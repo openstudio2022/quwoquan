@@ -2,19 +2,22 @@ backend: mongodb
 role: authoritative
 collections:
   skill_data_control_requests:
+    publication_role: not_published
     entity: SkillDataControlRequest
     role: authoritative
     indexes:
     - {name: idx_skill_data_control_owner_skill_updated, keys: {accountId: 1, skillId: 1, updatedAt: -1}}
     - {name: idx_skill_data_control_execution_recovery, keys: {status: 1, leaseExpiresAt: 1, updatedAt: 1}}
   skill_data_control_command_receipts:
+    publication_role: not_published
     entity: SkillDataControlCommandReceipt
     role: authoritative
     indexes:
     - {name: uq_skill_data_control_command_receipt, keys: {accountId: 1, commandId: 1}, unique: true}
   skill_data_control_outbox:
+    publication_role: transactional_outbox
     entity: SkillDataControlOutboxEvent
     role: authoritative
     indexes:
     - {name: uq_skill_data_control_outbox_revision, keys: {requestId: 1, aggregateRevision: 1, eventType: 1}, unique: true}
-    - {name: idx_skill_data_control_outbox_pending, keys: {publishedAt: 1, occurredAt: 1}}
+    - {name: idx_skill_data_control_outbox_pending, keys: {publishedAt: 1, nextAttemptAt: 1, claimUntil: 1, occurredAt: 1}}

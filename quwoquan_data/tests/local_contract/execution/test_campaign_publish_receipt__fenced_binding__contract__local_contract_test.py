@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import inspect
 import json
@@ -67,6 +68,7 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
     plan_stable = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
+        "executionMode": "central",
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": "sha256:" + "b" * 64,
@@ -207,6 +209,66 @@ def test_publish_receipt_projects_publish_ref_and_fence_without_caller_values(
         "campaign_generation",
         "campaign_fencing_token",
     }.intersection(parameters)
+
+
+def test_publish_receipt_projects_distributed_lane_claim(
+    tmp_path: Path,
+) -> None:
+    runtime, publish_path, _checkpoint_path = _fixture(tmp_path)
+    campaign = runtime.campaigns_root / ROOT_ID
+    plan_path = campaign / "campaign_plan.json"
+    plan = read_json(plan_path)
+    stable = {key: value for key, value in plan.items() if key != "planDigest"}
+    stable["executionMode"] = "distributed"
+    stable["distributedRun"] = {
+        "campaignRunId": "distributed-campaign-run",
+        "campaignGeneration": 1,
+        "campaignFencingToken": "sha256:" + "7" * 64,
+    }
+    write_json(plan_path, {**stable, "planDigest": payload_digest(stable)})
+    write_json(
+        campaign / "claims/image.json",
+        {
+            "schema": "quwoquan_data.content_campaign_lane_claim",
+            "rootExecutionId": ROOT_ID,
+            "planDigest": payload_digest(stable),
+            "campaignRunId": "distributed-campaign-run",
+            "campaignGeneration": 1,
+            "campaignFencingToken": "sha256:" + "7" * 64,
+            "carrier": "image",
+            "executionId": EXECUTION_IDS["image"],
+            "claimId": "sha256:" + "8" * 64,
+            "claimAttempt": 1,
+            "status": "running",
+            "phase": "run",
+            "capsuleRef": "data/local/cache/capsule",
+            "executionRoot": str(lane_execution_root(runtime, EXECUTION_IDS["image"])),
+            "pid": 123,
+            "pgid": 123,
+            "returnCode": None,
+            "error": None,
+            "acquiredAt": "2026-08-05T00:00:00+00:00",
+            "heartbeatAt": "2026-08-05T00:00:01+00:00",
+            "updatedAt": "2026-08-05T00:00:01+00:00",
+            "finishedAt": None,
+        },
+    )
+
+    lock_path = campaign / "claims/.image.lock"
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        path = write_publish_receipt(
+            root_execution_id=ROOT_ID,
+            execution_id=EXECUTION_IDS["image"],
+            runtime_paths=runtime,
+        )
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    receipt = read_json(path)
+
+    assert receipt["executionPublishSha256"] == _digest(publish_path)
+    assert receipt["campaignRunId"] == "distributed-campaign-run"
+    assert receipt["campaignGeneration"] == 1
+    assert receipt["campaignFencingToken"] == "sha256:" + "7" * 64
 
 
 def test_publish_receipt_blocks_stale_checkpoint_before_writing(tmp_path: Path) -> None:

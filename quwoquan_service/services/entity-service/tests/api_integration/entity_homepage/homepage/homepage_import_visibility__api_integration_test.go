@@ -121,7 +121,6 @@ func newHomepageImportVisibilityMongoStore(t *testing.T) *homepagepersistence.Mo
 	})
 	store := homepagepersistence.NewMongoHomepageStore(
 		client.Database("entity_homepage_import_visibility_it"),
-		true,
 	)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure homepage indexes: %v", err)

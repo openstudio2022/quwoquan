@@ -82,6 +82,36 @@ FORBIDDEN_ROLLOUT_TOKENS = (
 )
 
 
+PROD_ENVIRONMENT_JOBS = ("prod_rollout", "prod_soak_acceptance")
+
+
+def prod_environment_job_issues(path: Path) -> list[str]:
+    """受控 prod 事务的唯一允许清单：只有这些 job 可以绑定 production 环境。"""
+    try:
+        rel: Path | str = path.relative_to(ROOT)
+    except ValueError:
+        rel = path.name
+    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    jobs = document.get("jobs") or {}
+    bound = sorted(
+        name
+        for name, spec in jobs.items()
+        if isinstance(spec, dict) and spec.get("environment") == "production"
+    )
+    issues: list[str] = []
+    for name in bound:
+        if name not in PROD_ENVIRONMENT_JOBS:
+            issues.append(
+                f"{rel} job {name} binds environment: production outside the controlled prod transaction"
+            )
+    for name in PROD_ENVIRONMENT_JOBS:
+        if name not in bound:
+            issues.append(
+                f"{rel} job {name} must bind environment: production for manual prod admission"
+            )
+    return issues
+
+
 def workflow_rollout_issues(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     rel = path.relative_to(ROOT)
@@ -214,6 +244,7 @@ def main() -> int:
     issues: list[str] = []
     for path in WORKFLOWS:
         issues.extend(workflow_rollout_issues(path))
+        issues.extend(prod_environment_job_issues(path))
     issues.extend(candidate_identity_issues())
     issues.extend(hosted_soak_authority_issues())
 

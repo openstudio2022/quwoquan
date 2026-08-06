@@ -13,7 +13,7 @@
     "researchDistribution",
     "commercialDistribution",
     "articleMedia",
-    "scaleGates"
+    "scaleMilestones"
   ],
   "additionalProperties": false,
   "properties": {
@@ -91,23 +91,40 @@
     },
     "articleMedia": {
       "type": "object",
-      "required": ["minimumIllustratedRate", "maximumTextOnlyRate", "requireCoverAndBodyImage"],
+      "description": "Article media rate targets are receipt statistics; only per-object declared media closure is an admission gate.",
+      "required": ["illustratedRateTarget", "textOnlyRateTarget", "requireCoverAndBodyImage"],
       "additionalProperties": false,
       "properties": {
-        "minimumIllustratedRate": {"type": "number", "minimum": 0.9, "maximum": 1},
-        "maximumTextOnlyRate": {"type": "number", "minimum": 0, "maximum": 0.1},
+        "illustratedRateTarget": {
+          "description": "Statistical target only; does not reject a qualified article or release.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "textOnlyRateTarget": {
+          "description": "Statistical target only; does not reject a qualified article or release.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
         "requireCoverAndBodyImage": {"const": true}
       }
     },
-    "scaleGates": {
+    "scaleMilestones": {
       "type": "object",
-      "required": ["m100Targets", "m1000Targets", "requireM100PromotionBeforeM1000", "minimumAutomaticRecoveryRate"],
+      "description": "Workload targets and structural M100-to-M1000 binding; target attainment and recovery rate do not gate promotion.",
+      "required": ["m100Targets", "m1000Targets", "requireM100PromotionBeforeM1000", "automaticRecoveryRateTarget"],
       "additionalProperties": false,
       "properties": {
         "m100Targets": {"$ref": "#/$defs/m100Targets"},
         "m1000Targets": {"$ref": "#/$defs/m1000Targets"},
         "requireM100PromotionBeforeM1000": {"const": true},
-        "minimumAutomaticRecoveryRate": {"type": "number", "minimum": 0.95, "maximum": 1}
+        "automaticRecoveryRateTarget": {
+          "description": "Statistical target only; resource isolation and observer evidence remain structural gates.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     }
   },
@@ -120,7 +137,7 @@
         "homepage": {"const": 100},
         "article": {"const": 100},
         "image": {"const": 100},
-        "video": {"const": 50}
+        "video": {"const": 10}
       }
     },
     "m1000Targets": {
@@ -131,7 +148,7 @@
         "homepage": {"const": 1000},
         "article": {"const": 1000},
         "image": {"const": 1000},
-        "video": {"const": 300}
+        "video": {"const": 100}
       }
     }
   },

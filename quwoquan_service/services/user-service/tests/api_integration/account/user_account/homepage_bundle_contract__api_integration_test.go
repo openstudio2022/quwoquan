@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+// readiness_case: get-user-homepage-bundle-api
 package api_integration
 
 import (

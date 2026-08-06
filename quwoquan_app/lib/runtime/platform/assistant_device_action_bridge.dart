@@ -1,5 +1,3 @@
-import 'package:flutter/services.dart';
-
 enum AssistantDeviceActionStatus { created, unavailable, denied, failed }
 
 class AssistantCalendarReminderRequest {
@@ -59,51 +57,19 @@ class UnsupportedAssistantDeviceActionBridge
   );
 }
 
+/// Pre-M3 adapter retained only so the assistant consumer fails closed while it
+/// migrates to DeviceCalendarBridge with an opaque permit.
+///
+/// This request shape cannot prove installation/device/capability/input digest
+/// binding, so it must never reach the native calendar channel.
 class MethodChannelAssistantDeviceActionBridge
     implements AssistantDeviceActionBridge {
   const MethodChannelAssistantDeviceActionBridge();
 
-  static const MethodChannel _channel = MethodChannel(
-    'quwoquan/assistant/device_action',
-  );
-
   @override
   Future<AssistantDeviceActionResult> createCalendarReminder(
     AssistantCalendarReminderRequest request,
-  ) async {
-    try {
-      final raw = await _channel.invokeMapMethod<String, dynamic>(
-        'createCalendarReminder',
-        request.toChannelArguments(),
-      );
-      final rawStatus = _trimmedString(raw?['status']);
-      final deviceObjectId = _trimmedString(raw?['deviceObjectId']);
-      final status = switch (rawStatus) {
-        'created' when deviceObjectId.isNotEmpty =>
-          AssistantDeviceActionStatus.created,
-        'created' => AssistantDeviceActionStatus.failed,
-        'denied' => AssistantDeviceActionStatus.denied,
-        'unavailable' => AssistantDeviceActionStatus.unavailable,
-        _ => AssistantDeviceActionStatus.failed,
-      };
-      return AssistantDeviceActionResult(
-        status: status,
-        deviceObjectId: status == AssistantDeviceActionStatus.created
-            ? deviceObjectId
-            : '',
-      );
-    } on MissingPluginException {
-      return const AssistantDeviceActionResult(
-        status: AssistantDeviceActionStatus.unavailable,
-      );
-    } on PlatformException {
-      return const AssistantDeviceActionResult(
-        status: AssistantDeviceActionStatus.failed,
-      );
-    }
-  }
-
-  static String _trimmedString(Object? value) {
-    return value is String ? value.trim() : '';
-  }
+  ) async => const AssistantDeviceActionResult(
+    status: AssistantDeviceActionStatus.unavailable,
+  );
 }

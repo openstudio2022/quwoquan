@@ -12,7 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = (
     ROOT
-    / "quwoquan_app/scripts/runtime/verify_content_page_funnel_coverage.py"
+    / "quwoquan_app/scripts/runtime/observability/verify_content_page_funnel_coverage.py"
 )
 SPEC = importlib.util.spec_from_file_location(
     "verify_content_page_funnel_coverage",

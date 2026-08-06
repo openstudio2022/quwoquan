@@ -9,6 +9,7 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	rtredis "quwoquan_service/runtime/redis"
+	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	postmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
@@ -57,10 +58,10 @@ func buildReportRuntime(
 		healthChecker, logger)
 
 	// 举报 → 审核闭环：第二个具名 consumer 独立 checkpoint，把 post 目标的
-	// content.report.created 事实幂等投影为 PostModerationCase（同 revision 归并）。
+	// content.report.ReportCreated 事实幂等投影为 PostModerationCase（同 revision 归并）。
 	if moderationFacades != nil && postQueryReader != nil {
 		startReportOutboxRelay(ctx, reportStore, reportStore,
-			moderationapp.NewReportCaseOpener(moderationFacades, postQueryReader),
+			moderationapp.NewReportModerationHandler(moderationFacades, postQueryReader),
 			"content-report-moderation-projection", "report_moderation_projection",
 			healthChecker, logger)
 	}
@@ -83,7 +84,7 @@ func buildReportRuntime(
 func startCommentReportModerationProjection(
 	ctx context.Context,
 	reportStore *reportpersistence.PGReportStore,
-	comments moderationapp.CommentModerationCommandFacet,
+	comments commentapp.CommentModerationCommandFacet,
 	healthChecker *rthealth.Checker,
 	logger *slog.Logger,
 ) {
@@ -94,7 +95,9 @@ func startCommentReportModerationProjection(
 		ctx,
 		reportStore,
 		reportStore,
-		moderationapp.NewCommentReportResolutionProjector(comments),
+		commentapp.NewReportResolutionPublisher(
+			commentapp.NewCommentReportResolutionHandler(comments),
+		),
 		"content-report-comment-moderation",
 		"report_comment_moderation",
 		healthChecker,

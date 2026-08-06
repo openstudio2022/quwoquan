@@ -124,8 +124,8 @@ expect(actual.code, IntegrationLocationErrorCode.upstreamTimeout.code)
 - **A 类**（分组列表/表单）：`SettingsInsetFormPageScaffold` + `SettingsInsetGroupedSection` / `SettingsInsetFormRow` / `SettingsInsetFormSectionDivider`（`lib/components/settings_form/`）。
 - **B 类**（成员选择 + 内嵌搜索）：`SettingsInsetMemberPickerPageScaffold`（与 A **同源顶栏/灰底**）。
 - **禁止**内页返回使用 `GlobalTopBarIconButton`；禁止新建 `pageBackground` + `selectionToolbarBackground` + 白顶栏作为未登记的第三套组合。
-- 新增或移动受控页必须在同 PR 更新 [`quwoquan_app/scripts/settings/settings_canonical_manifest.yaml`](quwoquan_app/scripts/settings/settings_canonical_manifest.yaml)；例外页须在文件前部注释 owner、理由和失效条件，并遵循 `runtime/runtime-client-foundation/page-layout-semantics/spec.md`。
-- **门禁**：`python3 quwoquan_app/scripts/settings/verify_settings_canonical.py`（`gate_repo.sh` app 阶段已接入）。
+- 新增或移动受控页必须在同 PR 更新 [`quwoquan_app/scripts/runtime/page/settings_canonical_manifest.yaml`](quwoquan_app/scripts/runtime/page/settings_canonical_manifest.yaml)；例外页须在文件前部注释 owner、理由和失效条件，并遵循 `runtime/runtime-client-foundation/page-layout-semantics/spec.md`。
+- **门禁**：`python3 quwoquan_app/scripts/runtime/page/verify_settings_canonical.py`（`gate_repo.sh` app 阶段已接入）。
 
 ---
 
@@ -163,17 +163,17 @@ AppException (abstract)
 
 ---
 
-## 4. App Cloud 分层约束
+## 4. App 业务对象分层约束
 
 - pure Dart request/result/Slice/error/descriptor 只由 ContractGraph 生成到
   `packages/quwoquan_cloud_contracts`，禁止在 `lib/cloud/runtime/generated` 维护业务副本。
-- `lib/application/{context}/{object}` 只声明对象级 `*CommandWriter/*Query` port 与少量
+- `lib/<domain>/<context>/<object>/application` 只声明对象级 `*CommandWriter/*Query` port 与少量
   coordinator；禁止聚合 Repository 和动态 wire。
-- `lib/cloud/remote/{context}/{object}` 只做 generated client 到 application port 的薄映射；
+- `lib/<domain>/<context>/<object>/adapters` 只做 generated client 到 application port 的薄映射；
   URL、operationId、auth、decoder、retry、deadline 和 error policy 不得由调用方传入。
-- `lib/cloud/runtime` 只保留 executor/context/transport/error/config/observability，禁止依赖
+- `lib/runtime` 只保留 executor/context/transport/error/config/observability/platform/shell，禁止依赖
   UI、Router、Provider、fixture、local store 或平台插件。
-- production composition 位于 `lib/core/di` 且在 alpha/beta/gamma/prod 只装配 Remote；
+- production composition 位于 `lib/runtime/di/<domain>_dependencies.dart` 且在 alpha/beta/gamma/prod 只装配 Remote；
   对象级 typed double 只能存在 local_contract 测试树，runner/UAT support 不得注入。
 
 ---
@@ -283,8 +283,8 @@ if ((parsed['contractId'] as String?) != 'assistant_turn') {
 
 ```bash
 flutter analyze
-python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
-python3 quwoquan_app/scripts/settings/verify_settings_canonical.py
+python3 quwoquan_app/scripts/runtime/observability/verify_dart_semantic.py
+python3 quwoquan_app/scripts/runtime/page/verify_settings_canonical.py
 ```
 
 检查项：所有颜色/间距/文本/类型使用语义标签，无硬编码，无相对路径 import，无产品名做标识符；同时检查 iOS 语义（行尾箭头、Cupertino 页面组件边界、selector leading）；设置类全屏页与 `settings_canonical_manifest.yaml` 一致（§2.5）。

@@ -152,14 +152,14 @@ type DeliveryBacklog struct {
 }
 
 type DeliveryStore interface {
-	ClaimDue(
+	ClaimPendingOutbox(
 		ctx context.Context,
 		owner string,
 		now time.Time,
 		leaseDuration time.Duration,
 		limit int,
 	) ([]DeliveryJob, error)
-	MarkDelivered(
+	MarkDispatched(
 		ctx context.Context,
 		owner string,
 		receipt DeliveryReceipt,
@@ -177,8 +177,8 @@ type DeliveryStore interface {
 	Backlog(ctx context.Context, now time.Time) (DeliveryBacklog, error)
 }
 
-type EnforcementTarget interface {
-	Apply(
+type EnforcementPublisher interface {
+	Publish(
 		ctx context.Context,
 		decision model.Decision,
 	) (DeliveryReceipt, error)

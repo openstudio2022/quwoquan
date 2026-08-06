@@ -51,7 +51,7 @@ type MongoUserAccountRestrictionProjection struct {
 	now               func() time.Time
 }
 
-var _ application.UserAccountRestrictionProjection = (*MongoUserAccountRestrictionProjection)(nil)
+var _ application.UserAccountRestrictionProjectionStore = (*MongoUserAccountRestrictionProjection)(nil)
 
 func NewMongoUserAccountRestrictionProjection(
 	db *mongo.Database,

@@ -1,8 +1,10 @@
 dart_class: AssistantPresentationNodeWire
-library_path: assistant/generated/contracts/assistant_presentation_node.g.dart
-output_path: assistant/generated/contracts/assistant_presentation_node.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_presentation_node.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_presentation_node.g.dart
 contract: assistant_presentation_node
 kind: shared_wire_contract
+imports:
+  - assistant_runtime_enums.g.dart
 fields:
   - { name: nodeId, type: string, required: true }
   - { name: parentNodeId, type: string, default: '' }
@@ -42,11 +44,51 @@ subcontracts:
     class_name: AssistantActionIntentWire
     fields:
       - { name: intentId, type: string, required: true }
-      - { name: operation, type: string, required: true }
-      - { name: objectTypeRef, type: string, default: '' }
-      - { name: objectId, type: string, default: '' }
-      - { name: payload, type: map, default: {} }
-      - { name: requiresConfirmation, type: bool, default: false }
+      # 闭集：Navigate / ApproveTool / ExecuteDeviceAction / ProvideInput。
+      # runtime 必须拒绝未知 kind，禁止 operation + payload Map 或版本信封。
+      - { name: kind, type: string, required: true }
+      - { name: requestDigest, type: string, required: true }
+      - { name: jti, type: string, required: true }
+      - { name: issuedAt, type: timestamp, required: true }
+      - { name: expiresAt, type: timestamp, required: true }
+      - { name: navigate, type: object, ref: navigate_intent }
+      - { name: approveTool, type: object, ref: approve_tool_intent }
+      - { name: executeDeviceAction, type: object, ref: execute_device_action_intent }
+      - { name: provideInput, type: object, ref: provide_input_intent }
+  navigate_intent:
+    class_name: AssistantNavigateIntentWire
+    fields:
+      - { name: routeId, type: string, required: true }
+      - { name: objectTypeRef, type: string, required: true }
+      - { name: objectId, type: string, required: true }
+  approve_tool_intent:
+    class_name: AssistantApproveToolIntentWire
+    fields:
+      - { name: runId, type: string, required: true }
+      - { name: toolInvocationId, type: string, required: true }
+      - { name: decision, type: string, required: true }
+      - { name: capability, type: string, required: true }
+      - { name: inputDigest, type: string, required: true }
+      - { name: approvalPermit, type: string, required: true }
+  execute_device_action_intent:
+    class_name: AssistantExecuteDeviceActionIntentWire
+    fields:
+      - { name: runId, type: string, required: true }
+      - { name: toolInvocationId, type: string, required: true }
+      - { name: installationId, type: string, required: true }
+      - { name: deviceId, type: string, required: true }
+      - { name: capability, type: string, required: true }
+      - { name: inputDigest, type: string, required: true }
+      - { name: idempotencyKey, type: string, required: true }
+      - { name: deviceActionPermit, type: string, required: true }
+  provide_input_intent:
+    class_name: AssistantProvideInputIntentWire
+    fields:
+      - { name: runId, type: string, required: true }
+      - { name: toolInvocationId, type: string, required: true }
+      - { name: inputName, type: string, required: true }
+      - { name: inputSchemaRef, type: string, required: true }
+      - { name: inputPermit, type: string, required: true }
   accessibility:
     class_name: AssistantPresentationAccessibilityWire
     fields:

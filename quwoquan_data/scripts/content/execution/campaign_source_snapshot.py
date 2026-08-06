@@ -10,6 +10,7 @@ from core.source_digest import current_source_digest
 SNAPSHOT_FORMAT = "source-snapshot-v1"
 _IGNORED_NAMES = ("__pycache__", ".pytest_cache", ".DS_Store")
 _CAMPAIGN_GOVERNANCE_ROOTS = (
+    "quwoquan_data/requirements-cursor.txt",
     "quwoquan_ops/policies/branch_policy.yaml",
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md",
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md",

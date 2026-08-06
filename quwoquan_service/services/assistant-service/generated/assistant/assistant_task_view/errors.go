@@ -16,11 +16,11 @@ var (
 // AppErrorFromTaskProjectionUnavailable returns *AppError for ASSISTANT.SYSTEM.task_projection_unavailable (user_message from errors.yaml).
 func AppErrorFromTaskProjectionUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.task_projection_unavailable")
-	return rterr.NewAppError(code, "助手任务暂不可用，请稍后重试", debugMessage).WithMetadata("task_projection_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手任务暂不可用，请稍后重试", debugMessage).WithMetadata("task_projection_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromTaskUnauthorized returns *AppError for ASSISTANT.USER.task_unauthorized (user_message from errors.yaml).
 func AppErrorFromTaskUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.task_unauthorized")
-	return rterr.NewAppError(code, "请先登录后查看助手任务", debugMessage).WithMetadata("task_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后查看助手任务", debugMessage).WithMetadata("task_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }

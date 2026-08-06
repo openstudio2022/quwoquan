@@ -11,6 +11,7 @@ fields:
 - {name: groupAvatarVersion, type: int64}
 - {name: circleId, type: string}
 - {name: circleGroupId, type: string}
+- {name: gatheringId, type: string}
 - {name: entityId, type: string}
 - {name: sourceEntityTitle, type: string}
 - {name: sourceCircleTitle, type: string}
@@ -18,5 +19,7 @@ fields:
 - {name: announcement, type: string}
 - {name: capabilities, type: '[]string'}
 - {name: originType, type: string}
+- {name: accessMode, type: enum, enum_ref: ConversationAccessMode}
+- {name: postingPolicy, type: enum, enum_ref: ConversationPostingPolicy}
 - {name: canManageMembers, type: bool}
 - {name: canDissolve, type: bool}

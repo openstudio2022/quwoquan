@@ -25,7 +25,8 @@ from quwoquan_ops.cli.lib.output_paths import (
     legal_static_deployment_package_dir,
 )
 from quwoquan_ops.cli.probes import run_environment_integration_probe as integration_probe
-from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
+from quwoquan_app.scripts.gamma import run_local_gamma_release_consumer_api as local_gamma_release_consumer
+from quwoquan_app.scripts.gamma import verify_local_gamma_mirror
 
 
 def _gamma_release_identity() -> dict[str, object]:
@@ -43,12 +44,26 @@ def _gamma_release_identity() -> dict[str, object]:
     }
 
 
+def _gamma_candidate_identity() -> dict[str, str]:
+    return {
+        "environment": "gamma",
+        "target": "gamma-local",
+        "baselineId": f"sha256:{'3' * 64}",
+        "attemptId": "attempt-gamma-a",
+        "packageDigest": f"sha256:{'4' * 64}",
+        "configurationDigest": f"sha256:{'5' * 64}",
+        "providerRuntimeDigest": f"sha256:{'6' * 64}",
+        "observabilityLogSinkDigest": f"sha256:{'7' * 64}",
+        "imageDigest": f"sha256:{'8' * 64}",
+    }
+
+
 class StackctlUpRuntimeTest(unittest.TestCase):
     def test_beta_content_release_starts_all_declared_readiness_dependencies(self) -> None:
         root = Path(__file__).resolve().parents[4]
         script = (
             root
-            / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+            / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
         ).read_text(encoding="utf-8")
         beta_stack_script = (
             root / "quwoquan_ops/cli/beta/start_beta_stack.sh"
@@ -99,11 +114,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertIn("COMPOSE_PARALLEL_LIMIT=1 docker compose", script)
         self.assertIn("compose_up_args+=(--no-build)", script)
         self.assertIn("compose_up_args+=(--build)", script)
-        self.assertIn('APP_BETA_CMD+=(--skip-build)', beta_stack_script)
-        self.assertEqual(
-            beta_stack_script.count("APP_BETA_CMD+=(--content-release)"),
-            1,
-        )
+        self.assertIn("quwoquan_ops/cli/stackctl.py", beta_stack_script)
+        self.assertIn("--target beta-local", beta_stack_script)
+        self.assertNotIn("APP_BETA_CMD", beta_stack_script)
+        self.assertNotIn("go run", beta_stack_script)
         self.assertIn(
             "@creator_profile_release path /auth /auth/* /user /user/* /users /users/*",
             script,
@@ -306,6 +320,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "workload": "content-release",
                         "composeProject": "quwoquan_beta_release_test",
                         "configurationDigest": "sha256:" + "1" * 64,
+                        "providerRuntimeDigest": "sha256:" + "3" * 64,
                         "imageTransportTag": "sha256:" + "2" * 64,
                     },
                 ),
@@ -338,6 +353,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                         "workload": "content-commercial",
                         "composeProject": "quwoquan_beta_release_test",
                         "configurationDigest": "sha256:" + "1" * 64,
+                        "providerRuntimeDigest": "sha256:" + "3" * 64,
                         "imageTransportTag": "sha256:" + "2" * 64,
                     },
                 ),
@@ -372,7 +388,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
     def test_app_startup_treats_missing_log_sink_as_non_blocking_advisory(self) -> None:
         with mock.patch.object(
             stackctl,
-            "load_product_telemetry_log_sink",
+            "_load_active_product_telemetry_log_sink",
             side_effect=RuntimeError(
                 "local provider credentials must not be written into the repository or .qwq_output"
             ),
@@ -388,7 +404,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
     def test_app_startup_injects_log_sink_when_observability_is_available(self) -> None:
         with mock.patch.object(
             stackctl,
-            "load_product_telemetry_log_sink",
+            "_load_active_product_telemetry_log_sink",
             return_value=mock.Mock(
                 environment={
                     "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
@@ -407,28 +423,64 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(advisory, "")
 
-    def test_beta_cold_start_uses_configurable_backend_readiness_timeout(self) -> None:
-        script = (
-            Path(__file__).resolve().parents[4]
-            / "quwoquan_ops/cli/beta/start_beta_stack.sh"
-        ).read_text(encoding="utf-8")
+    def test_beta_compatibility_entry_dispatches_only_to_stackctl(self) -> None:
+        root = Path(__file__).resolve().parents[4]
+        script = root / "quwoquan_ops/cli/beta/start_beta_stack.sh"
 
-        self.assertIn(
-            'BETA_BACKEND_READY_TIMEOUT_SECONDS="${BETA_BACKEND_READY_TIMEOUT_SECONDS:-1200}"',
-            script,
-        )
-        self.assertIn(
-            "BETA_BACKEND_READY_TIMEOUT_SECONDS must be a positive integer.",
-            script,
-        )
-        self.assertIn(
-            'wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" "$BETA_BACKEND_READY_TIMEOUT_SECONDS"',
-            script,
-        )
-        self.assertNotIn(
-            'wait_service_ok app-beta "http://127.0.0.1:${CONTENT_PORT}/healthz" 420',
-            script,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            capture_path = temp_path / "python-args.txt"
+            fake_python = temp_path / "python3"
+            fake_python.write_text(
+                '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$QWQ_CAPTURE_ARGS"\n',
+                encoding="utf-8",
+            )
+            fake_python.chmod(0o755)
+            environment = {
+                **os.environ,
+                "PATH": f"{temp_path}:{os.environ.get('PATH', '')}",
+                "QWQ_CAPTURE_ARGS": str(capture_path),
+                "QWQ_OUTPUT_ROOT": str(temp_path / "output"),
+            }
+
+            cases = (
+                (
+                    ("up", "--skip-app"),
+                    ("up", "--target", "beta-local", "--skip-app"),
+                ),
+                (
+                    ("down", "--workload", "full"),
+                    ("down", "--target", "beta-local", "--workload", "full"),
+                ),
+                (
+                    ("status", "--scope", "config"),
+                    (
+                        "inspect",
+                        "--target",
+                        "beta-local",
+                        "--kind",
+                        "all",
+                        "--scope",
+                        "config",
+                    ),
+                ),
+            )
+            for arguments, expected_tail in cases:
+                result = subprocess.run(
+                    ["bash", str(script), *arguments],
+                    cwd=root,
+                    env=environment,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                captured = capture_path.read_text(encoding="utf-8").splitlines()
+                self.assertEqual(
+                    Path(captured[0]),
+                    root / "quwoquan_ops/cli/stackctl.py",
+                )
+                self.assertEqual(tuple(captured[1:]), expected_tail)
 
     def test_repair_restart_stack_supplies_complete_noninteractive_up_args(self) -> None:
         with (
@@ -436,7 +488,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             mock.patch.object(stackctl, "load_environment_topology", return_value={}),
             mock.patch.object(stackctl, "get_target", return_value={"env": "gamma"}),
             mock.patch.object(stackctl, "resolve_report_dir", return_value=Path(tmp_dir)),
-            mock.patch.object(stackctl, "load_product_telemetry_log_sink"),
+            mock.patch.object(
+                stackctl,
+                "_load_active_product_telemetry_log_sink",
+            ),
             mock.patch.object(
                 stackctl,
                 "command_down",
@@ -473,7 +528,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
                 mock.patch.object(
                     stackctl,
-                    "load_product_telemetry_log_sink",
+                    "_load_active_product_telemetry_log_sink",
                     side_effect=RuntimeError(
                         "local provider credentials must not be written into the repository or .qwq_output"
                     ),
@@ -511,7 +566,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "resolve_report_dir",
                 return_value=Path(tmp_dir),
             ),
-            mock.patch.object(stackctl, "load_product_telemetry_log_sink"),
+            mock.patch.object(
+                stackctl,
+                "_load_active_product_telemetry_log_sink",
+            ),
             mock.patch.object(
                 stackctl,
                 "command_down",
@@ -981,7 +1039,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertIn("  print_defines\n  exit 0", script[print_env_exit:prepare_runtime])
 
     def test_local_gamma_content_seed_is_idempotent_and_fail_closed(self) -> None:
-        source = Path(local_gamma_t3.__file__).read_text(encoding="utf-8")
+        source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
 
         for retired in (
             "seed_content",
@@ -991,8 +1049,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "deleteMany",
         ):
             self.assertNotIn(retired, source)
-        self.assertIn('"mutationPolicy": "read_only"', source)
         self.assertIn("load_release_content_identity", source)
+        self.assertIn("load_gamma_execution_identity", source)
+        self.assertIn("write_passed_case_result", source)
 
     def test_local_gamma_video_seed_preserves_work_browser_projection_fields(
         self,
@@ -1003,11 +1062,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             stdout="release verification passed",
         )
         with mock.patch.object(
-            local_gamma_t3.subprocess,
+            local_gamma_release_consumer.subprocess,
             "run",
             return_value=completed,
         ) as run:
-            result = local_gamma_t3.run_release_consumer(
+            result = local_gamma_release_consumer.run_release_consumer(
                 identity=_gamma_release_identity(),
             )
 
@@ -1022,33 +1081,43 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
     def test_local_gamma_relationship_seed_uses_running_stack_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "t3.json"
+            report_path = Path(tmp_dir) / "release_consumer.json"
             with (
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "resolve_readiness_path",
                     return_value=Path("/tmp/release-readiness.json"),
                 ),
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "load_release_content_identity",
                     return_value=_gamma_release_identity(),
                 ) as load_identity,
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
+                    "load_gamma_execution_identity",
+                    return_value=_gamma_candidate_identity(),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "require_unchanged_identity",
+                    return_value=_gamma_candidate_identity(),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
                     "run_release_consumer",
                     return_value={"status": "passed", "exitCode": 0},
                 ),
                 mock.patch.object(
-                    local_gamma_t3,
-                    "resolve_t3_report_path",
+                    local_gamma_release_consumer,
+                    "resolve_release_consumer_report_path",
                     return_value=report_path,
                 ),
                 mock.patch.object(
-                    local_gamma_t3.sys,
+                    local_gamma_release_consumer.sys,
                     "argv",
                     [
-                        "run_local_gamma_t3.py",
+                        "run_local_gamma_release_consumer_api.py",
                         "--release-readiness",
                         "env/gamma/release-readiness.json",
                         "--report",
@@ -1056,7 +1125,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     ],
                 ),
             ):
-                result = local_gamma_t3.main()
+                result = local_gamma_release_consumer.main()
 
         self.assertEqual(result, 0)
         load_identity.assert_called_once_with(
@@ -1064,24 +1133,34 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             expected_environment="gamma",
         )
 
-    def test_local_gamma_t3_uses_shared_target_isolated_acceptance_session(
+    def test_local_gamma_release_consumer_uses_shared_target_isolated_acceptance_session(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "t3-report.json"
+            report_path = Path(tmp_dir) / "release-consumer-report.json"
             with (
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "resolve_readiness_path",
                     return_value=Path("/tmp/release-readiness.json"),
                 ),
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "load_release_content_identity",
                     return_value=_gamma_release_identity(),
                 ),
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
+                    "load_gamma_execution_identity",
+                    return_value=_gamma_candidate_identity(),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "require_unchanged_identity",
+                    return_value=_gamma_candidate_identity(),
+                ),
+                mock.patch.object(
+                    local_gamma_release_consumer,
                     "run_release_consumer",
                     return_value={
                         "status": "passed",
@@ -1090,15 +1169,15 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     },
                 ),
                 mock.patch.object(
-                    local_gamma_t3,
-                    "resolve_t3_report_path",
+                    local_gamma_release_consumer,
+                    "resolve_release_consumer_report_path",
                     return_value=report_path,
                 ),
                 mock.patch.object(
-                    local_gamma_t3.sys,
+                    local_gamma_release_consumer.sys,
                     "argv",
                     [
-                        "run_local_gamma_t3.py",
+                        "run_local_gamma_release_consumer_api.py",
                         "--release-readiness",
                         "env/gamma/runs/data-release/release-gamma-a/"
                         "verify-gamma-a/release-readiness.json",
@@ -1107,14 +1186,18 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     ],
                 ),
             ):
-                self.assertEqual(local_gamma_t3.main(), 0)
+                self.assertEqual(local_gamma_release_consumer.main(), 0)
 
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(report["schema"], "gamma-t3-release-consumer")
+        self.assertEqual(set(report), verify_local_gamma_mirror.CASE_RESULT_FIELDS)
         self.assertEqual(report["status"], "passed")
-        self.assertEqual(report["release"], _gamma_release_identity())
-        self.assertEqual(report["mutationPolicy"], "read_only")
+        self.assertEqual(report["baselineId"], _gamma_candidate_identity()["baselineId"])
+        self.assertEqual(report["attemptId"], _gamma_candidate_identity()["attemptId"])
+        self.assertEqual(report["executed"], 1)
+        self.assertEqual(report["skipped"], 0)
+        self.assertEqual(report["failed"], 0)
+        self.assertNotIn("release", report)
         self.assertNotIn("auth", report)
         self.assertNotIn("domainSeeds", report)
 
@@ -1122,39 +1205,43 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "t3-seed-report.json"
+            report_path = Path(tmp_dir) / "release-consumer-seed-report.json"
             with (
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "resolve_readiness_path",
-                    side_effect=local_gamma_t3.ReleaseVideoDeliveryError(
+                    side_effect=local_gamma_release_consumer.ReleaseVideoDeliveryError(
                         "DATA_RELEASE_READINESS_RECEIPT is required"
                     ),
                 ),
-                mock.patch.object(local_gamma_t3, "run_release_consumer") as consumer,
                 mock.patch.object(
-                    local_gamma_t3,
-                    "resolve_t3_report_path",
+                    local_gamma_release_consumer,
+                    "load_gamma_execution_identity",
+                    return_value=_gamma_candidate_identity(),
+                ),
+                mock.patch.object(local_gamma_release_consumer, "run_release_consumer") as consumer,
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "resolve_release_consumer_report_path",
                     return_value=report_path,
                 ),
                 mock.patch.object(
-                    local_gamma_t3.sys,
+                    local_gamma_release_consumer.sys,
                     "argv",
                     [
-                        "run_local_gamma_t3.py",
+                        "run_local_gamma_release_consumer_api.py",
                         "--report",
                         str(report_path),
                     ],
                 ),
             ):
-                self.assertEqual(local_gamma_t3.main(), 2)
+                self.assertEqual(local_gamma_release_consumer.main(), 2)
 
             consumer.assert_not_called()
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
         self.assertEqual(report["status"], "gate_block")
         self.assertIn("DATA_RELEASE_READINESS_RECEIPT is required", report["reason"])
-        self.assertEqual(report["mutationPolicy"], "read_only")
 
     def test_local_gamma_has_no_environment_business_seed_path(self) -> None:
         script = (
@@ -1279,6 +1366,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         proxy = compose.split("\n  gamma-proxy:\n", 1)[1].split(
             "\n  # ── edge-media", 1
         )[0]
+        bounded_content_services = script.split(
+            "content_slice_services=(", 1
+        )[1].split("\n  )", 1)[0]
 
         self.assertIn('profiles: ["assistant-runtime"]', assistant)
         self.assertIn(
@@ -1320,7 +1410,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             script,
         )
         self.assertIn("gamma_full_workload_dependencies_ready", script)
-        self.assertIn('"workload": workload', script)
+        self.assertIn("--provider-runtime-digest", script)
         self.assertIn("prepare_down_compose_environment()", script)
         self.assertIn("prepare_down_compose_environment\n  down_args=(down)", script)
         self.assertIn('"${COMPOSE_FILE_ARGS[@]}" "${down_args[@]}"', script)
@@ -1332,16 +1422,17 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "api-edge:\n        condition: service_healthy",
             proxy,
         )
-        self.assertNotIn("assistant-service:", proxy)
+        self.assertNotIn("assistant-service", bounded_content_services)
         self.assertNotIn("required: false", proxy)
 
-    def test_local_gamma_content_release_accepts_empty_compose_profiles(self) -> None:
+    def test_local_gamma_print_env_requires_exact_candidate_before_profiles(self) -> None:
         root = Path(__file__).resolve().parents[4]
         script = root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         env = dict(os.environ)
         env.pop("COMPOSE_PROFILES", None)
         env.pop("LOCAL_GAMMA_RTC_SERVICE_IMAGE", None)
         env["QWQ_WORKLOAD"] = "content-release"
+        env["QWQ_PROVIDER_RUNTIME_DIGEST"] = "sha256:" + "a" * 64
         env["LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL"] = (
             "https://upload.gamma.quwoquan.com:19100"
         )
@@ -1370,20 +1461,22 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("unbound variable", result.stderr)
         self.assertNotIn("RTC_SERVICE_IMAGE must come", result.stderr)
         self.assertIn(
-            "GATE_BLOCK: LOCAL_GAMMA_CONFIG_VERSION must be the canonical sha256 runtime configuration digest",
+            "GATE_BLOCK: exact runtime candidate root is required",
             result.stderr,
         )
+        self.assertNotIn("LOCAL_GAMMA_CONFIG_VERSION", result.stderr)
         self.assertEqual(result.stdout, "")
         self.assertIn(
             'if [[ "$print_env" != "1" ]] && local_gamma_has_existing_stack; then',
             script.read_text(encoding="utf-8"),
         )
 
-    def test_local_gamma_rejects_unbound_package_before_url_projection(self) -> None:
+    def test_local_gamma_rejects_unbound_candidate_before_url_projection(self) -> None:
         root = Path(__file__).resolve().parents[4]
         script = root / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         env = dict(os.environ)
         env["QWQ_WORKLOAD"] = "content-release"
+        env["QWQ_PROVIDER_RUNTIME_DIGEST"] = "sha256:" + "a" * 64
         env.pop("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", None)
 
         with tempfile.TemporaryDirectory() as output_root:
@@ -1400,9 +1493,10 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertIn(
-            "GATE_BLOCK: LOCAL_GAMMA_CONFIG_VERSION must be the canonical sha256 runtime configuration digest",
+            "GATE_BLOCK: exact runtime candidate root is required",
             result.stderr,
         )
+        self.assertNotIn("LOCAL_GAMMA_CONFIG_VERSION", result.stderr)
         self.assertNotIn("--dart-define=APP_RUNTIME_ENV=gamma", result.stdout)
 
     def test_local_gamma_product_ops_uses_required_runtime_auth(self) -> None:
@@ -1420,7 +1514,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             self.assertIn(f'{name}: "${{{name}:?{name} is required}}"', product_ops)
 
     def test_local_gamma_content_probe_methods_come_from_contract_graph(self) -> None:
-        source = Path(local_gamma_t3.__file__).read_text(encoding="utf-8")
+        source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
 
         self.assertIn('"quwoquan_data/scripts/cli.py"', source)
         self.assertIn('"ship"', source)
@@ -1430,31 +1524,36 @@ class StackctlUpRuntimeTest(unittest.TestCase):
 
     def test_local_gamma_blocked_operation_requires_metadata_enforced_403(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "t3-invalid-environment.json"
+            report_path = Path(tmp_dir) / "release-consumer-invalid-environment.json"
             with (
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "resolve_readiness_path",
                     return_value=Path("/tmp/release-readiness.json"),
                 ),
                 mock.patch.object(
-                    local_gamma_t3,
+                    local_gamma_release_consumer,
                     "load_release_content_identity",
-                    side_effect=local_gamma_t3.ReleaseVideoDeliveryError(
+                    side_effect=local_gamma_release_consumer.ReleaseVideoDeliveryError(
                         "Data readiness environment='beta', expected 'gamma'"
                     ),
                 ),
-                mock.patch.object(local_gamma_t3, "run_release_consumer") as consumer,
                 mock.patch.object(
-                    local_gamma_t3,
-                    "resolve_t3_report_path",
+                    local_gamma_release_consumer,
+                    "load_gamma_execution_identity",
+                    return_value=_gamma_candidate_identity(),
+                ),
+                mock.patch.object(local_gamma_release_consumer, "run_release_consumer") as consumer,
+                mock.patch.object(
+                    local_gamma_release_consumer,
+                    "resolve_release_consumer_report_path",
                     return_value=report_path,
                 ),
                 mock.patch.object(
-                    local_gamma_t3.sys,
+                    local_gamma_release_consumer.sys,
                     "argv",
                     [
-                        "run_local_gamma_t3.py",
+                        "run_local_gamma_release_consumer_api.py",
                         "--release-readiness",
                         "env/beta/release-readiness.json",
                         "--report",
@@ -1462,7 +1561,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     ],
                 ),
             ):
-                status = local_gamma_t3.main()
+                status = local_gamma_release_consumer.main()
 
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
@@ -1478,11 +1577,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             stdout="GATE_BLOCK: import receipt mismatch",
         )
         with mock.patch.object(
-            local_gamma_t3.subprocess,
+            local_gamma_release_consumer.subprocess,
             "run",
             return_value=failed,
         ):
-            result = local_gamma_t3.run_release_consumer(
+            result = local_gamma_release_consumer.run_release_consumer(
                 identity=_gamma_release_identity(),
             )
 
@@ -1501,12 +1600,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 clear=False,
             ),
             mock.patch.object(
-                local_gamma_t3.subprocess,
+                local_gamma_release_consumer.subprocess,
                 "run",
                 return_value=subprocess.CompletedProcess(["ship"], 0, stdout="ok"),
             ) as run,
         ):
-            local_gamma_t3.run_release_consumer(identity=_gamma_release_identity())
+            local_gamma_release_consumer.run_release_consumer(identity=_gamma_release_identity())
 
         command = run.call_args.args[0]
         self.assertIn("release-gamma-a", command)
@@ -1515,7 +1614,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("parallel-import", command)
 
     def test_local_gamma_comment_setup_uses_current_command_contract(self) -> None:
-        source = Path(local_gamma_t3.__file__).read_text(encoding="utf-8")
+        source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
 
         for retired in (
             "setup_comment_thread",
@@ -1571,7 +1670,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value=({}, "", []),
             ) as run_probe,
             mock.patch(
-                "quwoquan_ops.cli.lib.public_domain_tls.root_certificate_path",
+                "quwoquan_ops.cli.stackctl.root_certificate_path",
                 return_value=Path("/tmp/gamma-local-root.crt"),
             ),
         ):
@@ -2141,8 +2240,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("up", commands[0]["argv"])
         socket_probe.assert_not_called()
 
-    def test_local_gamma_t3_uses_only_runtime_bearer_identity(self) -> None:
-        source = Path(local_gamma_t3.__file__).read_text(encoding="utf-8")
+    def test_local_gamma_release_consumer_uses_only_runtime_bearer_identity(self) -> None:
+        source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
 
         self.assertNotIn("Authorization", source)
         self.assertNotIn("Bearer", source)
@@ -2150,8 +2249,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("LocalGammaAcceptanceSession", source)
         self.assertIn("DATA_RELEASE_READINESS_RECEIPT", source)
 
-    def test_local_gamma_t3_compose_command_uses_stack_project(self) -> None:
-        source = Path(local_gamma_t3.__file__).read_text(encoding="utf-8")
+    def test_local_gamma_release_consumer_compose_command_uses_stack_project(self) -> None:
+        source = Path(local_gamma_release_consumer.__file__).read_text(encoding="utf-8")
 
         self.assertNotIn("docker", source)
         self.assertNotIn("compose_command", source)
@@ -2159,14 +2258,14 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("mongosh", source)
         self.assertIn("quwoquan_data/scripts/cli.py", source)
 
-    def test_local_gamma_t3_endpoint_checks_marks_scope_externals_out_of_scope(self) -> None:
+    def test_local_gamma_release_consumer_endpoint_checks_marks_scope_externals_out_of_scope(self) -> None:
         long_output = "discarded-prefix" + ("x" * 9000)
         with mock.patch.object(
-            local_gamma_t3.subprocess,
+            local_gamma_release_consumer.subprocess,
             "run",
             return_value=subprocess.CompletedProcess(["ship"], 1, stdout=long_output),
         ):
-            result = local_gamma_t3.run_release_consumer(
+            result = local_gamma_release_consumer.run_release_consumer(
                 identity=_gamma_release_identity(),
             )
 
@@ -2174,16 +2273,16 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertNotIn("discarded-prefix", result["outputTail"])
         self.assertEqual(result["status"], "failed")
 
-    def test_local_gamma_t3_strict_endpoint_checks_uses_scope_runtime_refs(self) -> None:
+    def test_local_gamma_release_consumer_strict_endpoint_checks_uses_scope_runtime_refs(self) -> None:
         with (
             mock.patch.object(
-                local_gamma_t3.sys,
+                local_gamma_release_consumer.sys,
                 "argv",
-                ["run_local_gamma_t3.py", "--enabled-domain", "content"],
+                ["run_local_gamma_release_consumer_api.py", "--enabled-domain", "content"],
             ),
             self.assertRaises(SystemExit) as raised,
         ):
-            local_gamma_t3.main()
+            local_gamma_release_consumer.main()
 
         self.assertEqual(raised.exception.code, 2)
 
@@ -2222,7 +2321,13 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             }
         }
         with tempfile.TemporaryDirectory() as tmp_dir:
-            args = mock.Mock(target="prod-hosted", report_dir=tmp_dir)
+            args = mock.Mock(
+                target="prod-hosted",
+                report_dir=tmp_dir,
+                deployment_instance="prod",
+                ssh_host="",
+                host_id="",
+            )
             health_payload = {
                 "exitCode": 0,
                 "summary": "stackctl health prod-hosted: 4/4 healthy",
@@ -2242,8 +2347,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 ),
                 mock.patch("quwoquan_ops.cli.stackctl._load_release_state", return_value={}),
                 mock.patch(
-                    "quwoquan_ops.cli.stackctl._prod_plane_runtime_report",
-                    return_value={
+                    "quwoquan_ops.cli.stackctl._prod_instance_runtime_reports",
+                    return_value=[{
+                        "plane": "service",
                         "composeFileExists": True,
                         "envFileExists": True,
                         "containerCount": 1,
@@ -2255,7 +2361,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                                 "health": "healthy",
                             }
                         ],
-                    },
+                    }],
                 ),
             ):
                 result = stackctl.command_doctor(args)
@@ -2349,7 +2455,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     return_value=topology["targets"]["beta-local"],
                 ),
                 mock.patch(
-                    "quwoquan_ops.cli.stackctl.load_product_telemetry_log_sink",
+                    "quwoquan_ops.cli.stackctl._load_active_product_telemetry_log_sink",
                     side_effect=RuntimeError(
                         "local provider credentials must not be written into the repository or .qwq_output"
                     ),

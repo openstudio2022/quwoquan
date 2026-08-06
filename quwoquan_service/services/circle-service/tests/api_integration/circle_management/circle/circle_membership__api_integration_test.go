@@ -14,6 +14,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	circleapp "quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	circlepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
 	membershipapp "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/application"
 	membershipmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/messaging"
 	membershippersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/infrastructure/persistence"
@@ -112,7 +114,9 @@ func TestCircleMembershipRealMongoTransactionReplayProjectionAndStream(t *testin
 	store := membershippersistence.NewMongoAggregateStore(mongoDB)
 	countRelay := membershipapp.NewOutboxRelay(
 		store, store,
-		membershippersistence.NewMongoMemberCountProjector(mongoDB, circleCacheInvalidator),
+		membershipCountTestConsumer{handler: circleapp.NewCircleMemberCountProjectionHandler(
+			circlepersistence.NewMongoMemberCountProjector(mongoDB, circleCacheInvalidator),
+		)},
 		"circle-member-count-test",
 	)
 	if count, err := countRelay.Drain(ctx, 10); err != nil || count != 2 {
@@ -397,7 +401,9 @@ func TestCircleMembershipApprovalLifecycle(t *testing.T) {
 	store := membershippersistence.NewMongoAggregateStore(mongoDB)
 	countRelay := membershipapp.NewOutboxRelay(
 		store, store,
-		membershippersistence.NewMongoMemberCountProjector(mongoDB, circleCacheInvalidator),
+		membershipCountTestConsumer{handler: circleapp.NewCircleMemberCountProjectionHandler(
+			circlepersistence.NewMongoMemberCountProjector(mongoDB, circleCacheInvalidator),
+		)},
 		"circle-member-count-approval-test",
 	)
 	if _, err := countRelay.Drain(ctx, 20); err != nil {

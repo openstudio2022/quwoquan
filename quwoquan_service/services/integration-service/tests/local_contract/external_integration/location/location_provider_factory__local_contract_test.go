@@ -55,6 +55,39 @@ func TestNewLocationProviderRejectsUnregisteredAdapterAndInsecureEndpoint(t *tes
 	}
 }
 
+func TestPublicProviderFactoryRequiresPassedProbeAndInjectedPolicy(t *testing.T) {
+	binding := providerbinding.ResolvedLocationBinding{
+		AdapterID:          LocationAdapterNominatimID,
+		ConfigRef:          "config:integration.public_provider.poi",
+		RatePolicyRef:      "config:integration.public_provider.poi",
+		RateLimitPerSecond: 1,
+		Endpoints:          map[string]string{"base": "https://nominatim.example.test"},
+		Timeout:            time.Second,
+	}
+	if _, err := NewPOISearchProvider(binding, &http.Client{}); err == nil {
+		t.Fatal("POI provider without passed probe must fail closed")
+	}
+	binding.ProbePassed = true
+	resolved, err := NewPOISearchProvider(binding, &http.Client{})
+	if err != nil {
+		t.Fatalf("construct ready POI provider: %v", err)
+	}
+	if _, ok := resolved.(*NominatimClient); !ok {
+		t.Fatalf("POI provider type = %T, want *NominatimClient", resolved)
+	}
+
+	binding.AdapterID = LocationAdapterOSRMID
+	binding.RateLimitPerSecond = 5
+	binding.Endpoints["base"] = "https://osrm.example.test"
+	route, err := NewRouteReadProvider(binding, &http.Client{})
+	if err != nil {
+		t.Fatalf("construct ready route provider: %v", err)
+	}
+	if _, ok := route.(*OSRMClient); !ok {
+		t.Fatalf("route provider type = %T, want *OSRMClient", route)
+	}
+}
+
 func resolvedLocationBindingForTest(
 	t *testing.T,
 	environment string,

@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 
 /// 端侧请求上下文 header 注入（用于网关访问日志/异常日志/过程日志关联）。
 ///

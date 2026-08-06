@@ -1,73 +1,81 @@
 events:
 - name: CommentCreated
-  description: 独立 Comment 聚合创建事实；payload 自包含计数、互动活动和通知投影所需主体，不允许消费者回查写模型补身份。
-  producer: content-service
-  consumers:
-  - content-comment-runtime-events
-  - content-comment-lifecycle-stream
-  - content-comment-post-count
-  - content-comment-profile-interaction
-  - content-comment-discovery-count
-  - content-comment-hot-score
-  - content-comment-recommend-signal
-  channel: transactional_outbox
+  description: '独立 Comment 聚合创建事实；payload 自包含计数、互动活动和通知投影所需主体，不允许消费者回查写模型补身份。
+
+    非 canonical 结构字段迁移注记：recommend_impact="engagement_signal"。'
+  delivery_semantics: transactional_outbox
   payload_entity: CommentCreatedPayload
   payload_shape: exact
-  payload_fields: [commentId, version, postId, postAuthorId, authorId, replyToCommentId, replyToUserId, parentCommentId, mentionedUserIds, createdAt]
-  recommend_impact: engagement_signal
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - postAuthorId
+  - authorId
+  - replyToCommentId
+  - replyToUserId
+  - parentCommentId
+  - mentionedUserIds
+  - createdAt
 - name: CommentDeleted
-  description: Comment 作者软删完成的版本化事实。
-  producer: content-service
-  consumers:
-  - content-comment-runtime-events
-  - content-comment-lifecycle-stream
-  - content-comment-post-count
-  - content-comment-profile-interaction
-  - content-comment-discovery-count
-  - content-comment-hot-score
-  channel: transactional_outbox
+  description: 'Comment 作者软删完成的版本化事实。
+
+    非 canonical 结构字段迁移注记：recommend_impact="engagement_signal"。'
+  delivery_semantics: transactional_outbox
   payload_entity: CommentDeletedPayload
   payload_shape: exact
-  payload_fields: [commentId, version, postId, authorId, parentCommentId, deletedAt]
-  recommend_impact: engagement_signal
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - authorId
+  - parentCommentId
+  - deletedAt
 - name: CommentPinChanged
   description: Post 作者变更一级 Comment 置顶状态的版本化事实；通知传输由 lifecycle stream 承载。
-  producer: content-service
-  consumers: [content-comment-runtime-events, content-comment-lifecycle-stream]
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CommentPinChangedPayload
   payload_shape: exact
-  payload_fields: [commentId, version, postId, commentAuthorId, operatorId, isPinned, pinnedAt]
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - commentAuthorId
+  - operatorId
+  - isPinned
+  - pinnedAt
 - name: CommentAttachmentsBound
   description: Comment 作者绑定已验证附件引用的版本化事实。
-  producer: content-service
-  consumers: [content-comment-runtime-events, content-comment-lifecycle-stream]
-  channel: transactional_outbox
+  delivery_semantics: transactional_event_log
   payload_entity: CommentAttachmentsBoundPayload
   payload_shape: exact
-  payload_fields: [commentId, version, postId, authorId, attachmentMediaIds]
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - authorId
+  - attachmentMediaIds
+  no_consumer_reason: 附件绑定只改变 Comment 聚合状态；对象事务中的持久事件日志用于审计，没有下游投影或传输接收方。
 - name: CommentModerated
   description: operator 对 Comment 执行 hide 或 restore 的治理审计事实。
-  producer: content-service
-  consumers:
-  - content-comment-runtime-events
-  - content-comment-lifecycle-stream
-  - content-comment-post-count
-  - content-comment-discovery-count
-  - content-comment-hot-score
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CommentModeratedPayload
   payload_shape: exact
-  payload_fields: [commentId, version, postId, parentCommentId, operatorId, action, reason, occurredAt]
+  payload_fields:
+  - commentId
+  - version
+  - postId
+  - parentCommentId
+  - operatorId
+  - action
+  - reason
+  - occurredAt
 - name: CommentsTombstoned
   description: PostDeleted 驱动的 post-scoped 批量级联事实；事件身份和版本继承源 PostDeleted，不能伪装成单条 Comment 聚合版本。
-  producer: content-service
-  consumers:
-  - content-comment-runtime-events
-  - content-comment-lifecycle-stream
-  - content-comment-post-count
-  - content-comment-discovery-count
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CommentsTombstonedPayload
   payload_shape: exact
-  payload_fields: [postId, tombstonedCount, occurredAt]
+  payload_fields:
+  - postId
+  - tombstonedCount
+  - occurredAt

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
-	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 )
 
 // DataPorts 显式装配 Post 对象的写端口、具名读取 Slice 与计数投影端口。

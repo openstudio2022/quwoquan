@@ -1,88 +1,368 @@
-domain: CIRCLE
-aggregate: Gathering
-description: Gathering 对象专属错误码。
+description: Gathering 对象专属稳定错误；保留 RuntimeFailure 所需 reason、HTTP、恢复动作、打断等级与双语文案元数据。
 errors:
 - code: CIRCLE.USER.gathering_not_found
-  kind: USER
   reason: gathering_not_found
-  emitted_by: [{surface: http, operations: [GetGathering, JoinGathering, ApproveGatheringParticipant, LeaveGathering, CancelGathering, CompleteGathering]}]
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, GetGathering, GetPublicGathering, ListGatheringApplications, ListGatheringRoster, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
   http_status: 404
-  recovery_action: refresh
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: gatheringNotFound
   go_const: ErrGatheringNotFound
-  user_message: {zh: 相聚不存在, en: Gathering not found}
-- code: CIRCLE.USER.gathering_not_open
-  kind: USER
-  reason: gathering_not_open
-  emitted_by: [{surface: http, operations: [JoinGathering, ApproveGatheringParticipant, LeaveGathering]}]
-  http_status: 409
-  recovery_action: refresh
-  dart_const: gatheringNotOpen
-  go_const: ErrGatheringNotOpen
-  user_message: {zh: 这次相聚当前不可加入, en: Gathering is not open}
-- code: CIRCLE.USER.gathering_full
-  kind: USER
-  reason: gathering_full
-  emitted_by: [{surface: http, operations: [JoinGathering, ApproveGatheringParticipant]}]
-  http_status: 409
-  recovery_action: refresh
-  dart_const: gatheringFull
-  go_const: ErrGatheringFull
-  user_message: {zh: 这次相聚人数已满, en: Gathering is full}
+  user_message: {zh: 活动不存在或已不可访问, en: Gathering was not found or is no longer available}
 - code: CIRCLE.USER.gathering_permission_denied
-  kind: USER
   reason: gathering_permission_denied
-  emitted_by: [{surface: http, operations: [ApproveGatheringParticipant, CancelGathering, CompleteGathering]}]
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, ListGatheringApplications, ReviewGatheringApplication, InviteToGathering, RevokeGatheringInvitation, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, CancelGathering, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering]}]
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: gatheringPermissionDenied
   go_const: ErrGatheringPermissionDenied
-  user_message: {zh: 你无权执行此操作, en: Gathering action is not permitted}
-- code: CIRCLE.USER.gathering_participant_state_invalid
-  kind: USER
-  reason: gathering_participant_state_invalid
-  emitted_by: [{surface: http, operations: [ApproveGatheringParticipant, LeaveGathering]}]
+  user_message: {zh: 你无权执行此活动操作, en: You are not allowed to perform this Gathering action}
+- code: CIRCLE.USER.gathering_invitation_recipient_mismatch
+  reason: gathering_invitation_recipient_mismatch
+  emitted_by: [{surface: http, operations: [AcceptGatheringInvitation, DeclineGatheringInvitation]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringInvitationRecipientMismatch
+  go_const: ErrGatheringInvitationRecipientMismatch
+  user_message: {zh: 这份活动邀请不属于你, en: This Gathering invitation does not belong to you}
+- code: CIRCLE.USER.gathering_draft_incomplete
+  reason: gathering_draft_incomplete
+  emitted_by: [{surface: http, operations: [PublishGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringDraftIncomplete
+  go_const: ErrGatheringDraftIncomplete
+  user_message: {zh: 请先补全活动发布所需信息, en: Complete the required Gathering details before publishing}
+- code: CIRCLE.USER.gathering_host_authority_invalid
+  reason: gathering_host_authority_invalid
+  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering, UpdateGathering, ListGatheringsByHost, AssignGatheringCoHost, TransferGatheringOrganizer]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringHostAuthorityInvalid
+  go_const: ErrGatheringHostAuthorityInvalid
+  user_message: {zh: 当前 Host 授权无效，请重新选择或验证, en: The current Host authority is invalid}
+- code: CIRCLE.USER.gathering_publish_obligation_missing
+  reason: gathering_publish_obligation_missing
+  emitted_by: [{surface: http, operations: [PublishGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPublishObligationMissing
+  go_const: ErrGatheringPublishObligationMissing
+  user_message: {zh: 尚未满足活动发布所需的风险义务, en: Required publishing obligations are not satisfied}
+- code: CIRCLE.USER.gathering_disclosure_invalid
+  reason: gathering_disclosure_invalid
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringDisclosureInvalid
+  go_const: ErrGatheringDisclosureInvalid
+  user_message: {zh: 当前活动信息披露设置无效, en: The Gathering disclosure settings are invalid}
+- code: CIRCLE.USER.gathering_schedule_invalid
+  reason: gathering_schedule_invalid
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringScheduleInvalid
+  go_const: ErrGatheringScheduleInvalid
+  user_message: {zh: 活动时间安排无效，请检查后重试, en: The Gathering schedule is invalid}
+- code: CIRCLE.USER.gathering_admission_closed
+  reason: gathering_admission_closed
+  emitted_by: [{surface: http, operations: [JoinOpenGathering, ApplyToGathering, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, ReinstateGatheringParticipant, ResumeGatheringAdmission]}]
   http_status: 409
-  recovery_action: refresh
-  dart_const: gatheringParticipantStateInvalid
-  go_const: ErrGatheringParticipantStateInvalid
-  user_message: {zh: 参与状态已变化，请刷新, en: Gathering participant state changed}
-- code: CIRCLE.USER.gathering_idempotency_conflict
-  kind: USER
-  reason: gathering_idempotency_conflict
-  emitted_by: [{surface: http, operations: [CreateGathering, JoinGathering, ApproveGatheringParticipant, LeaveGathering, CancelGathering, CompleteGathering]}]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringAdmissionClosed
+  go_const: ErrGatheringAdmissionClosed
+  user_message: {zh: 本次活动当前已关闭报名, en: Admission for this Gathering is closed}
+- code: CIRCLE.USER.gathering_admission_paused
+  reason: gathering_admission_paused
+  emitted_by: [{surface: http, operations: [JoinOpenGathering, ApplyToGathering, InviteToGathering]}]
   http_status: 409
-  recovery_action: refresh
-  dart_const: gatheringIdempotencyConflict
-  go_const: ErrGatheringIdempotencyConflict
-  user_message: {zh: 重复请求与原操作不一致, en: Idempotency key was reused for another gathering action}
-- code: CIRCLE.DEPENDENCY.gathering_conversation_binding_failed
-  kind: DEPENDENCY
-  reason: gathering_conversation_binding_failed
-  emitted_by: [{surface: http, operations: [CreateGathering, JoinGathering, ApproveGatheringParticipant, LeaveGathering]}]
+  recovery_action: retry
+  disruption_level: snackbar
+  recovery_after_seconds: 5
+  dart_const: gatheringAdmissionPaused
+  go_const: ErrGatheringAdmissionPaused
+  user_message: {zh: 主办方暂时停止接收新参与者, en: Admission is temporarily paused}
+- code: CIRCLE.USER.gathering_capacity_full
+  reason: gathering_capacity_full
+  emitted_by: [{surface: http, operations: [JoinOpenGathering, ApplyToGathering, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, ReinstateGatheringParticipant]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringCapacityFull
+  go_const: ErrGatheringCapacityFull
+  user_message: {zh: 本次活动名额已满, en: This Gathering is full}
+- code: CIRCLE.USER.gathering_participation_conflict
+  reason: gathering_participation_conflict
+  emitted_by: [{surface: http, operations: [JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, AcknowledgeGatheringRevision, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: snackbar
+  dart_const: gatheringParticipationConflict
+  go_const: ErrGatheringParticipationConflict
+  user_message: {zh: 参与状态已变化，请刷新后重试, en: 'Participation changed concurrently, refresh and retry'}
+- code: CIRCLE.USER.gathering_already_active
+  reason: gathering_already_active
+  emitted_by: [{surface: http, operations: [JoinOpenGathering, ApplyToGathering, InviteToGathering, AcceptGatheringInvitation]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringAlreadyActive
+  go_const: ErrGatheringAlreadyActive
+  user_message: {zh: 你已经是本次活动的有效参与者, en: You are already an active participant}
+- code: CIRCLE.USER.gathering_invitation_expired
+  reason: gathering_invitation_expired
+  emitted_by: [{surface: http, operations: [AcceptGatheringInvitation, DeclineGatheringInvitation]}]
+  http_status: 410
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringInvitationExpired
+  go_const: ErrGatheringInvitationExpired
+  user_message: {zh: 这份活动邀请已失效, en: This Gathering invitation has expired}
+- code: CIRCLE.USER.gathering_invitation_inactive
+  reason: gathering_invitation_inactive
+  emitted_by: [{surface: http, operations: [AcceptGatheringInvitation, DeclineGatheringInvitation]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringInvitationInactive
+  go_const: ErrGatheringInvitationInactive
+  user_message: {zh: 这份活动邀请已被处理、撤回或取消, en: "This Gathering invitation was already handled, revoked, or cancelled"}
+- code: CIRCLE.USER.gathering_seat_hold_expired
+  reason: gathering_seat_hold_expired
+  emitted_by: [{surface: http, operations: [AcceptGatheringInvitation]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringSeatHoldExpired
+  go_const: ErrGatheringSeatHoldExpired
+  user_message: {zh: 邀请保留名额已到期, en: The invitation seat hold has expired}
+- code: CIRCLE.USER.gathering_transition_forbidden
+  reason: gathering_transition_forbidden
+  emitted_by: [{surface: http, operations: [JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, AssignGatheringCoHost, RevokeGatheringCoHost, AcknowledgeGatheringRevision, CancelGathering, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringTransitionForbidden
+  go_const: ErrGatheringTransitionForbidden
+  user_message: {zh: 当前状态下不能执行此操作, en: This transition is not allowed in the current state}
+- code: CIRCLE.USER.gathering_cancellation_window_closed
+  reason: gathering_cancellation_window_closed
+  emitted_by: [{surface: http, operations: [CancelGathering]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringCancellationWindowClosed
+  go_const: ErrGatheringCancellationWindowClosed
+  user_message: {zh: 活动已开场，不能再按普通取消处理, en: The Gathering has started and can no longer be cancelled normally}
+- code: CIRCLE.USER.gathering_operation_not_allowed_in_progress
+  reason: gathering_operation_not_allowed_in_progress
+  emitted_by: [{surface: http, operations: [UpdateGathering, ChangeGatheringCapacity, TransferGatheringOrganizer, DeclareGatheringLeaveEarly, EndGatheringEarly]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringOperationNotAllowedInProgress
+  go_const: ErrGatheringOperationNotAllowedInProgress
+  user_message: {zh: 当前活动阶段不允许此操作, en: This action is not allowed in the current Gathering phase}
+- code: CIRCLE.USER.gathering_capacity_below_occupied_seats
+  reason: gathering_capacity_below_occupied_seats
+  emitted_by: [{surface: http, operations: [ChangeGatheringCapacity]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringCapacityBelowOccupiedSeats
+  go_const: ErrGatheringCapacityBelowOccupiedSeats
+  user_message: {zh: 新容量不能小于当前已占席位, en: Capacity cannot be lower than occupied seats}
+- code: CIRCLE.USER.gathering_reconfirmation_required
+  reason: gathering_reconfirmation_required
+  emitted_by: [{surface: http, operations: [AcknowledgeGatheringRevision]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringReconfirmationRequired
+  go_const: ErrGatheringReconfirmationRequired
+  user_message: {zh: 请先确认最新的活动重大变更, en: The latest material Gathering change requires acknowledgement}
+- code: CIRCLE.USER.gathering_reconfirmation_expired
+  reason: gathering_reconfirmation_expired
+  emitted_by: [{surface: http, operations: [AcknowledgeGatheringRevision]}]
+  http_status: 410
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringReconfirmationExpired
+  go_const: ErrGatheringReconfirmationExpired
+  user_message: {zh: 本次变更确认期限已结束, en: The material change acknowledgement window has expired}
+- code: CIRCLE.USER.gathering_organizer_transfer_required
+  reason: gathering_organizer_transfer_required
+  emitted_by: [{surface: http, operations: [LeaveGathering, TransferGatheringOrganizer]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringOrganizerTransferRequired
+  go_const: ErrGatheringOrganizerTransferRequired
+  user_message: {zh: 请先转移主办责任再继续, en: Transfer the primary organizer responsibility first}
+- code: CIRCLE.USER.gathering_attendance_conflict
+  reason: gathering_attendance_conflict
+  emitted_by: [{surface: http, operations: [DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: snackbar
+  dart_const: gatheringAttendanceConflict
+  go_const: ErrGatheringAttendanceConflict
+  user_message: {zh: 到场状态已变化，请刷新后重试, en: 'Attendance changed concurrently, refresh and retry'}
+- code: CIRCLE.USER.gathering_outcome_unverified
+  reason: gathering_outcome_unverified
+  emitted_by: [{surface: http, operations: [CompleteGathering]}]
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringOutcomeUnverified
+  go_const: ErrGatheringOutcomeUnverified
+  user_message: {zh: 当前证据不足以确认活动真实发生, en: Available evidence cannot verify that the Gathering occurred}
+- code: CIRCLE.USER.gathering_outcome_disputed
+  reason: gathering_outcome_disputed
+  emitted_by: [{surface: http, operations: [CompleteGathering]}]
+  http_status: 409
+  recovery_action: escalate
+  disruption_level: inlineCard
+  dart_const: gatheringOutcomeDisputed
+  go_const: ErrGatheringOutcomeDisputed
+  user_message: {zh: 活动结果存在争议，已进入复核, en: The Gathering outcome is disputed and requires review}
+- code: CIRCLE.DEPENDENCY.gathering_room_provision_pending
+  reason: gathering_room_provision_pending
+  emitted_by: [{surface: http, operations: [PublishGathering]}]
   http_status: 503
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
-  dart_const: gatheringConversationBindingFailed
-  go_const: ErrGatheringConversationBindingFailed
-  user_message: {zh: 相聚会话暂时未就绪，请重试, en: Gathering conversation is not ready}
-- code: CIRCLE.DEPENDENCY.gathering_target_unavailable
-  kind: DEPENDENCY
-  reason: gathering_target_unavailable
-  emitted_by: [{surface: http, operations: [CreateGathering]}]
+  dart_const: gatheringRoomProvisionPending
+  go_const: ErrGatheringRoomProvisionPending
+  user_message: {zh: 活动群聊正在准备，请稍后重试, en: The Gathering room is still being prepared}
+- code: CIRCLE.DEPENDENCY.gathering_room_provision_failed
+  reason: gathering_room_provision_failed
+  emitted_by: [{surface: http, operations: [PublishGathering]}]
   http_status: 503
   recovery_action: retry
+  disruption_level: inlineCard
+  recovery_after_seconds: 5
+  dart_const: gatheringRoomProvisionFailed
+  go_const: ErrGatheringRoomProvisionFailed
+  user_message: {zh: 活动群聊准备失败，请稍后重试, en: The Gathering room could not be prepared}
+- code: CIRCLE.USER.gathering_active_participation_required
+  reason: gathering_active_participation_required
+  emitted_by: [{surface: http, operations: [GetGathering, ListGatheringRoster, AcknowledgeGatheringRevision, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringActiveParticipationRequired
+  go_const: ErrGatheringActiveParticipationRequired
+  user_message: {zh: 需要有效参与资格才能继续, en: Active Gathering participation is required}
+- code: CIRCLE.USER.gathering_access_revoked
+  reason: gathering_access_revoked
+  emitted_by: [{surface: http, operations: [GetGathering, GetPublicGathering, ListGatheringApplications, ListGatheringRoster]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringAccessRevoked
+  go_const: ErrGatheringAccessRevoked
+  user_message: {zh: 你的活动访问权限已被撤销, en: Your Gathering access has been revoked}
+- code: CIRCLE.USER.gathering_control_required
+  reason: gathering_control_required
+  emitted_by: [{surface: http, operations: [PublishGathering, SafetyTerminateGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringControlRequired
+  go_const: ErrGatheringControlRequired
+  user_message: {zh: 请先完成所需的安全控制措施, en: Required safety controls must be completed first}
+- code: CIRCLE.USER.gathering_safety_termination_denied
+  reason: gathering_safety_termination_denied
+  emitted_by: [{surface: http, operations: [SafetyTerminateGathering]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringSafetyTerminationDenied
+  go_const: ErrGatheringSafetyTerminationDenied
+  user_message: {zh: 当前无法执行安全终止, en: Safety termination is not authorized}
+- code: CIRCLE.DEPENDENCY.gathering_safety_authority_unavailable
+  reason: gathering_safety_authority_unavailable
+  emitted_by: [{surface: http, operations: [SafetyTerminateGathering]}]
+  http_status: 503
+  recovery_action: retry
+  disruption_level: snackbar
+  recovery_after_seconds: 3
+  dart_const: gatheringSafetyAuthorityUnavailable
+  go_const: ErrGatheringSafetyAuthorityUnavailable
+  user_message: {zh: 安全授权服务暂时不可用，请稍后重试, en: Safety authorization is temporarily unavailable}
+- code: CIRCLE.USER.gathering_qualification_required
+  reason: gathering_qualification_required
+  emitted_by: [{surface: http, operations: [PublishGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringQualificationRequired
+  go_const: ErrGatheringQualificationRequired
+  user_message: {zh: 发布此活动需要补充有效资质, en: A valid qualification is required to publish this Gathering}
+- code: CIRCLE.USER.gathering_commercial_authority_required
+  reason: gathering_commercial_authority_required
+  emitted_by: [{surface: http, operations: [PublishGathering]}]
+  http_status: 422
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringCommercialAuthorityRequired
+  go_const: ErrGatheringCommercialAuthorityRequired
+  user_message: {zh: 该活动需要有效的商业主体授权, en: Valid commercial authority is required for this Gathering}
+- code: CIRCLE.USER.gathering_policy_denied
+  reason: gathering_policy_denied
+  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering]}]
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringPolicyDenied
+  go_const: ErrGatheringPolicyDenied
+  user_message: {zh: 当前政策不允许创建或发布此活动, en: Current policy does not allow this Gathering}
+- code: CIRCLE.DEPENDENCY.gathering_target_unavailable
+  reason: gathering_target_unavailable
+  emitted_by: [{surface: http, operations: [CreateGatheringDraft, ListGatheringsBySource]}]
+  http_status: 503
+  recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: gatheringTargetUnavailable
   go_const: ErrGatheringTargetUnavailable
-  user_message: {zh: 目标对象暂时不可验证，请重试, en: Gathering target cannot be verified right now}
+  user_message: {zh: 来源对象暂时无法验证，请稍后重试, en: The source object cannot be verified right now}
+- code: CIRCLE.USER.gathering_version_conflict
+  reason: gathering_version_conflict
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: snackbar
+  dart_const: gatheringVersionConflict
+  go_const: ErrGatheringVersionConflict
+  user_message: {zh: 活动已被更新，请刷新后重试, en: 'The Gathering changed concurrently, refresh and retry'}
+- code: CIRCLE.USER.gathering_idempotency_conflict
+  reason: gathering_idempotency_conflict
+  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering, UpdateGathering, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
+  http_status: 409
+  recovery_action: retry
+  disruption_level: snackbar
+  dart_const: gatheringIdempotencyConflict
+  go_const: ErrGatheringIdempotencyConflict
+  user_message: {zh: 重复请求与原活动操作不一致, en: The idempotency key was reused for a different Gathering action}
 - code: CIRCLE.SYSTEM.gathering_storage_failed
-  kind: SYSTEM
   reason: gathering_storage_failed
-  emitted_by: [{surface: http, operations: [CreateGathering, GetGathering, JoinGathering, ApproveGatheringParticipant, LeaveGathering, CancelGathering, CompleteGathering]}]
+  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering, UpdateGathering, GetGathering, GetPublicGathering, ListGatheringsByHost, ListGatheringsBySource, ListGatheringApplications, ListGatheringRoster, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
   http_status: 500
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: gatheringStorageFailed
   go_const: ErrGatheringStorageFailed
-  user_message: {zh: 相聚操作失败，请稍后重试, en: Gathering operation failed, retry later}
+  user_message: {zh: 活动操作失败，请稍后重试, en: 'Gathering operation failed, please retry later'}

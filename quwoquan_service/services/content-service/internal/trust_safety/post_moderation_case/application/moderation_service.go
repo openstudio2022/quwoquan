@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	moderationerrors "quwoquan_service/services/content-service/generated/trust_safety/post_moderation_case"
-	"quwoquan_service/runtime/commandmeta"
 	moderationmodel "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/model"
 	moderationports "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/ports"
 )
@@ -133,7 +133,7 @@ func (s *ModerationService) OpenPostModerationCase(
 		commandDigest,
 		moderationports.AuditActionOpened,
 		"",
-		"content.post_moderation_case.opened",
+		"content.post_moderation_case.PostModerationCaseOpened",
 		payload,
 		now,
 	)
@@ -212,7 +212,7 @@ func (s *ModerationService) ReviewPostModerationCase(
 			commandDigest,
 			moderationports.AuditActionReviewed,
 			"",
-			"content.post_moderation_case.reviewed",
+			"content.post_moderation_case.PostModerationCaseReviewed",
 			payload,
 			now,
 		)
@@ -306,7 +306,7 @@ func (s *ModerationService) DecidePostModerationCase(
 			commandDigest,
 			action,
 			command.DecisionReason,
-			"content.post_moderation_case.decided",
+			"content.post_moderation_case.PostModerationCaseDecided",
 			payload,
 			now,
 		)
@@ -373,7 +373,7 @@ func (s *ModerationService) SupersedePostModerationCase(
 			commandDigest,
 			moderationports.AuditActionSuperseded,
 			"",
-			"content.post_moderation_case.superseded",
+			"content.post_moderation_case.PostModerationCaseSuperseded",
 			payload,
 			now,
 		)
@@ -608,11 +608,7 @@ func unavailable(err error) error {
 	if errors.As(err, &appError) {
 		return appError
 	}
-	return rterr.NewUnavailable(
-		rterr.ModuleContent,
-		"审核服务暂时不可用",
-		err.Error(),
-	)
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 }
 
 func newModerationIdentifier(prefix string) (string, error) {

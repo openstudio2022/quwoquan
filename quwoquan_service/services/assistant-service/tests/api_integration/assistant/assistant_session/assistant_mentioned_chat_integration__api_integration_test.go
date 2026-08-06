@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/assistant-mentioned-consumer/spec.md#gwt-001
+// readiness_case: handle-assistant-mentioned-api
 package api_integration
 
 import (
@@ -14,9 +15,9 @@ import (
 	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	sessionstream "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/stream"
 	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
 	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
@@ -145,7 +146,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		sessionorchestration.WithRunCommandService(runCommands),
 		sessionorchestration.WithChatGroundingClient(chatGrounding),
 	)
-	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+	consumer := sessionstream.NewAssistantMentionedConsumerWithTransport(
 		newIntegrationMessageTransport(),
 		service,
 		"e2e-worker",
@@ -154,7 +155,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
 	}
-	if _, err := integrationRedisClient.XAdd(ctx, messaging.AssistantMentionedStream, map[string]string{
+	if _, err := integrationRedisClient.XAdd(ctx, sessionstream.AssistantMentionedStream, map[string]string{
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-12",
 		"seq":               "12",
@@ -188,9 +189,9 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	}
 	pending, err := integrationRedisClient.XReadGroup(
 		ctx,
-		messaging.AssistantMentionedConsumerGroup,
+		sessionstream.AssistantMentionedConsumerGroup,
 		"e2e-worker",
-		map[string]string{messaging.AssistantMentionedStream: "0"},
+		map[string]string{sessionstream.AssistantMentionedStream: "0"},
 		10,
 		0,
 	)
@@ -202,7 +203,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	}
 
 	assistantPresent = false
-	if _, err := integrationRedisClient.XAdd(ctx, messaging.AssistantMentionedStream, map[string]string{
+	if _, err := integrationRedisClient.XAdd(ctx, sessionstream.AssistantMentionedStream, map[string]string{
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-13",
 		"seq":               "13",

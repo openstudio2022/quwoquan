@@ -18,8 +18,8 @@ import (
 	"quwoquan_service/runtime/operation"
 	rtstreaming "quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 )
 
 func TestAssistantRunHTTPUsesOneMongoAggregateAndJournal(t *testing.T) {
@@ -48,10 +48,10 @@ func TestAssistantRunHTTPUsesOneMongoAggregateAndJournal(t *testing.T) {
 		nil,
 		runruntime.WithPolicyResolver(integrationRunPolicyResolver()),
 	)
-	handler := assistanthttp.NewHandler(
+	handler := assistantingress.Routes(
 		service,
-		assistanthttp.WithRunCommandService(commands),
-	).Routes()
+		assistantingress.WithRunCommandService(commands),
+	)
 	startBody := map[string]any{
 		"clientRequestId": "run-single-truth",
 		"intent": map[string]any{

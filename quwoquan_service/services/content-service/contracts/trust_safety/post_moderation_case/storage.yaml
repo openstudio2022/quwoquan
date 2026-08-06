@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   post_moderation_cases:
+    publication_role: not_published
     entity: PostModerationCase
     description: 绑定 postId、postVersion 和 contentDigest 的审核权威聚合；先前 revision 的 approval 不可作为当前发布资格。
     indexes:
@@ -31,6 +32,7 @@ collections:
         version: 1
       unique: true
   post_moderation_case_command_receipts:
+    publication_role: not_published
     entity: PostModerationCase
     description: 审核命令幂等结果；与 case 版本、审计记录和 outbox 同一 Mongo transaction 提交。
     indexes:
@@ -45,8 +47,9 @@ collections:
     - name: idx_post_moderation_case_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   post_moderation_case_outbox:
+    publication_role: transactional_outbox
     entity: PostModerationCase
     description: 审核生命周期领域事实；审核 relay 只能在事务提交后投递。
     indexes:
@@ -64,6 +67,7 @@ collections:
         aggregateVersion: 1
       unique: true
   post_moderation_case_audit:
+    publication_role: not_published
     entity: PostModerationCase
     description: reviewer 行为审计；reviewed、approved、rejected 和 superseded 各自产生不可变审计行。
     indexes:
@@ -77,6 +81,7 @@ collections:
         occurredAt: -1
       sparse: true
   post_moderation_case_projection_checkpoints:
+    publication_role: publication_accessory
     entity: PostModerationCase
     role: checkpoint
     description: PostModerationCase 事件投影的可重放消费水位；不得承载审核权威状态。

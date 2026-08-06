@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:quwoquan_app/core/platform/web_install_context_stub.dart'
-    if (dart.library.js_interop) 'package:quwoquan_app/core/platform/web_install_context_web.dart';
+import 'package:quwoquan_app/runtime/platform/web_install_context_stub.dart'
+    if (dart.library.js_interop) 'package:quwoquan_app/runtime/platform/web_install_context_web.dart';
 
 enum WebInstallRecommendation { android, ios, desktop, unknown }
 

@@ -56,7 +56,7 @@ func TestAssistantSessionRequiresStableClientRequestID(t *testing.T) {
 		"user-a",
 		assistant.CreateSessionInput{},
 	)
-	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.invalid_argument") {
+	if err == nil || !strings.Contains(err.Error(), "ASSISTANT.USER.session_invalid_argument") {
 		t.Fatalf("empty session clientRequestId error = %v", err)
 	}
 

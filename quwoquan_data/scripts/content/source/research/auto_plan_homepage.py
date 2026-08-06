@@ -148,11 +148,13 @@ def write_homepage_lane(spec: HomepageResearchInput) -> list[dict[str, Any]]:
         {
             "policyRevision": "encyclopedia-primary",
             "primaryEvidenceRef": core_sources[0]["source_id"] if core_sources else "",
-            "acquisitionReceiptRefs": list(spec.acquisition_receipt_refs),
             "sources": core_sources,
             "homepageMediaCollections": media_collections,
         },
         force=spec.force,
+        top_level_update={
+            "acquisitionReceiptRefs": list(spec.acquisition_receipt_refs),
+        },
     ):
         spec.updated.append({
             "entityId": spec.entity_id,

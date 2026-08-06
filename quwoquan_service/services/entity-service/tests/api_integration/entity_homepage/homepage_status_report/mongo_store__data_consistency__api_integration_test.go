@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// readiness_case: list-homepage-status-reports-api
+// readiness_case: create-homepage-status-report-api
+// readiness_case: review-homepage-status-report-api
 package api_integration
 
 import (
@@ -71,7 +74,7 @@ func TestHomepageStatusReportMongoPacket(t *testing.T) {
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
 
-	store := reportpersistence.NewMongoStore(client.Database("entity_status_report_packet_it"), true)
+	store := reportpersistence.NewMongoStore(client.Database("entity_status_report_packet_it"))
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure status report indexes: %v", err)
 	}
@@ -134,6 +137,13 @@ func TestHomepageStatusReportMongoPacket(t *testing.T) {
 	})
 	if err != nil || dismissed.Version != 2 {
 		t.Fatalf("dismiss report through transaction: %+v err=%v", dismissed, err)
+	}
+	queue, err := facade.ListQueue(ctx, reportapp.QueueQuery{
+		Status: reportmodel.StatusDismissed,
+		Limit:  20,
+	})
+	if err != nil || len(queue.Items) != 1 || queue.Items[0].ReportID != dismissed.ReportID {
+		t.Fatalf("list dismissed report queue through MongoDB: %+v err=%v", queue, err)
 	}
 	noop, err := facade.Review(reportContext("report-review-noop"), reportapp.ReviewCommand{
 		HomepageID:     created.HomepageID,

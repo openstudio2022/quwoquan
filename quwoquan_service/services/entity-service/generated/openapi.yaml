@@ -980,14 +980,14 @@ paths:
     /homepages/search:
         get:
             operationId: SearchHomepages
-            x-contract-operation-id: entity.homepage_search_item_view.SearchHomepages
-            x-object-id: entity.homepage_search_item_view
+            x-contract-operation-id: entity.homepage.SearchHomepages
+            x-object-id: entity.homepage
             x-actor: none
             x-application:
                 kind: query
-                facet: HomepageSearchItemViewQueryFacade
+                facet: HomepageQueryFacade
                 method: search
-                reader: HomepageSearchItemViewReader
+                reader: HomepageSearchReader
                 slice: HomepageSearchSlice
             parameters:
                 - name: query
@@ -1042,6 +1042,45 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
+    /internal/entity/homepages/{homepageId}/gathering-host-authority:evaluate:
+        post:
+            operationId: EvaluateEntityHomepageGatheringHostAuthority
+            x-contract-operation-id: entity.homepage.EvaluateEntityHomepageGatheringHostAuthority
+            x-object-id: entity.homepage
+            x-actor: none
+            x-application:
+                kind: query
+                facet: EntityHomepageGatheringHostAuthorityQueryFacet
+                method: evaluate
+                reader: HomepageOwnerAuthorityReader
+                slice: EntityHomepageGatheringHostAuthorityEvidence
+            parameters:
+                - name: homepageId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/EntityHomepageGatheringHostAuthorityEvaluationQuery'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EntityHomepageGatheringHostAuthorityEvidence'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
 components:
     securitySchemes:
         bearerAuth:
@@ -1061,6 +1100,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateHomepageStatusReportCommand
+            x-contract-placeholder: true
+        EntityHomepageGatheringHostAuthorityEvaluationQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: EntityHomepageGatheringHostAuthorityEvaluationQuery
+            x-contract-placeholder: true
+        EntityHomepageGatheringHostAuthorityEvidence:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: EntityHomepageGatheringHostAuthorityEvidence
             x-contract-placeholder: true
         EntityImpactSummary:
             type: object

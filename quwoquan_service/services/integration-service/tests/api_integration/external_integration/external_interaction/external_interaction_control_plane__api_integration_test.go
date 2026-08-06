@@ -1,4 +1,9 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+// readiness_case: get-external-interaction-api
+// readiness_case: list-external-interaction-attempts-api
+// readiness_case: list-external-interaction-dead-letters-api
+// readiness_case: recover-external-interaction-dead-letter-api
+// readiness_case: get-external-interaction-metrics-api
 package api_integration
 
 import (

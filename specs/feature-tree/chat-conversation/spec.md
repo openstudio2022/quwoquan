@@ -10,11 +10,12 @@
 
 ### 本领域拥有
 
-- 拥有 `Conversation`、会话成员投影、`Message`、投递/已读回执、会话治理状态和 `CallSession` 的生命周期与写入决定权。
+- 拥有 `Conversation`、`ConversationMembership`、`Message`、`Announcement`、置顶/已读/投递回执、会话治理状态、附件索引和 `CallSession` 的生命周期与写入决定权。
 - 只能通过本领域公开 command 修改其拥有事实。
 
 ### 本领域不拥有
 
+- 不拥有 Gathering、GatheringParticipation、Host、容量/准入、Revision、Outcome、Plan 或 room binding state；这些事实归 [`circle-community`](../circle-community/spec.md)。活动群聊是加入后的默认主场，但 Gathering 不迁入 Chat。
 - 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
 - 不复制 metadata 中的字段、path、错误码和 wire 语义。
 
@@ -83,10 +84,10 @@
   - 交付给下游的结果：创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态，形成该场景中本领域负责的终态。
   - 不负责：不决定账号关系、圈子成员资格、助手推理或媒体传输事实。
 - [`JNY-011 / SCN-027`](../spec.md#scn-027)
-  - 本领域负责：在“结伴同行与线下相聚”中，创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态。
-  - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
-  - 交付给下游的结果：创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态，形成该场景中本领域负责的终态。
-  - 不负责：不决定账号关系、圈子成员资格、助手推理或媒体传输事实。
+  - 本领域负责：为 Circle 请求幂等确保 Gathering 唯一 contextual Conversation，把有效 Participation/Organizer authority 投影为 participant/admin membership，并提供加入后的默认消息主场、Announcement、AssetIndex、已读、文件与通话。
+  - 进入条件：Circle 已交付 room binding 请求或带 source version 的 membership/access event；Chat 不从推荐卡、客户端角色或普通群成员推断 Participation。
+  - 交付给下游的结果：可恢复的 room access、消息与 Board 所需 Chat 投影；退出、移除、Block、取消或完成后的 posting/access mode 收敛。
+  - 不负责：不决定 Gathering 发布、Host、准入、容量、Revision、Outcome、Plan、内容回流或 Persona 关系；membership 不自动产生 mutual。
 - [`JNY-011 / SCN-029`](../spec.md#scn-029)
   - 本领域负责：在“可行动对象进入会话”中，把分享进会话的对象渲染为可行动 card，并按云侧行动键与可达性分流。
   - 进入条件：`recommendation-platform` 已交付该对象的行动提示。
@@ -154,6 +155,21 @@
 - 成员变更事件必须同步触发 ChatInbox 读模型更新
 - 端侧 chat 页面必须在 `lib/ui/chat/` 下，禁止 `lib/features/chat/`
 
+<a id="req-004"></a>
+### REQ-004 Gathering 活动群聊是加入后默认主场
+
+- 每个 Gathering 只允许一个 contextual Conversation；Chat 幂等创建/返回该 Conversation，并唯一拥有其 ConversationMembership、Message、Announcement、已读、附件索引与通话事实。
+- 只有 Circle 交付的有效 GatheringParticipation 或 Organizer authority 投影可授予 participant/admin access；待审批、邀请待响应和普通来源会话成员不得被自动加入。
+- 有效参与者再次打开 Gathering 默认进入消息；顶部 Board 组合 Circle 活动事实、Chat Announcement/AssetIndex 与可选能力投影。Board 不拥有写状态，不建立 Workspace 或第二消息/文件存储。
+- 退出、移除、Block、安全终止与权限撤销必须幂等收敛 access；Chat membership 是访问投影，不得反向改变 Participation、容量、Outcome、Follow 或 mutual。
+
+<a id="req-005"></a>
+### REQ-005 发起活动与发起群聊并列不合并
+
+- 全局“发起群聊”只创建普通 Conversation；“发起活动”由 Circle 创建 Gathering 并自动 provision contextual room。两项同入口并列，但任何一项不得冒充另一项。
+- 已有普通 Conversation 可作为 Gathering 来源并发送活动卡；原会话成员只有成功响应后才能进入活动群聊。capacity=2 仍使用两人活动群聊，不复用普通 direct。
+- Gathering 不因 Chat 成为产品主壳而迁入 Chat；字段、operation、route、surface、event、error 与 metric 只引用所属 canonical contracts。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -178,16 +194,23 @@
 - Circle 是成员池，Group/CircleGroup 是协作单元，Conversation 只负责消息。
 - Contact 与 Intersection 均为云端聚合 read model，App 不拼业务事实。
 - chat 云侧搜索无入口，本地 SQLite 检索是唯一搜索路径。
-- 实时下行推送依赖 realtime-gateway（B10），本域保证 long-poll/主动 sync 可靠路径。
+- 实时下行推送依赖 realtime-gateway，本域保证 long-poll/主动 sync 可靠路径。
+
+<a id="dom-003"></a>
+### DOM-003 Gathering activity room 所有权与访问投影
+
+- 条件：Circle 在 Publish 前请求唯一 contextual room，并在准入、退出、移除、Block、取消、完成或 organizer 变更后发送带 source version 的访问事件。
+- 可观察结果：Chat 幂等维护唯一 Conversation/Membership、Message、Announcement 与 AssetIndex；有效参与者默认进入消息并可打开 Board，投影延迟有可恢复等待态。
+- 禁止结果：不得由普通会话成员、推荐卡、客户端 role 或 Chat command 创建 Participation；不得建立 Workspace、复制 Gathering、自动 mutual，或把发起活动降级为普通建群。
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/chat`、`quwoquan_app/lib/cloud/services/chat`
+- App：`quwoquan_app/lib/service/chat_service`、`quwoquan_app/lib/service/notification_service`、`quwoquan_app/lib/service/rtc_service`
 - Service：`quwoquan_service/services/chat-service`、`quwoquan_service/services/notification-service`、`quwoquan_service/services/rtc-service`
 - 测试：
   - `local_contract`：`quwoquan_service/services/chat-service/tests`
   - `api_integration`：`quwoquan_service/services/chat-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/chat_notification_entry`、`quwoquan_app/test/user_acceptance/journeys/group_avatar_sync`
 
 ## 8. 开放事项
 
@@ -208,3 +231,13 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：消息页与联系页作为消息模块内两个独立一级页面状态，底栏保持五项不变。
 - 完成判定：`DOM-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 Gathering activity room 与 Board 未准出
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 Publish 前唯一 contextual room、Participation/Organizer 双投影、默认消息入口、Board、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全撤权，以及 C 位发起活动/群聊并列语义的实现与验收；消息离线可靠性仍阻断上层商用。
+- 完成判定：`DOM-003` 与跨域 user_acceptance 在重复事件、杀进程、重连和依赖恢复下通过，并覆盖 [`gathering-conversation-binding`](../circle-community/gathering-coordination/gathering-conversation-binding/spec.md) 的全部 GWT。
+- 依赖：`message-reliability-foundation`、Circle target contracts、后续 Board route/surface contracts 与 production Remote App。

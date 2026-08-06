@@ -5,21 +5,81 @@ groups:
     rules:
       - record: quwoquan_circle_contract_operation_requests_total
         expr: |
-          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:approve$"})
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:accept-invitation$"})
         labels:
           service: "circle-service"
-          operation: "circle.gathering.ApproveGatheringParticipant"
-          contract_metric: "gathering_participant_approve"
+          operation: "circle.gathering.AcceptGatheringInvitation"
+          contract_metric: "gathering_invitation_accept"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
         expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:approve$"})
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:accept-invitation$"})
         labels:
           service: "circle-service"
-          operation: "circle.gathering.ApproveGatheringParticipant"
-          contract_metric: "gathering_participant_approve"
+          operation: "circle.gathering.AcceptGatheringInvitation"
+          contract_metric: "gathering_invitation_accept"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:acknowledge-revision$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.AcknowledgeGatheringRevision"
+          contract_metric: "gathering_revision_acknowledge"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:acknowledge-revision$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.AcknowledgeGatheringRevision"
+          contract_metric: "gathering_revision_acknowledge"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:apply$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ApplyToGathering"
+          contract_metric: "gathering_apply"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:apply$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ApplyToGathering"
+          contract_metric: "gathering_apply"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:assign-co-host$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.AssignGatheringCoHost"
+          contract_metric: "gathering_cohost_assign"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:assign-co-host$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.AssignGatheringCoHost"
+          contract_metric: "gathering_cohost_assign"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -31,7 +91,7 @@ groups:
           operation: "circle.gathering.CancelGathering"
           contract_metric: "gathering_cancel"
           commercial_status: "blocked"
-          slo_latency_p95_ms: "700"
+          slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
         expr: |
@@ -41,7 +101,27 @@ groups:
           operation: "circle.gathering.CancelGathering"
           contract_metric: "gathering_cancel"
           commercial_status: "blocked"
-          slo_latency_p95_ms: "700"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:change-capacity$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ChangeGatheringCapacity"
+          contract_metric: "gathering_capacity_change"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:change-capacity$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ChangeGatheringCapacity"
+          contract_metric: "gathering_capacity_change"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
         expr: |
@@ -51,7 +131,7 @@ groups:
           operation: "circle.gathering.CompleteGathering"
           contract_metric: "gathering_complete"
           commercial_status: "blocked"
-          slo_latency_p95_ms: "700"
+          slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
         expr: |
@@ -61,15 +141,35 @@ groups:
           operation: "circle.gathering.CompleteGathering"
           contract_metric: "gathering_complete"
           commercial_status: "blocked"
-          slo_latency_p95_ms: "700"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:complete-self$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.CompleteGatheringSelf"
+          contract_metric: "gathering_self_complete"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:complete-self$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.CompleteGatheringSelf"
+          contract_metric: "gathering_self_complete"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
         expr: |
           sum by (status) (http_server_requests_total{service="circle-service",method="POST",route="/gatherings"})
         labels:
           service: "circle-service"
-          operation: "circle.gathering.CreateGathering"
-          contract_metric: "gathering_create"
+          operation: "circle.gathering.CreateGatheringDraft"
+          contract_metric: "gathering_draft_create"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -78,8 +178,88 @@ groups:
           sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route="/gatherings"})
         labels:
           service: "circle-service"
-          operation: "circle.gathering.CreateGathering"
-          contract_metric: "gathering_create"
+          operation: "circle.gathering.CreateGatheringDraft"
+          contract_metric: "gathering_draft_create"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:declare-arrival$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.DeclareGatheringArrival"
+          contract_metric: "gathering_arrival_declare"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:declare-arrival$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.DeclareGatheringArrival"
+          contract_metric: "gathering_arrival_declare"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:leave-early$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.DeclareGatheringLeaveEarly"
+          contract_metric: "gathering_leave_early_declare"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:leave-early$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.DeclareGatheringLeaveEarly"
+          contract_metric: "gathering_leave_early_declare"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:decline-invitation$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.DeclineGatheringInvitation"
+          contract_metric: "gathering_invitation_decline"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:decline-invitation$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.DeclineGatheringInvitation"
+          contract_metric: "gathering_invitation_decline"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:end-early$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.EndGatheringEarly"
+          contract_metric: "gathering_end_early"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:end-early$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.EndGatheringEarly"
+          contract_metric: "gathering_end_early"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -105,21 +285,61 @@ groups:
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
         expr: |
-          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:join$"})
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/public/gatherings/[^/]+$"})
         labels:
           service: "circle-service"
-          operation: "circle.gathering.JoinGathering"
-          contract_metric: "gathering_join"
+          operation: "circle.gathering.GetPublicGathering"
+          contract_metric: "gathering_public_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/public/gatherings/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.GetPublicGathering"
+          contract_metric: "gathering_public_get"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:invite$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.InviteToGathering"
+          contract_metric: "gathering_invite"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
         expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:join$"})
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:invite$"})
         labels:
           service: "circle-service"
-          operation: "circle.gathering.JoinGathering"
-          contract_metric: "gathering_join"
+          operation: "circle.gathering.InviteToGathering"
+          contract_metric: "gathering_invite"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:join-open$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.JoinOpenGathering"
+          contract_metric: "gathering_join_open"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:join-open$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.JoinOpenGathering"
+          contract_metric: "gathering_join_open"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -140,6 +360,366 @@ groups:
           service: "circle-service"
           operation: "circle.gathering.LeaveGathering"
           contract_metric: "gathering_leave"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/gatherings/[^/]+/applications$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringApplications"
+          contract_metric: "gathering_application_inbox_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/gatherings/[^/]+/applications$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringApplications"
+          contract_metric: "gathering_application_inbox_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route=~"^/gatherings/[^/]+/roster$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringRoster"
+          contract_metric: "gathering_roster_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route=~"^/gatherings/[^/]+/roster$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringRoster"
+          contract_metric: "gathering_roster_list"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route="/gatherings/by-host"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringsByHost"
+          contract_metric: "gathering_list_by_host"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route="/gatherings/by-host"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringsByHost"
+          contract_metric: "gathering_list_by_host"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="GET",route="/gatherings/by-source"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringsBySource"
+          contract_metric: "gathering_list_by_source"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="GET",route="/gatherings/by-source"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ListGatheringsBySource"
+          contract_metric: "gathering_list_by_source"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:pause-admission$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.PauseGatheringAdmission"
+          contract_metric: "gathering_admission_pause"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:pause-admission$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.PauseGatheringAdmission"
+          contract_metric: "gathering_admission_pause"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:publish$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.PublishGathering"
+          contract_metric: "gathering_publish"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:publish$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.PublishGathering"
+          contract_metric: "gathering_publish"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:reinstate$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ReinstateGatheringParticipant"
+          contract_metric: "gathering_participant_reinstate"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:reinstate$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ReinstateGatheringParticipant"
+          contract_metric: "gathering_participant_reinstate"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:remove$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.RemoveGatheringParticipant"
+          contract_metric: "gathering_participant_remove"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:remove$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.RemoveGatheringParticipant"
+          contract_metric: "gathering_participant_remove"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:resume-admission$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ResumeGatheringAdmission"
+          contract_metric: "gathering_admission_resume"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:resume-admission$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ResumeGatheringAdmission"
+          contract_metric: "gathering_admission_resume"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:review-application$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ReviewGatheringApplication"
+          contract_metric: "gathering_application_review"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:review-application$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.ReviewGatheringApplication"
+          contract_metric: "gathering_application_review"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:revoke-co-host$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.RevokeGatheringCoHost"
+          contract_metric: "gathering_cohost_revoke"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:revoke-co-host$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.RevokeGatheringCoHost"
+          contract_metric: "gathering_cohost_revoke"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:revoke-invitation$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.RevokeGatheringInvitation"
+          contract_metric: "gathering_invitation_revoke"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:revoke-invitation$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.RevokeGatheringInvitation"
+          contract_metric: "gathering_invitation_revoke"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:safety-terminate$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.SafetyTerminateGathering"
+          contract_metric: "gathering_safety_terminate"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:safety-terminate$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.SafetyTerminateGathering"
+          contract_metric: "gathering_safety_terminate"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:transfer-organizer$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.TransferGatheringOrganizer"
+          contract_metric: "gathering_organizer_transfer"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:transfer-organizer$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.TransferGatheringOrganizer"
+          contract_metric: "gathering_organizer_transfer"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:unwatch-availability$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.UnwatchGatheringAvailability"
+          contract_metric: "gathering_availability_unwatch"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:unwatch-availability$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.UnwatchGatheringAvailability"
+          contract_metric: "gathering_availability_unwatch"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="PUT",route=~"^/gatherings/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.UpdateGathering"
+          contract_metric: "gathering_update"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="PUT",route=~"^/gatherings/[^/]+$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.UpdateGathering"
+          contract_metric: "gathering_update"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:watch-availability$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.WatchGatheringAvailability"
+          contract_metric: "gathering_availability_watch"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:watch-availability$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.WatchGatheringAvailability"
+          contract_metric: "gathering_availability_watch"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:withdraw-application$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.WithdrawGatheringApplication"
+          contract_metric: "gathering_application_withdraw"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_circle_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="circle-service",method="POST",route=~"^/gatherings/[^/]+:withdraw-application$"})
+        labels:
+          service: "circle-service"
+          operation: "circle.gathering.WithdrawGatheringApplication"
+          contract_metric: "gathering_application_withdraw"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"

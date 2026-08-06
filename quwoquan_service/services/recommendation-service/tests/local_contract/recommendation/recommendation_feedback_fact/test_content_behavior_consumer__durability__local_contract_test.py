@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/recommendation-platform/spec.md#dom-001
+# readiness_case: append-feedback-local
 import hashlib
 import json
 from types import SimpleNamespace

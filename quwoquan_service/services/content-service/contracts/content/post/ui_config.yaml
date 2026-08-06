@@ -107,6 +107,13 @@ home_channels:
   mood_copy_key: home_mood_car
   order: 6
   runtime_overridable: true
+feed_request_type_by_category:
+  recommended: micro
+  following: micro
+  micro: micro
+  images: image
+  video: video
+  article: article
 discovery_tabs:
 - id: photo
   label_key: tab_photo

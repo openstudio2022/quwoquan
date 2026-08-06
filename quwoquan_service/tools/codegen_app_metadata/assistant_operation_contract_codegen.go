@@ -195,14 +195,55 @@ func generateAssistantOperationContracts(metadataDir, appDir string) error {
 		"assistant",
 		"assistant_operation_contracts.g.dart",
 	)
+	sharedWireOutputs, err := assistantPackageSharedWireOutputs(metadataDir)
+	if err != nil {
+		return err
+	}
 	writeFile(
 		ownerPath,
 		renderAssistantOperationOwnerLibrary(
 			objectSchemaOutputs,
 			requestSchemaImports,
+			sharedWireOutputs,
 		),
 	)
 	return nil
+}
+
+func assistantPackageSharedWireOutputs(metadataDir string) ([]string, error) {
+	const outputPrefix = "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/"
+	outputs := make([]string, 0, len(assistantPackageSharedWireSchemaNames))
+	for _, schemaName := range assistantPackageSharedWireSchemaNames {
+		schema, err := readAssistantContractSchema(filepath.Join(
+			metadataDir,
+			"assistant",
+			schemaName,
+			"schema.yaml",
+		))
+		if err != nil {
+			return nil, err
+		}
+		outputPath := filepath.ToSlash(strings.TrimSpace(schema.OutputPath))
+		if !strings.HasPrefix(outputPath, outputPrefix) {
+			return nil, fmt.Errorf(
+				"Assistant package schema %s output_path = %q, want %s<file>",
+				schemaName,
+				outputPath,
+				outputPrefix,
+			)
+		}
+		output := strings.TrimPrefix(outputPath, outputPrefix)
+		if output == "" || strings.Contains(output, "/") {
+			return nil, fmt.Errorf(
+				"Assistant package schema %s output_path must be a direct generated Assistant file: %q",
+				schemaName,
+				outputPath,
+			)
+		}
+		outputs = append(outputs, output)
+	}
+	sort.Strings(outputs)
+	return outputs, nil
 }
 
 type assistantOperationObjectSchema struct {
@@ -739,6 +780,7 @@ func cloneAssistantContractIndex(
 func renderAssistantOperationOwnerLibrary(
 	objectSchemaOutputs []string,
 	requestSchemaImports []string,
+	sharedWireOutputs []string,
 ) string {
 	var objectImports strings.Builder
 	requestImports := append(
@@ -758,7 +800,17 @@ func renderAssistantOperationOwnerLibrary(
 		)
 		previousImport = output
 	}
-	outputs := append([]string(nil), objectSchemaOutputs...)
+	outputSet := make(map[string]struct{}, len(objectSchemaOutputs)+len(sharedWireOutputs))
+	for _, output := range append(
+		append([]string(nil), objectSchemaOutputs...),
+		sharedWireOutputs...,
+	) {
+		outputSet[output] = struct{}{}
+	}
+	outputs := make([]string, 0, len(outputSet))
+	for output := range outputSet {
+		outputs = append(outputs, output)
+	}
 	sort.Strings(outputs)
 	var objectExports strings.Builder
 	for _, output := range outputs {

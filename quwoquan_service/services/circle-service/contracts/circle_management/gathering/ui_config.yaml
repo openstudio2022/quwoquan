@@ -1,0 +1,117 @@
+aggregate: Gathering
+description: >-
+  Gathering 的跨主题体验组合配置。ExperiencePackage 只引用既有对象、操作、
+  路由、Surface 与官方 Skill，不拥有业务事实，也不触发专用运行时分支。
+schema: gathering-experience-package
+
+behavior_contracts:
+- id: gathering.shared-action
+  stages:
+  - id: create
+    operation_ids:
+    - circle.gathering.CreateGatheringDraft
+    - circle.gathering.PublishGathering
+  - id: discovery
+    operation_ids:
+    - circle.gathering.ListGatheringsBySource
+    - circle.gathering.GetPublicGathering
+  - id: approval
+    operation_ids:
+    - circle.gathering.ApplyToGathering
+    - circle.gathering.ReviewGatheringApplication
+  - id: chat
+    operation_ids:
+    - chat.conversation.GetConversation
+  - id: board
+    operation_ids:
+    - chat.conversation.GetGatheringChatBoard
+  - id: plan
+    operation_ids:
+    - circle.gathering_plan.CreateGatheringPlan
+    - circle.gathering_plan.ProposeGatheringPlan
+    - circle.gathering_plan.CommitGatheringPlanProposal
+    - circle.gathering_plan.GetGatheringPlan
+  - id: outcome
+    operation_ids:
+    - circle.gathering.CompleteGatheringSelf
+    - circle.gathering.CompleteGathering
+    - content.post.SubmitPostPublication
+  tool_ids:
+  - gathering.search_public
+  - gathering.read_public
+  - gathering.read_private
+  - gathering.propose_create_draft
+  - gathering.propose_update
+  - gathering.propose_plan
+  - gathering.watch_availability
+
+placement_profiles:
+- id: gathering.discovery-to-outcome
+  placements:
+  - {surface_id: homeFeed, route_id: home}
+  - {surface_id: homepageDetail, route_id: homepageDetail}
+  - {surface_id: circleDetail, route_id: circleDetail}
+  - {surface_id: gatheringCreate, route_id: gatheringCreate}
+  - {surface_id: gatheringDetail, route_id: gatheringDetail}
+  - {surface_id: chatDetail, route_id: chatDetail}
+  - {surface_id: gatheringBoard, route_id: gatheringBoard}
+  - {surface_id: workBrowser, route_id: workBrowser}
+
+distribution_scenes:
+- id: gathering.topic-discovery
+  placement_profile_ref: gathering.discovery-to-outcome
+  source_object_refs:
+  - content.post
+  - entity.homepage
+  - circle.circle
+  topic_match: any
+  ranking_input: topicRef
+
+experience_packages:
+- id: gathering.travel.shared-action
+  scenario_id: shared_multi_day_journey
+  topic_refs:
+  - Topic/旅行/旅行筹备/行前规划
+  tag_refs:
+  - Topic/旅行
+  behavior_contract_ref: gathering.shared-action
+  distribution_scene_ref: gathering.topic-discovery
+  placement_profile_ref: gathering.discovery-to-outcome
+  skill_refs:
+  - gathering_coordinator
+  object_refs:
+  - content.post
+  - entity.homepage
+  - circle.circle
+  - circle.gathering
+  - circle.gathering_plan
+  - chat.conversation
+- id: gathering.campus.newcomer-interest-meetup
+  scenario_id: newcomer_same_school_interest_activity
+  topic_refs:
+  - Topic/教育成长/校园生活/社团活动
+  tag_refs:
+  - Audience/用户/职业/学生/大学生
+  behavior_contract_ref: gathering.shared-action
+  distribution_scene_ref: gathering.topic-discovery
+  placement_profile_ref: gathering.discovery-to-outcome
+  skill_refs:
+  - gathering_coordinator
+  object_refs:
+  - content.post
+  - entity.homepage
+  - circle.circle
+  - circle.gathering
+  - circle.gathering_plan
+  - chat.conversation
+
+data_activation:
+  source: quwoquan_data
+  immutable_release_required: true
+  environment_import_receipt_required: true
+  production_fixture_allowed: false
+  uat_state_without_activation: open
+
+observability:
+  dimensions:
+  - topicRef

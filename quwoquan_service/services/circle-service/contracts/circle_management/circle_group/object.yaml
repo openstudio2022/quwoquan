@@ -45,10 +45,6 @@ relationships:
   reference_fields:
   - conversationId
   target_object: chat.Conversation
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - circleId 与 groupType 创建后不可变
 - parentGroupId 必须属于同一 Circle 且层级关系无环
@@ -64,3 +60,19 @@ lifecycle:
   - archived
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - circle.circle_group.CircleGroupCreated
+  - circle.circle_group.CircleGroupUpdated
+  - circle.circle_group.CircleGroupArchived
+  - chat.conversation.CircleGroupConversationProvisioned
+  event_consumers:
+  - name: ProjectCircleGroupSearchIndex
+    kind: event_handler
+    facet: CircleGroupSearchIndexHandler
+    method: apply
+    idempotency: event_id
+  - name: BindProvisionedConversation
+    kind: event_handler
+    facet: ConversationBindingProjector
+    method: apply
+    idempotency: event_id

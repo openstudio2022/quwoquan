@@ -1,16 +1,12 @@
 events:
 - name: CircleCreated
-  description: 圈子创建
-  producer: circle-service
-  consumers:
-  - recommendation-engine
-  - notification-service
-  - chat-service
-  - circle-search-index-projector
-  channel: event_store
+  description: '圈子创建
+
+    非 canonical 结构字段迁移注记：recommend_impact="circle_index_refresh"。'
+  delivery_semantics: transactional_outbox
   payload_entity: Circle
   payload_fields:
-  - _id
+  - id
   - name
   - ownerId
   - category
@@ -19,17 +15,12 @@ events:
   - welcomeMessage
   - iconUrl
   - autoSyncChat
-  recommend_impact: circle_index_refresh
 - name: CircleUpdated
   description: 圈子信息更新
-  producer: circle-service
-  consumers:
-  - recommendation-engine
-  - circle-search-index-projector
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: Circle
   payload_fields:
-  - _id
+  - id
   - name
   - description
   - rulesText
@@ -40,23 +31,17 @@ events:
   - category
 - name: CircleArchived
   description: 圈子归档
-  producer: circle-service
-  consumers:
-  - recommendation-engine
-  - notification-service
-  - circle-search-index-projector
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: Circle
   payload_fields:
-  - _id
+  - id
   - status
 - name: CircleSectionsUpdated
   description: 圈子板块配置更新
-  producer: circle-service
-  consumers: []
-  channel: event_store
-  no_consumer_reason: Circle aggregate state is the only read source; the event is retained for audit/replay and has no independent service projection.
+  delivery_semantics: transactional_event_log
   payload_entity: Circle
   payload_fields:
   - circleId
   - sectionConfig
+  no_consumer_reason: Circle aggregate state is the only read source; the event is retained for audit/replay and has no independent
+    service projection.

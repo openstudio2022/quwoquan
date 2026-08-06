@@ -2,7 +2,7 @@ api_routes:
 - method: GET
   path: /ops/app-recovery/version
   operation: GetAppRecoveryVersion
-  actor: device
+  actor: none
   application:
     kind: query
     facet: AppReleaseRecoveryQueryFacade
@@ -20,6 +20,10 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 1
     idempotency: none
+  request_entity: GetAppRecoveryVersionQuery
+  request_body_kind: none
+  response_entity: AppReleaseRecoveryView
+  response_body_kind: object
   error_codes:
   - OPS.USER.app_release_query_invalid
   - OPS.SYSTEM.app_release_unavailable
@@ -58,12 +62,7 @@ consumers:
 - name: public-web
   capabilities: [get_app_recovery_version]
 contract_test:
-  mock_strategy:
-    app_side:
-      scenarios:
-      - name: version_update_available
-        route: GET /ops/app-recovery/version
-        assertions: [status_200, exact_four_field_response]
+  test_strategy:
     service_side:
       description: 使用环境 release 配置验证平台分流、Build 比较与受信 URL，不使用数据库或第三方商店替身。
       scenarios:
@@ -73,3 +72,29 @@ contract_test:
       - name: ios_pwa_recovery
         command: GetAppRecoveryVersion platform=ios
         assertions: [empty_update_url, official_pwa_recovery_url, current_release_build]
+
+readiness_cases:
+- case_id: get-app-recovery-version-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetAppRecoveryVersion}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/app_release/app_release_recovery__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-app-recovery-version-api
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetAppRecoveryVersion}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/app_release/version_and_download_http__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: app_release_get_app_recovery_version_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GetAppRecoveryVersion}
+  runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/app_release/app_release_recovery__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

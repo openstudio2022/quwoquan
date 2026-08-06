@@ -1,6 +1,0 @@
-domain: TRAVEL
-aggregate: TripMapView
-description: TripMapView Reader 错误码。
-errors:
-- {code: TRAVEL.DEPENDENCY.trip_map_projection_unavailable, kind: DEPENDENCY, reason: trip_map_projection_unavailable, emitted_by: [{surface: http, operations: [GetTripMap]}], http_status: 503, recovery_action: retry, recovery_after_seconds: 2, go_const: ErrTripMapProjectionUnavailable, user_message: {zh: 行程地图正在更新，请稍后重试, en: Trip map is being updated}}
-- {code: TRAVEL.SYSTEM.trip_map_projection_failed, kind: SYSTEM, reason: trip_map_projection_failed, emitted_by: [{surface: http, operations: [GetTripMap]}], http_status: 500, recovery_action: retry, recovery_after_seconds: 5, go_const: ErrTripMapProjectionFailed, user_message: {zh: 行程地图加载失败，请重试, en: Trip map failed to load}}

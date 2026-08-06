@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from core import cursor_startup_probe as pr
 from core import cursor_startup_cache as cache
+from core import cursor_startup_probe_suite as pr
 from core import cursor_workspace_probe as workspace_probe
 from content.execution.preflight import handler as preflight_handler
 

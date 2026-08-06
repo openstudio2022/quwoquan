@@ -10,7 +10,7 @@ groups:
           service: "assistant-service"
           operation: "assistant.page_context.ReportPageContext"
           contract_metric: "assistant_page_context_session"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "300"
           slo_availability_percent: "99.5"
       - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
@@ -20,6 +20,6 @@ groups:
           service: "assistant-service"
           operation: "assistant.page_context.ReportPageContext"
           contract_metric: "assistant_page_context_session"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "300"
           slo_availability_percent: "99.5"

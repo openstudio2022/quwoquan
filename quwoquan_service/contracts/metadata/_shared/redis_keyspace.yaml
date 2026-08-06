@@ -45,6 +45,7 @@ scene_routing:
         - "cache:"
         - "ix:"
         - "events.content."
+        - "events.user."
         - "events.circle."
         - "events.search."
         - "events.chat."

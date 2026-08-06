@@ -1,12 +1,17 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: recover-chat-account-closure-dead-letter-api
 package api_integration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -15,10 +20,70 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/accountrestriction"
+	rterr "quwoquan_service/runtime/errors"
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
+	mqadapter "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
 )
+
+func TestRecoverChatAccountClosureDeadLetterHTTPReleasesRealTerminalMarker(t *testing.T) {
+	cleanAll(t)
+	ctx := t.Context()
+	projection := persistence.NewMongoUserAccountClosedProjection(
+		requireMongoDB(t),
+		redisRouter.Scene("general"),
+	)
+	if err := projection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const sourceStreamID = "1710000000000-91"
+	if _, err := projection.RecordUserAccountClosedFailure(
+		ctx, sourceStreamID, "chat-account-closure-event-91", errors.New("scripted failure"),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := projection.MarkUserAccountClosedDeadLettered(ctx, sourceStreamID); err != nil {
+		t.Fatal(err)
+	}
+	consumer, err := mqadapter.NewUserAccountClosedConsumer(
+		redisRouter.Scene("general"), projection, projection,
+		"chat-account-closure-readiness", slog.Default(),
+		mqadapter.DefaultUserAccountClosedConsumerConfig(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
+		http.NotFoundHandler(),
+		runtimemessaging.DeadLetterRecoveryRouteConfig{
+			Path:   "/internal/chat/account-closure/dead-letters:recover",
+			Module: rterr.ModuleChat, Releaser: consumer,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/chat/account-closure/dead-letters:recover",
+		bytes.NewBufferString(`{"sourceStreamId":"1710000000000-91"}`),
+	)
+	request.Header.Set("Idempotency-Key", "recover-chat-account-closure-91")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	deadLettered, err := projection.IsUserAccountClosedDeadLettered(ctx, sourceStreamID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deadLettered {
+		t.Fatal("HTTP recovery must clear the canonical Mongo terminal marker")
+	}
+}
 
 func TestUserAccountClosedTerminalMarkerRetainsSourcePELReference(
 	t *testing.T,

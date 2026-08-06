@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// readiness_case: promote-post-to-work-api
 package api_integration
 
 import (

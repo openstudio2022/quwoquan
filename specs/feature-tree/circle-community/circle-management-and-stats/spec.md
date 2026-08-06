@@ -86,3 +86,15 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 圈子类目缺可引用的 canonical 值域
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/fields.yaml` 的 `PersonaCircleSlice.category` 与 `subCategory` 仍是裸 string，端侧只能自行约定类目取值，未知值无法失败关闭。
+- 根因是 `quwoquan_service/contracts/metadata/_shared/domain_taxonomy.yaml` 的自述已失效，它声称由 codegen 产出 Go 与 Dart 的领域标签类型，但仓库内既没有该生成器也没有这两个符号，唯一读取它的脚本只校验 `user_tag_ref`。
+- 该文件的子类目是按 domain 分组的本地化标签文案且没有稳定 id，直接压成扁平枚举会把 locale 文案写进 wire 取值，形成不可演进的对外契约。
+- 完成判定：`SIT-002` 与 `SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 依赖：先让领域标签文件真正产出枚举并为子类目分配稳定 id，再同时改聚合与投影字段类型。

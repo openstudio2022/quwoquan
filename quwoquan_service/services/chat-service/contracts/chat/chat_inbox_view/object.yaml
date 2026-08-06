@@ -49,9 +49,29 @@ relationships:
 business_rules:
 - 每个 persona 与 conversation 至多一条 inbox 行，排序游标由最后已提交消息序列和时间共同决定。
 - 未读数只由 Message 与 ConversationUserState 事件推进，查询不得回扫 message 集合补算。
+- 同一 conversation 的源事件按聚合版本单调应用，重放或乱序事件不得回退已投影行。
 - Conversation tombstone 必须移除可见内容并保留幂等处理水位。
 lifecycle:
-  source_events: [ConversationCreated, ConversationUpdated, ConversationDissolved, ConversationMemberAdded, ConversationMemberRemoved, ConversationMemberLeft, MessageSent, ConversationUserSettingsChanged, ConversationReadWatermarkAdvanced]
-  checkpoint: chat_outbox_sequence
-  rebuild: replay_chat_authoritative_outbox
-  tombstone: hide_conversation_and_retain_checkpoint
+  source_events:
+  - chat.message.MessageSent
+  - chat.message.MessageRecalled
+  - chat.conversation.ConversationCreated
+  - chat.conversation.ConversationRosterUpdated
+  - chat.conversation.ConversationAvatarUpdated
+  - chat.conversation.ConversationDissolved
+  - chat.conversation_membership.ConversationMemberAdded
+  - chat.conversation_membership.ConversationMemberRemoved
+  - chat.conversation_membership.ConversationMemberLeft
+  - chat.conversation_membership.ConversationMemberRoleChanged
+  - chat.conversation_user_state.ConversationReadWatermarkAdvanced
+  - chat.conversation_user_state.ConversationUserSettingsChanged
+  checkpoint: per_source_outbox_sequence
+  rebuild: enumerate_conversation_user_state_identities
+  tombstone: hide_inactive_or_inaccessible_conversation_keep_checkpoint
+  idempotency: aggregate_version
+  event_consumers:
+  - name: ProjectChatInbox
+    kind: projector
+    facet: ChatInboxViewProjector
+    method: apply
+    idempotency: aggregate_version

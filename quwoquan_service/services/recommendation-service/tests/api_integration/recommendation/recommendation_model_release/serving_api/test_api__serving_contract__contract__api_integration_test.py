@@ -3,6 +3,9 @@ API tests for the ModelRelease scoring Reader and GET /health.
 Run from services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime: python -m pytest tests/ -v
 Requires: pip install fastapi uvicorn pydantic httpx httpx2 pytest
 """
+# spec_ref: specs/feature-tree/recommendation-platform/rec-model-service/spec.md#sit-001
+# readiness_case: score-candidates-api
+# readiness_case: batch-score-candidates-api
 from __future__ import annotations
 
 import pytest
@@ -36,8 +39,15 @@ class _HealthyConsumer:
 
 
 def _mark_runtime_ready() -> None:
+    app.state.runtime_workload = "full"
     app.state.ranked_window_facade = object()
+    app.state.model_release_command_facade = object()
+    app.state.model_release_outbox_relay = _HealthyConsumer()
+    app.state.model_release_runtime_consumer = _HealthyConsumer()
     app.state.candidate_post_lifecycle_consumer = _HealthyConsumer()
+    app.state.candidate_gathering_lifecycle_consumer = _HealthyConsumer()
+    app.state.candidate_premium_pool_consumer = _HealthyConsumer()
+    app.state.experiment_policy_consumer = _HealthyConsumer()
     app.state.user_account_closed_consumer = _HealthyConsumer()
     app.state.content_behavior_consumer = _HealthyConsumer()
     app.state.feed_page_delivered_consumer = _HealthyConsumer()

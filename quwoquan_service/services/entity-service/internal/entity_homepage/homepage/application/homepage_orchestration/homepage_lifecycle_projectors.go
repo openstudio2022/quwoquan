@@ -27,12 +27,12 @@ type ClaimLifecycleSource interface {
 
 type ClaimHomepageProjector struct {
 	source    ClaimLifecycleSource
-	homepages *HomepageService
+	homepages *HomepageLifecycleHandler
 }
 
 func NewClaimHomepageProjector(
 	source ClaimLifecycleSource,
-	homepages *HomepageService,
+	homepages *HomepageLifecycleHandler,
 ) (*ClaimHomepageProjector, error) {
 	if source == nil || homepages == nil {
 		return nil, fmt.Errorf("claim homepage projector requires source and homepage service")

@@ -32,7 +32,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 	defer func() { recordSubscriptionCronTick(err) }()
 
 	if s.subscriptions == nil {
-		return skillmodel.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
+		return skillmodel.SkillSubscriptionCronTickResult{}, skillgenerated.AppErrorFromSubscriptionStorageUnavailable("skill subscription store is not configured")
 	}
 	if s.cache == nil {
 		return skillmodel.SkillSubscriptionCronTickResult{},
@@ -50,7 +50,7 @@ func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input 
 	if raw := strings.TrimSpace(input.Now); raw != "" {
 		parsed, err := time.Parse(time.RFC3339, raw)
 		if err != nil {
-			return skillmodel.SkillSubscriptionCronTickResult{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "now 无效", err.Error())
+			return skillmodel.SkillSubscriptionCronTickResult{}, skillgenerated.AppErrorFromSubscriptionInvalidArgument("invalid now: " + err.Error())
 		}
 		now = parsed.UTC()
 	}
@@ -606,7 +606,7 @@ func (s *AssistantService) createProactiveTurnMessage(
 	switch subscription.Destination.DestinationType {
 	case skillmodel.SkillSubscriptionDestinationChatConversation:
 		if s.chatGrounding == nil {
-			return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, rterr.NewUnavailable(rterr.ModuleAssistant, "会话投递通道不可用", "chat grounding client is not configured")
+			return assistant.AssistantTurn{}, ports.NotificationAppMessageReceipt{}, skillgenerated.AppErrorFromSubscriptionDeliveryFailed("chat grounding client is not configured")
 		}
 		clientMsgID := deliveryID + ":chat"
 		if err := s.chatGrounding.SendMessage(ctx, ports.ChatGroundingSendMessageRequest{

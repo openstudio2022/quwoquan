@@ -14,7 +14,7 @@ import (
 )
 
 type HomepageSearchItemProjection struct {
-	handler *searchitemevent.Handler
+	handler *searchitemevent.HomepageSearchItemViewProjector
 }
 
 func NewHomepageSearchItemProjection(index searchitemapp.Index) *HomepageSearchItemProjection {

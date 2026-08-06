@@ -1,9 +1,0 @@
-backend: mongodb
-role: projection
-collections:
-  trip_map_views:
-    entity: TripMapView
-    role: projection
-    indexes:
-    - {name: uq_trip_map_view_trip, keys: {tripId: 1}, unique: true}
-    - {name: idx_trip_map_source_revision, keys: {currentRevisionId: 1, currentRevisionNumber: 1}}

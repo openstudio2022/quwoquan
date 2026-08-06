@@ -20,7 +20,12 @@ type DataContentFleetReport struct {
 	FleetAcceptedThroughputPerHour     float64                  `json:"fleetAcceptedThroughputPerHour"`
 	EndToEndAcceptedThroughputPerHour  float64                  `json:"endToEndAcceptedThroughputPerHour"`
 	AcceptedContentThroughputStatus    string                   `json:"acceptedContentThroughputStatus"`
+	RecoveryEligibleCount              int                      `json:"recoveryEligibleCount"`
+	AutomaticRecoveredCount            int                      `json:"automaticRecoveredCount"`
+	ManualRecoveredCount               int                      `json:"manualRecoveredCount"`
+	AutomaticRecoveryStatus            string                   `json:"automaticRecoveryStatus"`
 	AutomaticRecoveryRate              float64                  `json:"automaticRecoveryRate"`
+	FirstAttemptSuccessRate            float64                  `json:"firstAttemptSuccessRate"`
 	FinalizedWithinStageBudgetRate     float64                  `json:"finalizedWithinStageBudgetRate"`
 	DuplicatePublishCount              int                      `json:"duplicatePublishCount"`
 	MissingObjectCount                 int                      `json:"missingObjectCount"`
@@ -75,6 +80,10 @@ func BuildDataContentFleetReport(
 	publishTasks := 0
 	transactionResults := 0
 	commercialAccepted := 0
+	recoveryEligible := 0
+	automaticRecovered := 0
+	manualRecovered := 0
+	firstAttemptSucceeded := 0
 	var canonicalFinalizedAt time.Time
 	outcomes := make([]DataContentTaskOutcome, 0, len(tasks))
 	for _, task := range tasks {
@@ -83,6 +92,19 @@ func BuildDataContentFleetReport(
 		}
 		if task.Status == TaskStatusSucceeded {
 			succeeded++
+			if task.Attempts <= 1 {
+				firstAttemptSucceeded++
+			}
+		}
+		if task.Attempts > 1 || task.LastFailure != nil {
+			recoveryEligible++
+			if task.Status == TaskStatusSucceeded {
+				if strings.TrimSpace(task.Result["recoveryMode"]) == "manual" {
+					manualRecovered++
+				} else {
+					automaticRecovered++
+				}
+			}
 		}
 		if task.Status == TaskStatusSucceeded && dataContentResultStageCompleted(task) {
 			stageCompleted++
@@ -115,9 +137,15 @@ func BuildDataContentFleetReport(
 	total := len(tasks)
 	finalizedRate := 0.0
 	recoveryRate := 0.0
+	firstAttemptSuccessRate := 0.0
+	recoveryStatus := "NOT_EXERCISED"
 	if total > 0 {
 		finalizedRate = float64(succeeded) / float64(total)
-		recoveryRate = finalizedRate
+		firstAttemptSuccessRate = float64(firstAttemptSucceeded) / float64(total)
+	}
+	if recoveryEligible > 0 {
+		recoveryRate = float64(automaticRecovered) / float64(recoveryEligible)
+		recoveryStatus = "MEASURED"
 	}
 	// Idempotent resume may leave jobs non-succeeded while canonical objects
 	// are already finalized on disk; count those toward the commercial quota.
@@ -164,7 +192,12 @@ func BuildDataContentFleetReport(
 		FleetAcceptedThroughputPerHour:     fleetAcceptedThroughput,
 		EndToEndAcceptedThroughputPerHour:  endToEndAcceptedThroughput,
 		AcceptedContentThroughputStatus:    acceptedStatus,
+		RecoveryEligibleCount:              recoveryEligible,
+		AutomaticRecoveredCount:            automaticRecovered,
+		ManualRecoveredCount:               manualRecovered,
+		AutomaticRecoveryStatus:            recoveryStatus,
 		AutomaticRecoveryRate:              recoveryRate,
+		FirstAttemptSuccessRate:            firstAttemptSuccessRate,
 		FinalizedWithinStageBudgetRate:     finalizedRate,
 		DuplicatePublishCount:              duplicatePublishCount,
 		MissingObjectCount:                 missingObjectCount,

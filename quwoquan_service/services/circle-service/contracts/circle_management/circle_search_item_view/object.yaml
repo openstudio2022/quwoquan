@@ -37,7 +37,16 @@ business_rules:
 - 同一 circleId 的版本必须单调应用，重复事件不得产生第二条搜索条目。
 - Circle 或 Homepage tombstone 必须从可搜索集合移除对应条目。
 lifecycle:
-  source_events: [CircleCreated, CircleUpdated, CircleDeleted, HomepageUpdated, HomepageDeleted]
+  source_events:
+  - circle.circle.CircleCreated
+  - circle.circle.CircleUpdated
+  - circle.circle.CircleArchived
   checkpoint: circle_outbox_sequence
-  rebuild: replay_circle_and_homepage_public_events
+  rebuild: replay_circle_public_events
   tombstone: delete_search_item_keep_checkpoint
+  event_consumers:
+  - name: ProjectCircleSearchItem
+    kind: projector
+    facet: CircleSearchItemViewProjector
+    method: apply
+    idempotency: aggregate_version

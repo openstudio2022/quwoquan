@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md#sit-003
+// readiness_case: apply-account-security-terminal-event-api
 package api_integration
 
 import (

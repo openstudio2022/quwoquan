@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: project-circle-derived-counts-api
 package api_integration
 
 import (
@@ -12,6 +14,9 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	circleapp "quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	circlepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
+	placementevents "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/events"
 	placementapp "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/application"
 	placementmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/messaging"
 	placementpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence"
@@ -30,7 +35,7 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 	if err := projection.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
 	}
-	consumer := placementmessaging.NewContentPostConsumer(
+	consumer := placementevents.NewContentPostConsumer(
 		circleMessageTransport, projection, projection, "circle-api-integration", nil,
 	)
 	values := map[string]string{
@@ -45,7 +50,7 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 		"occurredAt": time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC).Format(time.RFC3339Nano),
 	}
 	for duplicate := 0; duplicate < 2; duplicate++ {
-		if _, err := redisRouter.Scene("general").XAdd(ctx, placementmessaging.ContentPostLifecycleStream, values); err != nil {
+		if _, err := redisRouter.Scene("general").XAdd(ctx, placementevents.ContentPostLifecycleStream, values); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -92,14 +97,19 @@ func TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores(t *t
 	}
 
 	store := placementpersistence.NewMongoAggregateStore(mongoDB)
-	countProjector := placementpersistence.NewMongoPostCountProjector(mongoDB, circleCacheInvalidator)
-	countRelay := placementapp.NewOutboxRelay(store, store, countProjector, "circle-count-primary")
+	countHandler := circleapp.NewCirclePostCountProjectionHandler(
+		circlepersistence.NewMongoPostCountProjector(mongoDB, circleCacheInvalidator),
+	)
+	countRelay := placementapp.NewOutboxRelay(store, store, postCountTestConsumer{handler: countHandler}, "circle-count-primary")
 	if count, err := countRelay.Drain(ctx, 10); err != nil || count != 1 {
 		t.Fatalf("drain placement count projection count=%d err=%v", count, err)
 	}
+	if checkpoint, err := store.LoadCheckpoint(ctx, "circle-count-primary"); err != nil || checkpoint == "" {
+		t.Fatalf("post-count projection checkpoint=%q err=%v", checkpoint, err)
+	}
 	// A fresh checkpoint deliberately replays the same outbox event. The Mongo
 	// inbox must suppress a second increment.
-	replayRelay := placementapp.NewOutboxRelay(store, store, countProjector, "circle-count-rebuild-proof")
+	replayRelay := placementapp.NewOutboxRelay(store, store, postCountTestConsumer{handler: countHandler}, "circle-count-rebuild-proof")
 	if count, err := replayRelay.Drain(ctx, 10); err != nil || count != 1 {
 		t.Fatalf("replay placement count projection count=%d err=%v", count, err)
 	}

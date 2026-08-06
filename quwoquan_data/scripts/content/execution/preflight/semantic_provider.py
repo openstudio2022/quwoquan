@@ -235,7 +235,7 @@ def semantic_agent_probe_suite(
     resolved = _provider(provider)
     policy = active_runtime_policy()
     if resolved is AgentProvider.CURSOR_SDK:
-        from core.cursor_startup_probe import cursor_startup_probe_suite
+        from core.cursor_startup_probe_suite import cursor_startup_probe_suite
 
         report = cursor_startup_probe_suite(
             model=model,

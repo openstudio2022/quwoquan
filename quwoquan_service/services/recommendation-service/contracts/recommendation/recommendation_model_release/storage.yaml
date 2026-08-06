@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   rec_model_registry:
+    publication_role: not_published
     entity: RecommendationModelRelease
     role: authoritative
     description: RecommendationModelRelease Facade 事务写入的场景发布聚合；推理 Reader 只读取 status=active 的不可变 artifact 身份。
@@ -22,6 +23,7 @@ collections:
         status: 1
         updatedAt: -1
   rec_model_release_command_receipts:
+    publication_role: not_published
     entity: RecommendationModelReleaseCommandReceipt
     role: authoritative
     description: 与 Stage/Activate 聚合提交同事务写入的幂等命令回执。
@@ -30,6 +32,7 @@ collections:
       keys: {expiresAt: 1}
       expire_after_seconds: 0
   rec_model_release_outbox:
+    publication_role: transactional_outbox
     entity: RecommendationModelReleaseOutbox
     role: append_only
     description: 与 Stage/Activate 聚合状态同事务追加的不可变事件记录。
@@ -38,6 +41,7 @@ collections:
       keys: {aggregateId: 1, aggregateVersion: 1, eventType: 1}
       unique: true
   rec_training_samples:
+    publication_role: not_published
     entity: RecommendationTrainingSample
     role: append_only
     description: 由 canonical 行为、曝光和特征快照构建的不可变训练样本；模型训练不得回读上游服务存储。
@@ -46,6 +50,7 @@ collections:
       keys: {sourceSampleId: 1}
       unique: true
   rec_replay_datasets:
+    publication_role: not_published
     entity: RecommendationReplayDataset
     role: authoritative
     description: Stage 前冻结的 replay 数据集身份、样本边界与 digest；与不可变 model release revision 绑定。
@@ -54,6 +59,7 @@ collections:
       keys: {datasetDigest: 1}
       unique: true
   rec_replay_samples:
+    publication_role: not_published
     entity: RecommendationReplaySample
     role: append_only
     description: replay dataset 的不可变成员样本；只通过 datasetId 归属 RecommendationModelRelease。
@@ -61,4 +67,18 @@ collections:
     - name: uq_recommendation_replay_sample_identity
       keys: {datasetId: 1, sourceSampleId: 1}
       unique: true
+streams:
+  events.recommendation.model_releases:
+    publication_role: publication_accessory
+    entity: RecommendationModelRelease
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: RecommendationModelRelease transactional outbox relay 的唯一 durable runtime stream；scoring runtime 只消费该 typed stream。
+  events.recommendation.model_releases.runtime.dlq:
+    entity: RecommendationModelRelease
+    role: dead_letter
+    idempotency_key: sourceStreamId
+    retention_seconds: 604800
+    description: Scoring runtime 无法解析或应用 model release typed event 时写入的有界 dead-letter stream。
 role: authoritative

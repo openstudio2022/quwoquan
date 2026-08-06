@@ -1,0 +1,42 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_edit_models.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_code_page.dart';
+import '../../../../../support/service/user_service/persona_management/persona/contact_profile_queries.dart';
+
+const _qrCard = ProfileQrCardData(
+  publicProfileUrl: 'https://quwoquan.com/u/current',
+  qrPayload: 'https://quwoquan.com/u/current?qr=fixture',
+  qrTokenId: 'fixture-qr',
+  avatarUrl: '',
+  displayName: '当前用户',
+  region: '杭州',
+  shareText: 'https://quwoquan.com/u/current?qr=fixture',
+);
+
+void main() {
+  testWidgets('我的二维码页真实渲染名片与扫码主动作', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileEditQueryProvider.overrideWith(
+            (ref, surface) => ContactProfileEditQueryFake(qrCard: _qrCard),
+          ),
+        ],
+        child: const CupertinoApp(home: MyQrCodePage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(ProfileText.editProfileQrCardTitle), findsOneWidget);
+    expect(find.text(_qrCard.displayName), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text(ProfileText.editProfileQrScanAction),
+      200,
+    );
+    expect(find.text(ProfileText.editProfileQrScanAction), findsOneWidget);
+  });
+}

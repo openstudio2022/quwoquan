@@ -1,4 +1,19 @@
 // spec_ref: specs/feature-tree/object-homepage-network/spec.md#dom-002
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+// readiness_case: search-homepages-api
+// readiness_case: apply-homepage-lifecycle-events-api
+// readiness_case: list-homepage-candidates-api
+// readiness_case: intake-homepage-candidate-api
+// readiness_case: suggest-homepage-candidate-api
+// readiness_case: publish-homepage-candidate-api
+// readiness_case: get-homepage-detail-api
+// readiness_case: get-homepage-shell-api
+// readiness_case: get-homepage-introduction-api
+// readiness_case: get-object-page-bundle-api
+// readiness_case: get-entity-impact-api
+// readiness_case: get-homepage-review-summary-api
+// readiness_case: get-homepage-related-groups-api
+// readiness_case: update-claimed-homepage-basics-api
 package api_integration
 
 import (
@@ -49,9 +64,19 @@ func trustedPersonaHandler(next http.Handler, personaID string) http.Handler {
 	})
 }
 
+type homepageClaimGate struct{ service *application.HomepageService }
+
+func (gate homepageClaimGate) FindHomepageState(
+	ctx context.Context,
+	homepageID string,
+) (claimapp.HomepageState, bool, error) {
+	status, claimStatus, found, err := gate.service.FindHomepageClaimState(ctx, homepageID)
+	return claimapp.HomepageState{Status: status, ClaimStatus: claimStatus}, found, err
+}
+
 func newMongoGovernanceHomepageService(
 	t *testing.T,
-) (*application.HomepageService, *claimapp.Facade, *statusapp.Facade) {
+) (*application.HomepageService, *claimapp.Facade, *statusapp.Facade, *statuspersistence.MongoStore) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	container, err := tryRunReviewMongoContainer(ctx)
@@ -73,9 +98,9 @@ func newMongoGovernanceHomepageService(
 	}
 	t.Cleanup(func() { _ = client.Disconnect(context.Background()) })
 	database := client.Database("entity_homepage_governance_http_it")
-	homepageStore := homepagepersistence.NewMongoHomepageStore(database, true)
-	claimStore := claimpersistence.NewMongoStore(database, true)
-	statusStore := statuspersistence.NewMongoStore(database, true)
+	homepageStore := homepagepersistence.NewMongoHomepageStore(database)
+	claimStore := claimpersistence.NewMongoStore(database)
+	statusStore := statuspersistence.NewMongoStore(database)
 	for name, ensureIndexes := range map[string]func(context.Context) error{
 		"homepage":      homepageStore.EnsureIndexes,
 		"claim request": claimStore.EnsureIndexes,
@@ -89,7 +114,7 @@ func newMongoGovernanceHomepageService(
 	claimFacade, err := claimapp.NewFacade(claimapp.DataPorts{
 		Aggregates: claimStore,
 		Receipts:   claimStore,
-		Homepages:  service,
+		Homepages:  homepageClaimGate{service: service},
 		Queue:      claimStore,
 	})
 	if err != nil {
@@ -104,13 +129,13 @@ func newMongoGovernanceHomepageService(
 	if err != nil {
 		t.Fatalf("new status report facade: %v", err)
 	}
-	return service, claimFacade, statusFacade
+	return service, claimFacade, statusFacade, statusStore
 }
 
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/spec.md#sit-001
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-candidate-intake-and-publish/spec.md#gwt-001
 func TestHomepageCandidatePublishAndShell(t *testing.T) {
-	homepageService, _, _ := newMongoGovernanceHomepageService(t)
+	homepageService, _, _, _ := newMongoGovernanceHomepageService(t)
 	tokenConfig := rtauth.TokenConfig{
 		Secret:       []byte("0123456789abcdef0123456789abcdef"),
 		Issuer:       "quwoquan.entity.homepage.integration",
@@ -131,6 +156,7 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 	operatorToken, err := signer.Sign(rtauth.TokenSubject{
 		AccountID: "entity-governance-operator",
 		Roles:     []string{"operator"},
+		Scopes:    []string{"ops.case.read", "ops.case.write"},
 	})
 	if err != nil {
 		t.Fatalf("sign operator token: %v", err)
@@ -180,6 +206,35 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 		"address":      "西湖边",
 	}, http.StatusCreated, operatorHeaders)
 	homepageID := stringField(t, candidate, "homepageId")
+	candidateQueue := requestJSONWithHeaders(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/candidates?query=测试发布主页&limit=20",
+		nil,
+		http.StatusOK,
+		operatorHeaders,
+	)
+	if items := sliceField(t, candidateQueue, "items"); len(items) != 1 {
+		t.Fatalf("expected candidate in governance queue, got %#v", items)
+	}
+
+	suggested := requestJSONWithHeaders(
+		t,
+		server.Client(),
+		http.MethodPost,
+		server.URL+"/homepages/candidates/suggest",
+		map[string]any{
+			"title":        "用户建议主页",
+			"homepageType": "city",
+			"city":         "杭州",
+		},
+		http.StatusCreated,
+		http.Header{"Authorization": []string{"Bearer " + viewerToken}},
+	)
+	if got := stringField(t, suggested, "status"); got != "candidate" {
+		t.Fatalf("expected suggested candidate status, got %q", got)
+	}
 
 	published := requestJSONWithHeaders(
 		t,
@@ -220,6 +275,62 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 	}
 	if _, ok := shell["contentPreview"].([]any); !ok {
 		t.Fatalf("expected shell.contentPreview array, got %#v", shell)
+	}
+	detail := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/"+homepageID,
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, detail, "homepageId"); got != homepageID {
+		t.Fatalf("expected homepage detail %q, got %q", homepageID, got)
+	}
+	introduction := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/"+homepageID+"/introduction",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, introduction, "homepageId"); got != homepageID {
+		t.Fatalf("expected homepage introduction %q, got %q", homepageID, got)
+	}
+	impact := requestJSONWithHeaders(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/"+homepageID+"/impact",
+		nil,
+		http.StatusOK,
+		http.Header{"Authorization": []string{"Bearer " + viewerToken}},
+	)
+	if got := stringField(t, impact, "homepageId"); got != homepageID {
+		t.Fatalf("expected homepage impact %q, got %q", homepageID, got)
+	}
+	reviewSummary := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/"+homepageID+"/review-summary",
+		nil,
+		http.StatusOK,
+	)
+	if got := intField(t, reviewSummary, "ratingCount"); got != 0 {
+		t.Fatalf("expected empty review summary, got ratingCount=%d", got)
+	}
+	relatedGroups := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/homepages/"+homepageID+"/related-groups",
+		nil,
+		http.StatusOK,
+	)
+	if groups := sliceField(t, relatedGroups, "groups"); len(groups) != 0 {
+		t.Fatalf("new homepage must not synthesize related groups: %#v", groups)
 	}
 
 	bundle := requestJSONWithHeaders(
@@ -766,7 +877,7 @@ func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
 func TestHomepageGovernanceLifecycle(t *testing.T) {
-	homepageService, claimFacade, statusFacade := newMongoGovernanceHomepageService(t)
+	homepageService, claimFacade, statusFacade, statusStore := newMongoGovernanceHomepageService(t)
 	handler := httpadapter.NewHandler(homepageService).
 		WithClaimRequestHandler(claimhttp.NewHandler(claimFacade)).
 		WithStatusReportHandler(statushttp.NewHandler(statusFacade))
@@ -865,7 +976,8 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		stringField(t, claimItems[0].(map[string]any), "claimRequestId") != claimID {
 		t.Fatalf("expected pending claim in governance queue, got %#v", claimItems)
 	}
-	if err := homepageService.ApplyClaimRequestedProjection(
+	lifecycleHandler := application.NewHomepageLifecycleHandler(homepageService)
+	if err := lifecycleHandler.ApplyClaimRequestedProjection(
 		context.Background(),
 		"test-claim-requested",
 		homepageID,
@@ -887,7 +999,7 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	if got := stringField(t, claimReview, "status"); got != "approved" {
 		t.Fatalf("expected approved claim review, got %q", got)
 	}
-	if err := homepageService.ApplyClaimReviewedProjection(
+	if err := lifecycleHandler.ApplyClaimReviewedProjection(
 		context.Background(),
 		"test-claim-reviewed",
 		homepageID,
@@ -895,6 +1007,24 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		true,
 	); err != nil {
 		t.Fatalf("project claim reviewed: %v", err)
+	}
+	averageRating := 4.9
+	if err := lifecycleHandler.ApplyReviewSummary(
+		context.Background(),
+		homepageID,
+		&averageRating,
+		18,
+		[]string{"位置优越", "服务稳定"},
+	); err != nil {
+		t.Fatalf("project review summary: %v", err)
+	}
+	reviewSummary, err := homepageService.GetHomepageReviewSummary(
+		context.Background(),
+		homepageID,
+	)
+	if err != nil || reviewSummary.RatingCount != 18 ||
+		reviewSummary.AverageRating == nil || *reviewSummary.AverageRating != averageRating {
+		t.Fatalf("review summary projection mismatch: summary=%+v err=%v", reviewSummary, err)
 	}
 
 	intruderServer := httptest.NewServer(trustedPersonaHandler(
@@ -969,12 +1099,26 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	if got := stringField(t, reportReview, "status"); got != "confirmed_offline" {
 		t.Fatalf("expected confirmed_offline review, got %q", got)
 	}
-	if err := homepageService.ApplyStatusReviewedProjection(
+	statusProjector, err := application.NewStatusHomepageProjector(
+		statusStore,
+		homepageService,
+	)
+	if err != nil {
+		t.Fatalf("construct status lifecycle projector: %v", err)
+	}
+	processed, err := statusProjector.RunOnce(context.Background(), 10)
+	if err != nil || processed != 2 {
+		t.Fatalf("project status lifecycle: processed=%d err=%v", processed, err)
+	}
+	checkpoint, err := statusStore.LoadCheckpoint(
 		context.Background(),
-		"test-status-reviewed",
-		homepageID,
-	); err != nil {
-		t.Fatalf("project status reviewed: %v", err)
+		"entity.homepage-status-lifecycle",
+	)
+	if err != nil || strings.TrimSpace(checkpoint) == "" {
+		t.Fatalf("status lifecycle ACK checkpoint=%q err=%v", checkpoint, err)
+	}
+	if replayed, err := statusProjector.RunOnce(context.Background(), 10); err != nil || replayed != 0 {
+		t.Fatalf("status lifecycle replay: processed=%d err=%v", replayed, err)
 	}
 
 	offlineDetail := requestJSON(
@@ -1073,8 +1217,8 @@ func TestHomepageRouteNotFoundUsesRuntimeNotFound(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if out["code"] != "ENTITY.USER.not_found" {
-		t.Fatalf("expected runtime code ENTITY.USER.not_found, got %v", out["code"])
+	if out["code"] != "GATEWAY.USER.route_not_found" {
+		t.Fatalf("expected runtime code GATEWAY.USER.route_not_found, got %v", out["code"])
 	}
 	if out["kind"] != "notFound" {
 		t.Fatalf("expected runtime kind notFound, got %v", out["kind"])
@@ -1089,6 +1233,7 @@ func requestJSON(
 	payload any,
 	expectedStatus int,
 ) map[string]any {
+	t.Helper()
 	return requestJSONWithHeaders(
 		t,
 		client,

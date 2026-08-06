@@ -85,14 +85,14 @@
     "modelReadinessDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "postReviewClosureDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "publishReceiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-    "sourceReadyCount": { "type": "integer", "minimum": 50 },
+    "sourceReadyCount": { "type": "integer", "minimum": 1 },
     "sourceIneligibleCount": { "type": "integer", "minimum": 0 },
-    "candidateCount": { "type": "integer", "minimum": 90 },
-    "approvedQuota": { "const": 50 },
-    "qualifiedCount": { "type": "integer", "minimum": 50 },
-    "finalizedCount": { "type": "integer", "minimum": 50 },
+    "candidateCount": { "type": "integer", "minimum": 1 },
+    "approvedQuota": { "const": 10 },
+    "qualifiedCount": { "type": "integer", "minimum": 1 },
+    "finalizedCount": { "type": "integer", "minimum": 1 },
     "discardedCount": { "type": "integer", "minimum": 0 },
-    "shortfallCount": { "const": 0 },
+    "shortfallCount": { "type": "integer", "minimum": 0 },
     "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
   }
 }

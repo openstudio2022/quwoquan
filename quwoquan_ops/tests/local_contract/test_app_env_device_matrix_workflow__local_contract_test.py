@@ -39,14 +39,33 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             self.workflow,
         )
         self.assertIn(
-            'for attestation in "$RELEASE_ATTESTATION" "$ROLLBACK_RELEASE_ATTESTATION"',
+            "name: Verify OIDC, manifest and complete artifact closure",
             self.workflow,
         )
-        self.assertIn('[[ -z "$attestation" || ! -s "$attestation" ]]', self.workflow)
-        self.assertIn("--env gamma", self.workflow)
-        self.assertIn("--release-attestation \"$RELEASE_ATTESTATION\"", self.workflow)
         self.assertIn(
-            "--rollback-release-attestation \"$ROLLBACK_RELEASE_ATTESTATION\"",
+            "echo \"QWQ_RELEASE_ATTESTATION=${{ steps.release.outputs.pilot_release_path }}\"",
+            self.workflow,
+        )
+        self.assertIn(
+            "echo \"QWQ_ROLLBACK_RELEASE_ATTESTATION=${{ steps.release.outputs.pilot_rollback_path }}\"",
+            self.workflow,
+        )
+        self.assertIn(
+            'for attestation in "$QWQ_RELEASE_ATTESTATION" '
+            '"$QWQ_ROLLBACK_RELEASE_ATTESTATION"',
+            self.workflow,
+        )
+        self.assertIn(
+            '[[ -z "$attestation" || ! -s "$attestation" ]]',
+            self.workflow,
+        )
+        self.assertIn("--env gamma", self.workflow)
+        self.assertIn(
+            '--release-attestation "$QWQ_RELEASE_ATTESTATION"',
+            self.workflow,
+        )
+        self.assertIn(
+            '--rollback-release-attestation "$QWQ_ROLLBACK_RELEASE_ATTESTATION"',
             self.workflow,
         )
         self.assertIn("echo \"started=true\" >> \"$GITHUB_OUTPUT\"", self.workflow)

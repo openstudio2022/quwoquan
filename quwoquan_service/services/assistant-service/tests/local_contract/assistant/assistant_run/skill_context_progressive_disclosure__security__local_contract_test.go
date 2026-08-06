@@ -109,7 +109,7 @@ func TestSkillContextLoadsOnlySelectedProfileResolversAndArtifactsLargeValues(t 
 				TokenCost:   1200,
 				Value:       map[string]any{"fullPage": "large"},
 				ArtifactRef: "artifact:page_1",
-				Summary:     "trip plan page summary",
+				Summary:     "gathering plan page summary",
 			}, nil
 		})},
 		contextReaderBinding{descriptor: contextReaderDescriptor(
@@ -155,7 +155,8 @@ func TestSkillContextLoadsOnlySelectedProfileResolversAndArtifactsLargeValues(t 
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
 	segment := snapshot.Segments[0]
-	if segment.ArtifactRef != "artifact:page_1" || segment.Value["summary"] != "trip plan page summary" {
+	if segment.ArtifactRef != "artifact:page_1" ||
+		segment.Value["summary"] != "gathering plan page summary" {
 		t.Fatalf("artifact segment = %#v", segment)
 	}
 }
@@ -276,14 +277,14 @@ func TestSkillContextRejectsResolverThatDowngradesDeclaredSensitivity(t *testing
 	now := time.Now().UTC()
 	registry := contextReaderRegistry(t, contextReaderBinding{
 		descriptor: contextReaderDescriptor(
-			"trip.private", "domain",
+			"gathering.private", "domain",
 			generated.AssistantContextAuthorityDomainCanonical,
 			generated.AssistantContextSensitivityPrivate,
 		),
 		resolver: contextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
 			return skillcontext.ResolvedContext{
 				Kind:        "domain",
-				SourceRef:   "travel.TripTimelineView:trip-1",
+				SourceRef:   "circle.Gathering:gathering-1",
 				Authority:   generated.AssistantContextAuthorityDomainCanonical,
 				Sensitivity: generated.AssistantContextSensitivityPublic,
 				CapturedAt:  now,
@@ -293,15 +294,15 @@ func TestSkillContextRejectsResolverThatDowngradesDeclaredSensitivity(t *testing
 		}),
 	})
 	profile := skillcontext.Profile{
-		ProfileID: "travel-private",
+		ProfileID: "gathering-private",
 		Requirements: []skillcontext.Requirement{{
-			SlotID:              "trip_private",
+			SlotID:              "gathering_private",
 			Required:            true,
 			AcceptedSourceKinds: []string{"domain"},
 			Authority:           generated.AssistantContextAuthorityDomainCanonical,
 			Sensitivity:         generated.AssistantContextSensitivityPrivate,
 			TokenBudget:         100,
-			ResolverRef:         "trip.private",
+			ResolverRef:         "gathering.private",
 			FallbackPolicy:      "block",
 		}},
 	}
@@ -329,7 +330,7 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 	resolverCalls := 0
 	registry := contextReaderRegistry(t, contextReaderBinding{
 		descriptor: contextReaderDescriptor(
-			"trip.private", "domain",
+			"gathering.private", "domain",
 			generated.AssistantContextAuthorityDomainCanonical,
 			generated.AssistantContextSensitivityPrivate,
 		),
@@ -337,7 +338,7 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 			resolverCalls++
 			return skillcontext.ResolvedContext{
 				Kind:        "domain",
-				SourceRef:   "trip:user_1",
+				SourceRef:   "circle.Gathering:gathering-1",
 				Authority:   generated.AssistantContextAuthorityDomainCanonical,
 				Sensitivity: generated.AssistantContextSensitivityPrivate,
 				CapturedAt:  now,
@@ -347,16 +348,16 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 		}),
 	})
 	profile := skillcontext.Profile{
-		ProfileID: "travel-consented-context",
+		ProfileID: "gathering-consented-context",
 		Requirements: []skillcontext.Requirement{{
-			SlotID:              "trip",
+			SlotID:              "gathering",
 			Required:            true,
 			AcceptedSourceKinds: []string{"domain"},
 			Authority:           generated.AssistantContextAuthorityDomainCanonical,
 			Sensitivity:         generated.AssistantContextSensitivityPrivate,
-			ConsentScopes:       []string{"trip.read"},
+			ConsentScopes:       []string{"assistant.context.private.read"},
 			TokenBudget:         100,
-			ResolverRef:         "trip.private",
+			ResolverRef:         "gathering.private",
 			FallbackPolicy:      "block",
 		}},
 	}
@@ -364,7 +365,7 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 	request := skillcontext.AssembleRequest{
 		RunID:              "run_1",
 		OwnerID:            "user_1",
-		SkillID:            "travel",
+		SkillID:            "gathering",
 		Visibility:         skillcontext.DeliveryPersonal,
 		AllowedSensitivity: generated.AssistantContextSensitivityPrivate,
 	}
@@ -398,8 +399,8 @@ func TestSkillContextConsentReaderIsFailClosedBeforeResolver(t *testing.T) {
 				skillID string,
 				scopes []string,
 			) (bool, error) {
-				if ownerID != "user_1" || skillID != "travel" ||
-					len(scopes) != 1 || scopes[0] != "trip.read" {
+				if ownerID != "user_1" || skillID != "gathering" ||
+					len(scopes) != 1 || scopes[0] != "assistant.context.private.read" {
 					t.Fatalf(
 						"consent request owner=%q skill=%q scopes=%v",
 						ownerID,

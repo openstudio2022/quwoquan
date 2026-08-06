@@ -74,6 +74,11 @@ func MetadataSchemas(metadataDir string) ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
+	redisIssues, err := storageRedisSceneIssues(metadataDir)
+	if err != nil {
+		return nil, err
+	}
+	issues = append(issues, redisIssues...)
 	sortIssues(issues)
 	return issues, nil
 }

@@ -48,6 +48,7 @@ func (r *recordingReader) ListSessionTurns(
 }
 
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/spec.md#sit-001
+// readiness_case: list-session-turns-local
 func TestQueryFacadeOwnsAndNormalizesSessionTurnHistoryRead(t *testing.T) {
 	reader := &recordingReader{result: turnviewmodel.AssistantTurnListView{
 		Items: []turnviewmodel.AssistantTurnSummaryView{{TurnID: "turn_1"}},

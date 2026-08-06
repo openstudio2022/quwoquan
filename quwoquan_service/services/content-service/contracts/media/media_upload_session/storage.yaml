@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   media_upload_sessions:
+    publication_role: not_published
     entity: MediaUploadSession
     description: MediaUploadSession 权威聚合；会话过期后由 Mongo TTL 自动删除，Complete 必须在过期前完成。
     indexes:
@@ -16,13 +17,14 @@ collections:
     - name: idx_media_upload_sessions_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
     - name: idx_media_upload_sessions_version
       keys:
         _id: 1
         version: 1
       unique: true
   media_upload_session_command_receipts:
+    publication_role: not_published
     entity: MediaUploadSession
     description: Init/Complete/Abort 的幂等结果；和会话版本及 outbox 在同一 Mongo transaction 提交。
     indexes:
@@ -37,8 +39,9 @@ collections:
     - name: idx_media_upload_session_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   media_upload_session_outbox:
+    publication_role: transactional_outbox
     entity: MediaUploadSession
     description: 上传会话领域事实；与会话状态变更同一 Mongo transaction 落盘。
     indexes:

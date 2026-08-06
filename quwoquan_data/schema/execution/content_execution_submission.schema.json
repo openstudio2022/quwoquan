@@ -142,15 +142,6 @@
       "then": {
         "required": ["semanticPreflightReceipt"]
       }
-    },
-    {
-      "if": {
-        "properties": { "semanticSelectionId": { "const": "cursor_auto" } },
-        "required": ["semanticSelectionId"]
-      },
-      "then": {
-        "properties": { "retryOf": { "type": "string", "minLength": 1 } }
-      }
     }
   ]
 }

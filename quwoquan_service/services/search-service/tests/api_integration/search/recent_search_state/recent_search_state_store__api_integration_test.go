@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+// readiness_case: list-recent-searches-api
+// readiness_case: upsert-recent-search-api
+// readiness_case: delete-recent-search-api
+// readiness_case: clear-recent-searches-api
 package api_integration
 
 import (

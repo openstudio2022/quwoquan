@@ -1,7 +1,8 @@
-aggregate: Post
 description: 'Post 实体隐私与安全策略。
 
-  声明内容不与 fields.yaml classification 重复；仅描述 fields.yaml 无法表达的：
+  app_log_policy.classification 是 App 日志的有效分类，只能等于或严于 fields.yaml 字段基线；
+
+  其余声明只描述 fields.yaml 无法表达的：
 
   - 端侧 app log 的具体 mask 策略（补充 fields.yaml log_policy 的实现细节）
 
@@ -10,8 +11,6 @@ description: 'Post 实体隐私与安全策略。
   - 存储字段到 API 字段的 canonical 映射
 
   - 字段暴露范围（补充 api_exposure 的精细化 consumer 控制）
-
-  codegen 从本文件生成 Dart ContentPrivacyPolicy.sanitizeForLog()。
 
   '
 app_log_policy:
@@ -57,17 +56,19 @@ app_log_policy:
   description: 设备信息脱敏，不记录完整型号/版本
 data_lifecycle:
   retention_days: 1825
-  user_deletion_hook: true
+  deletion_on_user_request: true
   deletion_cascade:
-  - entity: Comment
-    strategy: hard_delete
-    description: 评论随帖子硬删除
-  - entity: MediaAsset
+  - object_id: content.comment
+    strategy: soft_delete
+    description: PostDeleted 事件经 CommentTombstoneProjector 把该帖 active|hidden 评论批量迁到
+      tombstoned，行与正文保留、查询期不可见。评论由他人撰写，物理删除会连带销毁第三方内容，
+      因此保留是有意的产品行为而非缺口；tombstoned 评论无 TTL 也无后续清理作业。
+  - object_id: content.media_asset
     strategy: soft_delete_then_cdn_purge
     soft_delete_first: true
     cdn_purge_delay_hours: 24
     description: 先软删，24小时后 CDN 清理，避免 CDN 回源错误
-  - entity: Post
+  - object_id: content.post
     strategy: soft_delete
     description: 帖子本身标记删除，数据保留至 retention_days
   anonymization_on_delete:
@@ -78,9 +79,12 @@ data_lifecycle:
     strategy: drop
 field_visibility:
 - field: _id
+  visibility:
+  - never_expose
   description: API/wire 唯一键为 postId；存储层 Mongo _id 不进入客户端 wire；拒绝 _id 与 id 旧键别名
 - field: embedding
-  visibility: never_expose
+  visibility:
+  - never_expose
   description: 向量嵌入对任何 API consumer 不可见（仅内部推荐服务直接查询 DB）
 - field: moderationStatus
   visibility:
@@ -90,7 +94,7 @@ field_visibility:
 - field: authorId
   visibility:
   - all
-  note: PUBLIC，所有 consumer 可见
+  description: PUBLIC，所有 consumer 可见
 - field: location
   visibility:
   - app

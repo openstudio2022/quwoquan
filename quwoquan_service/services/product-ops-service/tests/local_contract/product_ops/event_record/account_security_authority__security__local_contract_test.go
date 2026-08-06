@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v3"
 
 	rtauth "quwoquan_service/runtime/auth"
@@ -269,6 +270,71 @@ func TestProductOpsAccountSecurityAuthorityFailsClosedDuringConstructionAndHealt
 	}
 }
 
+func TestProductOpsAccountSecurityAuthorityChargesSlowSuccessToLatencyBudget(t *testing.T) {
+	accessConfig := productOpsAuthorityAccessTokenConfig()
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessConfig,
+		"product-ops-service",
+		[]string{"user.account.security.read"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		time.Sleep(200 * time.Millisecond)
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"accountState":"active","authEpoch":7}`))
+	}))
+	defer server.Close()
+	authority, err := rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     server.URL,
+			HTTPClient:  &http.Client{Timeout: 1500 * time.Millisecond},
+			Credentials: credentials,
+			Timeout:     1500 * time.Millisecond,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeTotal, beforeWithinSLO := productOpsAuthorityAllowedHistogram(t)
+	handler := productOpsAuthorityMiddleware(
+		t,
+		authority,
+		accessConfig,
+		productOpsAuthorityDeviceTicketConfig(),
+		http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+			writer.WriteHeader(http.StatusNoContent)
+		}),
+	)
+	request := httptest.NewRequest(http.MethodPost, "/ops/events", nil)
+	request.Header.Set(
+		"Authorization",
+		"Bearer "+signProductOpsAccessToken(t, accessConfig, "account-1", 7, nil),
+	)
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("200ms authority read under 1500ms deadline status=%d, want=204", response.Code)
+	}
+	afterTotal, afterWithinSLO := productOpsAuthorityAllowedHistogram(t)
+	if afterTotal != beforeTotal+1 {
+		t.Fatalf("authority histogram count=%d, want=%d", afterTotal, beforeTotal+1)
+	}
+	if afterWithinSLO != beforeWithinSLO {
+		t.Fatalf(
+			"200ms authority read must exceed the 150ms SLO bucket: before=%d after=%d",
+			beforeWithinSLO,
+			afterWithinSLO,
+		)
+	}
+}
+
 func TestProductOpsAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment(t *testing.T) {
 	root := productOpsServiceRoot(t)
 	schemaPath := filepath.Join(root, "config", "schema.yaml")
@@ -317,8 +383,8 @@ func TestProductOpsAccountSecurityAuthorityConfigurationIsExplicitInEveryEnviron
 			if got := environmentConfig.Overrides["sys.product-ops-service.account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.product-ops-service.account_security_authority.timeout_ms"]; got != 300 {
-				t.Fatalf("timeout=%#v, want=300ms", got)
+			if got := environmentConfig.Overrides["sys.product-ops-service.account_security_authority.timeout_ms"]; got != 1500 {
+				t.Fatalf("timeout=%#v, want=1500ms (hot-swap persist; thrash-tolerant authority probe)", got)
 			}
 		})
 	}
@@ -350,7 +416,22 @@ func TestProductOpsAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 	}
 
 	var sloEvidence struct {
-		Metrics map[string]string `yaml:"metrics"`
+		Metrics        map[string]string `yaml:"metrics"`
+		DeadlinePolicy struct {
+			LatencySLOMS               int     `yaml:"latency_slo_ms"`
+			RequestDeadlineMS          int     `yaml:"request_deadline_ms"`
+			SlowSuccess                string  `yaml:"slow_success"`
+			DeadlineExceeded           string  `yaml:"deadline_exceeded"`
+			LatencyErrorBudgetFraction float64 `yaml:"latency_error_budget_fraction"`
+		} `yaml:"deadline_policy"`
+		Alerts []struct {
+			ID                string  `yaml:"id"`
+			Signal            string  `yaml:"signal"`
+			ShortWindow       string  `yaml:"short_window"`
+			LongWindow        string  `yaml:"long_window"`
+			BurnRateThreshold float64 `yaml:"burn_rate_threshold"`
+			Response          string  `yaml:"response"`
+		} `yaml:"alerts"`
 		Privacy struct {
 			PermittedLabels  []string `yaml:"permitted_labels"`
 			ProhibitedLabels []string `yaml:"prohibited_labels"`
@@ -372,6 +453,68 @@ func TestProductOpsAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 	if strings.Join(sloEvidence.Privacy.ProhibitedLabels, ",") !=
 		"account_id,persona_id,token,authorization,request_path" {
 		t.Fatalf("authority SLO PII exclusions drift: %#v", sloEvidence.Privacy.ProhibitedLabels)
+	}
+	if sloEvidence.DeadlinePolicy.LatencySLOMS != 150 ||
+		sloEvidence.DeadlinePolicy.RequestDeadlineMS != 1500 ||
+		sloEvidence.DeadlinePolicy.SlowSuccess !=
+			"allow_before_deadline_and_charge_latency_error_budget" ||
+		sloEvidence.DeadlinePolicy.DeadlineExceeded !=
+			"fail_closed_and_degrade_readiness" ||
+		sloEvidence.DeadlinePolicy.LatencyErrorBudgetFraction != 0.05 {
+		t.Fatalf("authority deadline/SLO policy drift: %+v", sloEvidence.DeadlinePolicy)
+	}
+	if len(sloEvidence.Alerts) != 1 ||
+		sloEvidence.Alerts[0].ID !=
+			"account_security_authority_latency_error_budget_burn" ||
+		sloEvidence.Alerts[0].Signal !=
+			"AccountSecurityAuthorityLatencyErrorBudgetBurn" ||
+		sloEvidence.Alerts[0].ShortWindow != "5m" ||
+		sloEvidence.Alerts[0].LongWindow != "1h" ||
+		sloEvidence.Alerts[0].BurnRateThreshold != 14.4 ||
+		sloEvidence.Alerts[0].Response != "page_owner_and_halt_rollout" {
+		t.Fatalf("authority latency burn-rate contract drift: %+v", sloEvidence.Alerts)
+	}
+	var alertCatalog struct {
+		Groups []struct {
+			Rules []struct {
+				Alert string `yaml:"alert"`
+				Expr  string `yaml:"expr"`
+			} `yaml:"rules"`
+		} `yaml:"groups"`
+	}
+	readProductOpsAuthorityYAML(
+		t,
+		filepath.Join(
+			root,
+			"..",
+			"..",
+			"..",
+			"quwoquan_ops",
+			"observability",
+			"monitoring",
+			"alerts",
+			"quwoquan_alerts.yaml",
+		),
+		&alertCatalog,
+	)
+	var burnRateExpr string
+	for _, group := range alertCatalog.Groups {
+		for _, rule := range group.Rules {
+			if rule.Alert == "AccountSecurityAuthorityLatencyErrorBudgetBurn" {
+				burnRateExpr = rule.Expr
+			}
+		}
+	}
+	for _, required := range []string{
+		`le="0.15"`,
+		"[5m]",
+		"[1h]",
+		"/ 0.05",
+		"> 14.4",
+	} {
+		if !strings.Contains(burnRateExpr, required) {
+			t.Fatalf("authority burn-rate alert missing %q: %s", required, burnRateExpr)
+		}
 	}
 }
 
@@ -525,4 +668,38 @@ func productOpsAuthorityContains(values []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func productOpsAuthorityAllowedHistogram(t *testing.T) (uint64, uint64) {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather authority metrics: %v", err)
+	}
+	var total uint64
+	var withinSLO uint64
+	for _, family := range families {
+		if family.GetName() !=
+			"runtime_auth_account_security_authority_check_duration_seconds" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			isAllowed := false
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "outcome" && label.GetValue() == "allowed" {
+					isAllowed = true
+				}
+			}
+			if !isAllowed || metric.GetHistogram() == nil {
+				continue
+			}
+			total += metric.GetHistogram().GetSampleCount()
+			for _, bucket := range metric.GetHistogram().GetBucket() {
+				if bucket.GetUpperBound() == 0.15 {
+					withinSLO += bucket.GetCumulativeCount()
+				}
+			}
+		}
+	}
+	return total, withinSLO
 }

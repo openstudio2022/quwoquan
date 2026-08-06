@@ -28,7 +28,6 @@ func (reader gatheringBindingReader) ReadGatheringConversation(
 	}
 	return membershipapp.GatheringBinding{
 		GatheringID: conversation.GatheringId, ConversationID: conversation.ID,
-		OwnerPersonaID: conversation.CreatorId, MaxGroupSize: conversation.MaxGroupSize,
 		Active: conversation.Status == conversationmodel.ConversationStatusActive,
 	}, true, nil
 }

@@ -19,6 +19,82 @@ from quwoquan_ops.cli.lib import deployment_candidate_manifest, output_paths
 
 
 class StackctlCandidateSingleTrackTest(unittest.TestCase):
+    def _activate_service_candidate(
+        self,
+        *,
+        target: str = "alpha-local",
+        environment: str = "alpha",
+        service: str = "content-service",
+    ) -> Path:
+        baseline_id = f"sha256:{'b' * 64}"
+        candidate_dir = output_paths.deployment_candidate_dir(target, baseline_id)
+        package_dir = candidate_dir / "packages" / "services" / service
+        (package_dir / "config").mkdir(parents=True)
+        (package_dir / "manifests").mkdir(parents=True)
+        (package_dir / "image.lock").write_text(
+            "example.invalid/content@sha256:" + ("c" * 64) + "\n",
+            encoding="utf-8",
+        )
+        (package_dir / "config/config.yaml").write_text(
+            "environment: alpha\n",
+            encoding="utf-8",
+        )
+        (package_dir / "manifests/all.yaml").write_text(
+            "---\nkind: List\nitems: []\n",
+            encoding="utf-8",
+        )
+        (package_dir / "provenance.json").write_text(
+            json.dumps(
+                {
+                    "schema": "qwq.service_package",
+                    "service": service,
+                    "environment": environment,
+                    "digests": {"sourceTree": f"sha256:{'d' * 64}"},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (candidate_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "candidateType": "runtime-full",
+                    "target": target,
+                    "baselineId": baseline_id,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        # This suite exercises service verification against an already active
+        # candidate, not the full candidate compiler.  Keep activation on the
+        # canonical validation seam without recreating a partial manifest as a
+        # runnable candidate fixture.
+        full_candidate_loader = mock.patch.object(
+            output_paths,
+            "_load_full_deployment_candidate",
+            return_value={
+                "candidateType": "runtime-full",
+                "target": target,
+                "baselineId": baseline_id,
+            },
+        )
+        full_candidate_loader.start()
+        self.addCleanup(full_candidate_loader.stop)
+        output_paths.activate_deployment_candidate(target, baseline_id)
+        return package_dir
+
+    @staticmethod
+    def _service_verify_args(report_dir: Path) -> argparse.Namespace:
+        return argparse.Namespace(
+            command="verify",
+            service="content-service",
+            env="alpha",
+            target="alpha-local",
+            profile="baseline",
+            report_dir=str(report_dir),
+        )
+
     def test_internal_candidate_schemas_are_canonical_and_unversioned(self) -> None:
         self.assertEqual(
             deployment_candidate_manifest.CANDIDATE_MANIFEST_SCHEMA,
@@ -92,6 +168,12 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                             "bindingDigest": f"sha256:{'7' * 64}",
                             "deploymentDigest": f"sha256:{'8' * 64}",
                             "clusterRef": "target:alpha-local/product-ops/elasticsearch",
+                        },
+                        "providerRuntime": {
+                            "composition": {
+                                "runtimeCompositionDigest": f"sha256:{'9' * 64}"
+                            },
+                            "images": {},
                         },
                     },
                 ),
@@ -207,6 +289,13 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             )
         )
         self.assertEqual(invocations[1][1]["PROFILE_SENTINEL"], "preserved")
+        self.assertTrue(
+            all(
+                env[stackctl.PACKAGE_ROOT_OVERRIDE_ENV] == ""
+                and env[stackctl.RUNTIME_CANDIDATE_ROOT_ENV] == ""
+                for _argv, env in invocations
+            )
+        )
 
     def test_provider_readiness_clears_inherited_target(self) -> None:
         completed = CompletedProcess(["provider-readiness"], 0, "{}", "")
@@ -231,7 +320,121 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
         self.assertEqual(result["exitCode"], 0)
         self.assertEqual(
             run.call_args.kwargs["env"],
-            {"QWQ_DEPLOY_TARGET": "", "QWQ_APP_RUNTIME_ENV": ""},
+            {
+                "QWQ_DEPLOY_PACKAGE_ROOT_OVERRIDE": "",
+                "QWQ_RUNTIME_CANDIDATE_ROOT": "",
+                "QWQ_DEPLOY_TARGET": "",
+                "QWQ_APP_RUNTIME_ENV": "",
+            },
+        )
+
+    def test_service_verify_reads_active_candidate_without_rebuilding_or_mutating(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+            os.environ,
+            {"QWQ_DEPLOY_WORK_ROOT": str(Path(temporary) / "deploy")},
+            clear=False,
+        ):
+            package_dir = self._activate_service_candidate()
+            before = stackctl._sha256_tree(package_dir)
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    side_effect=AssertionError(
+                        "verify --service must not build or mutate a candidate"
+                    ),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_selected_profile_commands",
+                    return_value=[],
+                ),
+            ):
+                result = stackctl._command_verify_service_environment(
+                    self._service_verify_args(Path(temporary) / "report")
+                )
+
+            after = stackctl._sha256_tree(package_dir)
+            report = json.loads(
+                (Path(temporary) / "report/report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(result["exitCode"], 0, result)
+        self.assertEqual(after, before)
+        self.assertEqual(report["steps"][0]["kind"], "candidate-package")
+        self.assertEqual(report["steps"][0]["mode"], "read-only")
+        self.assertEqual(report["steps"][0]["contentDigestBefore"], before)
+        self.assertEqual(report["steps"][0]["contentDigestAfter"], before)
+        self.assertTrue(report["steps"][0]["unchanged"])
+
+    def test_service_verify_blocks_without_an_active_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+            os.environ,
+            {"QWQ_DEPLOY_WORK_ROOT": str(Path(temporary) / "deploy")},
+            clear=False,
+        ), mock.patch.object(
+            stackctl,
+            "run",
+            side_effect=AssertionError("verify must not create a package"),
+        ), mock.patch.object(
+            stackctl,
+            "_selected_profile_commands",
+            return_value=[],
+        ):
+            result = stackctl._command_verify_service_environment(
+                self._service_verify_args(Path(temporary) / "report")
+            )
+
+        self.assertEqual(result["exitCode"], 1)
+        self.assertIn("active immutable candidate is required", result["details"][0])
+
+    def test_service_verify_detects_profile_mutation_of_the_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+            os.environ,
+            {"QWQ_DEPLOY_WORK_ROOT": str(Path(temporary) / "deploy")},
+            clear=False,
+        ):
+            package_dir = self._activate_service_candidate()
+
+            def mutate_candidate(
+                argv: list[str],
+                **_kwargs: object,
+            ) -> CompletedProcess[str]:
+                (package_dir / "config/config.yaml").write_text(
+                    "environment: mutated\n",
+                    encoding="utf-8",
+                )
+                return CompletedProcess(argv, 0, "", "")
+
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    side_effect=mutate_candidate,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_selected_profile_commands",
+                    return_value=[
+                        {
+                            "name": "mutation-probe",
+                            "argv": ["mutation-probe"],
+                        }
+                    ],
+                ),
+            ):
+                result = stackctl._command_verify_service_environment(
+                    self._service_verify_args(Path(temporary) / "report")
+                )
+
+        self.assertEqual(result["exitCode"], 1)
+        self.assertIn(
+            "active immutable service package changed during verification",
+            result["details"],
         )
 
 

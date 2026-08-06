@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/core/links/trusted_endpoint_policy.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/transport/links/trusted_endpoint_policy.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 typedef AccountRestrictionSupportOpener = Future<bool> Function(Uri uri);

@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/core/platform/local_file_byte_source.dart';
-import 'package:quwoquan_app/core/platform/platform_capability_unavailable.dart';
+import 'package:quwoquan_app/runtime/platform/local_file_byte_source.dart';
+import 'package:quwoquan_app/runtime/platform/platform_capability_unavailable.dart';
 
 Future<LocalFileByteSource> preparePlatformLocalFileByteSource(
   String localPath,

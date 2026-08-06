@@ -1,30 +1,42 @@
-entity: SearchRequestFact
-domain: SEARCH
 errors:
 - code: SEARCH.USER.hot_query_invalid_argument
-  kind: USER
   reason: hot_query_invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [ListHotQueries]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: searchHotQueryInvalidArgument
   go_const: ErrSearchHotQueryInvalidArgument
   user_message:
     zh: 搜索请求格式不正确
     en: Invalid search request
 - code: SEARCH.MIDDLEWARE.hot_query_unavailable
-  kind: MIDDLEWARE
   reason: hot_query_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [ListHotQueries]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: searchHotQueryUnavailable
   go_const: ErrSearchHotQueryUnavailable
   user_message:
     zh: 搜索暂时不可用，请稍后再试
     en: Search is temporarily unavailable, please retry later
+- code: SEARCH.SYSTEM.internal_error
+  reason: internal_error
+  http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [RecoverSearchAccountClosureDeadLetter]
+  recovery_action: retry
+  disruption_level: snackbar
+  recovery_after_seconds: 5
+  dart_const: searchInternalError
+  go_const: ErrSearchInternalError
+  user_message:
+    zh: 搜索服务暂时无法完成该操作
+    en: Search service could not complete the operation

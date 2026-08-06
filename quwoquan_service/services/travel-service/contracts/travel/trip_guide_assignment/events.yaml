@@ -1,8 +1,0 @@
-description: TripGuideAssignment 任务归属与状态事件。
-events:
-- name: TripGuideAssignmentChanged
-  producer: travel-service
-  consumers: [assistant-service, notification-service]
-  channel: transactional_outbox
-  payload_entity: TripGuideAssignment
-  payload_fields: [_id, version, tripId, taskKey, assigneePersonaId, role, taskKind, status, sourceRevisionNumber, updatedAt]

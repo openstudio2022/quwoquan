@@ -18,3 +18,7 @@ externalBindings:
     state: enabled
     adapter: ext.map.baidu
     endpointRef: environment_binding:integration.location
+  location.poi.search:
+    state: not_required
+  location.route.read:
+    state: not_required

@@ -53,7 +53,7 @@ func TestModelProviderSubmitsNativeToolCallsWhenEnabled(t *testing.T) {
 		}
 		captured <- body
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"nextAction\":\"tool_call\",\"stageNarrative\":\"你想确认的是杭州本周末的天气与出行安排。\"}","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"杭州 周末 天气\",\"location\":\"杭州\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"total_tokens":42}}`))
+		_, _ = w.Write([]byte(`{"model":"served-reasoning-model","choices":[{"message":{"content":"{\"nextAction\":\"tool_call\",\"stageNarrative\":\"你想确认的是杭州本周末的天气与出行安排。\"}","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"杭州 周末 天气\",\"location\":\"杭州\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":30,"completion_tokens":12,"total_tokens":42}}`))
 	}))
 	defer server.Close()
 
@@ -112,6 +112,9 @@ func TestModelProviderSubmitsNativeToolCallsWhenEnabled(t *testing.T) {
 	if response.StructuredDelta["stageNarrative"] == nil {
 		t.Fatal("stageNarrative must survive alongside native tool calls")
 	}
+	if response.ClientModelInteraction["modelId"] != "served-reasoning-model" {
+		t.Fatalf("modelId=%v, want provider-served identity", response.ClientModelInteraction["modelId"])
+	}
 }
 
 func TestModelProviderFallsBackToStructuredOutputWhenToolCallingUnsupported(t *testing.T) {
@@ -124,7 +127,7 @@ func TestModelProviderFallsBackToStructuredOutputWhenToolCallingUnsupported(t *t
 		}
 		captured <- body
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"nextAction\":\"tool_call\",\"toolName\":\"web_search\",\"toolInput\":{\"query\":\"杭州 天气\"},\"stageNarrative\":\"叙事\"}"},"finish_reason":"stop"}]}`))
+		_, _ = w.Write([]byte(`{"model":"served-balanced-model","choices":[{"message":{"content":"{\"nextAction\":\"tool_call\",\"toolName\":\"web_search\",\"toolInput\":{\"query\":\"杭州 天气\"},\"stageNarrative\":\"叙事\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":10,"total_tokens":30}}`))
 	}))
 	defer server.Close()
 
@@ -169,8 +172,8 @@ func TestModelProviderFallsBackToStructuredOutputWhenToolCallingUnsupported(t *t
 func TestModelProviderAssemblesStreamedToolCallFragments(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"web_search\",\"arguments\":\"{\\\"query\\\":\"}}]}}]}\n\n"))
-		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"杭州\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: {\"model\":\"served-balanced-model\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"function\":{\"name\":\"web_search\",\"arguments\":\"{\\\"query\\\":\"}}]}}]}\n\n"))
+		_, _ = w.Write([]byte("data: {\"model\":\"served-balanced-model\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"杭州\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":2,\"total_tokens\":10}}\n\n"))
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
 	defer server.Close()

@@ -426,3 +426,116 @@ contract_test:
       assertions:
       - POST /integrations/push-deliveries 返回 404
       - POST /integrations/sms-otp:send 返回 404
+readiness_cases:
+- case_id: submit-external-interaction-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SubmitExternalInteractionRequest}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: submit-external-interaction-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SubmitExternalInteractionRequest}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_mongo_provider__reliability__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-https-provider, digest_binding: candidate}
+- case_id: get-external-interaction-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetExternalInteractionRequest}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-external-interaction-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetExternalInteractionRequest}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_control_plane__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-external-interaction-attempts-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListExternalInteractionAttempts}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-external-interaction-attempts-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListExternalInteractionAttempts}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_control_plane__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-external-interaction-dead-letters-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListExternalInteractionDeadLetters}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-external-interaction-dead-letters-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListExternalInteractionDeadLetters}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_control_plane__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: recover-external-interaction-dead-letter-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RecoverExternalInteractionDeadLetter}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: recover-external-interaction-dead-letter-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RecoverExternalInteractionDeadLetter}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_control_plane__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-external-interaction-metrics-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetExternalInteractionMetricsSnapshot}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/external_interaction_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-external-interaction-metrics-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetExternalInteractionMetricsSnapshot}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/external_interaction_control_plane__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: apply-external-interaction-account-closure-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: integration.external_interaction}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/user_account_closed_event__privacy__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: apply-external-interaction-account-closure-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: integration.external_interaction}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/user_account_closed_projection__privacy__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}

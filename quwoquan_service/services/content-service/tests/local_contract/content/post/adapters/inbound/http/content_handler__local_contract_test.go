@@ -1,3 +1,22 @@
+// readiness_case: promote-post-to-work-local
+// readiness_case: update-post-settings-local
+// readiness_case: delete-post-local
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// readiness_case: submit-post-publication-local
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+// readiness_case: get-feed-local
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004
+// readiness_case: get-app-config-local
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+// readiness_case: get-author-impact-local
+// readiness_case: list-author-impact-evidence-local
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+// readiness_case: get-counters-local
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001
+// readiness_case: get-my-footprint-local
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
+// readiness_case: get-entity-wishlist-state-local
 package http_test
 
 import (
@@ -14,11 +33,14 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
 	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
+	behaviormodel "quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/model"
 	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
+	postappports "quwoquan_service/services/content-service/internal/content/post/application/ports"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
@@ -26,6 +48,96 @@ import (
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	feedsupport "quwoquan_service/services/content-service/tests/support"
 )
+
+type localAuthorImpactReader struct{}
+
+func (localAuthorImpactReader) GetSummary(
+	_ context.Context,
+	authorID string,
+	_ int64,
+) (postappports.AuthorImpactSummary, error) {
+	return postappports.AuthorImpactSummary{
+		AuthorID: authorID,
+		Total:    3,
+		Items: []postappports.AuthorImpactItem{{
+			ImpactID:  "impact-community",
+			HelpType:  "community",
+			Action:    "join_circle",
+			Source:    "behavior_fact",
+			Count:     3,
+			UpdatedAt: time.Now().UTC(),
+		}},
+	}, nil
+}
+
+func (localAuthorImpactReader) ListPageWithTotal(
+	_ context.Context,
+	_ string,
+	impactID string,
+	_ string,
+	_ int64,
+) ([]postappports.AuthorImpactEvidenceRaw, string, bool, int64, error) {
+	return []postappports.AuthorImpactEvidenceRaw{{
+		EvidenceID: "evidence-community",
+		ImpactID:   impactID,
+		ContentID:  "post_photo_001",
+		HelpType:   "community",
+		Action:     "join_circle",
+		OccurredAt: time.Now().UTC(),
+	}}, "", false, 1, nil
+}
+
+type localFootprintStore struct {
+	facts []behaviormodel.Fact
+}
+
+func (store *localFootprintStore) InsertBatch(
+	_ context.Context,
+	facts []behaviormodel.Fact,
+) error {
+	store.facts = append(store.facts, facts...)
+	return nil
+}
+
+func (store *localFootprintStore) ListUserFootprint(
+	_ context.Context,
+	userID string,
+	actions []string,
+	_ time.Time,
+	limit int,
+) ([]behaviormodel.Fact, error) {
+	actionSet := make(map[string]struct{}, len(actions))
+	for _, action := range actions {
+		actionSet[action] = struct{}{}
+	}
+	result := make([]behaviormodel.Fact, 0, len(store.facts))
+	for _, fact := range store.facts {
+		if fact.UserID != userID {
+			continue
+		}
+		if _, ok := actionSet[fact.Action]; !ok {
+			continue
+		}
+		result = append(result, fact)
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+type localWishlistStateReader struct {
+	wishlisted bool
+}
+
+func (reader localWishlistStateReader) IsWishlisted(
+	context.Context,
+	string,
+	string,
+	string,
+) (bool, error) {
+	return reader.wishlisted, nil
+}
 
 type allowAllFeedViewerBlockReader struct{}
 
@@ -322,6 +434,210 @@ func TestAppConfigEndpointIsImplemented(t *testing.T) {
 	}
 	if conditionalRec.Body.Len() != 0 {
 		t.Fatalf("304 response must not include an app config body: %q", conditionalRec.Body.String())
+	}
+}
+
+func TestAuthorImpactOperationsUseTheBoundProjectionReader(t *testing.T) {
+	handler := NewContentHandler(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		WithAuthorImpactProjectionReader(localAuthorImpactReader{}),
+	).Routes()
+
+	summaryRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/content/personas/author-impact-local/author-impact?limit=5",
+		nil,
+	)
+	summaryRequest.Header.Set("X-Client-User-Id", "author-impact-local")
+	summaryRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(summaryRecorder, summaryRequest)
+	if summaryRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"GetAuthorImpact status=%d body=%s",
+			summaryRecorder.Code,
+			summaryRecorder.Body.String(),
+		)
+	}
+	var summary postappports.AuthorImpactSummary
+	if err := json.Unmarshal(summaryRecorder.Body.Bytes(), &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.AuthorID != "author-impact-local" ||
+		summary.Total != 3 ||
+		len(summary.Items) != 1 {
+		t.Fatalf("GetAuthorImpact summary=%+v", summary)
+	}
+
+	evidenceRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/content/personas/author-impact-local/author-impact/evidence?impactId=impact-community&limit=5",
+		nil,
+	)
+	evidenceRequest.Header.Set("X-Client-User-Id", "author-impact-local")
+	evidenceRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(evidenceRecorder, evidenceRequest)
+	if evidenceRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"ListAuthorImpactEvidence status=%d body=%s",
+			evidenceRecorder.Code,
+			evidenceRecorder.Body.String(),
+		)
+	}
+	var evidence struct {
+		ImpactID string `json:"impactId"`
+		Total    int64  `json:"totalCount"`
+		Items    []any  `json:"items"`
+		HasMore  bool   `json:"hasMore"`
+		Snapshot string `json:"evidenceSnapshotId"`
+	}
+	if err := json.Unmarshal(evidenceRecorder.Body.Bytes(), &evidence); err != nil {
+		t.Fatal(err)
+	}
+	if evidence.ImpactID != "impact-community" ||
+		evidence.Snapshot != "impact-community" ||
+		evidence.Total != 1 ||
+		len(evidence.Items) != 1 ||
+		evidence.HasMore {
+		t.Fatalf("ListAuthorImpactEvidence page=%+v", evidence)
+	}
+}
+
+func TestGetCountersUsesCommentOwnedAuthoritativeCount(t *testing.T) {
+	postStore := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
+	commentStore := commenttestsupport.NewStore()
+	postService := postapp.NewPostService(
+		postapp.BindDataPorts(postStore),
+		postapp.WithCommentReaders(commentStore),
+	)
+	handler := NewContentHandler(
+		nil,
+		postapp.BindFacades(postService),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	).Routes()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/content/posts/post_photo_001/counters",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GetCounters status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var counters postapp.PostCounterSlice
+	if err := json.Unmarshal(recorder.Body.Bytes(), &counters); err != nil {
+		t.Fatal(err)
+	}
+	if counters.CommentCount != 0 || counters.LikeCount < 0 || counters.ShareCount < 0 {
+		t.Fatalf("GetCounters result=%+v", counters)
+	}
+}
+
+func TestGetMyFootprintHydratesBehaviorFactsThroughThePostRoute(t *testing.T) {
+	postStore := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
+	now := time.Now().UTC()
+	facts := &localFootprintStore{facts: []behaviormodel.Fact{{
+		ClientEventID: "footprint-local-event",
+		UserID:        "footprint-local-user",
+		SessionID:     "footprint-local-session",
+		ContentID:     "post_photo_001",
+		Action:        "click",
+		OccurredAt:    now.Format(time.RFC3339Nano),
+		CreatedAt:     now,
+	}}}
+	behaviorService := behaviorapp.NewBehaviorService(
+		nil,
+		postStore,
+		behaviorapp.WithBehaviorEventStore(facts),
+	)
+	handler := NewContentHandler(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		behaviorService,
+	).Routes()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/content/footprint?type=viewed&limit=10",
+		nil,
+	)
+	request.Header.Set("X-Client-User-Id", "footprint-local-user")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GetMyFootprint status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var page struct {
+		Items []struct {
+			PostID string         `json:"postId"`
+			Action string         `json:"action"`
+			Post   map[string]any `json:"post"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 ||
+		page.Items[0].PostID != "post_photo_001" ||
+		page.Items[0].Action != "click" ||
+		page.Items[0].Post["postId"] != "post_photo_001" {
+		t.Fatalf("GetMyFootprint page=%+v", page)
+	}
+}
+
+func TestGetEntityWishlistStateUsesTheBehaviorFactReader(t *testing.T) {
+	behaviorService := behaviorapp.NewBehaviorService(
+		nil,
+		nil,
+		behaviorapp.WithWishlistStateReader(
+			localWishlistStateReader{wishlisted: true},
+		),
+	)
+	handler := NewContentHandler(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		behaviorService,
+	).Routes()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/content/entity-wishlist-state?objectId=homepage-local&objectKind=homepage",
+		nil,
+	)
+	request.Header.Set("X-Client-User-Id", "wishlist-local-user")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf(
+			"GetEntityWishlistState status=%d body=%s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+	var state behaviorapp.EntityWishlistState
+	if err := json.Unmarshal(recorder.Body.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.ObjectID != "homepage-local" ||
+		state.ObjectKind != "homepage" ||
+		!state.Wishlisted {
+		t.Fatalf("GetEntityWishlistState result=%+v", state)
 	}
 }
 

@@ -131,6 +131,24 @@ def _assert_one_source_identity(
         )
 
 
+def _assert_one_handoff_identity(
+    payloads: Mapping[str, Mapping[str, Any]],
+) -> None:
+    bindings = {
+        json.dumps(
+            payload["preAcquisitionHandoff"],
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for payload in payloads.values()
+    }
+    if len(bindings) != 1:
+        raise ValueError(
+            "campaign handoff identity changed while freezing carriers"
+        )
+
+
 def write_scale_envelopes(
     scale: str | None = None,
     *,
@@ -153,6 +171,8 @@ def write_scale_envelopes(
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
+    pre_acquisition_handoff: Path | None = None,
+    pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
 ) -> dict[str, Path]:
@@ -215,6 +235,8 @@ def write_scale_envelopes(
             semantic_preflight_output_root=semantic_preflight_output_root,
             predecessor_reconciliation=predecessor_reconciliation,
             promotion_receipt=promotion_receipt,
+            pre_acquisition_handoff=pre_acquisition_handoff,
+            pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
             external_input_refs=(external_input_refs_by_carrier or {}).get(carrier, ()),
             acquisition_root=acquisition_root,
         )
@@ -229,6 +251,7 @@ def write_scale_envelopes(
         payloads,
         predecessor_reconciliation_receipt=reconciliation_receipt,
     )
+    _assert_one_handoff_identity(payloads)
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     frozen_source = next(iter(payloads.values()))["sourceDigest"]
     if not isinstance(frozen_source, dict):

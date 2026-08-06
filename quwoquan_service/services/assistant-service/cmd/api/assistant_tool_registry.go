@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	runtimeconfig "quwoquan_service/runtime/config"
 	publicwebtool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/outbound/tool"
@@ -41,11 +42,11 @@ func buildAgentLoop(
 	subscriptions subscriptionports.Store,
 	interests ports.ProactiveInterestReader,
 	consents consentports.Reader,
-	travelContext domainreader.TravelContextReader,
 	canonicalDomainReaders domainreader.CanonicalReaders,
 	descriptorCatalog readerports.Catalog,
 	skillCatalog skillpkg.Loader,
 	promptAssets ports.PromptAssetResolver,
+	gatheringHandlers map[string]tool.Handler,
 ) (*orchestration.AgentLoop, error) {
 	model, err := buildModelProvider(
 		appEnv,
@@ -63,6 +64,7 @@ func buildAgentLoop(
 		newEgressClient,
 		publicWebEvidence,
 		publicWebBudget,
+		gatheringHandlers,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search provider binding invalid: %w", err)
@@ -91,12 +93,6 @@ func buildAgentLoop(
 		subscriptions,
 		interests,
 		canonicalDomainReaders,
-		skillcontextapplication.RegisteredResolver{
-			ResolverRef: "trip.current_context",
-			Resolver: skillcontextinfra.TravelContextResolver{
-				Runs: runs, Travel: travelContext,
-			},
-		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("skill context resolver registry unavailable: %w", err)
@@ -195,6 +191,7 @@ func buildToolRegistry(
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
 	publicWebEvidence *publicwebpersistence.MongoEvidenceStore,
 	publicWebBudget *publicwebpersistence.MongoRunBudgetGate,
+	gatheringHandlers map[string]tool.Handler,
 ) (tool.Registry, error) {
 	registry := tool.BaseRegistry()
 	if internalSearch == nil {
@@ -228,6 +225,15 @@ func buildToolRegistry(
 			handlers[toolName],
 			publicWebEvidence,
 		)
+	}
+	for name, handler := range gatheringHandlers {
+		if _, duplicated := handlers[name]; duplicated {
+			return tool.Registry{}, fmt.Errorf(
+				"tool handler %q is registered more than once",
+				name,
+			)
+		}
+		handlers[name] = handler
 	}
 	if err := tool.RegisterCanonical(&registry, handlers); err != nil {
 		return tool.Registry{}, err
@@ -283,22 +289,44 @@ func buildWeatherProvider(
 	if err != nil {
 		return providerbinding.UnavailableSearchProvider{Capability: "weather"}
 	}
-	geocodingURL, geocodingOK := binding.Endpoint("geocoding")
-	forecastURL, forecastOK := binding.Endpoint("forecast")
-	if !geocodingOK || !forecastOK {
+	config, err := weatherProviderConfig(binding)
+	if err != nil {
 		return providerbinding.UnavailableSearchProvider{Capability: "weather"}
 	}
 	provider, err := weather.New(
-		weather.Config{
-			GeocodingURL: geocodingURL,
-			ForecastURL:  forecastURL,
-		},
+		config,
 		newEgressClient(binding.AdapterID, int(binding.Timeout.Milliseconds())),
 	)
 	if err != nil {
 		return providerbinding.UnavailableSearchProvider{Capability: "weather"}
 	}
 	return provider
+}
+
+func weatherProviderConfig(
+	binding providerbinding.ResolvedBinding,
+) (weather.Config, error) {
+	geocodingURL, geocodingOK := binding.Endpoint("geocoding")
+	forecastURL, forecastOK := binding.Endpoint("forecast")
+	if !geocodingOK || !forecastOK {
+		return weather.Config{}, fmt.Errorf(
+			"weather binding has no geocoding or forecast endpoint",
+		)
+	}
+	resilience := tool.WeatherLookupMetadata().Resilience
+	config := weather.Config{
+		GeocodingURL: geocodingURL,
+		ForecastURL:  forecastURL,
+		AllowInsecure: binding.AdapterID ==
+			providerbinding.WeatherAdapterProtocolFixture,
+		MaxAttempts: resilience.MaxAttempts,
+		RetryBackoff: time.Duration(resilience.RetryBackoffMs) *
+			time.Millisecond,
+	}
+	if _, err := weather.New(config, &http.Client{}); err != nil {
+		return weather.Config{}, err
+	}
+	return config, nil
 }
 
 func buildFinanceProvider(

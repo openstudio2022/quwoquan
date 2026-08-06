@@ -182,3 +182,17 @@ codes:
     defaultLocation:
       businessObject: ops_control_plane
       functionModule: fetchJSON
+  - code: OPS.SYSTEM.internal_error
+    origin: system
+    kind: internal
+    nature: bug
+    defaultLocation:
+      businessObject: ops_service_request
+      functionModule: http_error_writer
+  - code: UNKNOWN.SYSTEM.internal_error
+    origin: system
+    kind: internal
+    nature: bug
+    defaultLocation:
+      businessObject: runtime_request
+      functionModule: error_normalizer

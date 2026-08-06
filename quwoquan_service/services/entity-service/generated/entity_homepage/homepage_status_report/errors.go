@@ -17,11 +17,11 @@ var (
 // AppErrorFromStatusReportNotFound returns *AppError for ENTITY.USER.status_report_not_found (user_message from errors.yaml).
 func AppErrorFromStatusReportNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStatusReportNotFound.Error()))
-	return rerrors.NewAppError(code, "上报记录不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "上报记录不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidStatusReportEvidenceURL returns *AppError for ENTITY.USER.invalid_status_report_evidence_url (user_message from errors.yaml).
 func AppErrorFromInvalidStatusReportEvidenceURL(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidStatusReportEvidenceURL.Error()))
-	return rerrors.NewAppError(code, "上报证据链接必须是安全的 HTTPS 地址", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "上报证据链接必须是安全的 HTTPS 地址", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }

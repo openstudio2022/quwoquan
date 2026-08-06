@@ -118,7 +118,7 @@ def main() -> int:
     )
     alpha_run = (ROOT / "quwoquan_app/run.sh").read_text(encoding="utf-8")
     beta_manual = (
-        ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+        ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
     ).read_text(encoding="utf-8")
     beta_stack = (
         ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
@@ -127,16 +127,16 @@ def main() -> int:
         ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
     ).read_text(encoding="utf-8")
     beta_stop = (
-        ROOT / "quwoquan_app/scripts/device/stop_app_beta_manual.sh"
+        ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app_stop.sh"
     ).read_text(encoding="utf-8")
     app_instance_launcher = (
-        ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
+        ROOT / "quwoquan_app/scripts/device/run_app_instance.sh"
     ).read_text(encoding="utf-8")
     legal_document_page = (
-        ROOT / "quwoquan_app/lib/ui/user/pages/legal_document_page.dart"
+        ROOT / "quwoquan_app/lib/runtime/shell/legal/legal_document_page.dart"
     ).read_text(encoding="utf-8")
     legal_document_remote = (
-        ROOT / "quwoquan_app/lib/cloud/remote/user/legal_document_remote.dart"
+        ROOT / "quwoquan_app/lib/runtime/shell/legal/legal_document_remote.dart"
     ).read_text(encoding="utf-8")
     mock_public_plane = (
         ROOT / "quwoquan_ops/cli/lib/mock_public_plane.py"
@@ -246,10 +246,11 @@ def main() -> int:
     if 'android:usesCleartextTraffic="true"' in android_debug_manifest + android_profile_manifest:
         issues.append("android debug/profile manifests must not permit cleartext HTTP")
     image_cache_controller = (
-        ROOT / "quwoquan_app/lib/core/media/app_image_cache_controller.dart"
+        ROOT
+        / "quwoquan_app/lib/runtime/platform/media/app_image_cache_controller.dart"
     ).read_text(encoding="utf-8")
     trusted_http_file_service = (
-        ROOT / "quwoquan_app/lib/core/platform/trusted_http_file_service_io.dart"
+        ROOT / "quwoquan_app/lib/runtime/platform/trusted_http_file_service_io.dart"
     ).read_text(encoding="utf-8")
     if "createTrustedHttpFileService" not in image_cache_controller:
         issues.append(
@@ -297,7 +298,7 @@ def main() -> int:
         ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
     ).read_text(encoding="utf-8")
     ios_prepare_defines = (
-        ROOT / "quwoquan_app/scripts/ios/prepare_dart_defines.sh"
+        ROOT / "quwoquan_app/scripts/ios/build_prepare_dart_defines.sh"
     ).read_text(encoding="utf-8")
     stackctl_source = STACKCTL.read_text(encoding="utf-8")
     if (
@@ -308,13 +309,33 @@ def main() -> int:
     for retired in (
         "DIRECT_ALPHA_HANDOFF",
         "xcode-direct-alpha",
-        "export FLUTTER_TARGET=",
     ):
         if retired in ios_prepare_defines:
             issues.append(
                 "iOS Xcode phase must not synthesize a bare flutter run fallback; "
                 f"retired token: {retired}"
             )
+    if 'DIRECT_TARGET="${DIRECT_ENVIRONMENT}-local"' not in ios_prepare_defines:
+        issues.append(
+            "iOS direct Debug must derive the canonical target from its selected environment"
+        )
+    for command_target in (
+        'app-debug-preflight --target "$DIRECT_TARGET"',
+        'device-trust --target "$DIRECT_TARGET"',
+        'consumer-lease acquire --target "$DIRECT_TARGET"',
+    ):
+        if command_target not in ios_prepare_defines:
+            issues.append(
+                "iOS direct Debug must propagate one canonical target through "
+                f"preflight, trust and lease: missing {command_target}"
+            )
+    if (
+        'print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))'
+        not in ios_prepare_defines
+    ):
+        issues.append(
+            "iOS Debug handoff must bind the canonical lib/main_prod.dart entrypoint"
+        )
     if "use ./run.sh -d <device>" not in ios_prepare_defines:
         issues.append(
             "iOS bare build failure must point to the canonical run.sh launcher"
@@ -467,8 +488,15 @@ def main() -> int:
         issues.append(
             "local release rendered deployment config must use the target-scoped system deployment work root"
         )
-    if 'LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"' not in gamma_script:
-        issues.append("gamma launcher must mount the single Ops-owned Caddyfile source")
+    if (
+        'LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/Caddyfile"'
+        not in gamma_script
+        or '"quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile"'
+        not in stackctl_source
+    ):
+        issues.append(
+            "gamma launcher must mount the package copy of the single Ops-owned Caddyfile"
+        )
     if "prepare_caddyfile" in gamma_script or "MEDIA_ORIGIN_BASE_URL" in gamma_script:
         issues.append("gamma launcher must not generate a second Caddyfile or launch a media origin")
     if 'handle /healthz {\n\t\trespond "ok" 200\n\t}' not in local_gamma_caddyfile:
@@ -481,14 +509,29 @@ def main() -> int:
         issues.append("local release runtime must write the canonical startup attempt receipt")
     if "LOCAL_GAMMA_STACK_STATUS_REPORT" in gamma_script or "stack_status.json" in gamma_script:
         issues.append("local release runtime must not write a second stack status receipt")
+    gamma_service_compose_files = sorted(
+        (ROOT / "quwoquan_service/services").glob("*/deploy/compose.yaml")
+    )
+    gamma_discovered_services = {
+        compose_path.parents[1].name for compose_path in gamma_service_compose_files
+    }
+    for scanner_marker in (
+        "find \"$ROOT/quwoquan_service/services\" -mindepth 3 -maxdepth 3",
+        "-path '*/deploy/compose.yaml' -type f | sort",
+    ):
+        if scanner_marker not in gamma_script:
+            issues.append(
+                "gamma full workload must derive first-party services from canonical "
+                f"service compose files: missing {scanner_marker}"
+            )
+    if "notification-service" not in gamma_discovered_services:
+        issues.append(
+            "gamma canonical service compose scan must derive notification-service"
+        )
     for marker, message in (
         (
             'image_key="LOCAL_GAMMA_${service_key}_IMAGE"',
             "gamma launcher must resolve every discovered first-party image explicitly",
-        ),
-        (
-            'notification-service \\\n',
-            "gamma launcher must include Notification in the autonomous package scan",
         ),
         (
             'local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"',
@@ -539,6 +582,16 @@ def main() -> int:
             issues.append(f"{label} must default QWQ_OUTPUT_ROOT to repository .qwq_output")
     if ".env.beta.local" in beta_stack:
         issues.append("beta stack must not write the repository-root .env.beta.local")
+    if (
+        "quwoquan_ops/cli/stackctl.py" not in beta_stack
+        or "--target beta-local" not in beta_stack
+        or "go run" in beta_stack
+        or "start_app_beta_manual.sh" in beta_stack
+        or "docker compose" in beta_stack
+    ):
+        issues.append(
+            "beta compatibility entry must be a stackctl-only beta-local adapter"
+        )
     combined_launchers = "\n".join(launcher_sources.values())
     for retired_path in (".qwq_state", "QWQ_STATE_ROOT", ".qwq_output/env/gamma/runtime"):
         if retired_path in combined_launchers:

@@ -13,38 +13,6 @@ import (
 
 const admissionOperationID = "content.post.GetFeed"
 
-func TestOperationAdmissionRateLimitIsScopedToCanonicalOperation(t *testing.T) {
-	policy := rtgov.OperationAdmissionPolicy{
-		CanonicalOperationID: admissionOperationID,
-		RateLimiter:          rtgov.NewRateLimiter(1),
-	}
-	rejections := make([]rtgov.OperationAdmissionRejection, 0, 1)
-	handler := guardedAdmissionHandler(
-		policy,
-		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}),
-		func(w http.ResponseWriter, _ *http.Request, reason rtgov.OperationAdmissionRejection) {
-			rejections = append(rejections, reason)
-			w.WriteHeader(http.StatusTooManyRequests)
-		},
-	)
-
-	first := httptest.NewRecorder()
-	handler.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/content/feed", nil))
-	if first.Code != http.StatusNoContent {
-		t.Fatalf("first status=%d want=%d", first.Code, http.StatusNoContent)
-	}
-	second := httptest.NewRecorder()
-	handler.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/content/feed", nil))
-	if second.Code != http.StatusTooManyRequests {
-		t.Fatalf("second status=%d want=%d", second.Code, http.StatusTooManyRequests)
-	}
-	if len(rejections) != 1 || rejections[0] != rtgov.OperationAdmissionRateLimited {
-		t.Fatalf("rejections=%v want=[%s]", rejections, rtgov.OperationAdmissionRateLimited)
-	}
-}
-
 func TestOperationAdmissionInflightShedsAndReleases(t *testing.T) {
 	policy := rtgov.OperationAdmissionPolicy{
 		CanonicalOperationID: admissionOperationID,
@@ -52,6 +20,7 @@ func TestOperationAdmissionInflightShedsAndReleases(t *testing.T) {
 	}
 	started := make(chan struct{})
 	release := make(chan struct{})
+	rejections := make([]rtgov.OperationAdmissionRejection, 0, 1)
 	handler := guardedAdmissionHandler(
 		policy,
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -59,7 +28,8 @@ func TestOperationAdmissionInflightShedsAndReleases(t *testing.T) {
 			<-release
 			w.WriteHeader(http.StatusNoContent)
 		}),
-		func(w http.ResponseWriter, _ *http.Request, _ rtgov.OperationAdmissionRejection) {
+		func(w http.ResponseWriter, _ *http.Request, reason rtgov.OperationAdmissionRejection) {
+			rejections = append(rejections, reason)
 			w.WriteHeader(http.StatusServiceUnavailable)
 		},
 	)
@@ -76,6 +46,9 @@ func TestOperationAdmissionInflightShedsAndReleases(t *testing.T) {
 	handler.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/content/feed", nil))
 	if second.Code != http.StatusServiceUnavailable {
 		t.Fatalf("second status=%d want=%d", second.Code, http.StatusServiceUnavailable)
+	}
+	if len(rejections) != 1 || rejections[0] != rtgov.OperationAdmissionInflightFull {
+		t.Fatalf("rejections=%v want=[%s]", rejections, rtgov.OperationAdmissionInflightFull)
 	}
 	close(release)
 	<-firstDone

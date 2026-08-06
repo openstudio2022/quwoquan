@@ -159,6 +159,7 @@ func renderOperation(
 			Method:         operation.FacadeMethod,
 			AggregateOwner: operation.AggregateOwner,
 			AppendSink:     operation.AppendSink,
+			LifecycleOwner: operation.LifecycleOwner,
 			SessionOwner:   operation.SessionOwner,
 			Reader:         operation.Reader,
 			Slice:          operation.Slice,
@@ -250,7 +251,8 @@ func buildSuccessResponse(
 			if err != nil {
 				return "", openAPIResponse{}, err
 			}
-			return jsonResponse("200", "OK", componentRef(component))
+			status, description := successResponseStatus(operation, "200")
+			return jsonResponse(status, description, componentRef(component))
 		}
 		if entity == "" {
 			entity = operation.LocalID + "Item"
@@ -267,7 +269,8 @@ func buildSuccessResponse(
 		if err != nil {
 			return "", openAPIResponse{}, err
 		}
-		return jsonResponse("200", "OK", componentRef(pageComponent))
+		status, description := successResponseStatus(operation, "200")
+		return jsonResponse(status, description, componentRef(pageComponent))
 	case "", "object":
 		if entity == "" {
 			if operation.Kind == ast.OperationKindCommand {
@@ -279,12 +282,39 @@ func buildSuccessResponse(
 		if err != nil {
 			return "", openAPIResponse{}, err
 		}
-		return jsonResponse("200", "OK", componentRef(component))
+		status, description := successResponseStatus(operation, "200")
+		return jsonResponse(status, description, componentRef(component))
 	default:
 		return "", openAPIResponse{}, fmt.Errorf(
 			"unsupported response_body_kind %q",
 			responseKind,
 		)
+	}
+}
+
+func successResponseStatus(operation ast.Operation, fallback string) (string, string) {
+	status := operation.SuccessStatus
+	if status == 0 {
+		switch fallback {
+		case "201":
+			return fallback, "Created"
+		case "202":
+			return fallback, "Accepted"
+		case "204":
+			return fallback, "No Content"
+		default:
+			return fallback, "OK"
+		}
+	}
+	switch status {
+	case 201:
+		return "201", "Created"
+	case 202:
+		return "202", "Accepted"
+	case 204:
+		return "204", "No Content"
+	default:
+		return "200", "OK"
 	}
 }
 

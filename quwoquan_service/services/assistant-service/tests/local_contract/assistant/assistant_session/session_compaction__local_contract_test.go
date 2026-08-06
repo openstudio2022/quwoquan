@@ -1,20 +1,100 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
+// readiness_case: compact-assistant-session-local
 package local_contract
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	runmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	sessioncompaction "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/compaction"
 	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 )
 
+type terminalRunReader struct {
+	run runruntime.Run
+}
+
+func (reader terminalRunReader) Load(
+	_ context.Context,
+	runID string,
+) (runruntime.Run, error) {
+	if runID != reader.run.RunID {
+		return runruntime.Run{}, errors.New("terminal Run not found")
+	}
+	return reader.run, nil
+}
+
 type recordingNarrativeGenerator struct {
 	calls  int
 	inputs []sessioncompaction.NarrativeInput
+}
+
+func TestAssistantRunTerminalCoordinatorCompactsTheOwnedSession(t *testing.T) {
+	store := persistence.NewMemorySessionStore()
+	now := time.Date(2026, 8, 4, 9, 0, 0, 0, time.UTC)
+	_, _, err := store.InsertSession(t.Context(), sessionmodel.AssistantSession{
+		SessionID: "session-terminal-coordinator",
+		UserID:    "user-terminal-coordinator",
+		State:     "active",
+		CreatedAt: now.Add(-time.Hour),
+		UpdatedAt: now.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("insert AssistantSession: %v", err)
+	}
+	hooks, err := runruntime.NewHookRegistry()
+	if err != nil {
+		t.Fatalf("create hook registry: %v", err)
+	}
+	coordinator := sessioncompaction.NewAssistantRunTerminalCoordinator(
+		terminalRunReader{run: runruntime.Run{
+			RunID:     "run-terminal-coordinator",
+			UserID:    "user-terminal-coordinator",
+			SessionID: "session-terminal-coordinator",
+			InputText: "规划杭州行程并确认酒店",
+			State:     assistantgenerated.AssistantRunStateCompleted,
+			TaskGraph: runruntime.TaskGraph{Tasks: []runruntime.TaskNode{{
+				TaskID: "task-confirm-hotel",
+				Goal:   "确认酒店",
+				Status: assistantgenerated.AssistantTaskStatusPending,
+			}}},
+			TerminalSnapshot: &runmodel.AssistantRunTerminalSnapshot{
+				AnswerText: "已给出第一版路线",
+			},
+		}},
+		sessioncompaction.NewService(store, &recordingNarrativeGenerator{}),
+		hooks,
+	)
+	event := runruntime.TerminalEvent{
+		EventID:    "run-terminal-coordinator:terminal",
+		RunID:      "run-terminal-coordinator",
+		UserID:     "user-terminal-coordinator",
+		SessionID:  "session-terminal-coordinator",
+		Outcome:    "completed",
+		OccurredAt: now,
+	}
+	if err := coordinator.CompactSession(t.Context(), event); err != nil {
+		t.Fatalf("compact terminal AssistantRun: %v", err)
+	}
+	if err := coordinator.HandleTerminalEvent(t.Context(), event); err != nil {
+		t.Fatalf("replay terminal AssistantRun: %v", err)
+	}
+	persisted, found, err := store.GetSession(t.Context(), event.SessionID)
+	if err != nil || !found || persisted.ContextSummary == nil {
+		t.Fatalf("persisted terminal summary=%+v found=%t err=%v", persisted, found, err)
+	}
+	if persisted.ContextSummary.ToTurnID != event.RunID ||
+		persisted.SummaryVersion != 1 || persisted.CompletionSequence != 1 ||
+		!strings.Contains(persisted.ContextSummary.Text, "待处理：确认酒店") {
+		t.Fatalf("terminal coordinator did not own compaction: %+v", persisted)
+	}
 }
 
 func (generator *recordingNarrativeGenerator) GenerateRollingNarrative(

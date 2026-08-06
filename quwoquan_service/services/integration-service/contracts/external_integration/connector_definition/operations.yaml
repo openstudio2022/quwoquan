@@ -62,3 +62,68 @@ consumers:
   capabilities: [resolve_connector_capability]
 - name: connector-release-publisher
   capabilities: [publish_connector_definition]
+readiness_cases:
+- case_id: publish-connector-definition-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: PublishConnectorDefinition}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_definition/connector_definition__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: publish-connector-definition-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: PublishConnectorDefinition}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_definition/connector_definition_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-connector-definitions-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListConnectorDefinitions}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_definition/connector_definition__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-connector-definitions-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListConnectorDefinitions}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_definition/connector_definition_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: get-connector-definition-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetConnectorDefinition}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/connector_definition/connector_definition__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-connector-definition-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetConnectorDefinition}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_definition/connector_definition_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: connector_definition_get_connector_definition_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GetConnectorDefinition}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_definition/connector_definition_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_definition_list_connector_definitions_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListConnectorDefinitions}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_definition/connector_definition_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

@@ -2,12 +2,12 @@
 # 编排层仍可向 Map 写入扩展键；`qualityMetrics` / `dialogueRuntime` 使用 type: map 以保留未知键往返。
 # 下列标量与 `qualityMetrics` 内常用键同源；客户端经 [assistantStructuredWireFromStructuredRoot] 从 structured root 投影嵌套 map（单键 canonical，禁止多键别名）。
 dart_class: AssistantStructuredResponseWire
-library_path: assistant/contracts/assistant_structured_response_wire.dart
-output_path: assistant/generated/contracts/assistant_structured_response_wire.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_structured_response_wire.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_structured_response_wire.g.dart
 contract: assistant_structured_response_wire
 kind: runtime_wire_contract
 imports:
-  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
+  - assistant_api_responses.g.dart
 fields:
   - { name: qualityMetrics, type: map, default: {} }
   - { name: decisionParseSuccess, type: bool, default: true }

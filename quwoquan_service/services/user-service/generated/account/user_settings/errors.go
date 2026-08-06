@@ -18,13 +18,13 @@ var (
 // AppErrorFromInvalidCallRingtone returns *AppError for USER.SETTING.invalid_call_ringtone (user_message from errors.yaml).
 func AppErrorFromInvalidCallRingtone(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidCallRingtone.Error()))
-	return rerrors.NewAppError(code, "所选铃声不可用，请从官方铃声库中重新选择", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "所选铃声不可用，请从官方铃声库中重新选择", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidAppearanceScope returns *AppError for USER.SETTING.invalid_appearance_scope (user_message from errors.yaml).
 func AppErrorFromInvalidAppearanceScope(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidAppearanceScope.Error()))
-	return rerrors.NewAppError(code, "外观设置作用范围无效，请重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "外观设置作用范围无效，请重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSettingsVersionConflict returns *AppError for USER.SETTING.settings_version_conflict (user_message from errors.yaml).

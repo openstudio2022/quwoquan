@@ -1,4 +1,5 @@
-// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: project-circle-search-item-local
 package local_contract
 
 import (
@@ -41,6 +42,30 @@ func (page rebuildPage) ListSearchItems(_ context.Context, after string, _ int) 
 	return page, nil
 }
 
+type lifecycleSource struct {
+	events []viewapp.LifecycleEvent
+}
+
+func (source lifecycleSource) ReadAfter(_ context.Context, checkpoint string, _ int) ([]viewapp.LifecycleEvent, error) {
+	if checkpoint != "" {
+		return nil, nil
+	}
+	return source.events, nil
+}
+
+type memoryCheckpoint struct {
+	value string
+}
+
+func (checkpoint *memoryCheckpoint) Load(context.Context, string) (string, error) {
+	return checkpoint.value, nil
+}
+
+func (checkpoint *memoryCheckpoint) Save(_ context.Context, _ string, value string) error {
+	checkpoint.value = value
+	return nil
+}
+
 func TestCircleSearchItemViewOwnsTypedEventAndRebuildLifecycle(t *testing.T) {
 	index := &recordingIndex{}
 	projector := viewapp.NewProjector(index)
@@ -48,18 +73,19 @@ func TestCircleSearchItemViewOwnsTypedEventAndRebuildLifecycle(t *testing.T) {
 		visible: true,
 		item:    viewapp.SearchItem{CircleID: "circle-1", DisplayName: "searchable", SourceVersion: 2},
 	})
-	if err := sink.Apply(context.Background(), viewapp.LifecycleEvent{
-		Type: "CircleUpdated", CircleID: "circle-1", SourceVersion: 2,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := sink.Apply(context.Background(), viewapp.LifecycleEvent{
-		Type: "CircleArchived", CircleID: "circle-1", SourceVersion: 3,
-	}); err != nil {
-		t.Fatal(err)
+	checkpoint := &memoryCheckpoint{}
+	relay := viewapp.NewRelay(lifecycleSource{events: []viewapp.LifecycleEvent{
+		{EventID: "circle-updated-2", Type: "CircleUpdated", CircleID: "circle-1", SourceVersion: 2, Checkpoint: "2"},
+		{EventID: "circle-archived-3", Type: "CircleArchived", CircleID: "circle-1", SourceVersion: 3, Checkpoint: "3"},
+	}}, checkpoint, sink, "circle-search-local")
+	if count, err := relay.Drain(context.Background(), 10); err != nil || count != 2 {
+		t.Fatalf("drain count=%d err=%v", count, err)
 	}
 	if len(index.upserts) != 1 || len(index.deletes) != 1 {
 		t.Fatalf("typed lifecycle drifted: upserts=%d deletes=%d", len(index.upserts), len(index.deletes))
+	}
+	if checkpoint.value != "3" {
+		t.Fatalf("successful projection checkpoint=%q want=3", checkpoint.value)
 	}
 
 	report, err := projector.Rebuild(context.Background(), rebuildPage{

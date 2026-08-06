@@ -68,20 +68,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: 3000
-- key: sys.assistant-service.travel_service.base_url
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: http://travel-service:18093
-- key: sys.assistant-service.travel_service.timeout_ms
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 3000
 - key: sys.assistant-service.integration_service.base_url
   type: string
   scope: workload

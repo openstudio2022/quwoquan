@@ -36,10 +36,6 @@ relationships:
   reference_fields:
   - lastTurnId
   target_object: assistant.AssistantTurnView
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - session 创建后 owner persona 不可变
 - 同一 session 最多一个 active run
@@ -55,3 +51,17 @@ lifecycle:
   - archived
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - chat.message.AssistantMentioned
+  - assistant.assistant_run.AssistantRunCompleted
+  event_consumers:
+  - name: HandleAssistantMentioned
+    kind: event_handler
+    facet: AssistantMentionedConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: CompactAssistantSessionOnRunCompleted
+    kind: event_handler
+    facet: AssistantRunTerminalCoordinator
+    method: compactSession
+    idempotency: event_id

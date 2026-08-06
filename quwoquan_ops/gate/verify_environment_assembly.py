@@ -25,20 +25,23 @@ from quwoquan_ops.cli.lib.immutable_image_composition import (
 
 
 def _first_party_compose_files() -> dict[str, Path]:
+    active_services = set(first_party_service_names(ROOT))
     files = {
         path.parents[1].name: path
         for path in (
             ROOT / "quwoquan_service" / "services"
         ).glob("*/deploy/compose.yaml")
+        if path.parents[1].name in active_services
     }
-    files["platform-ops-service"] = (
-        ROOT
-        / "quwoquan_service"
-        / "control-plane"
-        / "platform-ops"
-        / "deploy"
-        / "compose.yaml"
-    )
+    if "platform-ops-service" in active_services:
+        files["platform-ops-service"] = (
+            ROOT
+            / "quwoquan_service"
+            / "control-plane"
+            / "platform-ops"
+            / "deploy"
+            / "compose.yaml"
+        )
     return dict(sorted(files.items()))
 
 

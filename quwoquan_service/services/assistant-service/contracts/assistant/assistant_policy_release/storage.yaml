@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   assistant_policy_releases:
+    publication_role: not_published
     entity: AssistantPolicyRelease
     description: 不可变 AssistantPolicyRelease；同 policyId 下 releaseDigest 是唯一发布身份。
     indexes:
@@ -14,6 +15,7 @@ collections:
         policyId: 1
         stagedAt: -1
   assistant_policy_release_receipts:
+    publication_role: not_published
     entity: AssistantPolicyRelease
     description: Stage 命令 receipt；同 Idempotency-Key 不同 payload 必须冲突。
     indexes:
@@ -22,6 +24,7 @@ collections:
         policyId: 1
         releaseDigest: 1
   assistant_policy_release_outbox:
+    publication_role: transactional_outbox
     entity: AssistantPolicyRelease
     description: Stage 审计 outbox；payload 仅含 policy/releaseDigest 和模板规则计数。
     indexes:

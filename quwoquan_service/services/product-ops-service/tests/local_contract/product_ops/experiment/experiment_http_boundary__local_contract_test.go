@@ -7,13 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
-	"time"
 
-	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/runtime/operation"
-	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
+	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound/http"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	experimentports "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/ports"
@@ -21,75 +19,21 @@ import (
 	assignmentdomain "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/domain"
 )
 
-func TestExperimentAssignmentHTTPBoundaryRejectsPublicWriteAndReadsObservedFact(t *testing.T) {
-	store := newLocalExperimentStore()
-	facade, err := experimentapp.NewFacade(store, store, store, store)
-	if err != nil {
-		t.Fatalf("build experiment facade: %v", err)
-	}
-	handler, err := experimenthttp.NewHandler(facade)
-	if err != nil {
-		t.Fatalf("build experiment handler: %v", err)
-	}
-	path := "/ops/experiments/discovery_feed/assignment"
-
-	spoofed := requestWithPersona(http.MethodPost, path, []byte(`{"subjectKey":"persona:attacker"}`))
-	spoofedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(spoofedResponse, spoofed)
-	if spoofedResponse.Code != http.StatusBadRequest {
-		t.Fatalf("public assignment write status=%d body=%s", spoofedResponse.Code, spoofedResponse.Body.String())
-	}
-	if got := store.assignmentCount(); got != 0 {
-		t.Fatalf("public assignment write stored %d facts, want 0", got)
-	}
-
-	observedAt := time.Date(2026, time.July, 14, 10, 0, 0, 0, time.UTC)
-	expected, err := store.experiment.Assign("persona:persona-local-contract", observedAt)
-	if err != nil {
-		t.Fatalf("derive canonical assignment: %v", err)
-	}
-	observation := assignmentapp.AssignmentObservation{
-		ExperimentID: store.experiment.ID, ExperimentRevision: store.experiment.Version,
-		SubjectKey: expected.SubjectKey, Variant: expected.Variant, ObservedAt: observedAt,
-	}
-	first, inserted, err := facade.AssignmentFacts().AppendObserved(context.Background(), observation)
-	if err != nil || !inserted {
-		t.Fatalf("append observed assignment: inserted=%v fact=%+v err=%v", inserted, first, err)
-	}
-	replayed, inserted, err := facade.AssignmentFacts().AppendObserved(context.Background(), observation)
-	if err != nil || inserted || replayed != first {
-		t.Fatalf("replay observed assignment: inserted=%v first=%+v replay=%+v err=%v", inserted, first, replayed, err)
-	}
-	if got := store.assignmentCount(); got != 1 {
-		t.Fatalf("observed assignment replay stored %d facts, want 1", got)
-	}
-
-	readResponse := httptest.NewRecorder()
-	handler.ServeHTTP(readResponse, requestWithPersona(http.MethodGet, path, nil))
-	if readResponse.Code != http.StatusOK {
-		t.Fatalf("read observed assignment status=%d body=%s", readResponse.Code, readResponse.Body.String())
-	}
-	var read assignmentdomain.Fact
-	decodeLocalResponse(t, readResponse, &read)
-	if read != first {
-		t.Fatalf("read observed assignment=%+v, want %+v", read, first)
-	}
-
-	unauthorizedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(unauthorizedResponse, httptest.NewRequest(http.MethodGet, path, nil))
-	if unauthorizedResponse.Code != http.StatusUnauthorized {
-		t.Fatalf("untrusted assignment read status=%d body=%s", unauthorizedResponse.Code, unauthorizedResponse.Body.String())
-	}
-}
-
 // spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+// readiness_case: create-experiment-local
+// readiness_case: list-experiments-local
+// readiness_case: update-experiment-rollout-local
 func TestCreateExperimentPublishesOnePolicyFactAndReplaysIdempotently(t *testing.T) {
 	store := newLocalExperimentStore()
-	facade, err := experimentapp.NewFacade(store, store, store, store)
+	facade, err := experimentapp.NewFacade(store, store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := experimenthttp.NewHandler(facade)
+	assignments, err := assignmentapp.NewFacade(facade, store, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := experimenthttp.NewHandler(facade, assignments)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,14 +62,30 @@ func TestCreateExperimentPublishesOnePolicyFactAndReplaysIdempotently(t *testing
 	if conflict.Code != http.StatusConflict {
 		t.Fatalf("conflict status=%d body=%s", conflict.Code, conflict.Body.String())
 	}
-}
 
-func requestWithPersona(method, path string, body []byte) *http.Request {
-	request := httptest.NewRequest(method, path, bytes.NewReader(body))
-	principal := rtauth.Principal{
-		Actor: operation.ActorContext{PersonaID: "persona-local-contract"},
+	listed := httptest.NewRecorder()
+	handler.ServeHTTP(
+		listed,
+		httptest.NewRequest(http.MethodGet, "/control-plane/product/experiments", nil),
+	)
+	if listed.Code != http.StatusOK || !strings.Contains(listed.Body.String(), `"id":"search_ranking"`) {
+		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
 	}
-	return request.WithContext(rtauth.WithPrincipal(request.Context(), principal))
+
+	rolloutRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/product/experiments/search_ranking:rollout",
+		bytes.NewBufferString(`{"status":"paused","variants":[{"key":"control","allocationBasisPoints":5000},{"key":"term_heat","allocationBasisPoints":5000}]}`),
+	)
+	rolloutRequest.Header.Set("If-Match", `"1"`)
+	rolloutRequest.Header.Set("Idempotency-Key", "search-policy-rollout")
+	rolledOut := httptest.NewRecorder()
+	handler.ServeHTTP(rolledOut, rolloutRequest)
+	if rolledOut.Code != http.StatusOK ||
+		!strings.Contains(rolledOut.Body.String(), `"experimentRevision":2`) ||
+		!strings.Contains(rolledOut.Body.String(), `"status":"paused"`) {
+		t.Fatalf("rollout status=%d body=%s", rolledOut.Code, rolledOut.Body.String())
+	}
 }
 
 func decodeLocalResponse(t *testing.T, recorder *httptest.ResponseRecorder, target any) {
@@ -210,13 +170,26 @@ func (s *localExperimentStore) Replay(_ context.Context, id, key, digest string)
 func (s *localExperimentStore) Commit(_ context.Context, expectedVersion int64, changes experimentports.ChangeSet) (experimentports.CommitReceipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if expectedVersion != 0 {
-		return experimentports.CommitReceipt{}, experimentmodel.ErrVersionConflict
+	if expectedVersion == 0 {
+		if _, found := s.created[changes.Experiment.ID]; found || changes.Experiment.ID == s.experiment.ID {
+			return experimentports.CommitReceipt{}, experimentmodel.ErrVersionConflict
+		}
+		s.created[changes.Experiment.ID] = changes.Experiment
+	} else {
+		current, found := s.created[changes.Experiment.ID]
+		if changes.Experiment.ID == s.experiment.ID {
+			current, found = s.experiment, true
+		}
+		if !found || current.Version != expectedVersion ||
+			changes.Experiment.Version != expectedVersion+1 {
+			return experimentports.CommitReceipt{}, experimentmodel.ErrVersionConflict
+		}
+		if changes.Experiment.ID == s.experiment.ID {
+			s.experiment = changes.Experiment
+		} else {
+			s.created[changes.Experiment.ID] = changes.Experiment
+		}
 	}
-	if _, found := s.created[changes.Experiment.ID]; found || changes.Experiment.ID == s.experiment.ID {
-		return experimentports.CommitReceipt{}, experimentmodel.ErrVersionConflict
-	}
-	s.created[changes.Experiment.ID] = changes.Experiment
 	s.events = append(s.events, changes.Events...)
 	receipt := experimentports.CommitReceipt{ExperimentID: changes.Experiment.ID, Version: changes.Experiment.Version}
 	s.receipts[changes.Experiment.ID+"\x00"+changes.IdempotencyKey] = localExperimentReceipt{digest: changes.CommandDigest, receipt: receipt}

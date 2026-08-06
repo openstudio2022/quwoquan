@@ -7,6 +7,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from core.io import read_json, write_json
@@ -104,9 +105,15 @@ def write_report(
     started_at: str,
     failure: str | None,
 ) -> Path:
+    from content.execution.campaign_runtime import read_runtime_snapshot
+
+    runtime_snapshot = read_runtime_snapshot(runtime, root_execution_id) or {}
     payload = {
         "schema": "quwoquan_data.content_campaign_report",
         "rootExecutionId": root_execution_id,
+        "campaignRunId": runtime_snapshot.get("runId"),
+        "campaignGeneration": runtime_snapshot.get("generation"),
+        "campaignFencingToken": runtime_snapshot.get("fencingToken"),
         "status": status,
         "phase": phase,
         "planDigest": plan_digest,
@@ -182,7 +189,25 @@ def freeze_plan(
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
     submissions: dict[str, dict[str, Any]],
+    *,
+    execution_mode: str = "central",
+    distributed_run: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str]:
+    if execution_mode not in {"central", "distributed"}:
+        raise ValueError(f"campaign execution mode is invalid: {execution_mode}")
+    if execution_mode == "central" and distributed_run is not None:
+        raise ValueError("central campaign plan forbids distributedRun")
+    if execution_mode == "distributed":
+        if not isinstance(distributed_run, Mapping):
+            raise ValueError("distributed campaign plan requires distributedRun")
+        if (
+            not str(distributed_run.get("campaignRunId") or "").strip()
+            or int(distributed_run.get("campaignGeneration") or 0) < 1
+            or not str(distributed_run.get("campaignFencingToken") or "").startswith(
+                "sha256:"
+            )
+        ):
+            raise ValueError("distributed campaign run identity is incomplete")
     branches = {str(row.get("gitBranch") or "") for row in submissions.values()}
     commits = {str(row.get("gitCommitSha") or "") for row in submissions.values()}
     source_digests = {
@@ -301,6 +326,7 @@ def freeze_plan(
     stable = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_execution_id,
+        "executionMode": execution_mode,
         "gitBranch": next(iter(branches)),
         "gitCommitSha": frozen_commit,
         "sourceRevision": next(iter(source_revisions)),
@@ -319,6 +345,12 @@ def freeze_plan(
         },
         "frozenAt": utc_now(),
     }
+    if distributed_run is not None:
+        stable["distributedRun"] = {
+            "campaignRunId": str(distributed_run["campaignRunId"]),
+            "campaignGeneration": int(distributed_run["campaignGeneration"]),
+            "campaignFencingToken": str(distributed_run["campaignFencingToken"]),
+        }
     semantic_preflight = submissions["homepage"].get("semanticPreflightReceipt")
     if semantic_preflight is not None:
         validate_semantic_preflight_binding(

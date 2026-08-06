@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 from collections.abc import Mapping
@@ -13,6 +14,10 @@ from core.io import read_json
 from core.schema import assert_valid
 
 from content.execution.campaign_external_inputs import payload_digest
+from content.execution.campaign_lane_claim import (
+    lane_claim_path,
+    read_lane_claim,
+)
 from content.execution.campaign_runtime import (
     lane_checkpoint_path,
     read_lane_checkpoint,
@@ -176,6 +181,115 @@ def _read_publish_ref(path: Path, execution_id: str) -> tuple[dict[str, Any], st
     return payload, "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def _portable_publish_projection(
+    *,
+    runtime_paths: CampaignRuntimePaths,
+    execution_id: str,
+    run_id: str,
+    generation: int,
+    fencing_token: str,
+) -> CampaignPublishProjection:
+    publish_path = lane_execution_root(runtime_paths, execution_id) / "publish_ref.json"
+    publish_ref, publish_sha256 = _read_publish_ref(publish_path, execution_id)
+    try:
+        portable_ref = (
+            publish_path.resolve()
+            .relative_to(runtime_paths.output_root.resolve())
+            .as_posix()
+        )
+    except ValueError as exc:
+        raise receipt_error(
+            "PUBLISH_REF_PATH_DRIFT",
+            "execution publish_ref is outside canonical output root",
+            evidence=publish_path,
+        ) from exc
+    return CampaignPublishProjection(
+        publish_ref=publish_ref,
+        binding={
+            "executionPublishRef": portable_ref,
+            "executionPublishSha256": publish_sha256,
+            "campaignRunId": run_id,
+            "campaignGeneration": generation,
+            "campaignFencingToken": fencing_token,
+        },
+    )
+
+
+def _project_distributed_publish(
+    *,
+    runtime_paths: CampaignRuntimePaths,
+    root_execution_id: str,
+    execution_id: str,
+    carrier: str,
+    plan: Mapping[str, Any],
+) -> CampaignPublishProjection:
+    claim_path = lane_claim_path(runtime_paths, root_execution_id, carrier)
+    lock_path = claim_path.parent / f".{carrier}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pass
+        else:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+            raise receipt_error(
+                "CLAIM_NOT_ACTIVE",
+                f"{carrier} distributed lane lock is not held",
+                evidence=lock_path,
+            )
+    claim_before = read_lane_claim(runtime_paths, root_execution_id, carrier)
+    claim_after = read_lane_claim(runtime_paths, root_execution_id, carrier)
+    if claim_before is None or claim_after is None:
+        raise receipt_error(
+            "CLAIM_MISSING",
+            f"{carrier} distributed lane claim is missing",
+            evidence=claim_path,
+        )
+    stable_claim_keys = (
+        "claimId",
+        "planDigest",
+        "campaignRunId",
+        "campaignGeneration",
+        "campaignFencingToken",
+        "carrier",
+        "executionId",
+    )
+    if any(
+        claim_before.get(key) != claim_after.get(key) for key in stable_claim_keys
+    ):
+        raise receipt_error(
+            "FENCE_CHANGED",
+            f"{carrier} distributed claim changed during publish projection",
+            evidence=claim_path,
+        )
+    distributed = plan.get("distributedRun")
+    expected = {
+        "planDigest": plan["planDigest"],
+        "campaignRunId": (distributed or {}).get("campaignRunId"),
+        "campaignGeneration": (distributed or {}).get("campaignGeneration"),
+        "campaignFencingToken": (distributed or {}).get("campaignFencingToken"),
+        "carrier": carrier,
+        "executionId": execution_id,
+        "phase": "run",
+        "status": "running",
+        "executionRoot": str(lane_execution_root(runtime_paths, execution_id)),
+    }
+    if any(claim_after.get(key) != value for key, value in expected.items()):
+        raise receipt_error(
+            "CLAIM_DRIFT",
+            f"{carrier} distributed claim does not own the current publish",
+            evidence=claim_path,
+        )
+    return _portable_publish_projection(
+        runtime_paths=runtime_paths,
+        execution_id=execution_id,
+        run_id=str(claim_after["campaignRunId"]),
+        generation=int(claim_after["campaignGeneration"]),
+        fencing_token=str(claim_after["campaignFencingToken"]),
+    )
+
+
 def project_publish_receipt(
     *,
     root_execution_id: str,
@@ -197,6 +311,21 @@ def project_publish_receipt(
         raise receipt_error(
             "PLAN_IDENTITY_DRIFT",
             f"{carrier} execution is not the current frozen campaign lane",
+            evidence=plan_path,
+        )
+    execution_mode = str(plan.get("executionMode") or "")
+    if execution_mode == "distributed":
+        return _project_distributed_publish(
+            runtime_paths=runtime_paths,
+            root_execution_id=root_id,
+            execution_id=normalized,
+            carrier=carrier,
+            plan=plan,
+        )
+    if execution_mode != "central":
+        raise receipt_error(
+            "PLAN_MODE_INVALID",
+            f"campaign executionMode is invalid: {execution_mode}",
             evidence=plan_path,
         )
     snapshot_path = runtime_snapshot_path(runtime_paths, root_id)
@@ -267,29 +396,12 @@ def project_publish_receipt(
             f"{carrier} snapshot lane is not the current running publish",
             evidence=snapshot_path,
         )
-    publish_path = lane_execution_root(runtime_paths, normalized) / "publish_ref.json"
-    publish_ref, publish_sha256 = _read_publish_ref(publish_path, normalized)
-    try:
-        portable_ref = (
-            publish_path.resolve()
-            .relative_to(runtime_paths.output_root.resolve())
-            .as_posix()
-        )
-    except ValueError as exc:
-        raise receipt_error(
-            "PUBLISH_REF_PATH_DRIFT",
-            "execution publish_ref is outside canonical output root",
-            evidence=publish_path,
-        ) from exc
-    return CampaignPublishProjection(
-        publish_ref=publish_ref,
-        binding={
-            "executionPublishRef": portable_ref,
-            "executionPublishSha256": publish_sha256,
-            "campaignRunId": run_id,
-            "campaignGeneration": generation,
-            "campaignFencingToken": fencing_token,
-        },
+    return _portable_publish_projection(
+        runtime_paths=runtime_paths,
+        execution_id=normalized,
+        run_id=run_id,
+        generation=generation,
+        fencing_token=fencing_token,
     )
 
 

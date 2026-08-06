@@ -28,7 +28,21 @@ business_rules:
 - objectType 与 objectId 唯一定位一条索引文档，版本和 tombstone 必须单调应用。
 - 搜索排序、权限过滤和稳定分页在 SearchIndexView Reader 内完成，SearchRequestFact 只记录请求事实。
 lifecycle:
-  source_events: [PostSearchItemProjected, HomepageSearchItemProjected, CircleSearchItemProjected, PersonaSearchItemProjected, CanonicalObjectTombstoned]
+  source_events:
+  - ops.experiment.ExperimentPolicyActivated
+  - user.user_account.UserSuspended
+  - user.user_account.UserRestored
   checkpoint: per_source_event_sequence
-  rebuild: recreate_index_then_replay_all_typed_search_item_events
+  rebuild: replay_profile_search_outbox_account_security_and_experiment_policy
   tombstone: delete_index_document_keep_source_checkpoint
+  event_consumers:
+  - name: ApplySearchExperimentPolicy
+    kind: projector
+    facet: ExperimentPolicyConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ApplyAccountRestriction
+    kind: projector
+    facet: UserAccountRestrictionConsumer
+    method: processOnce
+    idempotency: event_id

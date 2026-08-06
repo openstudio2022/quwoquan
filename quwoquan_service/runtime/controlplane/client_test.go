@@ -21,8 +21,8 @@ func TestResolveSnapshotSaveLoadRoundTrip(t *testing.T) {
 		DesiredHash:   "des-hash",
 		Values: []ResolvedConfigValue{
 			{
-				Key:        "sys.orchestrator.downstream.timeout_ms",
-				Value:      780.0,
+				Key:        "sys.config_center.poll_interval_sec",
+				Value:      45.0,
 				ScopeLevel: "service",
 				ScopeID:    "product-ops-service",
 			},

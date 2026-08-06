@@ -1,8 +1,10 @@
 backend: postgres
 tables:
   reports:
+    publication_role: not_published
     entity: Report
-    pk: id
+    pk:
+    - id
     columns:
     - name: id
       type: VARCHAR(36)
@@ -69,9 +71,11 @@ tables:
       columns:
       - reporter_id
   report_command_receipts:
+    publication_role: not_published
     entity: Report
     description: Report command 幂等结果；与 aggregate/outbox 在同一 PostgreSQL 事务提交
-    pk: idempotency_key
+    pk:
+    - idempotency_key
     columns:
     - name: idempotency_key
       type: VARCHAR(128)
@@ -112,14 +116,22 @@ tables:
       columns:
       - expires_at
   report_outbox:
+    publication_role: transactional_outbox
     entity: Report
-    description: Report 领域事件 outbox；与 aggregate change 同一 PostgreSQL 事务提交
-    pk: event_id
+    description: Report 领域事件 outbox；与 aggregate change 同一 PostgreSQL 事务提交。投递为序列检查点模型：由
+      report_outbox_sequence 分配单调 outbox_sequence，消费者按 outbox_sequence 递增读取并把水位写入
+      report_outbox_checkpoints，行内不保留投递状态列。
+    pk:
+    - event_id
     columns:
     - name: event_id
-      type: VARCHAR(64)
+      type: VARCHAR(128)
       constraints:
       - PK
+      - NOT_NULL
+    - name: outbox_sequence
+      type: BIGINT
+      constraints:
       - NOT_NULL
     - name: aggregate_id
       type: VARCHAR(36)
@@ -130,7 +142,7 @@ tables:
       constraints:
       - NOT_NULL
     - name: event_type
-      type: VARCHAR(64)
+      type: VARCHAR(128)
       constraints:
       - NOT_NULL
     - name: payload_json
@@ -141,18 +153,18 @@ tables:
       type: TIMESTAMPTZ
       constraints:
       - NOT_NULL
-    - name: published_at
-      type: TIMESTAMPTZ
     indexes:
-    - name: idx_report_outbox_unpublished
+    - name: idx_report_outbox_replay_order
       columns:
-      - published_at
-      - occurred_at
+      - outbox_sequence
+      unique: true
   report_outbox_sequence:
+    publication_role: publication_accessory
     entity: Report
     infrastructure_only: true
     description: 为 Report 事务 outbox 分配唯一单调序列；只由 Report repository transaction 使用。
-    pk: name
+    pk:
+    - name
     columns:
     - name: name
       type: VARCHAR(64)
@@ -164,10 +176,12 @@ tables:
       constraints:
       - NOT_NULL
   report_outbox_checkpoints:
+    publication_role: publication_accessory
     entity: Report
     infrastructure_only: true
     description: Report outbox projector 的对象本地可重放 checkpoint；不得作为领域事实来源。
-    pk: consumer
+    pk:
+    - consumer
     columns:
     - name: consumer
       type: VARCHAR(128)
@@ -184,8 +198,34 @@ tables:
       constraints:
       - NOT_NULL
       default: NOW()
+  report_gathering_safety_authorizations:
+    publication_role: not_published
+    entity: Report
+    description: Report owner 签发的短期 Gathering 安全终止授权；精确绑定 actor、target、action、decision digest 与 expiry，可显式撤销。
+    pk:
+    - decision_ref
+    columns:
+    - {name: decision_ref, type: VARCHAR(192), constraints: [PK, NOT_NULL]}
+    - {name: report_id, type: VARCHAR(36), constraints: [NOT_NULL]}
+    - {name: decision_version, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: decision_digest, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: actor_persona_id, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: gathering_id, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: action, type: VARCHAR(64), constraints: [NOT_NULL]}
+    - {name: evidence_ref, type: VARCHAR(192), constraints: [NOT_NULL]}
+    - {name: grant_idempotency_key, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: revoke_idempotency_key, type: VARCHAR(128)}
+    - {name: expires_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: issued_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: revoked_at, type: TIMESTAMPTZ}
+    indexes:
+    - {name: uq_report_gathering_safety_report, columns: [report_id], unique: true}
+    - {name: uq_report_gathering_safety_grant_idempotency, columns: [grant_idempotency_key], unique: true}
+    - {name: uq_report_gathering_safety_revoke_idempotency, columns: [revoke_idempotency_key], unique: true}
+    - {name: idx_report_gathering_safety_expiry, columns: [expires_at]}
 streams:
   events.content.report_lifecycle:
+    publication_role: publication_accessory
     entity: Report
     role: append_only
     idempotency_key: eventId

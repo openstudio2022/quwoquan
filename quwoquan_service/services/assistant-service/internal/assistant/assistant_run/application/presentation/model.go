@@ -30,13 +30,60 @@ type MediaRef struct {
 	ProvenanceRef string `json:"provenanceRef"`
 }
 
+type ActionIntentKind string
+
+const (
+	ActionIntentNavigate            ActionIntentKind = "Navigate"
+	ActionIntentApproveTool         ActionIntentKind = "ApproveTool"
+	ActionIntentExecuteDeviceAction ActionIntentKind = "ExecuteDeviceAction"
+	ActionIntentProvideInput        ActionIntentKind = "ProvideInput"
+)
+
+type NavigateIntent struct {
+	RouteID       string `json:"routeId"`
+	ObjectTypeRef string `json:"objectTypeRef"`
+	ObjectID      string `json:"objectId"`
+}
+
+type ApproveToolIntent struct {
+	RunID            string `json:"runId"`
+	ToolInvocationID string `json:"toolInvocationId"`
+	Decision         string `json:"decision"`
+	Capability       string `json:"capability"`
+	InputDigest      string `json:"inputDigest"`
+	ApprovalPermit   string `json:"approvalPermit"`
+}
+
+type ExecuteDeviceActionIntent struct {
+	RunID              string `json:"runId"`
+	ToolInvocationID   string `json:"toolInvocationId"`
+	InstallationID     string `json:"installationId"`
+	DeviceID           string `json:"deviceId"`
+	Capability         string `json:"capability"`
+	InputDigest        string `json:"inputDigest"`
+	IdempotencyKey     string `json:"idempotencyKey"`
+	DeviceActionPermit string `json:"deviceActionPermit"`
+}
+
+type ProvideInputIntent struct {
+	RunID            string `json:"runId"`
+	ToolInvocationID string `json:"toolInvocationId"`
+	InputName        string `json:"inputName"`
+	InputSchemaRef   string `json:"inputSchemaRef"`
+	InputPermit      string `json:"inputPermit"`
+}
+
 type ActionIntent struct {
-	IntentID             string         `json:"intentId"`
-	Operation            string         `json:"operation"`
-	ObjectTypeRef        string         `json:"objectTypeRef"`
-	ObjectID             string         `json:"objectId"`
-	Payload              map[string]any `json:"payload"`
-	RequiresConfirmation bool           `json:"requiresConfirmation"`
+	IntentID            string                     `json:"intentId"`
+	Kind                ActionIntentKind           `json:"kind"`
+	RequestDigest       string                     `json:"requestDigest"`
+	JTI                 string                     `json:"jti"`
+	IssuedAt            time.Time                  `json:"issuedAt"`
+	ExpiresAt           time.Time                  `json:"expiresAt"`
+	Navigate            *NavigateIntent            `json:"navigate,omitempty"`
+	ApproveTool         *ApproveToolIntent         `json:"approveTool,omitempty"`
+	ExecuteDeviceAction *ExecuteDeviceActionIntent `json:"executeDeviceAction,omitempty"`
+	ProvideInput        *ProvideInputIntent        `json:"provideInput,omitempty"`
 }
 
 type Accessibility struct {

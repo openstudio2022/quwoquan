@@ -65,8 +65,6 @@ local_identity_reasons:
   roomId: external RTC provider room key governed by the CallSession external port
   screenShareUserId: CallSession-owned participant selector validated against the bounded participants
     collection; no child Store or Facade exists
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:
@@ -92,6 +90,30 @@ lifecycle:
   - ended
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - user.user_account.UserSuspended
+  - user.user_account.UserRestored
+  - user.user_account.UserAccountClosed
+  - rtc.call_session.CallInitiated
+  - rtc.call_session.CallRinging
+  - rtc.call_session.CallAnswered
+  - rtc.call_session.CallConnected
+  - rtc.call_session.CallEnded
+  - rtc.call_session.ParticipantJoined
+  - rtc.call_session.ParticipantLeft
+  - rtc.call_session.ScreenShareStarted
+  - rtc.call_session.ScreenShareStopped
+  event_consumers:
+  - name: ApplyAccountSecurityTerminalEvent
+    kind: event_handler
+    facet: CallOrchestrator
+    method: applyAccountSecurityTerminalEvent
+    idempotency: event_id
+  - name: DeliverRealtimeCallSignals
+    kind: event_handler
+    facet: CallSignalDeliveryCoordinator
+    method: deliver
+    idempotency: event_id
 members:
   CallParticipant:
     kind: owned_entity

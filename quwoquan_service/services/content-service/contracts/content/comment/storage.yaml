@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   comments:
+    publication_role: not_published
     entity: Comment
     description: Comment 聚合权威集合；只保存单条评论状态与可重算 hotScore 投影分，不保存 Post 或可重建计数。
     indexes:
@@ -81,8 +82,9 @@ collections:
       unique: true
       description: Comment CAS commit predicate
   comment_command_receipts:
+    publication_role: not_published
     entity: Comment
-    description: Comment command 幂等回执；与 Comment 聚合版本和 comment_outbox 在同一 Mongo transaction 提交。
+    description: Comment command 幂等回执；与 Comment 聚合版本以及对应的 comment_outbox 或 comment_event_log 事实在同一 Mongo transaction 提交。
     indexes:
     - name: idx_comment_command_receipts_aggregate
       keys:
@@ -91,18 +93,20 @@ collections:
     - name: idx_comment_command_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   comment_author_rate_limit_locks:
+    publication_role: not_published
     entity: Comment
     description: CreateComment 按 author 串行化的短生命周期事务锁；与 Comment 创建同事务更新，确保多实例并发滑动窗口不超卖。
     indexes:
     - name: idx_comment_author_rate_limit_locks_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   comment_outbox:
+    publication_role: transactional_outbox
     entity: Comment
-    description: Comment 领域事实 outbox；同事务写入，供 Post.commentCount 等投影异步重放。
+    description: 有具名下游消费者的 Comment 领域事实 outbox；同事务写入，供 Post.commentCount 等投影异步重放，不承载仅供聚合审计的 CommentAttachmentsBound。
     indexes:
     - name: idx_comment_outbox_replay
       keys:
@@ -113,7 +117,23 @@ collections:
         aggregateId: 1
         aggregateVersion: 1
       unique: true
+  comment_event_log:
+    publication_role: transactional_event_log
+    entity: Comment
+    role: append_only
+    description: Comment 聚合内审计事件日志；当前仅保存 CommentAttachmentsBound，可靠追加即完成义务，不被 outbox relay 搬运。
+    indexes:
+    - name: idx_comment_event_log_aggregate_version
+      keys:
+        aggregateId: 1
+        aggregateVersion: 1
+      unique: true
+    - name: idx_comment_event_log_occurred_at
+      keys:
+        occurredAt: -1
+        _id: -1
   comment_projection_checkpoints:
+    publication_role: publication_accessory
     entity: Comment
     description: 每个 Comment 外部投递或 projection consumer 的独立 durable checkpoint
     indexes:
@@ -121,6 +141,7 @@ collections:
       keys:
         updatedAt: -1
   comment_viewer_relationship_projection:
+    publication_role: not_published
     entity: CommentViewerRelationshipProjection
     role: projection
     description: Comment 对 user.PersonaRelationship typed event 的对象本地只读投影；仅用于评论页关注、互关与拉黑展示，不成为关系权威源。
@@ -141,6 +162,7 @@ collections:
         blocked: 1
         sourcePersonaId: 1
   comment_viewer_relationship_inbox:
+    publication_role: not_published
     entity: CommentViewerRelationshipProjection
     role: projection_checkpoint
     description: Comment 关系投影按 User eventId 去重的 durable inbox；投影版本守卫完成后写入。
@@ -155,71 +177,24 @@ transaction:
   - comment_command_receipts
   - comment_author_rate_limit_locks
   - comment_outbox
+  - comment_event_log
   isolation: mongo_transaction
   guarantees:
   - version_cas
   - idempotency_digest
   - aggregate_and_outbox_atomic_commit
+  - aggregate_and_event_log_atomic_commit
   - concurrent_author_rate_window_serialization
-read_models:
-- name: CommentPage
-  source: comments
-  projection:
-  - id
-  - postId
-  - authorId
-  - content
-  - replyToCommentId
-  - replyToUserId
-  - parentCommentId
-  - attachmentMediaIds
-  - status
-  - isPinned
-  - pinnedAt
-  - authorIpLocation
-  - createdAt
-- name: ReplyPage
-  source: comments
-  projection:
-  - id
-  - postId
-  - authorId
-  - content
-  - replyToCommentId
-  - replyToUserId
-  - parentCommentId
-  - attachmentMediaIds
-  - status
-  - authorIpLocation
-  - createdAt
-- name: AuthorCommentPage
-  source: comments
-  projection:
-  - id
-  - postId
-  - authorId
-  - content
-  - parentCommentId
-  - status
-  - createdAt
-- name: CommentViewerRelationshipProjection
-  source: comment_viewer_relationship_projection
-  projection:
-  - sourcePersonaId
-  - targetPersonaId
-  - following
-  - blocked
-  - version
-  - blockVersion
-  - updatedAt
 streams:
   events.content.comment_lifecycle:
+    publication_role: publication_accessory
     entity: Comment
     role: append_only
     idempotency_key: eventId
     retention_seconds: 604800
     description: Comment outbox 的唯一 durable 生命周期 transport；消费者按 eventId 幂等。
   events.user.persona_relationship.comment.dlq:
+    publication_role: not_published
     entity: CommentViewerRelationshipProjection
     role: dead_letter
     idempotency_key: sourceStreamId

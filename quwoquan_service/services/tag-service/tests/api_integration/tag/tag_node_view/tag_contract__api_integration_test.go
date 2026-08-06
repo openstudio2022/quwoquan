@@ -1,4 +1,16 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+// readiness_case: resolve-tag-api
+// readiness_case: list-tag-children-api
+// readiness_case: shared-tags-api
+// readiness_case: inverted-objects-api
+// readiness_case: list-dimensions-api
+// readiness_case: suggest-tags-api
+// readiness_case: validate-tag-refs-api
+// readiness_case: search-tags-api
+// readiness_case: related-tags-api
+// readiness_case: search-by-tags-api
+// readiness_case: tag-cooccurrence-api
+// readiness_case: related-objects-api
 package api_integration // TagNodeView HTTP contract
 
 import (

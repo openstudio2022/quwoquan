@@ -4,178 +4,82 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sort"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"quwoquan_service/internal/platform/testinfra"
 	"quwoquan_service/runtime/operation"
-	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 	httpadapter "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/adapters/inbound/http"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/testsupport"
+	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
+	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
 	reviewhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/adapters/inbound/http"
 	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
-	reviewmodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/domain/model"
 	reviewports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/domain/ports"
+	reviewpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/infrastructure/persistence"
 )
 
-// memoryReviewStore 是 transport 层集成测试的内存 AggregateStore；
-// CAS/receipt 语义与 Mongo store 同构（真实 Mongo CAS 由 store 层合同保证）。
-type memoryReviewStore struct {
-	mu       sync.Mutex
-	reviews  map[string]reviewmodel.Snapshot
-	receipts map[string]memoryReviewReceipt
-	outbox   []reviewports.OutboxEvent
-}
-
-type memoryReviewReceipt struct {
-	commandName   string
-	commandDigest string
-	snapshot      reviewmodel.Snapshot
-}
-
-func newMemoryReviewStore() *memoryReviewStore {
-	return &memoryReviewStore{
-		reviews:  map[string]reviewmodel.Snapshot{},
-		receipts: map[string]memoryReviewReceipt{},
-	}
-}
-
-var _ reviewports.AggregateStore = (*memoryReviewStore)(nil)
-var _ reviewports.PageReader = (*memoryReviewStore)(nil)
-
-func (s *memoryReviewStore) Load(
-	_ context.Context,
-	reviewID string,
-) (*reviewmodel.HomepageReview, bool, error) {
-	s.mu.Lock()
-	snapshot, found := s.reviews[strings.TrimSpace(reviewID)]
-	s.mu.Unlock()
-	if !found {
-		return nil, false, nil
-	}
-	aggregate, err := reviewmodel.Restore(snapshot)
-	return aggregate, err == nil, err
-}
-
-func (s *memoryReviewStore) FindByAuthor(
-	_ context.Context,
-	homepageID string,
-	authorPersonaID string,
-) (*reviewmodel.HomepageReview, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, snapshot := range s.reviews {
-		if snapshot.HomepageID == strings.TrimSpace(homepageID) &&
-			snapshot.AuthorPersonaID == strings.TrimSpace(authorPersonaID) {
-			aggregate, err := reviewmodel.Restore(snapshot)
-			return aggregate, err == nil, err
-		}
-	}
-	return nil, false, nil
-}
-
-func (s *memoryReviewStore) FindReceipt(
-	_ context.Context,
-	idempotencyKey string,
-	commandName string,
-	commandDigest string,
-) (reviewports.CommitResult, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	receipt, found := s.receipts[idempotencyKey]
-	if !found {
-		return reviewports.CommitResult{}, false, nil
-	}
-	if receipt.commandName != commandName || receipt.commandDigest != commandDigest {
-		return reviewports.CommitResult{}, false,
-			generated.AppErrorFromIdempotencyConflict("digest mismatch")
-	}
-	aggregate, err := reviewmodel.Restore(receipt.snapshot)
-	if err != nil {
-		return reviewports.CommitResult{}, false, err
-	}
-	return reviewports.CommitResult{Aggregate: aggregate, Replayed: true}, true, nil
-}
-
-func (s *memoryReviewStore) RecordNoopReceipt(
-	_ context.Context,
-	noop reviewports.NoopReceipt,
-) (reviewports.CommitResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	snapshot := noop.Aggregate.Snapshot()
-	s.receipts[noop.IdempotencyKey] = memoryReviewReceipt{
-		commandName:   noop.CommandName,
-		commandDigest: noop.CommandDigest,
-		snapshot:      snapshot,
-	}
-	aggregate, err := reviewmodel.Restore(snapshot)
-	return reviewports.CommitResult{Aggregate: aggregate}, err
-}
-
-func (s *memoryReviewStore) Commit(
-	_ context.Context,
-	commit reviewports.Commit,
-) (reviewports.CommitResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	snapshot := commit.Aggregate.Snapshot()
-	current, exists := s.reviews[snapshot.ID]
-	if commit.ExpectedVersion == 0 {
-		if exists {
-			return reviewports.CommitResult{},
-				generated.AppErrorFromVersionConflict("review already exists")
-		}
-	} else if !exists || current.Version != commit.ExpectedVersion {
-		return reviewports.CommitResult{},
-			generated.AppErrorFromVersionConflict("review version changed")
-	}
-	s.reviews[snapshot.ID] = snapshot
-	s.receipts[commit.IdempotencyKey] = memoryReviewReceipt{
-		commandName:   commit.CommandName,
-		commandDigest: commit.CommandDigest,
-		snapshot:      snapshot,
-	}
-	s.outbox = append(s.outbox, commit.Events...)
-	aggregate, err := reviewmodel.Restore(snapshot)
-	return reviewports.CommitResult{Aggregate: aggregate}, err
-}
-
-func (s *memoryReviewStore) ListByHomepage(
-	_ context.Context,
-	homepageID string,
-	request reviewports.PageRequest,
-) (reviewports.Page, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	items := make([]reviewmodel.Snapshot, 0)
-	for _, snapshot := range s.reviews {
-		if snapshot.HomepageID == strings.TrimSpace(homepageID) &&
-			snapshot.Status == reviewmodel.StatusActive {
-			items = append(items, snapshot)
-		}
-	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].CreatedAt.After(items[j].CreatedAt)
-	})
-	limit := request.Limit
-	if limit <= 0 {
-		limit = 20
-	}
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return reviewports.Page{Items: items}, nil
-}
-
-func newReviewTestServer(t *testing.T) (*httptest.Server, *memoryReviewStore) {
+func newReviewTestServer(
+	t *testing.T,
+) (*httptest.Server, *reviewpersistence.MongoReviewStore, string) {
 	t.Helper()
-	store := newMemoryReviewStore()
-	homepageService := testsupport.NewFixtureHomepageService()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	t.Cleanup(cancel)
+	mongoRuntime, err := testinfra.StartRealMongo(
+		ctx,
+		fmt.Sprintf("entity_homepage_review_handler_%d", time.Now().UnixNano()),
+	)
+	if err != nil {
+		t.Fatalf("start real MongoDB: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		if closeErr := mongoRuntime.Close(cleanupCtx); closeErr != nil {
+			t.Errorf("close real MongoDB: %v", closeErr)
+		}
+	})
+	homepageStore := homepagepersistence.NewMongoHomepageStore(mongoRuntime.Database)
+	store := reviewpersistence.NewMongoReviewStore(mongoRuntime.Database)
+	if err := homepageStore.EnsureIndexes(ctx); err != nil {
+		t.Fatalf("ensure Homepage indexes: %v", err)
+	}
+	if err := store.EnsureIndexes(ctx); err != nil {
+		t.Fatalf("ensure HomepageReview indexes: %v", err)
+	}
+	homepageService := homepageapp.NewHomepageServiceWithStore(ctx, homepageStore)
+	seedContext := func(operationID, idempotencyKey string) context.Context {
+		return operation.WithContext(ctx, operation.Context{
+			OperationID:    operationID,
+			RequestID:      "request-" + idempotencyKey,
+			IdempotencyKey: idempotencyKey,
+			Actor: operation.ActorContext{
+				AccountID: "homepage-review-seed-account",
+				PersonaID: "homepage-review-seed-persona",
+			},
+		})
+	}
+	candidate, err := homepageService.IntakeHomepageCandidate(
+		seedContext("entity.homepage.IntakeHomepageCandidate", "homepage-review-intake"),
+		homepageapp.HomepageInput{
+			Title:        "Homepage review integration target",
+			HomepageType: "sight",
+			City:         "Hangzhou",
+		},
+		"owner_created",
+	)
+	if err != nil {
+		t.Fatalf("intake Homepage review target: %v", err)
+	}
+	published, err := homepageService.PublishHomepageCandidate(
+		seedContext("entity.homepage.PublishHomepageCandidate", "homepage-review-publish"),
+		candidate.ID,
+	)
+	if err != nil || published.Status != "published" {
+		t.Fatalf("publish Homepage review target: homepage=%+v err=%v", published, err)
+	}
 	facade, err := reviewapp.NewFacade(reviewapp.DataPorts{
 		Aggregate: store,
 		Page:      store,
@@ -193,7 +97,7 @@ func newReviewTestServer(t *testing.T) (*httptest.Server, *memoryReviewStore) {
 	handler := httpadapter.NewHandler(homepageService).WithReviewHandler(reviewhttp.NewHandler(facade))
 	server := httptest.NewServer(reviewActorMiddleware(handler.Routes()))
 	t.Cleanup(server.Close)
-	return server, store
+	return server, store, candidate.ID
 }
 
 // reviewActorMiddleware 模拟 generated guard：从测试 header 注入可信 actor
@@ -264,11 +168,9 @@ func reviewRequest(
 	return decoded
 }
 
-const reviewFixtureHomepage = "homepage_sight_west_lake"
-
 func TestHomepageReviewHTTPLifecycle(t *testing.T) {
-	server, store := newReviewTestServer(t)
-	basePath := "/homepages/" + reviewFixtureHomepage + "/reviews"
+	server, store, homepageID := newReviewTestServer(t)
+	basePath := "/homepages/" + homepageID + "/reviews"
 
 	created := reviewRequest(t, server, http.MethodPost, basePath,
 		"persona-author", "key-create-1",
@@ -293,8 +195,13 @@ func TestHomepageReviewHTTPLifecycle(t *testing.T) {
 	if replayed["id"] != reviewID || replayed["version"].(float64) != 1 {
 		t.Fatalf("idempotent replay mismatch: %v", replayed)
 	}
-	if len(store.reviews) != 1 {
-		t.Fatalf("expected exactly one review, got %d", len(store.reviews))
+	storedPage, err := store.ListByHomepage(
+		context.Background(),
+		homepageID,
+		reviewports.PageRequest{Limit: 10},
+	)
+	if err != nil || len(storedPage.Items) != 1 {
+		t.Fatalf("expected exactly one persisted review, page=%+v err=%v", storedPage, err)
 	}
 
 	// 列表可见。
@@ -356,17 +263,23 @@ func TestHomepageReviewHTTPLifecycle(t *testing.T) {
 	if revived["id"] != reviewID || revived["status"] != "active" {
 		t.Fatalf("revive must reuse aggregate: %v", revived)
 	}
-	if len(store.reviews) != 1 {
-		t.Fatalf("author+homepage must map to one document, got %d", len(store.reviews))
+	storedPage, err = store.ListByHomepage(
+		context.Background(),
+		homepageID,
+		reviewports.PageRequest{Limit: 10},
+	)
+	if err != nil || len(storedPage.Items) != 1 {
+		t.Fatalf("author+homepage must map to one active document, page=%+v err=%v", storedPage, err)
 	}
-	if len(store.outbox) != 4 {
-		t.Fatalf("expected 4 outbox facts, got %d", len(store.outbox))
+	outbox, err := store.ReadAfter(context.Background(), "", 10)
+	if err != nil || len(outbox) != 4 {
+		t.Fatalf("expected 4 persisted outbox facts, outbox=%+v err=%v", outbox, err)
 	}
 }
 
 func TestHomepageReviewRequiresActorAndIdempotencyKey(t *testing.T) {
-	server, _ := newReviewTestServer(t)
-	basePath := "/homepages/" + reviewFixtureHomepage + "/reviews"
+	server, _, homepageID := newReviewTestServer(t)
+	basePath := "/homepages/" + homepageID + "/reviews"
 
 	// 无 persona actor：结构化 403。
 	reviewRequest(t, server, http.MethodPost, basePath,

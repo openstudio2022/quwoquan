@@ -1,7 +1,7 @@
 """锁定 page_object_contract 路径同步工具的行为契约。
 
 覆盖：唯一定位才修、幂等、外科手术式改写、git 重命名链优先、无法唯一定位必须
-报人工裁决、多 object_ids 页面落进单对象 presentation 必须被看见。
+报人工裁决，以及多 participant 页面只在 physical owner 无法证明时报告 REVIEW。
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
     def test_unique_basename_match_is_repaired_surgically(self) -> None:
         self.write_dart(
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
             "CircleDetailPage",
         )
         self.write_contract(
@@ -139,7 +139,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
         self.assertEqual(report.fixes[0].field_name, "source_path")
         self.assertEqual(
             report.fixes[0].new_path,
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
         )
         self.assertEqual(report.manual, [])
         self.assertTrue(report.changed)
@@ -158,7 +158,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
     def test_second_run_is_idempotent(self) -> None:
         self.write_dart(
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
             "CircleDetailPage",
         )
         self.write_contract(
@@ -178,7 +178,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
     def test_check_mode_never_writes(self) -> None:
         self.write_dart(
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
             "CircleDetailPage",
         )
         self.write_contract(
@@ -212,8 +212,8 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
     def test_multiple_candidates_require_manual_decision(self) -> None:
         for relative in (
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
-            "lib/content/content/post/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
+            "lib/service/content_service/content/post/presentation/circle_detail_page.dart",
         ):
             self.write_dart(relative, "CircleDetailPage")
         self.write_contract(
@@ -233,11 +233,11 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
     def test_entry_widget_narrows_same_name_candidates(self) -> None:
         self.write_dart(
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
             "CircleDetailPage",
         )
         self.write_dart(
-            "lib/content/content/post/presentation/circle_detail_page.dart",
+            "lib/service/content_service/content/post/presentation/circle_detail_page.dart",
             "SomethingElsePage",
         )
         self.write_contract(
@@ -252,18 +252,18 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
         self.assertEqual(report.manual, [])
         self.assertEqual(
             report.fixes[0].new_path,
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
         )
 
     def test_new_path_must_not_steal_another_page_claim(self) -> None:
         self.write_dart(
-            "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+            "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
             "CircleDetailPage",
         )
         self.write_contract(
             page_block(
                 "circle.detail_owner",
-                "lib/circle/circle/circle/presentation/circle_detail_page.dart",
+                "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart",
                 entry_widget="CircleDetailPage",
                 object_ids=["circle.circle"],
             ),
@@ -280,9 +280,9 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
     def test_mount_evidence_path_is_synced(self) -> None:
         self.write_dart(
-            "lib/circle/circle/circle/presentation/circle_shell.dart", "CircleShell"
+            "lib/service/circle_service/circle_management/circle/presentation/circle_shell.dart", "CircleShell"
         )
-        (self.app / "lib/circle/circle/circle/presentation/circle_shell.dart").write_text(
+        (self.app / "lib/service/circle_service/circle_management/circle/presentation/circle_shell.dart").write_text(
             "class CircleShell {}\nconst mounted = ObjectDetailGlobalBottomNav();\n",
             encoding="utf-8",
         )
@@ -306,18 +306,18 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
             [
                 (
                     "mount_evidence",
-                    "lib/circle/circle/circle/presentation/circle_shell.dart",
+                    "lib/service/circle_service/circle_management/circle/presentation/circle_shell.dart",
                 )
             ],
         )
         document = yaml.safe_load(self.contract.read_text(encoding="utf-8"))
         self.assertEqual(
             document["pages"][0]["mount_evidence"],
-            ["lib/circle/circle/circle/presentation/circle_shell.dart"],
+            ["lib/service/circle_service/circle_management/circle/presentation/circle_shell.dart"],
         )
 
-    def test_multi_object_page_in_single_presentation_is_reported(self) -> None:
-        source = "lib/assistant/assistant/assistant_run/presentation/session_page.dart"
+    def test_multi_object_page_with_declared_physical_owner_is_not_reported(self) -> None:
+        source = "lib/service/assistant_service/assistant/assistant_run/presentation/session_page.dart"
         self.write_dart(source, "SessionPage")
         self.write_contract(
             page_block(
@@ -330,23 +330,116 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
 
         def shape_of(path: str):
             parts = Path(path).parts
-            if len(parts) < 6 or parts[0] != "lib":
+            if (
+                len(parts) < 7
+                or parts[0] != "lib"
+                or parts[1] != "service"
+                or parts[5] != "presentation"
+            ):
                 return None
-            return parts[1], parts[2], parts[3], parts[4]
+            return parts[3], parts[3], parts[4], parts[5]
 
         report = self.run_sync(shape_of=shape_of)
-        kinds = [item.kind for item in report.review]
-        self.assertIn("multi_object_single_presentation", kinds)
+        self.assertEqual(
+            [
+                item
+                for item in report.review
+                if item.kind == "multi_object_single_presentation"
+            ],
+            [],
+        )
+
+    def test_multi_object_page_missing_physical_owner_is_reported(self) -> None:
+        source = "lib/service/assistant_service/assistant/assistant_run/presentation/session_page.dart"
+        self.write_dart(source, "SessionPage")
+        self.write_contract(
+            page_block(
+                "assistant.personal_session",
+                source,
+                entry_widget="SessionPage",
+                object_ids=["assistant.assistant_session", "notification.notification"],
+            )
+        )
+
+        def shape_of(path: str):
+            parts = Path(path).parts
+            if (
+                len(parts) < 7
+                or parts[0] != "lib"
+                or parts[1] != "service"
+                or parts[5] != "presentation"
+            ):
+                return None
+            return parts[3], parts[3], parts[4], parts[5]
+
+        report = self.run_sync(shape_of=shape_of)
         finding = next(
             item
             for item in report.review
             if item.kind == "multi_object_single_presentation"
         )
         self.assertEqual(finding.page_id, "assistant.personal_session")
+        self.assertIn("派生 physical owner assistant.assistant_run 未出现在 object_ids", finding.detail)
         self.assertIn("notification.notification", finding.detail)
 
+    def test_unresolvable_object_presentation_is_reported(self) -> None:
+        source = "lib/runtime/shell/fake_owner/presentation/fake_shell_page.dart"
+        self.write_dart(source, "FakeShellPage")
+        self.write_contract(
+            page_block(
+                "app.fake_shell",
+                source,
+                entry_widget="FakeShellPage",
+                object_ids=["ops.app_release", "ops.recovery_failure"],
+            )
+        )
+
+        report = self.run_sync(shape_of=lambda _: None)
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("无法从 ContractGraph roster", report.review[0].detail)
+        self.assertIn("shell 伪装", report.review[0].detail)
+
+    def test_duplicate_participant_set_is_reported(self) -> None:
+        source = "lib/service/assistant_service/assistant/assistant_run/presentation/session_page.dart"
+        self.write_dart(source, "SessionPage")
+        self.write_contract(
+            page_block(
+                "assistant.personal_session",
+                source,
+                entry_widget="SessionPage",
+                object_ids=["assistant.assistant_run", "assistant.assistant_run"],
+            )
+        )
+
+        report = self.run_sync(
+            shape_of=lambda _: (
+                "assistant",
+                "assistant",
+                "assistant_run",
+                "presentation",
+            )
+        )
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("重复 participant", report.review[0].detail)
+        self.assertIn("assistant.assistant_run", report.review[0].detail)
+
+    def test_route_less_runtime_shell_is_outside_object_owner_review(self) -> None:
+        source = "lib/runtime/shell/recovery/startup_recovery_page.dart"
+        self.write_dart(source, "StartupRecoveryPage")
+        self.write_contract(
+            page_block(
+                "app.startup_recovery",
+                source,
+                entry_widget="StartupRecoveryPage",
+                object_ids=["ops.app_release", "ops.recovery_failure"],
+            )
+        )
+
+        report = self.run_sync(shape_of=lambda _: None)
+        self.assertEqual(report.review, [])
+
     def test_single_object_page_in_presentation_is_not_reported(self) -> None:
-        source = "lib/circle/circle/circle/presentation/circle_detail_page.dart"
+        source = "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart"
         self.write_dart(source, "CircleDetailPage")
         self.write_contract(
             page_block(
@@ -368,7 +461,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
         )
 
     def test_page_outside_disk_scan_set_is_reported(self) -> None:
-        source = "lib/circle/circle/circle/presentation/circle_detail_page.dart"
+        source = "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart"
         self.write_dart(source, "CircleDetailPage")
         self.write_contract(
             page_block(
@@ -393,7 +486,7 @@ class GateFailureClassificationTest(unittest.TestCase):
         output = "\n".join(
             (
                 "page_object_contract: FAIL",
-                "  - canonical source 不在页面扫描集: lib/circle/circle/circle/presentation/x_page.dart",
+                "  - canonical source 不在页面扫描集: lib/service/circle_service/circle_management/circle/presentation/x_page.dart",
                 "  - circle.detail: source_path 不存在: lib/ui/circle/pages/x_page.dart",
                 "  - rtc.incoming: typed_presentation 在 App/Contract Dart 中不存在: CallSessionDto",
                 "  - circle.detail: experience_owner 'circle' 无 UI 路径、父页面或服务领域佐证",
@@ -467,8 +560,8 @@ class GitRenameEvidenceTest(unittest.TestCase):
 
     def test_rename_chain_disambiguates_same_name_candidates(self) -> None:
         old = "lib/ui/circle/pages/circle_detail_page.dart"
-        new = "lib/circle/circle/circle/presentation/circle_detail_page.dart"
-        decoy = "lib/content/content/post/presentation/circle_detail_page.dart"
+        new = "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart"
+        decoy = "lib/service/content_service/content/post/presentation/circle_detail_page.dart"
         body = "class CircleDetailPage {}\n" + "// padding\n" * 40
         self.write(old, body)
         self.write(decoy, body)

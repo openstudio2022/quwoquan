@@ -21,6 +21,17 @@ type OutboxEvent struct {
 	Checkpoint       string
 }
 
+// EventLogRecord 是只在 Comment owner 事务边界内可靠追加的审计事实。
+// 它没有 checkpoint，也不得交给 OutboxReader/OutboxPublisher 搬运。
+type EventLogRecord struct {
+	EventID          string
+	EventType        string
+	AggregateID      string
+	AggregateVersion int64
+	Payload          []byte
+	OccurredAt       time.Time
+}
+
 type TombstoneCommentsByPostCommand struct {
 	PostID            string
 	SourceEventID     string
@@ -36,7 +47,8 @@ type Commit struct {
 	CommandDigest    string
 	ReceiptExpiresAt time.Time
 	AuthorRateLimit  *AuthorRateLimit
-	Events           []OutboxEvent
+	OutboxEvents     []OutboxEvent
+	EventLogRecords  []EventLogRecord
 }
 
 // AuthorRateLimit 是 CreateComment 随聚合提交执行的权威滑动窗口约束。
@@ -65,7 +77,8 @@ type IdempotentReceipt struct {
 	ReceiptExpiresAt time.Time
 }
 
-// AggregateStore 只负责 Comment 状态、命令回执、CAS 与事务 outbox；
+// AggregateStore 只负责 Comment 状态、命令回执、CAS，以及互斥的事务
+// outbox / owner event log；
 // 它不持有 Post 状态或 Post.commentCount。
 type AggregateStore interface {
 	Load(ctx context.Context, commentID string) (*commentmodel.Comment, bool, error)

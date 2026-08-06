@@ -55,9 +55,9 @@ def _write_fake_keypair(key_dir: Path, account: str) -> None:
 
 
 class ProdPlaneAccessIsolationTest(unittest.TestCase):
-    """T1 契约 / T2 模块交互：四平面访问隔离单一真相源、凭据硬校验、bootstrap 与 deploy dry-run。"""
+    """访问隔离契约 / 部署模块交互：四平面访问隔离单一真相源、凭据硬校验、bootstrap 与 deploy dry-run。"""
 
-    # --- T1：访问隔离映射契约 ---
+    # --- 访问隔离契约：访问隔离映射契约 ---
     def test_access_isolation_gate_passes(self) -> None:
         result = _run(["python3", "quwoquan_ops/gate/verify_prod_plane_access_isolation.py"])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -94,7 +94,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
         self.assertEqual(planes["data"]["access"], "read-only-audit")
         self.assertEqual(planes["data"]["governedWorkloads"], [])
 
-    # --- T1/T2：按平面凭据硬校验（禁止失败放通） ---
+    # --- 契约与模块：按平面凭据硬校验（禁止失败放通） ---
     def test_credentials_hard_fail_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = _run(
@@ -145,7 +145,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("relay:PROD_OPS_SSH_KEY", result.stdout)
 
-    # --- T2：bootstrap dry-run 渲染去 root 账号 ---
+    # --- 部署模块：bootstrap dry-run 渲染去 root 账号 ---
     def test_bootstrap_dry_run_renders_nonroot_accounts(self) -> None:
         result = _run(
             ["bash", "quwoquan_ops/cli/prod/bootstrap_prod_plane_accounts.sh"],
@@ -164,7 +164,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
         # 读写平面启用 rootless podman linger；data 平面不建 stack。
         self.assertIn("enable-linger \"prod-service-svc\"", result.stdout)
 
-    # --- T2：prod deploy dry-run 给出按平面 SSH 发布计划 ---
+    # --- 部署模块：prod deploy dry-run 给出按平面 SSH 发布计划 ---
     def test_deploy_dry_run_plane_plan(self) -> None:
         result = _run(
             ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],

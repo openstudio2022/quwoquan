@@ -11,7 +11,6 @@ PLATFORM_WORKFLOW = ROOT / ".github/workflows/beta-device-platform.yml"
 DEVICE_EVIDENCE = ROOT / "quwoquan_ops/ci/render_beta_device_evidence.py"
 DEVICE_LEASE = ROOT / "quwoquan_ops/ci/device_runner_lease.py"
 PLATFORM_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
-STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
 EVIDENCE_DOCKERFILE = ROOT / "quwoquan_ops/ci/app_candidate_evidence.Dockerfile"
 SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 
@@ -210,7 +209,31 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert '--release-manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json"' in text
     assert "--skip-build" in text
     assert "--skip-app" in text
-    assert "--formal-release-teardown" in STACKCTL.read_text(encoding="utf-8")
+    formal_teardown = next(
+        step
+        for step in jobs["beta_teardown"]["steps"]
+        if step.get("name") == "Teardown only the recorded formal Beta runtime"
+    )
+    assert formal_teardown["if"] == (
+        "${{ needs.beta_stack.outputs.formal_runtime_started == 'true' }}"
+    )
+    formal_teardown_run = formal_teardown["run"]
+    assert "stackctl.py down" in formal_teardown_run
+    assert "--target beta-local" in formal_teardown_run
+    assert "--formal-release" in formal_teardown_run
+    assert (
+        '--release-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/beta-stack/'
+        'release-evidence-manifest/manifest.json"'
+    ) in formal_teardown_run
+    assert text.count("Require exact clean candidate checkout") == 1
+    assert platform_text.count("Require exact clean candidate checkout") == 1
+    assert text.count('[[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]') == 1
+    assert platform_text.count('[[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]') == 1
+    assert 'test -z "$(git status --porcelain --untracked-files=all)"' in text
+    assert (
+        'test -z "$(git status --porcelain --untracked-files=all)"'
+        in platform_text
+    )
     assert "docker compose up --build" not in text
     assert "source-built or destructive Beta formal runtime" not in text
     assert "steps.formal_runtime.outputs.started" in text

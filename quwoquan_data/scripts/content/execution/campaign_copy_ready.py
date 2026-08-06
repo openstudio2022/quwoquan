@@ -10,8 +10,7 @@ from content.execution.campaign_submission import campaign_root
 from core.io import read_json, write_json
 from core.schema import assert_valid
 
-COPY_READY_MIN_QUOTA = 3
-COPY_READY_MIN_CANDIDATE_COUNT = 6
+COPY_READY_MIN_QUALIFIED = 1
 
 
 def copy_ready_receipt_path(root_execution_id: str, *, root: Path) -> Path:
@@ -33,10 +32,11 @@ def maybe_write_copy_ready_receipt(
     assessed_at: str,
     assessment_ref: str | None = None,
 ) -> Path | None:
-    """Write COPY_READY when every lane met quota/count scale proof.
+    """Write COPY_READY when every lane published at least one qualified object.
 
-    Zero typed discards is allowed. If discards exist, each must already have
-    passed lane-receipt evidence completeness checks.
+    Requested quota/count and their attainment remain receipt statistics. Zero
+    typed discards is allowed. If discards exist, each must already have passed
+    lane-receipt evidence completeness checks.
     """
     lane_rows: dict[str, dict[str, Any]] = {}
     total_discards = 0
@@ -55,12 +55,10 @@ def maybe_write_copy_ready_receipt(
         qualified = int(publish["qualifiedCount"])
         discarded = int(publish["discardedCount"])
         finalized = int(publish["finalizedCount"])
+        shortfall = int(publish["shortfallCount"])
         discards = list(publish["discards"])
         if (
-            requested_quota < COPY_READY_MIN_QUOTA
-            or requested_count < COPY_READY_MIN_CANDIDATE_COUNT
-            or selected < COPY_READY_MIN_CANDIDATE_COUNT
-            or qualified < requested_quota
+            qualified < COPY_READY_MIN_QUALIFIED
             or finalized != qualified
             or discarded != len(discards)
             or selected != qualified + discarded
@@ -70,7 +68,7 @@ def maybe_write_copy_ready_receipt(
             or review["discards"] != publish["discards"]
             or lane.get("status") not in {"finalized", "partial"}
             or lane.get("cleanupStatus") != "cleaned"
-            or str(publish.get("status") or "") != "finalized"
+            or str(publish.get("status") or "") not in {"finalized", "partial"}
         ):
             return None
         if any(
@@ -96,6 +94,8 @@ def maybe_write_copy_ready_receipt(
             "qualifiedCount": qualified,
             "discardedCount": discarded,
             "finalizedCount": finalized,
+            "shortfallCount": shortfall,
+            "quotaAttainmentRate": qualified / requested_quota,
             "reviewReceiptRef": _output_ref(review_path, output_root=output_root),
             "publishReceiptRef": _output_ref(publish_path, output_root=output_root),
         }
@@ -112,8 +112,7 @@ def maybe_write_copy_ready_receipt(
         "entityCatalogDigest": str(plan["entityCatalogDigest"]),
         **({"assessmentRef": assessment_ref} if assessment_ref else {}),
         "minimums": {
-            "quotaPerLane": COPY_READY_MIN_QUOTA,
-            "candidateCountPerLane": COPY_READY_MIN_CANDIDATE_COUNT,
+            "qualifiedPerLane": COPY_READY_MIN_QUALIFIED,
         },
         "totalDiscardedCount": total_discards,
         "lanes": lane_rows,
@@ -134,8 +133,7 @@ def maybe_write_copy_ready_receipt(
 
 
 __all__ = [
-    "COPY_READY_MIN_CANDIDATE_COUNT",
-    "COPY_READY_MIN_QUOTA",
+    "COPY_READY_MIN_QUALIFIED",
     "copy_ready_receipt_path",
     "maybe_write_copy_ready_receipt",
 ]

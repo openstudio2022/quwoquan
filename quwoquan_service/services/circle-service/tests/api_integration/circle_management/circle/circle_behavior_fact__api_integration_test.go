@@ -15,6 +15,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	circleapp "quwoquan_service/services/circle-service/internal/circle_management/circle/application"
+	circlepersistence "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
 	behaviorfactapp "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/application"
 	behaviorfactmessaging "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/messaging"
 	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/infrastructure/persistence"
@@ -83,7 +85,9 @@ func TestCircleBehaviorFactRealAppendReplayProjectionAndStream(t *testing.T) {
 
 	store := behaviorfactpersistence.NewMongoAppendSink(mongoDB)
 	weeklyRelay := behaviorfactapp.NewOutboxRelay(
-		store, store, behaviorfactpersistence.NewMongoWeeklyActiveProjector(mongoDB, circleCacheInvalidator),
+		store, store, weeklyActiveTestConsumer{handler: circleapp.NewCircleWeeklyActiveProjectionHandler(
+			circlepersistence.NewMongoWeeklyActiveProjector(mongoDB, circleCacheInvalidator),
+		)},
 		"circle-weekly-active-test",
 	)
 	if count, err := weeklyRelay.Drain(ctx, 10); err != nil || count != 2 {
@@ -160,7 +164,9 @@ func TestCircleDiscoveryRecommendationUsesCircleOwnedLifecycleAndBehaviorFacts(t
 	relay := behaviorfactapp.NewOutboxRelay(
 		store,
 		store,
-		behaviorfactpersistence.NewMongoWeeklyActiveProjector(mongoDB, circleCacheInvalidator),
+		weeklyActiveTestConsumer{handler: circleapp.NewCircleWeeklyActiveProjectionHandler(
+			circlepersistence.NewMongoWeeklyActiveProjector(mongoDB, circleCacheInvalidator),
+		)},
 		"circle-discovery-recommendation-test",
 	)
 	if count, err := relay.Drain(t.Context(), 10); err != nil || count != 1 {

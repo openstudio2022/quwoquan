@@ -1,9 +1,11 @@
 backend: postgres
 tables:
   persona_relationships:
+    publication_role: not_published
     entity: PersonaRelationship
     role: authoritative
-    pk: pair_id
+    pk:
+    - pair_id
     columns:
     - name: pair_id
       type: VARCHAR(64)
@@ -40,12 +42,15 @@ tables:
       - upper_persona_id
       unique: true
   persona_relationship_directions:
+    publication_role: not_published
     entity: RelationshipDirection
     role: owned
-    pk: pair_id
-    fk:
-      column: pair_id
-      references: persona_relationships.pair_id
+    pk:
+    - pair_id
+    foreign_keys:
+    - columns:
+      - pair_id
+      references: persona_relationships(pair_id)
       on_delete: CASCADE
     columns:
     - name: pair_id
@@ -110,10 +115,11 @@ tables:
       - source_persona_id
       - blocked
       - blocked_at DESC
-    max_rows_per_aggregate: 2
   persona_relationship_command_receipts:
+    publication_role: not_published
     role: authoritative
-    pk: receipt_id
+    pk:
+    - receipt_id
     columns:
     - name: receipt_id
       type: VARCHAR(64)
@@ -160,8 +166,10 @@ tables:
       - idempotency_key
       unique: true
   persona_relationship_outbox:
+    publication_role: transactional_outbox
     role: append_only
-    pk: event_id
+    pk:
+    - event_id
     columns:
     - name: event_id
       type: VARCHAR(64)
@@ -218,6 +226,7 @@ tables:
       - occurred_at
 streams:
   events.user.persona_relationship:
+    publication_role: publication_accessory
     entity: PersonaRelationship
     role: append_only
     idempotency_key: eventId

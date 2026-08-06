@@ -731,6 +731,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     plan_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
+        "executionMode": "central",
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
@@ -834,7 +835,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "carrier": carrier,
                 "phase": "publish",
                 "status": "finalized",
-                "approvedQuota": 100,
+                "approvedQuota": 10 if carrier == "video" else 100,
                 "qualifiedCount": 100,
                 "finalizedCount": 100,
                 "selectedCount": 100,
@@ -1116,6 +1117,34 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     )
     assert promotion["m1000Eligible"] is True
     assert promotion["campaignEvidenceDigest"] == evidence["evidenceDigest"]
+    assert promotion["carrierCounts"][-1]["targetCount"] == 10
+    assert promotion["carrierCounts"][-1]["qualifiedCount"] == 100
+    assert promotion["carrierCounts"][-1]["shortfallCount"] == 0
+    assert promotion["statistics"]["objectPassRate"] == {
+        "numerator": 400,
+        "denominator": 400,
+        "rate": 1.0,
+    }
+    assert promotion["statistics"]["illustratedRate"] == {
+        "numerator": 90,
+        "denominator": 100,
+        "rate": 0.9,
+    }
+    assert promotion["statistics"]["automaticRecoveryRate"] == {
+        "numerator": 19,
+        "denominator": 20,
+        "rate": 0.95,
+    }
+    assert promotion["statistics"]["firstPassRate"] == {
+        "numerator": 3,
+        "denominator": 4,
+        "rate": 0.75,
+    }
+    assert promotion["statistics"]["discardRate"] == {
+        "numerator": 0,
+        "denominator": 400,
+        "rate": 0.0,
+    }
     assert promotion["fourLaneOverlapDurationSeconds"] == 3660
     assert promotion["fourLaneLongestContinuousOverlapSeconds"] == 3660
     assert promotion["allSemanticJobsTerminalAt"] == resource[
@@ -1381,7 +1410,7 @@ def test_campaign_scale_evidence_blocks_missing_sol_calibration_sample(
         _write_evidence(fixture)
 
 
-def test_zero_recovery_denominator_is_not_exercised_and_not_promotable(
+def test_zero_recovery_denominator_is_recorded_without_blocking_promotion(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
@@ -1406,14 +1435,20 @@ def test_zero_recovery_denominator_is_not_exercised_and_not_promotable(
     assert fault["automaticRecoveryStatus"] == "NOT_EXERCISED"
     assert fault["automaticRecoveryRate"] == 0
 
-    with pytest.raises(ResearchScalePromotionError, match="evidence is not passed"):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-blocked",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-statistical-recovery",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+    assert promotion["m1000Eligible"] is True
+    assert promotion["automaticRecoveryStatus"] == "NOT_EXERCISED"
+    assert promotion["statistics"]["automaticRecoveryRate"] == {
+        "numerator": 0,
+        "denominator": 0,
+        "rate": 0.0,
+    }
 
 
 def test_resource_soak_requires_one_continuous_four_lane_hour(

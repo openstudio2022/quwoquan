@@ -214,8 +214,8 @@ func TestCommentMetadataDeclaresTransactionalOutboxAndNamedReadModels(t *testing
 	}
 	var events struct {
 		Events []struct {
-			Name    string `yaml:"name"`
-			Channel string `yaml:"channel"`
+			Name              string `yaml:"name"`
+			DeliverySemantics string `yaml:"delivery_semantics"`
 		} `yaml:"events"`
 	}
 	if err := yaml.Unmarshal(raw, &events); err != nil {
@@ -223,18 +223,20 @@ func TestCommentMetadataDeclaresTransactionalOutboxAndNamedReadModels(t *testing
 	}
 	eventChannels := make(map[string]string, len(events.Events))
 	for _, event := range events.Events {
-		eventChannels[event.Name] = event.Channel
+		eventChannels[event.Name] = event.DeliverySemantics
 	}
 	for _, eventName := range []string{
 		"CommentCreated",
 		"CommentDeleted",
 		"CommentModerated",
 		"CommentPinChanged",
-		"CommentAttachmentsBound",
 	} {
 		if eventChannels[eventName] != "transactional_outbox" {
 			t.Errorf("%s must be emitted through the Comment outbox", eventName)
 		}
+	}
+	if eventChannels["CommentAttachmentsBound"] != "transactional_event_log" {
+		t.Error("CommentAttachmentsBound must remain in the Comment owner transactional event log")
 	}
 }
 

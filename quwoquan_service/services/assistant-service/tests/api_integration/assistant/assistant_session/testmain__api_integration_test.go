@@ -25,12 +25,12 @@ import (
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	consenterrors "quwoquan_service/services/assistant-service/generated/assistant/skill_consent"
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
-	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
 	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
 	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	runpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure"
+	runmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
@@ -346,36 +346,26 @@ func newIntegrationAssistantService(opts ...orchestration.AssistantServiceOption
 }
 
 func integrationRunTerminalRelay(ownerID string) *runruntime.TerminalRunRelay {
-	learningFacts := learningapplication.NewService(
+	learningFacts := learningapplication.NewAssistantLearningFactAppender(
 		integrationLearningFactStore,
 		runpersistence.NewMongoRunOwnerReader(integrationMongoDB),
 		nil,
 	)
+	publisher, err := runmessaging.NewTerminalEventPublisher(newIntegrationMessageTransport())
+	if err != nil {
+		panic("assistant run integration terminal publisher: " + err.Error())
+	}
 	return runruntime.NewTerminalRunRelay(
 		integrationRunRepository,
+		publisher,
 		[]runruntime.TerminalEventHandler{runruntime.TerminalEventHandlerFunc(func(
 			ctx context.Context,
 			event runruntime.TerminalEvent,
 		) error {
-			value := 0.0
-			if event.Outcome == "completed" {
-				value = 1.0
-			}
-			_, err := learningFacts.AppendServiceFact(
-				ctx,
-				learningmodel.AppendCommand{
-					EventID:          "turn:" + event.RunID + ":completion",
-					FactType:         learningmodel.FactTypeServiceScorecard,
-					AssistantTurnID:  event.RunID,
-					ReferralSource:   "service",
-					DomainID:         event.DomainID,
-					MetricID:         "turn_completion",
-					MetricValue:      value,
-					MetricSource:     "service_auto",
-					TrainingEligible: false,
-					OccurredAt:       event.OccurredAt,
-				},
-			)
+			_, err := learningFacts.AppendTerminalRun(ctx, learningapplication.TerminalRunEvent{
+				RunID: event.RunID, DomainID: event.DomainID, Outcome: event.Outcome,
+				OccurredAt: event.OccurredAt,
+			})
 			return err
 		})},
 		ownerID,
@@ -405,6 +395,7 @@ func resetIntegrationState(t *testing.T) {
 	for _, collection := range []string{
 		"assistant_sessions",
 		"assistant_session_summary_receipts",
+		"assistant_session_outbox",
 		"assistant_runs",
 		"assistant_run_events",
 		"assistant_run_command_receipts",
@@ -456,6 +447,7 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	assertMongoIndex(t, "assistant_run_events", "uq_run_events_run_seq")
 	assertMongoIndex(t, "assistant_run_terminal_outbox", "idx_run_terminal_outbox_pending")
 	assertMongoIndex(t, "assistant_session_summary_receipts", "uq_session_summary_source_sequence")
+	assertMongoIndex(t, "assistant_session_outbox", "idx_assistant_session_outbox_claimable")
 	assertMongoIndex(t, "assistant_learning_facts", "uq_assistant_learning_fact_sequence")
 	assertMongoIndex(t, "assistant_learning_facts", "idx_assistant_learning_fact_turn")
 	assertMongoIndex(t, "rm_assistant_learning_projection", "idx_assistant_learning_projection_owner_updated")
@@ -480,7 +472,7 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 		"storage-topology-command",
 		"account-storage-topology",
 		"travel_companion",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	)
 	if err != nil || result.Consent == nil {
 		t.Fatalf("grant Postgres consent result=%+v error=%v", result, err)

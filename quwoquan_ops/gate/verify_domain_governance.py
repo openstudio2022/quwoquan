@@ -378,7 +378,7 @@ def main() -> int:
         )
 
     topology_projection_consumers = (
-        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh",
+        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh",
         ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_search_api_uat.sh",
         ROOT
         / "quwoquan_app/scripts/gamma/"
@@ -386,9 +386,6 @@ def main() -> int:
         ROOT
         / "quwoquan_app/scripts/gamma/"
         "run_local_gamma_assistant_learning_api_uat.sh",
-        ROOT
-        / "quwoquan_data/scripts/content/release/canonical/"
-        "build_lookup_indexes.py",
     )
     for path in topology_projection_consumers:
         source = path.read_text(encoding="utf-8")
@@ -437,11 +434,11 @@ def main() -> int:
     ):
         if retired in chat_avatar_probe:
             issues.append(f"Chat avatar probe contains retired endpoint fallback {retired}")
-    gamma_t4 = (
-        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh"
+    gamma_device_uat = (
+        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh"
     ).read_text(encoding="utf-8")
-    if "require_canonical_endpoint gateway" not in gamma_t4:
-        issues.append("Gamma T4 endpoint overrides must be canonical-equality checked")
+    if "require_canonical_endpoint gateway" not in gamma_device_uat:
+        issues.append("Gamma device-UAT endpoint overrides must be canonical-equality checked")
 
     tls_profiles = policy.get("tlsProfiles") or {}
     local_profile = tls_profiles.get("local-managed")

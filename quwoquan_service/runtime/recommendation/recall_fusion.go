@@ -4,7 +4,7 @@ import (
 	recpolicy "quwoquan_service/runtime/recpolicy"
 )
 
-// applySourceQuota 按 policy 源配额截断单源候选（W9/B10 轻量融合）。
+// applySourceQuota 按 policy 源配额截断单源候选（source-quota 轻量融合）。
 // quota = poolLimit * pct / 100（至少 1）；未登记的 recallPath 不受限。
 // 截断保持候选原有顺序（稳定分页），disabled/空配置零行为。
 func applySourceQuota(

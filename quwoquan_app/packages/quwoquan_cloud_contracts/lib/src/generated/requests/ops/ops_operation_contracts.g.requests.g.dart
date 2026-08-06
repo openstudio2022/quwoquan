@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../ops/ops_operation_contracts.g.dart';
 
@@ -1135,6 +1135,42 @@ final class EventRecordBatchRequest {
   };
 }
 
+final class GetAppRecoveryVersionQuery {
+  GetAppRecoveryVersionQuery({
+    required String platform,
+    required String appVersion,
+    required int buildNumber,
+  }) : platform = platform,
+       appVersion = appVersion,
+       buildNumber = buildNumber {
+    if (this.appVersion.isEmpty) {
+      throw ArgumentError.value(this.appVersion, "appVersion", 'must not be blank');
+    }
+    if (this.buildNumber <= 0) {
+      throw ArgumentError.value(this.buildNumber, "buildNumber", "must be positive");
+    }
+  }
+
+  final String platform;
+  final String appVersion;
+  final int buildNumber;
+
+  factory GetAppRecoveryVersionQuery.fromWire(Map<String, Object?> map, [String path = "GetAppRecoveryVersionQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"platform", "appVersion", "buildNumber"}, path);
+    return GetAppRecoveryVersionQuery(
+      platform: _generatedRequestString(map["platform"], '$path.platform'),
+      appVersion: _generatedRequestString(map["appVersion"], '$path.appVersion'),
+      buildNumber: _generatedRequestInt(map["buildNumber"], '$path.buildNumber'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "platform": this.platform,
+    "appVersion": this.appVersion,
+    "buildNumber": this.buildNumber,
+  };
+}
+
 final class RecordVisitRequest {
   RecordVisitRequest({
     required VisitTargetType targetType,
@@ -1163,6 +1199,95 @@ final class RecordVisitRequest {
   Map<String, Object?> toWire() => <String, Object?>{
     "targetType": this.targetType.wireName,
     "targetKey": this.targetKey,
+  };
+}
+
+final class ReportRecoveryFailureRequest {
+  ReportRecoveryFailureRequest({
+    required DateTime occurredAt,
+    required String appVersion,
+    required String buildNumber,
+    required String platform,
+    required String osVersion,
+    required String deviceModel,
+    required String errorSource,
+    required String errorType,
+    required String errorMessage,
+    required String stackTrace,
+  }) : occurredAt = occurredAt,
+       appVersion = appVersion,
+       buildNumber = buildNumber,
+       platform = platform,
+       osVersion = osVersion,
+       deviceModel = deviceModel,
+       errorSource = errorSource,
+       errorType = errorType,
+       errorMessage = errorMessage,
+       stackTrace = stackTrace {
+    if (this.appVersion.isEmpty) {
+      throw ArgumentError.value(this.appVersion, "appVersion", 'must not be blank');
+    }
+    if (this.buildNumber.isEmpty) {
+      throw ArgumentError.value(this.buildNumber, "buildNumber", 'must not be blank');
+    }
+    if (this.osVersion.isEmpty) {
+      throw ArgumentError.value(this.osVersion, "osVersion", 'must not be blank');
+    }
+    if (this.deviceModel.isEmpty) {
+      throw ArgumentError.value(this.deviceModel, "deviceModel", 'must not be blank');
+    }
+    if (this.errorSource.isEmpty) {
+      throw ArgumentError.value(this.errorSource, "errorSource", 'must not be blank');
+    }
+    if (this.errorType.isEmpty) {
+      throw ArgumentError.value(this.errorType, "errorType", 'must not be blank');
+    }
+    if (this.errorMessage.isEmpty) {
+      throw ArgumentError.value(this.errorMessage, "errorMessage", 'must not be blank');
+    }
+    if (this.stackTrace.isEmpty) {
+      throw ArgumentError.value(this.stackTrace, "stackTrace", 'must not be blank');
+    }
+  }
+
+  final DateTime occurredAt;
+  final String appVersion;
+  final String buildNumber;
+  final String platform;
+  final String osVersion;
+  final String deviceModel;
+  final String errorSource;
+  final String errorType;
+  final String errorMessage;
+  final String stackTrace;
+
+  factory ReportRecoveryFailureRequest.fromWire(Map<String, Object?> map, [String path = "ReportRecoveryFailureRequest"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"occurredAt", "appVersion", "buildNumber", "platform", "osVersion", "deviceModel", "errorSource", "errorType", "errorMessage", "stackTrace"}, path);
+    return ReportRecoveryFailureRequest(
+      occurredAt: _generatedRequestTimestamp(map["occurredAt"], '$path.occurredAt'),
+      appVersion: _generatedRequestString(map["appVersion"], '$path.appVersion'),
+      buildNumber: _generatedRequestString(map["buildNumber"], '$path.buildNumber'),
+      platform: _generatedRequestString(map["platform"], '$path.platform'),
+      osVersion: _generatedRequestString(map["osVersion"], '$path.osVersion'),
+      deviceModel: _generatedRequestString(map["deviceModel"], '$path.deviceModel'),
+      errorSource: _generatedRequestString(map["errorSource"], '$path.errorSource'),
+      errorType: _generatedRequestString(map["errorType"], '$path.errorType'),
+      errorMessage: _generatedRequestString(map["errorMessage"], '$path.errorMessage'),
+      stackTrace: _generatedRequestString(map["stackTrace"], '$path.stackTrace'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "occurredAt": this.occurredAt.toUtc().toIso8601String(),
+    "appVersion": this.appVersion,
+    "buildNumber": this.buildNumber,
+    "platform": this.platform,
+    "osVersion": this.osVersion,
+    "deviceModel": this.deviceModel,
+    "errorSource": this.errorSource,
+    "errorType": this.errorType,
+    "errorMessage": this.errorMessage,
+    "stackTrace": this.stackTrace,
   };
 }
 
@@ -1810,7 +1935,11 @@ final class StartupTelemetryEventWire {
     required String runtimeEnv,
     String? appVersion,
     String? networkClass,
-    String? recoverySurface,
+    StartupRecoverySurface? recoverySurface,
+    StartupRecoveryLifecycle? recoveryLifecycle,
+    StartupRecoveryMount? recoveryMount,
+    StartupRecoveryPhase? recoveryPhase,
+    StartupRecoveryAction? recoveryAction,
     String? failureCode,
     String? failureSource,
     String? deadlineOrigin,
@@ -1827,6 +1956,10 @@ final class StartupTelemetryEventWire {
        appVersion = appVersion,
        networkClass = networkClass,
        recoverySurface = recoverySurface,
+       recoveryLifecycle = recoveryLifecycle,
+       recoveryMount = recoveryMount,
+       recoveryPhase = recoveryPhase,
+       recoveryAction = recoveryAction,
        failureCode = failureCode,
        failureSource = failureSource,
        deadlineOrigin = deadlineOrigin {
@@ -1862,13 +1995,17 @@ final class StartupTelemetryEventWire {
   final String runtimeEnv;
   final String? appVersion;
   final String? networkClass;
-  final String? recoverySurface;
+  final StartupRecoverySurface? recoverySurface;
+  final StartupRecoveryLifecycle? recoveryLifecycle;
+  final StartupRecoveryMount? recoveryMount;
+  final StartupRecoveryPhase? recoveryPhase;
+  final StartupRecoveryAction? recoveryAction;
   final String? failureCode;
   final String? failureSource;
   final String? deadlineOrigin;
 
   factory StartupTelemetryEventWire.fromWire(Map<String, Object?> map, [String path = "StartupTelemetryEventWire"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"eventId", "attemptId", "sequence", "phase", "phaseDurationMs", "elapsedMs", "outcome", "occurredAt", "platform", "runtimeEnv", "appVersion", "networkClass", "recoverySurface", "failureCode", "failureSource", "deadlineOrigin"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"eventId", "attemptId", "sequence", "phase", "phaseDurationMs", "elapsedMs", "outcome", "occurredAt", "platform", "runtimeEnv", "appVersion", "networkClass", "recoverySurface", "recoveryLifecycle", "recoveryMount", "recoveryPhase", "recoveryAction", "failureCode", "failureSource", "deadlineOrigin"}, path);
     return StartupTelemetryEventWire(
       eventId: _generatedRequestString(map["eventId"], '$path.eventId'),
       attemptId: _generatedRequestString(map["attemptId"], '$path.attemptId'),
@@ -1882,7 +2019,11 @@ final class StartupTelemetryEventWire {
       runtimeEnv: _generatedRequestString(map["runtimeEnv"], '$path.runtimeEnv'),
       appVersion: map["appVersion"] == null ? null : _generatedRequestString(map["appVersion"], '$path.appVersion'),
       networkClass: map["networkClass"] == null ? null : _generatedRequestString(map["networkClass"], '$path.networkClass'),
-      recoverySurface: map["recoverySurface"] == null ? null : _generatedRequestString(map["recoverySurface"], '$path.recoverySurface'),
+      recoverySurface: map["recoverySurface"] == null ? null : switch (map["recoverySurface"]) { "page.app.startup_recovery" => StartupRecoverySurface.pageAppStartupRecovery, _ => throw FormatException('$path.recoverySurface' + ' has an invalid enum value'), },
+      recoveryLifecycle: map["recoveryLifecycle"] == null ? null : switch (map["recoveryLifecycle"]) { "enter" => StartupRecoveryLifecycle.enter, "phase_change" => StartupRecoveryLifecycle.phaseChange, "external_action" => StartupRecoveryLifecycle.externalAction, "runtime_reentry" => StartupRecoveryLifecycle.runtimeReentry, "exit" => StartupRecoveryLifecycle.exit, "failure" => StartupRecoveryLifecycle.failure, _ => throw FormatException('$path.recoveryLifecycle' + ' has an invalid enum value'), },
+      recoveryMount: map["recoveryMount"] == null ? null : switch (map["recoveryMount"]) { "bootstrap" => StartupRecoveryMount.bootstrap, "runtime_boundary" => StartupRecoveryMount.runtimeBoundary, "safe_shell" => StartupRecoveryMount.safeShell, "router_error" => StartupRecoveryMount.routerError, _ => throw FormatException('$path.recoveryMount' + ' has an invalid enum value'), },
+      recoveryPhase: map["recoveryPhase"] == null ? null : switch (map["recoveryPhase"]) { "startup_checking" => StartupRecoveryPhase.startupChecking, "startup_update_required" => StartupRecoveryPhase.startupUpdateRequired, "startup_latest" => StartupRecoveryPhase.startupLatest, "startup_version_unavailable" => StartupRecoveryPhase.startupVersionUnavailable, "runtime_unavailable" => StartupRecoveryPhase.runtimeUnavailable, "runtime_reentering" => StartupRecoveryPhase.runtimeReentering, "runtime_version_checking" => StartupRecoveryPhase.runtimeVersionChecking, "runtime_update_required" => StartupRecoveryPhase.runtimeUpdateRequired, "runtime_latest" => StartupRecoveryPhase.runtimeLatest, "runtime_version_unavailable" => StartupRecoveryPhase.runtimeVersionUnavailable, _ => throw FormatException('$path.recoveryPhase' + ' has an invalid enum value'), },
+      recoveryAction: map["recoveryAction"] == null ? null : switch (map["recoveryAction"]) { "none" => StartupRecoveryAction.none, "open_update" => StartupRecoveryAction.openUpdate, "open_web" => StartupRecoveryAction.openWeb, "external_return" => StartupRecoveryAction.externalReturn, "runtime_reentry" => StartupRecoveryAction.runtimeReentry, _ => throw FormatException('$path.recoveryAction' + ' has an invalid enum value'), },
       failureCode: map["failureCode"] == null ? null : _generatedRequestString(map["failureCode"], '$path.failureCode'),
       failureSource: map["failureSource"] == null ? null : _generatedRequestString(map["failureSource"], '$path.failureSource'),
       deadlineOrigin: map["deadlineOrigin"] == null ? null : _generatedRequestString(map["deadlineOrigin"], '$path.deadlineOrigin'),
@@ -1902,11 +2043,25 @@ final class StartupTelemetryEventWire {
     "runtimeEnv": this.runtimeEnv,
     if (this.appVersion != null) "appVersion": this.appVersion!,
     if (this.networkClass != null) "networkClass": this.networkClass!,
-    if (this.recoverySurface != null) "recoverySurface": this.recoverySurface!,
+    if (this.recoverySurface != null) "recoverySurface": this.recoverySurface!.wireName,
+    if (this.recoveryLifecycle != null) "recoveryLifecycle": this.recoveryLifecycle!.wireName,
+    if (this.recoveryMount != null) "recoveryMount": this.recoveryMount!.wireName,
+    if (this.recoveryPhase != null) "recoveryPhase": this.recoveryPhase!.wireName,
+    if (this.recoveryAction != null) "recoveryAction": this.recoveryAction!.wireName,
     if (this.failureCode != null) "failureCode": this.failureCode!,
     if (this.failureSource != null) "failureSource": this.failureSource!,
     if (this.deadlineOrigin != null) "deadlineOrigin": this.deadlineOrigin!,
   };
+}
+
+CloudOperationRequestPayload encodeOpsAppReleaseGetAppRecoveryVersionGeneratedRequest(GetAppRecoveryVersionQuery request) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      "platform": request.platform,
+      "appVersion": request.appVersion,
+      "buildNumber": (request.buildNumber).toString(),
+    },
+  );
 }
 
 CloudOperationRequestPayload encodeOpsEventRecordReportEventBatchGeneratedRequest(EventRecordBatchRequest request) {
@@ -1932,6 +2087,23 @@ CloudOperationRequestPayload encodeOpsEventRecordReportStartupEventBatchGenerate
     },
     body: <String, Object?>{
       "events": request.events.map((value) => value.toWire()).toList(growable: false),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeOpsRecoveryFailureReportRecoveryFailureGeneratedRequest(ReportRecoveryFailureRequest request) {
+  return CloudOperationRequestPayload(
+    body: <String, Object?>{
+      "occurredAt": request.occurredAt.toUtc().toIso8601String(),
+      "appVersion": request.appVersion,
+      "buildNumber": request.buildNumber,
+      "platform": request.platform,
+      "osVersion": request.osVersion,
+      "deviceModel": request.deviceModel,
+      "errorSource": request.errorSource,
+      "errorType": request.errorType,
+      "errorMessage": request.errorMessage,
+      "stackTrace": request.stackTrace,
     },
   );
 }

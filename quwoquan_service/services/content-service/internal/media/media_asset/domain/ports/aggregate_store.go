@@ -78,3 +78,22 @@ type OutboxReader interface {
 		limit int,
 	) ([]OutboxEvent, error)
 }
+
+// MediaAssetOutboxReader isolates the MediaAsset publication stream from the
+// sibling MediaUploadSession outbox that shares the same Mongo store.
+type MediaAssetOutboxReader interface {
+	ReadMediaAssetOutboxAfter(
+		ctx context.Context,
+		checkpoint string,
+		limit int,
+	) ([]OutboxEvent, error)
+}
+
+type ProjectionCheckpointStore interface {
+	LoadCheckpoint(ctx context.Context, consumer string) (string, error)
+	SaveCheckpoint(ctx context.Context, consumer, checkpoint string) error
+}
+
+type OutboxPublisher interface {
+	Publish(ctx context.Context, event OutboxEvent) error
+}

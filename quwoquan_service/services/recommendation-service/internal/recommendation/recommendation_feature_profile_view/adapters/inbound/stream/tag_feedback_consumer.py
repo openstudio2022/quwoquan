@@ -5,8 +5,6 @@ from datetime import datetime, timezone
 import threading
 from typing import Any
 
-from redis.exceptions import ResponseError
-
 
 TAG_FEEDBACK_STREAM = "events.tag.feedback"
 TAG_FEEDBACK_DLQ = "events.tag.feedback.recommendation-feature.dlq"
@@ -97,7 +95,7 @@ class TagFeedbackConsumer:
                 id="0-0",
                 mkstream=True,
             )
-        except ResponseError as error:
+        except Exception as error:
             if "BUSYGROUP" not in str(error):
                 raise
 

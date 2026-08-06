@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 
 /// 由可信 AuthSession 提供的实时连接凭据。
 ///

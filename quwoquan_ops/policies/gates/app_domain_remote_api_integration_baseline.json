@@ -1,0 +1,36 @@
+{
+  "_governance": {
+    "expires_when": "本棘轮完全并入 ContractGraph object evidence 门禁",
+    "owner": "cloud-contract-governance",
+    "reason": "五域对象级 generated Remote API integration 证据只增不减"
+  },
+  "domains": {
+    "entity": {
+      "appTestFileCount": 1,
+      "coveredObjectCount": 1,
+      "serviceTestFileCount": 8
+    },
+    "notification": {
+      "appTestFileCount": 1,
+      "coveredObjectCount": 1,
+      "serviceTestFileCount": 10
+    },
+    "realtime": {
+      "appTestFileCount": 1,
+      "coveredObjectCount": 1,
+      "serviceTestFileCount": 2
+    },
+    "recommendation": {
+      "appTestFileCount": 1,
+      "coveredObjectCount": 1,
+      "serviceTestFileCount": 1
+    },
+    "tag": {
+      "appTestFileCount": 1,
+      "coveredObjectCount": 1,
+      "serviceTestFileCount": 3
+    }
+  },
+  "ruleId": "app-domain-remote-api-integration-ratchet",
+  "schema": "app-domain-remote-api-integration-baseline"
+}

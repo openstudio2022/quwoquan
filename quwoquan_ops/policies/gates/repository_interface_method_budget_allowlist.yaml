@@ -4,20 +4,4 @@ governance:
   reason: 超过方法数红线的存量 Repository 只减不增
   expires_when: allow 为空时删除本文件
 method_threshold: 10
-allow:
-- interface: AuthRepository
-  path: quwoquan_app/lib/cloud/services/user/auth_repository.dart
-  max_methods: 21
-  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
-- interface: HomepageRepository
-  path: quwoquan_app/lib/cloud/services/entity/entity_repository.dart
-  max_methods: 17
-  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
-- interface: AssistantRepository
-  path: quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
-  max_methods: 14
-  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
-- interface: UserRepository
-  path: quwoquan_app/lib/cloud/services/user/user_repository.dart
-  max_methods: 12
-  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
+allow: []

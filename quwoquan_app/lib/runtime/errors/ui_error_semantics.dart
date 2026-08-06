@@ -1,18 +1,18 @@
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
-import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
-import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
-import 'package:quwoquan_app/cloud/rtc/generated/rtc_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/integration_location_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
-import 'package:quwoquan_app/core/auth/auth_continuation.dart';
-import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/errors/generated/chat/chat_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/circle_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/circle_membership_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/entity/entity_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/errors/generated/integration/integration_location_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
+import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -758,6 +758,8 @@ class UiErrorSemanticResolver {
     if (continuation is OpenSheetContinuation) {
       return switch (continuation.sheet) {
         AuthContinuationSheet.addContact => '登录后将继续打开添加联系人流程',
+        AuthContinuationSheet.startGathering =>
+          CommunityText.authContinuationStartGathering,
         AuthContinuationSheet.startGroupChat => '登录后将继续打开发起讨论流程',
         AuthContinuationSheet.createCircle => '登录后将继续打开建圈流程',
       };

@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/core/platform/temporary_file_cleanup_io.dart'
-    if (dart.library.js_interop) 'package:quwoquan_app/core/platform/temporary_file_cleanup_web.dart';
+import 'package:quwoquan_app/runtime/platform/temporary_file_cleanup_io.dart'
+    if (dart.library.js_interop) 'package:quwoquan_app/runtime/platform/temporary_file_cleanup_web.dart';
 
 /// 仅删除 App 临时目录内的文件；越界路径必须 fail-closed。
 Future<void> deleteAppTemporaryFile(String path) =>

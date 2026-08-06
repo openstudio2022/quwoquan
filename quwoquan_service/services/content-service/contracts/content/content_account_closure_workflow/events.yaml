@@ -1,0 +1,3 @@
+description: ContentAccountClosureWorkflow 是 UserAccountClosed 的终端消费方，仓内没有该工作流自己的 publisher 或 outbox；工作流完成语义由「Mongo、Search
+  与媒体切片全部撤销后才 ACK source PEL」表达，Recommendation、User、Search 各自独立消费同一 UserAccountClosed 清理自有数据，不依赖 Content 再发一条扇出事件，因此不声明产出事件。
+events: []

@@ -20,6 +20,13 @@ func TestBuildDerivesClientContractFromCanonicalResponseEntity(t *testing.T) {
 				ResponseBodyKind: "ack",
 			},
 			{
+				ID:               "realtime.connection.WebSocketUpgrade",
+				LocalID:          "WebSocketUpgrade",
+				Domain:           "realtime",
+				ObjectID:         "realtime.connection",
+				ResponseBodyKind: "upgrade",
+			},
+			{
 				ID:             "assistant.assistant_entry_view.GetAssistantEntry",
 				LocalID:        "GetAssistantEntry",
 				Domain:         "assistant",
@@ -76,7 +83,7 @@ func TestBuildDerivesClientContractFromCanonicalResponseEntity(t *testing.T) {
 			{
 				Path: "_shared/ui_surfaces.yaml",
 				Content: json.RawMessage(
-					`{"surfaces":[{"owner":"assistant","operation_ids":["AppendLearningFact","GetAssistantEntry","GetAssistantRun","StreamAssistantRunEvents"]},{"owner":"search","operation_ids":["Search"]},{"owner":"circle","operation_ids":["GetCircleStats"]}]}`,
+					`{"surfaces":[{"owner":"assistant","operation_ids":["AppendLearningFact","GetAssistantEntry","GetAssistantRun","StreamAssistantRunEvents"]},{"owner":"realtime","operation_ids":["WebSocketUpgrade"]},{"owner":"search","operation_ids":["Search"]},{"owner":"circle","operation_ids":["GetCircleStats"]}]}`,
 				),
 			},
 		},
@@ -91,6 +98,11 @@ func TestBuildDerivesClientContractFromCanonicalResponseEntity(t *testing.T) {
 	want := map[string]ast.ClientContract{
 		"assistant.assistant_learning_fact.AppendLearningFact": {
 			DartImport:      "../assistant/assistant_operation_contracts.g.dart",
+			ResponseType:    "void",
+			ResponseDecoder: "decodeEmptyResponse",
+		},
+		"realtime.connection.WebSocketUpgrade": {
+			DartImport:      "../realtime/realtime_operation_contracts.g.dart",
 			ResponseType:    "void",
 			ResponseDecoder: "decodeEmptyResponse",
 		},

@@ -41,16 +41,21 @@ type commandReceipt struct {
 }
 
 type outboxRecord struct {
-	ID             string    `bson:"_id"`
-	EventType      string    `bson:"eventType"`
-	InvocationID   string    `bson:"invocationId"`
-	AccountID      string    `bson:"accountId"`
-	ConnectionID   string    `bson:"connectionId"`
-	AssistantRunID string    `bson:"assistantRunId"`
-	Capability     string    `bson:"capability"`
-	Status         string    `bson:"status"`
-	Revision       int64     `bson:"revision"`
-	OccurredAt     time.Time `bson:"occurredAt"`
+	ID                    string     `bson:"_id"`
+	EventType             string     `bson:"eventType"`
+	InvocationID          string     `bson:"invocationId"`
+	AccountID             string     `bson:"accountId"`
+	ConnectionID          string     `bson:"connectionId"`
+	AssistantRunID        string     `bson:"assistantRunId"`
+	Capability            string     `bson:"capability"`
+	Status                string     `bson:"status"`
+	ContinuationRef       string     `bson:"continuationRef,omitempty"`
+	NormalizedFailureCode string     `bson:"normalizedFailureCode,omitempty"`
+	RecoveryAction        string     `bson:"recoveryAction"`
+	Revision              int64      `bson:"revision"`
+	UpdatedAt             time.Time  `bson:"updatedAt"`
+	CompletedAt           *time.Time `bson:"completedAt,omitempty"`
+	OccurredAt            time.Time  `bson:"occurredAt"`
 }
 
 func NewMongoStore(database *mongo.Database) *MongoStore {
@@ -317,11 +322,21 @@ func (store *MongoStore) commitReceiptAndOutbox(ctx context.Context, accountID, 
 
 func buildOutboxRecord(invocation model.Invocation) outboxRecord {
 	return outboxRecord{
-		ID:        fmt.Sprintf("%s:%d", invocation.InvocationID, invocation.Revision),
-		EventType: "ConnectorInvocationChanged", InvocationID: invocation.InvocationID,
-		AccountID: invocation.AccountID, ConnectionID: invocation.ConnectionID,
-		AssistantRunID: invocation.AssistantRunID, Capability: invocation.Capability,
-		Status: invocation.Status, Revision: invocation.Revision, OccurredAt: invocation.UpdatedAt,
+		ID:                    fmt.Sprintf("%s:%d", invocation.InvocationID, invocation.Revision),
+		EventType:             "ConnectorInvocationChanged",
+		InvocationID:          invocation.InvocationID,
+		AccountID:             invocation.AccountID,
+		ConnectionID:          invocation.ConnectionID,
+		AssistantRunID:        invocation.AssistantRunID,
+		Capability:            invocation.Capability,
+		Status:                invocation.Status,
+		ContinuationRef:       invocation.ContinuationRef,
+		NormalizedFailureCode: invocation.NormalizedFailureCode,
+		RecoveryAction:        invocation.RecoveryAction,
+		Revision:              invocation.Revision,
+		UpdatedAt:             invocation.UpdatedAt,
+		CompletedAt:           invocation.CompletedAt,
+		OccurredAt:            invocation.UpdatedAt,
 	}
 }
 

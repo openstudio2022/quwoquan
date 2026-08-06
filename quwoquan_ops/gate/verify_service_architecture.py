@@ -157,6 +157,17 @@ RUNTIME_ENTRYPOINT_KIND_BY_OBJECT_KIND = {
     "runtime_session": {"middleware"},
     "external_reference": {"external_port"},
 }
+LIFECYCLE_CONSUMER_KINDS = {"projector", "event_handler", "subscription"}
+LIFECYCLE_CONSUMER_IDEMPOTENCY = {
+    "event_id",
+    "aggregate_version",
+    "identity_payload_digest",
+    "transaction_identity",
+}
+LIFECYCLE_ONLY_ENTRYPOINT_KINDS = {"projection"}
+CANONICAL_EVENT_REF_RE = re.compile(
+    r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[A-Z][A-Za-z0-9]*$"
+)
 
 # Stable service-owned resource roles.  These are layout semantics enforced by
 # this gate, not an asset registry: services still own the actual resources and
@@ -362,6 +373,372 @@ def snake_to_pascal(value: str) -> str:
     return "".join(part[:1].upper() + part[1:] for part in value.split("_") if part)
 
 
+def camel_to_snake(value: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", value).lower()
+
+
+def lifecycle_authored_consumers(
+    document: dict[str, Any],
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Return structurally valid object-local lifecycle consumer declarations.
+
+    These declarations may replace a standalone ``runtime_entrypoints`` entry
+    only for an object with no HTTP route.  Shape validation remains strict so
+    an arbitrary lifecycle mapping cannot satisfy the architecture gate.
+    """
+
+    lifecycle = document.get("lifecycle")
+    if lifecycle is None:
+        return [], []
+    if not isinstance(lifecycle, dict):
+        return [], ["lifecycle must be a mapping"]
+    raw_consumers = lifecycle.get("event_consumers")
+    if raw_consumers is None:
+        return [], []
+    issues: list[str] = []
+    source_events = lifecycle.get("source_events")
+    if not isinstance(source_events, list) or not source_events:
+        issues.append(
+            "lifecycle entrypoint requires a non-empty source_events string list"
+        )
+    else:
+        normalized_source_events = [
+            event.strip() if isinstance(event, str) else ""
+            for event in source_events
+        ]
+        invalid_source_events = [
+            index
+            for index, event in enumerate(normalized_source_events)
+            if not CANONICAL_EVENT_REF_RE.fullmatch(event)
+        ]
+        if invalid_source_events:
+            issues.append(
+                "lifecycle.source_events must use canonical "
+                "domain.object.EventName refs; invalid indexes="
+                f"{invalid_source_events}"
+            )
+        if len(set(normalized_source_events)) != len(normalized_source_events):
+            issues.append("lifecycle.source_events must be unique")
+    if not isinstance(raw_consumers, list) or not raw_consumers:
+        issues.append("lifecycle.event_consumers must be a non-empty list")
+        return [], issues
+
+    consumers: list[dict[str, str]] = []
+    required = {"name", "kind", "facet", "method", "idempotency"}
+    for index, raw in enumerate(raw_consumers):
+        if not isinstance(raw, dict):
+            issues.append(f"lifecycle.event_consumers[{index}] must be a mapping")
+            continue
+        unknown = set(raw) - required
+        missing = required - set(raw)
+        if unknown:
+            issues.append(
+                f"lifecycle.event_consumers[{index}] has unknown fields: "
+                f"{sorted(unknown)}"
+            )
+        if missing:
+            issues.append(
+                f"lifecycle.event_consumers[{index}] is missing fields: "
+                f"{sorted(missing)}"
+            )
+            continue
+        consumer = {field: str(raw.get(field) or "").strip() for field in required}
+        if not re.fullmatch(r"[A-Z][A-Za-z0-9]+", consumer["name"]):
+            issues.append(
+                f"lifecycle.event_consumers[{index}].name is not canonical"
+            )
+        if consumer["kind"] not in LIFECYCLE_CONSUMER_KINDS:
+            issues.append(
+                f"lifecycle.event_consumers[{index}].kind must be one of "
+                f"{sorted(LIFECYCLE_CONSUMER_KINDS)}"
+            )
+        if not re.fullmatch(
+            r"[A-Z][A-Za-z0-9]*(?:Facade|Projector|Projection|Appender|Consumer|"
+            r"Coordinator|Recorder|Orchestrator|Handler)",
+            consumer["facet"],
+        ):
+            issues.append(
+                f"lifecycle.event_consumers[{index}].facet is not canonical"
+            )
+        if not re.fullmatch(r"[a-z][A-Za-z0-9]*", consumer["method"]):
+            issues.append(
+                f"lifecycle.event_consumers[{index}].method is not canonical"
+            )
+        if consumer["idempotency"] not in LIFECYCLE_CONSUMER_IDEMPOTENCY:
+            issues.append(
+                f"lifecycle.event_consumers[{index}].idempotency must be one of "
+                f"{sorted(LIFECYCLE_CONSUMER_IDEMPOTENCY)}"
+            )
+        consumers.append(consumer)
+    return consumers, issues
+
+
+def object_entrypoint_mode(
+    object_kind: str,
+    api_routes: list[Any],
+    runtime_entrypoints: list[Any],
+    lifecycle_consumers: list[dict[str, str]],
+) -> tuple[str | None, list[str]]:
+    """Resolve the single DEC-011 entrypoint owner for one object."""
+
+    if api_routes and runtime_entrypoints:
+        return None, [
+            (
+                "canonical object must not own both HTTP api_routes and "
+                "runtime_entrypoints"
+            )
+        ]
+    if api_routes:
+        return "http", []
+    if runtime_entrypoints:
+        return "runtime", []
+    if lifecycle_consumers:
+        if object_kind not in LIFECYCLE_ONLY_ENTRYPOINT_KINDS:
+            return None, [
+                (
+                    f"kind={object_kind} cannot use lifecycle consumers as its only "
+                    "entrypoint; lifecycle-only entrypoints require "
+                    f"{sorted(LIFECYCLE_ONLY_ENTRYPOINT_KINDS)}"
+                )
+            ]
+        return "lifecycle", []
+    return None, [
+        (
+            "canonical object must own an HTTP operation, typed runtime entrypoint, "
+            "or object-local lifecycle consumer handler"
+        )
+    ]
+
+
+def _go_source_without_comments_or_literals(source: str) -> str:
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    source = re.sub(r"(?m)//.*$", "", source)
+    source = re.sub(r"`[^`]*`", "", source, flags=re.DOTALL)
+    source = re.sub(r'"(?:\\.|[^"\\])*"', "", source)
+    source = re.sub(r"'(?:\\.|[^'\\])'", "", source)
+    return source
+
+
+def _python_decorator_name(node: ast.expr) -> str:
+    if isinstance(node, ast.Call):
+        return _python_decorator_name(node.func)
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _python_decorator_name(node.value)
+        return f"{prefix}.{node.attr}" if prefix else node.attr
+    return ""
+
+
+def _python_not_implemented_value(node: ast.expr | None) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id in {"NotImplemented", "NotImplementedError"}
+    if isinstance(node, ast.Attribute):
+        return node.attr in {"NotImplemented", "NotImplementedError"}
+    if isinstance(node, ast.Call):
+        return _python_not_implemented_value(node.func)
+    return False
+
+
+def _python_handler_method_is_substantive(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    if any(
+        _python_decorator_name(decorator).split(".")[-1] == "abstractmethod"
+        for decorator in node.decorator_list
+    ):
+        return False
+
+    meaningful: list[ast.stmt] = []
+    for statement in node.body:
+        if isinstance(statement, ast.Pass):
+            continue
+        if (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and (
+                isinstance(statement.value.value, str)
+                or statement.value.value is Ellipsis
+            )
+        ):
+            continue
+        meaningful.append(statement)
+    if not meaningful:
+        return False
+
+    def is_not_implemented_only(statement: ast.stmt) -> bool:
+        if isinstance(statement, ast.Raise):
+            return _python_not_implemented_value(statement.exc)
+        if isinstance(statement, ast.Return):
+            return statement.value is None or _python_not_implemented_value(
+                statement.value
+            )
+        if isinstance(statement, ast.Expr):
+            return _python_not_implemented_value(statement.value)
+        return False
+
+    return not all(is_not_implemented_only(statement) for statement in meaningful)
+
+
+def _matching_delimiter(
+    source: str,
+    start: int,
+    opening: str,
+    closing: str,
+) -> int | None:
+    if start >= len(source) or source[start] != opening:
+        return None
+    depth = 0
+    for index in range(start, len(source)):
+        character = source[index]
+        if character == opening:
+            depth += 1
+        elif character == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def _go_method_body_open(source: str, start: int) -> int | None:
+    paren_depth = 0
+    bracket_depth = 0
+    index = start
+    while index < len(source):
+        character = source[index]
+        if character == "(":
+            paren_depth += 1
+        elif character == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif character == "[":
+            bracket_depth += 1
+        elif character == "]":
+            bracket_depth = max(0, bracket_depth - 1)
+        elif character == "{" and paren_depth == 0 and bracket_depth == 0:
+            prefix = source[start:index].rstrip()
+            if re.search(r"\b(?:struct|interface)\s*$", prefix):
+                closing = _matching_delimiter(source, index, "{", "}")
+                if closing is None:
+                    return None
+                start = closing + 1
+                index = start
+                continue
+            return index
+        index += 1
+    return None
+
+
+def _go_return_is_literal_only(body: str) -> bool:
+    normalized = re.sub(r"\s+", " ", body).strip().rstrip(";").strip()
+    if not normalized.startswith("return"):
+        return False
+    remainder = normalized.removeprefix("return").strip()
+    if not remainder:
+        return True
+    literal = re.compile(
+        r"(?:nil|true|false|"
+        r"[-+]?(?:0[xX][0-9A-Fa-f]+|0[bB][01]+|0[oO][0-7]+|"
+        r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?))"
+    )
+    return all(
+        not value.strip() or literal.fullmatch(value.strip())
+        for value in remainder.split(",")
+    )
+
+
+def _go_handler_method_is_substantive(
+    source: str,
+    facet: str,
+    method_names: set[str],
+) -> bool:
+    method_head = re.compile(
+        rf"\bfunc\s*\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\s+)?\*?\s*"
+        rf"{re.escape(facet)}(?:\[[^\]]+\])?\s*\)\s+"
+        rf"({'|'.join(re.escape(name) for name in sorted(method_names))})\s*"
+    )
+    for match in method_head.finditer(source):
+        parameter_open = match.end()
+        if parameter_open >= len(source) or source[parameter_open] != "(":
+            continue
+        parameter_close = _matching_delimiter(source, parameter_open, "(", ")")
+        if parameter_close is None:
+            continue
+        body_open = _go_method_body_open(source, parameter_close + 1)
+        if body_open is None:
+            continue
+        body_close = _matching_delimiter(source, body_open, "{", "}")
+        if body_close is None:
+            continue
+        body = source[body_open + 1 : body_close].strip().strip(";").strip()
+        if not body:
+            continue
+        if re.fullmatch(r"panic\s*\(.*\)", body, flags=re.DOTALL):
+            continue
+        if _go_return_is_literal_only(body):
+            continue
+        return True
+    return False
+
+
+def lifecycle_handler_binding_issues(
+    consumers: list[dict[str, str]],
+    object_source_root: Path,
+    source_paths: Iterable[Path],
+) -> list[str]:
+    """Bind every authored lifecycle edge to a same-object concrete handler."""
+
+    python_classes: dict[str, set[str]] = defaultdict(set)
+    go_sources: list[str] = []
+    resolved_root = object_source_root.resolve()
+    for source_path in source_paths:
+        try:
+            source_path.resolve().relative_to(resolved_root)
+        except ValueError:
+            continue
+        if source_path.suffix == ".py":
+            try:
+                module = ast.parse(source_path.read_text(encoding="utf-8"))
+            except (OSError, SyntaxError):
+                continue
+            for node in module.body:
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                methods = {
+                    child.name
+                    for child in node.body
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and _python_handler_method_is_substantive(child)
+                }
+                python_classes[node.name].update(methods)
+        elif source_path.suffix == ".go":
+            go_sources.append(
+                _go_source_without_comments_or_literals(
+                    source_path.read_text(encoding="utf-8", errors="replace")
+                )
+            )
+
+    go_source = "\n".join(go_sources)
+    issues: list[str] = []
+    for consumer in consumers:
+        facet = consumer["facet"]
+        method = consumer["method"]
+        python_methods = {method, camel_to_snake(method)}
+        python_bound = bool(python_classes.get(facet, set()) & python_methods)
+        go_method = method[:1].upper() + method[1:]
+        go_type = bool(re.search(rf"\btype\s+{re.escape(facet)}\s+struct\b", go_source))
+        go_bound = go_type and _go_handler_method_is_substantive(
+            go_source,
+            facet,
+            {method, go_method},
+        )
+        if not python_bound and not go_bound:
+            issues.append(
+                f"lifecycle consumer {consumer['name']} must bind same-object "
+                f"handler {facet}.{method}"
+            )
+    return issues
+
+
 def load_yaml(path: Path) -> dict[str, Any]:
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
@@ -428,6 +805,10 @@ class Verification:
         self.routed_objects: set[tuple[str, str, str]] = set()
         self.runtime_entrypoint_objects: set[tuple[str, str, str]] = set()
         self.runtime_entrypoint_kinds: dict[tuple[str, str, str], str] = {}
+        self.lifecycle_entrypoint_candidates: dict[
+            tuple[str, str, str], list[dict[str, str]]
+        ] = {}
+        self.lifecycle_entrypoint_objects: set[tuple[str, str, str]] = set()
         self.application_sources: dict[tuple[str, str, str], set[Path]] = defaultdict(set)
         self.local_contract_objects: set[tuple[str, str, str]] = set()
         self.api_integration_objects: set[tuple[str, str, str]] = set()
@@ -629,13 +1010,23 @@ class Verification:
                     except (OSError, ValueError, yaml.YAMLError) as exc:
                         self.error(f"{relative(operations_path)}: {exc}")
                     else:
-                        api_routes = operations.get("api_routes") or []
-                        runtime_entrypoints = operations.get("runtime_entrypoints") or []
-                        if not isinstance(api_routes, list):
+                        raw_api_routes = operations.get("api_routes") or []
+                        raw_runtime_entrypoints = (
+                            operations.get("runtime_entrypoints") or []
+                        )
+                        api_routes = (
+                            raw_api_routes if isinstance(raw_api_routes, list) else []
+                        )
+                        runtime_entrypoints = (
+                            raw_runtime_entrypoints
+                            if isinstance(raw_runtime_entrypoints, list)
+                            else []
+                        )
+                        if not isinstance(raw_api_routes, list):
                             self.error(f"{relative(operations_path)}: api_routes must be a list")
                         elif api_routes:
                             self.routed_objects.add(key)
-                        if not isinstance(runtime_entrypoints, list):
+                        if not isinstance(raw_runtime_entrypoints, list):
                             self.error(
                                 f"{relative(operations_path)}: runtime_entrypoints must be a list"
                             )
@@ -671,28 +1062,24 @@ class Verification:
                                         "application.object_owner must be "
                                         f"{expected_owner}, got {actual_owner!r}"
                                     )
+                        lifecycle_consumers: list[dict[str, str]] = []
+                        lifecycle_issues: list[str] = []
                         if not api_routes and not runtime_entrypoints:
-                            self.error(
-                                f"{relative(operations_path)}: canonical object must own an HTTP "
-                                "operation or typed runtime entrypoint"
+                            lifecycle_consumers, lifecycle_issues = (
+                                lifecycle_authored_consumers(document)
                             )
-                        elif api_routes and runtime_entrypoints:
-                            http_mutations = [
-                                route
-                                for route in api_routes
-                                if isinstance(route, dict)
-                                and str(
-                                    ((route.get("application") or {}).get("kind"))
-                                    if isinstance(route.get("application"), dict)
-                                    else ""
-                                ).strip()
-                                != "query"
-                            ]
-                            if http_mutations:
-                                self.error(
-                                    f"{relative(operations_path)}: canonical object must not own "
-                                    "both HTTP mutation operations and runtime mutation entrypoints"
-                                )
+                            for issue in lifecycle_issues:
+                                self.error(f"{relative(object_path)}: {issue}")
+                        entry_mode, entrypoint_issues = object_entrypoint_mode(
+                            kind,
+                            api_routes,
+                            runtime_entrypoints,
+                            lifecycle_consumers if not lifecycle_issues else [],
+                        )
+                        for issue in entrypoint_issues:
+                            self.error(f"{relative(operations_path)}: {issue}")
+                        if entry_mode == "lifecycle":
+                            self.lifecycle_entrypoint_candidates[key] = lifecycle_consumers
                 object_contexts[(domain, object_name)].add(context)
             for other in contracts.glob("*/*/*.yaml"):
                 if other.name != "object.yaml" and re.search(
@@ -871,6 +1258,7 @@ class Verification:
                         self.object_test_spec_refs[key].update(refs)
                         for issue in issues:
                             self.error(f"{relative(path)}: {issue}")
+        self.verify_lifecycle_entrypoint_sources()
         for key, owners in self.source_owners.items():
             if len(owners) != 1:
                 self.error(f"{'.'.join(key)} has multiple source owners: {sorted(owners)}")
@@ -883,7 +1271,7 @@ class Verification:
                     f"{relative(object_path.parent)}: canonical object requires "
                     "object-local non-generated source"
                 )
-        for key in sorted(self.routed_objects | self.runtime_entrypoint_objects):
+        for key in sorted(self.entrypoint_objects()):
             owner, object_path, _ = self.objects[key]
             if owner not in domain_service_names() and owner != "platform-ops":
                 continue
@@ -904,13 +1292,41 @@ class Verification:
                     "one substantive object-local test with a valid feature-tree "
                     "UAT/DOM/SIT/GWT spec_ref"
                 )
-        for key in sorted(self.routed_objects | self.runtime_entrypoint_objects):
+        for key in sorted(self.entrypoint_objects()):
             _, object_path, _ = self.objects[key]
             if key not in self.api_integration_objects:
                 self.error(
                     f"{relative(object_path.parent)}: routed/subscribed object requires "
                     "object-local api_integration evidence"
                 )
+
+    def entrypoint_objects(self) -> set[tuple[str, str, str]]:
+        return (
+            self.routed_objects
+            | self.runtime_entrypoint_objects
+            | self.lifecycle_entrypoint_objects
+        )
+
+    def verify_lifecycle_entrypoint_sources(self) -> None:
+        for key, consumers in sorted(self.lifecycle_entrypoint_candidates.items()):
+            _, object_path, _ = self.objects[key]
+            context, object_name = key[1:]
+            object_source_root = (
+                object_path.parents[2].parent / "internal" / context / object_name
+            )
+            source_paths = set()
+            for layer in ("application", "adapters"):
+                source_paths.update(self.layer_sources.get(key, {}).get(layer, set()))
+            issues = lifecycle_handler_binding_issues(
+                consumers,
+                object_source_root,
+                source_paths,
+            )
+            if issues:
+                for issue in issues:
+                    self.error(f"{relative(object_path)}: {issue}")
+                continue
+            self.lifecycle_entrypoint_objects.add(key)
 
     def verify_kind_aware_object_implementation(self) -> None:
         required_layers = {
@@ -941,6 +1357,8 @@ class Verification:
                 in {"projector", "subscription", "internal_port", "external_port"}
                 and "adapters" not in actual
             ):
+                missing.add("adapters")
+            if key in self.lifecycle_entrypoint_objects and "adapters" not in actual:
                 missing.add("adapters")
             if missing:
                 self.error(

@@ -1,22 +1,31 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-003
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+// readiness_case: get-skill-catalog-item-api
+// readiness_case: list-skills-api
 package api_integration
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	cataloghttp "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
+	activerelease "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/activerelease"
+	resourcebuilder "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
+	packageapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application"
+	packagemodel "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/domain/model"
 )
 
 type apiCatalogSource struct{ err error }
@@ -34,8 +43,8 @@ func (source apiCatalogSource) ListCatalogItems(context.Context) ([]model.Item, 
 		Description:                 "读取用户明确授权的旅行上下文。",
 		CatalogGroup:                model.SemanticLabel{ID: "travel", DisplayText: "旅行"},
 		RequiresConsent:             true,
-		RequiredConsentScopes:       []string{"travel.trip.read"},
-		ConsentScopeLabels:          []model.SemanticLabel{{ID: "travel.trip.read", DisplayText: "读取行程"}},
+		RequiredConsentScopes:       []string{"assistant.learning.feedback_context.read"},
+		ConsentScopeLabels:          []model.SemanticLabel{{ID: "assistant.learning.feedback_context.read", DisplayText: "读取脱敏反馈摘要"}},
 		TargetAudiences:             []model.SemanticLabel{{ID: "trip_organizer", DisplayText: "行程组织者"}},
 		DataUseSummary:              "仅在授权后读取",
 		Examples:                    []model.ResolvedExample{},
@@ -48,9 +57,92 @@ func (source apiCatalogSource) ListCatalogItems(context.Context) ([]model.Item, 
 	}}, nil
 }
 
+type activeReleaseResolver struct {
+	resolved packageapplication.ResolvedRelease
+}
+
+func (resolver activeReleaseResolver) ResolveActive(
+	ctx context.Context,
+	packageID string,
+) (packageapplication.ResolvedRelease, error) {
+	if err := ctx.Err(); err != nil {
+		return packageapplication.ResolvedRelease{}, err
+	}
+	if packageID != resolver.resolved.Release.PackageID {
+		return packageapplication.ResolvedRelease{}, errors.New("active package not found")
+	}
+	return resolver.resolved, nil
+}
+
+func (resolver activeReleaseResolver) ResolveRelease(
+	ctx context.Context,
+	packageID string,
+	releaseDigest string,
+) (packageapplication.ResolvedRelease, error) {
+	if err := ctx.Err(); err != nil {
+		return packageapplication.ResolvedRelease{}, err
+	}
+	if packageID != resolver.resolved.Release.PackageID ||
+		releaseDigest != resolver.resolved.Release.ReleaseDigest {
+		return packageapplication.ResolvedRelease{}, errors.New("immutable release not found")
+	}
+	return resolver.resolved, nil
+}
+
+func productionCatalogSource(t *testing.T) *activerelease.CatalogSource {
+	t.Helper()
+	bundle, err := resourcebuilder.NewSourceBuilder().Compile(t.Context())
+	if err != nil {
+		t.Fatalf("compile canonical Skill package source: %v", err)
+	}
+	built, err := resourcebuilder.BuildPackage(bundle, resourcebuilder.PackageBuildOptions{
+		PackageID:        activerelease.OfficialPackageID,
+		PackageVersion:   "1.0.0",
+		BuildID:          "skill-catalog-api-integration",
+		SourceRepository: "quwoquan",
+		SourceRevision:   "assistant-skill-catalog-readiness",
+		BuiltAt:          time.Date(2026, 8, 5, 8, 0, 0, 0, time.UTC),
+		RuntimeCompatibility: packagemodel.RuntimeCompatibility{
+			APIVersion:            packagemodel.RuntimeAPIVersion,
+			MinimumRuntimeVersion: packagemodel.RuntimeVersion,
+			MaximumRuntimeVersion: packagemodel.RuntimeVersion,
+		},
+		CapabilityGrants: []packagemodel.CapabilityGrant{{
+			CapabilityID: "assistant.skill",
+			Scope:        "official",
+		}},
+		SigningKeyID:      "api-integration-key",
+		SigningPrivateKey: ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)),
+	})
+	if err != nil {
+		t.Fatalf("build immutable Skill package: %v", err)
+	}
+	files := make(map[string][]byte, len(built.Files))
+	for _, file := range built.Files {
+		files[file.RelativePath] = append([]byte(nil), file.Content...)
+	}
+	assets := make(map[string][]byte, len(built.Release.Assets))
+	for _, asset := range built.Release.Assets {
+		relative := strings.TrimPrefix(asset.Locator, "skill-package://official/")
+		content, found := files[relative]
+		if !found {
+			t.Fatalf("built immutable asset %q is missing", asset.AssetID)
+		}
+		assets[asset.AssetID] = content
+	}
+	return activerelease.NewCatalogSource(
+		activeReleaseResolver{resolved: packageapplication.ResolvedRelease{
+			Release: built.Release,
+			Assets:  assets,
+		}},
+		activerelease.OfficialPackageID,
+		orchestration.ValidateAssistantDomainSkillCatalog,
+	)
+}
+
 func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
 	handler := cataloghttp.NewHandler(
-		application.NewQueryService(apiCatalogSource{}),
+		application.NewQueryService(productionCatalogSource(t)),
 	).Routes()
 
 	anonymous := requestCatalog(handler, "", false)
@@ -72,21 +164,30 @@ func TestListSkillsHTTPUsesVerifiedAccountAndFailsClosed(t *testing.T) {
 	if err := json.Unmarshal(owner.Body.Bytes(), &view); err != nil {
 		t.Fatalf("decode catalog view: %v", err)
 	}
-	if len(view.Items) != 1 ||
-		view.Items[0].PackageID != "assistant.session.skills" ||
-		view.Items[0].ReleaseDigest == "" ||
-		len(view.Items[0].RequiredConsentScopes) != 1 ||
-		view.Items[0].ConfigurationSchemaDigest == "" ||
-		view.Items[0].ActivationMode != "reactive" {
+	var travel model.Item
+	for _, item := range view.Items {
+		if item.SkillID == "travel_companion" {
+			travel = item
+			break
+		}
+	}
+	if travel.SkillID == "" ||
+		travel.PackageID != activerelease.OfficialPackageID ||
+		travel.ReleaseDigest == "" ||
+		len(travel.RequiredConsentScopes) != 0 ||
+		travel.ConfigurationSchemaDigest == "" ||
+		travel.ActivationMode != "hybrid" {
 		t.Fatalf("active package catalog metadata missing: %+v", view.Items)
 	}
 	var listWire map[string]any
 	if err := json.Unmarshal(owner.Body.Bytes(), &listWire); err != nil {
 		t.Fatalf("decode list wire: %v", err)
 	}
-	listed := listWire["items"].([]any)[0].(map[string]any)
-	if _, leaked := listed["configurationSchema"]; leaked {
-		t.Fatal("ListSkills leaked progressively disclosed configuration schema")
+	for _, raw := range listWire["items"].([]any) {
+		listed := raw.(map[string]any)
+		if _, leaked := listed["configurationSchema"]; leaked {
+			t.Fatal("ListSkills leaked progressively disclosed configuration schema")
+		}
 	}
 
 	detail := requestCatalogAt(

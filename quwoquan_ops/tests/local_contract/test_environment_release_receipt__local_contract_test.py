@@ -451,6 +451,24 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
                 green_matrix=matrix_path,
             )
             self.assertEqual(set(payloads), set(RELEASE_CLOSURE_PATHS))
+            matrix["claim"] = (
+                "ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN"
+            )
+            matrix["deviceProfile"] = "emulator_only"
+            matrix["nonPromotable"] = True
+            matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "not the live pilot release result"
+            ):
+                validate_release_closure_sources(
+                    pilot_release_attestation=candidate_path,
+                    pilot_rollback_attestation=rollback_path,
+                    lifecycle_exits=lifecycle_paths,
+                    green_matrix=matrix_path,
+                )
+            matrix["claim"] = "ALPHA_BETA_GAMMA_LOCAL_GREEN"
+            matrix.pop("deviceProfile")
+            matrix.pop("nonPromotable")
             matrix["environments"]["beta-local"]["environment"] = "gamma"
             matrix_path.write_text(json.dumps(matrix), encoding="utf-8")
             with self.assertRaisesRegex(

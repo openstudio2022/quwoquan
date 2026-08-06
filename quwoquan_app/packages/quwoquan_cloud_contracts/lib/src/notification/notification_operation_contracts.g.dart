@@ -1,11 +1,53 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
 import '../operation_request_payload.dart';
 
 part '../generated/requests/notification/notification_operation_contracts.g.requests.g.dart';
+
+enum AppMessageGatheringInvitationAction {
+  accept("accept"),
+  decline("decline");
+
+  const AppMessageGatheringInvitationAction(this.wireName);
+
+  final String wireName;
+
+  static AppMessageGatheringInvitationAction fromWire(Object? value, String path) {
+    return switch (value) {
+      "accept" => AppMessageGatheringInvitationAction.accept,
+      "decline" => AppMessageGatheringInvitationAction.decline,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum AppMessageGatheringInvitationStatus {
+  pending("pending"),
+  accepted("accepted"),
+  declined("declined"),
+  revoked("revoked"),
+  cancelled("cancelled"),
+  expired("expired");
+
+  const AppMessageGatheringInvitationStatus(this.wireName);
+
+  final String wireName;
+
+  static AppMessageGatheringInvitationStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "pending" => AppMessageGatheringInvitationStatus.pending,
+      "accepted" => AppMessageGatheringInvitationStatus.accepted,
+      "declined" => AppMessageGatheringInvitationStatus.declined,
+      "revoked" => AppMessageGatheringInvitationStatus.revoked,
+      "cancelled" => AppMessageGatheringInvitationStatus.cancelled,
+      "expired" => AppMessageGatheringInvitationStatus.expired,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
 
 enum NotificationType {
   social("social"),
@@ -76,6 +118,7 @@ final class AppMessage {
     required this.title,
     required this.summary,
     required this.target,
+    this.gatheringInvitation,
     required this.read,
     required this.createdAt,
     this.deliveredAt,
@@ -92,6 +135,7 @@ final class AppMessage {
   final String title;
   final String summary;
   final AppMessageTarget target;
+  final AppMessageGatheringInvitation? gatheringInvitation;
   final bool read;
   final DateTime createdAt;
   final DateTime? deliveredAt;
@@ -99,7 +143,7 @@ final class AppMessage {
   final DateTime? readAt;
 
   factory AppMessage.fromWire(Map<String, Object?> map, [String path = "AppMessage"]) {
-    _rejectUnknownFields(map, const <String>{"messageId", "userId", "messageType", "source", "sourceId", "destination", "title", "summary", "target", "read", "createdAt", "deliveredAt", "ackedAt", "readAt"}, path);
+    _rejectUnknownFields(map, const <String>{"messageId", "userId", "messageType", "source", "sourceId", "destination", "title", "summary", "target", "gatheringInvitation", "read", "createdAt", "deliveredAt", "ackedAt", "readAt"}, path);
     return AppMessage(
       messageId: _requiredNonBlankString(map["messageId"], '$path.messageId'),
       userId: _requiredNonBlankString(map["userId"], '$path.userId'),
@@ -110,6 +154,7 @@ final class AppMessage {
       title: _requiredNonBlankString(map["title"], '$path.title'),
       summary: _requiredNonBlankString(map["summary"], '$path.summary'),
       target: AppMessageTarget.fromWire(_requiredObject(map["target"], '$path.target'), '$path.target'),
+      gatheringInvitation: map["gatheringInvitation"] == null ? null : AppMessageGatheringInvitation.fromWire(_requiredObject(map["gatheringInvitation"], '$path.gatheringInvitation'), '$path.gatheringInvitation'),
       read: _requiredBool(map["read"], '$path.read'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       deliveredAt: map["deliveredAt"] == null ? null : _requiredTimestamp(map["deliveredAt"], '$path.deliveredAt'),
@@ -128,6 +173,7 @@ final class AppMessage {
     "title": title,
     "summary": summary,
     "target": target.toWire(),
+    if (gatheringInvitation != null) "gatheringInvitation": gatheringInvitation!.toWire(),
     "read": read,
     "createdAt": createdAt.toUtc().toIso8601String(),
     if (deliveredAt != null) "deliveredAt": deliveredAt!.toUtc().toIso8601String(),
@@ -156,6 +202,146 @@ final class AppMessageDestination {
   Map<String, Object?> toWire() => <String, Object?>{
     "type": type,
     "id": id,
+  };
+}
+
+final class AppMessageGatheringInvitation {
+  const AppMessageGatheringInvitation({
+    required this.gatheringId,
+    required this.inviterPersonaId,
+    required this.recipientPersonaId,
+    required this.purposeSummary,
+    required this.schedule,
+    required this.place,
+    required this.participationVersion,
+    required this.status,
+    required this.actionIntents,
+    this.expiresAt,
+  });
+
+  final String gatheringId;
+  final String inviterPersonaId;
+  final String recipientPersonaId;
+  final String purposeSummary;
+  final AppMessageGatheringInvitationSchedule schedule;
+  final AppMessageGatheringInvitationPlace place;
+  final int participationVersion;
+  final AppMessageGatheringInvitationStatus status;
+  final List<AppMessageGatheringInvitationActionIntent> actionIntents;
+  final DateTime? expiresAt;
+
+  factory AppMessageGatheringInvitation.fromWire(Map<String, Object?> map, [String path = "AppMessageGatheringInvitation"]) {
+    _rejectUnknownFields(map, const <String>{"gatheringId", "inviterPersonaId", "recipientPersonaId", "purposeSummary", "schedule", "place", "participationVersion", "status", "actionIntents", "expiresAt"}, path);
+    return AppMessageGatheringInvitation(
+      gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
+      inviterPersonaId: _requiredString(map["inviterPersonaId"], '$path.inviterPersonaId'),
+      recipientPersonaId: _requiredString(map["recipientPersonaId"], '$path.recipientPersonaId'),
+      purposeSummary: _requiredString(map["purposeSummary"], '$path.purposeSummary'),
+      schedule: AppMessageGatheringInvitationSchedule.fromWire(_requiredObject(map["schedule"], '$path.schedule'), '$path.schedule'),
+      place: AppMessageGatheringInvitationPlace.fromWire(_requiredObject(map["place"], '$path.place'), '$path.place'),
+      participationVersion: _requiredInt(map["participationVersion"], '$path.participationVersion'),
+      status: AppMessageGatheringInvitationStatus.fromWire(map["status"], '$path.status'),
+      actionIntents: List<AppMessageGatheringInvitationActionIntent>.unmodifiable(_requiredList(map["actionIntents"], '$path.actionIntents').asMap().entries.map((entry) => AppMessageGatheringInvitationActionIntent.fromWire(_requiredObject(entry.value, '$path.actionIntents' + '[${entry.key}]'), '$path.actionIntents' + '[${entry.key}]'))),
+      expiresAt: map["expiresAt"] == null ? null : _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": gatheringId,
+    "inviterPersonaId": inviterPersonaId,
+    "recipientPersonaId": recipientPersonaId,
+    "purposeSummary": purposeSummary,
+    "schedule": schedule.toWire(),
+    "place": place.toWire(),
+    "participationVersion": participationVersion,
+    "status": status.wireName,
+    "actionIntents": actionIntents.map((value) => value.toWire()).toList(growable: false),
+    if (expiresAt != null) "expiresAt": expiresAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class AppMessageGatheringInvitationActionIntent {
+  const AppMessageGatheringInvitationActionIntent({
+    required this.action,
+    required this.expectedGatheringVersion,
+    required this.expectedParticipationVersion,
+  });
+
+  final AppMessageGatheringInvitationAction action;
+  final int expectedGatheringVersion;
+  final int expectedParticipationVersion;
+
+  factory AppMessageGatheringInvitationActionIntent.fromWire(Map<String, Object?> map, [String path = "AppMessageGatheringInvitationActionIntent"]) {
+    _rejectUnknownFields(map, const <String>{"action", "expectedGatheringVersion", "expectedParticipationVersion"}, path);
+    return AppMessageGatheringInvitationActionIntent(
+      action: AppMessageGatheringInvitationAction.fromWire(map["action"], '$path.action'),
+      expectedGatheringVersion: _requiredInt(map["expectedGatheringVersion"], '$path.expectedGatheringVersion'),
+      expectedParticipationVersion: _requiredInt(map["expectedParticipationVersion"], '$path.expectedParticipationVersion'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "action": action.wireName,
+    "expectedGatheringVersion": expectedGatheringVersion,
+    "expectedParticipationVersion": expectedParticipationVersion,
+  };
+}
+
+final class AppMessageGatheringInvitationPlace {
+  const AppMessageGatheringInvitationPlace({
+    required this.mode,
+    this.coarsePlaceLabel,
+    this.exactMeetingPoint,
+  });
+
+  final String mode;
+  final String? coarsePlaceLabel;
+  final String? exactMeetingPoint;
+
+  factory AppMessageGatheringInvitationPlace.fromWire(Map<String, Object?> map, [String path = "AppMessageGatheringInvitationPlace"]) {
+    _rejectUnknownFields(map, const <String>{"mode", "coarsePlaceLabel", "exactMeetingPoint"}, path);
+    return AppMessageGatheringInvitationPlace(
+      mode: _requiredString(map["mode"], '$path.mode'),
+      coarsePlaceLabel: map["coarsePlaceLabel"] == null ? null : _requiredString(map["coarsePlaceLabel"], '$path.coarsePlaceLabel'),
+      exactMeetingPoint: map["exactMeetingPoint"] == null ? null : _requiredString(map["exactMeetingPoint"], '$path.exactMeetingPoint'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "mode": mode,
+    if (coarsePlaceLabel != null) "coarsePlaceLabel": coarsePlaceLabel!,
+    if (exactMeetingPoint != null) "exactMeetingPoint": exactMeetingPoint!,
+  };
+}
+
+final class AppMessageGatheringInvitationSchedule {
+  const AppMessageGatheringInvitationSchedule({
+    required this.timezone,
+    this.startAt,
+    this.endAt,
+    this.dateLabel,
+  });
+
+  final String timezone;
+  final DateTime? startAt;
+  final DateTime? endAt;
+  final String? dateLabel;
+
+  factory AppMessageGatheringInvitationSchedule.fromWire(Map<String, Object?> map, [String path = "AppMessageGatheringInvitationSchedule"]) {
+    _rejectUnknownFields(map, const <String>{"timezone", "startAt", "endAt", "dateLabel"}, path);
+    return AppMessageGatheringInvitationSchedule(
+      timezone: _requiredString(map["timezone"], '$path.timezone'),
+      startAt: map["startAt"] == null ? null : _requiredTimestamp(map["startAt"], '$path.startAt'),
+      endAt: map["endAt"] == null ? null : _requiredTimestamp(map["endAt"], '$path.endAt'),
+      dateLabel: map["dateLabel"] == null ? null : _requiredString(map["dateLabel"], '$path.dateLabel'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "timezone": timezone,
+    if (startAt != null) "startAt": startAt!.toUtc().toIso8601String(),
+    if (endAt != null) "endAt": endAt!.toUtc().toIso8601String(),
+    if (dateLabel != null) "dateLabel": dateLabel!,
   };
 }
 

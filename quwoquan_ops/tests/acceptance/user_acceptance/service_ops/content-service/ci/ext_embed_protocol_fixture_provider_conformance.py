@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-embed-protocol_fixture-user-acceptance'
-COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/patrol/discovery/home_recommendation_journey__user_acceptance_test.dart', '--platform', 'android')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py', '--target', 'test/user_acceptance/journeys/home_recommendation/home_recommendation_journey__user_acceptance_test.dart', '--platform', 'android')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

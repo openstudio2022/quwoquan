@@ -10,23 +10,21 @@ import (
 )
 
 const (
-	oneToOneRingTimeout        = 30 * time.Second
-	groupRingTimeout           = 60 * time.Second
-	ringTimeoutSystemActor     = "system:rtc-ring-timeout-sweeper"
-	ringTimeoutCommandName     = "RingTimeout"
-	defaultRingTimeoutInterval = 5 * time.Second
+	ringTimeoutSystemActor = "system:rtc-ring-timeout-sweeper"
+	ringTimeoutCommandName = "RingTimeout"
 )
 
 // SweepRingTimeouts 把振铃超期的会话迁移到 ended/no_answer 并经 outbox 下发
 // call.ended 事实（被叫撤来电面板、双端记未接）。系统命令使用确定性幂等 key；
-// named query 只返回达到各自 30s/60s 阈值的候选，命令仍经共享
+// named query 只返回达到 typed domain policy 阈值的候选，命令仍经共享
 // mutate/CAS/receipt/outbox 管道重新加载并调用领域 HandleTimeout。
 func (o *CallOrchestrator) SweepRingTimeouts(ctx context.Context) (int, error) {
 	now := o.now().UTC()
+	policy := o.domainService.RingTimeoutPolicy()
 	sessions, err := o.repo.FindOverdueRingingCalls(
 		ctx,
-		now.Add(-oneToOneRingTimeout),
-		now.Add(-groupRingTimeout),
+		now.Add(-policy.OneToOne()),
+		now.Add(-policy.Group()),
 		100,
 	)
 	if err != nil {
@@ -74,7 +72,7 @@ func (o *CallOrchestrator) timeoutRingingCall(
 // RunRingTimeoutSweeper 以固定间隔运行振铃超时收割（composition root 启动）。
 func (o *CallOrchestrator) RunRingTimeoutSweeper(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
-		interval = defaultRingTimeoutInterval
+		return fmt.Errorf("ring timeout sweep interval must be positive")
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

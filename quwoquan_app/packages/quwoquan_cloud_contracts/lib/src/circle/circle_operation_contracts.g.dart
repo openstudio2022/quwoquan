@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
@@ -343,6 +343,356 @@ enum CircleVisibility {
   }
 }
 
+enum GatheringAdmissionControlStatus {
+  open("open"),
+  paused("paused");
+
+  const GatheringAdmissionControlStatus(this.wireName);
+
+  final String wireName;
+
+  static GatheringAdmissionControlStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "open" => GatheringAdmissionControlStatus.open,
+      "paused" => GatheringAdmissionControlStatus.paused,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringAdmissionPolicy {
+  open("open"),
+  approval("approval"),
+  inviteOnly("invite_only");
+
+  const GatheringAdmissionPolicy(this.wireName);
+
+  final String wireName;
+
+  static GatheringAdmissionPolicy fromWire(Object? value, String path) {
+    return switch (value) {
+      "open" => GatheringAdmissionPolicy.open,
+      "approval" => GatheringAdmissionPolicy.approval,
+      "invite_only" => GatheringAdmissionPolicy.inviteOnly,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringAdmissionState {
+  accepting("accepting"),
+  full("full"),
+  paused("paused"),
+  closed("closed");
+
+  const GatheringAdmissionState(this.wireName);
+
+  final String wireName;
+
+  static GatheringAdmissionState fromWire(Object? value, String path) {
+    return switch (value) {
+      "accepting" => GatheringAdmissionState.accepting,
+      "full" => GatheringAdmissionState.full,
+      "paused" => GatheringAdmissionState.paused,
+      "closed" => GatheringAdmissionState.closed,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringApplicationQuestionKind {
+  text("text"),
+  singleSelect("single_select"),
+  multiSelect("multi_select");
+
+  const GatheringApplicationQuestionKind(this.wireName);
+
+  final String wireName;
+
+  static GatheringApplicationQuestionKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "text" => GatheringApplicationQuestionKind.text,
+      "single_select" => GatheringApplicationQuestionKind.singleSelect,
+      "multi_select" => GatheringApplicationQuestionKind.multiSelect,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringApplicationReviewDecision {
+  approve("approve"),
+  reject("reject");
+
+  const GatheringApplicationReviewDecision(this.wireName);
+
+  final String wireName;
+
+  static GatheringApplicationReviewDecision fromWire(Object? value, String path) {
+    return switch (value) {
+      "approve" => GatheringApplicationReviewDecision.approve,
+      "reject" => GatheringApplicationReviewDecision.reject,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringAudiencePolicy {
+  public("public"),
+  unlisted("unlisted"),
+  communityMembers("community_members"),
+  inviteOnly("invite_only");
+
+  const GatheringAudiencePolicy(this.wireName);
+
+  final String wireName;
+
+  static GatheringAudiencePolicy fromWire(Object? value, String path) {
+    return switch (value) {
+      "public" => GatheringAudiencePolicy.public,
+      "unlisted" => GatheringAudiencePolicy.unlisted,
+      "community_members" => GatheringAudiencePolicy.communityMembers,
+      "invite_only" => GatheringAudiencePolicy.inviteOnly,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringCostNotice {
+  free("free"),
+  estimated("estimated"),
+  externalPaymentRequired("external_payment_required");
+
+  const GatheringCostNotice(this.wireName);
+
+  final String wireName;
+
+  static GatheringCostNotice fromWire(Object? value, String path) {
+    return switch (value) {
+      "free" => GatheringCostNotice.free,
+      "estimated" => GatheringCostNotice.estimated,
+      "external_payment_required" => GatheringCostNotice.externalPaymentRequired,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringHostSubjectKind {
+  persona("persona"),
+  entityHomepage("entity_homepage"),
+  circle("circle");
+
+  const GatheringHostSubjectKind(this.wireName);
+
+  final String wireName;
+
+  static GatheringHostSubjectKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "persona" => GatheringHostSubjectKind.persona,
+      "entity_homepage" => GatheringHostSubjectKind.entityHomepage,
+      "circle" => GatheringHostSubjectKind.circle,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringLifecycleStatus {
+  draft("draft"),
+  published("published"),
+  cancelled("cancelled"),
+  completed("completed");
+
+  const GatheringLifecycleStatus(this.wireName);
+
+  final String wireName;
+
+  static GatheringLifecycleStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "draft" => GatheringLifecycleStatus.draft,
+      "published" => GatheringLifecycleStatus.published,
+      "cancelled" => GatheringLifecycleStatus.cancelled,
+      "completed" => GatheringLifecycleStatus.completed,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringOrganizerRole {
+  primaryOrganizer("primary_organizer"),
+  coHost("co_host");
+
+  const GatheringOrganizerRole(this.wireName);
+
+  final String wireName;
+
+  static GatheringOrganizerRole fromWire(Object? value, String path) {
+    return switch (value) {
+      "primary_organizer" => GatheringOrganizerRole.primaryOrganizer,
+      "co_host" => GatheringOrganizerRole.coHost,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringOutcomeStatus {
+  occurred("occurred"),
+  didNotHappen("did_not_happen"),
+  endedEarly("ended_early"),
+  safetyTerminated("safety_terminated"),
+  disputed("disputed"),
+  unverified("unverified");
+
+  const GatheringOutcomeStatus(this.wireName);
+
+  final String wireName;
+
+  static GatheringOutcomeStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "occurred" => GatheringOutcomeStatus.occurred,
+      "did_not_happen" => GatheringOutcomeStatus.didNotHappen,
+      "ended_early" => GatheringOutcomeStatus.endedEarly,
+      "safety_terminated" => GatheringOutcomeStatus.safetyTerminated,
+      "disputed" => GatheringOutcomeStatus.disputed,
+      "unverified" => GatheringOutcomeStatus.unverified,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringParticipationState {
+  invitedPending("invited_pending"),
+  applicationPending("application_pending"),
+  active("active"),
+  closed("closed");
+
+  const GatheringParticipationState(this.wireName);
+
+  final String wireName;
+
+  static GatheringParticipationState fromWire(Object? value, String path) {
+    return switch (value) {
+      "invited_pending" => GatheringParticipationState.invitedPending,
+      "application_pending" => GatheringParticipationState.applicationPending,
+      "active" => GatheringParticipationState.active,
+      "closed" => GatheringParticipationState.closed,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringPlaceDisclosure {
+  exact("exact"),
+  coarse("coarse"),
+  afterJoin("after_join");
+
+  const GatheringPlaceDisclosure(this.wireName);
+
+  final String wireName;
+
+  static GatheringPlaceDisclosure fromWire(Object? value, String path) {
+    return switch (value) {
+      "exact" => GatheringPlaceDisclosure.exact,
+      "coarse" => GatheringPlaceDisclosure.coarse,
+      "after_join" => GatheringPlaceDisclosure.afterJoin,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringPlaceMode {
+  physical("physical"),
+  online("online"),
+  hybrid("hybrid");
+
+  const GatheringPlaceMode(this.wireName);
+
+  final String wireName;
+
+  static GatheringPlaceMode fromWire(Object? value, String path) {
+    return switch (value) {
+      "physical" => GatheringPlaceMode.physical,
+      "online" => GatheringPlaceMode.online,
+      "hybrid" => GatheringPlaceMode.hybrid,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringRoomBindingStatus {
+  pending("pending"),
+  ready("ready"),
+  failed("failed");
+
+  const GatheringRoomBindingStatus(this.wireName);
+
+  final String wireName;
+
+  static GatheringRoomBindingStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "pending" => GatheringRoomBindingStatus.pending,
+      "ready" => GatheringRoomBindingStatus.ready,
+      "failed" => GatheringRoomBindingStatus.failed,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringRosterDisclosure {
+  countOnly("count_only"),
+  joinedMembers("joined_members"),
+  publicOptIn("public_opt_in");
+
+  const GatheringRosterDisclosure(this.wireName);
+
+  final String wireName;
+
+  static GatheringRosterDisclosure fromWire(Object? value, String path) {
+    return switch (value) {
+      "count_only" => GatheringRosterDisclosure.countOnly,
+      "joined_members" => GatheringRosterDisclosure.joinedMembers,
+      "public_opt_in" => GatheringRosterDisclosure.publicOptIn,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringTemporalPhase {
+  upcoming("upcoming"),
+  inProgress("in_progress"),
+  ended("ended");
+
+  const GatheringTemporalPhase(this.wireName);
+
+  final String wireName;
+
+  static GatheringTemporalPhase fromWire(Object? value, String path) {
+    return switch (value) {
+      "upcoming" => GatheringTemporalPhase.upcoming,
+      "in_progress" => GatheringTemporalPhase.inProgress,
+      "ended" => GatheringTemporalPhase.ended,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum GatheringTimeDisclosure {
+  exact("exact"),
+  dateOnly("date_only"),
+  afterJoin("after_join");
+
+  const GatheringTimeDisclosure(this.wireName);
+
+  final String wireName;
+
+  static GatheringTimeDisclosure fromWire(Object? value, String path) {
+    return switch (value) {
+      "exact" => GatheringTimeDisclosure.exact,
+      "date_only" => GatheringTimeDisclosure.dateOnly,
+      "after_join" => GatheringTimeDisclosure.afterJoin,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum OrganizationNodeType {
   generic("generic"),
   college("college"),
@@ -388,6 +738,29 @@ final class AppendResult {
   Map<String, Object?> toWire() => <String, Object?>{
     "factId": factId,
     "idempotentReplay": idempotentReplay,
+  };
+}
+
+final class CanonicalObjectRef {
+  const CanonicalObjectRef({
+    required this.objectTypeRef,
+    required this.objectId,
+  });
+
+  final String objectTypeRef;
+  final String objectId;
+
+  factory CanonicalObjectRef.fromWire(Map<String, Object?> map, [String path = "CanonicalObjectRef"]) {
+    _rejectUnknownFields(map, const <String>{"objectTypeRef", "objectId"}, path);
+    return CanonicalObjectRef(
+      objectTypeRef: _requiredNonBlankString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "objectTypeRef": objectTypeRef,
+    "objectId": objectId,
   };
 }
 
@@ -1673,6 +2046,981 @@ final class CircleStatsWire {
   };
 }
 
+final class GatheringAdmissionControl {
+  const GatheringAdmissionControl({
+    required this.status,
+    this.pausedByPersonaId,
+    this.reasonRef,
+    this.pausedAt,
+    required this.version,
+  });
+
+  final GatheringAdmissionControlStatus status;
+  final String? pausedByPersonaId;
+  final String? reasonRef;
+  final DateTime? pausedAt;
+  final int version;
+
+  factory GatheringAdmissionControl.fromWire(Map<String, Object?> map, [String path = "GatheringAdmissionControl"]) {
+    _rejectUnknownFields(map, const <String>{"status", "pausedByPersonaId", "reasonRef", "pausedAt", "version"}, path);
+    return GatheringAdmissionControl(
+      status: GatheringAdmissionControlStatus.fromWire(map["status"], '$path.status'),
+      pausedByPersonaId: map["pausedByPersonaId"] == null ? null : _requiredString(map["pausedByPersonaId"], '$path.pausedByPersonaId'),
+      reasonRef: map["reasonRef"] == null ? null : _requiredString(map["reasonRef"], '$path.reasonRef'),
+      pausedAt: map["pausedAt"] == null ? null : _requiredTimestamp(map["pausedAt"], '$path.pausedAt'),
+      version: _requiredInt(map["version"], '$path.version'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "status": status.wireName,
+    if (pausedByPersonaId != null) "pausedByPersonaId": pausedByPersonaId!,
+    if (reasonRef != null) "reasonRef": reasonRef!,
+    if (pausedAt != null) "pausedAt": pausedAt!.toUtc().toIso8601String(),
+    "version": version,
+  };
+}
+
+final class GatheringAdmissionStateSlice {
+  const GatheringAdmissionStateSlice({
+    required this.admissionState,
+    this.reasonRef,
+    required this.evaluatedAt,
+  });
+
+  final GatheringAdmissionState admissionState;
+  final String? reasonRef;
+  final DateTime evaluatedAt;
+
+  factory GatheringAdmissionStateSlice.fromWire(Map<String, Object?> map, [String path = "GatheringAdmissionStateSlice"]) {
+    _rejectUnknownFields(map, const <String>{"admissionState", "reasonRef", "evaluatedAt"}, path);
+    return GatheringAdmissionStateSlice(
+      admissionState: GatheringAdmissionState.fromWire(map["admissionState"], '$path.admissionState'),
+      reasonRef: map["reasonRef"] == null ? null : _requiredString(map["reasonRef"], '$path.reasonRef'),
+      evaluatedAt: _requiredTimestamp(map["evaluatedAt"], '$path.evaluatedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "admissionState": admissionState.wireName,
+    if (reasonRef != null) "reasonRef": reasonRef!,
+    "evaluatedAt": evaluatedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringApplicationQuestion {
+  const GatheringApplicationQuestion({
+    required this.questionId,
+    required this.prompt,
+    required this.kind,
+    required this.options,
+    required this.required,
+  });
+
+  final String questionId;
+  final String prompt;
+  final GatheringApplicationQuestionKind kind;
+  final List<GatheringApplicationQuestionOption> options;
+  final bool required;
+
+  factory GatheringApplicationQuestion.fromWire(Map<String, Object?> map, [String path = "GatheringApplicationQuestion"]) {
+    _rejectUnknownFields(map, const <String>{"questionId", "prompt", "kind", "options", "required"}, path);
+    return GatheringApplicationQuestion(
+      questionId: _requiredNonBlankString(map["questionId"], '$path.questionId'),
+      prompt: _requiredNonBlankString(map["prompt"], '$path.prompt'),
+      kind: GatheringApplicationQuestionKind.fromWire(map["kind"], '$path.kind'),
+      options: List<GatheringApplicationQuestionOption>.unmodifiable(_requiredList(map["options"], '$path.options').asMap().entries.map((entry) => GatheringApplicationQuestionOption.fromWire(_requiredObject(entry.value, '$path.options' + '[${entry.key}]'), '$path.options' + '[${entry.key}]'))),
+      required: _requiredBool(map["required"], '$path.required'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "questionId": questionId,
+    "prompt": prompt,
+    "kind": kind.wireName,
+    "options": options.map((value) => value.toWire()).toList(growable: false),
+    "required": required,
+  };
+}
+
+final class GatheringApplicationQuestionOption {
+  const GatheringApplicationQuestionOption({
+    required this.optionId,
+    required this.label,
+  });
+
+  final String optionId;
+  final String label;
+
+  factory GatheringApplicationQuestionOption.fromWire(Map<String, Object?> map, [String path = "GatheringApplicationQuestionOption"]) {
+    _rejectUnknownFields(map, const <String>{"optionId", "label"}, path);
+    return GatheringApplicationQuestionOption(
+      optionId: _requiredNonBlankString(map["optionId"], '$path.optionId'),
+      label: _requiredNonBlankString(map["label"], '$path.label'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "optionId": optionId,
+    "label": label,
+  };
+}
+
+final class GatheringCapacityPolicy {
+  const GatheringCapacityPolicy({
+    required this.maxParticipants,
+  });
+
+  final int maxParticipants;
+
+  factory GatheringCapacityPolicy.fromWire(Map<String, Object?> map, [String path = "GatheringCapacityPolicy"]) {
+    _rejectUnknownFields(map, const <String>{"maxParticipants"}, path);
+    return GatheringCapacityPolicy(
+      maxParticipants: _requiredInt(map["maxParticipants"], '$path.maxParticipants'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "maxParticipants": maxParticipants,
+  };
+}
+
+final class GatheringCapacitySlice {
+  const GatheringCapacitySlice({
+    required this.maxParticipants,
+    required this.activeSeatCount,
+    required this.invitedSeatHoldCount,
+    required this.occupiedSeats,
+    required this.remainingSeats,
+    required this.full,
+  });
+
+  final int maxParticipants;
+  final int activeSeatCount;
+  final int invitedSeatHoldCount;
+  final int occupiedSeats;
+  final int remainingSeats;
+  final bool full;
+
+  factory GatheringCapacitySlice.fromWire(Map<String, Object?> map, [String path = "GatheringCapacitySlice"]) {
+    _rejectUnknownFields(map, const <String>{"maxParticipants", "activeSeatCount", "invitedSeatHoldCount", "occupiedSeats", "remainingSeats", "full"}, path);
+    return GatheringCapacitySlice(
+      maxParticipants: _requiredInt(map["maxParticipants"], '$path.maxParticipants'),
+      activeSeatCount: _requiredInt(map["activeSeatCount"], '$path.activeSeatCount'),
+      invitedSeatHoldCount: _requiredInt(map["invitedSeatHoldCount"], '$path.invitedSeatHoldCount'),
+      occupiedSeats: _requiredInt(map["occupiedSeats"], '$path.occupiedSeats'),
+      remainingSeats: _requiredInt(map["remainingSeats"], '$path.remainingSeats'),
+      full: _requiredBool(map["full"], '$path.full'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "maxParticipants": maxParticipants,
+    "activeSeatCount": activeSeatCount,
+    "invitedSeatHoldCount": invitedSeatHoldCount,
+    "occupiedSeats": occupiedSeats,
+    "remainingSeats": remainingSeats,
+    "full": full,
+  };
+}
+
+final class GatheringCommandResult {
+  const GatheringCommandResult({
+    required this.gatheringId,
+    required this.aggregateVersion,
+    required this.lifecycleStatus,
+    this.participationState,
+    this.participationVersion,
+    this.currentGatheringRevisionId,
+    required this.currentGatheringRevisionNumber,
+    this.outcomeStatus,
+    this.conversationId,
+    required this.roomBindingStatus,
+    required this.idempotentReplay,
+  });
+
+  final String gatheringId;
+  final int aggregateVersion;
+  final GatheringLifecycleStatus lifecycleStatus;
+  final GatheringParticipationState? participationState;
+  final int? participationVersion;
+  final String? currentGatheringRevisionId;
+  final int currentGatheringRevisionNumber;
+  final GatheringOutcomeStatus? outcomeStatus;
+  final String? conversationId;
+  final GatheringRoomBindingStatus roomBindingStatus;
+  final bool idempotentReplay;
+
+  factory GatheringCommandResult.fromWire(Map<String, Object?> map, [String path = "GatheringCommandResult"]) {
+    _rejectUnknownFields(map, const <String>{"gatheringId", "aggregateVersion", "lifecycleStatus", "participationState", "participationVersion", "currentGatheringRevisionId", "currentGatheringRevisionNumber", "outcomeStatus", "conversationId", "roomBindingStatus", "idempotentReplay"}, path);
+    return GatheringCommandResult(
+      gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
+      aggregateVersion: _requiredInt(map["aggregateVersion"], '$path.aggregateVersion'),
+      lifecycleStatus: GatheringLifecycleStatus.fromWire(map["lifecycleStatus"], '$path.lifecycleStatus'),
+      participationState: map["participationState"] == null ? null : GatheringParticipationState.fromWire(map["participationState"], '$path.participationState'),
+      participationVersion: map["participationVersion"] == null ? null : _requiredInt(map["participationVersion"], '$path.participationVersion'),
+      currentGatheringRevisionId: map["currentGatheringRevisionId"] == null ? null : _requiredString(map["currentGatheringRevisionId"], '$path.currentGatheringRevisionId'),
+      currentGatheringRevisionNumber: _requiredInt(map["currentGatheringRevisionNumber"], '$path.currentGatheringRevisionNumber'),
+      outcomeStatus: map["outcomeStatus"] == null ? null : GatheringOutcomeStatus.fromWire(map["outcomeStatus"], '$path.outcomeStatus'),
+      conversationId: map["conversationId"] == null ? null : _requiredString(map["conversationId"], '$path.conversationId'),
+      roomBindingStatus: GatheringRoomBindingStatus.fromWire(map["roomBindingStatus"], '$path.roomBindingStatus'),
+      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": gatheringId,
+    "aggregateVersion": aggregateVersion,
+    "lifecycleStatus": lifecycleStatus.wireName,
+    if (participationState != null) "participationState": participationState!.wireName,
+    if (participationVersion != null) "participationVersion": participationVersion!,
+    if (currentGatheringRevisionId != null) "currentGatheringRevisionId": currentGatheringRevisionId!,
+    "currentGatheringRevisionNumber": currentGatheringRevisionNumber,
+    if (outcomeStatus != null) "outcomeStatus": outcomeStatus!.wireName,
+    if (conversationId != null) "conversationId": conversationId!,
+    "roomBindingStatus": roomBindingStatus.wireName,
+    "idempotentReplay": idempotentReplay,
+  };
+}
+
+final class GatheringDisclosurePolicy {
+  const GatheringDisclosurePolicy({
+    required this.timeDisclosure,
+    required this.placeDisclosure,
+    required this.rosterDisclosure,
+  });
+
+  final GatheringTimeDisclosure timeDisclosure;
+  final GatheringPlaceDisclosure placeDisclosure;
+  final GatheringRosterDisclosure rosterDisclosure;
+
+  factory GatheringDisclosurePolicy.fromWire(Map<String, Object?> map, [String path = "GatheringDisclosurePolicy"]) {
+    _rejectUnknownFields(map, const <String>{"timeDisclosure", "placeDisclosure", "rosterDisclosure"}, path);
+    return GatheringDisclosurePolicy(
+      timeDisclosure: GatheringTimeDisclosure.fromWire(map["timeDisclosure"], '$path.timeDisclosure'),
+      placeDisclosure: GatheringPlaceDisclosure.fromWire(map["placeDisclosure"], '$path.placeDisclosure'),
+      rosterDisclosure: GatheringRosterDisclosure.fromWire(map["rosterDisclosure"], '$path.rosterDisclosure'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "timeDisclosure": timeDisclosure.wireName,
+    "placeDisclosure": placeDisclosure.wireName,
+    "rosterDisclosure": rosterDisclosure.wireName,
+  };
+}
+
+final class GatheringHostSummarySlice {
+  const GatheringHostSummarySlice({
+    required this.hostSubjectKind,
+    required this.hostSubjectId,
+    required this.hostDigest,
+  });
+
+  final GatheringHostSubjectKind hostSubjectKind;
+  final String hostSubjectId;
+  final String hostDigest;
+
+  factory GatheringHostSummarySlice.fromWire(Map<String, Object?> map, [String path = "GatheringHostSummarySlice"]) {
+    _rejectUnknownFields(map, const <String>{"hostSubjectKind", "hostSubjectId", "hostDigest"}, path);
+    return GatheringHostSummarySlice(
+      hostSubjectKind: GatheringHostSubjectKind.fromWire(map["hostSubjectKind"], '$path.hostSubjectKind'),
+      hostSubjectId: _requiredString(map["hostSubjectId"], '$path.hostSubjectId'),
+      hostDigest: _requiredString(map["hostDigest"], '$path.hostDigest'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "hostSubjectKind": hostSubjectKind.wireName,
+    "hostSubjectId": hostSubjectId,
+    "hostDigest": hostDigest,
+  };
+}
+
+final class GatheringOutcome {
+  const GatheringOutcome({
+    required this.status,
+    required this.independentEvidenceCount,
+    required this.evidenceRefs,
+    required this.calculatedAt,
+    required this.calculationDigest,
+  });
+
+  final GatheringOutcomeStatus status;
+  final int independentEvidenceCount;
+  final List<CanonicalObjectRef> evidenceRefs;
+  final DateTime calculatedAt;
+  final String calculationDigest;
+
+  factory GatheringOutcome.fromWire(Map<String, Object?> map, [String path = "GatheringOutcome"]) {
+    _rejectUnknownFields(map, const <String>{"status", "independentEvidenceCount", "evidenceRefs", "calculatedAt", "calculationDigest"}, path);
+    return GatheringOutcome(
+      status: GatheringOutcomeStatus.fromWire(map["status"], '$path.status'),
+      independentEvidenceCount: _requiredInt(map["independentEvidenceCount"], '$path.independentEvidenceCount'),
+      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_requiredList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_requiredObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
+      calculatedAt: _requiredTimestamp(map["calculatedAt"], '$path.calculatedAt'),
+      calculationDigest: _requiredNonBlankString(map["calculationDigest"], '$path.calculationDigest'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "status": status.wireName,
+    "independentEvidenceCount": independentEvidenceCount,
+    "evidenceRefs": evidenceRefs.map((value) => value.toWire()).toList(growable: false),
+    "calculatedAt": calculatedAt.toUtc().toIso8601String(),
+    "calculationDigest": calculationDigest,
+  };
+}
+
+final class GatheringPlace {
+  const GatheringPlace({
+    required this.mode,
+    this.coarsePlaceRef,
+    this.coarsePlaceLabel,
+    this.exactMeetingPoint,
+    this.onlineLocationRef,
+  });
+
+  final GatheringPlaceMode mode;
+  final CanonicalObjectRef? coarsePlaceRef;
+  final String? coarsePlaceLabel;
+  final String? exactMeetingPoint;
+  final String? onlineLocationRef;
+
+  factory GatheringPlace.fromWire(Map<String, Object?> map, [String path = "GatheringPlace"]) {
+    _rejectUnknownFields(map, const <String>{"mode", "coarsePlaceRef", "coarsePlaceLabel", "exactMeetingPoint", "onlineLocationRef"}, path);
+    return GatheringPlace(
+      mode: GatheringPlaceMode.fromWire(map["mode"], '$path.mode'),
+      coarsePlaceRef: map["coarsePlaceRef"] == null ? null : CanonicalObjectRef.fromWire(_requiredObject(map["coarsePlaceRef"], '$path.coarsePlaceRef'), '$path.coarsePlaceRef'),
+      coarsePlaceLabel: map["coarsePlaceLabel"] == null ? null : _requiredString(map["coarsePlaceLabel"], '$path.coarsePlaceLabel'),
+      exactMeetingPoint: map["exactMeetingPoint"] == null ? null : _requiredString(map["exactMeetingPoint"], '$path.exactMeetingPoint'),
+      onlineLocationRef: map["onlineLocationRef"] == null ? null : _requiredString(map["onlineLocationRef"], '$path.onlineLocationRef'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "mode": mode.wireName,
+    if (coarsePlaceRef != null) "coarsePlaceRef": coarsePlaceRef!.toWire(),
+    if (coarsePlaceLabel != null) "coarsePlaceLabel": coarsePlaceLabel!,
+    if (exactMeetingPoint != null) "exactMeetingPoint": exactMeetingPoint!,
+    if (onlineLocationRef != null) "onlineLocationRef": onlineLocationRef!,
+  };
+}
+
+final class GatheringPolicySet {
+  const GatheringPolicySet({
+    required this.audiencePolicy,
+    required this.admissionPolicy,
+    required this.capacityPolicy,
+    required this.disclosurePolicy,
+    required this.applicationQuestions,
+    required this.riskControlPolicyRef,
+    this.policyDecisionRef,
+    this.policyDigest,
+    this.obligationDigest,
+  });
+
+  final GatheringAudiencePolicy audiencePolicy;
+  final GatheringAdmissionPolicy admissionPolicy;
+  final GatheringCapacityPolicy capacityPolicy;
+  final GatheringDisclosurePolicy disclosurePolicy;
+  final List<GatheringApplicationQuestion> applicationQuestions;
+  final String riskControlPolicyRef;
+  final String? policyDecisionRef;
+  final String? policyDigest;
+  final String? obligationDigest;
+
+  factory GatheringPolicySet.fromWire(Map<String, Object?> map, [String path = "GatheringPolicySet"]) {
+    _rejectUnknownFields(map, const <String>{"audiencePolicy", "admissionPolicy", "capacityPolicy", "disclosurePolicy", "applicationQuestions", "riskControlPolicyRef", "policyDecisionRef", "policyDigest", "obligationDigest"}, path);
+    return GatheringPolicySet(
+      audiencePolicy: GatheringAudiencePolicy.fromWire(map["audiencePolicy"], '$path.audiencePolicy'),
+      admissionPolicy: GatheringAdmissionPolicy.fromWire(map["admissionPolicy"], '$path.admissionPolicy'),
+      capacityPolicy: GatheringCapacityPolicy.fromWire(_requiredObject(map["capacityPolicy"], '$path.capacityPolicy'), '$path.capacityPolicy'),
+      disclosurePolicy: GatheringDisclosurePolicy.fromWire(_requiredObject(map["disclosurePolicy"], '$path.disclosurePolicy'), '$path.disclosurePolicy'),
+      applicationQuestions: List<GatheringApplicationQuestion>.unmodifiable(_requiredList(map["applicationQuestions"], '$path.applicationQuestions').asMap().entries.map((entry) => GatheringApplicationQuestion.fromWire(_requiredObject(entry.value, '$path.applicationQuestions' + '[${entry.key}]'), '$path.applicationQuestions' + '[${entry.key}]'))),
+      riskControlPolicyRef: _requiredNonBlankString(map["riskControlPolicyRef"], '$path.riskControlPolicyRef'),
+      policyDecisionRef: map["policyDecisionRef"] == null ? null : _requiredString(map["policyDecisionRef"], '$path.policyDecisionRef'),
+      policyDigest: map["policyDigest"] == null ? null : _requiredString(map["policyDigest"], '$path.policyDigest'),
+      obligationDigest: map["obligationDigest"] == null ? null : _requiredString(map["obligationDigest"], '$path.obligationDigest'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "audiencePolicy": audiencePolicy.wireName,
+    "admissionPolicy": admissionPolicy.wireName,
+    "capacityPolicy": capacityPolicy.toWire(),
+    "disclosurePolicy": disclosurePolicy.toWire(),
+    "applicationQuestions": applicationQuestions.map((value) => value.toWire()).toList(growable: false),
+    "riskControlPolicyRef": riskControlPolicyRef,
+    if (policyDecisionRef != null) "policyDecisionRef": policyDecisionRef!,
+    if (policyDigest != null) "policyDigest": policyDigest!,
+    if (obligationDigest != null) "obligationDigest": obligationDigest!,
+  };
+}
+
+final class GatheringPrivateDetailSlice {
+  const GatheringPrivateDetailSlice({
+    required this.gatheringId,
+    required this.aggregateVersion,
+    required this.createdByPersonaId,
+    required this.hostBinding,
+    required this.organizerAssignments,
+    required this.purpose,
+    required this.schedule,
+    required this.place,
+    required this.policySet,
+    required this.admissionControl,
+    required this.lifecycleStatus,
+    this.outcome,
+    this.conversationId,
+    required this.roomBindingStatus,
+    this.currentGatheringRevisionId,
+    required this.currentGatheringRevisionNumber,
+    required this.capacity,
+    required this.temporal,
+    required this.admission,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String gatheringId;
+  final int aggregateVersion;
+  final String createdByPersonaId;
+  final HostBinding hostBinding;
+  final List<OrganizerAssignment> organizerAssignments;
+  final GatheringPurpose purpose;
+  final GatheringSchedule schedule;
+  final GatheringPlace place;
+  final GatheringPolicySet policySet;
+  final GatheringAdmissionControl admissionControl;
+  final GatheringLifecycleStatus lifecycleStatus;
+  final GatheringOutcome? outcome;
+  final String? conversationId;
+  final GatheringRoomBindingStatus roomBindingStatus;
+  final String? currentGatheringRevisionId;
+  final int currentGatheringRevisionNumber;
+  final GatheringCapacitySlice capacity;
+  final GatheringTemporalPhaseSlice temporal;
+  final GatheringAdmissionStateSlice admission;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory GatheringPrivateDetailSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPrivateDetailSlice"]) {
+    _rejectUnknownFields(map, const <String>{"gatheringId", "aggregateVersion", "createdByPersonaId", "hostBinding", "organizerAssignments", "purpose", "schedule", "place", "policySet", "admissionControl", "lifecycleStatus", "outcome", "conversationId", "roomBindingStatus", "currentGatheringRevisionId", "currentGatheringRevisionNumber", "capacity", "temporal", "admission", "createdAt", "updatedAt"}, path);
+    return GatheringPrivateDetailSlice(
+      gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
+      aggregateVersion: _requiredInt(map["aggregateVersion"], '$path.aggregateVersion'),
+      createdByPersonaId: _requiredString(map["createdByPersonaId"], '$path.createdByPersonaId'),
+      hostBinding: HostBinding.fromWire(_requiredObject(map["hostBinding"], '$path.hostBinding'), '$path.hostBinding'),
+      organizerAssignments: List<OrganizerAssignment>.unmodifiable(_requiredList(map["organizerAssignments"], '$path.organizerAssignments').asMap().entries.map((entry) => OrganizerAssignment.fromWire(_requiredObject(entry.value, '$path.organizerAssignments' + '[${entry.key}]'), '$path.organizerAssignments' + '[${entry.key}]'))),
+      purpose: GatheringPurpose.fromWire(_requiredObject(map["purpose"], '$path.purpose'), '$path.purpose'),
+      schedule: GatheringSchedule.fromWire(_requiredObject(map["schedule"], '$path.schedule'), '$path.schedule'),
+      place: GatheringPlace.fromWire(_requiredObject(map["place"], '$path.place'), '$path.place'),
+      policySet: GatheringPolicySet.fromWire(_requiredObject(map["policySet"], '$path.policySet'), '$path.policySet'),
+      admissionControl: GatheringAdmissionControl.fromWire(_requiredObject(map["admissionControl"], '$path.admissionControl'), '$path.admissionControl'),
+      lifecycleStatus: GatheringLifecycleStatus.fromWire(map["lifecycleStatus"], '$path.lifecycleStatus'),
+      outcome: map["outcome"] == null ? null : GatheringOutcome.fromWire(_requiredObject(map["outcome"], '$path.outcome'), '$path.outcome'),
+      conversationId: map["conversationId"] == null ? null : _requiredString(map["conversationId"], '$path.conversationId'),
+      roomBindingStatus: GatheringRoomBindingStatus.fromWire(map["roomBindingStatus"], '$path.roomBindingStatus'),
+      currentGatheringRevisionId: map["currentGatheringRevisionId"] == null ? null : _requiredString(map["currentGatheringRevisionId"], '$path.currentGatheringRevisionId'),
+      currentGatheringRevisionNumber: _requiredInt(map["currentGatheringRevisionNumber"], '$path.currentGatheringRevisionNumber'),
+      capacity: GatheringCapacitySlice.fromWire(_requiredObject(map["capacity"], '$path.capacity'), '$path.capacity'),
+      temporal: GatheringTemporalPhaseSlice.fromWire(_requiredObject(map["temporal"], '$path.temporal'), '$path.temporal'),
+      admission: GatheringAdmissionStateSlice.fromWire(_requiredObject(map["admission"], '$path.admission'), '$path.admission'),
+      createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
+      updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": gatheringId,
+    "aggregateVersion": aggregateVersion,
+    "createdByPersonaId": createdByPersonaId,
+    "hostBinding": hostBinding.toWire(),
+    "organizerAssignments": organizerAssignments.map((value) => value.toWire()).toList(growable: false),
+    "purpose": purpose.toWire(),
+    "schedule": schedule.toWire(),
+    "place": place.toWire(),
+    "policySet": policySet.toWire(),
+    "admissionControl": admissionControl.toWire(),
+    "lifecycleStatus": lifecycleStatus.wireName,
+    if (outcome != null) "outcome": outcome!.toWire(),
+    if (conversationId != null) "conversationId": conversationId!,
+    "roomBindingStatus": roomBindingStatus.wireName,
+    if (currentGatheringRevisionId != null) "currentGatheringRevisionId": currentGatheringRevisionId!,
+    "currentGatheringRevisionNumber": currentGatheringRevisionNumber,
+    "capacity": capacity.toWire(),
+    "temporal": temporal.toWire(),
+    "admission": admission.toWire(),
+    "createdAt": createdAt.toUtc().toIso8601String(),
+    "updatedAt": updatedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringPublicCardSlice {
+  const GatheringPublicCardSlice({
+    required this.gatheringId,
+    required this.aggregateVersion,
+    required this.cardDigest,
+    required this.host,
+    required this.purpose,
+    required this.schedule,
+    required this.place,
+    required this.capacity,
+    required this.temporal,
+    required this.admission,
+    required this.lifecycleStatus,
+    this.outcomeStatus,
+    required this.currentGatheringRevisionId,
+    required this.currentGatheringRevisionNumber,
+    required this.updatedAt,
+  });
+
+  final String gatheringId;
+  final int aggregateVersion;
+  final String cardDigest;
+  final GatheringHostSummarySlice host;
+  final GatheringPublicPurposeSlice purpose;
+  final GatheringPublicScheduleSlice schedule;
+  final GatheringPublicPlaceSlice place;
+  final GatheringCapacitySlice capacity;
+  final GatheringTemporalPhaseSlice temporal;
+  final GatheringAdmissionStateSlice admission;
+  final GatheringLifecycleStatus lifecycleStatus;
+  final GatheringOutcomeStatus? outcomeStatus;
+  final String currentGatheringRevisionId;
+  final int currentGatheringRevisionNumber;
+  final DateTime updatedAt;
+
+  factory GatheringPublicCardSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPublicCardSlice"]) {
+    _rejectUnknownFields(map, const <String>{"gatheringId", "aggregateVersion", "cardDigest", "host", "purpose", "schedule", "place", "capacity", "temporal", "admission", "lifecycleStatus", "outcomeStatus", "currentGatheringRevisionId", "currentGatheringRevisionNumber", "updatedAt"}, path);
+    return GatheringPublicCardSlice(
+      gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
+      aggregateVersion: _requiredInt(map["aggregateVersion"], '$path.aggregateVersion'),
+      cardDigest: _requiredString(map["cardDigest"], '$path.cardDigest'),
+      host: GatheringHostSummarySlice.fromWire(_requiredObject(map["host"], '$path.host'), '$path.host'),
+      purpose: GatheringPublicPurposeSlice.fromWire(_requiredObject(map["purpose"], '$path.purpose'), '$path.purpose'),
+      schedule: GatheringPublicScheduleSlice.fromWire(_requiredObject(map["schedule"], '$path.schedule'), '$path.schedule'),
+      place: GatheringPublicPlaceSlice.fromWire(_requiredObject(map["place"], '$path.place'), '$path.place'),
+      capacity: GatheringCapacitySlice.fromWire(_requiredObject(map["capacity"], '$path.capacity'), '$path.capacity'),
+      temporal: GatheringTemporalPhaseSlice.fromWire(_requiredObject(map["temporal"], '$path.temporal'), '$path.temporal'),
+      admission: GatheringAdmissionStateSlice.fromWire(_requiredObject(map["admission"], '$path.admission'), '$path.admission'),
+      lifecycleStatus: GatheringLifecycleStatus.fromWire(map["lifecycleStatus"], '$path.lifecycleStatus'),
+      outcomeStatus: map["outcomeStatus"] == null ? null : GatheringOutcomeStatus.fromWire(map["outcomeStatus"], '$path.outcomeStatus'),
+      currentGatheringRevisionId: _requiredString(map["currentGatheringRevisionId"], '$path.currentGatheringRevisionId'),
+      currentGatheringRevisionNumber: _requiredInt(map["currentGatheringRevisionNumber"], '$path.currentGatheringRevisionNumber'),
+      updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": gatheringId,
+    "aggregateVersion": aggregateVersion,
+    "cardDigest": cardDigest,
+    "host": host.toWire(),
+    "purpose": purpose.toWire(),
+    "schedule": schedule.toWire(),
+    "place": place.toWire(),
+    "capacity": capacity.toWire(),
+    "temporal": temporal.toWire(),
+    "admission": admission.toWire(),
+    "lifecycleStatus": lifecycleStatus.wireName,
+    if (outcomeStatus != null) "outcomeStatus": outcomeStatus!.wireName,
+    "currentGatheringRevisionId": currentGatheringRevisionId,
+    "currentGatheringRevisionNumber": currentGatheringRevisionNumber,
+    "updatedAt": updatedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringPublicDetailSlice {
+  const GatheringPublicDetailSlice({
+    required this.card,
+    required this.audiencePolicy,
+    required this.admissionPolicy,
+    required this.disclosurePolicy,
+    required this.revisions,
+    this.viewerParticipationState,
+    this.conversationId,
+  });
+
+  final GatheringPublicCardSlice card;
+  final GatheringAudiencePolicy audiencePolicy;
+  final GatheringAdmissionPolicy admissionPolicy;
+  final GatheringDisclosurePolicy disclosurePolicy;
+  final List<GatheringRevisionSummarySlice> revisions;
+  final GatheringParticipationState? viewerParticipationState;
+  final String? conversationId;
+
+  factory GatheringPublicDetailSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPublicDetailSlice"]) {
+    _rejectUnknownFields(map, const <String>{"card", "audiencePolicy", "admissionPolicy", "disclosurePolicy", "revisions", "viewerParticipationState", "conversationId"}, path);
+    return GatheringPublicDetailSlice(
+      card: GatheringPublicCardSlice.fromWire(_requiredObject(map["card"], '$path.card'), '$path.card'),
+      audiencePolicy: GatheringAudiencePolicy.fromWire(map["audiencePolicy"], '$path.audiencePolicy'),
+      admissionPolicy: GatheringAdmissionPolicy.fromWire(map["admissionPolicy"], '$path.admissionPolicy'),
+      disclosurePolicy: GatheringDisclosurePolicy.fromWire(_requiredObject(map["disclosurePolicy"], '$path.disclosurePolicy'), '$path.disclosurePolicy'),
+      revisions: List<GatheringRevisionSummarySlice>.unmodifiable(_requiredList(map["revisions"], '$path.revisions').asMap().entries.map((entry) => GatheringRevisionSummarySlice.fromWire(_requiredObject(entry.value, '$path.revisions' + '[${entry.key}]'), '$path.revisions' + '[${entry.key}]'))),
+      viewerParticipationState: map["viewerParticipationState"] == null ? null : GatheringParticipationState.fromWire(map["viewerParticipationState"], '$path.viewerParticipationState'),
+      conversationId: map["conversationId"] == null ? null : _requiredString(map["conversationId"], '$path.conversationId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "card": card.toWire(),
+    "audiencePolicy": audiencePolicy.wireName,
+    "admissionPolicy": admissionPolicy.wireName,
+    "disclosurePolicy": disclosurePolicy.toWire(),
+    "revisions": revisions.map((value) => value.toWire()).toList(growable: false),
+    if (viewerParticipationState != null) "viewerParticipationState": viewerParticipationState!.wireName,
+    if (conversationId != null) "conversationId": conversationId!,
+  };
+}
+
+final class GatheringPublicPlaceSlice {
+  const GatheringPublicPlaceSlice({
+    required this.mode,
+    this.coarsePlaceRef,
+    this.coarsePlaceLabel,
+    this.exactMeetingPoint,
+  });
+
+  final GatheringPlaceMode mode;
+  final CanonicalObjectRef? coarsePlaceRef;
+  final String? coarsePlaceLabel;
+  final String? exactMeetingPoint;
+
+  factory GatheringPublicPlaceSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPublicPlaceSlice"]) {
+    _rejectUnknownFields(map, const <String>{"mode", "coarsePlaceRef", "coarsePlaceLabel", "exactMeetingPoint"}, path);
+    return GatheringPublicPlaceSlice(
+      mode: GatheringPlaceMode.fromWire(map["mode"], '$path.mode'),
+      coarsePlaceRef: map["coarsePlaceRef"] == null ? null : CanonicalObjectRef.fromWire(_requiredObject(map["coarsePlaceRef"], '$path.coarsePlaceRef'), '$path.coarsePlaceRef'),
+      coarsePlaceLabel: map["coarsePlaceLabel"] == null ? null : _requiredString(map["coarsePlaceLabel"], '$path.coarsePlaceLabel'),
+      exactMeetingPoint: map["exactMeetingPoint"] == null ? null : _requiredString(map["exactMeetingPoint"], '$path.exactMeetingPoint'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "mode": mode.wireName,
+    if (coarsePlaceRef != null) "coarsePlaceRef": coarsePlaceRef!.toWire(),
+    if (coarsePlaceLabel != null) "coarsePlaceLabel": coarsePlaceLabel!,
+    if (exactMeetingPoint != null) "exactMeetingPoint": exactMeetingPoint!,
+  };
+}
+
+final class GatheringPublicPurposeSlice {
+  const GatheringPublicPurposeSlice({
+    required this.title,
+    this.summary,
+    this.coverRef,
+    required this.topicRefs,
+    required this.requirementRefs,
+    required this.costNotice,
+    this.costDescription,
+  });
+
+  final String title;
+  final String? summary;
+  final CanonicalObjectRef? coverRef;
+  final List<String> topicRefs;
+  final List<String> requirementRefs;
+  final GatheringCostNotice costNotice;
+  final String? costDescription;
+
+  factory GatheringPublicPurposeSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPublicPurposeSlice"]) {
+    _rejectUnknownFields(map, const <String>{"title", "summary", "coverRef", "topicRefs", "requirementRefs", "costNotice", "costDescription"}, path);
+    return GatheringPublicPurposeSlice(
+      title: _requiredString(map["title"], '$path.title'),
+      summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
+      coverRef: map["coverRef"] == null ? null : CanonicalObjectRef.fromWire(_requiredObject(map["coverRef"], '$path.coverRef'), '$path.coverRef'),
+      topicRefs: List<String>.unmodifiable(_requiredList(map["topicRefs"], '$path.topicRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.topicRefs' + '[${entry.key}]'))),
+      requirementRefs: List<String>.unmodifiable(_requiredList(map["requirementRefs"], '$path.requirementRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.requirementRefs' + '[${entry.key}]'))),
+      costNotice: GatheringCostNotice.fromWire(map["costNotice"], '$path.costNotice'),
+      costDescription: map["costDescription"] == null ? null : _requiredString(map["costDescription"], '$path.costDescription'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "title": title,
+    if (summary != null) "summary": summary!,
+    if (coverRef != null) "coverRef": coverRef!.toWire(),
+    "topicRefs": topicRefs.map((value) => value).toList(growable: false),
+    "requirementRefs": requirementRefs.map((value) => value).toList(growable: false),
+    "costNotice": costNotice.wireName,
+    if (costDescription != null) "costDescription": costDescription!,
+  };
+}
+
+final class GatheringPublicScheduleSlice {
+  const GatheringPublicScheduleSlice({
+    required this.timezone,
+    this.startAt,
+    this.endAt,
+    this.dateLabel,
+  });
+
+  final String timezone;
+  final DateTime? startAt;
+  final DateTime? endAt;
+  final String? dateLabel;
+
+  factory GatheringPublicScheduleSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPublicScheduleSlice"]) {
+    _rejectUnknownFields(map, const <String>{"timezone", "startAt", "endAt", "dateLabel"}, path);
+    return GatheringPublicScheduleSlice(
+      timezone: _requiredString(map["timezone"], '$path.timezone'),
+      startAt: map["startAt"] == null ? null : _requiredTimestamp(map["startAt"], '$path.startAt'),
+      endAt: map["endAt"] == null ? null : _requiredTimestamp(map["endAt"], '$path.endAt'),
+      dateLabel: map["dateLabel"] == null ? null : _requiredString(map["dateLabel"], '$path.dateLabel'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "timezone": timezone,
+    if (startAt != null) "startAt": startAt!.toUtc().toIso8601String(),
+    if (endAt != null) "endAt": endAt!.toUtc().toIso8601String(),
+    if (dateLabel != null) "dateLabel": dateLabel!,
+  };
+}
+
+final class GatheringPurpose {
+  const GatheringPurpose({
+    this.title,
+    this.summary,
+    this.coverRef,
+    required this.topicRefs,
+    required this.requirementRefs,
+    required this.sourceObjectRefs,
+    required this.costNotice,
+    this.costDescription,
+  });
+
+  final String? title;
+  final String? summary;
+  final CanonicalObjectRef? coverRef;
+  final List<String> topicRefs;
+  final List<String> requirementRefs;
+  final List<GatheringSourceRef> sourceObjectRefs;
+  final GatheringCostNotice costNotice;
+  final String? costDescription;
+
+  factory GatheringPurpose.fromWire(Map<String, Object?> map, [String path = "GatheringPurpose"]) {
+    _rejectUnknownFields(map, const <String>{"title", "summary", "coverRef", "topicRefs", "requirementRefs", "sourceObjectRefs", "costNotice", "costDescription"}, path);
+    return GatheringPurpose(
+      title: map["title"] == null ? null : _requiredString(map["title"], '$path.title'),
+      summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
+      coverRef: map["coverRef"] == null ? null : CanonicalObjectRef.fromWire(_requiredObject(map["coverRef"], '$path.coverRef'), '$path.coverRef'),
+      topicRefs: List<String>.unmodifiable(_requiredList(map["topicRefs"], '$path.topicRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.topicRefs' + '[${entry.key}]'))),
+      requirementRefs: List<String>.unmodifiable(_requiredList(map["requirementRefs"], '$path.requirementRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.requirementRefs' + '[${entry.key}]'))),
+      sourceObjectRefs: List<GatheringSourceRef>.unmodifiable(_requiredList(map["sourceObjectRefs"], '$path.sourceObjectRefs').asMap().entries.map((entry) => GatheringSourceRef.fromWire(_requiredObject(entry.value, '$path.sourceObjectRefs' + '[${entry.key}]'), '$path.sourceObjectRefs' + '[${entry.key}]'))),
+      costNotice: GatheringCostNotice.fromWire(map["costNotice"], '$path.costNotice'),
+      costDescription: map["costDescription"] == null ? null : _requiredString(map["costDescription"], '$path.costDescription'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (title != null) "title": title!,
+    if (summary != null) "summary": summary!,
+    if (coverRef != null) "coverRef": coverRef!.toWire(),
+    "topicRefs": topicRefs.map((value) => value).toList(growable: false),
+    "requirementRefs": requirementRefs.map((value) => value).toList(growable: false),
+    "sourceObjectRefs": sourceObjectRefs.map((value) => value.toWire()).toList(growable: false),
+    "costNotice": costNotice.wireName,
+    if (costDescription != null) "costDescription": costDescription!,
+  };
+}
+
+final class GatheringRevisionSummarySlice {
+  const GatheringRevisionSummarySlice({
+    required this.revisionId,
+    required this.revisionNumber,
+    required this.digest,
+    required this.materialChange,
+    required this.createdAt,
+  });
+
+  final String revisionId;
+  final int revisionNumber;
+  final String digest;
+  final bool materialChange;
+  final DateTime createdAt;
+
+  factory GatheringRevisionSummarySlice.fromWire(Map<String, Object?> map, [String path = "GatheringRevisionSummarySlice"]) {
+    _rejectUnknownFields(map, const <String>{"revisionId", "revisionNumber", "digest", "materialChange", "createdAt"}, path);
+    return GatheringRevisionSummarySlice(
+      revisionId: _requiredString(map["revisionId"], '$path.revisionId'),
+      revisionNumber: _requiredInt(map["revisionNumber"], '$path.revisionNumber'),
+      digest: _requiredString(map["digest"], '$path.digest'),
+      materialChange: _requiredBool(map["materialChange"], '$path.materialChange'),
+      createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "revisionId": revisionId,
+    "revisionNumber": revisionNumber,
+    "digest": digest,
+    "materialChange": materialChange,
+    "createdAt": createdAt.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringSchedule {
+  const GatheringSchedule({
+    this.timezone,
+    this.startAt,
+    this.endAt,
+    this.admissionClosesAt,
+  });
+
+  final String? timezone;
+  final DateTime? startAt;
+  final DateTime? endAt;
+  final DateTime? admissionClosesAt;
+
+  factory GatheringSchedule.fromWire(Map<String, Object?> map, [String path = "GatheringSchedule"]) {
+    _rejectUnknownFields(map, const <String>{"timezone", "startAt", "endAt", "admissionClosesAt"}, path);
+    return GatheringSchedule(
+      timezone: map["timezone"] == null ? null : _requiredString(map["timezone"], '$path.timezone'),
+      startAt: map["startAt"] == null ? null : _requiredTimestamp(map["startAt"], '$path.startAt'),
+      endAt: map["endAt"] == null ? null : _requiredTimestamp(map["endAt"], '$path.endAt'),
+      admissionClosesAt: map["admissionClosesAt"] == null ? null : _requiredTimestamp(map["admissionClosesAt"], '$path.admissionClosesAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (timezone != null) "timezone": timezone!,
+    if (startAt != null) "startAt": startAt!.toUtc().toIso8601String(),
+    if (endAt != null) "endAt": endAt!.toUtc().toIso8601String(),
+    if (admissionClosesAt != null) "admissionClosesAt": admissionClosesAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class GatheringSourceRef {
+  const GatheringSourceRef({
+    required this.objectRef,
+    required this.routeId,
+    required this.sourceDigest,
+  });
+
+  final CanonicalObjectRef objectRef;
+  final String routeId;
+  final String sourceDigest;
+
+  factory GatheringSourceRef.fromWire(Map<String, Object?> map, [String path = "GatheringSourceRef"]) {
+    _rejectUnknownFields(map, const <String>{"objectRef", "routeId", "sourceDigest"}, path);
+    return GatheringSourceRef(
+      objectRef: CanonicalObjectRef.fromWire(_requiredObject(map["objectRef"], '$path.objectRef'), '$path.objectRef'),
+      routeId: _requiredNonBlankString(map["routeId"], '$path.routeId'),
+      sourceDigest: _requiredNonBlankString(map["sourceDigest"], '$path.sourceDigest'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "objectRef": objectRef.toWire(),
+    "routeId": routeId,
+    "sourceDigest": sourceDigest,
+  };
+}
+
+final class GatheringTemporalPhaseSlice {
+  const GatheringTemporalPhaseSlice({
+    required this.temporalPhase,
+    required this.evaluatedAt,
+  });
+
+  final GatheringTemporalPhase temporalPhase;
+  final DateTime evaluatedAt;
+
+  factory GatheringTemporalPhaseSlice.fromWire(Map<String, Object?> map, [String path = "GatheringTemporalPhaseSlice"]) {
+    _rejectUnknownFields(map, const <String>{"temporalPhase", "evaluatedAt"}, path);
+    return GatheringTemporalPhaseSlice(
+      temporalPhase: GatheringTemporalPhase.fromWire(map["temporalPhase"], '$path.temporalPhase'),
+      evaluatedAt: _requiredTimestamp(map["evaluatedAt"], '$path.evaluatedAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "temporalPhase": temporalPhase.wireName,
+    "evaluatedAt": evaluatedAt.toUtc().toIso8601String(),
+  };
+}
+
+final class HostBinding {
+  const HostBinding({
+    required this.hostSubjectKind,
+    required this.hostSubjectId,
+    required this.authorityEvidenceRef,
+    required this.authorityVersion,
+    this.authorityExpiresAt,
+  });
+
+  final GatheringHostSubjectKind hostSubjectKind;
+  final String hostSubjectId;
+  final String authorityEvidenceRef;
+  final int authorityVersion;
+  final DateTime? authorityExpiresAt;
+
+  factory HostBinding.fromWire(Map<String, Object?> map, [String path = "HostBinding"]) {
+    _rejectUnknownFields(map, const <String>{"hostSubjectKind", "hostSubjectId", "authorityEvidenceRef", "authorityVersion", "authorityExpiresAt"}, path);
+    return HostBinding(
+      hostSubjectKind: GatheringHostSubjectKind.fromWire(map["hostSubjectKind"], '$path.hostSubjectKind'),
+      hostSubjectId: _requiredNonBlankString(map["hostSubjectId"], '$path.hostSubjectId'),
+      authorityEvidenceRef: _requiredNonBlankString(map["authorityEvidenceRef"], '$path.authorityEvidenceRef'),
+      authorityVersion: _requiredInt(map["authorityVersion"], '$path.authorityVersion'),
+      authorityExpiresAt: map["authorityExpiresAt"] == null ? null : _requiredTimestamp(map["authorityExpiresAt"], '$path.authorityExpiresAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "hostSubjectKind": hostSubjectKind.wireName,
+    "hostSubjectId": hostSubjectId,
+    "authorityEvidenceRef": authorityEvidenceRef,
+    "authorityVersion": authorityVersion,
+    if (authorityExpiresAt != null) "authorityExpiresAt": authorityExpiresAt!.toUtc().toIso8601String(),
+  };
+}
+
+final class OrganizerAssignment {
+  const OrganizerAssignment({
+    required this.personaId,
+    required this.role,
+    required this.authorityEvidenceRef,
+    required this.authorityVersion,
+    required this.assignedAt,
+    this.revokedAt,
+    required this.version,
+  });
+
+  final String personaId;
+  final GatheringOrganizerRole role;
+  final String authorityEvidenceRef;
+  final int authorityVersion;
+  final DateTime assignedAt;
+  final DateTime? revokedAt;
+  final int version;
+
+  factory OrganizerAssignment.fromWire(Map<String, Object?> map, [String path = "OrganizerAssignment"]) {
+    _rejectUnknownFields(map, const <String>{"personaId", "role", "authorityEvidenceRef", "authorityVersion", "assignedAt", "revokedAt", "version"}, path);
+    return OrganizerAssignment(
+      personaId: _requiredNonBlankString(map["personaId"], '$path.personaId'),
+      role: GatheringOrganizerRole.fromWire(map["role"], '$path.role'),
+      authorityEvidenceRef: _requiredNonBlankString(map["authorityEvidenceRef"], '$path.authorityEvidenceRef'),
+      authorityVersion: _requiredInt(map["authorityVersion"], '$path.authorityVersion'),
+      assignedAt: _requiredTimestamp(map["assignedAt"], '$path.assignedAt'),
+      revokedAt: map["revokedAt"] == null ? null : _requiredTimestamp(map["revokedAt"], '$path.revokedAt'),
+      version: _requiredInt(map["version"], '$path.version'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "personaId": personaId,
+    "role": role.wireName,
+    "authorityEvidenceRef": authorityEvidenceRef,
+    "authorityVersion": authorityVersion,
+    "assignedAt": assignedAt.toUtc().toIso8601String(),
+    if (revokedAt != null) "revokedAt": revokedAt!.toUtc().toIso8601String(),
+    "version": version,
+  };
+}
+
 final class PersonaCirclePageSlice {
   const PersonaCirclePageSlice({
     required this.items,
@@ -1877,6 +3225,15 @@ CircleSearchResultView decodeCircleSearchResultView(Object? response) =>
 CircleStatsWire decodeCircleStatsWire(Object? response) =>
     CircleStatsWire.fromWire(_requiredObject(response, "CircleStatsWire"), "CircleStatsWire");
 
+GatheringCommandResult decodeGatheringCommandResult(Object? response) =>
+    GatheringCommandResult.fromWire(_requiredObject(response, "GatheringCommandResult"), "GatheringCommandResult");
+
+GatheringPrivateDetailSlice decodeGatheringPrivateDetailSlice(Object? response) =>
+    GatheringPrivateDetailSlice.fromWire(_requiredObject(response, "GatheringPrivateDetailSlice"), "GatheringPrivateDetailSlice");
+
+GatheringPublicDetailSlice decodeGatheringPublicDetailSlice(Object? response) =>
+    GatheringPublicDetailSlice.fromWire(_requiredObject(response, "GatheringPublicDetailSlice"), "GatheringPublicDetailSlice");
+
 PersonaCirclePageSlice decodePersonaCirclePageSlice(Object? response) =>
     PersonaCirclePageSlice.fromWire(_requiredObject(response, "PersonaCirclePageSlice"), "PersonaCirclePageSlice");
 
@@ -1910,6 +3267,14 @@ void _rejectUnknownFields(
 String _requiredString(Object? value, String path) {
   if (value is! String) throw FormatException('$path must be a string');
   return value;
+}
+
+String _requiredNonBlankString(Object? value, String path) {
+  final result = _requiredString(value, path);
+  if (result.trim().isEmpty) {
+    throw FormatException('$path must not be blank');
+  }
+  return result;
 }
 
 DateTime _requiredTimestamp(Object? value, String path) {

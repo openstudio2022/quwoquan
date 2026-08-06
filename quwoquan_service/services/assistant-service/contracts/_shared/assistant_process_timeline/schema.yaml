@@ -1,6 +1,6 @@
 dart_class: AssistantProcessTimelineWire
-library_path: assistant/generated/contracts/assistant_process_timeline.g.dart
-output_path: assistant/generated/contracts/assistant_process_timeline.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_process_timeline.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_process_timeline.g.dart
 contract: assistant_process_timeline
 kind: shared_wire_contract
 fields:

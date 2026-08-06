@@ -21,35 +21,35 @@ var (
 // AppErrorFromConnectorDefinitionInvalidArgument returns *AppError for INTEGRATION.USER.connector_definition_invalid_argument (user_message from errors.yaml).
 func AppErrorFromConnectorDefinitionInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorDefinitionInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "Connector 定义无效", debugMessage).WithMetadata("connector_definition_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "Connector 定义无效", debugMessage).WithMetadata("connector_definition_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorDefinitionIdempotencyConflict returns *AppError for INTEGRATION.USER.connector_definition_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorDefinitionIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorDefinitionIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复发布与原 Connector 定义不一致", debugMessage).WithMetadata("connector_definition_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复发布与原 Connector 定义不一致", debugMessage).WithMetadata("connector_definition_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorUnauthorized returns *AppError for INTEGRATION.USER.connector_unauthorized (user_message from errors.yaml).
 func AppErrorFromConnectorUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录后管理外部应用连接", debugMessage).WithMetadata("connector_unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录后管理外部应用连接", debugMessage).WithMetadata("connector_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorInvalidArgument returns *AppError for INTEGRATION.USER.connector_invalid_argument (user_message from errors.yaml).
 func AppErrorFromConnectorInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "连接目录查询参数有误", debugMessage).WithMetadata("connector_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "连接目录查询参数有误", debugMessage).WithMetadata("connector_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorDefinitionNotFound returns *AppError for INTEGRATION.USER.connector_definition_not_found (user_message from errors.yaml).
 func AppErrorFromConnectorDefinitionNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorDefinitionNotFound.Error()))
-	return rerrors.NewAppError(code, "此连接能力已不可用，请刷新", debugMessage).WithMetadata("connector_definition_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "此连接能力已不可用，请刷新", debugMessage).WithMetadata("connector_definition_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorCatalogUnavailable returns *AppError for INTEGRATION.SYSTEM.connector_catalog_unavailable (user_message from errors.yaml).
 func AppErrorFromConnectorCatalogUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorCatalogUnavailable.Error()))
-	return rerrors.NewAppError(code, "连接目录暂不可用，请稍后重试", debugMessage).WithMetadata("connector_catalog_unavailable", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "连接目录暂不可用，请稍后重试", debugMessage).WithMetadata("connector_catalog_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

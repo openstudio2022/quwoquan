@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -235,7 +235,10 @@ final class CompleteContentMediaUploadCommand {
 }
 
 final class ContentAuthorPostsQuery {
-  const ContentAuthorPostsQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ContentAuthorPostsQuery({
     required String personaId,
     String? identity,
     String? type,
@@ -247,7 +250,14 @@ final class ContentAuthorPostsQuery {
        type = type,
        visibility = visibility,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String personaId;
   final String? identity;
@@ -535,11 +545,20 @@ final class ContentBehaviorEventWire {
 }
 
 final class ContentCommentPageQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   ContentCommentPageQuery({
     String? cursor,
     int limit = 20,
   }) : cursor = _normalizeGeneratedOptionalText(cursor),
        limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
   }
 
   final String? cursor;
@@ -560,6 +579,9 @@ final class ContentCommentPageQuery {
 }
 
 final class ContentDiscoveryFeedQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 20;
+
   ContentDiscoveryFeedQuery({
     String? identity,
     String? type,
@@ -631,13 +653,23 @@ final class ContentDiscoveryFeedQuery {
 }
 
 final class ContentFootprintQuery {
-  const ContentFootprintQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ContentFootprintQuery({
     String? type,
     String? cursor,
     int limit = 20,
   }) : type = type,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? type;
   final String? cursor;
@@ -660,11 +692,21 @@ final class ContentFootprintQuery {
 }
 
 final class ContentMyReportsQuery {
-  const ContentMyReportsQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ContentMyReportsQuery({
     String? cursor,
     int limit = 20,
   }) : cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? cursor;
   final int limit;
@@ -703,6 +745,9 @@ final class ContentPostDetailQuery {
 }
 
 final class ContentProfileInteractionPageQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
   ContentProfileInteractionPageQuery({
     required String personaId,
     required InteractionActivityType type,
@@ -714,6 +759,12 @@ final class ContentProfileInteractionPageQuery {
        limit = limit {
     if (this.personaId.isEmpty) {
       throw ArgumentError.value(this.personaId, "personaId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
     }
   }
 
@@ -884,7 +935,7 @@ final class CreateContentReportCommand {
     _generatedRequestRejectUnknownFields(map, const <String>{"targetId", "targetType", "reason", "description"}, path);
     return CreateContentReportCommand(
       targetId: _generatedRequestString(map["targetId"], '$path.targetId'),
-      targetType: switch (map["targetType"]) { "post" => ReportTargetType.post, "comment" => ReportTargetType.comment, "user" => ReportTargetType.user, "circle" => ReportTargetType.circle, "message" => ReportTargetType.message, _ => throw FormatException('$path.targetType' + ' has an invalid enum value'), },
+      targetType: switch (map["targetType"]) { "post" => ReportTargetType.post, "comment" => ReportTargetType.comment, "user" => ReportTargetType.user, "circle" => ReportTargetType.circle, "gathering" => ReportTargetType.gathering, "message" => ReportTargetType.message, _ => throw FormatException('$path.targetType' + ' has an invalid enum value'), },
       reason: switch (map["reason"]) { "spam" => ReportReason.spam, "harassment" => ReportReason.harassment, "violence" => ReportReason.violence, "adult" => ReportReason.adult, "copyright" => ReportReason.copyright, "other" => ReportReason.other, _ => throw FormatException('$path.reason' + ' has an invalid enum value'), },
       description: map["description"] == null ? null : _generatedRequestString(map["description"], '$path.description'),
     );
@@ -1008,11 +1059,21 @@ final class GetAppConfigQuery {
 }
 
 final class GetAuthorImpactQuery {
-  const GetAuthorImpactQuery({
+  static const int defaultLimit = 12;
+  static const int maximumLimit = 50;
+
+  GetAuthorImpactQuery({
     required String personaId,
     int limit = 12,
   }) : personaId = personaId,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
 
   final String personaId;
   final int limit;
@@ -1199,7 +1260,10 @@ final class LikeContentPostCommand {
 }
 
 final class ListAuthorImpactEvidenceQuery {
-  const ListAuthorImpactEvidenceQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
+  ListAuthorImpactEvidenceQuery({
     required String personaId,
     required String impactId,
     String? evidenceSnapshotId,
@@ -1209,7 +1273,14 @@ final class ListAuthorImpactEvidenceQuery {
        impactId = impactId,
        evidenceSnapshotId = evidenceSnapshotId,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
 
   final String personaId;
   final String impactId;
@@ -1238,6 +1309,9 @@ final class ListAuthorImpactEvidenceQuery {
 }
 
 final class ListContentCommentRepliesQuery {
+  static const int defaultLimit = 10;
+  static const int maximumLimit = 100;
+
   ListContentCommentRepliesQuery({
     required String postId,
     required String commentId,
@@ -1252,6 +1326,12 @@ final class ListContentCommentRepliesQuery {
     }
     if (this.commentId.isEmpty) {
       throw ArgumentError.value(this.commentId, "commentId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -1279,6 +1359,9 @@ final class ListContentCommentRepliesQuery {
 }
 
 final class ListContentCommentsQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   ListContentCommentsQuery({
     required String postId,
     String? cursor,
@@ -1290,6 +1373,12 @@ final class ListContentCommentsQuery {
        sort = sort {
     if (this.postId.isEmpty) {
       throw ArgumentError.value(this.postId, "postId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -1317,7 +1406,10 @@ final class ListContentCommentsQuery {
 }
 
 final class ListMyIntersectionsQuery {
-  const ListMyIntersectionsQuery({
+  static const int defaultLimit = 50;
+  static const int maximumLimit = 100;
+
+  ListMyIntersectionsQuery({
     String? dimension,
     String? filter,
     String? sourceRef,
@@ -1329,7 +1421,14 @@ final class ListMyIntersectionsQuery {
        sourceRef = sourceRef,
        timeBucket = timeBucket,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? dimension;
   final String? filter;

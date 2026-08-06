@@ -263,7 +263,7 @@ fi
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
    || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
   RUNTIME_STACKCTL_PYTHON="$(
-    bash "$APP_DIR/scripts/ios/resolve_stackctl_python.sh"
+    bash "$APP_DIR/scripts/ios/build_resolve_stackctl_python.sh"
   )" || {
     echo "[run] GATE_BLOCK: a compatible Python is required for device system trust." >&2
     exit 2

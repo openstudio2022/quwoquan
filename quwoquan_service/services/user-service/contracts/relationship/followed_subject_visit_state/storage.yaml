@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   followed_subject_visit_states:
+    publication_role: not_published
     entity: FollowedSubjectVisitState
     indexes:
     - name: uq_visit_identity
@@ -13,4 +14,14 @@ collections:
       keys:
         personaId: 1
         updatedAt: -1
+  followed_subject_visit_outbox:
+    publication_role: transactional_outbox
+    entity: FollowedSubjectVisitState
+    description: FollowedSubjectVisited 事件的事务性发件箱；事件行与访问态在同一个 Mongo 事务内提交，relay 以 leasedUntil 租约认领后至少一次投递，eventId 由 personaId/subjectType/subjectId/visitedAt 派生保证重放幂等。
+    indexes:
+    - name: idx_visit_outbox_pending
+      keys:
+        publishedAt: 1
+        leasedUntil: 1
+        occurredAt: 1
 role: authoritative

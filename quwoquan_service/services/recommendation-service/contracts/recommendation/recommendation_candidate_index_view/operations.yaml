@@ -1,14 +1,85 @@
 description: RecommendationCandidateIndexView 仅通过对象 Reader 供排序管线读取。
 api_routes: []
-runtime_entrypoints:
-- name: ProjectRecommendationCandidateIndex
-  kind: projector
-  phase: event_projection
-  source_events: [content.PostPublished, content.PostUpdated, content.PostSettingsUpdated, content.PostPromotedToWork, content.PostDeleted, content.PostPrivacyRedacted, content.PostPurged, ops.PremiumPoolEntryUpserted, ops.PremiumPoolEntryRolledBack, ops.PremiumPoolEntryTakedownEjected]
-  checkpoint: per_source_partition_sequence
-  rebuild: recreate_candidate_indexes_then_replay_all_source_events
-  tombstone: remove_candidate_and_auxiliary_indexes_keep_checkpoint
-  idempotency: aggregate_version
-  application: {kind: command, facet: RecommendationCandidateIndexViewProjector, method: apply, object_owner: RecommendationCandidateIndexView}
 consumers:
 - {name: recommendation-ranking, capabilities: [list_candidates, list_premium_candidates, list_entity_tag_candidates]}
+readiness_cases:
+- case_id: project-candidate-index-local
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_candidate_index_view/test_post_lifecycle_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-candidate-index-api
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_candidate_index_view/test_mongo_candidate_projection__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-candidate-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_candidate_index_view/test_gathering_lifecycle_consumer__projection__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-candidate-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_candidate_index_view/test_mongo_candidate_projection__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-candidate-premium-pool-local
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_candidate_index_view/test_premium_pool_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-candidate-premium-pool-api
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_candidate_index_view/test_mongo_candidate_projection__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-candidate-persona-relationship-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_candidate_index_view/test_persona_relationship_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-candidate-persona-relationship-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_candidate_index_view/test_mongo_candidate_projection__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-candidate-account-restriction-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_candidate_index_view/test_user_account_restriction_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-candidate-account-restriction-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_candidate_index_view}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_candidate_index_view/test_mongo_candidate_projection__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

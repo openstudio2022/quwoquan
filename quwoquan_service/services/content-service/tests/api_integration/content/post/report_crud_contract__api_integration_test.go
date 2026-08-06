@@ -71,7 +71,7 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	if report.Status != reportmodel.StatusPending {
 		t.Fatalf("expected pending, got %s", report.Status)
 	}
-	assertReportOutboxCount(t, suite.PG, "content.report.created", 1)
+	assertReportOutboxCount(t, suite.PG, "content.report.ReportCreated", 1)
 
 	dispatched := testinfra.NewEventSpy()
 	relay := reportapp.NewOutboxRelay(
@@ -85,7 +85,7 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	} else if count != 1 {
 		t.Fatalf("dispatched Report events=%d want=1", count)
 	}
-	events := dispatched.EventsOfType("content.report.created")
+	events := dispatched.EventsOfType("content.report.ReportCreated")
 	if len(events) != 1 || events[0].EventID == "" || events[0].AggregateID != reportID {
 		t.Fatalf("stable Report fact not dispatched: %+v", events)
 	}
@@ -98,8 +98,8 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	}
 	if count, err := relay.Drain(context.Background(), 100); err != nil {
 		t.Fatalf("replay Report outbox: %v", err)
-	} else if count != 0 || len(dispatched.EventsOfType("content.report.created")) != 1 {
-		t.Fatalf("Report checkpoint replay duplicated delivery: count=%d events=%d", count, len(dispatched.EventsOfType("content.report.created")))
+	} else if count != 0 || len(dispatched.EventsOfType("content.report.ReportCreated")) != 1 {
+		t.Fatalf("Report checkpoint replay duplicated delivery: count=%d events=%d", count, len(dispatched.EventsOfType("content.report.ReportCreated")))
 	}
 }
 
@@ -132,7 +132,7 @@ INSERT INTO reports (
 	if _, err := suite.PG.Exec(`
 INSERT INTO report_outbox (
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
-) VALUES ($1, $2, 1, 'content.report.created', $3::jsonb, $4)`,
+) VALUES ($1, $2, 1, 'content.report.ReportCreated', $3::jsonb, $4)`,
 		"invalid-report-event-1",
 		"invalid-report-1",
 		`{"reportId":"invalid-report-1","reporterId":"invalid-persona"}`,
@@ -344,7 +344,7 @@ func TestCreateReportIdempotencyReplaysWithoutDuplicatePersistence(t *testing.T)
 	}
 	if err := suite.PG.QueryRow(
 		`SELECT COUNT(*) FROM report_outbox WHERE event_type = $1`,
-		"content.report.created",
+		"content.report.ReportCreated",
 	).Scan(&outboxCount); err != nil {
 		t.Fatalf("count replayed report outbox: %v", err)
 	}

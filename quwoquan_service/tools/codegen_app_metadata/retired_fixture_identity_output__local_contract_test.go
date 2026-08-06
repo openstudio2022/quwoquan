@@ -9,6 +9,24 @@ import (
 func TestRemoveUntrackedGeneratedOutputsRemovesRetiredSingleTrackOutputs(t *testing.T) {
 	appDir := t.TempDir()
 	beginGeneratedManifestForTest(t, appDir, "canonical-graph")
+	canonicalAssistantRun := filepath.Join(
+		appDir,
+		"packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_run.g.dart",
+	)
+	canonicalAssistantRunPayload := []byte(
+		"// Code generated from the canonical Assistant run schema. DO NOT EDIT.\n",
+	)
+	if err := os.MkdirAll(filepath.Dir(canonicalAssistantRun), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		canonicalAssistantRun,
+		canonicalAssistantRunPayload,
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	recordGeneratedFile(canonicalAssistantRun, canonicalAssistantRunPayload)
 	retired := []string{
 		"lib/cloud/user/generated/prefab_user_metadata.g.dart",
 		"lib/cloud/runtime/generated/circle/circle_detail_wire_dto.dart",
@@ -57,6 +75,12 @@ func TestRemoveUntrackedGeneratedOutputsRemovesRetiredSingleTrackOutputs(t *test
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("retired output %s must be removed, stat error: %v", relativePath, err)
 		}
+	}
+	if _, err := os.Stat(canonicalAssistantRun); err != nil {
+		t.Fatalf(
+			"canonical assistant_run.g.dart was removed with retired assistant_run_envelope.g.dart: %v",
+			err,
+		)
 	}
 }
 

@@ -10,7 +10,7 @@ class StartupWelcomeObservabilityContractTest(unittest.TestCase):
     def test_event_payload_uses_a_versionless_petal_bloom_motion_spec(self) -> None:
         timeline = (
             REPO_ROOT
-            / "quwoquan_app/lib/ui/welcome/welcome_motion_timeline.dart"
+            / "quwoquan_app/lib/runtime/shell/welcome/welcome_motion_timeline.dart"
         ).read_text(encoding="utf-8")
         self.assertIn("'motionSpec': motionSpec", timeline)
         self.assertIn("'petal_bloom'", timeline)
@@ -87,9 +87,13 @@ class StartupWelcomeObservabilityContractTest(unittest.TestCase):
             REPO_ROOT
             / "quwoquan_service/services/product-ops-service/cmd/api/startup_telemetry_metrics.go"
         ).read_text(encoding="utf-8")
+        metric_owner = (
+            REPO_ROOT
+            / "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/observability/startup_telemetry_metrics.go"
+        ).read_text(encoding="utf-8")
         handler = (
             REPO_ROOT
-            / "quwoquan_service/services/product-ops-service/cmd/api/startup_telemetry_handler.go"
+            / "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http/startup_telemetry.go"
         ).read_text(encoding="utf-8")
         for token in (
             "ops_startup_phase_total",
@@ -97,7 +101,7 @@ class StartupWelcomeObservabilityContractTest(unittest.TestCase):
             "recordStartupTelemetryMetrics",
             "ReportStartupDiagnostics",
         ):
-            self.assertIn(token, metrics + handler)
+            self.assertIn(token, metrics + metric_owner + handler)
 
 
 if __name__ == "__main__":

@@ -23,15 +23,16 @@ policy:
       sampleRate: 0.1
       minimumSampleCount: 10
       smallBatchPolicy: all
-    # Cursor Auto 不是 fallback，只能由新 execution 显式选择，并在独立
-    # preflight/soak 通过后使用；与当前 Codex 绑定之间的切换必须 retryOf。
+    # Cursor Auto 不是 fallback；新 execution 可在独立 preflight/soak 通过后
+    # 显式首选。已有 execution 的 frozen manifest 已禁止原地换 Provider/model，
+    # 发生变更时仍必须由通用 execution lineage 创建 retryOf。
     explicitSelections:
       - selectionId: cursor_auto
         provider: cursor_sdk
         model: auto
         modelParameters: []
         runtime: local
-        requiresNewRetryOf: true
+        requiresNewRetryOf: false
     # Opaque scope IDs never contain credentials. The provider/account/host
     # tuple owns one shared token bucket and per-lane concurrency ceiling.
     capacity:

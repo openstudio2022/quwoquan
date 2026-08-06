@@ -19,10 +19,6 @@ relationships:
   reference_fields:
   - environment
   - service
-capabilities:
-- queryable
-- auditable
-- idempotent_commands
 taggable: false
 vector_enabled: false
 business_rules:

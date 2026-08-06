@@ -13,8 +13,8 @@ import (
 	"quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
 	integrationclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/integration"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 type fixedServiceCredential string

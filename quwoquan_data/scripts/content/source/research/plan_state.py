@@ -383,13 +383,26 @@ def _plan_has_payload(plan: dict[str, Any], lane: str) -> bool:
         return bool(payload.get("collections") or plan.get("collections"))
     return bool(payload.get("sources") or plan.get("sources"))
 
-def _write_lane(path: Path, lane: str, payload_update: dict[str, Any], *, force: bool) -> bool:
+def _write_lane(
+    path: Path,
+    lane: str,
+    payload_update: dict[str, Any],
+    *,
+    force: bool,
+    top_level_update: Mapping[str, Any] | None = None,
+) -> bool:
     plan = read_json(path) if path.is_file() else {}
     if not force and _plan_has_payload(plan, lane):
         return False
     payload = dict(plan.get("payload") or {})
+    payload.pop("acquisitionReceiptRefs", None)
     payload.update(payload_update)
+    if "acquisitionReceiptRefs" in payload:
+        raise ValueError(
+            f"{lane} acquisitionReceiptRefs must use the canonical top-level field"
+        )
     plan["payload"] = payload
+    plan.update(dict(top_level_update or {}))
     execution_id = str(plan.get("executionId") or "")
     entity_id = str(plan.get("ref") or payload.get("entityId") or "").strip()
     if execution_id and entity_id:

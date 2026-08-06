@@ -25,9 +25,6 @@ local_identity_reasons:
   sourceDecisionId: >-
     同一 AccountEnforcementCase 聚合边界内的不可变 suspension decision 引用；
     不存在可被独立修改的第二聚合或跨对象 Store
-capabilities:
-- commandable
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

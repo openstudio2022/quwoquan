@@ -24,20 +24,20 @@ type DispatcherConfig struct {
 	BatchSize      int
 }
 
-type Dispatcher struct {
+type DeliveryRelay struct {
 	store   ports.DeliveryStore
-	target  ports.EnforcementTarget
+	target  ports.EnforcementPublisher
 	metrics ports.Metrics
 	config  DispatcherConfig
 	now     func() time.Time
 }
 
-func NewDispatcher(
+func NewDeliveryRelay(
 	store ports.DeliveryStore,
-	target ports.EnforcementTarget,
+	target ports.EnforcementPublisher,
 	metrics ports.Metrics,
 	config DispatcherConfig,
-) (*Dispatcher, error) {
+) (*DeliveryRelay, error) {
 	config.Owner = strings.TrimSpace(config.Owner)
 	if store == nil || target == nil || config.Owner == "" ||
 		config.PollInterval <= 0 || config.LeaseDuration <= 0 ||
@@ -50,10 +50,10 @@ func NewDispatcher(
 	if metrics == nil {
 		metrics = noopMetrics{}
 	}
-	return &Dispatcher{store: store, target: target, metrics: metrics, config: config, now: time.Now}, nil
+	return &DeliveryRelay{store: store, target: target, metrics: metrics, config: config, now: time.Now}, nil
 }
 
-func (dispatcher *Dispatcher) Run(ctx context.Context) {
+func (dispatcher *DeliveryRelay) Run(ctx context.Context) {
 	ticker := time.NewTicker(dispatcher.config.PollInterval)
 	defer ticker.Stop()
 	for {
@@ -68,9 +68,9 @@ func (dispatcher *Dispatcher) Run(ctx context.Context) {
 	}
 }
 
-func (dispatcher *Dispatcher) DispatchOnce(ctx context.Context) (int, error) {
+func (dispatcher *DeliveryRelay) DispatchOnce(ctx context.Context) (int, error) {
 	now := dispatcher.now().UTC()
-	jobs, err := dispatcher.store.ClaimDue(
+	jobs, err := dispatcher.store.ClaimPendingOutbox(
 		ctx,
 		dispatcher.config.Owner,
 		now,
@@ -84,12 +84,12 @@ func (dispatcher *Dispatcher) DispatchOnce(ctx context.Context) (int, error) {
 	for _, job := range jobs {
 		started := time.Now()
 		requestContext, cancel := context.WithTimeout(ctx, dispatcher.config.RequestTimeout)
-		receipt, applyErr := dispatcher.target.Apply(requestContext, job.Decision)
+		receipt, applyErr := dispatcher.target.Publish(requestContext, job.Decision)
 		cancel()
 		if applyErr == nil {
 			receipt.DecisionID = job.Decision.ID
 			receipt.DeliveredAt = dispatcher.now().UTC()
-			if err := dispatcher.store.MarkDelivered(ctx, dispatcher.config.Owner, receipt); err != nil {
+			if err := dispatcher.store.MarkDispatched(ctx, dispatcher.config.Owner, receipt); err != nil {
 				dispatcher.metrics.ObserveDelivery(string(job.Decision.Action), "receipt_failed", time.Since(started))
 				return delivered, err
 			}
@@ -131,7 +131,7 @@ func (dispatcher *Dispatcher) DispatchOnce(ctx context.Context) (int, error) {
 	return delivered, nil
 }
 
-func (dispatcher *Dispatcher) CheckReadiness(ctx context.Context) error {
+func (dispatcher *DeliveryRelay) CheckReadiness(ctx context.Context) error {
 	backlog, err := dispatcher.store.Backlog(ctx, dispatcher.now().UTC())
 	if err != nil {
 		return fmt.Errorf("account enforcement backlog unavailable: %w", err)
@@ -147,20 +147,20 @@ func (dispatcher *Dispatcher) CheckReadiness(ctx context.Context) error {
 	return nil
 }
 
-func (dispatcher *Dispatcher) observeBacklog(ctx context.Context) {
+func (dispatcher *DeliveryRelay) observeBacklog(ctx context.Context) {
 	backlog, err := dispatcher.store.Backlog(ctx, dispatcher.now().UTC())
 	if err == nil {
 		dispatcher.publishBacklog(backlog)
 	}
 }
 
-func (dispatcher *Dispatcher) publishBacklog(backlog ports.DeliveryBacklog) {
+func (dispatcher *DeliveryRelay) publishBacklog(backlog ports.DeliveryBacklog) {
 	dispatcher.metrics.SetDeliveryBacklog(string(model.DeliveryStatusPending), float64(backlog.Pending))
 	dispatcher.metrics.SetDeliveryBacklog(string(model.DeliveryStatusRetrying), float64(backlog.Retrying))
 	dispatcher.metrics.SetDeliveryBacklog(string(model.DeliveryStatusDeadLetter), float64(backlog.DeadLetter))
 }
 
-func (dispatcher *Dispatcher) backoff(attempts int) time.Duration {
+func (dispatcher *DeliveryRelay) backoff(attempts int) time.Duration {
 	backoff := dispatcher.config.InitialBackoff
 	for current := 0; current < attempts && backoff < dispatcher.config.MaxBackoff; current++ {
 		backoff *= 2

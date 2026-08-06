@@ -1,0 +1,60 @@
+{
+  "generator": "tools/codegen_app_metadata",
+  "responsibility": "shell-navigation-metadata-only",
+  "metadataSha256": "1185db4e1b41e89b0b7b554371ac91e5e316ddeface479c9fa2ca592da950ab0",
+  "inputs": [
+    {
+      "path": "_shared/app_routes.yaml",
+      "sha256": "c3bff6cfd16a45758d3156029b6b0c2b95fef65e293610b8a657c29c025381de"
+    },
+    {
+      "path": "_shared/app_pages.yaml",
+      "sha256": "40d6b8b8e64695e6eae452f2c14072178249698e4de9961578e2a71be5da4e88"
+    },
+    {
+      "path": "_shared/ui_surfaces.yaml",
+      "sha256": "9a0925fd0d9c728e7f0ef3ed3d7009f2660da617af1a9e3157b6eb56d0cc074e"
+    },
+    {
+      "path": "_shared/link_templates.yaml",
+      "sha256": "4dc2d7a9fe3a09c001a3a3a631f7d5be7e8ec0d891a570cf7ccee8b7c6d04c34"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "lib/runtime/shell/navigation/generated/app_pages.g.dart",
+      "owner": "app-shell-navigation-emitter",
+      "generator": "tools/codegen_app_metadata",
+      "sha256": "4af3047b26f97cea8f1b093f6622cfe0677f22b3a45f929acb197a183ae4607f",
+      "bytes": 20451
+    },
+    {
+      "path": "lib/runtime/shell/navigation/generated/app_route_paths.g.dart",
+      "owner": "app-shell-navigation-emitter",
+      "generator": "tools/codegen_app_metadata",
+      "sha256": "b2c87f56042a3f0d9efd09c19c0cd2c95df7f5e88a071990d4c801b0ac4551e2",
+      "bytes": 18221
+    },
+    {
+      "path": "lib/runtime/shell/navigation/generated/app_ui_surfaces.g.dart",
+      "owner": "app-shell-navigation-emitter",
+      "generator": "tools/codegen_app_metadata",
+      "sha256": "4ee67565803680455c254a2ccdb16ed5e00588005716b834bfb88a2c42cab884",
+      "bytes": 41753
+    },
+    {
+      "path": "lib/runtime/shell/navigation/generated/link_templates.g.dart",
+      "owner": "app-shell-navigation-emitter",
+      "generator": "tools/codegen_app_metadata",
+      "sha256": "c5938c14532b0d23a2c615167291fea31000391ac94f4df7295c424e24d0a1a1",
+      "bytes": 6205
+    },
+    {
+      "path": "lib/runtime/shell/navigation/generated/page_access_internal_routes.g.dart",
+      "owner": "app-shell-navigation-emitter",
+      "generator": "tools/codegen_app_metadata",
+      "sha256": "561f5dcaac1a902f28321187f7a2cd7d6dd5687523868abe0878f5b785a4a131",
+      "bytes": 2582
+    }
+  ]
+}

@@ -250,6 +250,34 @@ def test_ranked_window_freezes_bounded_unique_object_cards() -> None:
         ),
     )
     assert window.object_cards == (card,)
+    gathering_card = RecommendationObjectCard(
+        object_kind="gathering",
+        object_id="gathering-001",
+        title="周末山野徒步",
+        subtitle="公开摘要",
+        cover_url=None,
+        tag_refs=("徒步",),
+        reason_key="public_gathering",
+        recall_path="gathering_candidate_index",
+    )
+    gathering_window = RankedRecommendationWindow.create(
+        window_id="window-gathering-card",
+        subject_id="persona-001",
+        scenario="content_feed",
+        request_digest="request-gathering-card",
+        ranking=RankingResult(
+            model_bucket=ranking.model_bucket,
+            model_channel=ranking.model_channel,
+            model_release_id=ranking.model_release_id,
+            policy_digest=ranking.policy_digest,
+            feature_snapshot_at=ranking.feature_snapshot_at,
+            ranking_snapshot_digest=ranking.ranking_snapshot_digest,
+            user_feature_snapshot=ranking.user_feature_snapshot,
+            candidates=ranking.candidates,
+            object_cards=(gathering_card,),
+        ),
+    )
+    assert gathering_window.object_cards == (gathering_card,)
 
     for invalid_cards in (
         (card, card),

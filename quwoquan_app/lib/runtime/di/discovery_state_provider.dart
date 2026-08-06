@@ -1,0 +1,228 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/post_models.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/story_models.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_snapshot.dart';
+
+/// runtime/di 发现页 UI 不可变快照；所有集合更新须用新实例赋值以保证 `ref.watch` 能感知变化。
+class DiscoveryUiState {
+  const DiscoveryUiState({
+    this.activeTab = 'following',
+    this.photographyCategory = 'all',
+    this.feedData = const <String, List<Post>>{},
+    this.isLoading = const <String, bool>{},
+    this.errorMessages = const <String, String?>{},
+    this.likedPosts = const <String>{},
+    this.postLikesCount = const <String, int>{},
+    this.postSharesCount = const <String, int>{},
+    this.stories = const <Story>[],
+    this.isStoriesLoading = false,
+    this.currentUser,
+    this.userProfileData,
+    this.isUserProfileLoading = false,
+  });
+
+  final String activeTab;
+  final String photographyCategory;
+  final Map<String, List<Post>> feedData;
+  final Map<String, bool> isLoading;
+  final Map<String, String?> errorMessages;
+  final Set<String> likedPosts;
+  final Map<String, int> postLikesCount;
+  final Map<String, int> postSharesCount;
+  final List<Story> stories;
+  final bool isStoriesLoading;
+  final String? currentUser;
+  final PersonaProfileSnapshot? userProfileData;
+  final bool isUserProfileLoading;
+
+  /// 优先返回本地维护的展示数；未操作过时返回 0，由调用方用帖子原始数兜底
+  int getPostLikesCount(String postId) => postLikesCount[postId] ?? 0;
+
+  int getPostSharesCount(String postId) => postSharesCount[postId] ?? 0;
+
+  DiscoveryUiState copyWith({
+    String? activeTab,
+    String? photographyCategory,
+    Map<String, List<Post>>? feedData,
+    Map<String, bool>? isLoading,
+    Map<String, String?>? errorMessages,
+    Set<String>? likedPosts,
+    Map<String, int>? postLikesCount,
+    Map<String, int>? postSharesCount,
+    List<Story>? stories,
+    bool? isStoriesLoading,
+    String? currentUser,
+    PersonaProfileSnapshot? userProfileData,
+    bool? isUserProfileLoading,
+    bool clearCurrentUser = false,
+  }) {
+    return DiscoveryUiState(
+      activeTab: activeTab ?? this.activeTab,
+      photographyCategory: photographyCategory ?? this.photographyCategory,
+      feedData: feedData ?? this.feedData,
+      isLoading: isLoading ?? this.isLoading,
+      errorMessages: errorMessages ?? this.errorMessages,
+      likedPosts: likedPosts ?? this.likedPosts,
+      postLikesCount: postLikesCount ?? this.postLikesCount,
+      postSharesCount: postSharesCount ?? this.postSharesCount,
+      stories: stories ?? this.stories,
+      isStoriesLoading: isStoriesLoading ?? this.isStoriesLoading,
+      currentUser: clearCurrentUser ? null : (currentUser ?? this.currentUser),
+      userProfileData: userProfileData ?? this.userProfileData,
+      isUserProfileLoading: isUserProfileLoading ?? this.isUserProfileLoading,
+    );
+  }
+}
+
+class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
+  @override
+  DiscoveryUiState build() => const DiscoveryUiState();
+
+  void setActiveTab(String tab) {
+    state = state.copyWith(activeTab: tab);
+  }
+
+  void setPhotographyCategory(String category) {
+    state = state.copyWith(photographyCategory: category);
+  }
+
+  void setFeedData(String tab, List<Post> posts) {
+    state = state.copyWith(
+      feedData: Map<String, List<Post>>.from(state.feedData)..[tab] = posts,
+    );
+  }
+
+  void setLoading(String tab, bool loading) {
+    state = state.copyWith(
+      isLoading: Map<String, bool>.from(state.isLoading)..[tab] = loading,
+    );
+  }
+
+  void setError(String tab, String? error) {
+    state = state.copyWith(
+      errorMessages: Map<String, String?>.from(state.errorMessages)
+        ..[tab] = error,
+    );
+  }
+
+  void clearError(String tab) {
+    final next = Map<String, String?>.from(state.errorMessages)..remove(tab);
+    state = state.copyWith(errorMessages: next);
+  }
+
+  /// [baseLikesCount] 帖子原始点赞数，首次点赞时用于与本地状态合并，保证详情与列表一致
+  void toggleLike(String postId, {int? baseLikesCount}) {
+    if (state.likedPosts.contains(postId)) {
+      final liked = Set<String>.from(state.likedPosts)..remove(postId);
+      final currentCount = state.postLikesCount[postId] ?? baseLikesCount ?? 0;
+      final counts = Map<String, int>.from(state.postLikesCount)
+        ..[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
+      state = state.copyWith(likedPosts: liked, postLikesCount: counts);
+    } else {
+      final liked = {...state.likedPosts, postId};
+      final currentCount = state.postLikesCount[postId] ?? baseLikesCount ?? 0;
+      final counts = Map<String, int>.from(state.postLikesCount)
+        ..[postId] = currentCount + 1;
+      state = state.copyWith(likedPosts: liked, postLikesCount: counts);
+    }
+  }
+
+  void setLikeState(String postId, bool isLiked, {int? likeCount}) {
+    final liked = Set<String>.from(state.likedPosts);
+    final counts = Map<String, int>.from(state.postLikesCount);
+    if (isLiked) {
+      liked.add(postId);
+    } else {
+      liked.remove(postId);
+    }
+    if (likeCount != null) {
+      counts[postId] = likeCount;
+    }
+    state = state.copyWith(likedPosts: liked, postLikesCount: counts);
+  }
+
+  void incrementShares(String postId) {
+    final currentCount = state.postSharesCount[postId] ?? 0;
+    final counts = Map<String, int>.from(state.postSharesCount)
+      ..[postId] = currentCount + 1;
+    state = state.copyWith(postSharesCount: counts);
+  }
+
+  void setShareCount(String postId, int shareCount) {
+    final counts = Map<String, int>.from(state.postSharesCount)
+      ..[postId] = shareCount;
+    state = state.copyWith(postSharesCount: counts);
+  }
+
+  void applyMediaViewerResult(MediaViewerResult result) {
+    final scopePostIds = result.effectiveScopePostIds;
+    final nextLiked = Set<String>.from(state.likedPosts);
+    final nextLikeCounts = Map<String, int>.from(state.postLikesCount);
+    final nextShareCounts = Map<String, int>.from(state.postSharesCount);
+    for (final postId in scopePostIds) {
+      if (result.likedPosts.contains(postId)) {
+        nextLiked.add(postId);
+      } else {
+        nextLiked.remove(postId);
+      }
+      final likeCount = result.postLikesCount[postId];
+      if (likeCount != null) {
+        nextLikeCounts[postId] = likeCount;
+      }
+      final shareCount = result.postSharesCount[postId];
+      if (shareCount != null) {
+        nextShareCounts[postId] = shareCount;
+      }
+    }
+    state = state.copyWith(
+      likedPosts: nextLiked,
+      postLikesCount: nextLikeCounts,
+      postSharesCount: nextShareCounts,
+    );
+  }
+
+  void setStories(List<Story> stories) {
+    state = state.copyWith(stories: stories);
+  }
+
+  void setStoriesLoading(bool loading) {
+    state = state.copyWith(isStoriesLoading: loading);
+  }
+
+  void setCurrentUser(String? username) {
+    state = state.copyWith(
+      currentUser: username,
+      clearCurrentUser: username == null,
+    );
+  }
+
+  void setUserProfileData(PersonaProfileSnapshot? user) {
+    state = state.copyWith(userProfileData: user);
+  }
+
+  void setUserProfileLoading(bool loading) {
+    state = state.copyWith(isUserProfileLoading: loading);
+  }
+
+  void reset() {
+    state = const DiscoveryUiState();
+  }
+}
+
+final discoveryStateProvider =
+    NotifierProvider<DiscoveryNotifier, DiscoveryUiState>(
+      DiscoveryNotifier.new,
+    );
+
+final activeTabProvider = Provider<String>((ref) {
+  return ref.watch(discoveryStateProvider).activeTab;
+});
+
+final feedDataProvider = Provider<Map<String, List<Post>>>((ref) {
+  return ref.watch(discoveryStateProvider).feedData;
+});
+
+final likedPostsProvider = Provider<Set<String>>((ref) {
+  return ref.watch(discoveryStateProvider).likedPosts;
+});

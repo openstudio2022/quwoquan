@@ -7,11 +7,13 @@ import signal
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from content.execution import (
     campaign_controller,
+    campaign_distributed,
     campaign_orchestrator,
     campaign_process,
     campaign_submission,
@@ -20,6 +22,7 @@ from content.execution.campaign_external_input_runtime import (
     execution_external_input_envelope_path,
     load_execution_external_input_envelope,
 )
+from content.execution.campaign_lane_claim import read_lane_claim
 from content.execution.campaign_runtime import (
     CampaignFenceError,
     CampaignLeaseTakeoverError,
@@ -221,33 +224,53 @@ if phase == "publish":
     publish_path.parent.mkdir(parents=True, exist_ok=True)
     publish_path.write_bytes(publish_bytes)
     deadline = time.monotonic() + 1.0
+    plan = json.loads((campaign / "campaign_plan.json").read_text(encoding="utf-8"))
     while True:
-        snapshot = json.loads(
-            (campaign / "runtime/snapshot.json").read_text(encoding="utf-8")
-        )
-        checkpoint = json.loads(
-            (campaign / "runtime/lanes" / f"{carrier}.json").read_text(
-                encoding="utf-8"
+        if plan.get("executionMode") == "distributed":
+            claim = json.loads(
+                (campaign / "claims" / f"{carrier}.json").read_text(
+                    encoding="utf-8"
+                )
             )
-        )
-        runtime_identity = (
-            snapshot["runId"],
-            int(snapshot["generation"]),
-            snapshot["fencingToken"],
-        )
-        if (
-            snapshot.get("status") == "active"
-            and snapshot.get("phase") in {"review", "publish"}
-            and checkpoint.get("executionId") == execution_id
-            and checkpoint.get("phase") == "run"
-            and checkpoint.get("status") == "running"
-            and (
-                checkpoint.get("runId"),
-                int(checkpoint.get("generation") or 0),
-                checkpoint.get("fencingToken"),
+            runtime_identity = (
+                claim["campaignRunId"],
+                int(claim["campaignGeneration"]),
+                claim["campaignFencingToken"],
             )
-            == runtime_identity
-        ):
+            ready = (
+                claim.get("planDigest") == plan.get("planDigest")
+                and claim.get("executionId") == execution_id
+                and claim.get("phase") == "run"
+                and claim.get("status") == "running"
+            )
+        else:
+            snapshot = json.loads(
+                (campaign / "runtime/snapshot.json").read_text(encoding="utf-8")
+            )
+            checkpoint = json.loads(
+                (campaign / "runtime/lanes" / f"{carrier}.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            runtime_identity = (
+                snapshot["runId"],
+                int(snapshot["generation"]),
+                snapshot["fencingToken"],
+            )
+            ready = (
+                snapshot.get("status") == "active"
+                and snapshot.get("phase") in {"review", "publish"}
+                and checkpoint.get("executionId") == execution_id
+                and checkpoint.get("phase") == "run"
+                and checkpoint.get("status") == "running"
+                and (
+                    checkpoint.get("runId"),
+                    int(checkpoint.get("generation") or 0),
+                    checkpoint.get("fencingToken"),
+                )
+                == runtime_identity
+            )
+        if ready:
             break
         if time.monotonic() >= deadline:
             raise SystemExit(33)
@@ -306,6 +329,11 @@ def _restore_capsule_permissions_for_pytest_cleanup(
         "resolve_campaign_observer_binary",
         lambda runtime, root_execution_id, plan_digest: binding,
     )
+    monkeypatch.setattr(
+        campaign_distributed,
+        "resolve_campaign_observer_binary",
+        lambda runtime, root_execution_id, plan_digest: binding,
+    )
     fleet_transport = ReliableTaskFleetTransport(
         target="test-data-execution-fleet",
         mongo_uri="mongodb://127.0.0.1:27117/quwoquan",
@@ -313,6 +341,17 @@ def _restore_capsule_permissions_for_pytest_cleanup(
     )
     monkeypatch.setattr(
         campaign_orchestrator,
+        "resolve_campaign_fleet_transport",
+        lambda runtime, root_execution_id, plan_digest: (
+            FrozenReliableTaskFleetBinding.create(
+                root_execution_id=root_execution_id,
+                plan_digest=plan_digest,
+                transport=fleet_transport,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        campaign_distributed,
         "resolve_campaign_fleet_transport",
         lambda runtime, root_execution_id, plan_digest: (
             FrozenReliableTaskFleetBinding.create(
@@ -371,6 +410,10 @@ def _create_repo(tmp_path: Path) -> Path:
     scripts.mkdir(parents=True)
     (scripts / "cli.py").write_text(FAKE_CLI, encoding="utf-8")
     (repo / "quwoquan_data/requirements.txt").write_text("", encoding="utf-8")
+    (repo / "quwoquan_data/requirements-cursor.txt").write_text(
+        "-r requirements.txt\ncursor-sdk==1.0.26\n",
+        encoding="utf-8",
+    )
     branch_policy = repo / "quwoquan_ops/policies/branch_policy.yaml"
     branch_policy.parent.mkdir(parents=True)
     branch_policy.write_text(
@@ -499,6 +542,7 @@ def _assert_capsule_reused_and_lane_roots_isolated(
     assert capsule.is_dir()
     assert (capsule / ".qwq_campaign_capsule.json").is_file()
     assert not (capsule / ".qwq_output").exists()
+    assert (capsule / "quwoquan_data/requirements-cursor.txt").is_file()
     assert (
         capsule / "quwoquan_ops/policies/branch_policy.yaml"
     ).is_file()
@@ -605,6 +649,9 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     assert report["status"] == "succeeded"
     assert report["phase"] == "completed"
     assert report["planDigest"].startswith("sha256:")
+    assert report["campaignRunId"]
+    assert report["campaignGeneration"] == 1
+    assert report["campaignFencingToken"].startswith("sha256:")
     assert report["gitBranch"] == _git(repo, "branch", "--show-current")
     review_events = [row for row in _events(event_log) if row["phase"] == "review"]
     publish_events = [row for row in _events(event_log) if row["phase"] == "publish"]
@@ -672,6 +719,89 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     assert runtime_events[0]["eventType"] == "campaign_started"
     assert runtime_events[-1]["eventType"] == "campaign_finished"
     _assert_capsule_reused_and_lane_roots_isolated(runtime, report)
+
+
+def test_four_copied_sessions_claim_independent_lanes_and_finalize(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    event_log = tmp_path / "distributed-events.ndjson"
+    monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+
+    frozen_report = campaign_distributed.freeze_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        runtime_paths=runtime,
+    )
+    frozen = read_json(frozen_report)
+    plan = read_json(
+        runtime.campaigns_root / ROOT_ID / "campaign_plan.json"
+    )
+    assert frozen["phase"] == "capsule"
+    assert plan["executionMode"] == "distributed"
+    assert plan["distributedRun"]["campaignRunId"]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [
+            pool.submit(
+                campaign_distributed.run_campaign_lane,
+                ROOT_ID,
+                carrier,
+                lane_timeout_seconds=5,
+                runtime_paths=runtime,
+            )
+            for carrier in CARRIERS
+        ]
+        for future in futures:
+            future.result()
+
+    report_path = campaign_distributed.finalize_campaign(
+        ROOT_ID,
+        runtime_paths=runtime,
+    )
+    report = read_json(report_path)
+    assert report["status"] == "succeeded"
+    assert report["phase"] == "completed"
+    assert report["campaignRunId"] == plan["distributedRun"]["campaignRunId"]
+    assert report["campaignGeneration"] == plan["distributedRun"][
+        "campaignGeneration"
+    ]
+    review_events = [
+        row for row in _events(event_log) if row["phase"] == "review"
+    ]
+    starts = {
+        row["carrier"]: row["at"] for row in review_events if row["kind"] == "start"
+    }
+    ends = {
+        row["carrier"]: row["at"] for row in review_events if row["kind"] == "end"
+    }
+    assert set(starts) == set(CARRIERS)
+    assert max(starts.values()) < min(ends.values())
+    capsule_refs: set[str] = set()
+    execution_roots: set[Path] = set()
+    for carrier in CARRIERS:
+        claim = read_lane_claim(runtime, ROOT_ID, carrier)
+        assert claim is not None
+        assert claim["status"] == "completed"
+        assert claim["executionId"] == plan["executionIds"][carrier]
+        assert claim["campaignRunId"] == plan["distributedRun"]["campaignRunId"]
+        assert claim["capsuleRef"] == frozen["lanes"][carrier][
+            "sourceCapsuleRef"
+        ]
+        capsule_refs.add(str(claim["capsuleRef"]))
+        execution_root = Path(str(claim["executionRoot"]))
+        assert execution_root.parent == runtime.output_root / "data/tasks"
+        execution_roots.add(execution_root)
+        assert report["lanes"][carrier]["finalizedCount"] == 1
+    assert len(capsule_refs) == 1
+    assert len(execution_roots) == len(CARRIERS)
+    capsule_path = runtime.output_root / next(iter(capsule_refs))
+    assert capsule_path.is_dir()
+    assert not capsule_path.stat().st_mode & 0o222
+    assert (runtime.campaigns_root / ROOT_ID / "copy_ready_receipt.json").is_file()
 
 
 def test_killed_controller_is_reconciled_and_old_generation_is_fenced(
@@ -1329,7 +1459,7 @@ def test_submission_collision_and_cross_lane_mismatch_fail_closed(
     assert report["phase"] == "freeze"
 
 
-def test_cursor_auto_submission_requires_retry_and_reaches_lane_argv(
+def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1354,18 +1484,20 @@ def test_cursor_auto_submission_requires_retry_and_reaches_lane_argv(
             repo_root=repo,
             root=runtime.campaigns_root,
         )
-    with pytest.raises(ValueError, match="cursor_auto requires.*retryOf"):
-        campaign_submission.write_submission(
-            root_execution_id=root_id,
-            execution_id=article_id,
-            request=_request("article"),
-            retry_of=None,
-            semantic_selection_id="cursor_auto",
-            semantic_preflight_receipt=preflight_path,
-            semantic_preflight_output_root=runtime.output_root,
-            repo_root=repo,
-            root=runtime.campaigns_root,
-        )
+    first_path = campaign_submission.write_submission(
+        root_execution_id=(
+            "20260728--travel-homepage-scale--china--scale-001"
+        ),
+        execution_id=_execution_id("article", sequence="001"),
+        request=_request("article"),
+        retry_of=None,
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_output_root=runtime.output_root,
+        repo_root=repo,
+        root=runtime.campaigns_root,
+    )
+    assert read_json(first_path)["retryOf"] is None
     path = campaign_submission.write_submission(
         root_execution_id=root_id,
         execution_id=article_id,

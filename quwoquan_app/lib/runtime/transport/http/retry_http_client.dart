@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/cloud/runtime/transport/cloud_retry_policy.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_retry_policy.dart';
 
 /// HTTP client wrapper with exponential backoff retry for transient failures.
 ///

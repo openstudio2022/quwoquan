@@ -56,7 +56,7 @@ class CommitGateFastPathTest(unittest.TestCase):
                 "python3",
                 str(COMMIT_SELECT),
                 "--changed-file",
-                "quwoquan_app/lib/chat/chat/chat_message/presentation/chat_page.dart",
+                "quwoquan_app/lib/service/chat_service/chat/chat_message/presentation/chat_page.dart",
                 "--flutter-cap",
                 "5",
             ],

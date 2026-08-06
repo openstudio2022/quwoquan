@@ -32,6 +32,28 @@ type DismissReportCommand struct {
 	ReviewerID string
 }
 
+type GrantGatheringSafetyTerminationCommand struct {
+	ReportID              string
+	ExpectedReportVersion int64
+	ActorPersonaID        string
+	ExpiresAt             time.Time
+	IdempotencyKey        string
+}
+
+type RevokeGatheringSafetyTerminationCommand struct {
+	ReportID       string
+	DecisionRef    string
+	IdempotencyKey string
+}
+
+type AuthorizeGatheringSafetyTerminationQuery struct {
+	ActorPersonaID string
+	GatheringID    string
+	Action         string
+	EvidenceRef    string
+	DecisionRef    string
+}
+
 type GetReportQuery struct {
 	ReportID string
 }
@@ -56,6 +78,32 @@ type ReportCommandResult struct {
 	Version  int64              `json:"version"`
 	Status   reportmodel.Status `json:"status"`
 	Replayed bool               `json:"replayed"`
+}
+
+type GatheringSafetyTerminationGrantResult struct {
+	ActorPersonaID  string     `json:"actorPersonaId"`
+	GatheringID     string     `json:"gatheringId"`
+	Action          string     `json:"action"`
+	EvidenceRef     string     `json:"evidenceRef"`
+	DecisionRef     string     `json:"decisionRef"`
+	DecisionVersion int64      `json:"decisionVersion"`
+	DecisionDigest  string     `json:"decisionDigest"`
+	ExpiresAt       time.Time  `json:"expiresAt"`
+	RevokedAt       *time.Time `json:"revokedAt,omitempty"`
+	Replayed        bool       `json:"replayed"`
+}
+
+type GatheringSafetyTerminationAuthoritySlice struct {
+	Allowed         bool       `json:"allowed"`
+	ActorPersonaID  string     `json:"actorPersonaId,omitempty"`
+	GatheringID     string     `json:"gatheringId,omitempty"`
+	Action          string     `json:"action,omitempty"`
+	EvidenceRef     string     `json:"evidenceRef,omitempty"`
+	DecisionRef     string     `json:"decisionRef,omitempty"`
+	DecisionVersion int64      `json:"decisionVersion,omitempty"`
+	DecisionDigest  string     `json:"decisionDigest,omitempty"`
+	ExpiresAt       *time.Time `json:"expiresAt,omitempty"`
+	RevokedAt       *time.Time `json:"revokedAt,omitempty"`
 }
 
 type ReportDetailSlice struct {

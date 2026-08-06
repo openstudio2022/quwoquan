@@ -2,15 +2,16 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:quwoquan_app/core/platform/assistant_device_action_bridge.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
-import 'package:quwoquan_app/core/platform/firebase_incoming_call_runtime.dart';
-import 'package:quwoquan_app/core/platform/incoming_call_native_bridge.dart';
-import 'package:quwoquan_app/core/platform/native_bridge.dart';
-import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
-import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
-import 'package:quwoquan_app/core/platform/web_install_context.dart';
+import 'package:quwoquan_app/runtime/platform/assistant_device_action_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/device_calendar_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
+import 'package:quwoquan_app/runtime/platform/incoming_call_native_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/web_install_context.dart';
 
 /// Current platform (assembly/observability only — do NOT branch on this in
 /// business code; consume [platformCapabilitiesProvider] instead).
@@ -25,6 +26,34 @@ final platformTargetProvider = Provider<AppPlatform>(
 final platformCapabilitiesProvider = Provider<PlatformCapabilities>(
   (ref) => platformCapabilitiesFor(ref.watch(platformTargetProvider)),
 );
+
+/// Assistant auth has not yet exposed a generated opaque-permit verifier.
+///
+/// Production therefore remains fail-closed. Tests override this object-level
+/// port with a suite-local verifier; no environment composition may do so.
+final deviceCalendarPermitVerifierProvider =
+    Provider<DeviceCalendarPermitVerifier>(
+      (ref) => const FailClosedDeviceCalendarPermitVerifier(),
+    );
+
+/// Local installation/device binding for permit claim comparison.
+///
+/// The empty production binding is intentional until the generated assistant
+/// auth binding port lands. It cannot be filled from caller-controlled input.
+final deviceCalendarLocalBindingProvider = Provider<DeviceCalendarLocalBinding>(
+  (ref) => const DeviceCalendarLocalBinding.unavailable(),
+);
+
+final deviceCalendarBridgeProvider = Provider<DeviceCalendarBridge>((ref) {
+  final capabilities = ref.watch(platformCapabilitiesProvider);
+  if (!capabilities.deviceCalendar) {
+    return const UnsupportedDeviceCalendarBridge();
+  }
+  return MethodChannelDeviceCalendarBridge(
+    permitVerifier: ref.watch(deviceCalendarPermitVerifierProvider),
+    localBinding: ref.watch(deviceCalendarLocalBindingProvider),
+  );
+});
 
 final assistantDeviceActionBridgeProvider =
     Provider<AssistantDeviceActionBridge>((ref) {

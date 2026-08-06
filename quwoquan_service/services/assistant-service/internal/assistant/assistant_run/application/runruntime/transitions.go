@@ -54,6 +54,7 @@ var allowedTransitions = map[generated.AssistantRunState]map[generated.Assistant
 	),
 	generated.AssistantRunStateWaitingApproval: states(
 		generated.AssistantRunStateExecuting,
+		generated.AssistantRunStateWaitingExternal,
 		generated.AssistantRunStateCheckpointing,
 		generated.AssistantRunStatePaused,
 	),

@@ -1,9 +1,11 @@
 backend: postgres
 tables:
   experiments:
+    publication_role: not_published
     entity: Experiment
     role: authoritative
-    pk: id
+    pk:
+    - id
     columns:
     - name: id
       type: VARCHAR(64)
@@ -52,8 +54,8 @@ tables:
       - status
       - starts_at
       - ends_at
-    optimistic_lock: version
   experiment_policy_revisions:
+    publication_role: not_published
     entity: Experiment
     role: append_only
     pk:
@@ -92,6 +94,7 @@ tables:
     - name: idx_experiment_policy_revisions_activated
       columns: [experiment_id, activated_at]
   experiment_idempotency_receipts:
+    publication_role: not_published
     entity: Experiment
     role: authoritative
     pk:
@@ -123,9 +126,11 @@ tables:
       - NOT_NULL
       default: NOW()
   product_ops_outbox:
+    publication_role: transactional_outbox
     entity: Experiment
     role: append_only
-    pk: event_id
+    pk:
+    - event_id
     description: Experiment 的同库事务 outbox，由租约 dispatcher 重试投递。
     columns:
     - name: event_id
@@ -189,6 +194,7 @@ tables:
 role: authoritative
 streams:
   events.ops.experiment_policy_activated:
+    publication_role: publication_accessory
     entity: Experiment
     role: append_only
     idempotency_key: eventId

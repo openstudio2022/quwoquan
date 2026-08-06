@@ -1,8 +1,8 @@
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
+import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 
 final class AppCloudClientContextProvider
     implements CloudClientContextProvider {

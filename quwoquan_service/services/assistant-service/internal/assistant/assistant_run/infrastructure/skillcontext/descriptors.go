@@ -76,27 +76,6 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 				readermodel.SurfaceShared,
 			},
 		),
-		{
-			DescriptorID: "travel.trip_context", ResolverRef: "trip.current_context",
-			OwnerService: "travel-service",
-			OwnerOperationRefs: []string{
-				"travel.trip_timeline_view.GetTripTimeline",
-				"travel.trip_map_view.GetTripMap",
-				"travel.trip_guide_assignment.ListTripGuideAssignments",
-			},
-			InputSchemaRef:      "travel.GetTripTimelineQuery",
-			OutputSchemaRef:     "assistant.TravelContextSegment",
-			ObjectTypeRefs:      []string{"travel.TripTimelineView", "travel.TripMapView", "travel.TripGuideAssignment"},
-			AcceptedSourceKinds: []string{"domain"},
-			Authority:           generated.AssistantContextAuthorityDomainCanonical,
-			Sensitivity:         generated.AssistantContextSensitivityInternal,
-			SurfaceKinds: []readermodel.SurfaceKind{
-				readermodel.SurfacePersonal,
-				readermodel.SurfaceShared,
-			},
-			ArtifactPolicy: readermodel.ArtifactInlineOrStored,
-			CitationPolicy: readermodel.CitationEntityReference,
-		},
 		publicObjectDescriptor(
 			"circle.circle_context",
 			CircleContextResolverRef,

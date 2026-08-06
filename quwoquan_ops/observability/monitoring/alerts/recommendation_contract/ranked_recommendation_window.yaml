@@ -10,7 +10,7 @@ groups:
           service: "recommendation-service"
           operation: "recommendation.ranked_recommendation_window.CreateRankedRecommendationWindow"
           contract_metric: "recommendation_ranked_window_create"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_recommendation_contract_operation_duration_seconds_bucket
@@ -20,7 +20,7 @@ groups:
           service: "recommendation-service"
           operation: "recommendation.ranked_recommendation_window.CreateRankedRecommendationWindow"
           contract_metric: "recommendation_ranked_window_create"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_recommendation_contract_operation_requests_total
@@ -30,7 +30,7 @@ groups:
           service: "recommendation-service"
           operation: "recommendation.ranked_recommendation_window.GetRankedRecommendationPage"
           contract_metric: "recommendation_ranked_window_read"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "200"
           slo_availability_percent: "99.9"
       - record: quwoquan_recommendation_contract_operation_duration_seconds_bucket
@@ -40,6 +40,6 @@ groups:
           service: "recommendation-service"
           operation: "recommendation.ranked_recommendation_window.GetRankedRecommendationPage"
           contract_metric: "recommendation_ranked_window_read"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "200"
           slo_availability_percent: "99.9"

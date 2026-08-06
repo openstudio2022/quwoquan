@@ -105,11 +105,10 @@ relationships:
   - gatheringId
   target_object: circle.Gathering
 local_identity_reasons:
+  gatheringSourceEventId: immutable source-event idempotency and conflict coordinate for the monotonic
+    Gathering projection watermark; it is not Conversation identity or a business-object reference
   originRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
     a business-object reference
-capabilities:
-- queryable
-- searchable
 taggable: true
 vector_enabled: false
 business_rules:
@@ -120,6 +119,9 @@ business_rules:
 - CircleGroupMembership 的 active、left、removed、role_changed 与 CircleGroupArchived 仅由 durable projector
   写入对应 Conversation 成员、用户态与终态；圈群成员治理不接受 Chat HTTP 旁路
 - gatheringId 非空时必须一对一绑定 Gathering；仅接受 circle-service 受信任幂等投影命令，普通 CreateConversation 不得写入
+- Gathering room/access/posting 投影以 gatheringSourceVersion 单调收敛；旧版本为 no-op，同版本不同事实 fail-closed
+- Gathering capacity 不进入 Chat 席位裁决；活动 room 始终为 group，ConversationMembership 仅表达 Chat access
+- accessMode=read_only 或 postingPolicy=announcements_only 时公开 SendMessage 禁止写入；Announcement 继续复用 Chat owner 命令
 - 成员、用户状态与 Message 分别由其聚合维护
 - maxSeq 只由 MessageCommitted 事件单调推进，不由客户端提交
 - dissolved 为终态且通过 outbox 通知成员与投影收敛
@@ -130,3 +132,18 @@ lifecycle:
   - dissolved
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - circle.circle_group.CircleGroupCreated
+  - circle.circle_group.CircleGroupArchived
+  - user.user_account.UserAvatarUpdated
+  event_consumers:
+  - name: ProjectCircleGroupConversation
+    kind: event_handler
+    facet: CircleGroupConversationProjectionHandler
+    method: apply
+    idempotency: event_id
+  - name: ConsumeUserAvatarUpdated
+    kind: event_handler
+    facet: UserAvatarUpdateConsumer
+    method: handleMessage
+    idempotency: identity_payload_digest

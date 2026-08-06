@@ -13,7 +13,11 @@ import hashlib
 from pathlib import Path
 from unittest.mock import patch
 
+from quwoquan_ops.ci.render_provider_conformance_source import (
+    expected_required_cell_count_from_readiness,
+)
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as evidence_collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import generate_mainline_release_artifact as generator
@@ -211,18 +215,43 @@ def _evidence_sources(
             "projections": [],
         },
     )
+    provider_readiness = {
+        environment: {
+            capability_id: {
+                "required": True,
+                "capability_ready": True,
+            }
+            for capability_id in ("search", "fixture-message-transport")
+        }
+        for environment in provider_conformance.READINESS_ENVIRONMENTS
+    }
+    provider_cells = sorted(
+        provider_conformance.expected_required_cell_keys(
+            {
+                "providerConformanceCapabilityIds": sorted(
+                    provider_readiness["prod"]
+                )
+            }
+        )
+    )
+    provider_evidence_count = expected_required_cell_count_from_readiness(
+        provider_readiness
+    )
+    if len(provider_cells) != provider_evidence_count:
+        raise AssertionError("Provider fixture cell count does not match readiness")
     provider_files: dict[str, str] = {}
-    for index in range(140):
+    for index, (capability_id, environment, layer) in enumerate(provider_cells):
         relative = (
-            f"env/prod/runs/provider-check-{index:03d}/"
+            f"env/{environment}/runs/provider-check-{index:03d}/"
             "provider-conformance.evidence.json"
         )
         provider_raw = _provider_raw_dir(root) / relative
         generator.write_json(
             provider_raw,
             {
-                "provider": f"provider-{index:03d}",
-                "environment": "prod",
+                "provider": capability_id,
+                "environment": environment,
+                "testLayer": layer,
                 "status": "passed",
             },
         )
@@ -291,24 +320,9 @@ def _evidence_sources(
                 "digest": PROVIDER_EVIDENCE_DIGEST,
                 "files": provider_files,
             },
-            "evidenceCount": 140,
+            "evidenceCount": provider_evidence_count,
             "sourceCoverageIssues": [],
-            "readiness": {
-                environment: {
-                    capability: {
-                        "required": True,
-                        "capability_ready": True,
-                    }
-                    for capability in (
-                        "search",
-                        *(
-                            f"provider-capability-{index:02d}"
-                            for index in range(13)
-                        ),
-                    )
-                }
-                for environment in ("alpha", "beta", "gamma", "prod")
-            },
+            "readiness": provider_readiness,
             "issues": [],
         },
     }

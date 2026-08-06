@@ -1,74 +1,72 @@
-domain: OPS
-aggregate: EventRecord
 description: 产品遥测、启动恢复与受限启动遥测的稳定错误语义。
 errors:
 - code: OPS.USER.event_batch_invalid
-  kind: USER
   reason: event_batch_invalid
   http_status: 422
   emitted_by:
   - {surface: http, operations: [ReportEventBatch]}
   recovery_action: absorb
+  disruption_level: silent
   dart_const: eventBatchInvalid
   go_const: ErrEventBatchInvalid
   user_message:
     zh: 事件批次不符合目录契约
     en: The event batch does not match the telemetry catalog.
 - code: OPS.USER.runtime_log_batch_invalid
-  kind: USER
   reason: runtime_log_batch_invalid
   http_status: 422
   emitted_by:
   - {surface: http, operations: [ReportRuntimeLogBatch]}
   recovery_action: absorb
+  disruption_level: silent
   dart_const: runtimeLogBatchInvalid
   go_const: ErrRuntimeLogBatchInvalid
   user_message:
     zh: 诊断日志批次不符合统一日志目录
     en: The runtime diagnostic batch does not match the log catalog.
 - code: OPS.USER.idempotency_key_invalid
-  kind: USER
   reason: idempotency_key_invalid
   http_status: 400
   emitted_by:
   - {surface: http, operations: [ReportEventBatch, ReportRuntimeLogBatch]}
   recovery_action: absorb
+  disruption_level: silent
   dart_const: idempotencyKeyInvalid
   go_const: ErrIdempotencyKeyInvalid
   user_message:
     zh: 事件批次校验失败
     en: The event batch digest is invalid.
 - code: OPS.USER.query_window_invalid
-  kind: USER
   reason: query_window_invalid
   http_status: 400
   emitted_by:
   - {surface: http, operations: [GetRuntimeLogSummary, GetRuntimeLogDrilldown, GetEventSummary, GetEventDrilldown, ListL1L4MetricSnapshots, GetServiceRouteRED, GetGrowthOverview, GetPageExperience]}
   recovery_action: absorb
+  disruption_level: silent
   dart_const: queryWindowInvalid
   go_const: ErrQueryWindowInvalid
   user_message:
     zh: 日志查询时间范围无效
     en: The telemetry query window is invalid.
 - code: OPS.USER.event_drilldown_forbidden
-  kind: USER
   reason: event_drilldown_forbidden
   http_status: 403
   emitted_by:
   - {surface: http, operations: [GetRuntimeLogDrilldown, GetEventDrilldown]}
-  recovery_action: request_permission
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: eventDrilldownForbidden
   go_const: ErrEventDrilldownForbidden
   user_message:
     zh: 没有日志明细查询权限
     en: You do not have permission to query telemetry details.
 - code: OPS.SYSTEM.logstore_unavailable
-  kind: SYSTEM
   reason: logstore_unavailable
   http_status: 503
   emitted_by:
   - {surface: http, operations: [ReportEventBatch, GetEventSummary, GetEventDrilldown, GetRtcMediaQoeSummary, ListL1L4MetricSnapshots, GetServiceRouteRED, GetGrowthOverview, GetPageExperience, GetProductTriageSummary]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: logstoreUnavailable
   go_const: ErrLogstoreUnavailable
@@ -76,12 +74,12 @@ errors:
     zh: 日志服务暂时不可用
     en: Telemetry storage is temporarily unavailable.
 - code: OPS.SYSTEM.event_projection_unavailable
-  kind: SYSTEM
   reason: event_projection_unavailable
   http_status: 503
   emitted_by:
   - {surface: http, operations: [ListProductWorkflows, ListProductAudits, ListProductApprovals, GetProductProjectionSummary, GetProductTriageSummary]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 2
   dart_const: eventProjectionUnavailable
   go_const: ErrEventProjectionUnavailable
@@ -89,12 +87,12 @@ errors:
     zh: 产品事件运营投影暂时不可用
     en: The product event operations projection is temporarily unavailable.
 - code: OPS.SYSTEM.runtime_logstore_unavailable
-  kind: SYSTEM
   reason: runtime_logstore_unavailable
   http_status: 503
   emitted_by:
   - {surface: http, operations: [GetRuntimeLogSummary, GetRuntimeLogDrilldown, ReportRuntimeLogBatch]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: runtimeLogstoreUnavailable
   go_const: ErrRuntimeLogstoreUnavailable
@@ -102,10 +100,10 @@ errors:
     zh: 诊断日志服务暂时不可用
     en: Runtime diagnostics storage is temporarily unavailable.
 - code: OPS.SYSTEM.startup_configuration_invalid
-  kind: SYSTEM
   reason: startup_configuration_invalid
   emitted_by: [app]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 0
   dart_const: startupConfigurationInvalid
   go_const: ErrStartupConfigurationInvalid
@@ -113,10 +111,10 @@ errors:
     zh: 启动配置不可用，请检查网络后重试
     en: Startup configuration is unavailable. Check your connection and retry.
 - code: OPS.SYSTEM.startup_initialization_failed
-  kind: SYSTEM
   reason: startup_initialization_failed
   emitted_by: [app]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 0
   dart_const: startupInitializationFailed
   go_const: ErrStartupInitializationFailed
@@ -124,10 +122,10 @@ errors:
     zh: 应用启动遇到问题，请重试
     en: The app could not start. Please retry.
 - code: OPS.SYSTEM.startup_router_unavailable
-  kind: SYSTEM
   reason: startup_router_unavailable
   emitted_by: [app]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 1
   dart_const: startupRouterUnavailable
   go_const: ErrStartupRouterUnavailable
@@ -135,10 +133,10 @@ errors:
     zh: 页面暂时无法打开，请重试
     en: The page is temporarily unavailable. Please retry.
 - code: OPS.SYSTEM.startup_native_first_frame_timeout
-  kind: SYSTEM
   reason: startup_native_first_frame_timeout
   emitted_by: [app]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 1
   dart_const: startupNativeFirstFrameTimeout
   go_const: ErrStartupNativeFirstFrameTimeout
@@ -146,24 +144,24 @@ errors:
     zh: 应用界面未能及时显示，请重试
     en: The app interface did not appear in time. Please retry.
 - code: OPS.USER.startup_event_invalid
-  kind: USER
   reason: startup_event_invalid
   http_status: 400
   emitted_by:
   - {surface: http, operations: [ReportStartupEventBatch]}
   recovery_action: absorb
+  disruption_level: silent
   dart_const: startupEventInvalid
   go_const: ErrStartupEventInvalid
   user_message:
     zh: 启动诊断事件无效
     en: The startup diagnostic event is invalid.
 - code: OPS.SYSTEM.startup_telemetry_unavailable
-  kind: SYSTEM
   reason: startup_telemetry_unavailable
   http_status: 503
   emitted_by:
   - {surface: http, operations: [ReportStartupEventBatch]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: startupTelemetryUnavailable
   go_const: ErrStartupTelemetryUnavailable

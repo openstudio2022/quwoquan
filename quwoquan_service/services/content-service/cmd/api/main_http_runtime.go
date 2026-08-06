@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
@@ -89,6 +88,7 @@ func buildContentHTTPServer(
 	)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 
+	timeouts := rtauth.ContractHTTPServerTimeouts(contentDescriptors)
 	return &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -96,9 +96,9 @@ func buildContentHTTPServer(
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(corsHandler),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 }
 

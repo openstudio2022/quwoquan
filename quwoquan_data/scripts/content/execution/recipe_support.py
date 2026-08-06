@@ -46,12 +46,17 @@ def current_git_branch(repo_root: Path) -> str:
     )
 
 
-def runtime_preflight_argv(execution_root: Path) -> list[str]:
+def runtime_preflight_argv(
+    execution_root: Path,
+    semantic_selection_id: str = "default",
+) -> list[str]:
     evidence = execution_root / "evidence" / "runtime_preflight.json"
     return [
         "task",
         "preflight",
         "--semantic-agent-startup",
+        "--semantic-selection-id",
+        semantic_selection_id,
         "--report-out",
         str(evidence),
     ]

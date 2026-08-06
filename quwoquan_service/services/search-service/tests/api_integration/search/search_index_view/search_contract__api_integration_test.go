@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-002
+// readiness_case: search-api
 package api_integration
 
 import (

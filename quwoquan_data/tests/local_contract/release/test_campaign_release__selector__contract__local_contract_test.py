@@ -203,6 +203,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
     plan_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
+        "executionMode": "central",
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,

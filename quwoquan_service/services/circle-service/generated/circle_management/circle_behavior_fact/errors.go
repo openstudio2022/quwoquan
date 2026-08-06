@@ -17,11 +17,11 @@ var (
 // AppErrorFromBehaviorFactWriteFailed returns *AppError for CIRCLE.SYSTEM.behavior_fact_write_failed (user_message from errors.yaml).
 func AppErrorFromBehaviorFactWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBehaviorFactWriteFailed.Error()))
-	return rerrors.NewAppError(code, "行为记录失败，请稍后重试", debugMessage).WithMetadata("behavior_fact_write_failed", 500).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "行为记录失败，请稍后重试", debugMessage).WithMetadata("behavior_fact_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromBehaviorFactIdempotencyConflict returns *AppError for CIRCLE.USER.behavior_fact_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromBehaviorFactIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBehaviorFactIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复行为请求与原请求不一致", debugMessage).WithMetadata("behavior_fact_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复行为请求与原请求不一致", debugMessage).WithMetadata("behavior_fact_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }

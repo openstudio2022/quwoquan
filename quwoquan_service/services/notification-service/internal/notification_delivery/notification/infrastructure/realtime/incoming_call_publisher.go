@@ -8,7 +8,7 @@ import (
 
 	"quwoquan_service/runtime/clientrealtime"
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 type IncomingCallPublisher struct {

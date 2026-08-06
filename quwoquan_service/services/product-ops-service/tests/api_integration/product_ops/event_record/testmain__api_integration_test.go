@@ -15,6 +15,12 @@ import (
 var controlPlanePGPool *pgxpool.Pool
 
 func TestMain(m *testing.M) {
+	// Focused object HTTP runners that exclusively assemble explicit in-memory
+	// ports must not require the unrelated control-plane PostgreSQL fixture.
+	// The default full package path still provisions and verifies PostgreSQL.
+	if strings.TrimSpace(os.Getenv("QWQ_EVENT_RECORD_IN_MEMORY_ONLY")) == "1" {
+		os.Exit(m.Run())
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	dsn := strings.TrimSpace(os.Getenv("QWQ_TEST_POSTGRES_DSN"))

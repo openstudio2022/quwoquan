@@ -18,7 +18,7 @@ COMMAND = (
     "python3",
     "quwoquan_ops/ci/provider_conformance/run_provider_patrol_uat.py",
     "--target",
-    "test/user_acceptance/patrol/ops/event_ingestion_journey__user_acceptance_test.dart",
+    "test/user_acceptance/journeys/event_ingestion/event_ingestion_journey__user_acceptance_test.dart",
     "--platform",
     "android",
 )

@@ -48,6 +48,39 @@ func TestDataContentFleetReportCarriesOneOutcomePerFrozenJob(t *testing.T) {
 	}
 }
 
+func TestDataContentFleetReportSeparatesSuccessFromAutomaticRecovery(t *testing.T) {
+	completedAt := time.Now().UTC()
+	tasks := []ReliableAsyncTask{
+		{TaskID: "first", Status: TaskStatusSucceeded, Attempts: 1, Payload: map[string]string{"jobId": "first"}},
+		{TaskID: "recovered", Status: TaskStatusSucceeded, Attempts: 2, Payload: map[string]string{"jobId": "recovered"}},
+		{TaskID: "dead", Status: TaskStatusDead, Attempts: 3, Payload: map[string]string{"jobId": "dead"}},
+	}
+	report := BuildDataContentFleetReport(
+		tasks,
+		completedAt.Add(-2*time.Second),
+		completedAt.Add(-time.Second),
+		completedAt,
+		0, 0, 1, 0,
+	)
+	if report.RecoveryEligibleCount != 2 || report.AutomaticRecoveredCount != 1 || report.AutomaticRecoveryRate != 0.5 {
+		t.Fatalf("recovery metrics drift: %#v", report)
+	}
+	if report.AutomaticRecoveryStatus != "MEASURED" || report.FirstAttemptSuccessRate != 1.0/3.0 {
+		t.Fatalf("recovery status drift: %#v", report)
+	}
+
+	notExercised := BuildDataContentFleetReport(
+		tasks[:1],
+		completedAt.Add(-2*time.Second),
+		completedAt.Add(-time.Second),
+		completedAt,
+		0, 0, 1, 0,
+	)
+	if notExercised.AutomaticRecoveryStatus != "NOT_EXERCISED" || notExercised.AutomaticRecoveryRate != 0 {
+		t.Fatalf("unexercised recovery must not be reported as success: %#v", notExercised)
+	}
+}
+
 // dataQuotaPublishTasks 造一批 publish 任务：前 accepted 个是商用可接受终态，
 // 其余是被丢弃的 dead 对象，用来表达"过采 + 配额"的批次形态。
 func dataQuotaPublishTasks(total int, accepted int, completed time.Time) []ReliableAsyncTask {

@@ -663,28 +663,7 @@ consumers:
       - inverted
       - related_objects
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: tag-service API
-      data_source: fields.yaml
-      scenarios:
-        - name: resolve_launch_subset
-          route: GET /tag/resolve
-          assertions:
-            - status_200
-            - tagref_resolvable
-        - name: list_children_admin_regions
-          route: GET /tag/children
-          assertions:
-            - status_200
-            - direct_children_only
-            - active_only
-        - name: validate_expected_taxonomy_release
-          route: POST /tag/validate
-          assertions:
-            - status_200
-            - taxonomy_release_matches
-            - refs_partitioned_into_valid_and_invalid
+  test_strategy:
     service_side:
       description: 使用真实测试数据库，不 mock 存储层；只读首发子集 seed
       real_engines:
@@ -708,3 +687,197 @@ contract_test:
     - children direct hierarchy correctness
     - shared-tags intersection correctness
     - inverted returns objects referencing tagRef
+
+readiness_cases:
+- case_id: resolve-tag-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ResolveTag}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: resolve-tag-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ResolveTag}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-tag-children-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListTagChildren}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-tag-children-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListTagChildren}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: shared-tags-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SharedTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: shared-tags-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SharedTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: inverted-objects-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: InvertedObjects}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: inverted-objects-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: InvertedObjects}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-dimensions-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListDimensions}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-dimensions-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListDimensions}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: suggest-tags-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SuggestTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: suggest-tags-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SuggestTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: validate-tag-refs-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ValidateTagRefs}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: validate-tag-refs-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ValidateTagRefs}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: search-tags-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SearchTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: search-tags-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SearchTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: related-tags-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RelatedTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: related-tags-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RelatedTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: search-by-tags-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SearchByTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: search-by-tags-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SearchByTags}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: tag-cooccurrence-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: TagCooccurrence}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: tag-cooccurrence-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: TagCooccurrence}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: related-objects-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RelatedObjects}
+  runner_source_path: quwoquan_service/services/tag-service/tests/local_contract/tag/tag_node_view/tag_service_contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: related-objects-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RelatedObjects}
+  runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_node_view/tag_contract__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

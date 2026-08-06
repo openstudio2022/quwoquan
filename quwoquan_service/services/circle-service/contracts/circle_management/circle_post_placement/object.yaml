@@ -46,11 +46,6 @@ relationships:
   reference_fields:
   - ownerPersonaId
   target_object: user.Persona
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
-- transactional_outbox
 business_rules:
 - postId + circleId + groupId 在 active 生命周期内唯一
 - groupId 非空时必须属于同一 circleId
@@ -62,12 +57,22 @@ lifecycle:
   states:
   - active
   - removed
-  transitions:
-  - from: none
-    command: PlacePostInCircle
-    to: active
-  - from: active
-    command: RemovePostFromCircle
-    to: removed
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - content.post.PostSubmittedForReview
+  - content.post.PostPublished
+  - content.post.PostModerationRejected
+  - content.post.PostUpdated
+  - content.post.PostSettingsUpdated
+  - content.post.PostPromotedToWork
+  - content.post.PostDeleted
+  - content.post.PostPrivacyRedacted
+  - content.post.PostPurged
+  - content.post.PostImported
+  event_consumers:
+  - name: ProjectContentPostLifecycle
+    kind: event_handler
+    facet: ContentPostConsumer
+    method: processMessage
+    idempotency: event_id

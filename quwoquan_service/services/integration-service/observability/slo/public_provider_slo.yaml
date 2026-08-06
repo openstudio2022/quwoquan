@@ -1,0 +1,37 @@
+service: integration-service
+domain: integration
+capability: public-location-provider
+
+metrics:
+  provider_requests_total: integration_public_provider_requests_total
+  provider_request_duration_seconds: integration_public_provider_request_duration_seconds
+
+privacy:
+  permitted_labels: [capability, adapter, outcome]
+  prohibited_labels:
+    [account_id, query, endpoint, url, credential, secret, latitude, longitude]
+
+slis:
+  - id: integration_public_location_provider_availability
+    description: 已通过 generated binding 与 remote probe 的地点/路线 Public Provider 成功率；未激活 binding 不产生伪成功。
+    sli: sum(rate(integration_public_provider_requests_total{capability=~"location.poi.search|location.route.read",outcome="success"}[5m])) / clamp_min(sum(rate(integration_public_provider_requests_total{capability=~"location.poi.search|location.route.read"}[5m])), 0.001)
+    objective: 0.99
+  - id: integration_public_location_provider_latency
+    description: 地点搜索与路线读取真实 Provider 调用 P95，不记录 query、坐标或 endpoint。
+    sli: histogram_quantile(0.95, sum(rate(integration_public_provider_request_duration_seconds_bucket{capability=~"location.poi.search|location.route.read"}[5m])) by (le, capability))
+    objective_seconds: 2
+
+failure_semantics:
+  binding_unavailable: return_structured_unavailable_without_provider_call
+  region_unsupported: return_structured_unavailable_without_fallback
+  provider_timeout: bounded_retry_then_structured_timeout
+  provider_rate_limited: structured_rate_limited_without_synthetic_result
+  provider_malformed: structured_invalid_response_without_synthetic_result
+
+alerts:
+  provider_availability:
+    condition: sum(rate(integration_public_provider_requests_total{capability=~"location.poi.search|location.route.read",outcome="success"}[10m])) / clamp_min(sum(rate(integration_public_provider_requests_total{capability=~"location.poi.search|location.route.read"}[10m])), 0.001) < 0.99
+    severity: warning
+  provider_latency:
+    condition: histogram_quantile(0.95, sum(rate(integration_public_provider_request_duration_seconds_bucket{capability=~"location.poi.search|location.route.read"}[10m])) by (le)) > 2
+    severity: warning

@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
+// readiness_case: report-recovery-failure-local
 package local_contract
 
 import (

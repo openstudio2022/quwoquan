@@ -225,6 +225,8 @@ func main() {
 	var queryLogSink requestapplication.QueryLogSink
 	var recentFacade *recentsearch.Facade
 	var accountClosureConsumer *mqadapter.UserAccountClosedConsumer
+	var accountRestrictionConsumer *experimentpolicymq.UserAccountRestrictionConsumer
+	var accountClosureRecovery *requestapplication.SearchRequestAccountClosureRecoveryCommandFacet
 	var accountRestrictionProjection *accountrestrictioninfra.MongoAccountRestrictionProjection
 	var feedbackSignalRelay *feedbackstore.SignalRelay
 	var experimentPolicyConsumer *experimentpolicymq.ExperimentPolicyConsumer
@@ -369,9 +371,31 @@ func main() {
 				err,
 			)
 		}
-		accountClosureConsumer.WithUserAccountRestrictionProjection(
-			accountRestrictionProjection,
-		)
+		accountRestrictionConsumer, err =
+			experimentpolicymq.NewUserAccountRestrictionConsumer(
+				messageTransport,
+				accountRestrictionProjection,
+				serviceName+"-search-index-restriction-"+hostname(),
+				logger,
+			)
+		if err != nil {
+			log.Fatalf(
+				"%s account restriction consumer init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		accountClosureRecovery, err =
+			requestapplication.NewSearchRequestAccountClosureRecoveryCommandFacet(
+				accountClosureConsumer,
+			)
+		if err != nil {
+			log.Fatalf(
+				"%s UserAccountClosed recovery facet init failed: %v",
+				serviceName,
+				err,
+			)
+		}
 		if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
 			log.Fatalf(
 				"%s UserAccountClosed consumer group init failed: %v",
@@ -379,7 +403,15 @@ func main() {
 				err,
 			)
 		}
+		if err := accountRestrictionConsumer.EnsureGroup(ctx); err != nil {
+			log.Fatalf(
+				"%s account restriction consumer group init failed: %v",
+				serviceName,
+				err,
+			)
+		}
 		go accountClosureConsumer.Run(ctx)
+		go accountRestrictionConsumer.Run(ctx)
 		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	}
 
@@ -481,13 +513,13 @@ func main() {
 	// search routes so /healthz and /metrics stay reachable while shedding.
 	inflightLimiter := rtgov.NewInflightLimiter(getenvInt("SEARCH_MAX_INFLIGHT", 256))
 	searchHandler := httpadapter.MaxInflightMiddleware(inflightLimiter, metricsRecorder)(handler)
-	if accountClosureConsumer != nil {
+	if accountClosureRecovery != nil {
 		searchHandler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
 			searchHandler,
 			runtimemessaging.DeadLetterRecoveryRouteConfig{
 				Path:     "/internal/search/account-closure/dead-letters:recover",
 				Module:   rterr.ModuleSearch,
-				Releaser: accountClosureConsumer,
+				Releaser: accountClosureRecovery,
 			},
 		)
 		if err != nil {
@@ -531,6 +563,14 @@ func main() {
 			},
 		)
 	}
+	if accountRestrictionConsumer != nil {
+		readiness.Register(
+			"user-account-restriction-consumer",
+			func(context.Context) error {
+				return accountRestrictionConsumer.Healthy(15 * time.Second)
+			},
+		)
+	}
 	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -554,6 +594,9 @@ func main() {
 	}
 	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
 
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("search"),
+	)
 	server := &http.Server{
 		Addr: cfg.Service.HTTP.Addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -562,9 +605,9 @@ func main() {
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObs),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("%s listening on %s (es.enabled=%t)", serviceName, cfg.Service.HTTP.Addr, cfg.ES.Enabled)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {

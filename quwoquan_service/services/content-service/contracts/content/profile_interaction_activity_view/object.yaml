@@ -120,7 +120,21 @@ business_rules:
 - 同一 sourceEventId 只物化一次活动行，稳定分页使用 occurredAt 与 activityId 复合游标。
 - 源内容 tombstone 后必须清除正文预览，但保留用户可理解的互动历史与审计水位。
 lifecycle:
-  source_events: [ContentReactionChanged, CommentCreated, CommentDeleted, OutboundShareRecorded]
-  checkpoint: content_outbox_sequence
-  rebuild: replay_content_interaction_outbox
-  tombstone: redact_deleted_preview_and_retain_activity_identity
+  source_events:
+  - content.content_reaction.ContentReactionSet
+  - content.content_reaction.ContentReactionCleared
+  - content.comment.CommentCreated
+  - content.comment.CommentDeleted
+  - content.outbound_share_fact.OutboundShareRecorded
+  - content.post.PostDeleted
+  - content.profile_interaction_read_fact.ProfileInteractionReadFactAppended
+  checkpoint: per_source_outbox_publication_state
+  rebuild: replay_reaction_comment_share_post_and_read_fact_outboxes
+  tombstone: deactivate_source_activity_or_mark_target_unavailable
+  idempotency: aggregate_version
+  event_consumers:
+  - name: ProjectProfileInteractionActivity
+    kind: projector
+    facet: ProfileInteractionActivityViewProjector
+    method: apply
+    idempotency: aggregate_version

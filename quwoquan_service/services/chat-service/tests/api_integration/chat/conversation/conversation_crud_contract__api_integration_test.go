@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+// readiness_case: list-conversations-api
+// readiness_case: create-conversation-api
+// readiness_case: get-conversation-api
 package api_integration
 
 import (

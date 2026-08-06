@@ -375,16 +375,24 @@ func (l *AgentLoop) runTurnWithSinkAfterSeq(
 		if toolUseID == "" || len(proposal) == 0 {
 			return events, nil, fmt.Errorf("device action approval is missing its proposal")
 		}
+		issuedAt := time.Now().UTC()
+		if l.Now != nil {
+			issuedAt = l.Now().UTC()
+		}
+		runID := assistantContinuationRunID(turn)
 		if err := appendEvent(projector.Event(
 			assistantstreaming.AssistantStreamEventWaitingApproval,
 			map[string]any{
 				"reason":    "waiting_tool_approval",
+				"runId":     runID,
 				"toolUseId": toolUseID,
 				"continuationToken": assistantContinuationToken(
-					assistantContinuationRunID(turn),
+					runID,
 					toolUseID,
 				),
-				"proposal": proposal,
+				"issuedAt":  issuedAt.Format(time.RFC3339Nano),
+				"expiresAt": issuedAt.Add(time.Minute).Format(time.RFC3339Nano),
+				"proposal":  proposal,
 			},
 		)); err != nil {
 			return events, nil, err

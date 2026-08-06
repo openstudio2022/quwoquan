@@ -294,7 +294,7 @@ def _timestamp(
     fields: Sequence[str],
     *,
     now: datetime,
-    max_age_seconds: int,
+    max_age_seconds: int | None,
 ) -> str:
     raw = next(
         (
@@ -318,11 +318,18 @@ def _timestamp(
         )
         return ""
     age = (now - parsed).total_seconds()
-    if age < -MAX_FUTURE_SKEW_SECONDS or age > max_age_seconds:
+    if age < -MAX_FUTURE_SKEW_SECONDS or (
+        max_age_seconds is not None and age > max_age_seconds
+    ):
+        freshness = (
+            f"the {max_age_seconds}-second freshness window"
+            if max_age_seconds is not None
+            else "the accepted timestamp range"
+        )
         evaluation.block(
             "STALE_EVIDENCE",
             receipt.label,
-            f"receipt is outside the {max_age_seconds}-second freshness window",
+            f"receipt is outside {freshness}",
         )
     normalized = parsed.isoformat().replace("+00:00", "Z")
     evaluation.observed_at[receipt.label] = normalized
@@ -479,7 +486,7 @@ def verify_canonical_provider_readiness(
                 ),
             }
         ),
-        claims=frozenset({"provider_readiness", "140_required_cells"}),
+        claims=frozenset({"provider_readiness", "all_required_cells"}),
     )
 
 
@@ -522,16 +529,17 @@ def _provider_layers(
     capability_ids = frozenset(
         provider_conformance.provider_conformance_capability_ids(compiled)
     )
-    if governance_issues or len(capability_ids) != 14:
+    if governance_issues or not capability_ids:
         evaluation.block(
             "STATUS_NOT_PASSED",
             "artifact.provider",
-            "canonical Provider governance must define exactly 14 required capabilities",
+            "canonical Provider governance must define a non-empty required capability set",
         )
         return
     expected_cells = set(
         provider_conformance.expected_required_cell_keys(compiled)
     )
+    expected_cell_count = len(expected_cells)
     evidence: list[Mapping[str, Any]] = []
     observed_cells: list[tuple[str, str, str]] = []
     for relative in files:
@@ -595,14 +603,15 @@ def _provider_layers(
         evaluation.block(
             "STATUS_NOT_PASSED",
             "artifact.provider",
-            "manifest-bound Provider evidence must contain exactly 140 unique required cells",
+            "manifest-bound Provider evidence must contain exactly the compiled "
+            f"{expected_cell_count} unique required cells",
         )
     readiness = payload.get("readiness")
     readiness_valid = (
         payload.get("issues") == []
         and payload.get("sourceCoverageIssues") == []
-        and payload.get("evidenceCount") == 140
-        and len(files) == 140
+        and payload.get("evidenceCount") == expected_cell_count
+        and len(files) == expected_cell_count
         and isinstance(readiness, Mapping)
         and set(readiness) == {"alpha", "beta", "gamma", "prod"}
     )
@@ -643,14 +652,14 @@ def _provider_layers(
         verified.authority != "canonical-provider-conformance"
         or verified.subject_digest != provider_digest
         or DIGEST_PATTERN.fullmatch(verified.verification_digest) is None
-        or not {"provider_readiness", "140_required_cells"}.issubset(
+        or not {"provider_readiness", "all_required_cells"}.issubset(
             verified.claims
         )
     ):
         evaluation.block(
             "UNVERIFIABLE_AUTHORITY",
             "artifact.provider",
-            "Provider verifier did not bind canonical readiness and all 140 cells",
+            "Provider verifier did not bind canonical readiness and all compiled cells",
         )
         return
     evaluation.authority["artifact.provider"] = verified
@@ -868,7 +877,6 @@ def _pilot_identity(
     rollback: LoadedReceipt | None,
     *,
     now: datetime,
-    max_age_seconds: int,
 ) -> dict[str, str] | None:
     if release is None or rollback is None:
         return None
@@ -913,7 +921,7 @@ def _pilot_identity(
             receipt,
             ("recordedAt",),
             now=now,
-            max_age_seconds=max_age_seconds,
+            max_age_seconds=None,
         )
     return {
         "releaseId": release_id,
@@ -1829,7 +1837,6 @@ def evaluate_final_acceptance(
         loaded["pilot.release"],
         loaded["pilot.rollback"],
         now=current_time,
-        max_age_seconds=max_age_seconds,
     )
     for environment in ENVIRONMENTS:
         _validate_content_lifecycle(

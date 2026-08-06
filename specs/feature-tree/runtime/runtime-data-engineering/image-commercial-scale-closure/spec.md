@@ -38,7 +38,9 @@
 <a id="req-003"></a>
 ### REQ-003 image release and capacity evidence are request-derived
 
-- 任何 dry-run、缺环境 receipt 或估算值都不能作为放量完成。
+- M100/M1000 的 image workload target 分别为 100/1000；quota/count 只表达请求负载与里程碑目标，不是发布门。
+- 每个 hard-qualified 图片对象均须发布；shortfall 和带 typed issues 的 discard 不否决其余对象。
+- receipt 必须记录 target/selected/qualified/finalized/discarded/shortfall，以及 object pass、first-pass、discard 与 quota attainment 的清晰分子、分母和 rate。任何 dry-run、缺对象硬门或缺环境 receipt 的估算值都不能作为放量完成，target/rate 未命中仅形成统计。
 
 ## 4. 契约引用
 
@@ -71,7 +73,8 @@
 - GIVEN request 冻结 target set、runtime policy、source digest 和模型绑定。
 - WHEN execution 形成 immutable release 并进入 integration 环境。
 - THEN import、API、consumer、rollback/replay 和成本吞吐 evidence 都绑定同一 release digest。
-- THEN 后续容量评估只读取真实 receipt。
+- THEN 每个 qualified 图片均 finalize；target shortfall 与 typed discard 只进入 receipt，不阻断其它合格图片。
+- THEN 后续容量评估只读取真实 receipt，并按明确分子/分母报告 object pass、first-pass、discard 与 quota attainment；统计值不参与对象发布或结构性 promotion 判定。
 
 ## 6. 依赖
 
@@ -105,5 +108,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任何 dry-run、缺环境 receipt 或估算值都不能作为放量完成。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：任何 dry-run、缺对象硬门、缺环境 receipt 或估算值都不能作为放量完成，同时 target/rate shortfall 只统计而不阻断合格对象。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

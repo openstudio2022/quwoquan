@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
+// readiness_case: list-premium-pool-entries-api
+// readiness_case: upsert-premium-pool-entry-api
+// readiness_case: rollback-premium-pool-entry-api
+// readiness_case: takedown-premium-pool-entry-api
 package api_integration
 
 import (
@@ -48,6 +52,20 @@ func TestPremiumPoolCommandsCommitStateAuditReceiptAndOutboxAtomically(t *testin
 	}
 	if created.Status != "active" || created.Revision != 1 {
 		t.Fatalf("created=%+v", created)
+	}
+	listed, err := service.List(ctx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundCreated := false
+	for _, item := range listed {
+		if item.ContentID == contentID && item.Revision == created.Revision {
+			foundCreated = true
+			break
+		}
+	}
+	if !foundCreated {
+		t.Fatalf("List() did not return created entry %q: %+v", contentID, listed)
 	}
 	replayed, err := service.Upsert(ctx, upsert)
 	if err != nil || replayed.Revision != 1 || replayed.UpdatedAt != created.UpdatedAt {

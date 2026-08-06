@@ -175,3 +175,60 @@ consumers:
     capabilities:
       - list_homepage_status_reports
       - review_homepage_status_report
+readiness_cases:
+  - case_id: list-homepage-status-reports-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListHomepageStatusReports}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_status_report/facade__functional__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-homepage-status-reports-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListHomepageStatusReports}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_status_report/mongo_store__data_consistency__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: create-homepage-status-report-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateHomepageStatusReport}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_status_report/facade__functional__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-homepage-status-report-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateHomepageStatusReport}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_status_report/mongo_store__data_consistency__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: review-homepage-status-report-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ReviewHomepageStatusReport}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_status_report/facade__functional__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: review-homepage-status-report-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ReviewHomepageStatusReport}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_status_report/mongo_store__data_consistency__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: homepage_status_report_create_homepage_status_report_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateHomepageStatusReport}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_status_report/homepage_status_report_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

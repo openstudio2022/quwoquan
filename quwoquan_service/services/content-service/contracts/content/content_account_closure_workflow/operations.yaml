@@ -60,3 +60,20 @@ api_routes:
 consumers:
 - name: platform-ops
   capabilities: [recover_account_closure]
+readiness_cases:
+- case_id: recover-content-account-closure-dead-letter-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RecoverContentAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/content_account_closure_workflow/adapters/inbound/http/recovery_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: recover-content-account-closure-dead-letter-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RecoverContentAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/content_account_closure_workflow/stream_mongo_workflow__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

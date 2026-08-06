@@ -44,15 +44,13 @@ def test_retired_directory_classes_are_absent_and_device_script_is_canonical() -
     ]
 
     assert not (ROOT / "quwoquan_app/scripts/fix_flutter_devices.sh").exists()
-    assert (ROOT / "quwoquan_app/scripts/device/fix_flutter_devices.sh").is_file()
-    for script_name in (
-        "verify_dart_semantic.py",
-        "verify_error_code_semantic.py",
-        "verify_unified_error_semantics_ratchet.py",
+    assert (ROOT / "quwoquan_app/scripts/tools/device/list_flutter_devices.sh").is_file()
+    for script_path in (
+        "quwoquan_app/scripts/runtime/observability/verify_dart_semantic.py",
+        "quwoquan_app/scripts/runtime/error/verify_error_code_semantic.py",
+        "quwoquan_app/scripts/runtime/error/verify_unified_error_semantics_ratchet.py",
     ):
-        source = (ROOT / "quwoquan_app/scripts/runtime" / script_name).read_text(
-            encoding="utf-8"
-        )
+        source = (ROOT / script_path).read_text(encoding="utf-8")
         assert "--update-baseline" not in source
 
 
@@ -150,12 +148,12 @@ def test_entrypoint_script_paths_and_operational_dependencies_are_live() -> None
     assert entrypoint_script_path_issues() == []
     assert markdown_link_issues() == []
     for path in (
-        "quwoquan_ops/backup/pg_backup.sh",
-        "quwoquan_ops/backup/mongo_backup.sh",
+        "quwoquan_ops/tools/backup/pg_backup.sh",
+        "quwoquan_ops/tools/backup/mongo_backup.sh",
         "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/requirements.txt",
-        "quwoquan_service/scripts/search/search_load_benchmark.py",
-        "quwoquan_service/scripts/search/search_rollback_rehearsal.py",
-        "quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py",
+        "quwoquan_service/scripts/search-service/search_load_benchmark.py",
+        "quwoquan_service/scripts/tools/search/search_rollback_rehearsal.py",
+        "quwoquan_service/scripts/tools/search/local_gamma_capacity_probe.py",
     ):
         assert (ROOT / path).is_file()
 

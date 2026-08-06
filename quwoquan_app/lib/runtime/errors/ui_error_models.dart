@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/core/errors/ui_error_appearance.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 enum UiErrorCategory {

@@ -72,7 +72,8 @@
 
 ## 7. 工程归属
 
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/ui/discovery`
+- App：`quwoquan_app/lib/service/recommendation_service`
+- App（协作引用，不用于代码归属）：`quwoquan_app/lib/service/content_service`
 - Metadata：`quwoquan_service/contracts/metadata/_vectors`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service/contracts`
 - Service：`quwoquan_service/services/recommendation-service`
@@ -92,3 +93,15 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 排序窗口缺用户验收与四环境证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：当前 `recommendation.ranked_recommendation_window` 的窗口创建与稳定续页已具备打真实 redis-server 与真实 mongod 副本集的端云集成证据并转为 ready，剩余缺口只有缺用户验收证据与缺 alpha/beta/gamma/prod 四环境证据两项。
+- 这两个 operation 的可见性为 internal 且 principal 为 service，由 content-service 消费而端侧没有直接页面，因此用户验收锚点只能挂在 content feed 旅程上。
+- 该对象唯一那条 HTTP 集成测试仍使用进程内替身，按三层测试的依赖真实度口径替换为真实传输前不得计为端云集成证据。
+- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 依赖：content feed 旅程的用户验收锚点与同一候选四环境证据产物。

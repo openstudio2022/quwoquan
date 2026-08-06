@@ -77,3 +77,22 @@ func TestDelegatedPersonaAuthorizationRejectsMissingPersona(t *testing.T) {
 		t.Fatal("missing delegated persona must fail closed")
 	}
 }
+
+func TestDelegatedPersonaCompatibilityAllowlistCannotExpand(t *testing.T) {
+	t.Parallel()
+	_, err := NewHS256DelegatedPersonaAuthorizationProvider(
+		TokenConfig{
+			Secret:       []byte("delegated-persona-test-secret-at-least-32-bytes"),
+			Issuer:       "quwoquan-test",
+			Audience:     "quwoquan-test",
+			Type:         TokenTypeAccess,
+			TokenVersion: 1,
+			TTL:          time.Minute,
+		},
+		"assistant-service",
+		[]string{"circle.gathering.write"},
+	)
+	if err == nil {
+		t.Fatal("legacy delegated persona scope expansion must fail")
+	}
+}

@@ -1,80 +1,78 @@
-entity: AssistantLearningFact
-domain: ASSISTANT
 description: AssistantLearningFact 校验、主体、幂等与持久化错误。
 errors:
 - code: ASSISTANT.USER.learning_fact_invalid
-  kind: USER
   reason: learning_fact_invalid
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
+    operations: [AppendAssistantLearningFact]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: learningFactInvalid
   go_const: ErrLearningFactInvalid
   user_message:
     zh: 助手反馈内容不合法
     en: Assistant learning fact is invalid
 - code: ASSISTANT.USER.learning_fact_unauthorized
-  kind: USER
   reason: learning_fact_unauthorized
   http_status: 401
   emitted_by:
   - surface: http
-    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact, GetLearningOpsSummary]
-  recovery_action: reauth
+    operations: [AppendAssistantLearningFact, GetLearningOpsSummary]
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: learningFactUnauthorized
   go_const: ErrLearningFactUnauthorized
   user_message:
     zh: 请登录后再提交助手反馈
     en: Authentication is required to append assistant learning facts
 - code: ASSISTANT.USER.learning_fact_owner_mismatch
-  kind: USER
   reason: learning_fact_owner_mismatch
   http_status: 403
   emitted_by:
   - surface: http
     operations: [AppendAssistantLearningFact]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: learningFactOwnerMismatch
   go_const: ErrLearningFactOwnerMismatch
   user_message:
     zh: 无法提交不属于当前用户的助手反馈
     en: The assistant learning fact owner does not match the requester
 - code: ASSISTANT.USER.learning_fact_run_not_found
-  kind: USER
   reason: learning_fact_run_not_found
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
-  recovery_action: refresh
+    operations: [AppendAssistantLearningFact]
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: learningFactRunNotFound
   go_const: ErrLearningFactRunNotFound
   user_message:
     zh: 对应的助手运行不存在
     en: The referenced assistant run was not found
 - code: ASSISTANT.USER.learning_fact_identity_conflict
-  kind: USER
   reason: learning_fact_identity_conflict
   http_status: 409
   emitted_by:
   - surface: http
-    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
-  recovery_action: refresh
+    operations: [AppendAssistantLearningFact]
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: learningFactIdentityConflict
   go_const: ErrLearningFactIdentityConflict
   user_message:
     zh: 重复反馈与已确认内容不一致
     en: Repeated assistant learning fact identity has different content
 - code: ASSISTANT.SYSTEM.learning_fact_sink_unavailable
-  kind: SYSTEM
   reason: learning_fact_sink_unavailable
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
+    operations: [AppendAssistantLearningFact]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: learningFactSinkUnavailable
   go_const: ErrLearningFactSinkUnavailable
@@ -82,13 +80,13 @@ errors:
     zh: 助手反馈暂时无法保存，请稍后重试
     en: Assistant learning fact storage is temporarily unavailable
 - code: ASSISTANT.SYSTEM.learning_ops_unavailable
-  kind: SYSTEM
   reason: learning_ops_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [GetLearningOpsSummary]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: learningOpsUnavailable
   go_const: ErrLearningOpsUnavailable

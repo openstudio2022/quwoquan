@@ -97,7 +97,7 @@ def main() -> int:
                     f"{runtime_path.relative_to(ROOT)}: {runtime_key} must be generated from topology"
                 )
 
-    cloud_runtime_path = ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "cloud_runtime_config.dart"
+    cloud_runtime_path = ROOT / "quwoquan_app" / "lib" / "runtime" / "config" / "cloud_runtime_config.dart"
     cloud_runtime_defaults = parse_cloud_runtime_defaults(cloud_runtime_path)
     for key in DART_RUNTIME_DEFAULT_KEYS:
         actual = str(cloud_runtime_defaults.get(key, "")).strip()

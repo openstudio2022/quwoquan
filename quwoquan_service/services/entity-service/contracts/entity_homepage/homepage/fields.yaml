@@ -236,6 +236,18 @@ fields:
     description: 已认领主页的可私信公开主体 ID，端侧私信复用 user→user direct 会话
     role: authoritative_state
     reference: true
+  - name: managerPersonaIds
+    source: managerPersonaIds
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read_write
+    description: 由 Entity owner 维护的主页经理 Persona；仅 canonical owner authority 查询可消费
+    role: authoritative_state
+    reference: true
   - name: verified
     source: verified
     type: bool
@@ -311,6 +323,14 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  HomepageSearchQuery:
+    fields:
+      - {name: query, type: string, constraints: [NOT_NULL]}
+      - {name: homepageType, type: string, constraints: [NULLABLE]}
+      - {name: city, type: string, constraints: [NULLABLE]}
+      - {name: status, type: string, constraints: [NULLABLE]}
+      - {name: cursor, type: string, constraints: [NULLABLE]}
+      - {name: limit, type: int, constraints: [NOT_NULL], client_default: "20"}
   HomepageGeoPointInput:
     fields:
       - name: lat
@@ -952,3 +972,27 @@ types:
         type: HomepageGeoPointInput
         constraints:
           - NULLABLE
+  EntityHomepageGatheringHostAuthorityEvaluationQuery:
+    fields:
+      - {name: hostSubjectKind, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectRef, type: string, constraints: [NOT_BLANK]}
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: organizerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityVersion, type: int64, constraints: [POSITIVE]}
+      - {name: action, type: string, constraints: [NOT_BLANK]}
+  EntityHomepageGatheringHostAuthorityEvidence:
+    fields:
+      - {name: hostSubjectKind, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+      - {name: hostSubjectRef, type: string, constraints: [NOT_BLANK]}
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: organizerPersonaId, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+      - {name: authorityVersion, type: int64, constraints: [POSITIVE]}
+      - {name: authorityDigest, type: string, constraints: [NOT_BLANK]}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+      - {name: action, type: string, constraints: [NOT_BLANK]}
+      - {name: valid, type: bool, constraints: [NOT_NULL]}
+      - {name: revoked, type: bool, constraints: [NOT_NULL]}

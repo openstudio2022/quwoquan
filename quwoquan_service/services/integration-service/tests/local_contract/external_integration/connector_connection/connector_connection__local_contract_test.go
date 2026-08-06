@@ -1,4 +1,9 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// readiness_case: list-connector-connections-local
+// readiness_case: get-connector-connection-local
+// readiness_case: create-connector-connection-local
+// readiness_case: revoke-connector-connection-local
+// readiness_case: resolve-connector-capability-grant-local
 package connector_connection_test
 
 import (
@@ -40,7 +45,10 @@ func (verifier grantVerifier) Verify(
 	return verifier.grant, nil
 }
 
-type connectionStore struct{ created connectionmodel.CreateCommand }
+type connectionStore struct {
+	created connectionmodel.CreateCommand
+	current connectionmodel.Connection
+}
 
 func (*connectionStore) Replay(
 	context.Context,
@@ -52,27 +60,49 @@ func (*connectionStore) Replay(
 	return connectionmodel.MutationResult{}, false, nil
 }
 
-func (store *connectionStore) Get(context.Context, string, string) (connectionmodel.Connection, error) {
-	return connectionmodel.Connection{}, connectionmodel.ErrNotFound
+func (store *connectionStore) Get(_ context.Context, accountID, connectionID string) (connectionmodel.Connection, error) {
+	if store.current.AccountID != accountID || store.current.ConnectionID != connectionID {
+		return connectionmodel.Connection{}, connectionmodel.ErrNotFound
+	}
+	return store.current, nil
 }
 
-func (store *connectionStore) List(context.Context, string, int) ([]connectionmodel.Connection, error) {
-	return nil, nil
+func (store *connectionStore) List(_ context.Context, accountID string, _ int) ([]connectionmodel.Connection, error) {
+	if store.current.AccountID != accountID {
+		return nil, nil
+	}
+	return []connectionmodel.Connection{store.current}, nil
 }
 
 func (store *connectionStore) Create(_ context.Context, command connectionmodel.CreateCommand) (connectionmodel.MutationResult, error) {
 	store.created = command
-	return connectionmodel.MutationResult{Connection: connectionmodel.Connection{
+	store.current = connectionmodel.Connection{
 		ConnectionID: "connection-1", AccountID: command.AccountID,
 		ConnectorID: command.ConnectorID, GrantedCapabilities: command.GrantedCapabilities,
 		Status: connectionmodel.StatusActive, CredentialRef: command.CredentialRef,
-		GrantReceiptDigest: command.GrantReceiptDigest, FreshnessAt: command.OccurredAt,
+		ProviderAccountSubjectDigest: command.ProviderAccountSubjectDigest,
+		GrantReceiptDigest:           command.GrantReceiptDigest, FreshnessAt: command.OccurredAt,
 		Revision: 1, CreatedAt: command.OccurredAt, UpdatedAt: command.OccurredAt,
-	}}, nil
+	}
+	return connectionmodel.MutationResult{Connection: store.current}, nil
 }
 
-func (store *connectionStore) Revoke(context.Context, connectionmodel.RevokeInput) (connectionmodel.MutationResult, error) {
-	return connectionmodel.MutationResult{}, nil
+func (store *connectionStore) Revoke(_ context.Context, input connectionmodel.RevokeInput) (connectionmodel.MutationResult, error) {
+	if store.current.AccountID != input.AccountID || store.current.ConnectionID != input.ConnectionID {
+		return connectionmodel.MutationResult{}, connectionmodel.ErrNotFound
+	}
+	if store.current.Revision != input.ExpectedRevision {
+		return connectionmodel.MutationResult{}, connectionmodel.ErrRevisionConflict
+	}
+	revokedAt := input.OccurredAt
+	store.current.Status = connectionmodel.StatusRevoked
+	store.current.CredentialRef = ""
+	store.current.ProviderAccountSubjectDigest = ""
+	store.current.GrantReceiptDigest = ""
+	store.current.RevokedAt = &revokedAt
+	store.current.Revision++
+	store.current.UpdatedAt = input.OccurredAt
+	return connectionmodel.MutationResult{Connection: store.current}, nil
 }
 
 func TestConnectionExposesGrantStateButNeverCredentialMaterial(t *testing.T) {
@@ -85,10 +115,11 @@ func TestConnectionExposesGrantStateButNeverCredentialMaterial(t *testing.T) {
 			Capabilities: []string{"calendar.event.create"},
 		}},
 		grantVerifier{grant: connectionmodel.VerifiedGrant{
-			AuthorizationID:     "authorization-1",
-			CredentialRef:       "protected://calendar/account-1",
-			ReceiptDigest:       "sha256:" + strings.Repeat("c", 64),
-			GrantedCapabilities: []string{"calendar.event.create"},
+			AuthorizationID:              "authorization-1",
+			CredentialRef:                "protected://calendar/account-1",
+			ProviderAccountSubjectDigest: "sha256:" + strings.Repeat("a", 64),
+			ReceiptDigest:                "sha256:" + strings.Repeat("c", 64),
+			GrantedCapabilities:          []string{"calendar.event.create"},
 		}},
 		func() time.Time { return now },
 	)
@@ -103,14 +134,71 @@ func TestConnectionExposesGrantStateButNeverCredentialMaterial(t *testing.T) {
 	if !result.Connection.IsActive(now) || !result.Connection.Grants("calendar.event.create") {
 		t.Fatalf("active grant not reflected: %#v", result.Connection)
 	}
+	if result.Connection.ProviderAccountSubjectDigest != "sha256:"+strings.Repeat("a", 64) {
+		t.Fatalf("verified provider account subject was not preserved internally")
+	}
+	queries := connectionapp.NewQueryFacade(store)
+	readback, err := queries.Get(context.Background(), "account-1", "connection-1")
+	if err != nil || readback.ConnectionID != result.Connection.ConnectionID {
+		t.Fatalf("connection readback failed: connection=%+v err=%v", readback, err)
+	}
+	listed, err := queries.List(context.Background(), "account-1", 10)
+	if err != nil || len(listed) != 1 || listed[0].ConnectionID != result.Connection.ConnectionID {
+		t.Fatalf("connection list failed: connections=%+v err=%v", listed, err)
+	}
 	encoded, err := json.Marshal(result.Connection)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"protected://", "grantReceiptDigest", "account-1"} {
+	for _, forbidden := range []string{
+		"protected://",
+		"sha256:" + strings.Repeat("a", 64),
+		"grantReceiptDigest",
+		"account-1",
+	} {
 		if strings.Contains(string(encoded), forbidden) {
 			t.Fatalf("connection leaked protected material %q: %s", forbidden, encoded)
 		}
+	}
+	revoked, err := facade.Revoke(context.Background(), connectionmodel.RevokeInput{
+		AccountID:        "account-1",
+		ConnectionID:     "connection-1",
+		ExpectedRevision: 1,
+		IdempotencyKey:   "revoke-1",
+	})
+	if err != nil || revoked.Connection.Status != connectionmodel.StatusRevoked ||
+		revoked.Connection.Revision != 2 || revoked.Connection.CredentialRef != "" {
+		t.Fatalf("connection revoke failed: result=%+v err=%v", revoked, err)
+	}
+}
+
+func TestOAuthConnectionRequiresVerifiedProviderAccountSubjectDigest(t *testing.T) {
+	now := time.Date(2026, time.August, 2, 9, 30, 0, 0, time.UTC)
+	facade := connectionapp.NewCommandFacade(
+		&connectionStore{},
+		definitionReader{definition: definitionmodel.Definition{
+			ConnectorID:       "google_calendar",
+			Capabilities:      []string{"calendar.event.create"},
+			AuthorizationMode: definitionmodel.AuthorizationOAuth2,
+			Status:            definitionmodel.StatusActive,
+		}},
+		grantVerifier{grant: connectionmodel.VerifiedGrant{
+			AuthorizationID:     "authorization-oauth-1",
+			CredentialRef:       "protected://oauth/calendar/account-1",
+			ReceiptDigest:       "sha256:" + strings.Repeat("c", 64),
+			GrantedCapabilities: []string{"calendar.event.create"},
+		}},
+		func() time.Time { return now },
+	)
+	_, err := facade.Create(context.Background(), connectionmodel.CreateInput{
+		AccountID:             "account-1",
+		ConnectorID:           "google_calendar",
+		RequestedCapabilities: []string{"calendar.event.create"},
+		GrantReceiptRef:       "oauth-receipt-1",
+		IdempotencyKey:        "connect-oauth-1",
+	})
+	if !errors.Is(err, connectionmodel.ErrGrantReceiptInvalid) {
+		t.Fatalf("OAuth connection without subject digest error = %v", err)
 	}
 }
 

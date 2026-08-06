@@ -33,8 +33,8 @@
     "cleanup"
   ],
   "deviceReports": {
-    "suspended": "test/user_acceptance/patrol/user/account_enforcement_suspended__user_acceptance_test.dart",
-    "restored": "test/user_acceptance/patrol/user/account_enforcement_restored__user_acceptance_test.dart",
+    "suspended": "test/user_acceptance/journeys/account_enforcement/account_enforcement_suspended__user_acceptance_test.dart",
+    "restored": "test/user_acceptance/journeys/account_enforcement/account_enforcement_restored__user_acceptance_test.dart",
     "physicalPlatforms": [
       "android",
       "ios"

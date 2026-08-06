@@ -1,14 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
-import 'package:quwoquan_app/core/di/ops_event_record_dependencies.dart';
-import 'package:quwoquan_app/core/observability/runtime_log_ports.dart';
-import 'package:quwoquan_app/core/observability/runtime_log_record.dart';
-import 'package:quwoquan_app/core/observability/runtime_log_transport.dart';
-import 'package:quwoquan_app/core/observability/runtime_diagnostics.dart';
-import 'package:quwoquan_app/core/observability/runtime_logger.dart';
-import 'package:quwoquan_app/core/observability/secure_runtime_log_buffer.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/runtime/di/ops_event_record_dependencies.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_log_ports.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_log_record.dart';
+import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/adapters/runtime_log_transport_remote.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_diagnostics.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
+import 'package:quwoquan_app/runtime/observability/secure_runtime_log_buffer.dart';
 
 /// alpha 只保留本地加密证据；beta/gamma/prod 从单一 metadata operation 装配
 /// runtime log exporter，业务调用点不可自行拼接 HTTP。

@@ -509,7 +509,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/bash \"${SRCROOT}/../scripts/ios/xcode_backend_build.sh\"";
+			shellScript = "/bin/bash \"${SRCROOT}/../scripts/ios/build_xcode_backend.sh\"";
 		};
 		9C5E4EABB9E68540CE2CFB2C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -541,7 +541,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/bash \"${SRCROOT}/../scripts/ios/xcode_backend_build.sh\"";
+			shellScript = "/bin/bash \"${SRCROOT}/../scripts/ios/build_xcode_backend.sh\"";
 		};
 		A1B2C3D4E5F60718293A0010 /* xcode_backend embed_and_thin */ = {
 			isa = PBXShellScriptBuildPhase;

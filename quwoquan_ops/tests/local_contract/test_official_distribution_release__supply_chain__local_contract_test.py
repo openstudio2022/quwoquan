@@ -320,9 +320,26 @@ def _release_manifest(
     evidence.mkdir(parents=True, exist_ok=True)
     contract_graph = evidence / "contractGraph.json"
     contract_graph.write_text("{}", encoding="utf-8")
-    provider_raw = root / "evidence/raw/provider/provider.json"
-    provider_raw.parent.mkdir(parents=True, exist_ok=True)
-    _write_json(provider_raw, {"status": "passed"})
+    provider_readiness = {
+        environment: {
+            "fixture.capability": {
+                "required": True,
+                "capability_ready": True,
+            }
+        }
+        for environment in finalizer.ENVIRONMENTS
+    }
+    provider_evidence_count = (
+        finalizer.expected_required_cell_count_from_readiness(provider_readiness)
+    )
+    provider_raw_files: dict[str, str] = {}
+    for index in range(provider_evidence_count):
+        provider_raw = root / f"evidence/raw/provider/{index:03d}.json"
+        provider_raw.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(provider_raw, {"status": "passed", "cell": index})
+        provider_raw_files[provider_raw.relative_to(root).as_posix()] = (
+            _sha256_prefixed(provider_raw)
+        )
     provider_transport_digest = "sha256:" + ("d" * 64)
     provider = evidence / "providerEvidence.json"
     _write_json(
@@ -330,22 +347,38 @@ def _release_manifest(
         {
             "schema": "provider-conformance-readiness",
             "status": "passed",
+            "evidenceCount": provider_evidence_count,
+            "readiness": provider_readiness,
             "sourceEvidence": {
                 "ref": (
                     "oci://ghcr.io/owner/repo/provider-evidence@"
                     + provider_transport_digest
                 ),
                 "digest": provider_transport_digest,
-                "files": {
-                    provider_raw.relative_to(root).as_posix(): _sha256_prefixed(
-                        provider_raw
-                    )
-                },
+                "files": provider_raw_files,
             },
         },
     )
+    test_evidence_files: dict[str, dict[str, str]] = {}
+    for label, relative in finalizer.RELEASE_CLOSURE_PATHS.items():
+        source = root / relative
+        source.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(source, {"label": label, "status": "passed"})
+        test_evidence_files[label] = {
+            "path": relative,
+            "digest": _sha256_prefixed(source),
+        }
+    test_evidence = {
+        "schema": "qwq.three-layer-case-results",
+        "status": "passed",
+        "layers": {
+            layer: {"status": "passed", "artifactDigest": image_digest}
+            for layer in finalizer.TEST_LAYERS
+        },
+        "evidence": {"files": test_evidence_files},
+    }
     tests = evidence / "testEvidence.json"
-    tests.write_text("{}", encoding="utf-8")
+    _write_json(tests, test_evidence)
 
     manifest = finalizer.seal_manifest({
         "schema": finalizer.SCHEMA,
@@ -400,12 +433,13 @@ def _release_manifest(
                 layer: {"status": "passed", "artifactDigest": image_digest}
                 for layer in finalizer.TEST_LAYERS
             },
+            "evidence": test_evidence["evidence"],
         },
         "providerEvidence": {
             "path": provider.relative_to(root).as_posix(),
             "digest": _sha256_prefixed(provider),
             "status": "passed",
-            "evidenceCount": 1,
+            "evidenceCount": provider_evidence_count,
         },
         "environmentReceipts": {},
         "rolloutReceipt": None,

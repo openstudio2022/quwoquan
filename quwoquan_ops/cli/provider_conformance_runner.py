@@ -591,7 +591,11 @@ def _execute_cell(
     return evidence_path
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    evidence_paths_out: list[Path] | None = None,
+) -> int:
     args = _build_parser().parse_args(argv)
     try:
         registry = governance.load_registry()
@@ -652,6 +656,8 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
         print(f"[provider_conformance_runner] GATE_BLOCK: {exc}", file=sys.stderr)
         return 1
+    if evidence_paths_out is not None:
+        evidence_paths_out.extend(evidence_paths)
     for evidence_path in evidence_paths:
         print(f"[provider_conformance_runner] evidence={evidence_path}")
     return 0

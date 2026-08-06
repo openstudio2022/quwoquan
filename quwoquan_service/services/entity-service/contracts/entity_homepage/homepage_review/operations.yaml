@@ -172,6 +172,7 @@ api_routes:
   - method: GET
     path: /homepages/{homepageId}/reviews
     operation: ListHomepageReviews
+    pagination: {default_items: 20, maximum_items: 100}
     commercial:
       status: ready
     actor: none
@@ -288,15 +289,7 @@ consumers:
       - list_homepage_reviews
       - read_my_homepage_review
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: entity-service API
-      scenarios:
-        - name: list_homepage_reviews
-          route: GET /homepages/{homepageId}/reviews
-          assertions:
-            - status_200
-            - items_match_schema
+  test_strategy:
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
@@ -313,3 +306,84 @@ contract_test:
           assertions:
             - review summary projection converges to real aggregation
             - eventSpy.AssertPublished('HomepageReviewPublished')
+readiness_cases:
+  - case_id: create-homepage-review-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_review/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: create-homepage-review-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_review/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: update-homepage-review-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_review/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-homepage-review-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_review/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: delete-homepage-review-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: DeleteHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_review/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: delete-homepage-review-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: DeleteHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_review/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-homepage-reviews-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListHomepageReviews}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_review/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-homepage-reviews-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListHomepageReviews}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_review/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-my-homepage-review-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetMyHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_review/facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-my-homepage-review-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetMyHomepageReview}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_review/http_mongo_transaction__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 
 /// 小趣花瓣标识（与欢迎页像素级一致）
 ///

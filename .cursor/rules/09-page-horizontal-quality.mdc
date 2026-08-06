@@ -12,7 +12,7 @@ alwaysApply: true
 - `quwoquan_app/lib/ui/**/pages/**/*_page.dart`
 - `quwoquan_app/lib/ui/welcome/pages/welcome_screen.dart`
 - `quwoquan_app/lib/components/**/*_page.dart`
-- `quwoquan_app/lib/app/shell/*.dart`
+- `quwoquan_app/lib/runtime/shell/*.dart`
 
 仅占位 export 的 barrel 与 `chat_display_fallbacks.dart` 不作为独立页面。
 

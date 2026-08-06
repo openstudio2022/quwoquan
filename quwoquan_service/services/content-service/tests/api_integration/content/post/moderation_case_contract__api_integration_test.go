@@ -10,8 +10,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	"quwoquan_service/runtime/commandmeta"
+	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
@@ -22,7 +22,7 @@ import (
 )
 
 // TestReportOutboxOpensModerationCase 验证举报 → 审核闭环：
-// content.report.created 事实经 moderation-projection consumer 幂等打开
+// content.report.ReportCreated 事实经 moderation-projection consumer 幂等打开
 // PostModerationCase；同一事实重放与同一 post revision 的第二条举报都归并到
 // 同一个 Case（一次创建语义 + revision 唯一约束）。
 func TestReportOutboxOpensModerationCase(t *testing.T) {
@@ -41,7 +41,7 @@ func TestReportOutboxOpensModerationCase(t *testing.T) {
 		t.Fatalf("init pg report store: %v", err)
 	}
 	reportService := reportapp.NewReportService(reportapp.BindDataPorts(reportRepo))
-	opener := moderationapp.NewReportCaseOpener(
+	opener := moderationapp.NewReportModerationHandler(
 		testModerationFacades,
 		persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
 	)
@@ -160,7 +160,7 @@ func TestReportPostRevisionDecodeFailureDoesNotAdvanceCheckpoint(t *testing.T) {
 	relay := reportapp.NewOutboxRelay(
 		reportRepo,
 		reportRepo,
-		moderationapp.NewReportCaseOpener(
+		moderationapp.NewReportModerationHandler(
 			testModerationFacades,
 			persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
 		),
@@ -331,13 +331,13 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	reportRelay := reportapp.NewOutboxRelay(
 		reportRepo,
 		reportRepo,
-		moderationapp.NewReportCaseOpener(testModerationFacades, postReader),
+		moderationapp.NewReportModerationHandler(testModerationFacades, postReader),
 		"content-report-moderation-post-lifecycle",
 	)
 	moderationRelay := moderationapp.NewOutboxRelay(
 		testModerationStore,
 		testModerationStore,
-		postapp.NewPostModerationDecisionConsumer(testPostService),
+		postapp.NewPostModerationDecisionHandler(testPostService),
 		"content-moderation-post-lifecycle-api-integration",
 	)
 

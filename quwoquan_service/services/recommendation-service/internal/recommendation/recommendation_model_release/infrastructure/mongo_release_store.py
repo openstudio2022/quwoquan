@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from pymongo import ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from ..domain.model import ActivateRelease, CommandResult, StageRelease
+from ..domain.outbox import (
+    OutboxClaimLostError,
+    OutboxEvent,
+    build_model_release_event_payload,
+)
 
 
 class ModelReleaseConflictError(RuntimeError):
@@ -48,6 +54,127 @@ class MongoRecommendationModelReleaseStore:
             unique=True,
             name="uq_model_release_outbox_aggregate_version_event",
         )
+        self._outbox.create_index(
+            [
+                ("publishedAt", ASCENDING),
+                ("nextAttemptAt", ASCENDING),
+                ("occurredAt", ASCENDING),
+                ("_id", ASCENDING),
+            ],
+            name="idx_model_release_outbox_delivery_head",
+        )
+
+    def claim_pending_outbox(
+        self,
+        owner_id: str,
+        now: datetime,
+        lease_seconds: float,
+    ) -> OutboxEvent | None:
+        owner = owner_id.strip()
+        if not owner or now.tzinfo is None or lease_seconds <= 0:
+            raise ValueError("model release outbox claim is invalid")
+        instant = now.astimezone(UTC)
+        candidate = self._outbox.find_one(
+            {"publishedAt": None},
+            {"_id": 1},
+            sort=[("occurredAt", ASCENDING), ("_id", ASCENDING)],
+        )
+        if candidate is None:
+            return None
+        record = self._outbox.find_one_and_update(
+            {
+                "_id": candidate["_id"],
+                "publishedAt": None,
+                "$and": [
+                    {
+                        "$or": [
+                            {"nextAttemptAt": {"$exists": False}},
+                            {"nextAttemptAt": {"$lte": instant}},
+                        ]
+                    },
+                    {
+                        "$or": [
+                            {"leaseOwner": {"$exists": False}},
+                            {"leaseExpiresAt": {"$lte": instant}},
+                        ]
+                    },
+                ],
+            },
+            {
+                "$set": {
+                    "leaseOwner": owner,
+                    "leaseExpiresAt": instant + timedelta(seconds=lease_seconds),
+                },
+                "$inc": {"attemptCount": 1},
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        if record is None:
+            return None
+        payload = record.get("payloadJson")
+        if not isinstance(payload, dict):
+            payload = {}
+        return OutboxEvent(
+            event_id=str(record.get("_id") or ""),
+            event_type=str(record.get("eventType") or ""),
+            aggregate_id=str(record.get("aggregateId") or ""),
+            aggregate_version=int(record.get("aggregateVersion") or 0),
+            payload=dict(payload),
+            occurred_at=record.get("occurredAt"),
+            attempt_count=int(record.get("attemptCount") or 0),
+        )
+
+    def mark_outbox_published(
+        self,
+        event_id: str,
+        owner_id: str,
+        published_at: datetime,
+    ) -> None:
+        result = self._outbox.update_one(
+            {
+                "_id": event_id.strip(),
+                "leaseOwner": owner_id.strip(),
+                "publishedAt": None,
+            },
+            {
+                "$set": {"publishedAt": published_at.astimezone(UTC)},
+                "$unset": {
+                    "leaseOwner": "",
+                    "leaseExpiresAt": "",
+                    "nextAttemptAt": "",
+                    "lastErrorCode": "",
+                },
+            },
+        )
+        if result.matched_count != 1:
+            raise OutboxClaimLostError("model release outbox claim was lost")
+
+    def schedule_outbox_retry(
+        self,
+        event_id: str,
+        owner_id: str,
+        next_attempt_at: datetime,
+        failure_code: str,
+    ) -> None:
+        normalized_failure = failure_code.strip()
+        if not normalized_failure or len(normalized_failure) > 64:
+            normalized_failure = "delivery_failed"
+        result = self._outbox.update_one(
+            {
+                "_id": event_id.strip(),
+                "leaseOwner": owner_id.strip(),
+                "publishedAt": None,
+            },
+            {
+                "$set": {
+                    "nextAttemptAt": next_attempt_at.astimezone(UTC),
+                    "lastErrorCode": normalized_failure,
+                },
+                "$unset": {"leaseOwner": "", "leaseExpiresAt": ""},
+            },
+        )
+        if result.matched_count != 1:
+            raise OutboxClaimLostError("model release outbox claim was lost")
 
     @staticmethod
     def _receipt_id(operation: str, idempotency_key: str) -> str:
@@ -175,7 +302,7 @@ class MongoRecommendationModelReleaseStore:
             if replayed is not None:
                 return replayed
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             existing = self._releases.find_one(
                 {"_id": command.release_id}, session=session
             )
@@ -211,14 +338,14 @@ class MongoRecommendationModelReleaseStore:
                     event_type="RecommendationModelReleaseStaged",
                     aggregate_id=command.release_id,
                     aggregate_version=version,
-                    payload={
-                        "releaseId": command.release_id,
-                        "scenario": command.scenario,
-                        "modelDigest": command.model_digest,
-                        "featureContractDigest": command.feature_contract_digest,
-                        "artifactUri": command.artifact_uri,
-                        "verificationDigest": command.verification_digest,
-                    },
+                    payload=build_model_release_event_payload(
+                        "RecommendationModelReleaseStaged",
+                        release_id=command.release_id,
+                        scenario=command.scenario,
+                        model_digest=command.model_digest,
+                        feature_contract_digest=command.feature_contract_digest,
+                        occurred_at=now,
+                    ),
                     occurred_at=now,
                     session=session,
                 )
@@ -263,7 +390,7 @@ class MongoRecommendationModelReleaseStore:
             if replayed is not None:
                 return replayed
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             current = self._releases.find_one(
                 {"scenario": command.scenario, "status": "active"},
                 session=session,
@@ -342,11 +469,12 @@ class MongoRecommendationModelReleaseStore:
                     event_type="RecommendationModelReleaseRetired",
                     aggregate_id=current_id,
                     aggregate_version=current_version + 1,
-                    payload={
-                        "releaseId": current_id,
-                        "scenario": command.scenario,
-                        "activatedReleaseId": command.release_id,
-                    },
+                    payload=build_model_release_event_payload(
+                        "RecommendationModelReleaseRetired",
+                        release_id=current_id,
+                        scenario=command.scenario,
+                        occurred_at=now,
+                    ),
                     occurred_at=now,
                     session=session,
                 )
@@ -379,15 +507,14 @@ class MongoRecommendationModelReleaseStore:
                 event_type="RecommendationModelReleaseActivated",
                 aggregate_id=command.release_id,
                 aggregate_version=activated_version,
-                payload={
-                    "releaseId": command.release_id,
-                    "scenario": command.scenario,
-                    "previousActiveReleaseId": current_id,
-                    "modelDigest": target["modelDigest"],
-                    "featureContractDigest": target["featureContractDigest"],
-                    "artifactUri": target["artifactUri"],
-                    "verificationDigest": target["verificationDigest"],
-                },
+                payload=build_model_release_event_payload(
+                    "RecommendationModelReleaseActivated",
+                    release_id=command.release_id,
+                    scenario=command.scenario,
+                    model_digest=target["modelDigest"],
+                    feature_contract_digest=target["featureContractDigest"],
+                    occurred_at=now,
+                ),
                 occurred_at=now,
                 session=session,
             )

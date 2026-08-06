@@ -368,14 +368,6 @@ def write_submission(
         )
     if (
         frozen_semantic_selection_id == CURSOR_AUTO_SEMANTIC_SELECTION_ID
-        and retry_of is None
-    ):
-        raise ValueError(
-            "GATE_BLOCK DATA.CAMPAIGN.SEMANTIC_SELECTION_RETRY_REQUIRED: "
-            "cursor_auto requires a new execution with retryOf"
-        )
-    if (
-        frozen_semantic_selection_id == CURSOR_AUTO_SEMANTIC_SELECTION_ID
         and semantic_preflight_binding is None
     ):
         raise ValueError(

@@ -1,36 +1,24 @@
 events:
 - name: PersonaCreated
-  producer: user-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Persona
   payload_fields:
   - userId
   - personaId
 - name: PersonaUpdated
-  producer: user-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Persona
   payload_fields:
   - userId
   - personaId
 - name: PersonaRetired
-  producer: user-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Persona
   payload_fields:
   - userId
   - personaId
 - name: PersonaActivated
-  producer: user-service
-  consumers:
-  - projection-workers
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: Persona
   payload_fields:
   - userId

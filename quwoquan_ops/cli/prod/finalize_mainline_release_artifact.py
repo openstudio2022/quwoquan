@@ -9,8 +9,17 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.ci.render_provider_conformance_source import (
+    expected_required_cell_count_from_readiness,
+)
 
 
 SCHEMA = "release-evidence-manifest"
@@ -1359,8 +1368,17 @@ def _verify_provider_raw_evidence(
     *,
     expected_count: int,
 ) -> None:
-    if expected_count != 140:
-        raise ValueError("providerEvidence must bind exactly 140 raw cells")
+    readiness_count = expected_required_cell_count_from_readiness(
+        provider_payload.get("readiness")
+    )
+    if (
+        expected_count != readiness_count
+        or provider_payload.get("evidenceCount") != readiness_count
+    ):
+        raise ValueError(
+            "providerEvidence manifest count does not match its dynamically "
+            "validated required cell set"
+        )
     source = provider_payload.get("sourceEvidence")
     if not isinstance(source, dict) or set(source) != {"ref", "digest", "files"}:
         raise ValueError("providerEvidence sourceEvidence is not canonical")

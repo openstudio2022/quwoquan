@@ -28,7 +28,7 @@ SCRIPT = (
 SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
-BETA_STARTUP_PATH = ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+BETA_STARTUP_PATH = ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
 SPEC = importlib.util.spec_from_file_location(
     "run_media_publication_device_matrix_ci",
     SCRIPT,

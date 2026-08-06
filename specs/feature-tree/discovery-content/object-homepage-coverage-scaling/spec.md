@@ -42,6 +42,8 @@
 - 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
+- homepage/article/image/video 的 quota/count 只表达请求负载与 `100/100/100/10`、`1000/1000/1000/100` 里程碑 target；每路至少一个对象闭合对象硬门且所有合格对象均发布即可形成结构性 promotion，shortfall、discard 与比率统计不否决。
+- M1000 只能精确绑定同一 release/manifest/source/catalog identity 的 create-once M100 promotion receipt。
 - release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
 
 <a id="req-002"></a>
@@ -69,6 +71,8 @@
 - THEN 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - THEN execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - THEN 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
+- THEN M100 promotion 证明四路真实执行、每路至少一个 hard-qualified 对象全部发布、同源与资源隔离成立；receipt 记录 target/qualified/shortfall 及各 rate 分子分母，但不要求 target 或比率命中。
+- THEN M1000 精确绑定该 M100 promotion identity，不以其它 release、计划值或聚合成功替代。
 - THEN release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
 
 ## 8. 开放事项

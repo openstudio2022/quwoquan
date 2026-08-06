@@ -6,7 +6,7 @@
 ``lib/<domain>/<context>/<object>/<layer>/`` 的对象树。页面文件每被搬走一次，
 ``page_object_contract.yaml`` 的路径就失效一条：
 
-- ``quwoquan_app/scripts/runtime/verify_page_object_contract.py`` 直接 BLOCK。
+- ``quwoquan_app/scripts/runtime/page/verify_page_object_contract.py`` 直接 BLOCK。
 - ``quwoquan_ops/gate/object_path_map.py`` 的 ``page_object_contract`` 认领
   **无声失效**，退化成别名启发式或 ``context_only``。
 
@@ -18,13 +18,14 @@
     # 只检测，不落盘（CI / gate 用）
     python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --check
 
-    # 检测并修正（搬迁期人工/循环执行）
-    python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py
+    # 搬完页面后一条命令收敛 + 门禁分类（运行报告落 .qwq_output，可删可重建）
+    python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --with-gate
 
     # 把需人工裁决的 REVIEW 项也视为失败
     python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --check --fail-on-review
 
 退出码：``0`` 无待处理 drift；``1`` 存在需人工裁决项；``2`` 工具/契约自身错误。
+``--with-gate`` 只读消费门禁输出用于分类，退出码不受门禁影响，也绝不修改门禁。
 """
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
 
@@ -39,6 +40,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from copy import deepcopy
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Sequence
@@ -52,12 +54,12 @@ CONTRACT_REL = "quwoquan_service/contracts/metadata/_shared/page_object_contract
 
 #: 搬迁流每 15~30 秒提交一次，重命名链可能跨多个提交，逐跳追到磁盘存在为止。
 GIT_RENAME_MAX_HOPS = 8
-GIT_RENAME_LOG_LIMIT = 40
-
-CLASS_DECLARATION = "class"
 
 #: 与 ``source_path`` 一样承载 App 相对路径、同样会被搬迁打断的装配证据字段。
 EVIDENCE_FIELDS = ("route_registration_evidence", "mount_evidence")
+
+#: 运行报告目录名；落在 `.qwq_output` 下，可删除可重建，不是第二套页面台账。
+REPORT_DIR_NAME = "page-object-source-path"
 
 
 # ---------------------------------------------------------------------------
@@ -322,15 +324,7 @@ def git_rename_target(repository_root: Path, relative_from_root: str) -> str | N
     for _ in range(GIT_RENAME_MAX_HOPS):
         commit = _run_git(
             repository_root,
-            [
-                "log",
-                "--diff-filter=D",
-                "--format=%H",
-                f"-{GIT_RENAME_LOG_LIMIT}",
-                "-1",
-                "--",
-                current,
-            ],
+            ["log", "--diff-filter=D", "--format=%H", "-1", "--", current],
         ).strip()
         if not commit:
             return None
@@ -355,7 +349,7 @@ def _dart_library_text(source: Path) -> str:
 
 
 def defines_entry_widget(source: Path, entry_widget: str) -> bool:
-    pattern = re.compile(rf"\b{CLASS_DECLARATION}\s+{re.escape(entry_widget)}\b")
+    pattern = re.compile(rf"\bclass\s+{re.escape(entry_widget)}\b")
     return bool(pattern.search(_dart_library_text(source)))
 
 
@@ -467,16 +461,32 @@ def resolve_moved_path(
 # ---------------------------------------------------------------------------
 
 
+def _looks_like_object_presentation(path_parts: tuple[str, ...]) -> bool:
+    if len(path_parts) < 6 or path_parts[0] != "lib":
+        return False
+    if path_parts[4] == "presentation":
+        return True
+    return (
+        len(path_parts) >= 7
+        and path_parts[1] == "service"
+        and path_parts[5] == "presentation"
+    )
+
+
 def multi_object_presentation_findings(
     pages: Sequence[dict],
     shape_of: Callable[[str], tuple[str, str, str, str] | None],
 ) -> list[ReviewFinding]:
-    """多 ``object_ids`` 页面被搬进单个对象 ``presentation/`` 时报人工裁决。
+    """只报告无法证明 physical owner 的多 participant 页面。
 
-    ``object_path_map.py`` 的 ``app_target_shape`` 优先级高于
-    ``page_object_contract``，一旦这类页面落进某个对象目录，它就从
-    ``multi_object_page`` 信号里掉出去 —— 「40 个」下降不代表页面被拆了。
-    metadata 的 ``object_ids`` 才是拆页决策真相源，这里保证它不会无声消失。
+    ``object_ids`` 表达页面参与对象集合，不代表每个 participant 都要拥有一份
+    ``presentation``。页面位于 canonical
+    ``lib/<domain>/<context>/<object>/presentation/**``，且由对象 roster 派生出的
+    physical owner 已在 ``object_ids`` 中时，单一 presentation 正是合法形状。
+
+    只有 physical owner 缺席、canonical 路径无法反推，或 participant 集合本身
+    含空值/重复值时才保留 REVIEW。非对象化的 runtime/design-system shell 不在本
+    检查职责内；伪装成对象 presentation 的 shell 路径会因无法命中 roster 而阻断。
     """
 
     findings: list[ReviewFinding] = []
@@ -485,12 +495,46 @@ def multi_object_presentation_findings(
         if not isinstance(object_ids, list) or len(object_ids) < 2:
             continue
         source_path = str(page["source_path"]).strip()
+        path_parts = Path(source_path).parts
+        looks_like_object_presentation = _looks_like_object_presentation(path_parts)
         shape = shape_of(source_path)
+        if shape is None and not looks_like_object_presentation:
+            continue
+
+        normalized_object_ids = tuple(
+            str(item).strip() for item in object_ids if isinstance(item, str)
+        )
+        participant_set_is_valid = (
+            len(normalized_object_ids) == len(object_ids)
+            and all(normalized_object_ids)
+            and len(set(normalized_object_ids)) == len(normalized_object_ids)
+        )
+
+        physical_owner: str | None = None
+        reason: str
         if shape is None:
-            continue
-        domain, context, object_name, layer = shape
-        if layer != "presentation":
-            continue
+            reason = (
+                "source_path 看似单对象 presentation，但无法从 ContractGraph roster "
+                "反推 physical owner；可能是 ownerless 路径或 shell 伪装"
+            )
+        else:
+            domain, context, object_name, layer = shape
+            physical_owner = f"{domain}.{object_name}"
+            if layer != "presentation" or not looks_like_object_presentation:
+                reason = (
+                    "source_path 与派生层不一致，不能证明 canonical 单对象 "
+                    f"presentation（派生 {domain}.{context}.{object_name}/{layer}）"
+                )
+            elif not participant_set_is_valid:
+                reason = "object_ids 含空值、非字符串或重复 participant，集合发生漂移"
+            elif physical_owner not in normalized_object_ids:
+                reason = (
+                    f"派生 physical owner {physical_owner} 未出现在 object_ids，"
+                    "页面参与集合与物理归属漂移"
+                )
+            else:
+                continue
+
         findings.append(
             ReviewFinding(
                 kind="multi_object_single_presentation",
@@ -499,9 +543,8 @@ def multi_object_presentation_findings(
                 detail=(
                     f"声明 {len(object_ids)} 个 object_ids "
                     f"({', '.join(str(item) for item in object_ids)}) "
-                    f"却已落在单对象 {domain}.{context}.{object_name} 的 presentation/；"
-                    "object_path_map 会按 app_target_shape 判成单对象，"
-                    "multi_object_page 信号随之丢失，需人工决定拆页或改归属"
+                    f"但{reason}；需人工修正 owner/participant 契约，不能靠多对象页面"
+                    "计数消失视为闭合"
                 ),
             )
         )
@@ -720,9 +763,107 @@ def _load_shape_resolver(repository_root: Path) -> Callable[[str], tuple[str, st
 
 
 def _load_disk_scan_paths(repository_root: Path) -> frozenset[str]:
-    with _importable(repository_root / APP_DIR_NAME / "scripts" / "runtime"):
+    with _importable(repository_root / APP_DIR_NAME / "scripts" / "runtime" / "page"):
         import page_disk_scan_paths  # type: ignore
     return page_disk_scan_paths.matrix_disk_scan_paths(repository_root)
+
+
+def _default_report_dir(repository_root: Path) -> Path:
+    """复用 Ops 的唯一输出根契约，不在本工具复制 ``.qwq_output`` 布局规则。"""
+
+    with _importable(repository_root):
+        from quwoquan_ops.cli.lib.output_paths import repo_runs_root  # type: ignore
+    return repo_runs_root() / REPORT_DIR_NAME
+
+
+# ---------------------------------------------------------------------------
+# 门禁失败分类（只读消费门禁输出，不改门禁）
+# ---------------------------------------------------------------------------
+
+#: 门禁失败按「谁能修」分类，避免每轮人工重读一遍 flat 列表。
+GATE_FAILURE_CLASSES: tuple[tuple[str, str, str], ...] = (
+    (
+        "page_scan_set_gap",
+        r"不在页面扫描集|磁盘页面未登记",
+        "页面已在对象树目标位置，但 page_disk_scan_paths 的扫描规则尚未跟随；"
+        "属页面质量门禁 owner，不能靠改契约绕过",
+    ),
+    (
+        "contract_path_drift",
+        r"source_path 不存在|evidence 不存在|Dart part 不存在",
+        "契约路径尚未同步；重跑本工具即可收敛",
+    ),
+    (
+        "contract_reference_drift",
+        r"typed_presentation .*不存在|object_id 无 object.yaml 定义"
+        r"|Query Slice 引用不存在|route_id 引用不存在|surface 引用不存在"
+        r"|capability 未在 PlatformCapabilities 定义",
+        "契约引用的类型/对象/路由已被端云改名或删除；需按实际实现裁决后改契约",
+    ),
+    (
+        "owner_or_object_missing",
+        r"experience_owner .*佐证|data_owner .*佐证|未列入 data_owners"
+        r"|experience_owner 必填|data_owners 必须",
+        "页面缺 owner 或对象归属佐证；需业务裁决后补契约",
+    ),
+    (
+        "assembly_evidence_broken",
+        r"未装配 entry_widget|未消费 entry_widget|未注册 route"
+        r"|没有对应 Surface 覆盖|未定义 entry_widget",
+        "页面装配点已改动但契约声明的 entry_widget/route 装配不再成立；"
+        "需对应 domain 流确认落位后再同步契约",
+    ),
+)
+
+
+def classify_gate_failures(output: str) -> dict[str, list[str]]:
+    classified: dict[str, list[str]] = {}
+    for line in output.splitlines():
+        message = line.strip()
+        if not message.startswith("- "):
+            continue
+        message = message[2:].strip()
+        bucket = "unclassified"
+        for name, pattern, _ in GATE_FAILURE_CLASSES:
+            if re.search(pattern, message):
+                bucket = name
+                break
+        classified.setdefault(bucket, []).append(message)
+    return classified
+
+
+def run_page_quality_gates(repository_root: Path) -> dict:
+    """只读跑页面横向质量门禁并分类失败，不修改门禁脚本。"""
+
+    runtime = repository_root / APP_DIR_NAME / "scripts" / "runtime" / "page"
+    results: list[dict] = []
+    for script, extra in (
+        ("verify_page_object_contract.py", ()),
+        ("verify_page_abc_governance.py", ("--quiet",)),
+    ):
+        completed = subprocess.run(
+            [sys.executable, str(runtime / script), *extra],
+            cwd=repository_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        output = completed.stdout + completed.stderr
+        results.append(
+            {
+                "script": script,
+                "exitCode": completed.returncode,
+                "output": output.strip(),
+                "failuresByClass": classify_gate_failures(output),
+            }
+        )
+    return {
+        "classes": {
+            name: description for name, _, description in GATE_FAILURE_CLASSES
+        },
+        "gates": results,
+    }
 
 
 def render_report(report: SyncReport, *, write: bool) -> str:
@@ -750,6 +891,76 @@ def render_report(report: SyncReport, *, write: bool) -> str:
     return "\n".join(lines)
 
 
+def render_markdown_report(payload: dict) -> str:
+    lines = [
+        "# page_object_contract 路径同步运行报告",
+        "",
+        "一次性运行输出，可删除可重建；页面集合真相仍是磁盘扫描与 "
+        "`page_object_contract.yaml`，本文件不是台账。",
+        "",
+        f"- 扫描时点：`{payload['scanAt']}`",
+        f"- HEAD：`{payload['headCommit']}`",
+        f"- 契约登记页面：{payload['sync']['totalPages']}",
+        f"- 本轮 drift：{payload['sync']['driftTotal']}"
+        f"（已修 {len(payload['sync']['fixes'])}，"
+        f"待人工裁决 {len(payload['sync']['manual'])}）",
+        f"- 契约是否被写入：{'是' if payload['sync']['changed'] else '否'}",
+        "",
+    ]
+    if payload["sync"]["fixes"]:
+        lines += ["## 已同步", ""]
+        for item in payload["sync"]["fixes"]:
+            lines.append(
+                f"- `{item['pageId']}`.{item['field']} [{item['method']}]："
+                f"`{item['oldPath']}` -> `{item['newPath']}`"
+            )
+        lines.append("")
+    if payload["sync"]["manual"]:
+        lines += ["## 需人工裁决（无法唯一定位）", ""]
+        for item in payload["sync"]["manual"]:
+            lines.append(f"- `{item['pageId']}`.{item['field']}：{item['reason']}")
+            for candidate in item["candidates"]:
+                lines.append(f"  - 候选：`{candidate}`")
+        lines.append("")
+    if payload["sync"]["review"]:
+        lines += ["## 需人工裁决（伴生风险）", ""]
+        for item in payload["sync"]["review"]:
+            lines.append(
+                f"- [{item['kind']}] `{item['pageId']}`（`{item['sourcePath']}`）："
+                f"{item['detail']}"
+            )
+        lines.append("")
+    gate = payload.get("gate")
+    if gate:
+        lines += ["## 页面横向质量门禁", ""]
+        for entry in gate["gates"]:
+            lines.append(f"### `{entry['script']}` exit={entry['exitCode']}")
+            lines.append("")
+            for bucket, messages in sorted(entry["failuresByClass"].items()):
+                lines.append(
+                    f"- **{bucket}**（{gate['classes'].get(bucket, '未归类')}）："
+                    f"{len(messages)} 条"
+                )
+                for message in messages:
+                    lines.append(f"  - {message}")
+            if not entry["failuresByClass"]:
+                lines.append("- 无失败项")
+            lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def write_run_report(report_dir: Path, payload: dict) -> Path:
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "report.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (report_dir / "report.md").write_text(
+        render_markdown_report(payload), encoding="utf-8"
+    )
+    return report_dir
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="同步 page_object_contract.yaml 的 source_path 到磁盘真相"
@@ -765,6 +976,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="把 REVIEW（多对象页面落单对象 presentation、页面扫描集缺口）也视为失败",
     )
     parser.add_argument("--json", action="store_true", help="额外输出机器可读报告")
+    parser.add_argument(
+        "--with-gate",
+        action="store_true",
+        help="同步后顺带只读跑页面横向质量门禁并按「谁能修」分类失败",
+    )
+    parser.add_argument(
+        "--report-dir",
+        default=None,
+        help="运行报告目录（默认 .qwq_output/env/repo/runs/page-object-source-path）",
+    )
+    parser.add_argument(
+        "--no-report",
+        action="store_true",
+        help="不落运行报告（默认落 .qwq_output 下的一次性可重建报告）",
+    )
     parser.add_argument(
         "--repository-root",
         default=None,
@@ -792,6 +1018,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(render_report(report, write=not arguments.check))
     if arguments.json:
         print(json.dumps(report.as_json(), ensure_ascii=False, indent=2, sort_keys=True))
+
+    payload = {
+        "schema": "page-object-source-path-sync-run",
+        "scanAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "headCommit": _run_git(repository_root, ["rev-parse", "HEAD"]).strip()
+        or "unknown",
+        "mode": "check" if arguments.check else "write",
+        "sync": report.as_json(),
+    }
+    if arguments.with_gate:
+        payload["gate"] = run_page_quality_gates(repository_root)
+        for entry in payload["gate"]["gates"]:
+            print(f"[page-quality-gate] {entry['script']} exit={entry['exitCode']}")
+            for bucket, messages in sorted(entry["failuresByClass"].items()):
+                print(f"  {bucket}: {len(messages)}")
+                for message in messages:
+                    print(f"    - {message}")
+    if not arguments.no_report:
+        report_dir = (
+            Path(arguments.report_dir).resolve()
+            if arguments.report_dir
+            else _default_report_dir(repository_root)
+        )
+        write_run_report(report_dir, payload)
+        print(f"[page-object-source-path] report -> {report_dir}")
 
     if report.manual:
         return 1

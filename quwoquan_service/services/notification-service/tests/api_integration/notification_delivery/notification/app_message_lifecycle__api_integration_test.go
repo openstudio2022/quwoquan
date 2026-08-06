@@ -1,3 +1,10 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+// readiness_case: create-app-message-api
+// readiness_case: list-app-messages-api
+// readiness_case: get-app-message-api
+// readiness_case: ack-app-message-api
+// readiness_case: read-app-message-api
+// readiness_case: get-app-message-unread-count-api
 package api_integration
 
 import (
@@ -37,7 +44,6 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 	httpHandler, err := httpadapter.NewHandler(httpadapter.HandlerDependencies{
 		AppMessageCommands: commands,
 		AppMessageQueries:  queries,
-		IncomingCalls:      newTestIncomingCallCoordinator(t),
 	})
 	if err != nil {
 		t.Fatalf("construct notification handler: %v", err)
@@ -80,6 +86,19 @@ func TestAppMessageLifecycleUsesNotificationAggregateAndTransactionalOutbox(t *t
 	items, ok := decodeResponse(t, list)["items"].([]any)
 	if !ok || len(items) != 1 {
 		t.Fatalf("list items=%#v", items)
+	}
+	owned := requestAppMessage(
+		t,
+		handler,
+		http.MethodGet,
+		"/app-messages/"+messageID,
+		"account_001",
+		"",
+		nil,
+	)
+	if owned.Code != http.StatusOK ||
+		stringValue(decodeResponse(t, owned)["messageId"]) != messageID {
+		t.Fatalf("owner detail status=%d body=%s", owned.Code, owned.Body.String())
 	}
 
 	// 收件箱身份只能来自经认证中间件写入的 principal；调用方伪造

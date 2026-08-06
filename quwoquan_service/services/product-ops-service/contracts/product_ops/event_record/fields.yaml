@@ -114,7 +114,7 @@ types:
     - {name: acceptedCount, source: acceptedCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: duplicateBatch, source: duplicateBatch, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   StartupTelemetryEventWire:
-    description: 匿名启动诊断的最小事件 wire；不得承载账号、内容、原始异常或堆栈。
+    description: 匿名启动与启动恢复诊断的最小事件 wire；不得承载账号、内容、原始异常、堆栈、URL 或 route identity。
     fields:
     - {name: eventId, source: eventId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: attemptId, source: attemptId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
@@ -128,7 +128,11 @@ types:
     - {name: runtimeEnv, source: runtimeEnv, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: appVersion, source: appVersion, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: networkClass, source: networkClass, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
-    - {name: recoverySurface, source: recoverySurface, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: recoverySurface, source: recoverySurface, type: enum, enum_ref: StartupRecoverySurface, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: recoveryLifecycle, source: recoveryLifecycle, type: enum, enum_ref: StartupRecoveryLifecycle, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: recoveryMount, source: recoveryMount, type: enum, enum_ref: StartupRecoveryMount, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: recoveryPhase, source: recoveryPhase, type: enum, enum_ref: StartupRecoveryPhase, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: recoveryAction, source: recoveryAction, type: enum, enum_ref: StartupRecoveryAction, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: failureCode, source: failureCode, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: failureSource, source: failureSource, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: deadlineOrigin, source: deadlineOrigin, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
@@ -142,6 +146,17 @@ types:
     fields:
     - {name: acceptedCount, source: acceptedCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: duplicateBatch, source: duplicateBatch, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+enums:
+  StartupRecoverySurface:
+    values: [page.app.startup_recovery]
+  StartupRecoveryLifecycle:
+    values: [enter, phase_change, external_action, runtime_reentry, exit, failure]
+  StartupRecoveryMount:
+    values: [bootstrap, runtime_boundary, safe_shell, router_error]
+  StartupRecoveryPhase:
+    values: [startup_checking, startup_update_required, startup_latest, startup_version_unavailable, runtime_unavailable, runtime_reentering, runtime_version_checking, runtime_update_required, runtime_latest, runtime_version_unavailable]
+  StartupRecoveryAction:
+    values: [none, open_update, open_web, external_return, runtime_reentry]
 typed_extensions:
   catalog: event_catalog.yaml
   discriminator: eventType

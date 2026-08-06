@@ -1,14 +1,16 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
 import '../operation_request_payload.dart';
 import "../generated/shared_operation_enums.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
+import "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart";
 
 export "../generated/shared_operation_enums.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
+export "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart";
 
 part '../generated/requests/content/content_operation_contracts.g.requests.g.dart';
 
@@ -252,29 +254,6 @@ enum InteractionDirection {
     return switch (value) {
       "received" => InteractionDirection.received,
       "sent" => InteractionDirection.sent,
-      _ => throw FormatException('$path has an invalid enum value'),
-    };
-  }
-}
-
-enum IntersectionDimension {
-  identity("identity"),
-  location("location"),
-  content("content"),
-  interest("interest"),
-  relationship("relationship");
-
-  const IntersectionDimension(this.wireName);
-
-  final String wireName;
-
-  static IntersectionDimension fromWire(Object? value, String path) {
-    return switch (value) {
-      "identity" => IntersectionDimension.identity,
-      "location" => IntersectionDimension.location,
-      "content" => IntersectionDimension.content,
-      "interest" => IntersectionDimension.interest,
-      "relationship" => IntersectionDimension.relationship,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -551,6 +530,7 @@ enum ReportTargetType {
   comment("comment"),
   user("user"),
   circle("circle"),
+  gathering("gathering"),
   message("message");
 
   const ReportTargetType(this.wireName);
@@ -563,6 +543,7 @@ enum ReportTargetType {
       "comment" => ReportTargetType.comment,
       "user" => ReportTargetType.user,
       "circle" => ReportTargetType.circle,
+      "gathering" => ReportTargetType.gathering,
       "message" => ReportTargetType.message,
       _ => throw FormatException('$path has an invalid enum value'),
     };

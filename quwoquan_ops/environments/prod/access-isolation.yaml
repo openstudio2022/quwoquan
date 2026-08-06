@@ -143,7 +143,6 @@ prevalidation:
         - tag-service
         - entity-service
         - notification-service
-        - travel-service
       imageAndConfigOnlyServices: [integration-service]
       exposedPorts:
         - 39000
@@ -159,7 +158,6 @@ prevalidation:
         - 39270
         - 39290
         - 39320
-        - 39330
         - 39400
         - 39410
         - 39420
@@ -269,7 +267,6 @@ planes:
       - product-ops-service
       - search-service
       - tag-service
-      - travel-service
       - user-service
     rootlessComposeTemplate: quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
     rootlessGovernedComposeServices:
@@ -287,7 +284,6 @@ planes:
       - entity-service
       - integration-service
       - notification-service
-      - travel-service
     # rootless compose 是 topology workload 的运行投影，不重新定义 domain 归属。
     rootlessProjectionBindings:
       - composeService: api-edge
@@ -320,8 +316,6 @@ planes:
         ownerWorkload: integration-service
       - composeService: notification-service
         ownerWorkload: notification-service
-      - composeService: travel-service
-        ownerWorkload: travel-service
     rootlessSupportComposeServices:
       - gamma-proxy
     rootlessConfigServices:
@@ -339,7 +333,6 @@ planes:
       - entity-service
       - integration-service
       - notification-service
-      - travel-service
     rootlessRuntimeCredentials:
       api-edge:
         envFile: api-edge/admission-redis.env
@@ -388,7 +381,7 @@ planes:
     appliesToStages: [gray-initial, carry-on, full]
     summary: >
       当前 prod-hosted 首波 rootless 接管按 onebox split-services 真实运行面落地：
-      governed compose services = api-edge/recommendation/content/chat/circle/user/assistant/product-ops/platform-ops/search/tag/entity/integration/notification/travel，
+      governed compose services = api-edge/recommendation/content/chat/circle/user/assistant/product-ops/platform-ops/search/tag/entity/integration/notification，
       support compose services = gamma-proxy；数据面继续复用现有 host 上的 19400/19410/19420 服务，不在 service plane 内复制一套空 DB。
       integration-service 的 APNs/FCM 凭据仅从 credentialsPath 下的 rootlessRuntimeCredentials 文件读取，
       不进入仓库、渲染产物、stack.env、日志或 provenance。

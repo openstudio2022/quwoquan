@@ -19,29 +19,29 @@ var (
 // AppErrorFromPreferenceInvalidArgument returns *AppError for ASSISTANT.USER.preference_invalid_argument (user_message from errors.yaml).
 func AppErrorFromPreferenceInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.preference_invalid_argument")
-	return rterr.NewAppError(code, "偏好设置无效，请重新选择", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "偏好设置无效，请重新选择", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPreferenceNotFound returns *AppError for ASSISTANT.USER.preference_not_found (user_message from errors.yaml).
 func AppErrorFromPreferenceNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.preference_not_found")
-	return rterr.NewAppError(code, "偏好不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "偏好不存在或已失效", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPreferenceRestoreExpired returns *AppError for ASSISTANT.USER.preference_restore_expired (user_message from errors.yaml).
 func AppErrorFromPreferenceRestoreExpired(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.preference_restore_expired")
-	return rterr.NewAppError(code, "撤销恢复时间已过，请重新设置偏好", debugMessage).WithMetadata("restore_expired", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "撤销恢复时间已过，请重新设置偏好", debugMessage).WithMetadata("restore_expired", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPreferenceStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.preference_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromPreferenceStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.preference_storage_unavailable")
-	return rterr.NewAppError(code, "偏好服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "偏好服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromPreferenceUnauthorized returns *AppError for ASSISTANT.USER.preference_unauthorized (user_message from errors.yaml).
 func AppErrorFromPreferenceUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.preference_unauthorized")
-	return rterr.NewAppError(code, "请先登录后管理助手偏好", debugMessage).WithMetadata("preference_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后管理助手偏好", debugMessage).WithMetadata("preference_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }

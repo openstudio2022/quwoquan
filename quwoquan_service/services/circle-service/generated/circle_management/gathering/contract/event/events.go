@@ -3,12 +3,19 @@ package event
 
 // Event type constants for Gathering.
 const (
-	GatheringCreated                   = "GatheringCreated"
-	GatheringConversationBound         = "GatheringConversationBound"
-	GatheringConversationBindingFailed = "GatheringConversationBindingFailed"
-	GatheringParticipantStateChanged   = "GatheringParticipantStateChanged"
-	GatheringCancelled                 = "GatheringCancelled"
-	GatheringCompleted                 = "GatheringCompleted"
+	GatheringDraftCreated             = "GatheringDraftCreated"
+	GatheringRoomBindingChanged       = "GatheringRoomBindingChanged"
+	GatheringPublished                = "GatheringPublished"
+	GatheringRevisionAppended         = "GatheringRevisionAppended"
+	GatheringParticipationChanged     = "GatheringParticipationChanged"
+	GatheringInvitationChanged        = "GatheringInvitationChanged"
+	GatheringAdmissionControlChanged  = "GatheringAdmissionControlChanged"
+	GatheringCancelled                = "GatheringCancelled"
+	GatheringEndedEarly               = "GatheringEndedEarly"
+	GatheringSafetyTerminated         = "GatheringSafetyTerminated"
+	GatheringCompleted                = "GatheringCompleted"
+	GatheringOutcomeCalculated        = "GatheringOutcomeCalculated"
+	GatheringAvailabilityWatchChanged = "GatheringAvailabilityWatchChanged"
 )
 
 // ClientRealtimeWireTypes contains only events explicitly exposed by

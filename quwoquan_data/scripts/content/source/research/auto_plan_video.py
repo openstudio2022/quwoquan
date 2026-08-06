@@ -313,7 +313,6 @@ def write_video_lane(
         "video",
         {
             "renderStrategy": "sourced_video",
-            "acquisitionReceiptRefs": list(acquisition_receipt_refs or []),
             "videos": sourced_videos,
             "diagnostic": {
                 "directVideoCandidates": len(sourced_videos),
@@ -326,6 +325,9 @@ def write_video_lane(
             ),
         },
         force=force,
+        top_level_update={
+            "acquisitionReceiptRefs": list(acquisition_receipt_refs or []),
+        },
     ):
         updated.append(
             {

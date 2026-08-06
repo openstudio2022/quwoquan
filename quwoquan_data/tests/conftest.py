@@ -41,6 +41,7 @@ _REAL_DATA_OUTPUT_ROOTS = (
     _REAL_OUTPUT_ROOT / "data" / "releases",
     _REAL_OUTPUT_ROOT / "data" / "local",
 )
+_SNAPSHOT_IGNORED_DIRECTORIES = {"cache", "__pycache__"}
 
 if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     # 清除运行器/外部会话遗留的真实输出根声明，防止测试跟随其落盘。
@@ -108,14 +109,24 @@ def _snapshot_files(root: Path) -> dict[str, tuple[int, int]]:
     if not root.exists():
         return {}
     snapshot: dict[str, tuple[int, int]] = {}
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        try:
-            stat = path.stat()
-        except OSError:
-            continue
-        snapshot[path.relative_to(root).as_posix()] = (stat.st_mtime_ns, stat.st_size)
+    for current, directories, files in os.walk(root):
+        current_path = Path(current)
+        directories[:] = [
+            name
+            for name in directories
+            if name not in _SNAPSHOT_IGNORED_DIRECTORIES
+        ]
+        relative_parent = current_path.relative_to(root)
+        for name in files:
+            path = current_path / name
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            snapshot[(relative_parent / name).as_posix()] = (
+                stat.st_mtime_ns,
+                stat.st_size,
+            )
     return snapshot
 
 

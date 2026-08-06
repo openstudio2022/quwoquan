@@ -23,13 +23,33 @@ def tag(*args, **kwargs):
 def tags_list(*args, **kwargs):
     return _WRITERS["tags_list"](*args, **kwargs)
 
-from governance.taxonomy.bootstrap_tags_topic_verticals_part1 import (
-    configure_writers as _configure_topic_verticals_part1,
-    gen_topic_verticals_part1,
+from governance.taxonomy.bootstrap_tags_topic_nature_history import (
+    configure_writers as _configure_topic_nature_history,
+    gen_topic_nature_history,
 )
-from governance.taxonomy.bootstrap_tags_topic_verticals_part2 import (
-    configure_writers as _configure_topic_verticals_part2,
-    gen_topic_verticals_part2,
+from governance.taxonomy.bootstrap_tags_topic_food import (
+    configure_writers as _configure_topic_food,
+    gen_topic_food,
+)
+from governance.taxonomy.bootstrap_tags_topic_travel import (
+    configure_writers as _configure_topic_travel,
+    gen_topic_travel,
+)
+from governance.taxonomy.bootstrap_tags_topic_lifestyle_wellness import (
+    configure_writers as _configure_topic_lifestyle_wellness,
+    gen_topic_lifestyle_wellness,
+)
+from governance.taxonomy.bootstrap_tags_topic_technology_learning import (
+    configure_writers as _configure_topic_technology_learning,
+    gen_topic_technology_learning,
+)
+from governance.taxonomy.bootstrap_tags_topic_relationships_entertainment import (
+    configure_writers as _configure_topic_relationships_entertainment,
+    gen_topic_relationships_entertainment,
+)
+from governance.taxonomy.bootstrap_tags_topic_society_public_affairs import (
+    configure_writers as _configure_topic_society_public_affairs,
+    gen_topic_society_public_affairs,
 )
 from governance.taxonomy.bootstrap_tags_topic_photography import (
     configure_writers as _configure_topic_photography,
@@ -39,8 +59,13 @@ from governance.taxonomy.bootstrap_tags_topic_photography import (
 
 def configure_writers(**writers):
     _WRITERS.update(writers)
-    _configure_topic_verticals_part1(**writers)
-    _configure_topic_verticals_part2(**writers)
+    _configure_topic_nature_history(**writers)
+    _configure_topic_food(**writers)
+    _configure_topic_travel(**writers)
+    _configure_topic_lifestyle_wellness(**writers)
+    _configure_topic_technology_learning(**writers)
+    _configure_topic_relationships_entertainment(**writers)
+    _configure_topic_society_public_affairs(**writers)
     _configure_topic_photography(**writers)
 
 def gen_topic():
@@ -69,8 +94,16 @@ def gen_topic():
 
 
 def _gen_topic_verticals():
-    gen_topic_verticals_part1()
-    gen_topic_verticals_part2()
+    # 顺序必须与历史 vertical shards → photography 字节序一致：
+    # nature/history → food → lodging(in food) → travel → lifestyle →
+    # technology(含家居) → relationships → society → photography
+    gen_topic_nature_history()
+    gen_topic_food()
+    gen_topic_travel()
+    gen_topic_lifestyle_wellness()
+    gen_topic_technology_learning()
+    gen_topic_relationships_entertainment()
+    gen_topic_society_public_affairs()
     gen_photography()
 
 

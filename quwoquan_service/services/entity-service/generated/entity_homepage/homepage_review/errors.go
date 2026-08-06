@@ -16,5 +16,5 @@ var (
 // AppErrorFromReviewNotFound returns *AppError for ENTITY.USER.review_not_found (user_message from errors.yaml).
 func AppErrorFromReviewNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrReviewNotFound.Error()))
-	return rerrors.NewAppError(code, "评价不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "评价不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }

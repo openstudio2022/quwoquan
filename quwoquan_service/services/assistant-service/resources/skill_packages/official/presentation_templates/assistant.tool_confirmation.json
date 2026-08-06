@@ -136,10 +136,10 @@
       "density": "standard"
     }
   ],
-  "allowedActionIntents": ["ContinueAssistantToolUse"],
+  "allowedActionIntents": ["ApproveTool"],
   "fallbackMarkdown": "需要确认后才能执行此操作。",
   "accessibility": {
     "summary": "待确认操作及详情"
   },
-  "assetDigest": "sha256:7ca78aec550926a335bd5ff4e0617347fc148f20b5eb33fecb8b44612028c51d"
+  "assetDigest": "sha256:b7889885b7dced179d3384976515a99d3fc1ab96fe7d53119b08396f59115f1f"
 }

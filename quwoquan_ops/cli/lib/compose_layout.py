@@ -4,16 +4,28 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+
 
 def domain_service_compose_files(repo_root: Path) -> list[Path]:
     services_root = repo_root / "quwoquan_service" / "services"
-    return sorted(services_root.glob("*/deploy/compose.yaml"))
+    active_services = set(first_party_service_names(repo_root))
+    return sorted(
+        path
+        for path in services_root.glob("*/deploy/compose.yaml")
+        if path.parents[1].name in active_services
+    )
 
 
 def gamma_service_environment_compose_files(repo_root: Path) -> list[Path]:
     """Return autonomous service-owned gamma Compose overlays."""
     services_root = repo_root / "quwoquan_service" / "services"
-    return sorted(services_root.glob("*/environments/gamma/deploy/compose.yaml"))
+    active_services = set(first_party_service_names(repo_root))
+    return sorted(
+        path
+        for path in services_root.glob("*/environments/gamma/deploy/compose.yaml")
+        if path.parents[3].name in active_services
+    )
 
 
 def gamma_compose_files(repo_root: Path) -> list[Path]:

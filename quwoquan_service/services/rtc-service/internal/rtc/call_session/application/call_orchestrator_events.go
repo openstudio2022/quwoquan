@@ -62,7 +62,7 @@ func (o *CallOrchestrator) buildEvent(
 			targetPersonaID,
 		)
 		payload.ExpiresAt = now.Add(
-			callRingingTTL(session),
+			o.domainService.RingTimeout(session),
 		).UTC().Format(time.RFC3339Nano)
 	}
 	if participant := participantOf(session, actorID); participant != nil {

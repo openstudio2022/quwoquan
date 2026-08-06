@@ -23,6 +23,42 @@ UNDECLARED_PROVIDER_ENVIRONMENT = {
     "PRODUCT_OPS_LOG_SINK_ENDPOINT": "https://undeclared-provider.invalid",
     "PRODUCT_OPS_LOG_SINK_TOKEN": "should-not-be-read",
 }
+DIGEST = "sha256:" + "a" * 64
+
+
+def _local_composition(environment: str, target: str) -> dict[str, object]:
+    return {
+        "schema": "stackctl-observability-log-sink-package",
+        "adapterId": "ext.obs.elasticsearch",
+        "bindingDigest": DIGEST,
+        "endpointRef": f"local_topology:{environment}.elasticsearch",
+        "endpointEnvironmentKey": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+        "secretEnvironmentKeys": [],
+        "deploymentMode": "package-bound-local",
+        "platform": "arm64",
+        "runtimeEndpoint": "http://elasticsearch:9200",
+        "imageDigest": DIGEST,
+        "sourceComposeDigest": DIGEST,
+        "composeRef": (
+            "packages/runtime-shared/observability-log-sink/"
+            "elasticsearch.compose.yaml"
+        ),
+        "composeDigest": DIGEST,
+        "clusterRef": f"target:{target}/product-ops/elasticsearch",
+    }
+
+
+def _bundle(target: str) -> ProductTelemetryLogSink:
+    return ProductTelemetryLogSink(
+        environment=LOCAL_ES_ENVIRONMENT,
+        secret_path=None,
+        source=f"target:{target}/product-ops/elasticsearch",
+        status="ready",
+        redacted_digest=_sha256_digest(target),
+        binding_digest=DIGEST,
+        runtime_artifact_digest=DIGEST,
+        cluster_ref=f"target:{target}/product-ops/elasticsearch",
+    )
 
 
 def _sha256_digest(payload: str) -> str:
@@ -58,11 +94,18 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 bundle = load_product_telemetry_log_sink(
                     environment,
                     target,
+                    runtime_composition=_local_composition(
+                        environment,
+                        target,
+                    ),
                     process_environment=UNDECLARED_PROVIDER_ENVIRONMENT,
                     home=home,
                 )
 
-            self.assertEqual(bundle.source, f"{target}-elasticsearch-topology")
+            self.assertEqual(
+                bundle.source,
+                f"target:{target}/product-ops/elasticsearch",
+            )
             self.assertEqual(bundle.status, "ready")
             self.assertEqual(bundle.environment, LOCAL_ES_ENVIRONMENT)
             self.assertIsNone(bundle.secret_path)
@@ -73,8 +116,15 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 self.assertNotIn(value, serialized)
 
     def test_cross_environment_target_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "unsupported product telemetry target"):
-            load_product_telemetry_log_sink("beta", "gamma-local")
+        with self.assertRaisesRegex(
+            ValueError,
+            "local observability log-sink package identity is invalid",
+        ):
+            load_product_telemetry_log_sink(
+                "beta",
+                "gamma-local",
+                runtime_composition=_local_composition("beta", "beta-local"),
+            )
 
     def test_full_workload_missing_binding_returns_redacted_gate_block(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -96,12 +146,17 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
                 mock.patch.object(
                     stackctl,
+                    "active_deployment_candidate_snapshot",
+                    return_value={"candidateDir": "/candidate/gamma-local"},
+                ),
+                mock.patch.object(
+                    stackctl,
                     "can_reuse_package",
                     return_value=(True, "fixed candidate ready"),
                 ),
                 mock.patch.object(
                     stackctl,
-                    "load_product_telemetry_log_sink",
+                    "_load_active_product_telemetry_log_sink",
                     side_effect=RuntimeError(
                         "endpoint=https://provider.internal token=should-not-appear"
                     ),
@@ -134,13 +189,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             self.assertNotIn("should-not-appear", serialized)
 
     def test_controlled_health_receipt_is_provider_neutral_and_redacted(self) -> None:
-        bundle = ProductTelemetryLogSink(
-            environment=LOCAL_ES_ENVIRONMENT,
-            secret_path=None,
-            source="gamma-local-elasticsearch-topology",
-            status="ready",
-            redacted_digest=_sha256_digest("gamma-local-elasticsearch-topology"),
-        )
+        bundle = _bundle("gamma-local")
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir)
             args = argparse.Namespace(target="gamma-local", action="health")
@@ -150,7 +199,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
                 mock.patch.object(
                     stackctl,
-                    "load_product_telemetry_log_sink",
+                    "_load_active_product_telemetry_log_sink",
                     return_value=bundle,
                 ),
                 mock.patch.object(
@@ -184,13 +233,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             self.assertNotIn("elasticsearch:9200", serialized)
 
     def test_control_action_scopes_canonical_local_ca_without_leaking_environment(self) -> None:
-        bundle = ProductTelemetryLogSink(
-            environment=LOCAL_ES_ENVIRONMENT,
-            secret_path=None,
-            source="alpha-local-elasticsearch-topology",
-            status="ready",
-            redacted_digest=_sha256_digest("alpha-local-elasticsearch-topology"),
-        )
+        bundle = _bundle("alpha-local")
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir)
             root = report_dir / "root.pem"
@@ -202,7 +245,9 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "get_target", return_value={"env": "alpha"}),
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
                 mock.patch.object(
-                    stackctl, "load_product_telemetry_log_sink", return_value=bundle
+                    stackctl,
+                    "_load_active_product_telemetry_log_sink",
+                    return_value=bundle,
                 ),
                 mock.patch.object(stackctl, "root_certificate_path", return_value=root),
                 mock.patch.object(
@@ -277,6 +322,214 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
         self.assertTrue(args.skip_build)
         self.assertTrue(args.skip_app)
         self.assertEqual(args.workload, "full")
+
+    def test_cold_start_reuses_running_full_only_for_the_fixed_candidate(
+        self,
+    ) -> None:
+        identity = {
+            "candidateDigest": "sha256:" + "1" * 64,
+            "configurationDigest": "sha256:" + "2" * 64,
+            "providerRuntimeDigest": "sha256:" + "3" * 64,
+            "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+            "imageComposition": {"identity": "full-oci"},
+        }
+        attempt = {
+            "attemptId": "full-alpha-1",
+            "status": "running",
+            "workload": "full",
+            "target": "alpha-local",
+            "env": "alpha",
+            **identity,
+        }
+        snapshot = {
+            "candidateDir": "/candidate/alpha-local",
+            "manifest": {"packageDigest": "sha256:" + "5" * 64},
+        }
+        with (
+            tempfile.TemporaryDirectory() as temporary_dir,
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=attempt,
+            ),
+            mock.patch.object(
+                stackctl,
+                "active_deployment_candidate_snapshot",
+                return_value=snapshot,
+            ),
+            mock.patch.object(
+                stackctl,
+                "can_reuse_package",
+                return_value=(True, "fixed candidate ready"),
+            ) as package_reuse,
+            mock.patch.object(
+                stackctl,
+                "_fixed_candidate_runtime_identity",
+                return_value=identity,
+            ),
+            mock.patch.object(
+                stackctl,
+                "assert_active_deployment_candidate_snapshot",
+            ) as pointer_check,
+            mock.patch.object(
+                stackctl,
+                "command_up",
+                side_effect=AssertionError("running full must be reused"),
+            ),
+        ):
+            report_dir = Path(temporary_dir)
+            stackctl._run_product_telemetry_log_sink_control_action(
+                action="cold-start",
+                target_name="alpha-local",
+                environment="alpha",
+                report_dir=report_dir,
+            )
+            receipt = json.loads(
+                (report_dir / "cold-start/already-running.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(receipt["status"], "reused_running_full")
+        self.assertEqual(receipt["candidateDigest"], identity["candidateDigest"])
+        self.assertEqual(
+            receipt["packageDigest"],
+            snapshot["manifest"]["packageDigest"],
+        )
+        package_reuse.assert_called_once_with(
+            "alpha",
+            "alpha-local",
+            include_services=True,
+            require_workspace_match=False,
+            candidate_root=Path(snapshot["candidateDir"]),
+        )
+        pointer_check.assert_called_once_with(snapshot)
+
+    def test_cold_start_rejects_partial_or_different_running_full_identity(
+        self,
+    ) -> None:
+        expected = {
+            "candidateDigest": "sha256:" + "1" * 64,
+            "configurationDigest": "sha256:" + "2" * 64,
+            "providerRuntimeDigest": "sha256:" + "3" * 64,
+            "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+            "imageComposition": {"identity": "full-oci"},
+        }
+        snapshot = {
+            "candidateDir": "/candidate/alpha-local",
+            "manifest": {"packageDigest": "sha256:" + "5" * 64},
+        }
+        for field in expected:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary_dir:
+                attempt = {
+                    "attemptId": "full-alpha-1",
+                    "status": "running",
+                    "workload": "full",
+                    "target": "alpha-local",
+                    "env": "alpha",
+                    **expected,
+                }
+                attempt[field] = None
+                with (
+                    mock.patch.object(
+                        stackctl,
+                        "load_startup_attempt",
+                        return_value=attempt,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "active_deployment_candidate_snapshot",
+                        return_value=snapshot,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "can_reuse_package",
+                        return_value=(True, "fixed candidate ready"),
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "_fixed_candidate_runtime_identity",
+                        return_value=expected,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "assert_active_deployment_candidate_snapshot",
+                    ) as pointer_check,
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError,
+                        "running full startup receipt differs",
+                    ):
+                        stackctl._run_product_telemetry_log_sink_control_action(
+                            action="cold-start",
+                            target_name="alpha-local",
+                            environment="alpha",
+                            report_dir=Path(temporary_dir),
+                        )
+
+                pointer_check.assert_not_called()
+
+    def test_cold_start_rejects_invalid_package_or_pointer_switch(self) -> None:
+        identity = {
+            "candidateDigest": "sha256:" + "1" * 64,
+            "configurationDigest": "sha256:" + "2" * 64,
+            "providerRuntimeDigest": "sha256:" + "3" * 64,
+            "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+            "imageComposition": {"identity": "full-oci"},
+        }
+        attempt = {
+            "attemptId": "full-alpha-1",
+            "status": "running",
+            "workload": "full",
+            "target": "alpha-local",
+            "env": "alpha",
+            **identity,
+        }
+        snapshot = {
+            "candidateDir": "/candidate/alpha-local",
+            "manifest": {"packageDigest": "sha256:" + "5" * 64},
+        }
+        cases = (
+            ((False, "fingerprint drift"), None, "package fingerprint is invalid"),
+            ((True, "ready"), ValueError("pointer switched"), "pointer switched"),
+        )
+        for package_result, pointer_error, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as temporary_dir:
+                pointer_side_effect = pointer_error
+                with (
+                    mock.patch.object(
+                        stackctl,
+                        "load_startup_attempt",
+                        return_value=attempt,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "active_deployment_candidate_snapshot",
+                        return_value=snapshot,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "can_reuse_package",
+                        return_value=package_result,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "_fixed_candidate_runtime_identity",
+                        return_value=identity,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "assert_active_deployment_candidate_snapshot",
+                        side_effect=pointer_side_effect,
+                    ),
+                ):
+                    with self.assertRaisesRegex(RuntimeError, expected):
+                        stackctl._run_product_telemetry_log_sink_control_action(
+                            action="cold-start",
+                            target_name="alpha-local",
+                            environment="alpha",
+                            report_dir=Path(temporary_dir),
+                        )
 
     def test_control_parser_exposes_all_required_actions(self) -> None:
         parser = stackctl.build_parser()

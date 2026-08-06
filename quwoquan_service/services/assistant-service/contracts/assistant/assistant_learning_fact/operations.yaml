@@ -13,8 +13,8 @@ api_routes:
       status: ready
     application:
       kind: command
-      facet: AssistantLearningFactAppendSink
-      method: appendUserFact
+      facet: AssistantLearningFactAppender
+      method: append
       append_sink: AssistantLearningFact
       mutation_target: AssistantLearningFact
       invariant_target: AssistantLearningFact
@@ -60,59 +60,6 @@ api_routes:
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
-  - method: POST
-    path: /internal/assistant/learning/facts
-    operation: AppendAssistantServiceLearningFact
-    actor: account
-    commercial:
-      status: ready
-    application:
-      kind: command
-      facet: AssistantLearningFactAppendSink
-      method: appendServiceFact
-      append_sink: AssistantLearningFact
-      mutation_target: AssistantLearningFact
-      invariant_target: AssistantLearningFact
-    request_entity: AppendAssistantServiceLearningFactRequest
-    request_body_kind: object
-    response_entity: AssistantLearningFactReceipt
-    reliability:
-      timeout_ms: 3000
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 3
-      idempotency: required
-    error_codes:
-      - ASSISTANT.USER.learning_fact_invalid
-      - ASSISTANT.USER.learning_fact_unauthorized
-      - ASSISTANT.USER.learning_fact_run_not_found
-      - ASSISTANT.USER.learning_fact_identity_conflict
-      - ASSISTANT.SYSTEM.learning_fact_sink_unavailable
-    privacy:
-      request_classification: INTERNAL
-      response_classification: INTERNAL
-      log_policy: metadata_only
-    telemetry:
-      metric: assistant_learning_fact_append
-      trace: true
-      attributes:
-        - operation
-        - outcome
-        - error_code
-        - fact_type
-        - deduplicated
-    slo:
-      latency_p95_ms: 800
-      availability_percent: 99.9
-    authorization:
-      principal: service
-      ownership_policy: internal_service
-    security:
-      auth_mode: required
-      principal: service
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: internal
   - method: GET
     path: /assistant/ops/learning-summary
     operation: GetLearningOpsSummary
@@ -173,10 +120,59 @@ consumers:
       - append_learning_facts
   - name: assistant-service
     capabilities:
-      - append_service_learning_facts
+      - append_terminal_learning_facts
   - name: platform-ops
     capabilities:
       - read_learning_summary
   - name: recommendation-engine
     capabilities:
       - read_learning_facts
+readiness_cases:
+  - case_id: append-terminal-learning-fact-local
+    spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: AppendAssistantLearningFact}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/learning_fact__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: append-terminal-learning-fact-api
+    spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: AppendAssistantLearningFact}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_learning_fact/append_outbox__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: consume-assistant-run-completed-local
+    spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: assistant.assistant_learning_fact}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/learning_fact__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: consume-assistant-run-completed-api
+    spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: assistant.assistant_learning_fact}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_learning_fact/append_outbox__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-learning-ops-summary-local
+    spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetLearningOpsSummary}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_learning_fact/learning_ops_summary_wire__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-learning-ops-summary-api
+    spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetLearningOpsSummary}
+    runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_learning_fact/append_outbox__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

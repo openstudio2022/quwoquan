@@ -41,7 +41,7 @@ PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE = (
     / "deploy"
     / "local-elasticsearch.compose.yaml"
 )
-T3_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_local_gamma_t3.py"
+RELEASE_CONSUMER_SCRIPT = ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_local_gamma_release_consumer_api.py"
 
 
 def service_compose(service: str) -> str:
@@ -80,8 +80,8 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             },
         )
 
-    def test_t3_runtime_is_a_read_only_release_consumer(self) -> None:
-        source = T3_SCRIPT.read_text(encoding="utf-8")
+    def test_release_consumer_runtime_is_a_read_only_release_consumer(self) -> None:
+        source = RELEASE_CONSUMER_SCRIPT.read_text(encoding="utf-8")
 
         for retired in (
             "setup_runtime_fixtures",
@@ -95,50 +95,47 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn("quwoquan_data/scripts/cli.py", source)
         self.assertIn('"ship"', source)
         self.assertIn('"verify"', source)
-        self.assertIn('"mutationPolicy": "read_only"', source)
+        for mutating_command in ('"import"', '"publish"', '"activate"', '"seed"'):
+            self.assertNotIn(mutating_command, source)
 
-    def test_content_t3_identity_is_owned_by_canonical_readiness_receipt(
+    def test_content_release_consumer_identity_is_owned_by_canonical_readiness_receipt(
         self,
     ) -> None:
-        source = T3_SCRIPT.read_text(encoding="utf-8")
+        source = RELEASE_CONSUMER_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("load_release_content_identity", source)
         self.assertIn("resolve_readiness_path", source)
         self.assertIn('expected_environment="gamma"', source)
         for field in (
             "releaseId",
-            "sourceOwner",
-            "manifestDigest",
-            "mediaManifestDigest",
             "importRunId",
             "verifyRunId",
-            "readinessReceiptRef",
         ):
             self.assertIn(f'identity["{field}"]', source)
         self.assertNotIn('parser.add_argument("--release-id"', source)
         self.assertNotIn('parser.add_argument("--import-run-id"', source)
         self.assertNotIn('parser.add_argument("--verification-run-id"', source)
 
-    def test_user_t3_does_not_provision_contact_discovery(
+    def test_user_release_consumer_does_not_provision_contact_discovery(
         self,
     ) -> None:
-        source = T3_SCRIPT.read_text(encoding="utf-8")
+        source = RELEASE_CONSUMER_SCRIPT.read_text(encoding="utf-8")
 
         self.assertNotIn("provision_contact_discovery", source)
         self.assertNotIn("hashedPhones", source)
         self.assertNotIn("_ACTIVE_SESSION", source)
 
-    def test_core_readback_does_not_mint_anonymous_identity_in_t3(
+    def test_core_readback_does_not_mint_anonymous_identity_in_release_consumer(
         self,
     ) -> None:
-        source = T3_SCRIPT.read_text(encoding="utf-8")
+        source = RELEASE_CONSUMER_SCRIPT.read_text(encoding="utf-8")
 
         self.assertNotIn("open_public_anonymous_session", source)
         self.assertNotIn("LocalGammaAcceptanceSession", source)
         self.assertNotIn("/auth/login", source)
         self.assertNotIn("accessToken", source)
 
-    def test_core_readback_does_not_provision_chat_inbox_in_t3(self) -> None:
-        source = T3_SCRIPT.read_text(encoding="utf-8")
+    def test_core_readback_does_not_provision_chat_inbox_in_release_consumer(self) -> None:
+        source = RELEASE_CONSUMER_SCRIPT.read_text(encoding="utf-8")
 
         self.assertNotIn("provision_chat_core_readback", source)
         self.assertNotIn("/chat/conversations", source)
@@ -176,14 +173,14 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertNotIn("SSL_CERT_FILE:", service_block)
         self.assertNotIn("object-storage-ca.crt", service_block)
 
-    def test_content_service_waits_for_required_elasticsearch_dependency(self) -> None:
+    def test_gamma_overlay_owns_required_elasticsearch_dependency(self) -> None:
         content = service_compose("content-service")
         gamma_content_overlay = CONTENT_GAMMA_COMPOSE_FILE.read_text(encoding="utf-8")
         search = service_compose("search-service")
         entity = service_compose("entity-service")
         circle = service_compose("circle-service")
         expected = "elasticsearch:\n        condition: service_healthy"
-        self.assertIn(expected, content)
+        self.assertNotIn(expected, content)
         self.assertIn(expected, gamma_content_overlay)
         for dependency, condition in (
             ("mongodb", "service_healthy"),
@@ -222,7 +219,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             compose,
         )
 
-    def test_gamma_elasticsearch_uses_native_architecture_with_arm_sve_guard(self) -> None:
+    def test_package_owns_elasticsearch_architecture_selection(self) -> None:
         compose = PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE.read_text(encoding="utf-8")
         script = START_SCRIPT.read_text(encoding="utf-8")
         multi_arch_index = (
@@ -251,24 +248,18 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "ES_JAVA_OPTS: \"${QWQ_COMPOSE_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}\"",
             compose,
         )
-        self.assertIn('case "$(uname -m)" in', script)
-        self.assertIn("arm64|aarch64)", script)
-        self.assertIn(arm64_manifest, script)
-        self.assertIn(multi_arch_index, script)
+        self.assertIn("x-qwq-package-elasticsearch:", compose)
+        self.assertIn(arm64_manifest, compose)
+        self.assertIn(multi_arch_index, compose)
+        self.assertNotIn('case "$(uname -m)" in', script)
+        self.assertNotIn(arm64_manifest, script)
+        self.assertNotIn(multi_arch_index, script)
         self.assertNotIn(amd64_only_manifest, script)
-        self.assertIn(
-            'LOCAL_GAMMA_ELASTICSEARCH_CLI_JAVA_OPTS:--XX:UseSVE=0',
-            script,
-        )
-        self.assertIn(
-            'LOCAL_GAMMA_ELASTICSEARCH_JAVA_OPTS:--XX:UseSVE=0 -Xms512m -Xmx512m',
-            script,
-        )
+        self.assertIn("QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE", script)
+        self.assertIn("QWQ_OBSERVABILITY_LOG_SINK_DIGEST", script)
+        self.assertNotIn("LOCAL_GAMMA_ELASTICSEARCH_IMAGE", script)
         self.assertNotIn("--platform=linux/amd64", script)
-        self.assertIn(
-            "QWQ_COMPOSE_${source_name#LOCAL_GAMMA_}",
-            script,
-        )
+        self.assertNotIn("QWQ_COMPOSE_ELASTICSEARCH_IMAGE", script)
 
     def test_gamma_runtime_applies_service_owned_content_overlay_after_base(self) -> None:
         compose_files = gamma_compose_files(ROOT)
@@ -283,7 +274,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         start_script = START_SCRIPT.read_text(encoding="utf-8")
         self.assertIn(
-            '-path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort',
+            'services_root.glob(f"*/environments/{env_name}/deploy/compose.yaml")',
             start_script,
         )
 
@@ -456,7 +447,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         self.assertIn("compose_build_services+=(realtime-gateway)", start_script)
         self.assertIn("compose_build_services+=(rtc-service)", start_script)
-        self.assertIn("\n  travel-service\n", start_script)
+        self.assertNotIn("\n  travel-service\n", start_script)
         self.assertIn(
             "commercial-observability,assistant-runtime,edge-media",
             start_script,
@@ -708,11 +699,12 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
 
         key = "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT"
         self.assertIn(f'{key}: "${{{key}:-}}"', service_block)
+        self.assertIn(f'-z "${{{key}:-}}"', start_script)
         self.assertIn(
-            f'export {key}="${{{key}:-http://elasticsearch:9200}}"',
+            "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE",
             start_script,
         )
-        self.assertIn(
+        self.assertNotIn(
             "product-ops-service/deploy/local-elasticsearch.compose.yaml",
             start_script,
         )
@@ -814,8 +806,8 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertNotIn("local-gamma-v1", verifier)
         self.assertNotIn('"--config-version"', verifier)
 
-    def test_t3_rejects_reports_in_mutable_local_runtime_state(self) -> None:
-        spec = importlib.util.spec_from_file_location("local_gamma_t3_report_path_test", T3_SCRIPT)
+    def test_release_consumer_rejects_reports_in_mutable_local_runtime_state(self) -> None:
+        spec = importlib.util.spec_from_file_location("local_gamma_release_consumer_report_path_test", RELEASE_CONSUMER_SCRIPT)
         self.assertIsNotNone(spec)
         self.assertIsNotNone(spec.loader)
         module = importlib.util.module_from_spec(spec)
@@ -829,7 +821,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                 / "gamma"
                 / "runs"
                 / "release-consumer"
-                / "t3.json"
+                / "release_consumer.json"
             )
             forbidden = (
                 output_root
@@ -837,22 +829,22 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                 / "gamma"
                 / "local"
                 / "gamma-local"
-                / "t3_forbidden.json"
+                / "release_consumer_forbidden.json"
             )
             with mock.patch.dict(
                 module.os.environ,
                 {"QWQ_OUTPUT_ROOT": str(output_root)},
             ):
-                self.assertEqual(module.default_t3_report_path(), allowed)
+                self.assertEqual(module.default_release_consumer_report_path(), allowed)
                 self.assertEqual(
-                    module.resolve_t3_report_path(str(allowed)),
+                    module.resolve_release_consumer_report_path(str(allowed)),
                     allowed.resolve(),
                 )
                 with self.assertRaisesRegex(
                     ValueError,
                     "QWQ_OUTPUT_ROOT/env/gamma/runs",
                 ):
-                    module.resolve_t3_report_path(str(forbidden))
+                    module.resolve_release_consumer_report_path(str(forbidden))
 
 
 if __name__ == "__main__":

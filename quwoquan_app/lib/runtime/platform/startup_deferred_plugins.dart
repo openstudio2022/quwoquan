@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/startup_native_bridge.dart';
 
 /// Android 冷启动延后注册的重 native 插件（RTC / 创作入口）。
 final class StartupDeferredPlugins {

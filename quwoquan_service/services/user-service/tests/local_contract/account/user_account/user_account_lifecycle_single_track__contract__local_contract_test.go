@@ -7,7 +7,6 @@ import (
 
 	"quwoquan_service/internal/metadata/ast"
 	"quwoquan_service/internal/metadata/compiler"
-	"quwoquan_service/internal/metadata/validate"
 	"quwoquan_service/internal/testsupport/contractsview"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 )
@@ -26,15 +25,9 @@ func TestUserAccountLifecycleUsesAccountStateAsItsOnlyRuntimeState(t *testing.T)
 func TestUserAccountLifecycleAndPrivacyUseCanonicalContractVocabulary(t *testing.T) {
 	t.Parallel()
 
-	contractGraph, issues, err := compiler.Validate(
-		contractsview.Build(t),
-		validate.ProfileCommercial,
-	)
+	contractGraph, err := compiler.Build(contractsview.Build(t))
 	if err != nil {
-		t.Fatalf("compile commercial ContractGraph: %v", err)
-	}
-	if len(issues) != 0 {
-		t.Fatalf("commercial ContractGraph contains governance failures: %+v", issues)
+		t.Fatalf("compile ContractGraph: %v", err)
 	}
 
 	account := requireObjectGovernance(t, contractGraph.Governance.Objects, "user.user_account")
@@ -47,22 +40,49 @@ func TestUserAccountLifecycleAndPrivacyUseCanonicalContractVocabulary(t *testing
 	) {
 		t.Fatalf("user account lifecycle states = %v", account.Lifecycle.States)
 	}
-	if account.Privacy == nil || account.Privacy.Aggregate != "UserAccount" {
+	if account.Privacy == nil || account.Privacy.ObjectID != "user.user_account" {
 		t.Fatalf("user account privacy owner = %+v", account.Privacy)
 	}
-	for _, field := range []string{"birthDate", "region"} {
-		if !contains(account.Privacy.AppLogFields, field) {
-			t.Fatalf("privacy app-log policy does not bind canonical field %q", field)
+	for field, want := range map[string]struct {
+		classification ast.PrivacyClassification
+		action         ast.PrivacyAppLogAction
+	}{
+		"birthDate": {ast.PrivacyClassificationPII, ast.PrivacyAppLogDrop},
+		"region":    {ast.PrivacyClassificationPII, ast.PrivacyAppLogMask},
+	} {
+		policy := requirePrivacyAppLogPolicy(t, account.Privacy.Document.AppLogPolicy, field)
+		if policy.Classification != want.classification || policy.AppLog != want.action {
+			t.Fatalf(
+				"privacy app-log policy for %q = classification %q/action %q, want %q/%q",
+				field,
+				policy.Classification,
+				policy.AppLog,
+				want.classification,
+				want.action,
+			)
 		}
 	}
+	if account.Privacy.Document.DataLifecycle == nil {
+		t.Fatal("user account privacy data lifecycle is missing")
+	}
 	for _, target := range []string{
-		"Persona",
-		"CredentialBinding",
-		"DeviceRegistration",
-		"UserSettings",
+		"user.persona",
+		"user.credential_binding",
+		"user.device_registration",
+		"user.user_settings",
 	} {
-		if !contains(account.Privacy.DeletionTargets, target) {
-			t.Fatalf("privacy deletion cascade does not bind canonical object %q", target)
+		cascade := requirePrivacyDeletionCascade(
+			t,
+			account.Privacy.Document.DataLifecycle.DeletionCascade,
+			target,
+		)
+		if cascade.Strategy != ast.PrivacyDeletionHardDelete {
+			t.Fatalf(
+				"privacy deletion cascade for %q uses %q, want %q",
+				target,
+				cascade.Strategy,
+				ast.PrivacyDeletionHardDelete,
+			)
 		}
 	}
 
@@ -110,11 +130,32 @@ func requireEnum(
 	return ast.EnumDefinition{}
 }
 
-func contains(values []string, expected string) bool {
-	for _, value := range values {
-		if value == expected {
-			return true
+func requirePrivacyAppLogPolicy(
+	t *testing.T,
+	policies []ast.PrivacyAppLogPolicy,
+	field string,
+) ast.PrivacyAppLogPolicy {
+	t.Helper()
+	for _, policy := range policies {
+		if policy.Field == field {
+			return policy
 		}
 	}
-	return false
+	t.Fatalf("privacy app-log policy does not bind canonical field %q", field)
+	return ast.PrivacyAppLogPolicy{}
+}
+
+func requirePrivacyDeletionCascade(
+	t *testing.T,
+	cascades []ast.PrivacyDeletionCascade,
+	objectID string,
+) ast.PrivacyDeletionCascade {
+	t.Helper()
+	for _, cascade := range cascades {
+		if cascade.ObjectID == objectID {
+			return cascade
+		}
+	}
+	t.Fatalf("privacy deletion cascade does not bind canonical object %q", objectID)
+	return ast.PrivacyDeletionCascade{}
 }

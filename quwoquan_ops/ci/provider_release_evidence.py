@@ -182,9 +182,10 @@ def command_execute_prod(args: argparse.Namespace) -> int:
         ]
         subprocess.run(command, cwd=ROOT, env=runtime_env, check=True)
         executed += 1
-    if executed != len(expected_prod_cells) or executed != 14:
+    if executed != len(expected_prod_cells):
         raise ValueError(
-            f"Prod Provider execution must produce exactly 14 cells, got {executed}"
+            "Prod Provider execution must produce exactly the compiled required "
+            f"cells: expected={len(expected_prod_cells)}, got={executed}"
         )
     print(f"provider_release_evidence: executed {executed} Prod Remote cells")
     return 0
@@ -205,11 +206,14 @@ def command_execute_nonprod(args: argparse.Namespace) -> int:
         "QWQ_PROVIDER_CONFORMANCE_REQUIRE_PROMOTABLE": "true",
     }
     executed = 0
+    expected_nonprod_cells = {
+        cell for cell in expected if cell[1] in provider_conformance.ENVIRONMENTS
+    }
     for environment in provider_conformance.ENVIRONMENTS:
         expected_environment = {cell for cell in expected if cell[1] == environment}
-        if len(expected_environment) != 42:
+        if not expected_environment:
             raise ValueError(
-                f"{environment} Provider matrix must contain exactly 42 cells"
+                f"{environment} Provider matrix contains no compiled required cells"
             )
         subprocess.run(
             [
@@ -228,9 +232,10 @@ def command_execute_nonprod(args: argparse.Namespace) -> int:
             check=True,
         )
         executed += len(expected_environment)
-    if executed != 126:
+    if executed != len(expected_nonprod_cells):
         raise ValueError(
-            f"nonprod Provider execution must produce exactly 126 cells, got {executed}"
+            "nonprod Provider execution must produce exactly the compiled required "
+            f"cells: expected={len(expected_nonprod_cells)}, got={executed}"
         )
     print(f"provider_release_evidence: executed {executed} nonprod cells")
     return 0
@@ -277,10 +282,12 @@ def command_package(args: argparse.Namespace) -> int:
         raise ValueError(
             "executed Provider evidence is not release-ready: " + "; ".join(all_issues)
         )
+    expected_cells = provider_conformance.expected_required_cell_keys(compiled)
     evidence_paths = sorted(Path(str(item["_source"])) for item in evidence)
-    if len(evidence_paths) != 140:
+    if len(evidence_paths) != len(expected_cells):
         raise ValueError(
-            "executed Provider evidence set must contain exactly 140 files"
+            "executed Provider evidence set must contain exactly the compiled "
+            f"required cells: expected={len(expected_cells)}, got={len(evidence_paths)}"
         )
     output_dir = args.output_dir.resolve()
     if output_dir.exists():

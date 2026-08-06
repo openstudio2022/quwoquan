@@ -1,0 +1,34 @@
+export 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/generated/assistant_journey.g.dart';
+
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/generated/assistant_journey.g.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/runtime_enums.dart';
+
+extension AssistantJourneyDomainSemantics on AssistantJourney {
+  bool get isEmpty =>
+      stages.isEmpty && entries.isEmpty && summary.trim().isEmpty;
+
+  AssistantJourneyStage? stageFor(JourneyStageId stageId) {
+    for (final stage in stages) {
+      if (stage.stageId == stageId) return stage;
+    }
+    return null;
+  }
+
+  JourneyStageId get activeStageId {
+    for (final stage in stages) {
+      if (stage.status == JourneyStageStatus.active ||
+          stage.status == JourneyStageStatus.blocked) {
+        return stage.stageId;
+      }
+    }
+    return JourneyStageId.unknown;
+  }
+}
+
+extension AssistantJourneyStageDomainSemantics on AssistantJourneyStage {
+  bool get isVisible => stageId != JourneyStageId.unknown;
+  bool get isCompleted => status == JourneyStageStatus.completed;
+  bool get isActive =>
+      status == JourneyStageStatus.active ||
+      status == JourneyStageStatus.blocked;
+}

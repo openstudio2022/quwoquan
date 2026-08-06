@@ -18,29 +18,67 @@ var ErrTerminalEventClaimLost = errors.New(
 // TerminalEvent is the immutable, typed subscription source emitted in the
 // same transaction as the AssistantRun terminal snapshot and journal event.
 type TerminalEvent struct {
-	EventID    string
-	RunID      string
-	UserID     string
-	PersonaID  string
-	SessionID  string
-	DomainID   string
-	Outcome    string
-	OccurredAt time.Time
+	EventID               string
+	RunID                 string
+	UserID                string
+	PersonaID             string
+	PersonaContextVersion *int64
+	SessionID             string
+	DomainID              string
+	Outcome               string
+	ToolsCalled           *[]string
+	LLMModel              *string
+	LLMTokensUsed         *int64
+	LatencyMS             *int64
+	SatisfactionScore     *float64
+	OccurredAt            time.Time
+	AttemptCount          int
 }
 
 type TerminalEventStore interface {
 	ClaimPendingTerminalEvents(
 		context.Context,
 		string,
+		time.Time,
 		time.Duration,
 		int,
 	) ([]TerminalEvent, error)
-	MarkTerminalEventProcessed(context.Context, string, string, time.Time) error
+	AcknowledgeTerminalEvent(context.Context, string, string, time.Time) error
+	ScheduleTerminalEventRetry(
+		context.Context, string, string, time.Time, time.Time, string,
+	) error
 	ReleaseTerminalEventClaim(context.Context, string, string) error
+}
+
+type TerminalRelayOption func(*TerminalRunRelay)
+
+func WithTerminalRelayClock(now func() time.Time) TerminalRelayOption {
+	return func(relay *TerminalRunRelay) {
+		if now != nil {
+			relay.now = now
+		}
+	}
 }
 
 type TerminalEventHandler interface {
 	HandleTerminalEvent(context.Context, TerminalEvent) error
+}
+
+// TerminalEventPublisher hands the externally declared terminal event to the
+// durable transport before any source checkpoint is advanced. Failed and
+// cancelled runs still flow through internal idempotent handlers but have no
+// undeclared public event fabricated for them.
+type TerminalEventPublisher interface {
+	PublishTerminalEvent(context.Context, TerminalEvent) error
+}
+
+type TerminalEventPublisherFunc func(context.Context, TerminalEvent) error
+
+func (publish TerminalEventPublisherFunc) PublishTerminalEvent(
+	ctx context.Context,
+	event TerminalEvent,
+) error {
+	return publish(ctx, event)
 }
 
 type TerminalEventHandlerFunc func(context.Context, TerminalEvent) error
@@ -58,6 +96,7 @@ func (handle TerminalEventHandlerFunc) HandleTerminalEvent(
 // marking the terminal event processed.
 type TerminalRunRelay struct {
 	store     TerminalEventStore
+	publisher TerminalEventPublisher
 	handlers  []TerminalEventHandler
 	ownerID   string
 	interval  time.Duration
@@ -72,13 +111,15 @@ type TerminalRunRelay struct {
 
 func NewTerminalRunRelay(
 	store TerminalEventStore,
+	publisher TerminalEventPublisher,
 	handlers []TerminalEventHandler,
 	ownerID string,
 	interval time.Duration,
 	batchSize int,
+	options ...TerminalRelayOption,
 ) *TerminalRunRelay {
 	ownerID = strings.TrimSpace(ownerID)
-	if store == nil || len(handlers) == 0 || ownerID == "" || interval <= 0 {
+	if store == nil || publisher == nil || len(handlers) == 0 || ownerID == "" || interval <= 0 {
 		panic("assistant run terminal relay dependencies are required")
 	}
 	for _, handler := range handlers {
@@ -89,8 +130,9 @@ func NewTerminalRunRelay(
 	if batchSize <= 0 {
 		batchSize = 128
 	}
-	return &TerminalRunRelay{
+	relay := &TerminalRunRelay{
 		store:     store,
+		publisher: publisher,
 		handlers:  append([]TerminalEventHandler(nil), handlers...),
 		ownerID:   ownerID,
 		interval:  interval,
@@ -98,6 +140,12 @@ func NewTerminalRunRelay(
 		now:       time.Now,
 		logger:    slog.Default(),
 	}
+	for _, option := range options {
+		if option != nil {
+			option(relay)
+		}
+	}
+	return relay
 }
 
 func (relay *TerminalRunRelay) Run(ctx context.Context) {
@@ -118,9 +166,11 @@ func (relay *TerminalRunRelay) Run(ctx context.Context) {
 }
 
 func (relay *TerminalRunRelay) FlushOnce(ctx context.Context) (int, error) {
+	now := relay.now().UTC()
 	events, err := relay.store.ClaimPendingTerminalEvents(
 		ctx,
 		relay.ownerID,
+		now,
 		terminalEventClaimLease,
 		relay.batchSize,
 	)
@@ -129,15 +179,23 @@ func (relay *TerminalRunRelay) FlushOnce(ctx context.Context) (int, error) {
 	}
 	processed := 0
 	for index, event := range events {
+		if err := relay.publisher.PublishTerminalEvent(ctx, event); err != nil {
+			return processed, errors.Join(
+				err,
+				relay.scheduleRetry(ctx, event, "publish_failed"),
+				relay.releaseClaims(ctx, events[index+1:]),
+			)
+		}
 		for _, handler := range relay.handlers {
 			if err := handler.HandleTerminalEvent(ctx, event); err != nil {
 				return processed, errors.Join(
 					err,
-					relay.releaseClaims(ctx, events[index:]),
+					relay.scheduleRetry(ctx, event, "handler_failed"),
+					relay.releaseClaims(ctx, events[index+1:]),
 				)
 			}
 		}
-		if err := relay.store.MarkTerminalEventProcessed(
+		if err := relay.store.AcknowledgeTerminalEvent(
 			ctx,
 			event.EventID,
 			relay.ownerID,
@@ -145,12 +203,39 @@ func (relay *TerminalRunRelay) FlushOnce(ctx context.Context) (int, error) {
 		); err != nil {
 			return processed, errors.Join(
 				err,
-				relay.releaseClaims(ctx, events[index:]),
+				relay.scheduleRetry(ctx, event, "checkpoint_failed"),
+				relay.releaseClaims(ctx, events[index+1:]),
 			)
 		}
 		processed++
 	}
 	return processed, nil
+}
+
+func (relay *TerminalRunRelay) scheduleRetry(
+	ctx context.Context,
+	event TerminalEvent,
+	failureCode string,
+) error {
+	failedAt := relay.now().UTC()
+	return relay.store.ScheduleTerminalEventRetry(
+		ctx,
+		event.EventID,
+		relay.ownerID,
+		failedAt,
+		failedAt.Add(terminalEventRetryDelay(event.AttemptCount)),
+		failureCode,
+	)
+}
+
+func terminalEventRetryDelay(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	if attempt > 6 {
+		attempt = 6
+	}
+	return time.Second * time.Duration(1<<(attempt-1))
 }
 
 func (relay *TerminalRunRelay) Healthy(

@@ -79,6 +79,7 @@ api_routes:
   - method: GET
     path: /circles/discovery-feed
     operation: ListCircleDiscoveryFeed
+    pagination: {default_items: 20, maximum_items: 50}
     request_bindings:
       query:
         - name: category
@@ -686,6 +687,59 @@ api_routes:
       anonymous_policy: deny
       visibility: internal
     description: operator 只释放 Circle 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
+  - method: POST
+    path: /internal/circle/circles/{circleId}/gathering-host-authority:evaluate
+    operation: EvaluateCircleGatheringHostAuthority
+    request_bindings:
+      path:
+        - {name: circleId, field: hostSubjectId}
+    actor: none
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: CircleGatheringHostAuthorityQueryFacet
+      method: evaluate
+      reader: CircleOwnerAuthorityReader
+      slice: CircleGatheringHostAuthorityEvidence
+    description: Circle canonical owner 基于当前 owner/admin membership、聚合或 membership 版本与归档状态签发短时 typed evidence；Gathering 不复制角色判断。
+    authorization:
+      principal: service
+      ownership_policy: circle_canonical_owner_authority
+      scopes: [circle.circle.gathering_host_authority.evaluate]
+    reliability:
+      timeout_ms: 500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.not_found
+      - CIRCLE.USER.permission_denied
+      - CIRCLE.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_gathering_host_authority_evaluate
+      trace: true
+      attributes: [outcome, action]
+    slo:
+      latency_p95_ms: 200
+      availability_percent: 99.95
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    request_entity: CircleGatheringHostAuthorityEvaluationQuery
+    request_body_kind: object
+    response_entity: CircleGatheringHostAuthorityEvidence
+    response_body: CircleGatheringHostAuthorityEvidence
+    response_body_kind: object
 consumers:
   - name: app
     capabilities:
@@ -733,37 +787,7 @@ consumers:
       - read_groups
       - read_feed
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: circle-service API
-      data_source: fields.yaml
-      scenarios:
-        - name: circle_discovery
-          route: GET /circles
-          query_params:
-            - category=interest
-          assertions:
-            - status_200
-            - items_match_schema
-            - sorted_by_member_count
-        - name: create_circle
-          route: POST /circles
-          assertions:
-            - circle_created
-            - no_hidden_membership_write
-            - member_count_projection_initialized
-        - name: circle_feed
-          route: GET /circles/{id}/feed
-          assertions:
-            - status_200
-            - posts_within_circle
-        - name: visibility_and_join_policy
-          variants:
-            - public_open
-            - private_approval
-            - invite_only
-          assertions:
-            - policy_enforced
+  test_strategy:
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
@@ -810,3 +834,228 @@ contract_test:
     - section config CRUD + event tested
     - feed pin/feature operations tested
     - recommended circles API tested
+readiness_cases:
+  - case_id: project-circle-derived-counts-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: circle.circle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/event_projection_consumer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: project-circle-derived-counts-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: circle.circle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_post_projection_stream__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: create-circle-local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-circle-local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: archive-circle-local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ArchiveCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-circle-sections-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateCircleSections}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_command_facade__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-circle-stats-local
+    spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCircleStats}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_impact_service__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-circle-impact-local
+    spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCircleImpact}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_impact_service__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-circles-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCircles}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-circle-discovery-feed-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListCircleDiscoveryFeed}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_feed_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: search-circles-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SearchCircles}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_search_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: create-circle-api
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-circle-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: update-circle-api
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: archive-circle-api
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ArchiveCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-circle-feed-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCircleFeed}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_feed_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-circle-stats-api
+    spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCircleStats}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_stats_wire__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-circle-impact-api
+    spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCircleImpact}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_impact_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: update-circle-sections-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateCircleSections}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_section_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-circles-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCircles}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_query_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-circle-discovery-feed-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListCircleDiscoveryFeed}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_query_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: search-circles-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SearchCircles}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_query_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-circle-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCircle}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_query_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-circle-feed-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCircleFeed}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/circle_query_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: recover-circle-account-closure-dead-letter-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RecoverCircleAccountClosureDeadLetter}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/user_account_closed_consumer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: recover-circle-account-closure-dead-letter-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RecoverCircleAccountClosureDeadLetter}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/user_account_closed__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+  - case_id: circle_list_circles_app_local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCircles}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_remote_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_list_circle_discovery_feed_app_local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCircleDiscoveryFeed}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_remote_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

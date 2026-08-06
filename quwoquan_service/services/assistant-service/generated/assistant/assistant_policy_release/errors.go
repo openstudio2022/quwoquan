@@ -18,23 +18,23 @@ var (
 // AppErrorFromPolicyReleaseDigestMismatch returns *AppError for ASSISTANT.USER.policy_release_digest_mismatch (user_message from errors.yaml).
 func AppErrorFromPolicyReleaseDigestMismatch(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_release_digest_mismatch")
-	return rterr.NewAppError(code, "助手策略发布校验失败", debugMessage).WithMetadata("policy_release_digest_mismatch", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "助手策略发布校验失败", debugMessage).WithMetadata("policy_release_digest_mismatch", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPolicyReleaseIdempotencyConflict returns *AppError for ASSISTANT.USER.policy_release_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromPolicyReleaseIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_release_idempotency_conflict")
-	return rterr.NewAppError(code, "重复发布请求与原策略内容不一致", debugMessage).WithMetadata("policy_release_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复发布请求与原策略内容不一致", debugMessage).WithMetadata("policy_release_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPolicyReleaseInvalid returns *AppError for ASSISTANT.USER.policy_release_invalid (user_message from errors.yaml).
 func AppErrorFromPolicyReleaseInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.policy_release_invalid")
-	return rterr.NewAppError(code, "助手策略发布内容不合法", debugMessage).WithMetadata("policy_release_invalid", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "助手策略发布内容不合法", debugMessage).WithMetadata("policy_release_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPolicyReleaseStorageUnavailable returns *AppError for ASSISTANT.SYSTEM.policy_release_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromPolicyReleaseStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.policy_release_storage_unavailable")
-	return rterr.NewAppError(code, "助手策略发布服务暂不可用", debugMessage).WithMetadata("policy_release_storage_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手策略发布服务暂不可用", debugMessage).WithMetadata("policy_release_storage_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

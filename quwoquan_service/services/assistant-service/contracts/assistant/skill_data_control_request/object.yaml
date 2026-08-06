@@ -14,7 +14,6 @@ relationships:
 - {name: accountOwner, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: cascade}
 local_identity_reasons:
   skillId: stable active Skill package key scoped under the authenticated account and never used as aggregate identity
-capabilities: [commandable, queryable, idempotent_commands, auditable]
 taggable: false
 vector_enabled: false
 business_rules:

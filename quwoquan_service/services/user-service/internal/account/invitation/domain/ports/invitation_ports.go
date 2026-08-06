@@ -9,15 +9,24 @@ import (
 )
 
 var (
-	ErrNotFound   = errors.New("invitation not found")
-	ErrDailyLimit = errors.New("invitation daily limit exceeded")
+	ErrNotFound            = errors.New("invitation not found")
+	ErrDailyLimit          = errors.New("invitation daily limit exceeded")
+	ErrIdempotencyConflict = errors.New("invitation idempotency key reused for another command")
 )
+
+type CommandIdentity struct {
+	Operation      string
+	OwnerAccountID string
+	IdempotencyKey string
+	CommandDigest  string
+}
 
 type InvitationStore interface {
 	Generate(
 		ctx context.Context,
 		invitation *invitationmodel.Invitation,
 		dailyLimit int,
+		command CommandIdentity,
 	) (stored *invitationmodel.Invitation, created bool, err error)
 	FindByLinkCode(ctx context.Context, linkCode string) (*invitationmodel.Invitation, error)
 	ListByInviter(
@@ -28,7 +37,12 @@ type InvitationStore interface {
 		offset int,
 	) ([]invitationmodel.Invitation, error)
 	MarkDelivered(ctx context.Context, linkCode string, now time.Time) (*invitationmodel.Invitation, error)
-	Accept(ctx context.Context, linkCode string, now time.Time) (*invitationmodel.Invitation, error)
+	Accept(
+		ctx context.Context,
+		linkCode string,
+		now time.Time,
+		command CommandIdentity,
+	) (*invitationmodel.Invitation, error)
 }
 
 type PersonaOwnerReader interface {

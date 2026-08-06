@@ -216,7 +216,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		ctx,
 		moderationStore,
 		moderationStore,
-		postapp.NewPostModerationDecisionConsumer(postService),
+		postapp.NewPostModerationDecisionHandler(postService),
 		"content-moderation-post-lifecycle",
 		"content_moderation_post_lifecycle",
 		healthChecker,

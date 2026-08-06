@@ -56,11 +56,11 @@ class ContentDistributionPolicy:
     release_class: ReleaseClass
     image_generation_allowed: bool
     video_generation_allowed: bool
-    minimum_illustrated_rate: float
-    maximum_text_only_rate: float
+    illustrated_rate_target: float
+    text_only_rate_target: float
     m100_targets: tuple[tuple[str, int], ...]
     m1000_targets: tuple[tuple[str, int], ...]
-    minimum_automatic_recovery_rate: float
+    automatic_recovery_rate_target: float
     image_provider_priority: tuple[str, ...]
     video_popularity_signals: tuple[str, ...]
 
@@ -106,25 +106,25 @@ def load_content_distribution_policy(
     media_generation = raw["mediaGeneration"]
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
-    scale_gates = raw["scaleGates"]
+    scale_milestones = raw["scaleMilestones"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
         product_lifecycle_state=lifecycle,
         release_class=release_class,
         image_generation_allowed=bool(media_generation["imageAllowed"]),
         video_generation_allowed=bool(media_generation["videoAllowed"]),
-        minimum_illustrated_rate=float(article_media["minimumIllustratedRate"]),
-        maximum_text_only_rate=float(article_media["maximumTextOnlyRate"]),
+        illustrated_rate_target=float(article_media["illustratedRateTarget"]),
+        text_only_rate_target=float(article_media["textOnlyRateTarget"]),
         m100_targets=tuple(
-            (carrier, int(scale_gates["m100Targets"][carrier]))
+            (carrier, int(scale_milestones["m100Targets"][carrier]))
             for carrier in ("homepage", "article", "image", "video")
         ),
         m1000_targets=tuple(
-            (carrier, int(scale_gates["m1000Targets"][carrier]))
+            (carrier, int(scale_milestones["m1000Targets"][carrier]))
             for carrier in ("homepage", "article", "image", "video")
         ),
-        minimum_automatic_recovery_rate=float(
-            scale_gates["minimumAutomaticRecoveryRate"]
+        automatic_recovery_rate_target=float(
+            scale_milestones["automaticRecoveryRateTarget"]
         ),
         image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
         video_popularity_signals=tuple(research_discovery["videoPopularitySignals"]),

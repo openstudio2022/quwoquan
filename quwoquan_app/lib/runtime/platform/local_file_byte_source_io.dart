@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:quwoquan_app/core/platform/local_file_byte_source.dart';
+import 'package:quwoquan_app/runtime/platform/local_file_byte_source.dart';
 
 /// Native implementation that hashes once, then reopens the file for upload.
 Future<LocalFileByteSource> preparePlatformLocalFileByteSource(

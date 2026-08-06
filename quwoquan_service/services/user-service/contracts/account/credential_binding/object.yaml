@@ -19,16 +19,12 @@ relationships:
   reference_fields:
   - ownerId
   target_object: user.UserAccount
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - credentialType + credentialKey 全局唯一且 secret 仅保存不可逆引用
 - 绑定必须消费已完成且未消费的 AuthenticationChallenge
 - Account 必须始终保留至少一种可恢复凭证，除非账号 closed
 - revoked 绑定不可恢复，重新绑定创建新 identity
-- bind/revoke 与安全审计 outbox 在同一 PostgreSQL transaction 提交
+- bind/revoke 与安全审计事件表在同一 PostgreSQL transaction 提交；权限判断始终同步读取当前绑定状态
 - 同账号重复绑定同一凭证为幂等 no-op，由全局唯一约束承载，不接收调用方幂等键
 - 社交首登未知 identity 只签发 hash-only、短 TTL、一次消费的 phone binding ticket，不得提前创建账号或 session
 - CompleteFederatedPhoneBinding 必须在一个 PostgreSQL transaction 内锁定 ticket 与其 bind_phone challenge，并原子创建账号、绑定 phone/social credential、登记设备与 consent、签发 session；ticket 不得跨 device、platform、appVersion 或 consent version 使用

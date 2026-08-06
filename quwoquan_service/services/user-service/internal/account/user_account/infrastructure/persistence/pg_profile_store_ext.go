@@ -263,8 +263,7 @@ func userProfileSearchProjectionEventID(
 func isUserProfileSearchProjectionEvent(eventType string) bool {
 	switch eventType {
 	case userevent.UserProfileUpdated,
-		userevent.UserAvatarUpdated,
-		userevent.UserRegistered:
+		userevent.UserAvatarUpdated:
 		return true
 	default:
 		return false

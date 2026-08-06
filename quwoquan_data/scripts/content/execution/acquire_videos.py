@@ -26,6 +26,7 @@ def handle_acquire_videos(args: argparse.Namespace) -> None:
 
         receipt, path = acquire_professional_videos(
             Path(args.manifest).expanduser().resolve(),
+            handoff_ref=Path(args.handoff_ref).expanduser().resolve(),
             manual_root=manual_root,
             output_root=output_root,
         )
@@ -53,6 +54,7 @@ def register_acquire_videos_parser(sub: argparse._SubParsersAction) -> None:
         help="通过公开直链、平台支持 API 或人工文件取得专业研究视频",
     )
     parser.add_argument("--manifest", required=True)
+    parser.add_argument("--handoff-ref", required=True)
     parser.add_argument("--manual-root")
     parser.add_argument("--output-root")
     parser.set_defaults(handler=handle_acquire_videos)

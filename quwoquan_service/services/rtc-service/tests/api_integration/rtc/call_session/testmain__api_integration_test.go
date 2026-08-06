@@ -115,7 +115,7 @@ func TestMain(m *testing.M) {
 		panic("construct rtc message transport: " + err.Error())
 	}
 	realtimePublisher := mq.NewRealtimePublisher(realtimeTransport)
-	domainSvc := callsession.NewCallSessionService()
+	domainSvc := newAPITestCallSessionService()
 	orchestrator := application.NewCallOrchestrator(
 		callStore,
 		callCache,
@@ -127,13 +127,13 @@ func TestMain(m *testing.M) {
 		),
 	)
 	testOrchestrator = orchestrator
-	outboxRelay := application.NewCallOutboxRelay(callStore, realtimePublisher)
+	signalDeliveryCoordinator := application.NewCallSignalDeliveryRelay(callStore, realtimePublisher)
 	workerCtx, cancelWorker := context.WithCancel(ctx)
 	var workerWG sync.WaitGroup
 	workerWG.Add(1)
 	go func() {
 		defer workerWG.Done()
-		_ = outboxRelay.Run(workerCtx, 10*time.Millisecond)
+		_ = signalDeliveryCoordinator.Run(workerCtx, 10*time.Millisecond)
 	}()
 
 	// 真实链路：auth middleware 从可信 Principal 派生 actor（不信任客户端 header），
@@ -156,6 +156,18 @@ func TestMain(m *testing.M) {
 }
 
 type testMediaRoomProvider struct{}
+
+func newAPITestCallSessionService() *callsession.CallSessionService {
+	policy, err := callsession.NewRingTimeoutPolicy(30*time.Second, 60*time.Second)
+	if err != nil {
+		panic("construct RTC API test ring-timeout policy: " + err.Error())
+	}
+	service, err := callsession.NewCallSessionService(policy)
+	if err != nil {
+		panic("construct RTC API test call-session service: " + err.Error())
+	}
+	return service
+}
 
 func newTestMediaRoomProvider() *testMediaRoomProvider {
 	return &testMediaRoomProvider{}

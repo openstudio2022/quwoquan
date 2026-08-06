@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+// readiness_case: report-behaviors-local
 package http_test
 
 import (

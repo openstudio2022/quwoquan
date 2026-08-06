@@ -7,10 +7,10 @@
 
 按触达范围追加：
 
-- 触及 `lib/ui/**/pages/**` 或 `lib/app/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
+- 触及 `lib/ui/**/pages/**` 或 `lib/runtime/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
 - 触及登录入口、登录成功/关闭回退路径：补读 `.cursor/rules/15-auth-entry-no-loop.mdc`
 - 触及平台差异、Web/鸿蒙能力：补读 `.cursor/rules/14-cross-platform-portability.mdc`
-- 触及 `lib/components/pageflip/**` 或 `lib/ui/content/article_reader/pageflip/**`：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
+- 触及 `lib/design_system/pageflip/**` 或 `lib/service/content_service/content/post/presentation/article_reader/pageflip/**`：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
 
 ## App 端硬约束
 
@@ -96,7 +96,7 @@ key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
 - 被测对象就是 generated client / decoder / 错误映射本身时，改用
   `generatedClientBoundaryOverrides(transport: MockClient(...))`：environment 由测试显式
   声明为字面值，传输必须是测试交出的 `MockClient`。样板见
-  `test/local_contract/app/cloud_boundary_test_scope__local_contract_test.dart`。
+  `test/local_contract/runtime/cloud_boundary_test_scope__local_contract_test.dart`。
 - 撞上 `SealedCloudBoundaryError` 时唯一正确动作是补对象级 typed port override。禁止改成
   给测试注入 environment、放宽 seal、返回 Noop/Mock client 或 skip 测试。失败信息里已经写明
   缺哪一层边界 provider，按它往上找 `ref.watch` 链即可定位该 override 的 typed port。

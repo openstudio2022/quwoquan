@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:video_player_android/video_player_android.dart';
 
-import 'package:quwoquan_app/core/platform/video_native_playback_signals.dart';
+import 'package:quwoquan_app/runtime/platform/video_native_playback_signals.dart';
 
 /// I/O bridge that activates vendored Android signals only on Android.
 Map<String, String> videoNativePlaybackSignalRequestHeadersImpl(

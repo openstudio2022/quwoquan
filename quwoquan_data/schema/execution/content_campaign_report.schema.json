@@ -5,6 +5,9 @@
   "required": [
     "schema",
     "rootExecutionId",
+    "campaignRunId",
+    "campaignGeneration",
+    "campaignFencingToken",
     "status",
     "phase",
     "planDigest",
@@ -21,6 +24,12 @@
   "properties": {
     "schema": { "const": "quwoquan_data.content_campaign_report" },
     "rootExecutionId": { "type": "string", "minLength": 1 },
+    "campaignRunId": { "type": ["string", "null"], "minLength": 1 },
+    "campaignGeneration": { "type": ["integer", "null"], "minimum": 1 },
+    "campaignFencingToken": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
     "status": {
       "enum": [
         "awaiting_submissions",

@@ -15,6 +15,9 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
     VerificationProfile,
     load_content_release_readiness_policy,
 )
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 
 
 def _operation_evidence(path: str, page_id: str, *, suffix: str) -> dict[str, object]:
@@ -173,9 +176,9 @@ def test_media_edge_health_uses_edge_root_not_carrier_path_base__local_contract(
         assert "/media/video/" not in media["url"]
 
 
-def test_content_release_import_plane_excludes_tag_and_search__local_contract() -> (
-    None
-):
+def test_content_release_import_plane_excludes_tag_and_search__local_contract(
+    monkeypatch,
+) -> None:
     topology = stackctl.load_environment_topology()
     checks = stackctl._health_checks_for_target(
         topology,
@@ -188,6 +191,25 @@ def test_content_release_import_plane_excludes_tag_and_search__local_contract() 
     assert "entity-service" in names
     assert "tag-service" not in names
     assert "search-service" not in names
+
+    composition = compile_provider_runtime_composition(
+        environment="alpha",
+        target="alpha-local",
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_active_provider_runtime",
+        lambda _environment, _target: {"composition": composition},
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "load_startup_attempt",
+        lambda _target: {
+            "status": "running",
+            "workload": "full",
+            "providerRuntimeDigest": composition["runtimeCompositionDigest"],
+        },
+    )
 
     full_plane = {
         str(item["name"])

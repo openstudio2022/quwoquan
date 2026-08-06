@@ -26,7 +26,6 @@ func TestCatalogQualityGatePublishesOnlyCompleteResolvedSkillMetadata(t *testing
 		item.RequiresConsent || len(item.RequiredConsentScopes) != 0 ||
 		!hasSemanticLabel(item.ConsentScopeLabels, "assistant.memory.preferences.read") ||
 		!hasSemanticLabel(item.ConsentScopeLabels, "assistant.learning.feedback_context.read") ||
-		!hasSemanticLabel(item.ConsentScopeLabels, "travel.trip.read") ||
 		len(item.Examples) != 3 {
 		t.Fatalf("resolved catalog semantics are incomplete: %+v", item)
 	}

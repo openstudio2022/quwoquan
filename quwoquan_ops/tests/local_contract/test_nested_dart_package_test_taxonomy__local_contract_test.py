@@ -17,8 +17,12 @@ from test_directory_layout_lib import (
 
 
 CANONICAL_APP_LOCATION_TEST = (
-    "quwoquan_app/test/local_contract/core/providers/"
+    "quwoquan_app/test/local_contract/runtime/di/"
     "create_location_service_provider__local_contract_test.dart"
+)
+CANONICAL_APP_PYTHON_TEST = (
+    "quwoquan_app/test/local_contract/runtime/"
+    "ios_runtime_dart_defines__local_contract_test.py"
 )
 
 
@@ -32,6 +36,7 @@ def test_app_local_contract_is_canonical_after_mock_package_retirement() -> None
 def test_app_local_contract_is_inventory_visible() -> None:
     paths = {path.relative_to(ROOT).as_posix() for _, path, _ in iter_canonical_files()}
     assert CANONICAL_APP_LOCATION_TEST in paths
+    assert CANONICAL_APP_PYTHON_TEST in paths
 
 
 def test_embedded_real_service_integration_test_is_canonical() -> None:

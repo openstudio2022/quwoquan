@@ -53,10 +53,13 @@ func (w *DurableWorker) completeRun(
 			current.RunID,
 			completionHook.ConfirmationRef,
 		)
-		if _, valid := pendingDeviceActionKind(
+		if _, valid := pendingDeviceActionBinding(
 			result.Presentation,
+			current.RunID,
 			completionHook.ConfirmationRef,
 			continuationToken,
+			"approved",
+			w.now().UTC(),
 		); !valid {
 			return w.failRun(
 				ctx,

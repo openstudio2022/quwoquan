@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	presentation "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
@@ -216,7 +217,7 @@ func TestAdaptivePresentationFallsBackForInvalidDataUnsupportedNodeOrPolicyFailu
 		},
 		{
 			name: "unsupported semantic node",
-			data: map[string]any{"title": "trip", "showRisk": true},
+			data: map[string]any{"title": "gathering", "showRisk": true},
 			supported: map[generated.AssistantPresentationNodeKind]bool{
 				generated.AssistantPresentationNodeKindCard: true,
 				generated.AssistantPresentationNodeKindText: true,
@@ -224,13 +225,13 @@ func TestAdaptivePresentationFallsBackForInvalidDataUnsupportedNodeOrPolicyFailu
 		},
 		{
 			name:         "action unreachable",
-			data:         map[string]any{"title": "trip", "showRisk": true},
+			data:         map[string]any{"title": "gathering", "showRisk": true},
 			supported:    allPresentationKinds(),
 			actionReject: true,
 		},
 		{
 			name:        "media unavailable",
-			data:        map[string]any{"title": "trip", "showRisk": true},
+			data:        map[string]any{"title": "gathering", "showRisk": true},
 			supported:   allPresentationKinds(),
 			mediaReject: true,
 		},
@@ -284,13 +285,13 @@ func TestAdaptivePresentationTemplateRejectsUnsafeStructureStyleAndActions(t *te
 		{
 			name: "arbitrary route",
 			mutate: func(template *presentation.Template) {
-				template.Nodes[2].Action.Payload["route"] = "/admin"
+				template.Nodes[2].Action.Navigate.RouteID = "/admin"
 			},
 		},
 		{
 			name: "unknown action",
 			mutate: func(template *presentation.Template) {
-				template.Nodes[2].Action.Operation = "UnknownOperation"
+				template.Nodes[2].Action.Kind = "UnknownOperation"
 			},
 		},
 		{
@@ -372,25 +373,33 @@ func TestAdaptivePresentationRejectsTamperedBoundActionIntent(t *testing.T) {
 		presentation.NewOfficialNodeDataPolicies(),
 	)
 	validAction := map[string]any{
-		"intentId":             "continue_tool_use",
-		"operation":            "ContinueAssistantToolUse",
-		"objectTypeRef":        "assistant_tool_use",
-		"objectId":             "tu_01KZ1AAX6373K6ETA4ETAXPYW1",
-		"payload":              map[string]any{"decision": "approved"},
-		"requiresConfirmation": true,
+		"intentId":      "approve_tool_use",
+		"kind":          "ApproveTool",
+		"requestDigest": "sha256:" + strings.Repeat("a", 64),
+		"jti":           "approve_tool_use_jti",
+		"issuedAt":      time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano),
+		"expiresAt":     time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano),
+		"approveTool": map[string]any{
+			"runId":            "run_01KZ1AAX6373K6ETA4ETAXPYW1",
+			"toolInvocationId": "tu_01KZ1AAX6373K6ETA4ETAXPYW1",
+			"decision":         "approved",
+			"capability":       "calendar_create_reminder",
+			"inputDigest":      "sha256:" + strings.Repeat("b", 64),
+			"approvalPermit":   "opaque_approval_permit_123456",
+		},
 	}
 	for _, test := range []struct {
 		name   string
 		mutate func(map[string]any)
 	}{
 		{
-			name: "operation outside template allowlist",
+			name: "kind outside template allowlist",
 			mutate: func(action map[string]any) {
-				action["operation"] = "DeleteAccount"
+				action["kind"] = "DeleteAccount"
 			},
 		},
 		{
-			name: "unsafe callback payload",
+			name: "generic payload is forbidden",
 			mutate: func(action map[string]any) {
 				action["payload"] = map[string]any{"callbackUrl": "https://evil.example"}
 			},
@@ -515,7 +524,7 @@ func TestAdaptivePresentationRouteMapPolicyAcceptsOnlyCanonicalSemanticData(t *t
 		generated.AssistantPresentationNodeKindRouteMap,
 		canonicalData,
 	); err == nil {
-		t.Fatal("generic Presentation accepted a vertical TripMapView field")
+		t.Fatal("generic Presentation accepted an owner-private route projection field")
 	}
 }
 
@@ -622,12 +631,17 @@ func validPresentationTemplate() presentation.Template {
 				Binding:      map[string]string{"visible": "$.showRisk"},
 				Style:        style,
 				Action: &presentation.ActionIntent{
-					IntentID:             "open_weather",
-					Operation:            "OpenWeatherDetail",
-					ObjectTypeRef:        "weather_location",
-					ObjectID:             "chengdu",
-					Payload:              map[string]any{"sourceRef": "weather_1"},
-					RequiresConfirmation: false,
+					IntentID:      "open_weather",
+					Kind:          presentation.ActionIntentNavigate,
+					RequestDigest: "sha256:" + strings.Repeat("b", 64),
+					JTI:           "open_weather_jti",
+					IssuedAt:      time.Now().UTC().Add(-time.Second),
+					ExpiresAt:     time.Now().UTC().Add(time.Minute),
+					Navigate: &presentation.NavigateIntent{
+						RouteID:       "weather_detail",
+						ObjectTypeRef: "weather_location",
+						ObjectID:      "chengdu",
+					},
 				},
 			},
 		},
@@ -637,7 +651,7 @@ func validPresentationTemplate() presentation.Template {
 			ViewportClass:     "narrow",
 			Density:           generated.AssistantPresentationDensityCompact,
 		}},
-		AllowedActionIntents: []string{"OpenWeatherDetail"},
+		AllowedActionIntents: []string{string(presentation.ActionIntentNavigate)},
 		FallbackMarkdown:     "## 川西行程\n请查看天气与来源。",
 		AssetDigest:          "sha256:" + strings.Repeat("a", 64),
 	}
@@ -704,7 +718,7 @@ func validBoundActionTemplate() presentation.Template {
 				ResponsiveSpan: 1,
 			},
 		}},
-		AllowedActionIntents: []string{"ContinueAssistantToolUse"},
+		AllowedActionIntents: []string{string(presentation.ActionIntentApproveTool)},
 		FallbackMarkdown:     "需要确认后才能执行此操作。",
 		AssetDigest:          "sha256:" + strings.Repeat("d", 64),
 	}

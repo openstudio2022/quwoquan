@@ -200,6 +200,199 @@ contract_test:
   - ACK 只接受绑定 service/environment/instance namespace 的已验证 service principal。
   - ACK 必须绑定 canonical ReleaseManifest digest，desiredHash 只能来自 ConfigSnapshot；状态、workflow、audit、幂等 receipt 与 ConfigInstanceReported outbox 必须原子提交。
   current_evidence:
-    local_contract: [control-plane/platform-ops/cmd/api/main__local_contract_test.go]
-    api_integration: [control-plane/platform-ops/tests/api_integration/ops/platform_ops/config_snapshot/config_layer_http_boundary__api_integration_test.go]
+    local_contract: [control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go]
+    api_integration: [control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go]
     real_engines: {postgres: embedded-postgres}
+readiness_cases:
+- case_id: list-config-instance-reports-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListConfigInstanceReports}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-config-instance-reports-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListConfigInstanceReports}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: report-config-instance-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportConfigInstance}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: report-config-instance-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportConfigInstance}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: list-release-candidate-acks-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListReleaseCandidateAcks}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-release-candidate-acks-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListReleaseCandidateAcks}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: list-runtime-services-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRuntimeServices}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-runtime-services-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRuntimeServices}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: list-runtime-instances-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListRuntimeInstances}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-runtime-instances-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListRuntimeInstances}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: ingest-alertmanager-webhook-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: IngestAlertmanagerWebhook}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: ingest-alertmanager-webhook-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: IngestAlertmanagerWebhook}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: list-active-alerts-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListActiveAlerts}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-active-alerts-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListActiveAlerts}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: acknowledge-alert-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: AcknowledgeAlert}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: acknowledge-alert-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: AcknowledgeAlert}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: list-platform-audits-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListPlatformAudits}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-platform-audits-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListPlatformAudits}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: list-platform-approvals-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListPlatformApprovals}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: list-platform-approvals-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListPlatformApprovals}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: get-platform-projection-summary-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetPlatformProjectionSummary}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: get-platform-projection-summary-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetPlatformProjectionSummary}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: get-platform-triage-summary-local
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetPlatformTriageSummary}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/config_instance_report/atomic_handler__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: file-atomic-store, digest_binding: candidate}
+- case_id: get-platform-triage-summary-api
+  spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetPlatformTriageSummary}
+  runner_source_path: quwoquan_service/control-plane/platform-ops/tests/api_integration/platform_ops/config_instance_report/postgres_outbox__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

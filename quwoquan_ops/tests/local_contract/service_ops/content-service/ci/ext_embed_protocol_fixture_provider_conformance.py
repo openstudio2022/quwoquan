@@ -14,7 +14,7 @@ from quwoquan_ops.ci.provider_conformance.native_case_result import run_native_h
 
 RESULT_PATH_ENV = "QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
 TARGET = 'ext-embed-protocol_fixture-local-contract'
-COMMAND = ('go', '-C', 'quwoquan_service', 'test', './services/content-service/internal/content/post/...', './services/content-service/tests/local_contract/content/post/...', '-count=1')
+COMMAND = ('python3', 'quwoquan_ops/ci/provider_conformance/run_generic_protocol_substitute_conformance.py')
 
 if __name__ == "__main__":
     raise SystemExit(run_native_harness(command=COMMAND, target=TARGET))

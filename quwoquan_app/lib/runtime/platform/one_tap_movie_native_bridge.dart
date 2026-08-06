@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/core/platform/ios_video_editing_bridge.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/ios_video_editing_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 
 class OneTapMovieNativeComposeResult {
   const OneTapMovieNativeComposeResult({

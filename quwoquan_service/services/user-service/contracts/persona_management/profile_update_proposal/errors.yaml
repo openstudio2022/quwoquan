@@ -1,8 +1,5 @@
-domain: USER
-entity: ProfileUpdateProposal
 errors:
 - code: USER.PROFILE_PROPOSAL.not_found
-  kind: PROFILE_PROPOSAL
   reason: not_found
   emitted_by:
   - surface: http
@@ -16,13 +13,13 @@ errors:
     - RollbackProposal
   http_status: 404
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: profileProposalNotFound
   go_const: ErrProfileProposalNotFound
   user_message:
     zh: 资料修改提案不存在
     en: Profile update proposal not found
 - code: USER.PROFILE_PROPOSAL.invalid_argument
-  kind: PROFILE_PROPOSAL
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -36,13 +33,13 @@ errors:
     - RollbackProposal
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: profileProposalInvalidArgument
   go_const: ErrProfileProposalInvalidArgument
   user_message:
     zh: 提案内容无效，请检查后重试
     en: The proposal is invalid, please review and retry
 - code: USER.PROFILE_PROPOSAL.invalid_transition
-  kind: PROFILE_PROPOSAL
   reason: invalid_transition
   emitted_by:
   - surface: http
@@ -55,14 +52,14 @@ errors:
     - RejectProposal
     - RollbackProposal
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: profileProposalInvalidTransition
   go_const: ErrProfileProposalInvalidTransition
   user_message:
     zh: 提案状态已变化，请刷新后重试
     en: Proposal state changed, please refresh and retry
 - code: USER.PROFILE_PROPOSAL.version_conflict
-  kind: PROFILE_PROPOSAL
   reason: version_conflict
   emitted_by:
   - surface: http
@@ -75,14 +72,14 @@ errors:
     - RejectProposal
     - RollbackProposal
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: profileProposalVersionConflict
   go_const: ErrProfileProposalVersionConflict
   user_message:
     zh: 资料已更新，请刷新后重新确认
     en: Profile data changed, please refresh and confirm again
 - code: USER.PROFILE_PROPOSAL.idempotency_conflict
-  kind: PROFILE_PROPOSAL
   reason: idempotency_conflict
   emitted_by:
   - surface: http
@@ -96,20 +93,21 @@ errors:
     - RollbackProposal
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: profileProposalIdempotencyConflict
   go_const: ErrProfileProposalIdempotencyConflict
   user_message:
     zh: 重复请求内容不一致，请重新操作
     en: The repeated request differs from the original request
 - code: USER.PROFILE_PROPOSAL.rollback_expired
-  kind: PROFILE_PROPOSAL
   reason: rollback_expired
   emitted_by:
   - surface: http
     operations:
     - RollbackProposal
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: profileProposalRollbackExpired
   go_const: ErrProfileProposalRollbackExpired
   user_message:

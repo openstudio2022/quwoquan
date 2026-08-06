@@ -18,3 +18,7 @@ externalBindings:
     state: enabled
     adapter: ext.map.protocol_fixture
     endpointRef: local_topology:provider-protocol-substitute
+  location.poi.search:
+    state: not_required
+  location.route.read:
+    state: not_required

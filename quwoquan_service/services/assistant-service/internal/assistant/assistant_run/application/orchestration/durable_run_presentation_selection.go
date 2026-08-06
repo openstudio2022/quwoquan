@@ -222,7 +222,7 @@ func (policy groundedPresentationPolicy) ValidateAction(
 	_ string,
 	action presentationpkg.ActionIntent,
 ) error {
-	if !policy.supportedActions[action.Operation] {
+	if !policy.supportedActions[string(action.Kind)] {
 		return presentationpkg.ErrActionRejected
 	}
 	digest, ok := presentationGroundingDigest(action)

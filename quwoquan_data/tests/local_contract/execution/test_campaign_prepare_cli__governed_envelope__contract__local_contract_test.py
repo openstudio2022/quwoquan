@@ -13,6 +13,7 @@ from core.io import write_json
 
 def _args(tmp_path: Path) -> Namespace:
     return Namespace(
+        phase="envelopes",
         scale="M3",
         region_ref="china",
         run_date="20260806",
@@ -22,6 +23,11 @@ def _args(tmp_path: Path) -> Namespace:
         source_providers=["pinterest", "manual_file"],
         semantic_selection_id="default",
         semantic_preflight_receipt=str(tmp_path / "semantic-preflight.json"),
+        handoff_id=None,
+        handoff_revision=None,
+        supersedes_handoff_ref=None,
+        campaign_retry_of=None,
+        handoff_ref=str(tmp_path / "handoff.json"),
         predecessor_reconciliation_receipt=None,
         promotion_receipt=None,
         homepage_retry_of="20260805--travel-homepage-m3--china--scale-001",
@@ -47,9 +53,24 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
                 ),
                 "executionId": f"20260806--travel-{carrier}-m3--china--scale-002",
                 "retryOf": f"20260805--travel-{carrier}-m3--china--scale-001",
+                "familyRef": f"content/travel/{carrier}/{carrier}",
+                "regionRef": "china",
+                "selector": "all",
+                "quota": 3,
+                "count": 6,
+                "topic": "川西",
+                "targetNames": ["九寨沟", "四姑娘山"],
+                "sourceProviders": ["manual_file", "pinterest"],
                 "sourceRevision": "sha256:" + "a" * 64,
                 "sourceDigest": {"digest": "sha256:" + "b" * 64},
                 "entityCatalogDigest": "sha256:" + "c" * 64,
+                "preAcquisitionHandoff": {
+                    "handoffId": "m3-test",
+                    "handoffRevision": 1,
+                    "handoffRef": "data/local/workspace/handoff.json",
+                    "handoffDigest": "sha256:" + "e" * 64,
+                    "handoffFileDigest": "sha256:" + "f" * 64,
+                },
                 "semanticSelectionId": "default",
                 "semanticPreflightReceipt": {"receiptRef": "preflight.json"},
                 "requestDigest": "sha256:" + "d" * 64,
@@ -79,6 +100,9 @@ def test_prepare_campaign_maps_only_governed_external_input_kinds(
     assert captured["semantic_selection_id"] == "default"
     assert captured["semantic_preflight_receipt"] == (
         tmp_path / "semantic-preflight.json"
+    ).resolve()
+    assert captured["pre_acquisition_handoff"] == (
+        tmp_path / "handoff.json"
     ).resolve()
     assert captured["predecessor_execution_ids_by_carrier"] == {
         carrier: f"20260805--travel-{carrier}-m3--china--scale-001"
@@ -114,6 +138,9 @@ def test_prepare_campaign_maps_only_governed_external_input_kinds(
     output = capsys.readouterr().out
     assert "campaign_envelope_prepare_result" in output
     assert '"articleExternalInputMode": "execution_source_unit_freeze"' in output
+    assert '"campaign-freeze"' in output
+    assert '"campaign-lane-run"' in output
+    assert '"campaign-finalize"' in output
 
 
 def test_prepare_campaign_reports_writer_failure_as_gate_block(
@@ -129,3 +156,45 @@ def test_prepare_campaign_reports_writer_failure_as_gate_block(
     )
     with pytest.raises(SystemExit, match="GATE_BLOCK.*preflight receipt expired"):
         prepare_campaign.handle_prepare_campaign(_args(tmp_path))
+
+
+def test_prepare_campaign_handoff_revision_never_writes_envelopes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = _args(tmp_path)
+    args.phase = "handoff"
+    args.handoff_id = "travel-m100-20260807"
+    args.handoff_revision = 2
+    args.supersedes_handoff_ref = str(tmp_path / "manual-revision-1.json")
+    args.campaign_retry_of = None
+    args.handoff_ref = None
+    args.semantic_preflight_receipt = None
+    args.homepage_image_input = None
+    args.image_input = None
+    args.video_input = None
+    for carrier in CAMPAIGN_CARRIERS:
+        setattr(args, f"{carrier}_retry_of", None)
+    observed: list[str] = []
+    monkeypatch.setattr(
+        prepare_campaign,
+        "_handle_handoff",
+        lambda _args: observed.append("handoff"),
+    )
+    monkeypatch.setattr(
+        prepare_campaign,
+        "_handle_envelopes",
+        lambda _args: pytest.fail("handoff phase must not create envelopes"),
+    )
+
+    prepare_campaign.handle_prepare_campaign(args)
+
+    assert observed == ["handoff"]
+
+
+def test_prepare_campaign_envelopes_require_explicit_handoff(tmp_path: Path) -> None:
+    args = _args(tmp_path)
+    args.handoff_ref = None
+
+    with pytest.raises(SystemExit, match="GATE_BLOCK.*--handoff-ref"):
+        prepare_campaign.handle_prepare_campaign(args)

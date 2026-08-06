@@ -89,7 +89,7 @@ type UserProfileSearchOutboxFailure struct {
 // dropping a search projection would make ES permanently diverge from its
 // authoritative profile.
 type UserProfileSearchOutboxStore interface {
-	ClaimReady(
+	ClaimPendingOutbox(
 		ctx context.Context,
 		owner string,
 		now time.Time,

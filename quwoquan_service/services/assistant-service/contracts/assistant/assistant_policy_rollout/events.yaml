@@ -1,9 +1,6 @@
 events:
 - name: AssistantPolicyRolloutActivated
-  producer: assistant-service
-  consumers:
-  - platform-ops
-  channel: outbox
+  delivery_semantics: transactional_event_log
   payload_entity: AssistantPolicyRollout
   payload_fields:
   - policyId
@@ -11,11 +8,9 @@ events:
   - status
   - assignments
   - activatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 policy audit stream；运行时按当前 rollout store 解析，不订阅该审计记录。
 - name: AssistantPolicyRolloutRolledBack
-  producer: assistant-service
-  consumers:
-  - platform-ops
-  channel: outbox
+  delivery_semantics: transactional_event_log
   payload_entity: AssistantPolicyRollout
   payload_fields:
   - policyId
@@ -23,3 +18,4 @@ events:
   - status
   - assignments
   - activatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 policy audit stream；运行时按当前 rollout store 解析，不订阅该审计记录。

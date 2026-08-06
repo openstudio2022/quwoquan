@@ -1,21 +1,24 @@
 errors:
 - code: OPS.USER.recovery_failure_invalid
-  kind: VALIDATION
+  reason: recovery_failure_invalid
   http_status: 400
   emitted_by:
   - {surface: http, operations: [ReportRecoveryFailure]}
-  message_key: opsRecoveryFailureInvalid
-  default_message: 异常记录无效
-  recovery:
-    action: none
-    disruption_level: silent
+  recovery_action: absorb
+  disruption_level: silent
+  go_const: ErrRecoveryFailureInvalid
+  user_message:
+    zh: 异常记录无效
+    en: The recovery failure record is invalid.
 - code: OPS.SYSTEM.recovery_failure_unavailable
-  kind: UNAVAILABLE
+  reason: recovery_failure_unavailable
   http_status: 503
   emitted_by:
   - {surface: http, operations: [ReportRecoveryFailure]}
-  message_key: opsRecoveryFailureUnavailable
-  default_message: 异常记录暂未接收
-  recovery:
-    action: retry_later
-    disruption_level: silent
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: silent
+  go_const: ErrRecoveryFailureUnavailable
+  user_message:
+    zh: 异常记录暂未接收
+    en: The recovery failure record was not accepted.

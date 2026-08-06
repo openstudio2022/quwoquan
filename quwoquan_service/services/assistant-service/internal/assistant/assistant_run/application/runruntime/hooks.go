@@ -60,9 +60,9 @@ type RegisteredHook struct {
 }
 
 type HookRegistry struct {
-	byPhase    map[HookPhase][]RegisteredHook
-	byName     map[string]RegisteredHook
-	verifiers  *VerifierRegistry
+	byPhase   map[HookPhase][]RegisteredHook
+	byName    map[string]RegisteredHook
+	verifiers *VerifierRegistry
 }
 
 type executionHookContext struct {

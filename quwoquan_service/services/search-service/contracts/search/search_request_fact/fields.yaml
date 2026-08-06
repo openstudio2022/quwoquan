@@ -228,3 +228,36 @@ types:
       - name: limit
         type: int
         client_dart_type: int
+  SearchAccountClosureDeadLetterRecoveryRequest:
+    description: operator 释放 Search 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
+    fields:
+      - name: sourceStreamId
+        source: sourceStreamId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: write
+  SearchAccountClosureDeadLetterRecoveryAccepted:
+    description: Search 注销清理 source PEL 已受理重新消费。
+    fields:
+      - name: sourceStreamId
+        source: sourceStreamId
+        type: string
+        constraints:
+          - PK
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: recoveryAccepted
+        source: recoveryAccepted
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

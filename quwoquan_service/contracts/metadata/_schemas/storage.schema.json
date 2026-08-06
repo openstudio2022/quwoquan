@@ -2,7 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://quwoquan.local/contracts/metadata/storage.schema.json",
   "type": "object",
-  "additionalProperties": true,
+  "description": "一份 storage.yaml 的顶层键集在本 schema 关闭。`additionalProperties: false` 是键集唯一真相源的执行位：任何消费者（codegen_storage、readiness loader、ops gate）只能读这里声明过的键，新增键必须先落 schema。放开它会让臆造键、拼写错键与真实承重键在校验层同权，见 contracts/metadata/DESIGN.md。",
+  "additionalProperties": false,
   "required": [
     "backend",
     "role"
@@ -12,6 +13,11 @@
       "type": "string",
       "minLength": 1
     },
+    "description": {
+      "description": "该对象存储事实的散文补充说明。仅承载无法结构化的语义（例如 CAS/幂等的提交语义、Redis 场景的原子性说明）。任何可结构化的事实必须使用对应结构键，不得退回本字段。",
+      "type": "string",
+      "minLength": 4
+    },
     "role": {
       "enum": [
         "authoritative",
@@ -20,6 +26,18 @@
         "external",
         "runtime"
       ]
+    },
+    "collections": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/storageCollection"
+      }
+    },
+    "tables": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/storageTable"
+      }
     },
     "streams": {
       "type": "object",
@@ -62,6 +80,274 @@
               "type": "string",
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             }
+          },
+          "publication_role": {
+            "$ref": "#/$defs/publicationRole"
+          }
+        }
+      }
+    },
+    "transaction": {
+      "description": "该对象一次写入的原子提交边界。scope 列出必须在同一事务内提交的存储名，guarantees 列出该事务提供的并发/幂等保证。只描述真实存在的事务提交，不描述期望。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "isolation",
+        "guarantees"
+      ],
+      "properties": {
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "description": "同 storage.yaml 内 tables/collections 声明过的存储名。",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        },
+        "isolation": {
+          "enum": [
+            "mongo_transaction"
+          ]
+        },
+        "guarantees": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        }
+      }
+    },
+    "redis_cache": {
+      "description": "该对象拥有的 Redis 键。tools/codegen_storage/gen_cache.go 由本键生成缓存基础设施，因此这里是承重声明而非文档。key 前缀到 Redis 实例的路由由 contracts/metadata/_shared/redis_keyspace.yaml 的 scene_routing 决定。",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ttl_seconds": {
+            "description": "0 或 null 表示该键不设过期，由显式失效、会话生命周期或容量准入回收。",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "type": {
+            "enum": [
+              "string",
+              "hash",
+              "set",
+              "sorted_set",
+              "pubsub_channel"
+            ]
+          },
+          "scene": {
+            "description": "redis_keyspace.yaml scene_routing 中的 scene 名。",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "entity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 4
+          },
+          "isolation": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "invalidate_on": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "description": "触发失效的领域事件名。",
+              "type": "string",
+              "pattern": "^[A-Z][A-Za-z0-9]*$"
+            }
+          },
+          "create_operation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "member": {
+            "type": "string",
+            "minLength": 1
+          },
+          "score": {
+            "type": "string",
+            "minLength": 1
+          },
+          "field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quota_index": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quota_metadata": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quota_shards": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_fields": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_members": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_value_bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_object_cards": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_active_per_scope": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_live_records_per_quota_shard": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "max_live_bytes_per_quota_shard": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "global_max_live_records": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "global_max_live_bytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "environment_backends": {
+      "description": "该对象的存储后端按环境绑定的适配器。只允许四环境键；环境之间不继承。",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "alpha",
+          "beta",
+          "gamma",
+          "prod"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "adapter",
+          "backend"
+        ],
+        "properties": {
+          "adapter": {
+            "description": "外部能力标识，形如 ext.<domain>.<provider>。",
+            "type": "string",
+            "pattern": "^ext\\.[a-z0-9]+(?:\\.[a-z0-9_]+)+$"
+          },
+          "backend": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "fallback": {
+      "description": "外部后端不可用时的降级策略。forbidden 表示必须返回结构化 unavailable，禁止本地合成成功或回退 fixture。",
+      "enum": [
+        "forbidden"
+      ]
+    },
+    "logstores": {
+      "description": "该对象写入的可观测日志库。字段分级（indexed/internal/non_indexed/forbidden）是脱敏与检索能力的真相源，由 App 与 Ops 侧的日志治理门禁读取。",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider_config_keys",
+          "default_name",
+          "ttl_days"
+        ],
+        "properties": {
+          "provider_config_keys": {
+            "description": "后端名到服务 config/schema.yaml 配置键的映射；索引名只来自配置，不在此硬编码。",
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+            }
+          },
+          "default_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ttl_days": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "time_field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "business_time_field": {
+            "type": "string",
+            "minLength": 1
+          },
+          "indexed_fields": {
+            "$ref": "#/$defs/logstoreFieldList"
+          },
+          "non_indexed_fields": {
+            "$ref": "#/$defs/logstoreFieldList"
+          },
+          "internal_fields": {
+            "$ref": "#/$defs/logstoreFieldList"
+          },
+          "forbidden_fields": {
+            "description": "禁止写入该日志库的字段；写入即为脱敏事故。",
+            "$ref": "#/$defs/logstoreFieldList"
           }
         }
       }
@@ -145,6 +431,500 @@
           }
         }
       }
+    }
+  },
+  "$defs": {
+    "logstoreFieldList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^_?[a-zA-Z][a-zA-Z0-9]*$"
+      }
+    },
+    "publicationRole": {
+      "description": "这张存储在事件发布中承担的角色。它是发布归属的唯一判别位：readiness 不再按存储名子串猜测哪张表是发件箱（`*_outbox_sequences` 之类的配件会被子串误捕，`skill_consent_events` 之类的事务性事件表又会被漏捕）。未标注不等于不发布，未标注是可见缺口，见 contracts/metadata/DESIGN.md 第 9.2 节。",
+      "enum": [
+        "transactional_outbox",
+        "transactional_event_log",
+        "publication_accessory",
+        "not_published"
+      ]
+    },
+    "storageTable": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "authoritative",
+            "append_only",
+            "owned",
+            "idempotency_receipt"
+          ]
+        },
+        "publication_role": {
+          "$ref": "#/$defs/publicationRole"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 4
+        },
+        "pk": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/storageColumn"
+          }
+        },
+        "foreign_keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/storageForeignKey"
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/storageTableIndex"
+          }
+        },
+        "unique_constraints": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/storageUniqueConstraint"
+          }
+        },
+        "search_indexes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/storageTableSearchIndex"
+          }
+        },
+        "cache_excluded": {
+          "type": "boolean"
+        },
+        "infrastructure_only": {
+          "type": "boolean"
+        }
+      }
+    },
+    "storageColumn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "constraints": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "default": true
+      }
+    },
+    "storageTableIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "columns"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 4
+        }
+      }
+    },
+    "storageUniqueConstraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "columns"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "storageForeignKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "columns",
+        "references"
+      ],
+      "properties": {
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "references": {
+          "type": "string",
+          "minLength": 1
+        },
+        "on_delete": {
+          "enum": [
+            "CASCADE",
+            "RESTRICT",
+            "SET NULL"
+          ]
+        }
+      }
+    },
+    "storageTableSearchIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "columns",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "storageCollection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "append_only",
+            "idempotency_receipt",
+            "rate_limit_lock",
+            "checkpoint",
+            "authoritative",
+            "projection",
+            "inbox",
+            "projection_checkpoint",
+            "owned_entity",
+            "operational",
+            "reliable_task"
+          ]
+        },
+        "publication_role": {
+          "$ref": "#/$defs/publicationRole"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 4
+        },
+        "indexes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/storageCollectionIndex"
+          }
+        }
+      }
+    },
+    "storageCollectionIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keys": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "enum": [
+              -1,
+              1,
+              "2dsphere",
+              "hashed",
+              "text"
+            ]
+          }
+        },
+        "key_order": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "sparse": {
+          "type": "boolean"
+        },
+        "partial_filter": {
+          "type": "object",
+          "minProperties": 1
+        },
+        "expire_after_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string",
+          "minLength": 4
+        },
+        "type": {
+          "enum": [
+            "text",
+            "vector"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "weights": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dimensions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "similarity": {
+          "enum": [
+            "cosine",
+            "dot_product",
+            "euclidean"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "keys"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "field"
+                ]
+              },
+              {
+                "required": [
+                  "fields"
+                ]
+              },
+              {
+                "required": [
+                  "weights"
+                ]
+              },
+              {
+                "required": [
+                  "dimensions"
+                ]
+              },
+              {
+                "required": [
+                  "similarity"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "type",
+            "source",
+            "fields"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "keys"
+                ]
+              },
+              {
+                "required": [
+                  "field"
+                ]
+              },
+              {
+                "required": [
+                  "dimensions"
+                ]
+              },
+              {
+                "required": [
+                  "similarity"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "type",
+            "field",
+            "dimensions",
+            "similarity"
+          ],
+          "properties": {
+            "type": {
+              "const": "vector"
+            }
+          },
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "keys"
+                ]
+              },
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "fields"
+                ]
+              },
+              {
+                "required": [
+                  "weights"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     }
   }
 }

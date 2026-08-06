@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+// readiness_case: list-inbox-local
+// readiness_case: project-chat-inbox-local
 package local_contract
 
 import (
@@ -10,9 +13,13 @@ import (
 )
 
 type inboxMemoryStore struct {
-	upserts    int
-	tombstones int
-	completed  string
+	upserts      int
+	tombstones   int
+	completed    string
+	listedUser   string
+	listedLimit  int
+	listedCursor string
+	page         inboxapp.Page
 }
 
 func (store *inboxMemoryStore) UpsertIfNewer(_ context.Context, _ inboxapp.Item, _ string, _ int64, _ string) (bool, error) {
@@ -27,8 +34,11 @@ func (store *inboxMemoryStore) TombstoneConversationIfNewer(context.Context, str
 	store.tombstones++
 	return 1, nil
 }
-func (store *inboxMemoryStore) List(context.Context, string, int, string) (inboxapp.Page, error) {
-	return inboxapp.Page{}, nil
+func (store *inboxMemoryStore) List(_ context.Context, userID string, limit int, cursor string) (inboxapp.Page, error) {
+	store.listedUser = userID
+	store.listedLimit = limit
+	store.listedCursor = cursor
+	return store.page, nil
 }
 func (store *inboxMemoryStore) CompleteRebuild(_ context.Context, runID string) (int64, error) {
 	store.completed = runID
@@ -101,17 +111,21 @@ func TestChatInboxViewProjectorOwnsReplayTombstoneAndRebuildLifecycle(t *testing
 				ID: "event-1", Type: "MessageSent", ConversationID: "conversation-1",
 				ActorID: "persona-2", Checkpoint: "1",
 				Payload: map[string]any{"seq": int64(1), "timestamp": time.Now().UTC()},
+			}, {
+				ID: "event-2", Type: "MessageRecalled", ConversationID: "conversation-1",
+				ActorID: "persona-2", Checkpoint: "2",
+				Payload: map[string]any{"seq": int64(1), "recalledAt": time.Now().UTC()},
 			}}},
 		},
 	)
 
-	if processed, err := projector.Drain(context.Background(), 100); err != nil || processed != 1 {
+	if processed, err := projector.Drain(context.Background(), 100); err != nil || processed != 2 {
 		t.Fatalf("first projection failed: processed=%d err=%v", processed, err)
 	}
 	if processed, err := projector.Drain(context.Background(), 100); err != nil || processed != 0 {
 		t.Fatalf("checkpoint replay must be a no-op: processed=%d err=%v", processed, err)
 	}
-	if store.upserts != 1 || advancer.calls != 1 || checkpoints["chat-inbox-view-message"] != "1" {
+	if store.upserts != 2 || advancer.calls != 1 || checkpoints["chat-inbox-view-message"] != "2" {
 		t.Fatalf("single-track projection drifted: upserts=%d advances=%d checkpoint=%q", store.upserts, advancer.calls, checkpoints["chat-inbox-view-message"])
 	}
 
@@ -121,5 +135,28 @@ func TestChatInboxViewProjectorOwnsReplayTombstoneAndRebuildLifecycle(t *testing
 	}
 	if store.tombstones != 1 || store.completed != "rebuild-1" {
 		t.Fatalf("rebuild must tombstone missing identities: tombstones=%d completed=%q", store.tombstones, store.completed)
+	}
+}
+
+func TestChatInboxViewReaderOwnsIdentityLimitAndOpaqueCursor(t *testing.T) {
+	store := &inboxMemoryStore{page: inboxapp.Page{
+		Items:      []inboxapp.Item{{UserID: "persona-1", ConversationID: "conversation-1"}},
+		NextCursor: "opaque-next",
+	}}
+	reader := inboxapp.NewReader(store)
+	page, err := reader.List(t.Context(), " persona-1 ", 0, "opaque-current")
+	if err != nil || len(page.Items) != 1 || page.NextCursor != "opaque-next" {
+		t.Fatalf("List() page=%+v err=%v", page, err)
+	}
+	if store.listedUser != "persona-1" || store.listedLimit != 50 || store.listedCursor != "opaque-current" {
+		t.Fatalf(
+			"reader arguments user=%q limit=%d cursor=%q",
+			store.listedUser,
+			store.listedLimit,
+			store.listedCursor,
+		)
+	}
+	if _, err := reader.List(t.Context(), "", 10, ""); err == nil {
+		t.Fatal("empty persona identity must fail closed")
 	}
 }

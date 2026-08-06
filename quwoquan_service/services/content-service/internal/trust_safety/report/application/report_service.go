@@ -83,7 +83,7 @@ func (s *ReportService) CreateReport(
 		0,
 		"CreateReport",
 		commandDigest,
-		"content.report.created",
+		"content.report.ReportCreated",
 		struct {
 			ReportID          string                 `json:"reportId"`
 			ReporterID        string                 `json:"reporterId"`
@@ -145,7 +145,7 @@ func (s *ReportService) BeginReview(
 		expectedVersion,
 		"BeginReviewReport",
 		commandDigest,
-		"content.report.review_started",
+		"content.report.ReportReviewStarted",
 		struct {
 			ReportID   string `json:"reportId"`
 			ReviewerID string `json:"reviewerId"`
@@ -199,7 +199,7 @@ func (s *ReportService) Resolve(
 		expectedVersion,
 		"ResolveReport",
 		commandDigest,
-		"content.report.resolved",
+		"content.report.ReportResolved",
 		struct {
 			ReportID          string                 `json:"reportId"`
 			ReporterID        string                 `json:"reporterId"`
@@ -261,7 +261,7 @@ func (s *ReportService) Dismiss(
 		expectedVersion,
 		"DismissReport",
 		commandDigest,
-		"content.report.dismissed",
+		"content.report.ReportDismissed",
 		struct {
 			ReportID          string                 `json:"reportId"`
 			ReporterID        string                 `json:"reporterId"`
@@ -570,11 +570,7 @@ func unavailable(err error) error {
 	if errors.As(err, &appError) {
 		return appError
 	}
-	return rterr.NewUnavailable(
-		rterr.ModuleContent,
-		"举报服务暂时不可用",
-		err.Error(),
-	)
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 }
 
 func newReportIdentifier(prefix string) (string, error) {

@@ -110,7 +110,7 @@ while IFS= read -r env_name; do
         matrix_exit_code=2
       else
         profile_target="$(resolve_patrol_target user_profile_journey_patrol)"
-        bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
+        bash quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh \
           --platform "$MOBILE_PLATFORM" \
           --device-id "$MOBILE_DEVICE_ID" \
           --target "$profile_target" \
@@ -153,7 +153,7 @@ while IFS= read -r env_name; do
       closure_target="$(resolve_patrol_target account_closure_patrol)"
       closure_install_id="account-closure-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${MOBILE_PLATFORM}-$(date +%s)-{device}"
       if [[ "$env_name" == "gamma" ]]; then
-        bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
+        bash quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh \
           --platform "$MOBILE_PLATFORM" \
           --device-id "$MOBILE_DEVICE_ID" \
           --target "$closure_target" \
@@ -260,10 +260,10 @@ while IFS= read -r env_name; do
         matrix_exit_code=2
       else
         if [[ "$matrix_kind" == "app-core-readback" ]]; then
-          smoke_target="test/user_acceptance/patrol/environment/app_core_readback__user_acceptance_test.dart"
+          smoke_target="test/user_acceptance/journeys/app_startup/app_core_readback__user_acceptance_test.dart"
           smoke_report_name="app-core-readback"
         else
-          smoke_target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart"
+          smoke_target="test/user_acceptance/journeys/app_startup/basic_viability__user_acceptance_test.dart"
           smoke_report_name="environment-smoke"
         fi
         IFS=$'\t' read -r \

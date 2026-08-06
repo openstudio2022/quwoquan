@@ -1,5 +1,3 @@
-entity: ContentReaction
-domain: CONTENT
 description: 'ContentReaction 对象专属错误码。共享错误码唯一定义于 content/content/post/errors.yaml；
 
   content 域 codegen 与端云 parity 按固定文件列表合并，code 全域唯一。
@@ -7,13 +5,13 @@ description: 'ContentReaction 对象专属错误码。共享错误码唯一定�
   '
 errors:
 - code: CONTENT.USER.content_reaction_target_not_found
-  kind: USER
   reason: content_reaction_target_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [LikePost, UnlikePost, ReactToComment]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: contentReactionTargetNotFound
   go_const: ErrContentReactionTargetNotFound
   user_message:

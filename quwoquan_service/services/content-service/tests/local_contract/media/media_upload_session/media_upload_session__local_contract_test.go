@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-001
+// readiness_case: init-media-upload-local
+// readiness_case: complete-media-upload-local
+// readiness_case: abort-media-upload-local
+// readiness_case: get-media-upload-session-local
 
 package media_upload_session_test
 

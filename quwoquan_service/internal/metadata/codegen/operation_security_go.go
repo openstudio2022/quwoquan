@@ -128,6 +128,18 @@ func RenderOperationSecurityGo(
 				"\t\tTimeoutMilliseconds: %d,\n",
 				operation.Reliability.TimeoutMilliseconds,
 			)
+			if budget := operation.Reliability.StreamBudget; budget != nil {
+				fmt.Fprintf(
+					&output,
+					"\t\tStreamBudget: &auth.OperationStreamBudget{"+
+						"HandshakeMilliseconds: %d, "+
+						"IdleMilliseconds: %d, "+
+						"MaxDurationMilliseconds: %d},\n",
+					budget.HandshakeMilliseconds,
+					budget.IdleMilliseconds,
+					budget.MaxDurationMilliseconds,
+				)
+			}
 			writeGoStringField(
 				&output,
 				"Idempotency",

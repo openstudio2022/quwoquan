@@ -122,11 +122,11 @@ EXPECTED_ARTIFACT_KINDS = (
 )
 EXPECTED_DEVICE_TARGETS = {
     "suspended": (
-        "test/user_acceptance/patrol/user/"
+        "test/user_acceptance/journeys/account_enforcement/"
         "account_enforcement_suspended__user_acceptance_test.dart"
     ),
     "restored": (
-        "test/user_acceptance/patrol/user/"
+        "test/user_acceptance/journeys/account_enforcement/"
         "account_enforcement_restored__user_acceptance_test.dart"
     ),
 }

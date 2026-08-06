@@ -31,6 +31,7 @@ type inboxCursor struct {
 }
 
 var _ notification.AppMessageAggregateStore = (*MongoAppMessageStore)(nil)
+var _ notification.GatheringInvitationProjectionStore = (*MongoAppMessageStore)(nil)
 var _ application.AppMessageInboxReader = (*MongoAppMessageStore)(nil)
 var _ application.AppMessageDetailReader = (*MongoAppMessageStore)(nil)
 var _ application.AppMessageUnreadCountReader = (*MongoAppMessageStore)(nil)
@@ -55,6 +56,10 @@ func (s *MongoAppMessageStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("idx_app_messages_owner_read"),
 		},
 		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "source", Value: 1}, {Key: "sourceId", Value: 1}},
+			Options: options.Index().SetName("idx_app_messages_owner_source"),
+		},
+		{
 			Keys:    bson.D{{Key: "createdAt", Value: 1}},
 			Options: options.Index().SetName("ttl_app_messages_created").SetExpireAfterSeconds(int32(appMessageRetention.Seconds())),
 		},
@@ -63,6 +68,93 @@ func (s *MongoAppMessageStore) EnsureIndexes(ctx context.Context) error {
 		return fmt.Errorf("ensure app message indexes: %w", err)
 	}
 	return nil
+}
+
+func (s *MongoAppMessageStore) UpsertGatheringInvitation(
+	ctx context.Context,
+	message notification.AppMessage,
+) (notification.AppMessage, bool, error) {
+	if message.GatheringInvitation == nil {
+		return notification.AppMessage{}, false,
+			errors.New("Gathering invitation card is required")
+	}
+	card := message.GatheringInvitation
+	eligible := bson.A{
+		bson.M{"gatheringInvitation": bson.M{"$exists": false}},
+		bson.M{"gatheringInvitation.participationVersion": bson.M{
+			"$lt": card.ParticipationVersion,
+		}},
+	}
+	if card.Status != "pending" {
+		eligible = append(eligible, bson.M{
+			"gatheringInvitation.participationVersion": card.ParticipationVersion,
+			"gatheringInvitation.status":               "pending",
+		})
+	}
+	filter := bson.M{
+		"_id": message.MessageID,
+		"$or": eligible,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"userId":              message.UserID,
+			"messageType":         message.MessageType,
+			"source":              message.Source,
+			"sourceId":            message.SourceID,
+			"destination":         message.Destination,
+			"title":               message.Title,
+			"summary":             message.Summary,
+			"target":              message.Target,
+			"gatheringInvitation": card,
+		},
+		"$setOnInsert": bson.M{
+			"idempotencyKey": message.IdempotencyKey,
+			"provenance":     message.Provenance,
+			"read":           false,
+			"createdAt":      message.CreatedAt.UTC(),
+		},
+	}
+	var projected notification.AppMessage
+	err := s.coll.FindOneAndUpdate(
+		ctx,
+		filter,
+		update,
+		options.FindOneAndUpdate().
+			SetUpsert(true).
+			SetReturnDocument(options.After),
+	).Decode(&projected)
+	if err == nil {
+		return projected, true, nil
+	}
+	if mongo.IsDuplicateKeyError(err) || errors.Is(err, mongo.ErrNoDocuments) {
+		findErr := s.coll.FindOne(ctx, bson.M{"_id": message.MessageID}).Decode(&projected)
+		if findErr == nil {
+			return projected, false, nil
+		}
+		if !errors.Is(findErr, mongo.ErrNoDocuments) {
+			return notification.AppMessage{}, false, findErr
+		}
+	}
+	return notification.AppMessage{}, false, err
+}
+
+func (s *MongoAppMessageStore) CancelGatheringInvitations(
+	ctx context.Context,
+	gatheringID string,
+) error {
+	_, err := s.coll.UpdateMany(
+		ctx,
+		bson.M{
+			"source":                     "gathering_invitation",
+			"sourceId":                   strings.TrimSpace(gatheringID),
+			"gatheringInvitation.status": "pending",
+		},
+		bson.M{"$set": bson.M{
+			"gatheringInvitation.status":        "cancelled",
+			"gatheringInvitation.actionIntents": bson.A{},
+		}},
+	)
+	return err
 }
 
 func (s *MongoAppMessageStore) RunInTransaction(
@@ -134,6 +226,7 @@ func (s *MongoAppMessageStore) Get(
 	if err != nil {
 		return notification.AppMessage{}, generated.AppErrorFromStorageReadFailed(err.Error())
 	}
+	expireGatheringInvitation(&message, time.Now().UTC())
 	return message, nil
 }
 
@@ -176,6 +269,10 @@ func (s *MongoAppMessageStore) ListInbox(
 	if err := cursor.All(ctx, &items); err != nil {
 		return notification.AppMessageInboxSlice{}, generated.AppErrorFromStorageReadFailed(err.Error())
 	}
+	now := time.Now().UTC()
+	for index := range items {
+		expireGatheringInvitation(&items[index], now)
+	}
 	nextCursor := ""
 	if len(items) > query.Limit {
 		last := items[query.Limit-1]
@@ -186,6 +283,18 @@ func (s *MongoAppMessageStore) ListInbox(
 		items = items[:query.Limit]
 	}
 	return notification.AppMessageInboxSlice{Items: items, NextCursor: nextCursor}, nil
+}
+
+func expireGatheringInvitation(message *notification.AppMessage, now time.Time) {
+	if message == nil || message.GatheringInvitation == nil {
+		return
+	}
+	card := message.GatheringInvitation
+	if card.Status == "pending" && card.ExpiresAt != nil &&
+		!card.ExpiresAt.After(now) {
+		card.Status = "expired"
+		card.ActionIntents = []notification.AppMessageGatheringInvitationActionIntent{}
+	}
 }
 
 func (s *MongoAppMessageStore) Acknowledge(

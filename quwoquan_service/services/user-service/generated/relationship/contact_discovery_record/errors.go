@@ -18,17 +18,17 @@ var (
 // AppErrorFromContactDiscoveryRateLimited returns *AppError for USER.CONTACT.rate_limited (user_message from errors.yaml).
 func AppErrorFromContactDiscoveryRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrContactDiscoveryRateLimited.Error()))
-	return rerrors.NewAppError(code, "今日通讯录发现次数已达上限，请明日再试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 86400)
+	return rerrors.NewAppError(code, "今日通讯录发现次数已达上限，请明日再试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "snackbar", 86400)
 }
 
 // AppErrorFromTooManyContacts returns *AppError for USER.CONTACT.too_many_contacts (user_message from errors.yaml).
 func AppErrorFromTooManyContacts(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTooManyContacts.Error()))
-	return rerrors.NewAppError(code, "通讯录条目过多，单次最多支持 5000 条", debugMessage).WithMetadata("payload_too_large", 400).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "通讯录条目过多，单次最多支持 5000 条", debugMessage).WithMetadata("payload_too_large", 400).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromContactDiscoveryNotFound returns *AppError for USER.CONTACT.not_found (user_message from errors.yaml).
 func AppErrorFromContactDiscoveryNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrContactDiscoveryNotFound.Error()))
-	return rerrors.NewAppError(code, "发现记录不存在或已过期", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "发现记录不存在或已过期", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }

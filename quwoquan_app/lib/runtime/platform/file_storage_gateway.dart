@@ -1,5 +1,5 @@
-import 'package:quwoquan_app/core/platform/file_storage_gateway_io.dart'
-    if (dart.library.js_interop) 'package:quwoquan_app/core/platform/file_storage_gateway_web.dart';
+import 'package:quwoquan_app/runtime/platform/file_storage_gateway_io.dart'
+    if (dart.library.js_interop) 'package:quwoquan_app/runtime/platform/file_storage_gateway_web.dart';
 
 /// 目录子项（路径 + 是否目录）。供能力位为本机文件系统的平台（桌面 / 移动 / 鸿蒙）
 /// 在防腐层内做目录遍历，业务层据此聚合本地相册等，无需直接 import `dart:io`。

@@ -22,6 +22,9 @@ from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import flutter_android_device_proxy as flutter_proxy
 from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 
 
 class EnvironmentPatrolSmokeTest(unittest.TestCase):
@@ -48,7 +51,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "current_owner_id": "fixture_owner_current",
             "current_persona_id": "fixture_user_current",
             "target": (
-                "test/user_acceptance/patrol/environment/"
+                "test/user_acceptance/journeys/home_video_playback/"
                 "video_playback_canary__user_acceptance_test.dart"
             ),
             "platform": "all",
@@ -78,6 +81,38 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             if argument not in overrides:
                 values[argument] = public_bases[role]
         return argparse.Namespace(**values)
+
+    def _expected_roles_from_current_provider_source(
+        self,
+        target_name: str,
+    ) -> list[str]:
+        environment_name = target_name.removesuffix("-local")
+        composition = compile_provider_runtime_composition(
+            environment=environment_name,
+            target=target_name,
+        )
+        provider_runtime_digest = composition["runtimeCompositionDigest"]
+        with (
+            mock.patch.object(
+                stackctl,
+                "_active_provider_runtime",
+                return_value={"composition": composition},
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value={
+                    "schema": "stackctl-local-startup-attempt",
+                    "attemptId": f"attempt-{target_name}",
+                    "env": environment_name,
+                    "target": target_name,
+                    "status": "running",
+                    "workload": "full",
+                    "providerRuntimeDigest": provider_runtime_digest,
+                },
+            ),
+        ):
+            return stackctl._expected_local_roles(target_name)
 
     def test_patrol_build_workspace_rejects_overlapping_runners(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -111,7 +146,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(
             smoke.DEFAULT_TARGET,
             (
-                "test/user_acceptance/patrol/environment/"
+                "test/user_acceptance/journeys/home_video_playback/"
                 "video_playback_canary__user_acceptance_test.dart"
             ),
         )
@@ -365,7 +400,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertNotIn("runQuwoquanApp(", patrol_main)
         harness = (
             ROOT
-            / "quwoquan_app/test/support/patrol/patrol_environment_harness.dart"
+            / "quwoquan_app/test/support/runtime/patrol/"
+            "patrol_environment_harness.dart"
         ).read_text(encoding="utf-8")
         self.assertNotIn("buildAlphaCloudOverrides", harness)
         self.assertNotIn("providerScopeOverrides", harness)
@@ -399,66 +435,166 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
 
     def test_ios_build_restores_canonical_public_transport_authority(self) -> None:
-        def resolved_gateway(supplied_gateway: str) -> str:
-            entries = {
-                "APP_RUNTIME_ENV": "gamma",
-                "CLOUD_GATEWAY_BASE_URL": supplied_gateway,
-            }
-            encoded = ",".join(
-                base64.b64encode(f"{key}={value}".encode("utf-8")).decode("ascii")
-                for key, value in entries.items()
+        # Isolate deploy/output roots so a host active candidate with legacy
+        # legal-static/current symlink cannot pollute this contract. Safety
+        # validation stays fail-closed; this test must not read that candidate.
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            output_root = work / "output"
+            deploy_root = work / "deploy"
+            package_app = deploy_root / "gamma-local" / "packages" / "app"
+            package_app.mkdir(parents=True, exist_ok=True)
+            (package_app / "app_runtime.yaml").write_text(
+                "\n".join(
+                    [
+                        "schema: app-runtime-config",
+                        "runtime:",
+                        "  appRuntimeEnv: gamma",
+                        "  gatewayBaseUrl: https://api.gamma.quwoquan.com:19000",
+                        "  legalBaseUrl: https://gamma.quwoquan.com:19000/legal",
+                        "  publicWebBaseUrl: https://gamma.quwoquan.com:19000",
+                        "  appDownloadBaseUrl: https://cdn.gamma.quwoquan.com:19100/download",
+                        "  realtimeBaseUrl: wss://api.gamma.quwoquan.com:19000",
+                        "  mediaAvatarCdnBaseUrl: https://cdn.gamma.quwoquan.com:19100/media/avatar",
+                        "  mediaImageCdnBaseUrl: https://cdn.gamma.quwoquan.com:19100/media/image",
+                        "  mediaVideoCdnBaseUrl: https://cdn.gamma.quwoquan.com:19100/media/video",
+                        "  mediaUploadBaseUrl: https://upload.gamma.quwoquan.com:19130",
+                        "  rtcMediaConnectionUrl: wss://rtc.gamma.quwoquan.com:19000",
+                        "  currentUserId: ''",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
             )
-            environment = {
+            (package_app / "report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "packaged",
+                        "env": "gamma",
+                        "target": "gamma-local",
+                        "runtimeEnv": "gamma",
+                        "composition": "production_remote",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            isolated_env = {
                 **os.environ,
-                "DART_DEFINES": encoded,
                 "PYTHONDONTWRITEBYTECODE": "1",
-                "QWQ_APP_RUNTIME_ENV": "gamma",
-                "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
-                "QWQ_LAUNCH_TARGET": "gamma-local",
-                "QWQ_DART_DEFINES_DIGEST": "sha256:" + ("0" * 64),
-                "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": "sha256:" + ("1" * 64),
-                "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": "sha256:" + ("2" * 64),
+                "QWQ_OUTPUT_ROOT": str(output_root),
+                "QWQ_DEPLOY_WORK_ROOT": str(deploy_root),
             }
-            result = subprocess.run(
+            handoff_result = subprocess.run(
                 [
-                    "bash",
+                    sys.executable,
                     str(
                         ROOT
                         / "quwoquan_app"
                         / "scripts"
-                        / "ios"
-                        / "prepare_dart_defines.sh"
+                        / "device"
+                        / "build_launcher_handoff.py"
                     ),
+                    "--env",
+                    "gamma",
+                    "--target",
+                    "gamma-local",
+                    "--launch-mode",
+                    "canonical_launcher",
+                    "--content-release-id",
+                    "release-gamma",
+                    "--content-manifest-digest",
+                    "sha256:" + ("1" * 64),
+                    "--content-readiness-receipt-digest",
+                    "sha256:" + ("2" * 64),
                 ],
                 cwd=ROOT / "quwoquan_app",
-                env=environment,
+                env=isolated_env,
                 text=True,
                 capture_output=True,
                 check=False,
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            export = next(
-                line
-                for line in result.stdout.splitlines()
-                if line.startswith("export DART_DEFINES=")
+            self.assertEqual(
+                handoff_result.returncode,
+                0,
+                handoff_result.stderr or handoff_result.stdout,
             )
-            merged = {
-                key: value
-                for key, value in (
-                    base64.b64decode(item).decode("utf-8").split("=", 1)
-                    for item in export.split("=", 1)[1].split(",")
-                )
-            }
-            return merged["CLOUD_GATEWAY_BASE_URL"]
+            handoff = json.loads(handoff_result.stdout)
 
-        self.assertEqual(
-            resolved_gateway("https://legacy.invalid:19000"),
-            "https://api.gamma.quwoquan.com:19000",
-        )
-        self.assertEqual(
-            resolved_gateway("https://untrusted.localhost:19000"),
-            "https://api.gamma.quwoquan.com:19000",
-        )
+            def resolved_gateway(supplied_gateway: str) -> str:
+                entries = {
+                    "APP_RUNTIME_ENV": "gamma",
+                    "CLOUD_GATEWAY_BASE_URL": supplied_gateway,
+                }
+                encoded = ",".join(
+                    base64.b64encode(f"{key}={value}".encode("utf-8")).decode(
+                        "ascii"
+                    )
+                    for key, value in entries.items()
+                )
+                environment = {
+                    **isolated_env,
+                    "DART_DEFINES": encoded,
+                    "QWQ_APP_RUNTIME_ENV": "gamma",
+                    "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
+                    "QWQ_LAUNCH_TARGET": "gamma-local",
+                    "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
+                    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff[
+                        "runtimeConfigDigest"
+                    ],
+                    "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
+                        "effectiveLaunchManifestDigest"
+                    ],
+                    "QWQ_CONTENT_RELEASE_ID": handoff["contentReleaseId"],
+                    "QWQ_CONTENT_MANIFEST_DIGEST": handoff[
+                        "contentManifestDigest"
+                    ],
+                    "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": handoff[
+                        "contentReadinessReceiptDigest"
+                    ],
+                }
+                result = subprocess.run(
+                    [
+                        "bash",
+                        str(
+                            ROOT
+                            / "quwoquan_app"
+                            / "scripts"
+                            / "ios"
+                            / "prepare_dart_defines.sh"
+                        ),
+                    ],
+                    cwd=ROOT / "quwoquan_app",
+                    env=environment,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                export = next(
+                    line
+                    for line in result.stdout.splitlines()
+                    if line.startswith("export DART_DEFINES=")
+                )
+                merged = {
+                    key: value
+                    for key, value in (
+                        base64.b64decode(item).decode("utf-8").split("=", 1)
+                        for item in export.split("=", 1)[1].split(",")
+                    )
+                }
+                return merged["CLOUD_GATEWAY_BASE_URL"]
+
+            self.assertEqual(
+                resolved_gateway("https://legacy.invalid:19000"),
+                "https://api.gamma.quwoquan.com:19000",
+            )
+            self.assertEqual(
+                resolved_gateway("https://untrusted.localhost:19000"),
+                "https://api.gamma.quwoquan.com:19000",
+            )
 
     def test_effective_base_urls_keep_public_for_hosted_target(self) -> None:
         args = self._args(
@@ -633,7 +769,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
     def test_patrol_command_forwards_disposable_account_install_id(self) -> None:
         args = self._args(
             target=(
-                "test/user_acceptance/patrol/settings/"
+                "test/user_acceptance/journeys/account_closure/"
                 "account_closure_journey__user_acceptance_test.dart"
             ),
             patrol_install_id="account-closure-ci-run-1-{device}",
@@ -740,7 +876,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 args = self._args(
                     env_name=alias,
                     target=(
-                        "test/user_acceptance/patrol/content/"
+                        "test/user_acceptance/service/content_service/media/media_upload_session/"
                         "media_publication_remote__user_acceptance_test.dart"
                     ),
                     test_auth_token="",
@@ -1135,8 +1271,96 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertEqual(
             summary,
-            {"framework": "xctest", "executed": 1, "failed": 0},
+            {
+                "framework": "xctest",
+                "executed": 1,
+                "failed": 0,
+                "skipped": 0,
+            },
         )
+
+    def test_patrol_test_execution_requires_executed_without_failures_or_skips(
+        self,
+    ) -> None:
+        passed = smoke.patrol_test_execution_summary(
+            "📝 Total: 2\n✅ Successful: 2\n❌ Failed: 0\n"
+            "⏩ Skipped: 0\n"
+        )
+        self.assertEqual(
+            passed,
+            {
+                "framework": "patrol",
+                "executed": 2,
+                "failed": 0,
+                "skipped": 0,
+            },
+        )
+        self.assertEqual(smoke.patrol_test_execution_failure_reason(passed), "")
+
+        skipped = smoke.patrol_test_execution_summary(
+            "Executed 2 tests, with 1 test skipped and 0 failures"
+        )
+        self.assertEqual(skipped["skipped"], 1)
+        self.assertIn(
+            "1 skipped tests",
+            smoke.patrol_test_execution_failure_reason(skipped),
+        )
+
+        zero = smoke.patrol_test_execution_summary(
+            "📝 Total: 0\n❌ Failed: 0\n⏩ Skipped: 0\n"
+        )
+        self.assertIn(
+            "zero executed tests",
+            smoke.patrol_test_execution_failure_reason(zero),
+        )
+
+        incomplete = smoke.patrol_test_execution_summary(
+            "patrol command exited successfully without a test summary"
+        )
+        self.assertIn(
+            "missing or incomplete",
+            smoke.patrol_test_execution_failure_reason(incomplete),
+        )
+
+    def test_non_dry_run_exit_zero_without_summary_cannot_pass(self) -> None:
+        result = {"exitCode": 0, "outputSummary": "process exit 0"}
+
+        smoke.apply_patrol_test_execution_summary(
+            result,
+            "Patrol process exited successfully without test totals",
+            dry_run=False,
+        )
+
+        self.assertEqual(result["exitCode"], 1)
+        self.assertEqual(
+            result["testExecution"],
+            {
+                "framework": "unknown",
+                "executed": None,
+                "failed": None,
+                "skipped": None,
+            },
+        )
+        self.assertIn(
+            "execution summary is missing or incomplete",
+            result["outputSummary"],
+        )
+
+        passed_result = {"exitCode": 0, "outputSummary": "process exit 0"}
+        smoke.apply_patrol_test_execution_summary(
+            passed_result,
+            "📝 Total: 1\n❌ Failed: 0\n⏩ Skipped: 0\n",
+            dry_run=False,
+        )
+        self.assertEqual(passed_result["exitCode"], 0)
+
+        dry_run_result = {"exitCode": 0, "outputSummary": "dry-run"}
+        smoke.apply_patrol_test_execution_summary(
+            dry_run_result,
+            "",
+            dry_run=True,
+        )
+        self.assertEqual(dry_run_result["exitCode"], 0)
 
     def test_remote_api_evidence_requires_ids_and_effective_actions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -1346,7 +1570,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
     def test_unauthenticated_auth_entry_rejects_preloaded_session(self) -> None:
         args = self._args(
             target=(
-                "test/user_acceptance/patrol/user/"
+                "test/user_acceptance/service/user_service/account/authentication_challenge/"
                 "sms_otp_provider__user_acceptance_test.dart"
             ),
             unauthenticated_auth_entry=True,
@@ -1393,7 +1617,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
     def test_release_bound_homepage_uat_does_not_require_video_canary(self) -> None:
         args = self._args(
             target=(
-                "test/user_acceptance/patrol/entity/"
+                "test/user_acceptance/service/entity_service/entity_homepage/homepage/"
                 "release_homepage__consumer_render__functional__user_acceptance_test.dart"
             ),
             release_uat_cases="/tmp/homepage_verification_cases.json",
@@ -1621,14 +1845,14 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             stackctl_source,
         )
         self.assertNotIn("start_beta_stack.sh", stackctl_source)
-        self.assertNotIn("start_alpha_content_release_stack.sh", stackctl_source)
+        self.assertNotIn("run_alpha_content_release_stack.sh", stackctl_source)
 
     def test_local_launchers_and_tls_stacks_use_public_ca_helper(self) -> None:
         app_instance = (
-            ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
+            ROOT / "quwoquan_app/scripts/device/run_app_instance.sh"
         ).read_text(encoding="utf-8")
         beta_manual = (
-            ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+            ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
         ).read_text(encoding="utf-8")
         dev_up = (
             ROOT / "quwoquan_ops/cli/lib/dev_up.py"
@@ -1650,7 +1874,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
     def test_beta_uses_one_immutable_release_consumer_backend(self) -> None:
         beta_manual = (
-            ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+            ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
         ).read_text(encoding="utf-8")
         beta_stack = (
             ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
@@ -1786,7 +2010,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "recommendation_policy.yaml",
             beta_manual,
         )
-        self.assertEqual(beta_stack.count("APP_BETA_CMD+=(--content-release)"), 1)
+        self.assertIn("quwoquan_ops/cli/stackctl.py", beta_stack)
+        self.assertIn("--target beta-local", beta_stack)
+        self.assertNotIn("APP_BETA_CMD", beta_stack)
+        self.assertNotIn("go run", beta_stack)
         self.assertIn("beta_manual_start_content_release_stack", beta_manual)
         self.assertIn(
             "for service in content-service entity-service recommendation-service user-service",
@@ -1814,7 +2041,15 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "    ports:\n", 1
         )[0]
 
-        self.assertNotIn("elasticsearch:", content_dependencies)
+        self.assertNotIn(
+            "elasticsearch:",
+            content_dependencies,
+            (
+                "content-service base makes Alpha/Beta content-release depend on "
+                "Elasticsearch even though only full/content-commercial loads the "
+                "package-bound Product Ops Elasticsearch Compose"
+            ),
+        )
         self.assertIn("elasticsearch:\n        condition: service_healthy", gamma_content_overlay)
 
     def test_prod_sim_tls_uses_canonical_hosts_and_public_certificate(self) -> None:
@@ -1888,9 +2123,10 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             compose,
         )
         self.assertIn(
-            'if [[ "$WORKLOAD" == "content-release" ]]; then',
+            'case "$WORKLOAD" in',
             gamma_start,
         )
+        self.assertIn("  content-release)", gamma_start)
         self.assertIn("export_service_compose_environment", gamma_start)
         self.assertIn('export "$source_name"', gamma_start)
         self.assertIn("QWQ_COMPOSE_${source_name#LOCAL_GAMMA_}", gamma_start)
@@ -1925,7 +2161,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 search_patrol["argv"].index("--target") + 1
             ],
             (
-                "test/user_acceptance/patrol/search/"
+                "test/user_acceptance/journeys/cross_domain_search/"
                 "cross_domain_search_journey__user_acceptance_test.dart"
             ),
         )
@@ -1974,7 +2210,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "published release work"):
             smoke._validate_video_playback_canary_work_id(args, "prod")
 
-    def test_stackctl_t4_evidence_binds_same_range_and_player_ready_reports(self) -> None:
+    def test_stackctl_runtime_media_playback_evidence_binds_same_range_and_player_ready_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)
             health_report = root / "health.json"
@@ -2074,7 +2310,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 },
                 clear=False,
             ):
-                evidence = stackctl._runtime_media_t4_evidence(
+                evidence = stackctl._runtime_media_playback_evidence(
                     target_name="gamma-local",
                     steps=[
                         {
@@ -2114,7 +2350,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         self.assertEqual(evidence["uiEvidence"]["playerState"], "ready")
 
-    def test_stackctl_t4_evidence_rejects_emulator_native_signal_claim(self) -> None:
+    def test_stackctl_runtime_media_playback_evidence_rejects_emulator_native_signal_claim(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)
             health_report = root / "health.json"
@@ -2152,7 +2388,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            evidence = stackctl._runtime_media_t4_evidence(
+            evidence = stackctl._runtime_media_playback_evidence(
                 target_name="gamma-local",
                 steps=[
                     {
@@ -2176,7 +2412,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         self.assertEqual(evidence["uiEvidence"]["seekEvidenceSource"], "unverified")
 
-    def test_stackctl_t4_evidence_does_not_mislabel_missing_stage_as_player_error(
+    def test_stackctl_runtime_media_playback_evidence_does_not_mislabel_missing_stage_as_player_error(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -2210,7 +2446,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            evidence = stackctl._runtime_media_t4_evidence(
+            evidence = stackctl._runtime_media_playback_evidence(
                 target_name="gamma-local",
                 steps=[
                     {
@@ -2298,7 +2534,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         self.assertEqual(
             argv[argv.index("--target") + 1],
-            "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart",
+            "test/user_acceptance/journeys/home_video_playback/video_playback_canary__user_acceptance_test.dart",
         )
         self.assertNotIn("env", command)
 
@@ -2442,7 +2678,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("No such file", "\n".join(payload["details"]))
 
     def test_three_nonprod_full_runtimes_share_one_required_role_set(self) -> None:
-        roles = stackctl._expected_local_roles("gamma-local")
+        roles = self._expected_roles_from_current_provider_source("gamma-local")
 
         self.assertIn("api-edge", roles)
         self.assertIn("product-ops-edge", roles)
@@ -2452,11 +2688,17 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("livekit-http", roles)
         self.assertNotIn("platform-ops-edge", roles)
         self.assertNotIn("ops-portal", roles)
-        self.assertEqual(roles, stackctl._expected_local_roles("alpha-local"))
-        self.assertEqual(roles, stackctl._expected_local_roles("beta-local"))
+        self.assertEqual(
+            roles,
+            self._expected_roles_from_current_provider_source("alpha-local"),
+        )
+        self.assertEqual(
+            roles,
+            self._expected_roles_from_current_provider_source("beta-local"),
+        )
 
     def test_beta_runtime_readiness_requires_real_report_dependencies(self) -> None:
-        roles = stackctl._expected_local_roles("beta-local")
+        roles = self._expected_roles_from_current_provider_source("beta-local")
 
         self.assertIn("content-service", roles)
         self.assertIn("notification-service", roles)

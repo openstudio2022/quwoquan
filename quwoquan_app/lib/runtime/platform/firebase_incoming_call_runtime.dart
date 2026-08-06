@@ -6,10 +6,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:quwoquan_app/core/platform/incoming_call_envelope.dart';
-import 'package:quwoquan_app/core/platform/incoming_call_native_presenter.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
-import 'package:quwoquan_app/core/platform/push_endpoint_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/incoming_call_envelope.dart';
+import 'package:quwoquan_app/runtime/platform/incoming_call_native_presenter.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 @pragma('vm:entry-point')

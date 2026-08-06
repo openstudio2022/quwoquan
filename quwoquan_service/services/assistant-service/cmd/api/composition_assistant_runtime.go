@@ -56,7 +56,7 @@ type assistantComponents struct {
 	policyRolloutService *policyrolloutapplication.Service
 	skillPackageService  *skillpackageapplication.Service
 	activeSkillCatalog   *skillcatalogactive.CatalogSource
-	learningFactService  *learningapplication.Service
+	learningFactService  *learningapplication.AssistantLearningFactAppender
 	learningOpsQueries   *learningapplication.OpsQueryService
 	domainReaderHandler  *descriptorhttp.Handler
 	runHooks             *runruntime.HookRegistry
@@ -147,6 +147,10 @@ func wireAssistantRuntime(
 	if err != nil {
 		return nil, err
 	}
+	gatheringHandlers, err := buildGatheringToolHandlers(runtime, infrastructure)
+	if err != nil {
+		return nil, dependencyError("assistant-gathering-tools", "initialization", err)
+	}
 	agentLoop, err := buildAgentLoop(
 		runtime.appEnv,
 		externalClients.canonicalSearch,
@@ -159,11 +163,11 @@ func wireAssistantRuntime(
 		deps.subscriptionStore,
 		externalClients.interestReader,
 		deps.consentStore,
-		externalClients.travelContextReader,
 		externalClients.canonicalDomainReaders,
 		descriptorCatalog,
 		activeSkillCatalog,
 		activeSkillPrompts,
+		gatheringHandlers,
 	)
 	if err != nil {
 		return nil, dependencyError("assistant-agent-loop", "initialization", err)
@@ -397,7 +401,7 @@ func wireAssistantRuntime(
 		assistantOpts,
 		sessionorchestration.WithChatGroundingClient(chatGroundingClient),
 	)
-	learningFactService := learningapplication.NewService(
+	learningFactService := learningapplication.NewAssistantLearningFactAppender(
 		deps.learningFactStore,
 		deps.learningRunOwners,
 		nil,

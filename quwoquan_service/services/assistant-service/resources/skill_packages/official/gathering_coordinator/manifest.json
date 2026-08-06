@@ -1,0 +1,30 @@
+{
+  "skillId": "gathering_coordinator",
+  "displayName": "聚会协调器",
+  "description": "从内容来源补齐共同承诺，生成需确认的聚会草稿，并在 Circle 就绪后衔接 room/chat。",
+  "domainId": "circle",
+  "problemClass": "task_execution",
+  "tagRefs": ["gathering", "social_coordination", "shared_commitment"],
+  "executionTarget": "hybrid",
+  "routingHints": ["聚会", "约伴", "一起去", "集合", "组局", "名额提醒", "活动草稿"],
+  "catalogProfileRef": "catalog.gathering_coordinator",
+  "activationProfileRef": "activation.gathering_coordinator",
+  "inputProfileRef": "input.none",
+  "contextProfileRef": "context.none",
+  "capabilityProfileRef": "capability.gathering_coordinator",
+  "orchestrationProfileRef": "orchestration.gathering_coordinator",
+  "triggerProfileRef": "trigger.none",
+  "memoryProfileRef": "memory.none",
+  "presentationProfileRef": "presentation.gathering_coordinator",
+  "evaluationProfileRef": "evaluation.gathering_coordinator",
+  "replayAssetRef": "assistant.replay.gathering_coordinator",
+  "promptAssets": [
+    "gathering_coordinator.system"
+  ],
+  "examples": [
+    "从内容页发起一个需要确认的聚会草稿",
+    "多人群聊补齐共同承诺后生成聚会提案",
+    "满员聚会先生成名额关注提案，不自动加入",
+    "地图天气日历失败时仍保存不含伪造事实的草稿"
+  ]
+}

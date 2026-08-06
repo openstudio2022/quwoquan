@@ -283,10 +283,11 @@ def test_execution_readiness_cli_registers_recipe_contract_options() -> None:
 
 
 def test_preflight_evidence_belongs_to_execution_work_package() -> None:
-    argv = recipe._runtime_preflight_argv(EXECUTION_ID)
+    argv = recipe._runtime_preflight_argv(EXECUTION_ID, "cursor_auto")
     report_path = Path(argv[argv.index("--report-out") + 1])
 
     assert argv[:2] == ["task", "preflight"]
+    assert argv[argv.index("--semantic-selection-id") + 1] == "cursor_auto"
     assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "runtime_preflight.json"
 
 
@@ -458,6 +459,8 @@ def test_existing_homepage_retry_does_not_reopen_predecessor_evidence(
         argparse.Namespace(
             execution_id="20260722--travel-homepage-coverage--test-region-a--pilot-002",
             retry_of="20260722--travel-homepage-coverage--test-region-a--pilot-001",
+            semantic_selection_id="cursor_auto",
+            semantic_preflight_receipt="data/local/cache/cursor-auto-receipt.json",
             family="content/travel/homepage/homepage",
             region_ref="test-region-a",
             selector="source-ready-priority",
@@ -473,6 +476,11 @@ def test_existing_homepage_retry_does_not_reopen_predecessor_evidence(
     )
 
     assert captured["inherited_targets"] == ()
+    assert captured["semantic_selection_id"] == "cursor_auto"
+    assert (
+        captured["semantic_preflight_receipt"]
+        == "data/local/cache/cursor-auto-receipt.json"
+    )
 
 
 def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) -> None:

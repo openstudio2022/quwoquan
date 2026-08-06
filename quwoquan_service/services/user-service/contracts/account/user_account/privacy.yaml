@@ -1,4 +1,3 @@
-aggregate: UserAccount
 app_log_policy:
 - app_log: drop
   classification: PII
@@ -17,21 +16,23 @@ app_log_policy:
   field: bio
 data_lifecycle:
   deletion_cascade:
-  - entity: Persona
+  - object_id: user.persona
+    strategy: scrub
+    description: 行保留并置 status=retired，display_name 覆写为占位、user_handle 与头像/背景/生日/地区/性别/身份标签/外观覆写等个人数据全部原地清空，覆写不可逆。保留行的动因是 persona_id 被内容、社交关系与风控留痕引用，物理删除会造成悬挂引用并丧失争议处理能力。
+  - object_id: user.credential_binding
+    strategy: scrub
+    description: 行保留并置 is_active=false，credential_key 覆写为不可还原的擦除值，display_label 与 last_used_at 清空，覆写不可逆。保留行的动因是防止同一凭据被重复注册以及风控追溯。
+  - object_id: user.device_registration
     strategy: hard_delete
-  - entity: CredentialBinding
-    strategy: hard_delete
-  - entity: DeviceRegistration
-    strategy: hard_delete
-  - entity: UserSettings
+  - object_id: user.user_settings
     strategy: hard_delete
   deletion_on_user_request: true
   retention_days: 3650
 description: 'UserAccount 账号与只读公开资料投影的隐私与安全策略。
 
-  补充 fields.yaml classification 的端侧实现细节和 GDPR 数据生命周期。
+  app_log_policy.classification 是 App 日志的有效分类，只能等于或严于 fields.yaml 字段基线；
 
-  codegen 从本文件生成 Dart UserPrivacyPolicy.sanitizeForLog()。
+  其余声明补充端侧实现细节和 GDPR 数据生命周期。
 
   '
 field_visibility:

@@ -40,9 +40,9 @@ fi
 # 覆盖：A3/A4/A8 协议契约（回答协议、消息时间轴、只读投影）
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_A_TESTS=(
-  "test/local_contract/quality/shared/assistant/protocol/assistant_answer_protocol_leak_regression__local_contract_test.dart"
-  "test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart"
-  "test/local_contract/ui/assistant/assistant_context_scope_read_view__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/assistant_run/assistant_answer_protocol_leak_regression__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/assistant_run/personal_assistant_stream_controller__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/page_context/assistant_context_scope_read_view__local_contract_test.dart"
 )
 
 echo "[pa-core] ── Bucket A: flutter test (pure VM, no network) ─────────────────"
@@ -65,9 +65,8 @@ fi
 # 覆盖：A3/A8/A9 状态编排、消息解析与 Provider 投影
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_B_TESTS=(
-  "test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart"
-  "test/local_contract/ui/assistant/assistant_turn_message_resolver_transcript_row__local_contract_test.dart"
-  "test/local_contract/ui/assistant/personal_content_access_provider__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/assistant_run/personal_assistant_stream_controller__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_message_resolver_transcript_row__local_contract_test.dart"
 )
 
 echo "[pa-core] ── Bucket B: flutter test (engine integration) ─────────────────"
@@ -85,9 +84,9 @@ echo "[pa-core] Bucket B: OK"
 # 覆盖：A3/A10 页面与消息 UI 契约
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_C_TESTS=(
-  "test/local_contract/ui/assistant/assistant_transcript_bubble_envelope__local_contract_test.dart"
-  "test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart"
-  "test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/assistant_run/assistant_transcript_bubble_envelope__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/assistant_preference/assistant_management_page_consent__local_contract_test.dart"
+  "test/local_contract/service/assistant_service/assistant/skill_catalog/assistant_skill_center_page_widget__local_contract_test.dart"
 )
 
 echo "[pa-core] ── Bucket C: flutter test (UI contract) ────────────────────────"

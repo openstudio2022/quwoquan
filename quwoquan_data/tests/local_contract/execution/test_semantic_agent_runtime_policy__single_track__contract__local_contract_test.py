@@ -49,13 +49,13 @@ def test_scale_calibration_sample_count_matches_runtime_policy() -> None:
         )
 
 
-def test_cursor_auto_is_explicit_and_requires_new_retry_lineage() -> None:
+def test_cursor_auto_is_explicit_and_allows_first_execution() -> None:
     selection = active_runtime_policy().explicit_semantic_selection("cursor_auto")
 
     assert selection.binding.provider is AgentProvider.CURSOR_SDK
     assert selection.binding.model == "auto"
     assert selection.runtime.value == "local"
-    assert selection.requires_new_retry_of is True
+    assert selection.requires_new_retry_of is False
 
 
 def test_legacy_cursor_profile_is_not_a_second_truth_source() -> None:

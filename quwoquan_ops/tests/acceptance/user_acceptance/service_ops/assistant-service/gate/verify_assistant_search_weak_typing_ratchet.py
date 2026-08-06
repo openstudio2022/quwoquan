@@ -3,7 +3,7 @@
 助手 / App 搜索弱类型只减不增门禁。
 
 口径（手写助手，排除生成体目录）：
-  - bucket assistant_handwritten: quwoquan_app/lib/assistant/**/*.dart
+  - bucket assistant_handwritten: quwoquan_app/lib/service/assistant_service/**/*.dart
     排除 **/assistant/generated/** 与 *.g.dart
   - bucket core_search_repository: 单文件 search_repository.dart
 
@@ -46,7 +46,15 @@ MAP_RE = re.compile(r"Map<String,\s*dynamic>")
 MAP_OBJECT_OPT_RE = re.compile(r"Map<String,\s*Object\?>")
 DYNAMIC_RE = re.compile(r"\bdynamic\b")
 
-SEARCH_REPO_FILE = LIB / "core" / "services" / "search_repository.dart"
+SEARCH_REPO_FILE = (
+    LIB
+    / "service"
+    / "search_service"
+    / "search"
+    / "search_index_view"
+    / "application"
+    / "search_repository.dart"
+)
 
 
 @dataclass
@@ -62,9 +70,12 @@ def _read_text(p: Path) -> str:
 def _scan_assistant_handwritten_files() -> tuple[BucketCounts, int]:
     """Single pass: ratchet counts + informational `Map<String, Object?>` count."""
     m = d = mo = 0
-    base = LIB / "assistant"
+    base = LIB / "service" / "assistant_service"
     if not base.is_dir():
-        return BucketCounts(0, 0), 0
+        raise SystemExit(
+            f"ERROR: assistant service root not found: {base.relative_to(ROOT)}\n"
+            "搬迁后请把 assistant_handwritten bucket 指向新位置，不要让门禁静默归零。"
+        )
     for path in base.rglob("*.dart"):
         if path.name.endswith(".g.dart"):
             continue
@@ -88,7 +99,11 @@ def scan_assistant_handwritten() -> BucketCounts:
 
 def _scan_search_repository_files() -> tuple[BucketCounts, int]:
     if not SEARCH_REPO_FILE.is_file():
-        return BucketCounts(0, 0), 0
+        # 文件缺失必须阻断：静默返回 0 会让搬迁后的 bucket 永久达标，门禁空转。
+        raise SystemExit(
+            f"ERROR: search repository not found: {SEARCH_REPO_FILE.relative_to(ROOT)}\n"
+            "搬迁后请把 SEARCH_REPO_FILE 指向新位置，不要让 bucket 静默归零。"
+        )
     text = _read_text(SEARCH_REPO_FILE)
     return (
         BucketCounts(

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+// readiness_case: list-user-posts-api
 // L2 契约测试：Post 业务对象 — 用户创作列表
 package api_integration
 

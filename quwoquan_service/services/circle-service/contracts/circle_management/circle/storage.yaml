@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   circles:
+    publication_role: not_published
     entity: Circle
     role: authoritative
     indexes:
@@ -21,7 +22,6 @@ collections:
     - name: idx_circles_weekly_active
       keys:
         weeklyActiveCount: -1
-    search_indexes:
     - name: search_circles_text
       source: search_circles_text
       type: text
@@ -34,14 +34,16 @@ collections:
         tags: 5
         description: 1
   circle_command_receipts:
+    publication_role: not_published
     entity: CircleCommandReceipt
     role: authoritative
     indexes:
     - name: idx_circle_receipt_expiry
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   circle_outbox:
+    publication_role: transactional_outbox
     entity: CircleOutbox
     role: append_only
     indexes:
@@ -55,9 +57,11 @@ collections:
         outboxSequence: 1
       unique: true
   circle_outbox_sequences:
+    publication_role: publication_accessory
     entity: CircleOutboxSequence
     role: authoritative
   circle_user_account_closed_inbox:
+    publication_role: not_published
     entity: Circle
     role: projection
     description: UserAccountClosed 清理的不可逆幂等 inbox，不保存账号或 persona 原值。
@@ -66,6 +70,7 @@ collections:
       keys:
         eventDigest: 1
   circle_user_account_closed_failures:
+    publication_role: not_published
     entity: Circle
     role: projection
     description: UserAccountClosed 有限重试状态，只保存 source message reference、
@@ -78,24 +83,29 @@ collections:
     - name: ttl_circle_user_account_closed_failures
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   circle_closed_account_subjects:
+    publication_role: not_published
     entity: Circle
     role: projection
     description: UserAccountClosed 的不可逆本地主体阻断投影；Circle 与 CirclePostPlacement 只能经本域 port 查询。
   circle_user_account_restrictions:
+    publication_role: not_published
     entity: Circle
     role: projection
     description: UserSuspended/UserRestored 的 Circle 本地可逆阻断状态。
   circle_user_account_restriction_inbox:
+    publication_role: not_published
     entity: Circle
     role: projection
     description: 账号限制事件的幂等 inbox；与 Circle 自有状态 mutation 同事务。
   circle_user_account_restriction_watermarks:
+    publication_role: not_published
     entity: Circle
     role: projection
     description: 账号限制单调水位；账号关闭后 terminal，不允许迟到恢复事件复活状态。
   circle_projection_checkpoints:
+    publication_role: publication_accessory
     entity: Circle
     role: projection
     description: Circle 对象本地 projector 的可重建 checkpoint。
@@ -134,19 +144,4 @@ redis_cache:
   - CircleGroupUpdated
   - CircleGroupMemberJoined
   - CircleGroupMemberLeft
-object_storage:
-  bucket_prefix: circle-files
-  key_pattern: '{circleId}/{fileId}/{filename}'
-  max_file_size_bytes: 52428800
-  allowed_mime_types:
-  - image/*
-  - video/*
-  - audio/*
-  - application/pdf
-  - application/zip
-  - application/x-rar-compressed
-  - application/msword
-  - application/vnd.openxmlformats-officedocument.*
-  - text/plain
-  - text/markdown
 role: authoritative

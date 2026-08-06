@@ -132,6 +132,18 @@ class AppContentPreflightTest(unittest.TestCase):
                     "nonPromotable": True,
                 }
             )
+            provider_runtime_digest = "sha256:" + "5" * 64
+            provider_runtime = {
+                "composition": {
+                    "runtimeCompositionDigest": provider_runtime_digest,
+                    "workloads": [
+                        {
+                            "role": "sms-provider-substitute",
+                            "adapterIds": ["ext.sms.local_capture"],
+                        }
+                    ],
+                }
+            }
 
             def fetch(url: str, **_kwargs: object) -> tuple[bool, int, str, str]:
                 return (
@@ -151,7 +163,13 @@ class AppContentPreflightTest(unittest.TestCase):
                         "target": "alpha-local",
                         "workload": "full",
                         "configurationDigest": "sha256:" + "1" * 64,
+                        "providerRuntimeDigest": provider_runtime_digest,
                     },
+                ),
+                patch.object(
+                    stackctl,
+                    "_active_provider_runtime",
+                    return_value=provider_runtime,
                 ),
                 patch.object(
                     stackctl,
@@ -206,7 +224,12 @@ class AppContentPreflightTest(unittest.TestCase):
                     "target": "alpha-local",
                     "workload": "full",
                     "configurationDigest": "sha256:" + "1" * 64,
+                    "providerRuntimeDigest": provider_runtime_digest,
                 },
+            ), patch.object(
+                stackctl,
+                "_active_provider_runtime",
+                return_value=provider_runtime,
             ), patch.object(
                 stackctl,
                 "verify_certificate",

@@ -16,6 +16,12 @@ externalDependencies:
         endpointEnvs: {}
         secretRefs: []
         defaultTimeoutMs: 5000
+    observability:
+      metrics:
+        - pending_lag
+        - dead_letter
+        - publish_p95
+        - consume_p95
 api_routes:
   - method: GET
     path: /chat/conversations
@@ -627,6 +633,7 @@ api_routes:
   - method: GET
     path: /chat/contacts
     operation: ListContacts
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       query:
         - name: limit
@@ -792,6 +799,7 @@ api_routes:
   - method: GET
     path: /chat/group-candidates
     operation: ListGroupCandidates
+    pagination: {default_items: 100, maximum_items: 100}
     request_bindings:
       query:
         - name: limit
@@ -848,6 +856,7 @@ api_routes:
   - method: GET
     path: /chat/selectable-group-conversations
     operation: ListSelectableGroupConversations
+    pagination: {default_items: 50, maximum_items: 50}
     request_bindings:
       query:
         - name: limit
@@ -919,6 +928,7 @@ api_routes:
   - method: GET
     path: /chat/selectable-group-conversations/{conversationId}/contact-members
     operation: ListSelectableGroupContactMembers
+    pagination: {default_items: 100, maximum_items: 100}
     request_bindings:
       path:
         - name: conversationId
@@ -1058,9 +1068,9 @@ api_routes:
       ownership_policy: gathering_source_projection
     commercial: {status: ready}
     reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 3, idempotency: required}
-    error_codes: [CHAT.USER.invalid_argument, CHAT.USER.gathering_binding_conflict, CHAT.SYSTEM.internal_error]
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.invalid_argument, CHAT.USER.gathering_binding_conflict, CHAT.SYSTEM.internal_error]
     privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: chat_gathering_conversation_project, trace: true, attributes: [outcome]}
+    telemetry: {metric: chat_gathering_conversation_project, trace: true, attributes: [outcome, access_mode, posting_policy]}
     slo: {latency_p95_ms: 800, availability_percent: 99.9}
     security:
       auth_mode: required
@@ -1069,7 +1079,40 @@ api_routes:
       anonymous_policy: deny
       visibility: internal
     request_body_kind: object
-    description: 以 Gathering source event 幂等创建唯一群会话；普通建群命令不得写 gatheringId。
+    description: 以 Gathering sourceVersion 幂等创建唯一群会话并投影 access/posting policy；旧版本不得倒退，普通建群命令不得写 gatheringId。
+  - method: GET
+    path: /chat/gathering-conversations/{conversationId}/board
+    operation: GetGatheringChatBoard
+    actor: persona
+    application:
+      kind: query
+      facet: GatheringChatBoardQueryFacet
+      method: getGatheringChatBoard
+      reader: GatheringChatBoardReader
+      slice: GatheringChatBoardSlice
+    request_bindings:
+      path: [{name: conversationId, field: conversationId}]
+    request_entity: GatheringChatBoardQuery
+    response_entity: GatheringChatBoardSlice
+    response_body: GatheringChatBoardSlice
+    response_body_kind: object
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    commercial: {status: ready}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    privacy: {request_classification: INTERNAL, response_classification: SENSITIVE, log_policy: metadata_only}
+    telemetry: {metric: chat_gathering_board_query, trace: true, attributes: [outcome]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.conversation_not_found, CHAT.USER.invalid_argument, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: none
+    description: 返回 Board 可组合的 Chat typed slice；只复用 Announcement、Message/MediaAsset index 与 access summary，不建立 Board/Workspace 聚合。
 consumers:
   - name: app
     capabilities:
@@ -1108,29 +1151,387 @@ consumers:
   - name: realtime-gateway
     capabilities:
       - sync_messages
+readiness_cases:
+  - case_id: list-conversations-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListConversations}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-conversation-timestamps-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListConversationTimestamps}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: create-conversation-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CreateConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: batch-get-conversations-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: BatchGetConversations}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: get-conversation-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: update-conversation-title-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateConversationTitle}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: update-announcement-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateAnnouncement}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: update-group-governance-settings-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdateGroupGovernanceSettings}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: dissolve-conversation-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: DissolveConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-message-home-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListMessageHome}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-contacts-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListContacts}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-contact-home-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListContactHome}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: get-group-home-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetGroupHome}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-group-candidates-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListGroupCandidates}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-selectable-group-conversations-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListSelectableGroupConversations}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-selectable-group-contact-members-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListSelectableGroupContactMembers}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/operation_facades__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: recover-chat-account-closure-dead-letter-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RecoverChatAccountClosureDeadLetter}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/user_account_closed_consumer__reliability__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: project-gathering-conversation-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ProjectGatheringConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/gathering_projection__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: get-gathering-chat-board-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetGatheringChatBoard}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/gathering_projection__local_contract_test.go
+    executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+  - case_id: list-conversations-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListConversations}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/conversation_crud_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-conversation-timestamps-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListConversationTimestamps}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_announcement_governance__contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: create-conversation-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CreateConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/conversation_crud_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: batch-get-conversations-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: BatchGetConversations}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_announcement_governance__contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: get-conversation-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/conversation_crud_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: update-conversation-title-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateConversationTitle}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_announcement_governance__contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: update-announcement-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateAnnouncement}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_announcement_governance__contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: update-group-governance-settings-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdateGroupGovernanceSettings}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_announcement_governance__contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: dissolve-conversation-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: DissolveConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_lifecycle_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-message-home-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListMessageHome}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/operation_views__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-contacts-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListContacts}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/social_contacts_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-contact-home-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListContactHome}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/operation_views__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: get-group-home-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetGroupHome}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_announcement_governance__contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-group-candidates-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListGroupCandidates}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/selectable_group_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-selectable-group-conversations-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListSelectableGroupConversations}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/selectable_group_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: list-selectable-group-contact-members-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListSelectableGroupContactMembers}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/selectable_group_contract__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: recover-chat-account-closure-dead-letter-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RecoverChatAccountClosureDeadLetter}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/user_account_closed_projection__security__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: project-gathering-conversation-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ProjectGatheringConversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/operation_views__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: get-gathering-chat-board-api
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetGatheringChatBoard}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/operation_views__api_integration_test.go
+    executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
+  - case_id: project-circle-group-conversation-local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: chat.conversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/circle_group_chat_sync__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: project-circle-group-conversation-api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: chat.conversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/circle_group_chat_binding__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: consume-user-avatar-updated-local
+    spec_ref: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: chat.conversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/user_avatar_updated_consumer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: consume-user-avatar-updated-api
+    spec_ref: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: chat.conversation}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_avatar_user_avatar_update_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+  - case_id: conversation_create_conversation_app_local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateConversation}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_production_composition__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_get_conversation_app_local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetConversation}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_production_composition__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_batch_get_conversations_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: BatchGetConversations}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_contact_home_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListContactHome}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_contacts_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListContacts}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_group_candidates_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListGroupCandidates}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_message_home_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListMessageHome}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_selectable_group_conversations_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListSelectableGroupConversations}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_selectable_group_contact_members_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListSelectableGroupContactMembers}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_update_conversation_title_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateConversationTitle}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: chat-service API
-      data_source: fields.yaml
-      scenarios:
-        - name: conversation_list
-          route: GET /chat/conversations
-          assertions:
-            - status_200
-            - items_match_schema
-            - sorted_by_last_message_time
-            - maxSeq_present
-        - name: group_chat_lifecycle
-          routes:
-            - POST /chat/conversations
-            - POST /chat/conversations/{id}/members
-            - DELETE /chat/conversations/{id}/members/{uid}
-          assertions:
-            - group_created
-            - member_added
-            - member_removed
-            - memberCount_updated
+  test_strategy:
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:

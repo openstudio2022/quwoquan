@@ -48,13 +48,10 @@ relationships:
 local_identity_reasons:
   clientMsgId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - clientMsgId 在 conversationId + sender persona 范围内唯一
 - sender 必须是 active ConversationMembership，actor 只能来自 trusted principal
+- Conversation accessMode=read_only 或 postingPolicy=announcements_only 时公开 SendMessage 必须拒绝；公告只走 Chat Announcement 命令
 - seq 由服务端按 Conversation 单调分配，客户端不可指定
 - media 消息只保存 MediaAsset id，不拥有上传会话或 URL 真相
 - card 消息必须拥有一个强类型 MessageCard，非 card 消息禁止携带 card
@@ -70,3 +67,11 @@ lifecycle:
   - recalled
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - rtc.call_session.CallEnded
+  event_consumers:
+  - name: AppendRtcCallLog
+    kind: event_handler
+    facet: RtcCallLogHandler
+    method: appendRtcCallLog
+    idempotency: event_id

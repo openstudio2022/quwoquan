@@ -13,6 +13,7 @@ import (
 
 	rtfailures "quwoquan_service/runtime/failures"
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
@@ -30,9 +31,11 @@ type ToolRequest struct {
 }
 
 type ToolExecution struct {
-	Requested assistant.ToolUse
-	Completed assistant.ToolUse
-	Failure   *rtfailures.Failure
+	Requested      assistant.ToolUse
+	Completed      assistant.ToolUse
+	Failure        *rtfailures.Failure
+	TypedProposal  any
+	ApprovalIntent *presentation.ActionIntent
 	// RecoveryAction 是该工具元数据声明的失败恢复语义，运行时据此决定是否继续本轮。
 	RecoveryAction assistantgenerated.ToolRecoveryAction
 }
@@ -258,6 +261,11 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 		ToolName:       toolName,
 		Input:          requested.Input,
 		History:        append([]string{}, req.History...),
+		RunID:          req.Turn.ExecutionRunID,
+		AccountID:      req.Turn.UserID,
+		PersonaID:      req.Turn.RequestContext.PersonaID,
+		SurfaceKind:    req.Turn.RequestContext.SurfaceKind,
+		SurfaceID:      req.Turn.RequestContext.SurfaceID,
 	})
 	if err != nil {
 		failure := toolFailure(toolName, meta, err)
@@ -272,7 +280,12 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	}
 	completed.Status = "completed"
 	completed.Result = result.Output
-	return ToolExecution{Requested: requested, Completed: completed}, nil
+	return ToolExecution{
+		Requested:      requested,
+		Completed:      completed,
+		TypedProposal:  result.TypedProposal,
+		ApprovalIntent: result.ApprovalIntent,
+	}, nil
 }
 
 func stableToolUseID(

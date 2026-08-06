@@ -122,6 +122,7 @@ type Snapshot struct {
 	Location             *GeoPoint
 	OwnerUserID          string
 	OwnerPersonaID       string
+	ManagerPersonaIDs    []string
 	Verified             bool
 	EstablishedYear      *int
 	IntroductionMarkdown string
@@ -213,6 +214,7 @@ type Homepage struct {
 	location             *GeoPoint
 	ownerUserID          string
 	ownerPersonaID       string
+	managerPersonaIDs    []string
 	verified             bool
 	establishedYear      *int
 	introductionMarkdown string
@@ -308,6 +310,7 @@ func Restore(snapshot Snapshot) (*Homepage, error) {
 		location:             cloneGeo(snapshot.Location),
 		ownerUserID:          strings.TrimSpace(snapshot.OwnerUserID),
 		ownerPersonaID:       strings.TrimSpace(snapshot.OwnerPersonaID),
+		managerPersonaIDs:    cloneStrings(snapshot.ManagerPersonaIDs),
 		verified:             snapshot.Verified,
 		establishedYear:      cloneInt(snapshot.EstablishedYear),
 		introductionMarkdown: strings.TrimSpace(snapshot.IntroductionMarkdown),
@@ -390,6 +393,7 @@ func (h *Homepage) ApplyClaimApproved(ownerUserID, ownerPersonaID string, approv
 		h.claimStatus = "rejected"
 		h.ownerUserID = ""
 		h.ownerPersonaID = ""
+		h.managerPersonaIDs = nil
 	}
 	return h.advance(now)
 }
@@ -566,6 +570,7 @@ func (h *Homepage) Snapshot() Snapshot {
 		Location:             cloneGeo(h.location),
 		OwnerUserID:          h.ownerUserID,
 		OwnerPersonaID:       h.ownerPersonaID,
+		ManagerPersonaIDs:    cloneStrings(h.managerPersonaIDs),
 		Verified:             h.verified,
 		EstablishedYear:      cloneInt(h.establishedYear),
 		IntroductionMarkdown: h.introductionMarkdown,
@@ -605,7 +610,7 @@ func CanonicalEntityID(homepageType, title string) string {
 // verify_homepage_type_contract.py 守住两侧一致；新增取值必须同时出现在这里，
 // 否则该类型会在 Intake 阶段被判定为非法而无法建立主页。
 var homepageTypes = []string{
-	"vehicle", "hotel", "restaurant", "sight", "university", "travel_photo",
+	"vehicle", "hotel", "restaurant", "sight", "university", "school", "travel_photo",
 	"museum", "heritage_site", "ancient_town", "religious_site",
 	"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park",
 	"transport_hub", "city", "route", "photo_spot", "gear",
@@ -681,7 +686,7 @@ func ObjectPageTemplate(homepageType, explicit string) string {
 		return value
 	}
 	switch strings.TrimSpace(homepageType) {
-	case "university":
+	case "university", "school":
 		return "campus"
 	case "travel_photo", "sight", "museum", "heritage_site", "ancient_town",
 		"religious_site", "check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park",

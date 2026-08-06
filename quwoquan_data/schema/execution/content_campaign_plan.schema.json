@@ -5,6 +5,7 @@
   "required": [
     "schema",
     "rootExecutionId",
+    "executionMode",
     "gitBranch",
     "gitCommitSha",
     "sourceRevision",
@@ -22,6 +23,7 @@
   "properties": {
     "schema": { "const": "quwoquan_data.content_campaign_plan" },
     "rootExecutionId": { "type": "string", "minLength": 1 },
+    "executionMode": { "enum": ["central", "distributed"] },
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
@@ -68,6 +70,23 @@
     "reviewedClosureAdoption": {
       "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
     },
+    "distributedRun": {
+      "type": "object",
+      "required": [
+        "campaignRunId",
+        "campaignGeneration",
+        "campaignFencingToken"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "campaignRunId": { "type": "string", "minLength": 1 },
+        "campaignGeneration": { "type": "integer", "minimum": 1 },
+        "campaignFencingToken": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
     "frozenAt": { "type": "string", "format": "date-time" },
     "planDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
   },
@@ -80,6 +99,16 @@
         "required": ["semanticSelectionId"]
       },
       "then": {"required": ["semanticPreflightReceipt"]}
+    },
+    {
+      "if": {
+        "properties": {
+          "executionMode": {"const": "distributed"}
+        },
+        "required": ["executionMode"]
+      },
+      "then": {"required": ["distributedRun"]},
+      "else": {"not": {"required": ["distributedRun"]}}
     }
   ],
   "$defs": {

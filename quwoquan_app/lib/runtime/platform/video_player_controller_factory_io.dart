@@ -15,3 +15,7 @@ VideoPlayerController createLocalFileVideoController(
     videoPlayerOptions: videoPlayerOptions,
   );
 }
+
+VideoPlayerController createLocalFileVideoReadinessProbeController(
+  String path,
+) => VideoPlayerController.file(File(path));

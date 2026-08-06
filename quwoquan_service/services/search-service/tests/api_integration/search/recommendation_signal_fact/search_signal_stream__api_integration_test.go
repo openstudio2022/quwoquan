@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+// readiness_case: append-recommendation-signal-api
 package api_integration
 
 import (
@@ -29,7 +30,11 @@ func TestRecommendationSignalUsesRealRedisAndTrimsActiveStreamByAge(
 	if err != nil {
 		t.Fatalf("create signal publisher: %v", err)
 	}
-	if err := publisher.PublishSearchSignal(ctx, signalapplication.Signal{
+	appender, err := signalapplication.NewAppender(publisher)
+	if err != nil {
+		t.Fatalf("create recommendation signal appender: %v", err)
+	}
+	if err := appender.Append(ctx, signalapplication.Signal{
 		SignalID:        "query:request-old",
 		SignalType:      "query",
 		SearchRequestID: "request-old",
@@ -42,7 +47,7 @@ func TestRecommendationSignalUsesRealRedisAndTrimsActiveStreamByAge(
 		t.Fatalf("publish old query signal: %v", err)
 	}
 	time.Sleep(250 * time.Millisecond)
-	if err := publisher.PublishSearchSignal(ctx, signalapplication.Signal{
+	if err := appender.Append(ctx, signalapplication.Signal{
 		SignalID:         "feedback:click-recent",
 		SignalType:       "click",
 		SearchRequestID:  "request-recent",

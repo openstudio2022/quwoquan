@@ -36,160 +36,167 @@ var (
 	ErrConversationDissolved              = errors.New("CHAT.USER.conversation_dissolved")
 	ErrGroupOwnerMustTransferBeforeLeave  = errors.New("CHAT.USER.group_owner_must_transfer_before_leave")
 	ErrInternalError                      = errors.New("CHAT.SYSTEM.internal_error")
+	ErrConversationProjectionUnavailable  = errors.New("CHAT.MIDDLEWARE.conversation_projection_unavailable")
 )
 
 // AppErrorFromInvalidArgument returns *AppError for CHAT.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSourceManagedBindingWriteForbidden returns *AppError for CHAT.USER.source_managed_binding_write_forbidden (user_message from errors.yaml).
 func AppErrorFromSourceManagedBindingWriteForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSourceManagedBindingWriteForbidden.Error()))
-	return rerrors.NewAppError(code, "来源对象绑定只能由所属领域创建", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "来源对象绑定只能由所属领域创建", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGatheringBindingConflict returns *AppError for CHAT.USER.gathering_binding_conflict (user_message from errors.yaml).
 func AppErrorFromGatheringBindingConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringBindingConflict.Error()))
-	return rerrors.NewAppError(code, "相聚会话绑定冲突", debugMessage).WithMetadata("gathering_binding_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "相聚会话绑定冲突", debugMessage).WithMetadata("gathering_binding_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConversationNotFound returns *AppError for CHAT.USER.conversation_not_found (user_message from errors.yaml).
 func AppErrorFromConversationNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConversationNotFound.Error()))
-	return rerrors.NewAppError(code, "会话不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "会话不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for CHAT.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageNotFound returns *AppError for CHAT.USER.message_not_found (user_message from errors.yaml).
 func AppErrorFromMessageNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageNotFound.Error()))
-	return rerrors.NewAppError(code, "消息不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageRecallForbidden returns *AppError for CHAT.USER.message_recall_forbidden (user_message from errors.yaml).
 func AppErrorFromMessageRecallForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageRecallForbidden.Error()))
-	return rerrors.NewAppError(code, "只能撤回自己发送的消息", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "只能撤回自己发送的消息", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageRecallExpired returns *AppError for CHAT.USER.message_recall_expired (user_message from errors.yaml).
 func AppErrorFromMessageRecallExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageRecallExpired.Error()))
-	return rerrors.NewAppError(code, "消息已超过可撤回时间", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息已超过可撤回时间", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageIdempotencyConflict returns *AppError for CHAT.USER.message_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromMessageIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "该消息请求标识已用于不同内容，请重新发送", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该消息请求标识已用于不同内容，请重新发送", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConversationIdempotencyConflict returns *AppError for CHAT.USER.conversation_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromConversationIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConversationIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "该建群请求标识已用于不同内容，请重新发起", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该建群请求标识已用于不同内容，请重新发起", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageTooLong returns *AppError for CHAT.USER.message_too_long (user_message from errors.yaml).
 func AppErrorFromMessageTooLong(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageTooLong.Error()))
-	return rerrors.NewAppError(code, "消息内容超出长度限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息内容超出长度限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageInvalid returns *AppError for CHAT.USER.message_invalid (user_message from errors.yaml).
 func AppErrorFromMessageInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageInvalid.Error()))
-	return rerrors.NewAppError(code, "消息内容不符合发送要求，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息内容不符合发送要求，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageMediaInvalid returns *AppError for CHAT.USER.message_media_invalid (user_message from errors.yaml).
 func AppErrorFromMessageMediaInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageMediaInvalid.Error()))
-	return rerrors.NewAppError(code, "消息媒体不可用，请重新上传后再发送", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息媒体不可用，请重新上传后再发送", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMessageMediaUnavailable returns *AppError for CHAT.SYSTEM.message_media_unavailable (user_message from errors.yaml).
 func AppErrorFromMessageMediaUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMessageMediaUnavailable.Error()))
-	return rerrors.NewAppError(code, "媒体服务暂时不可用，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "媒体服务暂时不可用，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromNotMutual returns *AppError for CHAT.USER.not_mutual (user_message from errors.yaml).
 func AppErrorFromNotMutual(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotMutual.Error()))
-	return rerrors.NewAppError(code, "互相关注后可进入正式私信", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "互相关注后可进入正式私信", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGreetingRequired returns *AppError for CHAT.USER.greeting_required (user_message from errors.yaml).
 func AppErrorFromGreetingRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingRequired.Error()))
-	return rerrors.NewAppError(code, "请先打招呼，等对方回复后再进入正式私信", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先打招呼，等对方回复后再进入正式私信", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromBlocked returns *AppError for CHAT.USER.blocked (user_message from errors.yaml).
 func AppErrorFromBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBlocked.Error()))
-	return rerrors.NewAppError(code, "当前状态不能继续发送消息", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前状态不能继续发送消息", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupMemberNotMutual returns *AppError for CHAT.USER.group_member_not_mutual (user_message from errors.yaml).
 func AppErrorFromGroupMemberNotMutual(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMemberNotMutual.Error()))
-	return rerrors.NewAppError(code, "只能邀请互相关注的好友加入群聊", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "只能邀请互相关注的好友加入群聊", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupMemberBlocked returns *AppError for CHAT.USER.group_member_blocked (user_message from errors.yaml).
 func AppErrorFromGroupMemberBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupMemberBlocked.Error()))
-	return rerrors.NewAppError(code, "存在已屏蔽的成员，无法发起群聊", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "存在已屏蔽的成员，无法发起群聊", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupGovernanceForbidden returns *AppError for CHAT.USER.group_governance_forbidden (user_message from errors.yaml).
 func AppErrorFromGroupGovernanceForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupGovernanceForbidden.Error()))
-	return rerrors.NewAppError(code, "只有群主或管理员可以执行该操作", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "只有群主或管理员可以执行该操作", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSourceManagedConversation returns *AppError for CHAT.USER.source_managed_conversation (user_message from errors.yaml).
 func AppErrorFromSourceManagedConversation(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSourceManagedConversation.Error()))
-	return rerrors.NewAppError(code, "该会话由来源对象管理，请从来源对象操作", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该会话由来源对象管理，请从来源对象操作", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCircleGroupBindingConflict returns *AppError for CHAT.SYSTEM.circle_group_binding_conflict (user_message from errors.yaml).
 func AppErrorFromCircleGroupBindingConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleGroupBindingConflict.Error()))
-	return rerrors.NewAppError(code, "圈群会话绑定状态异常，请稍后重试", debugMessage).WithMetadata("projection_conflict", 0).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "圈群会话绑定状态异常，请稍后重试", debugMessage).WithMetadata("projection_conflict", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGroupFull returns *AppError for CHAT.USER.group_full (user_message from errors.yaml).
 func AppErrorFromGroupFull(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupFull.Error()))
-	return rerrors.NewAppError(code, "群成员已达上限", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "群成员已达上限", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConversationDissolved returns *AppError for CHAT.USER.conversation_dissolved (user_message from errors.yaml).
 func AppErrorFromConversationDissolved(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConversationDissolved.Error()))
-	return rerrors.NewAppError(code, "该群聊已解散", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该群聊已解散", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGroupOwnerMustTransferBeforeLeave returns *AppError for CHAT.USER.group_owner_must_transfer_before_leave (user_message from errors.yaml).
 func AppErrorFromGroupOwnerMustTransferBeforeLeave(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGroupOwnerMustTransferBeforeLeave.Error()))
-	return rerrors.NewAppError(code, "群主退群前需先转让群主", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "群主退群前需先转让群主", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CHAT.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "消息服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromConversationProjectionUnavailable returns *AppError for CHAT.MIDDLEWARE.conversation_projection_unavailable (user_message from errors.yaml).
+func AppErrorFromConversationProjectionUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConversationProjectionUnavailable.Error()))
+	return rerrors.NewAppError(code, "群聊会话暂时不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecoveryDirective("retry", "snackbar", 5)
 }

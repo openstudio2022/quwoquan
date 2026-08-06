@@ -15,8 +15,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/runtime/reliabletask"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
 	deliverydomain "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
 const (
@@ -712,7 +712,7 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationExternal
 	now time.Time,
 ) error {
 	return s.RunInTransaction(ctx, func(txCtx context.Context) error {
-		var job notification.IncomingCallDeliveryJob
+		var submitted notification.IncomingCallDeliveryJob
 		err := s.jobs.FindOneAndUpdate(
 			txCtx,
 			bson.M{
@@ -724,22 +724,22 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationExternal
 			},
 			bson.M{
 				"$set": bson.M{
-					"cancellationExternalInteractionId":         strings.TrimSpace(externalInteractionID),
-					"cancellationExternalInteractionAcceptedAt": now.UTC(),
-					"cancellationPushSubmittedAt":               now.UTC(),
-					"updatedAt":                                 now.UTC(),
+					"cancellationExternalInteractionId": strings.TrimSpace(externalInteractionID),
+					"cancellationPushSubmittedAt":       now.UTC(),
+					"updatedAt":                         now.UTC(),
 				},
 				"$inc": bson.M{"version": 1},
 			},
 			options.FindOneAndUpdate().SetReturnDocument(options.After),
-		).Decode(&job)
+		).Decode(&submitted)
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			var current notification.IncomingCallDeliveryJob
 			if loadErr := s.jobs.FindOne(
 				txCtx,
 				bson.M{"_id": strings.TrimSpace(jobID)},
 			).Decode(&current); loadErr == nil &&
-				current.CancellationPushSubmittedAt != nil {
+				current.CancellationPushSubmittedAt != nil &&
+				current.CancellationExternalInteractionAcceptedAt != nil {
 				return nil
 			}
 			return errors.New("incoming call cancellation push state changed")
@@ -747,9 +747,38 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallCancellationExternal
 		if err != nil {
 			return err
 		}
+		if err := s.appendIncomingCallEvent(
+			txCtx,
+			submitted,
+			"IncomingCallCancellationPushSubmitted",
+			now,
+		); err != nil {
+			return err
+		}
+		var accepted notification.IncomingCallDeliveryJob
+		err = s.jobs.FindOneAndUpdate(
+			txCtx,
+			bson.M{
+				"_id":     strings.TrimSpace(jobID),
+				"version": submitted.Version,
+				"status":  notification.IncomingCallStatusCancelled,
+				"cancellationExternalInteractionAcceptedAt": bson.M{"$exists": false},
+			},
+			bson.M{
+				"$set": bson.M{
+					"cancellationExternalInteractionAcceptedAt": now.UTC(),
+					"updatedAt": now.UTC(),
+				},
+				"$inc": bson.M{"version": 1},
+			},
+			options.FindOneAndUpdate().SetReturnDocument(options.After),
+		).Decode(&accepted)
+		if err != nil {
+			return err
+		}
 		return s.appendIncomingCallEvent(
 			txCtx,
-			job,
+			accepted,
 			"IncomingCallCancellationExternalInteractionAccepted",
 			now,
 		)
@@ -846,8 +875,12 @@ func (s *MongoNotificationDeliveryJobStore) appendIncomingCallEvent(
 	eventType string,
 	occurredAt time.Time,
 ) error {
+	payload, err := incomingCallEventPayload(job, eventType)
+	if err != nil {
+		return err
+	}
 	eventID := fmt.Sprintf("%s:%020d:%s", job.ID, job.Version, eventType)
-	_, err := s.outbox.UpdateOne(
+	_, err = s.outbox.UpdateOne(
 		ctx,
 		bson.M{"_id": eventID},
 		bson.M{"$setOnInsert": notificationDeliveryJobEventDocument{
@@ -855,20 +888,72 @@ func (s *MongoNotificationDeliveryJobStore) appendIncomingCallEvent(
 			AggregateID:      job.ID,
 			AggregateVersion: job.Version,
 			EventType:        eventType,
-			Payload: map[string]string{
-				"jobId":          job.ID,
-				"notificationId": job.NotificationID,
-				"callId":         job.CallID,
-				"deviceId":       job.DeviceID,
-				"deliveryKey":    job.DeliveryKey,
-				"status":         job.Status,
-			},
-			Status:    reliabletask.TaskOutboxStatusPending,
-			CreatedAt: occurredAt.UTC(),
+			Payload:          payload,
+			Status:           reliabletask.TaskOutboxStatusPending,
+			CreatedAt:        occurredAt.UTC(),
 		}},
 		options.UpdateOne().SetUpsert(true),
 	)
 	return err
+}
+
+func incomingCallEventPayload(
+	job notification.IncomingCallDeliveryJob,
+	eventType string,
+) (map[string]string, error) {
+	base := map[string]string{
+		"id": job.ID, "callId": job.CallID, "deviceId": job.DeviceID, "deliveryKey": job.DeliveryKey,
+	}
+	requiredTime := func(field string, value *time.Time) error {
+		if value == nil || value.IsZero() {
+			return fmt.Errorf("%s requires %s", eventType, field)
+		}
+		base[field] = value.UTC().Format(time.RFC3339Nano)
+		return nil
+	}
+	switch eventType {
+	case "NotificationDeliveryJobCreated":
+		return map[string]string{"id": job.ID}, nil
+	case "IncomingCallRealtimeDispatched":
+		base["targetPersonaId"] = job.TargetPersonaID
+		if err := requiredTime("ackDeadlineAt", job.AckDeadlineAt); err != nil {
+			return nil, err
+		}
+	case "IncomingCallRealtimePresented":
+		if err := requiredTime("presentedAt", job.PresentedAt); err != nil {
+			return nil, err
+		}
+	case "IncomingCallPushQueued":
+		base["expiresAt"] = job.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	case "IncomingCallExternalInteractionAccepted":
+		base["externalInteractionId"] = job.ExternalInteractionID
+		if err := requiredTime("externalInteractionAcceptedAt", job.ExternalInteractionAcceptedAt); err != nil {
+			return nil, err
+		}
+	case "IncomingCallDeliveryCancelled":
+		base["status"] = job.Status
+	case "IncomingCallCancellationPushSubmitted":
+		base["cancellationExternalInteractionId"] = job.CancellationExternalInteractionID
+		if err := requiredTime("cancellationPushSubmittedAt", job.CancellationPushSubmittedAt); err != nil {
+			return nil, err
+		}
+	case "IncomingCallCancellationExternalInteractionAccepted":
+		base["cancellationExternalInteractionId"] = job.CancellationExternalInteractionID
+		if err := requiredTime("cancellationExternalInteractionAcceptedAt", job.CancellationExternalInteractionAcceptedAt); err != nil {
+			return nil, err
+		}
+	case "IncomingCallCancellationRealtimeDispatched":
+		base = map[string]string{
+			"id": job.ID, "callId": job.CallID, "targetPersonaId": job.TargetPersonaID,
+			"cancellationEventId": job.CancellationEventID,
+		}
+		if err := requiredTime("cancellationRealtimeDispatchedAt", job.CancellationRealtimeDispatchedAt); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("incoming call event type %q is not canonical", eventType)
+	}
+	return base, nil
 }
 
 func (s *MongoNotificationDeliveryJobStore) appendIncomingCallProviderResultEvent(

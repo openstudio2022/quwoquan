@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   homepage_reviews:
+    publication_role: not_published
     entity: HomepageReview
     role: authoritative
     indexes:
@@ -23,6 +24,7 @@ collections:
       unique: true
       description: HomepageReview CAS commit predicate
   homepage_review_command_receipts:
+    publication_role: not_published
     entity: HomepageReview
     description: HomepageReview command 幂等回执；与聚合版本和 homepage_review_outbox 在同一 Mongo transaction 提交。
     indexes:
@@ -33,8 +35,9 @@ collections:
     - name: idx_homepage_review_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   homepage_review_outbox:
+    publication_role: transactional_outbox
     entity: HomepageReview
     description: HomepageReview 领域事实 outbox；同事务写入，供 Homepage 评价摘要投影与推荐消费异步重放。
     indexes:
@@ -48,6 +51,7 @@ collections:
         aggregateVersion: 1
       unique: true
   homepage_review_projection_checkpoints:
+    publication_role: publication_accessory
     entity: HomepageReview
     role: projection
     description: HomepageReview outbox projector 的可重建消费水位。
@@ -61,19 +65,4 @@ transaction:
   - version_cas
   - idempotency_digest
   - aggregate_and_outbox_atomic_commit
-read_models:
-- name: HomepageReviewPage
-  source: homepage_reviews
-  projection:
-  - id
-  - homepageId
-  - authorPersonaId
-  - authorDisplayNameSnapshot
-  - authorAvatarUrlSnapshot
-  - rating
-  - body
-  - tagRefs
-  - status
-  - createdAt
-  - updatedAt
 role: authoritative

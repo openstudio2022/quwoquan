@@ -34,6 +34,14 @@
 
 - 页面文件不得用 `dynamic`、`Map<String, dynamic>` 或版本化 `Current/V2` 命名承载展示与观测状态；可扩展观测属性使用 `Map<String, Object?>`，路由参数使用明确可空类型。
 
+<a id="req-003"></a>
+### REQ-003 页面对象契约表达读模型归属，不表达 HTTP 直连
+
+- `page_object_contract.yaml` 的 `query_slices` 表达数据血缘与读模型归属，不表示该页面直接调用被认领对象的 HTTP 路由。
+- 跨域 hydration 是合规形态：页面认领的对象可以只提供内部特征或读模型，真实读路径由另一个域的 App 面 operation 承载。
+- 页面认领对象的必需产物是 presentation 实现，不包含 clientContract；被页面认领却没有 clientContract 的对象不得判为缺口。
+- 认领 `recommendation.recommendation_feature_profile_view` 的页面即属该形态，其真实读路径由 `content.intersection_visit_state` 与 `content.post` 的 App 面 operation 承载。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。

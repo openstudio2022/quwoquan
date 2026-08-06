@@ -1,5 +1,3 @@
-domain: USER
-aggregate: Persona
 description: 'Persona（分身/Persona）对象专属错误码。格式：MODULE.KIND.REASON。
 
   覆盖分身配额、主分身/激活态保护、退役与删除守卫、handle 唯一性；
@@ -9,13 +7,13 @@ description: 'Persona（分身/Persona）对象专属错误码。格式：MODULE
   '
 errors:
 - code: USER.PERSONA.not_found
-  kind: PERSONA
   reason: not_found
   emitted_by:
   - surface: http
     operations:
     - ActivatePersona
     - ApplyPersonaProfileSync
+    - EvaluatePersonaGatheringHostAuthority
     - RetirePersona
     - UpdatePersona
     - user.user_account.GetPersonaLifecycleGuard
@@ -23,13 +21,13 @@ errors:
     - user.user_account.GetUserHomepageBundle
   http_status: 404
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: personaNotFound
   go_const: ErrPersonaNotFound
   user_message:
     zh: Persona不存在
     en: Persona not found
 - code: USER.PERSONA.last_persona
-  kind: PERSONA
   reason: constraint_violation
   emitted_by:
   - surface: http
@@ -37,13 +35,13 @@ errors:
     - RetirePersona
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: lastPersona
   go_const: ErrLastPersona
   user_message:
     zh: 无法删除，这是您的最后一个账号
     en: Cannot delete the last persona
 - code: USER.PERSONA.quota_reached
-  kind: PERSONA
   reason: constraint_violation
   emitted_by:
   - surface: http
@@ -51,13 +49,13 @@ errors:
     - CreatePersona
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: personaQuotaReached
   go_const: ErrPersonaQuotaReached
   user_message:
     zh: 分身数量已达上限，请先整理现有分身
     en: Persona limit reached, please manage existing personas first
 - code: USER.PERSONA.primary_guard
-  kind: PERSONA
   reason: constraint_violation
   emitted_by:
   - surface: http
@@ -65,13 +63,13 @@ errors:
     - RetirePersona
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: primaryPersonaGuard
   go_const: ErrPrimaryPersonaGuard
   user_message:
     zh: 主分身不能退役
     en: Primary persona cannot be retired
 - code: USER.PERSONA.active_guard
-  kind: PERSONA
   reason: constraint_violation
   emitted_by:
   - surface: http
@@ -79,13 +77,13 @@ errors:
     - RetirePersona
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: activePersonaGuard
   go_const: ErrActivePersonaGuard
   user_message:
     zh: 请先切换到其他分身后再继续
     en: Please switch to another persona before continuing
 - code: USER.PERSONA.retired_guard
-  kind: PERSONA
   reason: invalid_status_transition
   emitted_by:
   - surface: http
@@ -94,13 +92,13 @@ errors:
     - UpdatePersona
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: retiredPersonaGuard
   go_const: ErrRetiredPersonaGuard
   user_message:
     zh: 该分身已退役，当前操作不可继续
     en: This persona is retired and cannot continue this action
 - code: USER.PERSONA.handle_taken
-  kind: PERSONA
   reason: conflict
   emitted_by:
   - surface: http
@@ -110,13 +108,13 @@ errors:
     - UpdatePersona
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: personaHandleTaken
   go_const: ErrPersonaHandleTaken
   user_message:
     zh: 该分身号已被占用，请换一个
     en: This persona handle is already taken, please choose another
 - code: USER.PERSONA.handle_readonly
-  kind: PERSONA
   reason: invalid_argument
   emitted_by:
   - surface: http
@@ -124,6 +122,7 @@ errors:
     - UpdatePersona
   http_status: 400
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: personaHandleReadonly
   go_const: ErrPersonaHandleReadonly
   user_message:

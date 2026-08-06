@@ -1,5 +1,3 @@
-entity: PostModerationCase
-domain: CONTENT
 description: 'PostModerationCase 对象专属错误码（审核裁决与版本一致性）。
 
   共享错误码唯一定义于 content/content/post/errors.yaml；content 域 codegen 与端云 parity
@@ -9,13 +7,13 @@ description: 'PostModerationCase 对象专属错误码（审核裁决与版本�
   '
 errors:
 - code: CONTENT.USER.moderation_case_not_found
-  kind: USER
   reason: moderation_case_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [ReviewPostModerationCase, DecidePostModeration, SupersedePostModerationCase, GetCurrentPostModerationCase]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: moderationCaseNotFound
   go_const: ErrModerationCaseNotFound
   user_message:

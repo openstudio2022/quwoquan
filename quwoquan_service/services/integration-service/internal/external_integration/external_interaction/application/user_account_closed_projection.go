@@ -80,11 +80,43 @@ type UserAccountClosedProjectionResult struct {
 	DeletedRecoveryRecords int64
 }
 
-type UserAccountClosedProjection interface {
+// UserAccountClosedProjectionStore 是 ExternalInteraction lifecycle facet 的
+// 持久化端口；实现负责 inbox、隐私清理与结果原子提交。
+type UserAccountClosedProjectionStore interface {
 	ApplyUserAccountClosed(
 		context.Context,
 		UserAccountClosedEvent,
 	) (UserAccountClosedProjectionResult, error)
+}
+
+// UserAccountClosedProjection 是 ExternalInteraction 对 UserAccountClosed 的
+// 唯一 application facet。它先校验 typed event，再进入对象自有事务端口。
+type UserAccountClosedProjection struct {
+	store UserAccountClosedProjectionStore
+}
+
+func NewUserAccountClosedProjection(
+	store UserAccountClosedProjectionStore,
+) (*UserAccountClosedProjection, error) {
+	if store == nil {
+		return nil, errors.New("integration account closure projection store is required")
+	}
+	return &UserAccountClosedProjection{store: store}, nil
+}
+
+func (projection *UserAccountClosedProjection) ApplyUserAccountClosed(
+	ctx context.Context,
+	event UserAccountClosedEvent,
+) (UserAccountClosedProjectionResult, error) {
+	if projection == nil || projection.store == nil {
+		return UserAccountClosedProjectionResult{}, errors.New(
+			"integration account closure projection is not configured",
+		)
+	}
+	if err := event.Validate(); err != nil {
+		return UserAccountClosedProjectionResult{}, err
+	}
+	return projection.store.ApplyUserAccountClosed(ctx, event)
 }
 
 // AttemptSubjectClosure is the only port through which ExternalInteraction

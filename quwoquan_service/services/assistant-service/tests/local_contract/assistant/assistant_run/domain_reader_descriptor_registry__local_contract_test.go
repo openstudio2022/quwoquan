@@ -16,7 +16,7 @@ import (
 
 func TestCanonicalDomainReaderDescriptorsBindOnlyGeneratedOwnerOperations(t *testing.T) {
 	knownOperations := map[string]struct{}{}
-	for _, domain := range []string{"assistant", "circle", "content", "entity", "travel", "user"} {
+	for _, domain := range []string{"assistant", "circle", "content", "entity", "user"} {
 		for _, operation := range operationsecurity.ForDomain(domain) {
 			knownOperations[operation.CanonicalOperationID] = struct{}{}
 		}
@@ -79,12 +79,12 @@ func containsSurface(values []readermodel.SurfaceKind, wanted readermodel.Surfac
 
 func TestContextProfileCannotWidenRegisteredReaderBoundary(t *testing.T) {
 	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
-		DescriptorID:        "travel.private_trip",
-		ResolverRef:         "trip.private",
-		OwnerService:        "travel-service",
-		OwnerOperationRefs:  []string{"travel.trip_timeline_view.GetTripTimeline"},
-		InputSchemaRef:      "travel.GetTripTimelineQuery",
-		OutputSchemaRef:     "assistant.TravelContextSegment",
+		DescriptorID:        "circle.private_gathering",
+		ResolverRef:         "gathering.private",
+		OwnerService:        "circle-service",
+		OwnerOperationRefs:  []string{"circle.gathering.GetGathering"},
+		InputSchemaRef:      "circle.GatheringIDQuery",
+		OutputSchemaRef:     "assistant.ContextSegment",
 		AcceptedSourceKinds: []string{"domain"},
 		Authority:           generated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity:         generated.AssistantContextSensitivityPrivate,
@@ -112,12 +112,12 @@ func TestContextProfileCannotWidenRegisteredReaderBoundary(t *testing.T) {
 	profile := skillcontext.Profile{
 		ProfileID: "widened",
 		Requirements: []skillcontext.Requirement{{
-			SlotID:              "trip",
+			SlotID:              "gathering",
 			Required:            true,
 			AcceptedSourceKinds: []string{"domain", "memory"},
 			Authority:           generated.AssistantContextAuthorityDomainCanonical,
 			Sensitivity:         generated.AssistantContextSensitivityPrivate,
-			ResolverRef:         "trip.private",
+			ResolverRef:         "gathering.private",
 			FallbackPolicy:      "block",
 		}},
 	}

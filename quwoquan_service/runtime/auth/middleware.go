@@ -187,25 +187,67 @@ func applyTrustedIdentityHeaders(headers http.Header, actor operation.ActorConte
 	}
 }
 
-func writeCredentialError(w http.ResponseWriter, r *http.Request, cause error) {
-	reason := "unauthorized"
-	debugMessage := "credential verification failed"
-	if errors.Is(cause, ErrExpiredToken) {
-		reason = "token_expired"
-		debugMessage = "credential expired"
-	} else if errors.Is(cause, ErrOIDCNotMFA) {
-		reason = "mfa_required"
-		debugMessage = "operator mfa is required"
+// credentialRejection mirrors the credential-boundary errors declared in
+// services/user-service/contracts/account/account_session/errors.yaml
+// (USER.AUTH.*) and account/user_account/errors.yaml (USER.USER.unauthorized).
+// runtime/auth is linked into every service and cannot import one service's
+// generated error package, so the mirror is kept honest by
+// TestCredentialRejectionsMatchContract.
+type credentialRejection struct {
+	kind        rterr.Kind
+	reason      string
+	userMessage string
+	debug       string
+}
+
+//nolint:gochecknoglobals
+var (
+	credentialUnauthorized = credentialRejection{
+		kind:        rterr.KindUser,
+		reason:      "unauthorized",
+		userMessage: "请先登录",
+		debug:       "credential verification failed",
 	}
-	rterr.WriteHTTPError(
-		w,
-		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleUser, rterr.KindUser, reason),
-			"请先登录",
-			debugMessage,
-		),
-		rterr.HTTPWriteOptionsFromRequest(r),
-	)
+	credentialTokenExpired = credentialRejection{
+		kind:        "AUTH",
+		reason:      "token_expired",
+		userMessage: "登录已过期，请重新登录",
+		debug:       "credential expired",
+	}
+	credentialMFARequired = credentialRejection{
+		kind:        "AUTH",
+		reason:      "mfa_required",
+		userMessage: "该操作需要多因子认证，请用已启用 MFA 的运营账号重新登录",
+		debug:       "operator mfa is required",
+	}
+)
+
+// writeCredentialError keeps one literal NewCode per branch on purpose: a
+// single call with a variable kind/reason would hide these codes from the
+// emitted-error-code scanner and silently drop the boundary out of governance.
+func writeCredentialError(w http.ResponseWriter, r *http.Request, cause error) {
+	var appError *rterr.AppError
+	switch {
+	case errors.Is(cause, ErrExpiredToken):
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, "AUTH", "token_expired"),
+			credentialTokenExpired.userMessage,
+			credentialTokenExpired.debug,
+		)
+	case errors.Is(cause, ErrOIDCNotMFA):
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, "AUTH", "mfa_required"),
+			credentialMFARequired.userMessage,
+			credentialMFARequired.debug,
+		)
+	default:
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleUser, rterr.KindUser, "unauthorized"),
+			credentialUnauthorized.userMessage,
+			credentialUnauthorized.debug,
+		)
+	}
+	rterr.WriteHTTPError(w, appError, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 type accountSecurityDenyReason string

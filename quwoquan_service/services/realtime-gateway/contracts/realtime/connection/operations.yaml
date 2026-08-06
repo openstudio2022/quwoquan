@@ -122,6 +122,9 @@ api_routes:
     method: openWebSocket
     session_owner: Connection
   description: WebSocket Upgrade（query 携带一次性 ticket；服务端消费 ticket 派生可信身份后下发 auth_ack）
+  request_entity: WebSocketUpgradeRequest
+  request_body_kind: none
+  response_body_kind: upgrade
   request_bindings:
     query:
     - name: ticket
@@ -151,7 +154,10 @@ api_routes:
     principal: account
     ownership_policy: ticket_self
   reliability:
-    timeout_ms: 1000
+    stream_budget:
+      handshake_ms: 5000
+      idle_ms: 90000
+      max_duration_ms: 1800000
     cancellation: supported
     retry_mode: none
     max_attempts: 1
@@ -460,3 +466,148 @@ consumers:
 - name: notification-service
   capabilities: []
   description: realtime-gateway 通过事件通知离线推送
+readiness_cases:
+- case_id: issue-connection-ticket-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: IssueConnectionTicket}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/gateway__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: issue-connection-ticket-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: IssueConnectionTicket}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: websocket-upgrade-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: WebSocketUpgrade}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/gateway__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: websocket-upgrade-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: WebSocketUpgrade}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: long-poll-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: LongPoll}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/gateway__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: long-poll-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: LongPoll}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: get-realtime-config-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetRealtimeConfig}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/gateway__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-realtime-config-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetRealtimeConfig}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: health-check-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: HealthCheck}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/runtime_probes__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: health-check-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: HealthCheck}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: readiness-check-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReadinessCheck}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/runtime_probes__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: readiness-check-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReadinessCheck}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: metrics-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: Metrics}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/runtime_probes__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: metrics-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: Metrics}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: recover-account-closure-dead-letter-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RecoverRealtimeAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/account_security__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: recover-account-closure-dead-letter-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RecoverRealtimeAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/realtime-gateway/tests/api_integration/realtime/connection/connection_operations__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: connection_issue_connection_ticket_app_local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: IssueConnectionTicket}
+  runner_source_path: quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_connection_operation_gateway__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connection_long_poll_app_local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: LongPoll}
+  runner_source_path: quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_connection_operation_gateway__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

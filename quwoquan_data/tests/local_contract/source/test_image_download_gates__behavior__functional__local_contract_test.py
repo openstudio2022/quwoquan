@@ -1,4 +1,4 @@
-"""图片下载 6 项门禁 (T1/T2)：相关性必填非模板、每实体≥2、最小像素、
+"""图片下载 6 项契约与行为门禁：相关性必填非模板、每实体≥2、最小像素、
 contentType+完整版权持久化、多变体(webp)格式化、感知哈希去重。
 
 可直接运行：python3 quwoquan_data/tests/local_contract/source/test_image_download_gates__behavior__functional__local_contract_test.py

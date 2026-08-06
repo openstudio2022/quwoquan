@@ -1,27 +1,66 @@
 backend: mongodb
 role: authoritative
+description: Gathering root、owned Participation、append-only Revision、receipt 与 publication outbox 在同一 owner Mongo 边界持久化。
 collections:
   gatherings:
+    publication_role: not_published
     entity: Gathering
     role: authoritative
+    description: Gathering root 文档；Participation、Revision、OrganizerAssignment 与 AvailabilityWatch 只能经 aggregate facade 改写。
     indexes:
     - name: uq_gathering_conversation
       keys: {conversationId: 1}
       sparse: true
       unique: true
-    - name: idx_gathering_status_start
-      keys: {status: 1, startAt: 1}
+    - name: idx_gathering_lifecycle_schedule
+      keys: {lifecycleStatus: 1, schedule.startAt: 1, schedule.endAt: 1}
+    - name: idx_gathering_host_page
+      keys: {hostBinding.hostSubjectKind: 1, hostBinding.hostSubjectId: 1, lifecycleStatus: 1, schedule.startAt: 1}
+    - name: idx_gathering_source_page
+      keys: {purpose.sourceObjectRefs.objectRef.objectTypeRef: 1, purpose.sourceObjectRefs.objectRef.objectId: 1, lifecycleStatus: 1, schedule.startAt: 1}
+    - name: idx_gathering_participation_identity
+      keys: {participations.personaId: 1, participations.state: 1}
+    - name: idx_gathering_availability_watch
+      keys: {availabilityWatches.personaId: 1, availabilityWatches.status: 1, schedule.startAt: 1}
   gathering_command_receipts:
+    publication_role: not_published
     entity: GatheringCommandReceipt
-    role: authoritative
+    role: idempotency_receipt
     description: 与 Gathering state 和 outbox 在同一 MongoDB transaction 提交的幂等回执。
+    indexes:
+    - name: uq_gathering_command_receipt
+      keys: {_id: 1}
+      unique: true
+    - name: ttl_gathering_command_receipt
+      keys: {expiresAt: 1}
+      expire_after_seconds: 0
   gathering_outbox:
+    publication_role: transactional_outbox
     entity: GatheringOutbox
     role: append_only
+    description: 保留现有 publication outbox；M1 事件仅在真实 consumer 落地后由 relay 发布。
+    indexes:
+    - name: uq_gathering_outbox_sequence
+      keys: {outboxSequence: 1}
+      unique: true
+    - name: idx_gathering_outbox_aggregate
+      keys: {aggregateId: 1, aggregateVersion: 1}
   gathering_outbox_sequences:
+    publication_role: publication_accessory
     entity: GatheringOutbox
     role: authoritative
+    description: Gathering publication outbox 的单调序列分配器。
+  gathering_publication_checkpoints:
+    publication_role: publication_accessory
+    entity: GatheringOutbox
+    role: projection
+    description: Gathering 领域事实 durable stream 的 consumer-scoped 单调投递进度；不得复用 Chat reconciliation checkpoint。
+    indexes:
+    - name: uq_gathering_publication_checkpoint
+      keys: {_id: 1}
+      unique: true
   gathering_reconciliation_checkpoints:
+    publication_role: publication_accessory
     entity: GatheringReconciliationCheckpoint
     role: projection
     description: Gathering 到 Chat 会话与成员投影的 durable 单调 checkpoint；仅在聚合当前版本的全部期望状态收敛后推进。
@@ -29,3 +68,20 @@ collections:
     - name: uq_gathering_reconciliation_checkpoint
       keys: {_id: 1}
       unique: true
+transaction:
+  scope: [gatherings, gathering_command_receipts, gathering_outbox, gathering_outbox_sequences]
+  isolation: mongo_transaction
+  guarantees:
+  - aggregate_version_cas
+  - root_owned_participation_uniqueness
+  - occupied_seat_capacity_bound
+  - command_idempotency
+  - owner_state_receipt_outbox_atomicity
+streams:
+  events.circle.gatherings:
+    publication_role: publication_accessory
+    entity: Gathering
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: Gathering publication outbox relay 发布的唯一 durable 生命周期事件流；下游只消费 typed event。

@@ -327,7 +327,7 @@ type Guardrail struct {
 	Action         string  `yaml:"action" json:"action"`
 }
 
-// RecallFusionConfig 是多路召回合并的轻量融合策略（W9/B10，S0 反过度设计：
+// RecallFusionConfig 是多路召回合并的轻量融合策略（source-quota，S0 反过度设计：
 // policy 权重表 + 源配额，不做 RRF；融合公式升级只改本配置的消费实现，契约不变）。
 // SourceQuotaPct：recallPath → 该源候选数占召回池的百分比上限（未登记 = 不限）。
 // SourceBoost：recallPath → 精排分乘数（未登记 = 1.0；fact 优先原则下 boost

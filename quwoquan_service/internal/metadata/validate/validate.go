@@ -65,11 +65,13 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 
 	operationIDs := map[string]string{}
 	transportKeys := map[string]string{}
-	mutationOperationCountByObject := map[string]int{}
+	// DEC-011: HTTP 与非 HTTP runtime ingress 是互斥入口。事件消费是
+	// object.yaml.lifecycle 的内部事实，不再借 runtime entrypoint 形成第二入口。
+	operationsByObject := map[string][]ast.Operation{}
 	for _, operation := range contractGraph.Operations {
-		if operation.Kind != ast.OperationKindQuery {
-			mutationOperationCountByObject[operation.ObjectID]++
-		}
+		operationsByObject[operation.ObjectID] = append(
+			operationsByObject[operation.ObjectID], operation,
+		)
 		if previous, exists := operationIDs[operation.ID]; exists {
 			issues = append(issues, issue(
 				"CONTRACT.DUPLICATE.OPERATION_ID",
@@ -157,6 +159,8 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				"non-SSE operation %q cannot declare streaming policy", operation.ID,
 			))
 		}
+		issues = append(issues, streamBudgetIssues(operation)...)
+		issues = append(issues, successStatusIssues(operation)...)
 		transportKey := operation.Method + " " + operation.PathTemplate
 		if previous, exists := transportKeys[transportKey]; exists {
 			issues = append(issues, issue(
@@ -221,11 +225,11 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				}
 			}
 		}
-		if mutationOperationCountByObject[entrypoint.ObjectID] != 0 {
+		if operations := operationsByObject[entrypoint.ObjectID]; len(operations) != 0 {
 			issues = append(issues, issue(
 				"CONTRACT.RUNTIME_ENTRYPOINT.HTTP_DUAL_TRACK",
 				entrypoint.SourcePath,
-				"object %q must not own both HTTP mutation operations and runtime mutation entrypoints",
+				"object %q must not own both HTTP api_routes and runtime_entrypoints; internal event consumption belongs to object lifecycle",
 				entrypoint.ObjectID,
 			))
 		}
@@ -290,6 +294,7 @@ func validateRuntimeEntrypoint(
 	expectedPhase := map[string]string{
 		"middleware":    "post_authorization_pre_owner_proxy",
 		"projector":     "event_projection",
+		"event_handler": "event_command",
 		"subscription":  "event_ingest",
 		"internal_port": "transactional_append",
 		"external_port": "outbound_invocation",
@@ -316,6 +321,7 @@ func validateRuntimeEntrypoint(
 	expectedObjectKind := map[string]ast.ObjectKind{
 		"middleware":    ast.ObjectKindRuntimeSession,
 		"projector":     ast.ObjectKindProjection,
+		"event_handler": ast.ObjectKindAggregateRoot,
 		"subscription":  ast.ObjectKindAppendOnlyFact,
 		"internal_port": ast.ObjectKindAppendOnlyFact,
 		"external_port": ast.ObjectKindExternalReference,
@@ -380,17 +386,19 @@ func validateRuntimeEntrypoint(
 			object.Name,
 		))
 	}
-	if entrypoint.RuntimeKind == "projector" &&
-		(len(entrypoint.SourceEvents) == 0 || entrypoint.Checkpoint == "" ||
-			entrypoint.Rebuild == "" || entrypoint.Tombstone == "") {
-		issues = append(issues, issue(
-			"CONTRACT.RUNTIME_ENTRYPOINT.INCOMPLETE_PROJECTOR",
-			entrypoint.SourcePath,
-			"runtime entrypoint %q projector requires source events, checkpoint, rebuild and tombstone",
-			entrypoint.ID,
-		))
+	if entrypoint.RuntimeKind == "projector" || entrypoint.RuntimeKind == "event_handler" ||
+		entrypoint.RuntimeKind == "subscription" {
+		if !runtimeEntrypointHasLifecycleConsumer(entrypoint, object) {
+			issues = append(issues, issue(
+				"CONTRACT.RUNTIME_ENTRYPOINT.LIFECYCLE_CONSUMER_MISSING",
+				entrypoint.SourcePath,
+				"runtime entrypoint %q must bind an object.lifecycle.event_consumers handler; event facts are not authored in operations",
+				entrypoint.ID,
+			))
+		}
 	}
-	if entrypoint.RuntimeKind != "middleware" && entrypoint.Idempotency == "" {
+	if (entrypoint.RuntimeKind == "internal_port" || entrypoint.RuntimeKind == "external_port") &&
+		entrypoint.Idempotency == "" {
 		issues = append(issues, issue(
 			"CONTRACT.RUNTIME_ENTRYPOINT.MISSING_IDEMPOTENCY",
 			entrypoint.SourcePath,
@@ -402,7 +410,10 @@ func validateRuntimeEntrypoint(
 }
 
 func hasTypedEntrypointSuffix(value string) bool {
-	for _, suffix := range []string{"Facade", "Projector", "Appender", "Port"} {
+	for _, suffix := range []string{
+		"Facade", "Projector", "Projection", "Appender", "Consumer", "Port",
+		"Coordinator", "Recorder", "Orchestrator", "Handler",
+	} {
 		if strings.HasSuffix(value, suffix) {
 			return true
 		}
@@ -469,6 +480,22 @@ func validateOpenAPISnapshots(
 	return issues
 }
 
+func runtimeEntrypointHasLifecycleConsumer(
+	entrypoint ast.RuntimeEntrypoint,
+	object ast.Object,
+) bool {
+	if object.Lifecycle == nil || len(object.Lifecycle.SourceEvents) == 0 {
+		return false
+	}
+	for _, consumer := range object.Lifecycle.EventConsumers {
+		if consumer.Name == entrypoint.LocalID && consumer.Kind == entrypoint.RuntimeKind &&
+			consumer.Facet == entrypoint.Facet && consumer.Method == entrypoint.FacadeMethod {
+			return true
+		}
+	}
+	return false
+}
+
 func validateCommercialObject(object ast.Object) []Issue {
 	var issues []Issue
 	if !object.KindExplicit {
@@ -532,6 +559,45 @@ func validateCommercialObject(object ast.Object) []Issue {
 				object.Name,
 				member.AggregateOwner,
 			))
+		}
+	}
+	if object.Lifecycle != nil {
+		for _, consumer := range object.Lifecycle.EventConsumers {
+			expectedKind := map[string]ast.ObjectKind{
+				"projector":     ast.ObjectKindProjection,
+				"event_handler": ast.ObjectKindAggregateRoot,
+				"subscription":  ast.ObjectKindAppendOnlyFact,
+			}[consumer.Kind]
+			if expectedKind != "" && object.Kind != expectedKind {
+				issues = append(issues, issue(
+					"CONTRACT.EVENT.LIFECYCLE_CONSUMER_INVALID_OWNER_KIND",
+					object.SourcePath,
+					"lifecycle consumer %q kind %q requires object kind %q, got %q",
+					consumer.Name,
+					consumer.Kind,
+					expectedKind,
+					object.Kind,
+				))
+			}
+			if !typedBindingIdentifier.MatchString(consumer.Name) ||
+				!typedBindingIdentifier.MatchString(consumer.Facet) ||
+				!hasTypedEntrypointSuffix(consumer.Facet) {
+				issues = append(issues, issue(
+					"CONTRACT.EVENT.LIFECYCLE_CONSUMER_INVALID_BINDING",
+					object.SourcePath,
+					"lifecycle consumer %q must bind a typed production facet",
+					consumer.Name,
+				))
+			}
+			if !runtimeFacadeMethodIdentifier.MatchString(consumer.Method) {
+				issues = append(issues, issue(
+					"CONTRACT.EVENT.LIFECYCLE_CONSUMER_INVALID_METHOD",
+					object.SourcePath,
+					"lifecycle consumer %q method %q must be lower camel case",
+					consumer.Name,
+					consumer.Method,
+				))
+			}
 		}
 	}
 	return issues
@@ -615,6 +681,9 @@ func validateCommercialOperation(
 		if expectedMutationTarget == "" {
 			expectedMutationTarget = operation.AppendSink
 		}
+		if expectedMutationTarget == "" {
+			expectedMutationTarget = operation.LifecycleOwner
+		}
 		if operation.MutationTarget == "" || operation.InvariantTarget == "" {
 			issues = append(issues, issue(
 				"CONTRACT.OPERATION.MISSING_SEMANTIC_TARGET",
@@ -633,19 +702,29 @@ func validateCommercialOperation(
 				expectedMutationTarget,
 			))
 		}
-		if operation.AggregateOwner == "" && operation.AppendSink == "" {
+		commandOwnerCount := 0
+		for _, owner := range []string{
+			operation.AggregateOwner,
+			operation.AppendSink,
+			operation.LifecycleOwner,
+		} {
+			if owner != "" {
+				commandOwnerCount++
+			}
+		}
+		if commandOwnerCount == 0 {
 			issues = append(issues, issue(
 				"CONTRACT.OPERATION.MISSING_COMMAND_TARGET",
 				operation.SourcePath,
-				"command %q must declare exactly one application.aggregate_owner or application.append_sink",
+				"command %q must declare exactly one application.aggregate_owner, application.append_sink, or application.lifecycle_owner",
 				operation.ID,
 			))
 		}
-		if operation.AggregateOwner != "" && operation.AppendSink != "" {
+		if commandOwnerCount > 1 {
 			issues = append(issues, issue(
 				"CONTRACT.OPERATION.AMBIGUOUS_COMMAND_TARGET",
 				operation.SourcePath,
-				"command %q must not declare aggregate_owner and append_sink together",
+				"command %q must declare only one of aggregate_owner, append_sink, or lifecycle_owner",
 				operation.ID,
 			))
 		}
@@ -736,6 +815,50 @@ func validateCommercialOperation(
 				}
 			}
 		}
+		if operation.LifecycleOwner != "" {
+			owner, exists := objectsByDomainName[domainObjectKey(
+				operation.Domain,
+				operation.LifecycleOwner,
+			)]
+			if !exists {
+				issues = append(issues, issue(
+					"CONTRACT.REFERENCE.UNKNOWN_LIFECYCLE_OWNER",
+					operation.SourcePath,
+					"command %q references unknown lifecycle owner %q",
+					operation.ID,
+					operation.LifecycleOwner,
+				))
+			} else {
+				if owner.ID != operation.ObjectID {
+					issues = append(issues, issue(
+						"CONTRACT.OPERATION.CROSS_OBJECT_LIFECYCLE_OWNER",
+						operation.SourcePath,
+						"command %q is declared by %q but recovers lifecycle owner %q; move it to the canonical owner packet",
+						operation.ID,
+						operation.ObjectID,
+						owner.ID,
+					))
+				}
+				if owner.Lifecycle == nil || len(owner.Lifecycle.SourceEvents) == 0 ||
+					len(owner.Lifecycle.EventConsumers) == 0 {
+					issues = append(issues, issue(
+						"CONTRACT.OPERATION.LIFECYCLE_OWNER_WITHOUT_CONSUMER",
+						operation.SourcePath,
+						"command %q lifecycle owner %q must declare lifecycle.source_events and lifecycle.event_consumers",
+						operation.ID,
+						owner.ID,
+					))
+				}
+				if operation.Method != "POST" {
+					issues = append(issues, issue(
+						"CONTRACT.OPERATION.LIFECYCLE_RECOVERY_METHOD",
+						operation.SourcePath,
+						"lifecycle recovery command %q must use POST",
+						operation.ID,
+					))
+				}
+			}
+		}
 	case ast.OperationKindQuery:
 		if operation.MutationTarget != "" || operation.InvariantTarget != "" {
 			issues = append(issues, issue(
@@ -745,11 +868,12 @@ func validateCommercialOperation(
 				operation.ID,
 			))
 		}
-		if operation.AggregateOwner != "" || operation.AppendSink != "" || operation.SessionOwner != "" {
+		if operation.AggregateOwner != "" || operation.AppendSink != "" ||
+			operation.LifecycleOwner != "" || operation.SessionOwner != "" {
 			issues = append(issues, issue(
 				"CONTRACT.OPERATION.INVALID_QUERY_BINDING",
 				operation.SourcePath,
-				"query %q must not declare aggregate_owner, append_sink, or session_owner",
+				"query %q must not declare aggregate_owner, append_sink, lifecycle_owner, or session_owner",
 				operation.ID,
 			))
 		}
@@ -794,12 +918,13 @@ func validateCommercialOperation(
 		}
 		if operation.AggregateOwner != "" ||
 			operation.AppendSink != "" ||
+			operation.LifecycleOwner != "" ||
 			operation.Reader != "" ||
 			operation.Slice != "" {
 			issues = append(issues, issue(
 				"CONTRACT.OPERATION.INVALID_SESSION_BINDING",
 				operation.SourcePath,
-				"session operation %q must not declare aggregate_owner, append_sink, or query reader/slice",
+				"session operation %q must not declare aggregate_owner, append_sink, lifecycle_owner, or query reader/slice",
 				operation.ID,
 			))
 		}
@@ -1029,6 +1154,131 @@ func bindIssueSubject(subjectID string, issues []Issue) []Issue {
 		if issues[index].SubjectID == "" {
 			issues[index].SubjectID = subjectID
 		}
+	}
+	return issues
+}
+
+func successStatusIssues(operation ast.Operation) []Issue {
+	status := operation.SuccessStatus
+	if status == 0 {
+		return nil
+	}
+	responseKind := strings.TrimSpace(operation.ResponseBodyKind)
+	responseEntity := strings.TrimSpace(operation.ResponseEntity)
+	if status != 200 && status != 201 && status != 202 && status != 204 {
+		return []Issue{issue(
+			"CONTRACT.OPERATION.INVALID_SUCCESS_STATUS",
+			operation.SourcePath,
+			"operation %q success_status must be one of 200, 201, 202 or 204",
+			operation.ID,
+		)}
+	}
+	if responseKind == "upgrade" {
+		return []Issue{issue(
+			"CONTRACT.OPERATION.SUCCESS_STATUS_FORBIDDEN",
+			operation.SourcePath,
+			"upgrade operation %q has protocol status 101 and cannot declare success_status",
+			operation.ID,
+		)}
+	}
+	if responseKind == "ack" && status != 204 {
+		return []Issue{issue(
+			"CONTRACT.OPERATION.SUCCESS_STATUS_BODY_MISMATCH",
+			operation.SourcePath,
+			"ack operation %q must use success_status 204; use response_body_kind object for a typed receipt",
+			operation.ID,
+		)}
+	}
+	if status == 204 && responseEntity != "" {
+		return []Issue{issue(
+			"CONTRACT.OPERATION.SUCCESS_STATUS_BODY_MISMATCH",
+			operation.SourcePath,
+			"operation %q cannot combine success_status 204 with response_entity %q",
+			operation.ID,
+			responseEntity,
+		)}
+	}
+	if status != 204 && responseKind != "page" && responseKind != "object" &&
+		responseEntity == "" {
+		return []Issue{issue(
+			"CONTRACT.OPERATION.SUCCESS_STATUS_BODY_MISMATCH",
+			operation.SourcePath,
+			"operation %q success_status %d requires response_body_kind object/page and a typed response_entity",
+			operation.ID,
+			status,
+		)}
+	}
+	return nil
+}
+
+// streamBudgetIssues keeps the two timeout vocabularies from overlapping.
+//
+// A unary operation declares reliability.timeout_ms and nothing else: one
+// budget describes its whole life. A streaming operation declares
+// reliability.stream_budget and nothing else: handshake, idle and connection
+// lifetime are independent limits, and enforcing any single one of them as
+// "the timeout" is wrong in both directions — clamping the lifetime truncates
+// healthy long work, while clamping idle at the lifetime value never detects a
+// stalled producer. timeout_ms is therefore derived from max_duration_ms by
+// load, not authored, so the connection ceiling stays one number.
+func streamBudgetIssues(operation ast.Operation) []Issue {
+	budget := operation.Reliability.StreamBudget
+	isStreaming := strings.EqualFold(
+		strings.TrimSpace(operation.Transport),
+		"sse",
+	) || strings.EqualFold(
+		strings.TrimSpace(operation.ResponseBodyKind),
+		"upgrade",
+	)
+	if !isStreaming {
+		if budget == nil {
+			return nil
+		}
+		return []Issue{issue(
+			"CONTRACT.RELIABILITY.STREAM_BUDGET_FORBIDDEN",
+			operation.SourcePath,
+			"non-streaming operation %q cannot declare reliability.stream_budget; its whole-request bound is reliability.timeout_ms",
+			operation.ID,
+		)}
+	}
+	if budget == nil {
+		return []Issue{issue(
+			"CONTRACT.RELIABILITY.STREAM_BUDGET_REQUIRED",
+			operation.SourcePath,
+			"streaming operation %q must declare reliability.stream_budget handshake_ms/idle_ms/max_duration_ms; reliability.timeout_ms cannot bound a long-lived connection",
+			operation.ID,
+		)}
+	}
+	var issues []Issue
+	if operation.Reliability.TimeoutExplicit {
+		issues = append(issues, issue(
+			"CONTRACT.RELIABILITY.STREAM_TIMEOUT_FORBIDDEN",
+			operation.SourcePath,
+			"streaming operation %q cannot author reliability.timeout_ms; it is derived from stream_budget.max_duration_ms",
+			operation.ID,
+		))
+	}
+	if budget.HandshakeMilliseconds <= 0 ||
+		budget.IdleMilliseconds <= 0 ||
+		budget.MaxDurationMilliseconds <= 0 {
+		issues = append(issues, issue(
+			"CONTRACT.RELIABILITY.INVALID_STREAM_BUDGET",
+			operation.SourcePath,
+			"streaming operation %q must declare positive handshake_ms, idle_ms and max_duration_ms",
+			operation.ID,
+		))
+		return issues
+	}
+	// A bound that can never fire before the connection is closed anyway is a
+	// dead clause, and a dead clause reads like enforcement without being it.
+	if budget.HandshakeMilliseconds >= budget.MaxDurationMilliseconds ||
+		budget.IdleMilliseconds >= budget.MaxDurationMilliseconds {
+		issues = append(issues, issue(
+			"CONTRACT.RELIABILITY.UNREACHABLE_STREAM_BUDGET",
+			operation.SourcePath,
+			"streaming operation %q must keep handshake_ms and idle_ms strictly below max_duration_ms, otherwise neither bound can ever fire",
+			operation.ID,
+		))
 	}
 	return issues
 }

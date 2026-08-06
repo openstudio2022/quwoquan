@@ -24,7 +24,6 @@ local_identity_reasons:
   skillId: >-
     active SkillPackageRelease 内的稳定 Skill key；通过 typed catalog reader 校验，
     不作为本聚合 Store 身份或授权事实
-capabilities: [commandable, queryable, idempotent_commands]
 taggable: false
 vector_enabled: false
 business_rules:

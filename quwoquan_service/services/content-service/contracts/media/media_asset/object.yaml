@@ -41,8 +41,6 @@ relationships:
   reference_fields:
   - manualCoverAssetId
   target_object: content.MediaAsset
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:
@@ -69,3 +67,17 @@ lifecycle:
   - deleted
   optimistic_concurrency: version
   idempotency: command_key
+  source_events:
+  - content.media_asset.MediaAssetCreated
+  - content.media_asset.MediaAssetProcessingUpdated
+  - content.media_asset.MediaAssetAccessPolicyUpdated
+  - content.media_asset.MediaAssetDiscarded
+  - content.media_upload_session.MediaUploadInitialized
+  - content.media_upload_session.MediaUploadCompleted
+  - content.media_upload_session.MediaUploadAborted
+  event_consumers:
+  - name: ProcessMediaOutbox
+    kind: event_handler
+    facet: MediaProcessingHandler
+    method: process
+    idempotency: event_id

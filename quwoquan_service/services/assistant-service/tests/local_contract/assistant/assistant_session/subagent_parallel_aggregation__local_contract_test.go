@@ -95,10 +95,8 @@ func toolNames(catalog []ports.ModelToolDefinition) []string {
 
 func subagentLoop(t *testing.T, model orchestration.ModelProvider) *orchestration.AgentLoop {
 	t.Helper()
-	registry := toolpkg.BaseRegistry()
-	registry.Register(
-		toolpkg.WebSearchMetadata(),
-		func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
+	registry := canonicalTestToolRegistry(map[string]toolpkg.Handler{
+		"web_search": func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			return toolpkg.Result{Output: map[string]any{
 				"summary":            "杭州周末多云，适合安排室外行程。",
 				"references":         []any{},
@@ -106,39 +104,18 @@ func subagentLoop(t *testing.T, model orchestration.ModelProvider) *orchestratio
 				"evidenceAssessment": acceptedEvidenceAssessment("subagent_web_search_stub"),
 			}}, nil
 		},
-	)
-	registry.Register(
-		toolpkg.AppSearchMetadata(),
-		func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
+		"app_search": func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			return toolpkg.Result{Output: map[string]any{
 				"provider":           "search-service",
 				"summary":            "杭州东站到市区的地铁与公交班次充足。",
 				"results":            []any{},
 				"citations":          []any{},
+				"emergedTagRefs":     []string{},
 				"provenance":         map[string]any{"source": "search-service"},
 				"evidenceAssessment": acceptedEvidenceAssessment("subagent_app_search_stub"),
 			}}, nil
 		},
-	)
-	// Weather/travel capability profiles also declare these tools; register them
-	// so frozenToolMetadataFor can resolve canonical metadata for subagent runs.
-	for _, meta := range []toolpkg.Metadata{
-		toolpkg.WeatherLookupMetadata(),
-		toolpkg.WebOpenMetadata(),
-		toolpkg.WebFindMetadata(),
-		toolpkg.CalendarCreateReminderMetadata(),
-	} {
-		metadata := meta
-		registry.Register(
-			metadata,
-			func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
-				return toolpkg.Result{Output: map[string]any{
-					"summary":            "stub " + metadata.ToolName,
-					"evidenceAssessment": acceptedEvidenceAssessment("subagent_" + metadata.ToolName + "_stub"),
-				}}, nil
-			},
-		)
-	}
+	})
 	loop := orchestration.NewAgentLoop(
 		nil,
 		orchestration.ReactRuntime{

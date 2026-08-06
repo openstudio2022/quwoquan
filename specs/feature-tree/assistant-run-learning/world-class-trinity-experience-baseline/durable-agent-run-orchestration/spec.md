@@ -46,7 +46,7 @@
 ## 4. 契约引用
 
 - object / projection：`AssistantRun`、`AssistantRunItem`、`AssistantTaskGraph`、`AssistantRunCheckpoint`、`AssistantReasoningProfile`
-- operation：`StartAssistantRun`、`GetAssistantRun`、`StreamAssistantRunEvents`、`PauseAssistantRun`、`ResumeAssistantRun`、`SteerAssistantRun`、`CancelAssistantRun`、`ContinueAssistantToolUse`
+- operation：`StartAssistantRun`、`GetAssistantRun`、`StreamAssistantRunEvents`、`PauseAssistantRun`、`ResumeAssistantRun`、`SteerAssistantRun`、`CancelAssistantRun`、`ApproveAssistantToolUse`、`SubmitDeviceActionReceipt`
 - event / metric：`assistant_run_state_changed`、`assistant_run_checkpointed`、`assistant_run_recovered`、`assistant_run_completion_rejected`
 
 ## 5. 验收场景

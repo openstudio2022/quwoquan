@@ -361,7 +361,7 @@ def _wait_notification_signals(
                         "objectHash": _canonical_hash(item),
                     }
         inbox = executor.call(
-            "chat.conversation.ListInbox",
+            "chat.chat_inbox_view.ListInbox",
             actor=actors[1],
             step=f"chat-inbox-readback-{attempt:02d}",
             query={"limit": 100},

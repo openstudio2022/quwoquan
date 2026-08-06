@@ -1,10 +1,7 @@
 events:
 - name: MediaUploadInitialized
   description: 上传会话已创建，且已绑定 owner、objectKey、expectedSha256 和过期时间。
-  producer: content-service
-  consumers:
-  - media-processing
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: MediaUploadSession
   payload_fields:
   - id
@@ -14,11 +11,7 @@ events:
   - expiresAt
 - name: MediaUploadCompleted
   description: 上传会话完成；同一事务内物化 MediaAssetCreated 事实。
-  producer: content-service
-  consumers:
-  - media-processing
-  - content-service
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: MediaUploadSession
   payload_fields:
   - id
@@ -28,10 +21,7 @@ events:
   - completedAt
 - name: MediaUploadAborted
   description: 上传会话已中止，后续完成回调必须拒绝。
-  producer: content-service
-  consumers:
-  - media-processing
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: MediaUploadSession
   payload_fields:
   - id

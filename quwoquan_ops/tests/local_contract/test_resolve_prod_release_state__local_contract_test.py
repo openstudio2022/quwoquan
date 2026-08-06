@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -96,6 +97,54 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary:
             return hosted_release_ledger.commit(Path(temporary), request)
+
+    def test_fetch_uses_only_the_hosted_release_ledger_authority(self) -> None:
+        payload = {
+            "schema": "prod-hosted-release-readback",
+            "authority": "prod-hosted-service-plane",
+            "state": {},
+            "receipt": {},
+            "receiptRef": "",
+        }
+
+        def write_readback(
+            argv: list[str],
+            **_: object,
+        ) -> subprocess.CompletedProcess[str]:
+            output = Path(argv[argv.index("--output-path") + 1])
+            output.write_text(json.dumps(payload), encoding="utf-8")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        with mock.patch.object(
+            resolver.subprocess,
+            "run",
+            side_effect=write_readback,
+        ) as mocked_run:
+            resolved = resolver._fetch_hosted_readback()
+
+        self.assertEqual(resolved, payload)
+        command = mocked_run.call_args.args[0]
+        self.assertEqual(
+            command[0:2],
+            ["bash", "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh"],
+        )
+        self.assertEqual(
+            command[command.index("--operation") + 1],
+            "release-ledger-fetch",
+        )
+        self.assertEqual(command[command.index("--service") + 1], "prod-stack")
+        self.assertNotIn("ssh", command)
+
+    def test_fetch_failure_is_gate_block(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["bash"],
+            2,
+            "",
+            "authority unavailable",
+        )
+        with mock.patch.object(resolver.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(resolver.GateBlockError, "fetch failed"):
+                resolver._fetch_hosted_readback()
 
     def test_same_target_preserves_original_source_and_advances_stage(self) -> None:
         expectations = {

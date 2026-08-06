@@ -44,10 +44,11 @@ UI_CONFIG_PATH = (
     / "homepage/ui_config.yaml"
 )
 DART_LABEL_PATH = (
-    ROOT / "quwoquan_app/lib/ui/entity/models/homepage_type_labels.dart"
+    ROOT
+    / "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_type_labels.dart"
 )
 DART_LOCATION_PATH = (
-    ROOT / "quwoquan_app/lib/search/search/search_index_view/presentation/search_coordinator.dart"
+    ROOT / "quwoquan_app/lib/service/search_service/search/search_index_view/presentation/search_coordinator.dart"
 )
 INTERSECTION_REGISTRY_PATH = (
     ROOT

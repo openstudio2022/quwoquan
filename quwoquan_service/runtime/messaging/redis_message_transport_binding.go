@@ -64,10 +64,12 @@ var (
 		},
 		[]string{"root", "adapter", "operation"},
 	)
+	// Canonical provider-conformance metric refs for runtime.message.transport:
+	// pending_lag / dead_letter / publish_p95 / consume_p95.
 	messageTransportPending = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "qwq_message_transport",
-			Name:      "stream_pending",
+			Name:      "pending_lag",
 			Help:      "Pending durable records by root, stream and consumer group.",
 		},
 		[]string{"root", "adapter", "stream", "group"},
@@ -75,10 +77,28 @@ var (
 	messageTransportDeadLetters = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "qwq_message_transport",
-			Name:      "dead_letters_total",
+			Name:      "dead_letter",
 			Help:      "Durable records written to a dead-letter stream by root and reason.",
 		},
 		[]string{"root", "adapter", "stream", "reason"},
+	)
+	messageTransportPublishLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "qwq_message_transport",
+			Name:      "publish_duration_seconds",
+			Help:      "Publish latency samples used by the canonical publish_p95 recording rule.",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"root", "adapter", "operation"},
+	)
+	messageTransportConsumeLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "qwq_message_transport",
+			Name:      "consume_duration_seconds",
+			Help:      "Consume latency samples used by the canonical consume_p95 recording rule.",
+			Buckets:   prometheus.DefBuckets,
+		},
+		[]string{"root", "adapter", "operation"},
 	)
 	messageTransportPreflight = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -656,17 +676,34 @@ func (t *RedisMessageTransport) recordOperation(operation string, started time.T
 	if err != nil {
 		status = "error"
 	}
+	rootID := t.metricRootID()
+	adapterID := t.metricAdapterID()
+	elapsed := time.Since(started).Seconds()
 	messageTransportOperations.WithLabelValues(
-		t.metricRootID(),
-		t.metricAdapterID(),
+		rootID,
+		adapterID,
 		operation,
 		status,
 	).Inc()
 	messageTransportLatency.WithLabelValues(
-		t.metricRootID(),
-		t.metricAdapterID(),
+		rootID,
+		adapterID,
 		operation,
-	).Observe(time.Since(started).Seconds())
+	).Observe(elapsed)
+	switch operation {
+	case "ephemeral_publish", "durable_append":
+		messageTransportPublishLatency.WithLabelValues(
+			rootID,
+			adapterID,
+			operation,
+		).Observe(elapsed)
+	case "ephemeral_subscribe", "durable_consume", "durable_cursor_read", "durable_reclaim":
+		messageTransportConsumeLatency.WithLabelValues(
+			rootID,
+			adapterID,
+			operation,
+		).Observe(elapsed)
+	}
 }
 
 func (t *RedisMessageTransport) observePending(ctx context.Context, stream, group string) {

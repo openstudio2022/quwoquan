@@ -68,11 +68,6 @@ local_identity_reasons:
   deviceId: delivery routing key scoped to one NotificationDeliveryJob; authoritative device lifecycle
     remains in user.DeviceRegistration
   eventId: immutable source-event correlation key, not a standalone aggregate identity
-capabilities:
-- commandable
-- queryable
-- leased
-- attempt_budgeted
 business_rules:
 - notificationId、channel 与 destinationRef 创建后不可变
 - 同一 delivery identity 只存在一个活动 Job
@@ -104,3 +99,24 @@ lifecycle:
   - expired
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - rtc.call_session.CallRinging
+  - rtc.call_session.CallAnswered
+  - rtc.call_session.CallEnded
+  - integration.external_interaction.ExternalInteractionResultReported
+  event_consumers:
+  - name: HandleIncomingCallRinging
+    kind: event_handler
+    facet: IncomingCallDeliveryCoordinator
+    method: handleRinging
+    idempotency: event_id
+  - name: HandleIncomingCallCancellation
+    kind: event_handler
+    facet: IncomingCallDeliveryCoordinator
+    method: handleCancellation
+    idempotency: event_id
+  - name: RecordExternalInteractionResult
+    kind: event_handler
+    facet: ExternalInteractionResultRecorder
+    method: recordExternalInteractionResult
+    idempotency: event_id

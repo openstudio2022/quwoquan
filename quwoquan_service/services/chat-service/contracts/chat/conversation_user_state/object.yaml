@@ -27,10 +27,6 @@ relationships:
   reference_fields:
   - userId
   target_object: user.Persona
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - identity 固定为 conversationId + personaId
 - readSeq 只能单调增加且不得超过 Conversation maxSeq

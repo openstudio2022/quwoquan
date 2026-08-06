@@ -234,16 +234,6 @@
           "fallbackPolicy": "omit"
         },
         {
-          "slotId": "trip_context",
-          "acceptedSourceKinds": ["domain"],
-          "authority": "domain_canonical",
-          "sensitivity": "internal",
-          "consentScopes": ["travel.trip.read"],
-          "tokenBudget": 1536,
-          "resolverRef": "trip.current_context",
-          "fallbackPolicy": "omit"
-        },
-        {
           "slotId": "conversation_context",
           "acceptedSourceKinds": ["conversation"],
           "authority": "domain_canonical",
@@ -303,7 +293,7 @@
           "fallbackPolicy": "omit"
         }
       ],
-      "assetDigest": "sha256:d5a4bc47bf4cd71bc1803190bad7cc62ed74b11517e922c17e68868564f92864"
+      "assetDigest": "sha256:96ec583cec497e645926ff948b30aecd1ad050e0502e82d281931be6bcfa8519"
     }
   ],
   "capabilityProfiles": [
@@ -385,12 +375,63 @@
     {
       "profileId": "capability.travel_companion",
       "toolPolicy": {
-        "allowedTools": ["app_search", "weather_lookup", "web_search", "web_open", "web_find", "calendar_create_reminder"],
-        "preferredTools": ["app_search", "weather_lookup", "web_search"],
-        "maxToolCalls": 8,
+        "allowedTools": [
+          "gathering.search_public",
+          "gathering.read_public",
+          "gathering.read_private",
+          "gathering.propose_create_draft",
+          "gathering.propose_update",
+          "gathering.watch_availability",
+          "gathering.propose_plan",
+          "app_search",
+          "weather_lookup",
+          "web_search",
+          "web_open",
+          "web_find",
+          "calendar_create_reminder"
+        ],
+        "preferredTools": [
+          "gathering.read_public",
+          "gathering.read_private",
+          "gathering.propose_plan",
+          "app_search",
+          "weather_lookup",
+          "web_search"
+        ],
+        "maxToolCalls": 12,
         "allowDeviceActionProposal": true
       },
-      "assetDigest": "sha256:32749565adb930b0665b05ca88861f71a77e60ef4fe6b58653ebe4cfd55e44ec"
+      "assetDigest": "sha256:dbf31dd3c1dbb2be60ded385d6a00d894c2485ad9c43ab4ce8f686445a7091af"
+    },
+    {
+      "profileId": "capability.gathering_coordinator",
+      "toolPolicy": {
+        "allowedTools": [
+          "gathering.search_public",
+          "gathering.read_public",
+          "gathering.read_private",
+          "gathering.propose_create_draft",
+          "gathering.propose_update",
+          "gathering.watch_availability",
+          "gathering.propose_plan",
+          "location_poi_search",
+          "location_route_read",
+          "weather_lookup",
+          "calendar_create_reminder",
+          "calendar_update_event",
+          "calendar_delete_event"
+        ],
+        "preferredTools": [
+          "gathering.search_public",
+          "gathering.read_public",
+          "gathering.propose_create_draft",
+          "location_poi_search",
+          "weather_lookup"
+        ],
+        "maxToolCalls": 12,
+        "allowDeviceActionProposal": true
+      },
+      "assetDigest": "sha256:7b85e5662abfec12a41628b36d2c6fb9b6a6c936f474c150e1f7d12d9ac15839"
     }
   ],
   "orchestrationProfiles": [
@@ -444,6 +485,38 @@
       ],
       "stopRules": ["definition_of_done_satisfied", "waiting_user_choice", "waiting_user_confirmation", "evidence_budget_exhausted", "blocked"],
       "assetDigest": "sha256:b8d898ae64104afb432404a40ebfa5d28e93791f8e0a6531de88bf0eab1dcbc5"
+    },
+    {
+      "profileId": "orchestration.gathering_coordinator",
+      "reasoningProfile": "balanced",
+      "definitionOfDone": [
+        "canonical_source_is_preserved",
+        "gathering_commitments_are_explicit",
+        "private_fields_are_redacted",
+        "optional_provider_failures_do_not_block_draft",
+        "write_is_a_typed_proposal",
+        "user_confirmation_precedes_any_effect",
+        "room_binding_is_not_synthesized"
+      ],
+      "checkpointPolicyRef": "checkpoint.standard",
+      "hookPolicyRefs": [
+        "platform.audit",
+        "platform.permission_revalidation",
+        "platform.prompt_injection_isolation",
+        "platform.budget_enforcement",
+        "platform.before_complete"
+      ],
+      "verifierRefs": [
+        "platform.verifier.goal_satisfaction",
+        "platform.verifier.tool_receipt"
+      ],
+      "stopRules": [
+        "definition_of_done_satisfied",
+        "waiting_user_choice",
+        "waiting_user_confirmation",
+        "blocked"
+      ],
+      "assetDigest": "sha256:fc37159e6aa54a94dd3a3febd2f5a17522a290f436a2a80b56aee865d9684cff"
     }
   ],
   "triggerProfiles": [

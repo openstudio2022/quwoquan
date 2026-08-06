@@ -7,14 +7,14 @@ paths:
     /internal/search/account-closure/dead-letters:recover:
         post:
             operationId: RecoverSearchAccountClosureDeadLetter
-            x-contract-operation-id: search.recent_search_state.RecoverSearchAccountClosureDeadLetter
-            x-object-id: search.recent_search_state
+            x-contract-operation-id: search.search_request_fact.RecoverSearchAccountClosureDeadLetter
+            x-object-id: search.search_request_fact
             x-actor: none
             x-application:
                 kind: command
-                facet: RecentSearchAccountClosureRecoveryCommandFacet
-                method: recoverAccountClosureDeadLetter
-                aggregateOwner: RecentSearchState
+                facet: SearchRequestAccountClosureRecoveryCommandFacet
+                method: recoverDeadLetter
+                lifecycleOwner: SearchRequestFact
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -29,8 +29,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SearchAccountClosureDeadLetterRecoveryRequest'
             responses:
-                "200":
-                    description: OK
+                "202":
+                    description: Accepted
                     content:
                         application/json:
                             schema:

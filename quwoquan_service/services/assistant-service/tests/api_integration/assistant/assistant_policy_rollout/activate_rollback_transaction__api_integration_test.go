@@ -1,10 +1,13 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001
+// readiness_case: activate-assistant-policy-rollout-api
+// readiness_case: rollback-assistant-policy-rollout-api
 package api_integration
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +25,7 @@ import (
 	rollouthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/adapters/inbound/http"
 	rolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
 	rolloutmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
+	rolloutports "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/ports"
 	rolloutpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/infrastructure/persistence"
 )
 
@@ -118,6 +122,79 @@ func TestAssistantPolicyRolloutActivatesAndRollsBackWithCASReceiptsAndOutbox(t *
 	}
 	assertPolicyRolloutCount(t, runtime, "assistant_policy_rollout_receipts", 3)
 	assertPolicyRolloutCount(t, runtime, "assistant_policy_rollout_outbox", 3)
+
+	// Keep one source event pending so the due-time and owner fence are tested
+	// against real MongoDB rather than a fixture implementation.
+	if _, err := runtime.Database.Collection("assistant_policy_rollout_outbox").UpdateMany(
+		startupCtx,
+		bson.M{"_id": bson.M{"$ne": "activate-baseline"}},
+		bson.M{"$set": bson.M{"publishedAt": time.Now().UTC()}},
+	); err != nil {
+		t.Fatalf("isolate rollout outbox retry event: %v", err)
+	}
+	claimAt := time.Now().UTC().Add(time.Minute)
+	event, found, err := rolloutStore.ClaimPendingOutbox(
+		startupCtx, "rollout-owner-a", claimAt, time.Minute,
+	)
+	if err != nil || !found || event.EventID != "activate-baseline" ||
+		event.AttemptCount != 1 {
+		t.Fatalf("claim rollout outbox event=%+v found=%t err=%v", event, found, err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(event.Payload, &payload); err != nil {
+		t.Fatalf("decode rollout event payload: %v", err)
+	}
+	if len(payload) != 5 || payload["policyId"] != "assistant-default" ||
+		payload["revision"] != float64(1) || payload["status"] != "active" ||
+		payload["activatedAt"] == nil || payload["assignments"] == nil {
+		t.Fatalf("rollout event payload is not the exact contract: %v", payload)
+	}
+	retryAt := claimAt.Add(5 * time.Second)
+	if err := rolloutStore.ScheduleOutboxRetry(
+		startupCtx, event.EventID, "rollout-owner-a", claimAt,
+		retryAt, "transport_unavailable",
+	); err != nil {
+		t.Fatalf("schedule rollout outbox retry: %v", err)
+	}
+	if _, found, err := rolloutStore.ClaimPendingOutbox(
+		startupCtx, "rollout-owner-b", retryAt.Add(-time.Millisecond), time.Minute,
+	); err != nil || found {
+		t.Fatalf("claim before nextAttemptAt found=%t err=%v", found, err)
+	}
+	retried, found, err := rolloutStore.ClaimPendingOutbox(
+		startupCtx, "rollout-owner-b", retryAt, 10*time.Second,
+	)
+	if err != nil || !found || retried.EventID != event.EventID || retried.AttemptCount != 2 {
+		t.Fatalf("claim due rollout retry=%+v found=%t err=%v", retried, found, err)
+	}
+	if err := rolloutStore.MarkOutboxPublished(
+		startupCtx, retried.EventID, "rollout-owner-a", "wrong-owner", retryAt,
+	); !errors.Is(err, rolloutports.ErrOutboxClaimLost) {
+		t.Fatalf("wrong owner checkpoint error=%v, want claim lost", err)
+	}
+	expiredAt := retryAt.Add(10 * time.Second)
+	if err := rolloutStore.ScheduleOutboxRetry(
+		startupCtx, retried.EventID, "rollout-owner-b", expiredAt,
+		expiredAt.Add(time.Second), "expired_owner",
+	); !errors.Is(err, rolloutports.ErrOutboxClaimLost) {
+		t.Fatalf("expired owner retry error=%v, want claim lost", err)
+	}
+	if err := rolloutStore.MarkOutboxPublished(
+		startupCtx, retried.EventID, "rollout-owner-b", "expired-owner", expiredAt,
+	); !errors.Is(err, rolloutports.ErrOutboxClaimLost) {
+		t.Fatalf("expired owner checkpoint error=%v, want claim lost", err)
+	}
+	takeover, found, err := rolloutStore.ClaimPendingOutbox(
+		startupCtx, "rollout-owner-c", expiredAt, time.Minute,
+	)
+	if err != nil || !found || takeover.EventID != retried.EventID || takeover.AttemptCount != 3 {
+		t.Fatalf("expired lease takeover=%+v found=%t err=%v", takeover, found, err)
+	}
+	if err := rolloutStore.MarkOutboxPublished(
+		startupCtx, takeover.EventID, "rollout-owner-c", "stream-1", expiredAt,
+	); err != nil {
+		t.Fatalf("acknowledge rollout outbox: %v", err)
+	}
 }
 
 func rolloutPolicyRelease(t *testing.T, variant string) releasemodel.Release {

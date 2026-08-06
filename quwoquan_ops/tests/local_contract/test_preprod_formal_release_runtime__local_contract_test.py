@@ -46,7 +46,9 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             self.assertIn(environment_name, environment["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"])
             self.assertNotIn("AUTH", environment)
 
-    def test_alpha_and_beta_formal_up_share_exact_candidate_path(self) -> None:
+    def test_alpha_and_beta_formal_up_blocks_without_full_release_oci_closure(
+        self,
+    ) -> None:
         composition = {
             "candidateId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
@@ -75,6 +77,33 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                 )
                 report_dir = Path(temp) / "report"
                 runtime = {"content-service": {"ref": "exact", "digest": DIGEST}}
+                active_candidate_patcher = mock.patch.object(
+                    stackctl,
+                    "active_deployment_candidate_snapshot",
+                    return_value={
+                        "schema": "qwq.deployment_candidate_pointer",
+                        "candidateType": "full",
+                        "target": target_name,
+                        "baselineId": DIGEST,
+                        "candidateDir": stackctl.deployment_candidate_dir(
+                            target_name,
+                            DIGEST,
+                        ),
+                        "manifest": {
+                            "environment": target_name.removesuffix("-local"),
+                            "target": target_name,
+                            "baselineId": DIGEST,
+                        },
+                    },
+                )
+                active_candidate = active_candidate_patcher.start()
+                self.addCleanup(active_candidate_patcher.stop)
+                assert_candidate_patcher = mock.patch.object(
+                    stackctl,
+                    "assert_active_deployment_candidate_snapshot",
+                )
+                assert_candidate = assert_candidate_patcher.start()
+                self.addCleanup(assert_candidate_patcher.stop)
                 with (
                     mock.patch.object(
                         stackctl,
@@ -106,13 +135,18 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     ),
                     mock.patch.object(
                         stackctl,
-                        "load_product_telemetry_log_sink",
+                        "_load_active_product_telemetry_log_sink",
                         return_value=telemetry,
                     ),
                     mock.patch.object(
                         stackctl,
                         "_local_stack_operation_lock",
                         return_value=contextlib.nullcontext(),
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "load_startup_attempt",
+                        return_value=None,
                     ),
                     mock.patch.object(stackctl, "assert_local_runtime_available"),
                     mock.patch.object(
@@ -128,12 +162,58 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                         "_optional_product_telemetry_environment",
                         return_value=({}, ""),
                     ),
+                    mock.patch.multiple(
+                        stackctl,
+                        _candidate_bindings_from_snapshot=mock.Mock(
+                            return_value=(
+                                {
+                                    "candidateRoot": Path(temp),
+                                    "providerRuntime": {"composition": {}},
+                                    "composition": {},
+                                },
+                                {
+                                    "candidateRoot": Path(temp),
+                                    "composition": {},
+                                },
+                            ),
+                        ),
+                        _provider_runtime_launch_environment=mock.Mock(
+                            return_value={
+                                "QWQ_PROVIDER_RUNTIME_DIGEST": DIGEST,
+                            }
+                        ),
+                        _active_observability_log_sink=mock.Mock(
+                            return_value={
+                                "candidateRoot": Path(temp),
+                                "composition": {},
+                            }
+                        ),
+                        _observability_log_sink_launch_environment=mock.Mock(
+                            return_value={
+                                "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE": str(
+                                    Path(temp) / "elasticsearch.compose.yaml"
+                                ),
+                                "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": DIGEST,
+                                "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": (
+                                    "http://elasticsearch:9200"
+                                ),
+                            }
+                        ),
+                    ),
                     mock.patch.object(
                         stackctl,
                         "_bind_formal_local_release_provider_environment",
                         return_value=None,
                     ) as bind_provider,
-                    mock.patch.object(stackctl, "run", return_value=completed()),
+                    mock.patch.multiple(
+                        stackctl,
+                        run=mock.Mock(return_value=completed()),
+                        _write_summary_bundle=mock.Mock(),
+                        relpath=mock.Mock(side_effect=str),
+                        activate_search_experiment_policy=mock.Mock(
+                            return_value={"status": "passed"}
+                        ),
+                    ),
                     mock.patch.object(
                         stackctl,
                         "_bind_gamma_release_image_refs",
@@ -147,24 +227,26 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                         "_inspect_gamma_release_runtime",
                         return_value=runtime,
                     ) as inspect_runtime,
-                    mock.patch.object(stackctl, "_write_summary_bundle"),
-                    mock.patch.object(stackctl, "relpath", side_effect=str),
                 ):
                     result = stackctl.command_up(args)
 
-                self.assertEqual(result["exitCode"], 0)
+                self.assertEqual(result["exitCode"], 2, result)
+                self.assertIn(
+                    "complete first-party and Provider OCI composition",
+                    "\n".join(result["details"]),
+                )
                 bind_provider.assert_called_once()
-                bind_candidate.assert_called_once()
-                inspect_runtime.assert_called_once_with(composition, mock.ANY)
-                command = run_runtime.call_args.args[0]
-                self.assertIn("--formal-release", command)
-                self.assertIn("--skip-build", command)
+                active_candidate.assert_called_once_with(target_name)
+                assert_candidate.assert_called()
+                bind_candidate.assert_not_called()
+                run_runtime.assert_not_called()
+                inspect_runtime.assert_not_called()
 
                 report = json.loads((report_dir / "report.json").read_text())
                 self.assertTrue(report["formalRelease"])
                 self.assertEqual(report["runtimeMode"], "immutable-oci")
-                self.assertEqual(report["runtimeCandidateDigest"], DIGEST)
-                self.assertEqual(report["runtimeImages"], runtime)
+                self.assertEqual(report["runtimeCandidateDigest"], "")
+                self.assertEqual(report["runtimeImages"], {})
                 self.assertFalse(report["destructiveRepairPerformed"])
 
     def test_formal_candidate_images_pull_concurrently_before_binding(self) -> None:
@@ -301,7 +383,9 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
         self.assertTrue(both_started.is_set())
         self.assertEqual(list(runtime), ["service-a", "service-b"])
 
-    def test_formal_down_targets_only_candidate_scoped_compose_project(self) -> None:
+    def test_formal_down_blocks_until_release_owns_full_oci_and_receipt(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             manifest_path = root / "manifest.json"
@@ -365,33 +449,23 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                 ),
                 mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
                 mock.patch.object(stackctl, "run", return_value=completed()) as run,
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_network_ports_released",
+                    return_value=[],
+                ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
                 mock.patch.object(stackctl, "relpath", side_effect=str),
             ):
                 result = stackctl.command_down(args)
 
-        self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(
-            run.call_args.args[0],
-            [
-                "bash",
-                "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
-                "--down",
-                "--formal-release-teardown",
-            ],
+        self.assertEqual(result["exitCode"], 2, result)
+        self.assertIn(
+            "complete first-party and Provider OCI composition",
+            "\n".join(result["details"]),
         )
-        self.assertEqual(
-            run.call_args.kwargs["env"]["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"],
-            "candidate-project",
-        )
-        self.assertRegex(
-            run.call_args.kwargs["env"]["LOCAL_GAMMA_IMAGE_VERSION"],
-            r"^sha256:[0-9a-f]{64}$",
-        )
-        self.assertEqual(
-            run.call_args.kwargs["env"]["LOCAL_GAMMA_CONTENT_SERVICE_IMAGE"],
-            f"ghcr.io/owner/repo/content-service@{DIGEST}",
-        )
+        self.assertIn("exact startup receipt/Compose project", result["details"][0])
+        run.assert_not_called()
 
     def test_health_fails_fast_without_running_downstream_integration_probe(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

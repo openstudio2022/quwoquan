@@ -15,11 +15,12 @@ var (
 type TargetType string
 
 const (
-	TargetPost    TargetType = "post"
-	TargetComment TargetType = "comment"
-	TargetUser    TargetType = "user"
-	TargetCircle  TargetType = "circle"
-	TargetMessage TargetType = "message"
+	TargetPost      TargetType = "post"
+	TargetComment   TargetType = "comment"
+	TargetUser      TargetType = "user"
+	TargetCircle    TargetType = "circle"
+	TargetGathering TargetType = "gathering"
+	TargetMessage   TargetType = "message"
 )
 
 type Reason string
@@ -45,11 +46,12 @@ const (
 type Resolution string
 
 const (
-	ResolutionWarn          Resolution = "warn"
-	ResolutionDeleteContent Resolution = "delete_content"
-	ResolutionSuspendUser   Resolution = "suspend_user"
-	ResolutionBan           Resolution = "ban"
-	ResolutionDismiss       Resolution = "dismiss"
+	ResolutionWarn               Resolution = "warn"
+	ResolutionDeleteContent      Resolution = "delete_content"
+	ResolutionSuspendUser        Resolution = "suspend_user"
+	ResolutionTerminateGathering Resolution = "terminate_gathering"
+	ResolutionBan                Resolution = "ban"
+	ResolutionDismiss            Resolution = "dismiss"
 )
 
 // Snapshot 是 domain 与 persistence mapper 之间的无标签状态快照。
@@ -311,7 +313,7 @@ func (r *Report) validate() error {
 
 func validTargetType(value TargetType) bool {
 	switch value {
-	case TargetPost, TargetComment, TargetUser, TargetCircle, TargetMessage:
+	case TargetPost, TargetComment, TargetUser, TargetCircle, TargetGathering, TargetMessage:
 		return true
 	default:
 		return false
@@ -341,6 +343,7 @@ func validResolution(value Resolution) bool {
 	case ResolutionWarn,
 		ResolutionDeleteContent,
 		ResolutionSuspendUser,
+		ResolutionTerminateGathering,
 		ResolutionBan,
 		ResolutionDismiss:
 		return true

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -16,6 +17,7 @@ type assistantContractSchema struct {
 	Version       string                                `yaml:"version"`
 	Kind          string                                `yaml:"kind"`
 	Imports       []string                              `yaml:"imports"`
+	RefImports    map[string]string                     `yaml:"ref_imports"`
 	Fields        []assistantContractField              `yaml:"fields"`
 	Subcontracts  map[string]assistantSubcontractSchema `yaml:"subcontracts"`
 	MapStableKeys map[string][]string                   `yaml:"map_stable_keys,omitempty"`
@@ -50,6 +52,16 @@ type assistantSchemaCodec struct {
 	inputName    string
 	pathAware    bool
 }
+
+// App-owned Assistant libraries the renderer must import by name. These mirror
+// the `library_path` values in the Assistant contracts and follow the App object
+// tree layout `service/assistant_service/assistant/<object>/domain/`.
+const (
+	assistantRuntimeEnumsLibrary = "service/assistant_service/assistant/assistant_run/domain/runtime_enums.dart"
+	assistantTurnContractLibrary = "service/assistant_service/assistant/assistant_turn_view/domain/assistant_turn_contract.dart"
+	assistantContextFillLibrary  = "service/assistant_service/assistant/assistant_run/domain/context_fill_contract.dart"
+	assistantMapPartitionLibrary = "service/assistant_service/assistant/assistant_run/domain/run_artifacts_map_partition.dart"
+)
 
 var (
 	assistantJSONSchemaCodec = assistantSchemaCodec{
@@ -226,13 +238,13 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 			importsSet[trimmed] = true
 			hasRuntimeEnumImport = hasRuntimeEnumImport ||
 				strings.HasSuffix(trimmed, "assistant_runtime_enums.g.dart") ||
-				strings.HasSuffix(trimmed, "assistant/contracts/runtime_enums.dart")
+				strings.HasSuffix(trimmed, assistantRuntimeEnumsLibrary)
 		}
 	}
 	if assistantSchemaNeedsRuntimeEnums(schema) &&
 		!hasRuntimeEnumImport &&
-		!importsSet["package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart"] &&
-		!importsSet["package:quwoquan_app/assistant/contracts/context_fill_contract.dart"] {
+		!importsSet["package:quwoquan_app/"+assistantTurnContractLibrary] &&
+		!importsSet["package:quwoquan_app/"+assistantContextFillLibrary] {
 		importsSet["package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart"] = true
 	}
 	for _, field := range schema.Fields {
@@ -243,15 +255,29 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 		if _, ok := schema.Subcontracts[ref]; ok {
 			continue
 		}
+		if override := strings.TrimSpace(schema.RefImports[ref]); override != "" {
+			importsSet[override] = true
+			continue
+		}
+		if assistantSchemaIsCloudPackageOwned(schema) &&
+			assistantPackageOwnedContractType(ref) {
+			continue
+		}
 		if importsSet[packageOwner] && assistantPackageOwnedContractType(ref) {
 			continue
 		}
 		if libraryPath, ok := index.libraryByClass[ref]; ok && libraryPath != schema.LibraryPath {
-			importsSet["package:quwoquan_app/"+libraryPath] = true
+			if importsSet[packageOwner] && strings.HasPrefix(
+				libraryPath,
+				"package:quwoquan_cloud_contracts/",
+			) {
+				continue
+			}
+			importsSet[assistantReferencedLibraryImport(schema, libraryPath)] = true
 		}
 	}
 	if assistantSchemaUsesPartitionedMap(schema) {
-		importsSet["package:quwoquan_app/assistant/contracts/run_artifacts_map_partition.dart"] = true
+		importsSet["package:quwoquan_app/"+assistantMapPartitionLibrary] = true
 	}
 	var imports []string
 	for imp := range importsSet {
@@ -259,6 +285,46 @@ func assistantCollectContractImports(schema *assistantContractSchema, index *ass
 	}
 	sort.Strings(imports)
 	return imports
+}
+
+func assistantSchemaIsCloudPackageOwned(schema *assistantContractSchema) bool {
+	return schema != nil && strings.HasPrefix(
+		strings.TrimSpace(schema.LibraryPath),
+		"package:quwoquan_cloud_contracts/",
+	)
+}
+
+func assistantReferencedLibraryImport(
+	schema *assistantContractSchema,
+	libraryPath string,
+) string {
+	target := strings.TrimSpace(libraryPath)
+	if !strings.HasPrefix(target, "package:") {
+		return "package:quwoquan_app/" + target
+	}
+	current := ""
+	if schema != nil {
+		current = strings.TrimSpace(schema.LibraryPath)
+	}
+	currentPackage, currentPath, currentOK := assistantPackageLibraryParts(current)
+	targetPackage, targetPath, targetOK := assistantPackageLibraryParts(target)
+	if currentOK && targetOK && currentPackage == targetPackage &&
+		path.Dir(currentPath) == path.Dir(targetPath) {
+		return path.Base(targetPath)
+	}
+	return target
+}
+
+func assistantPackageLibraryParts(value string) (string, string, bool) {
+	trimmed := strings.TrimPrefix(strings.TrimSpace(value), "package:")
+	if trimmed == value {
+		return "", "", false
+	}
+	parts := strings.SplitN(trimmed, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 func assistantPackageOwnedContractType(name string) bool {

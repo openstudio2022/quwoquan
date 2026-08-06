@@ -22,6 +22,9 @@ from governance.coverage.distribution import (
     load_content_distribution_policy,
 )
 
+from content.execution.pre_acquisition_handoff import (
+    guard_acquisition_source_identity,
+)
 from content.source.professional_video_popularity import (
     apply_popularity_percentiles,
     initial_popularity_signals,
@@ -418,6 +421,8 @@ def _plan_spec(row: Mapping[str, Any], *, receipt_ref: str, publication: str) ->
 def acquire_professional_videos(
     manifest_path: Path,
     *,
+    handoff_ref: Path,
+    repo_root: Path | None = None,
     manual_root: Path | None = None,
     output_root: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
@@ -427,6 +432,11 @@ def acquire_professional_videos(
     if not isinstance(manifest, dict):
         raise TypeError("professional video acquisition manifest must be an object")
     assert_valid(manifest, "source", "professional_video_acquisition_manifest", label="professional video acquisition manifest")
+    guard_acquisition_source_identity(
+        manifest,
+        handoff_ref=handoff_ref,
+        repo_root=repo_root,
+    )
     if not manifest["items"]:
         raise ValueError("professional video acquisition manifest must contain items")
     asset_ids = [str(item["assetId"]) for item in manifest["items"]]

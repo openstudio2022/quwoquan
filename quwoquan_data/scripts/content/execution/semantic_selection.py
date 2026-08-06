@@ -29,6 +29,7 @@ def resolve_frozen_semantic_selection(
     requested_selection_id: object,
     retry_of: str | None,
 ) -> SemanticExecutionBinding:
+    del retry_of  # Existing manifests, not first use, define retry/rebind safety.
     requested = (
         normalize_semantic_selection_id(requested_selection_id)
         if requested_selection_id not in (None, "")
@@ -46,13 +47,6 @@ def resolve_frozen_semantic_selection(
     else:
         selection_id = requested or DEFAULT_SEMANTIC_SELECTION_ID
     binding = semantic_execution_binding(recipe, selection_id)
-    if selection_id != DEFAULT_SEMANTIC_SELECTION_ID:
-        profile = str(recipe.get("runtimeProfile") or "").strip()
-        explicit = load_runtime_policy(profile).explicit_semantic_selection(selection_id)
-        if explicit.requires_new_retry_of and retry_of is None:
-            raise ValueError(
-                "explicit semantic selection requires a new execution with retryOf"
-            )
     return binding
 
 

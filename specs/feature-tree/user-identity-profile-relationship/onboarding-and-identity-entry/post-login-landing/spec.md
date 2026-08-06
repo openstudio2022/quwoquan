@@ -47,9 +47,9 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/lib/core/auth/auth_session.dart`
-- canonical：`quwoquan_app/lib/core/auth/auth_continuation.dart`
-- canonical：`quwoquan_app/lib/ui/user/pages/login_page.dart`
+- canonical：`quwoquan_app/lib/runtime/auth/auth_session.dart`
+- canonical：`quwoquan_app/lib/runtime/auth/auth_continuation.dart`
+- canonical：`quwoquan_app/lib/service/user_service/account/account_session/presentation/login_page.dart`
 
 ## 5. 验收场景
 

@@ -26,10 +26,6 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.AssistantPolicyCohortAssignment
-capabilities:
-- versioned
-- auditable
-- idempotent_commands
 business_rules:
 - cohort 名称唯一且权重总和必须为 10000 basis points
 - 每个 cohort 必须且只能映射到同 policyId 下已 staged 的 releaseDigest
@@ -41,13 +37,6 @@ lifecycle:
   states:
   - active
   initial: active
-  transitions:
-  - - active
-    - active
-    - ActivateAssistantPolicyRollout
-  - - active
-    - active
-    - RollbackAssistantPolicyRollout
   optimistic_concurrency: revision
   idempotency: command_receipt
 members:

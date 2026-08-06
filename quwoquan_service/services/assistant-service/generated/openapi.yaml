@@ -77,8 +77,8 @@ paths:
             x-actor: persona
             x-application:
                 kind: command
-                facet: AssistantLearningFactAppendSink
-                method: appendUserFact
+                facet: AssistantLearningFactAppender
+                method: append
                 appendSink: AssistantLearningFact
             parameters:
                 - name: Idempotency-Key
@@ -547,16 +547,16 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /assistant/runs/{runId}/tool-uses/{toolUseId}/continue:
+    /assistant/runs/{runId}/tool-invocations/{toolInvocationId}/approval:
         post:
-            operationId: ContinueAssistantToolUse
-            x-contract-operation-id: assistant.assistant_run.ContinueAssistantToolUse
+            operationId: ApproveAssistantToolUse
+            x-contract-operation-id: assistant.assistant_run.ApproveAssistantToolUse
             x-object-id: assistant.assistant_run
             x-actor: persona
             x-application:
                 kind: command
                 facet: AssistantRunCommandFacade
-                method: continueToolUse
+                method: approveToolUse
                 aggregateOwner: AssistantRun
             parameters:
                 - name: runId
@@ -564,7 +564,7 @@ paths:
                   required: true
                   schema:
                     type: string
-                - name: toolUseId
+                - name: toolInvocationId
                   in: path
                   required: true
                   schema:
@@ -580,7 +580,56 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AssistantContinueToolUseRequest'
+                            $ref: '#/components/schemas/AssistantApproveToolUseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AssistantToolApprovalResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /assistant/runs/{runId}/tool-invocations/{toolInvocationId}/device-action-receipt:
+        post:
+            operationId: SubmitDeviceActionReceipt
+            x-contract-operation-id: assistant.assistant_run.SubmitDeviceActionReceipt
+            x-object-id: assistant.assistant_run
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: AssistantRunCommandFacade
+                method: submitDeviceActionReceipt
+                aggregateOwner: AssistantRun
+            parameters:
+                - name: runId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: toolInvocationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AssistantSubmitDeviceActionReceiptRequest'
             responses:
                 "200":
                     description: OK
@@ -735,8 +784,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/AssistantStartRunRequest'
             responses:
-                "200":
-                    description: OK
+                "201":
+                    description: Created
                     content:
                         application/json:
                             schema:
@@ -1555,45 +1604,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /internal/assistant/learning/facts:
-        post:
-            operationId: AppendAssistantServiceLearningFact
-            x-contract-operation-id: assistant.assistant_learning_fact.AppendAssistantServiceLearningFact
-            x-object-id: assistant.assistant_learning_fact
-            x-actor: account
-            x-application:
-                kind: command
-                facet: AssistantLearningFactAppendSink
-                method: appendServiceFact
-                appendSink: AssistantLearningFact
-            parameters:
-                - name: Idempotency-Key
-                  in: header
-                  required: true
-                  description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/AppendAssistantServiceLearningFactRequest'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AssistantLearningFactReceipt'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
     /internal/assistant/policy-releases:
         post:
             operationId: StageAssistantPolicyRelease
@@ -1887,15 +1897,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ActivateSkillPackageCommand
             x-contract-placeholder: true
-        AppendAssistantServiceLearningFactRequest:
+        AssistantApproveToolUseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AppendAssistantServiceLearningFactRequest
-            x-contract-placeholder: true
-        AssistantContinueToolUseRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AssistantContinueToolUseRequest
+            x-contract-entity: AssistantApproveToolUseRequest
             x-contract-placeholder: true
         AssistantCreateSessionRequest:
             type: object
@@ -1987,10 +1992,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantStreamEventWire
             x-contract-placeholder: true
+        AssistantSubmitDeviceActionReceiptRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantSubmitDeviceActionReceiptRequest
+            x-contract-placeholder: true
         AssistantTaskSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantTaskSlice
+            x-contract-placeholder: true
+        AssistantToolApprovalResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantToolApprovalResult
             x-contract-placeholder: true
         AssistantTurnListView:
             type: object

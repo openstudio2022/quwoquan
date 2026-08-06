@@ -38,8 +38,8 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#isBottomNavRootLocation`
-- canonical：`quwoquan_app/lib/app/navigation/native_back_navigation.dart#rootExitGuardWindow`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#isBottomNavRootLocation`
+- canonical：`quwoquan_app/lib/runtime/shell/navigation/native_back_navigation.dart#rootExitGuardWindow`
 
 ## 5. 验收场景
 

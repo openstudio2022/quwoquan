@@ -262,3 +262,52 @@ types:
           - NULLABLE
         client_dart_type: String?
         client_normalization: trim_to_null
+  GrantGatheringSafetyTerminationRequest:
+    description: 由受信 Trust & Safety operator 为已结案 Gathering Report 签发的短期执行授权。
+    fields:
+      - {name: reportId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_36], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: expectedReportVersion, type: int64, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_64], classification: PII, log_policy: hash, api_exposure: write, ops_exposure: mask}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RevokeGatheringSafetyTerminationRequest:
+    description: 撤销同一 Report 已签发的 Gathering 安全终止授权。
+    fields:
+      - {name: reportId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_36], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: decisionRef, type: string, constraints: [NOT_BLANK, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+  AuthorizeGatheringSafetyTerminationRequest:
+    description: Circle 使用服务身份校验 caller 与不可变 Trust & Safety 决定的精确绑定。
+    fields:
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_64], classification: PII, log_policy: hash, api_exposure: write, ops_exposure: mask}
+      - {name: gatheringId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_64], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: action, type: enum, enum_ref: GatheringSafetyAction, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: evidenceRef, type: string, constraints: [NOT_BLANK, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: decisionRef, type: string, constraints: [NOT_BLANK, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: read}
+  GatheringSafetyTerminationGrantResult:
+    description: 短 TTL、可撤销且绑定 actor/gathering/action/evidence 的不可变授权决定。
+    fields:
+      - {name: actorPersonaId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_64], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: mask}
+      - {name: gatheringId, type: string, constraints: [NOT_BLANK, MAX_LENGTH_64], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: action, type: enum, enum_ref: GatheringSafetyAction, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: evidenceRef, type: string, constraints: [NOT_BLANK, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: decisionRef, type: string, constraints: [NOT_BLANK, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: decisionVersion, type: int64, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: decisionDigest, type: string, constraints: [NOT_BLANK, MAX_LENGTH_64], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: revokedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replayed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  GatheringSafetyTerminationAuthoritySlice:
+    description: 只向 Circle 返回是否允许；拒绝时省略决定细节，避免泄露审核理由。
+    fields:
+      - {name: allowed, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: actorPersonaId, type: string, constraints: [NULLABLE, MAX_LENGTH_64], classification: PII, log_policy: hash, api_exposure: read, ops_exposure: mask}
+      - {name: gatheringId, type: string, constraints: [NULLABLE, MAX_LENGTH_64], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: action, type: enum, enum_ref: GatheringSafetyAction, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: evidenceRef, type: string, constraints: [NULLABLE, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: decisionRef, type: string, constraints: [NULLABLE, MAX_LENGTH_192], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: decisionVersion, type: int64, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: decisionDigest, type: string, constraints: [NULLABLE, MAX_LENGTH_64], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: revokedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+enums:
+  GatheringSafetyAction:
+    values: [terminate_gathering]

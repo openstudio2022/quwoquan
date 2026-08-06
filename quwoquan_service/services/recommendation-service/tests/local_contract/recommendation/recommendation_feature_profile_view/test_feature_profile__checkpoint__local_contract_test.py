@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
 from datetime import datetime, timezone
 
 import pytest

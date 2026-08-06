@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/comment"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
 	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
-	"quwoquan_service/runtime/commandmeta"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 )
 

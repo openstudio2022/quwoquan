@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-003
+// readiness_case: create-skill-data-control-request-local
+// readiness_case: confirm-skill-data-control-request-local
+// readiness_case: get-skill-data-control-request-local
 package local_contract
 
 import (

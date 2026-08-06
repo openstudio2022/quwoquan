@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+// readiness_case: create-homepage-review-local
+// readiness_case: update-homepage-review-local
+// readiness_case: delete-homepage-review-local
+// readiness_case: list-homepage-reviews-local
+// readiness_case: get-my-homepage-review-local
 package local_contract
 
 import (

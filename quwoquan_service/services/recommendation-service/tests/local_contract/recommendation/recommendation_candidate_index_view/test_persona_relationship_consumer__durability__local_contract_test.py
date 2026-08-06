@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
+# readiness_case: project-candidate-persona-relationship-local
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.persona_relationship_consumer import (
     CONSUMER_GROUP,
     PERSONA_RELATIONSHIP_STREAM,

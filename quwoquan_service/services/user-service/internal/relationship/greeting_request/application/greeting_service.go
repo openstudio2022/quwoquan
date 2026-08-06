@@ -31,6 +31,8 @@ type GreetingStreamEvent struct {
 	TargetPersonaID              string
 	Source                       string
 	PromotedConversationID       string
+	ExpireAt                     string
+	DecisionAt                   string
 	TargetAllowsStrangerGreeting bool
 	OccurredAt                   time.Time
 }

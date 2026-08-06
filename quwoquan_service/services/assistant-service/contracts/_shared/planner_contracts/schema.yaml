@@ -1,6 +1,6 @@
 dart_class: SlotFillPlanDto
-library_path: assistant/contracts/planner_contracts.dart
-output_path: assistant/generated/contracts/planner_contracts.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/planner_contracts.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/planner_contracts.g.dart
 contract: planner_contracts
 kind: runtime_protocol_contract
 fields:

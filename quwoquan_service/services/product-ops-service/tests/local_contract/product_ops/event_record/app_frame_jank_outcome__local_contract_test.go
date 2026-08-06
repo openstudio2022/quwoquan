@@ -9,6 +9,7 @@ import (
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
 )
 
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-001
 func TestFrameJankOutcomeAcceptsZeroJankyFramesAndRejectsNegativeValues(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
 	service := application.NewTelemetryService(store, store)

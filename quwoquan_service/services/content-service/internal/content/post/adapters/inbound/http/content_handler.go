@@ -227,6 +227,9 @@ type ReportHTTPHandler interface {
 	BeginReview(http.ResponseWriter, *http.Request)
 	Dismiss(http.ResponseWriter, *http.Request)
 	Resolve(http.ResponseWriter, *http.Request)
+	GrantGatheringSafetyTermination(http.ResponseWriter, *http.Request)
+	RevokeGatheringSafetyTermination(http.ResponseWriter, *http.Request)
+	AuthorizeGatheringSafetyTermination(http.ResponseWriter, *http.Request)
 }
 
 type outboundShareHTTPHandler interface {
@@ -448,11 +451,7 @@ func (h *ContentHandler) handleBehaviorAttributionMetrics(w http.ResponseWriter,
 	}
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
-		writeHTTPError(w, r, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "metrics_unavailable"),
-			"推荐指标暂不可用",
-			err.Error(),
-		))
+		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("behavior attribution metrics gather: "+err.Error()))
 		return
 	}
 	series := make([]behaviorAttributionMetricSeries, 0)

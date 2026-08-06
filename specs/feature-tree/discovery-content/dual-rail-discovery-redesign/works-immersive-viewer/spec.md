@@ -77,7 +77,7 @@
 <a id="req-009"></a>
 ### REQ-009 图片适配不得改变文章翻页引擎边界
 
-- `components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 是文章翻页唯一实现边界。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配另建文章翻页主线、诊断坐标链或改写同步 `completeAnimation` 时序。
+- `design_system/pageflip/**` 与 `content/content/post/presentation/article_reader/pageflip/**` 是文章翻页唯一实现边界。本 Story 不抽取新 DeckHost、painter、partition 或通用纹理类型，也不得为了图片适配另建文章翻页主线、诊断坐标链或改写同步 `completeAnimation` 时序。
 - 文章 portrait BACK 使用 Route-B：L0 为完整的 current/right underlay；L1 为唯一的 previous moving leaf，并在同一个 `Positioned + Transform.rotate + ClipPath` surface 中按 `ArticlePageBackwardLeafFrame` 切分 recto/front 与 verso/back。禁止 previous-front page-space replacement、独立 front/back 平面或额外 moving sheet。文章和图片在任意帧都只能出现一个 moving leaf、一条 seam/fold 与一条 free edge。
 - 图片 moving sheet 每帧只绘制一张完整页面 front 或 back 材质。禁止两个纹理子页重叠、对子纹理使用 `FractionallySizedBox` 压缩、重复完整纹理起点，或以黑色/舞台底色填补本应由背面材质覆盖的区域。
 - release 完成时，媒体适配层必须与文章一样强制应用 animation plan 最后一帧，再同步 `completeAnimation` 和 page index；动态 bottom 与目标静态页须同源。图片加载状态继续冻结到落平后的首个静态帧，随后才应用排队状态。
@@ -109,7 +109,7 @@
 - 解码槽位等待、媒体源解析与原生播放器初始化共享一个 6 秒总预算；切集、返回、取消和 dispose 必须释放 controller 与槽位。
 - 当前项可在全局解码预算允许时预热唯一 N+1 项的同源封面与媒体源；当前项永远优先，N+1 不自动播放，方向变更、切集、离开或内存压力必须立即取消并释放槽位。
 - 等待时保留同源封面、返回与更多操作；300ms 后显示媒体区域内紧凑进度，3 秒显示“还在加载，请稍候”，6 秒切换到唯一恢复组错误且不保留动画。
-- 可恢复播放故障进入 `reloadLater` 并提供“重新加载”；明确不支持播放进入 `contentUnavailable` 并提供“返回”。单个视频失败只替换媒体区域，不遮挡作品浏览器。
+- 未被分类的临时播放故障进入 `reloadLater` 并提供“重新加载”；明确不支持播放进入 `contentUnavailable` 并提供“返回”。单个视频失败只替换媒体区域，不遮挡作品浏览器。
 
 <a id="req-014"></a>
 ### REQ-014 文章阅读器运营闭环与远端恢复
@@ -131,7 +131,7 @@
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml#entityRefs`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_slice.yaml#ContentPostDetailSlice`
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail`
-- canonical：`quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart`
+- canonical：`quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart`
 
 ## 5. 验收场景
 

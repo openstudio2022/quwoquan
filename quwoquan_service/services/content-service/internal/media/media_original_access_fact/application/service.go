@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	originalaccesserrors "quwoquan_service/services/content-service/generated/media/media_original_access_fact"
-	"quwoquan_service/runtime/commandmeta"
 	mediaassetports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 	originalaccessmodel "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/model"
 	originalaccessports "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/ports"
@@ -213,5 +214,5 @@ func unavailable(err error) error {
 	if errors.As(err, &appError) {
 		return appError
 	}
-	return rterr.NewUnavailable(rterr.ModuleContent, "媒体服务暂时不可用", err.Error())
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 }

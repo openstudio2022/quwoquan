@@ -87,10 +87,7 @@ func TestContractFixtureSeed_EntityReadsViaHandler(t *testing.T) {
 			t.Errorf("close real MongoDB: %v", closeErr)
 		}
 	})
-	store := homepagepersistence.NewMongoHomepageStore(
-		mongoRuntime.Database,
-		mongoRuntime.ReplicaSet != "",
-	)
+	store := homepagepersistence.NewMongoHomepageStore(mongoRuntime.Database)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure homepage indexes: %v", err)
 	}

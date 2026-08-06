@@ -10,7 +10,6 @@ access:
   cross_context: event_only
   queries: named_reader
 relationships: []
-capabilities: [append_only, queryable]
 taggable: false
 vector_enabled: false
 business_rules:

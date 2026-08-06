@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
@@ -17,6 +18,10 @@ SCHEMAS = METADATA / "_schemas"
 FORBIDDEN_FIELDS = {"version", "schema", "registryRevision"}
 TOP_LEVEL_VERSION = re.compile(r"^(version|schemaVersion|registryRevision):", re.MULTILINE)
 VERSIONED_SCHEMA_PATH = re.compile(r'["\']_schemas["\']\s*,\s*["\']v\d+["\']')
+SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+DEFAULT_CONTRACT_VIEW = (
+    ROOT / ".qwq_output/env/repo/local/service-contract-view/cache/view"
+)
 
 
 def relative(path: Path) -> str:
@@ -30,7 +35,82 @@ def read_object(path: Path) -> dict[str, object]:
     return value
 
 
+def contract_graph_source_failures(
+    graph: dict[str, object],
+    metadata_dir: Path,
+    repository_root: Path = ROOT,
+) -> list[str]:
+    """Bind every embedded source digest to the current compiler view.
+
+    The graph/lock/manifest hashes can all agree with one another while all of
+    them describe an older source tree.  The disposable service contract view
+    is the canonical projection of service-owned contracts, so each graph
+    source must still resolve there with the exact embedded digest.
+    """
+    failures: list[str] = []
+    if not metadata_dir.is_dir():
+        return [f"metadata compiler view is missing: {metadata_dir}"]
+    sources = graph.get("sources")
+    if not isinstance(sources, list) or not sources:
+        return ["ContractGraph.sources must be a non-empty list"]
+
+    repository = repository_root.resolve()
+    seen: set[str] = set()
+    for index, source in enumerate(sources):
+        location = f"ContractGraph.sources[{index}]"
+        if not isinstance(source, dict) or set(source) != {"path", "sha256"}:
+            failures.append(f"{location} must contain exactly path/sha256")
+            continue
+        path_text = source.get("path")
+        expected = source.get("sha256")
+        if not isinstance(path_text, str) or not path_text.strip():
+            failures.append(f"{location}.path must be a non-empty relative path")
+            continue
+        relative_path = Path(path_text)
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            failures.append(f"{location}.path escapes the metadata view: {path_text!r}")
+            continue
+        if path_text in seen:
+            failures.append(f"ContractGraph.sources contains duplicate path: {path_text}")
+            continue
+        seen.add(path_text)
+        if not isinstance(expected, str) or not SHA256_HEX.fullmatch(expected):
+            failures.append(f"{location}.sha256 is not canonical: {expected!r}")
+            continue
+
+        candidate = metadata_dir / relative_path
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(repository)
+        except FileNotFoundError:
+            failures.append(f"ContractGraph source is missing from current view: {path_text}")
+            continue
+        except (OSError, RuntimeError, ValueError) as error:
+            failures.append(
+                f"ContractGraph source cannot be resolved safely: {path_text}: {error}"
+            )
+            continue
+        if not resolved.is_file():
+            failures.append(f"ContractGraph source is not a file: {path_text}")
+            continue
+        actual = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        if actual != expected:
+            failures.append(
+                "ContractGraph source digest drift: "
+                f"{path_text}: graph={expected} current={actual}"
+            )
+    return failures
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--metadata-dir",
+        type=Path,
+        default=DEFAULT_CONTRACT_VIEW,
+        help="current disposable service contract compiler view",
+    )
+    arguments = parser.parse_args()
     failures: list[str] = []
 
     for path in sorted(SCHEMAS.iterdir()):
@@ -78,6 +158,12 @@ def main() -> int:
 
     graph = loaded.get(graph_path)
     if graph is not None:
+        failures.extend(
+            contract_graph_source_failures(
+                graph,
+                arguments.metadata_dir.resolve(),
+            )
+        )
         maps = graph.get("businessObjectMaps")
         if not isinstance(maps, list):
             failures.append("ContractGraph.businessObjectMaps must be a list")

@@ -34,14 +34,6 @@ func writeForbidden(w http.ResponseWriter, r *http.Request, msg string) {
 	writeHTTPError(w, r, generated.AppErrorFromForbidden(msg))
 }
 
-func writeConflict(w http.ResponseWriter, r *http.Request, userMessage string, debugMessage string) {
-	writeHTTPError(w, r, rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleUser, rterr.KindUser, "conflict"),
-		userMessage,
-		debugMessage,
-	))
-}
-
 func parseLimit(r *http.Request, defaultVal int) int {
 	if s := r.URL.Query().Get("limit"); s != "" {
 		if n, err := strconv.Atoi(s); err == nil && n > 0 && n <= 100 {

@@ -26,59 +26,59 @@ var (
 // AppErrorFromMediaInUse returns *AppError for CONTENT.USER.media_in_use (user_message from errors.yaml).
 func AppErrorFromMediaInUse(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_in_use")
-	return rterr.NewAppError(code, "媒体已被内容引用，无法放弃", debugMessage).WithMetadata("media_in_use", 409).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "媒体已被内容引用，无法放弃", debugMessage).WithMetadata("media_in_use", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaNotFound returns *AppError for CONTENT.USER.media_not_found (user_message from errors.yaml).
 func AppErrorFromMediaNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_not_found")
-	return rterr.NewAppError(code, "媒体资源不存在或已过期", debugMessage).WithMetadata("media_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "媒体资源不存在或已过期", debugMessage).WithMetadata("media_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaNotReady returns *AppError for CONTENT.USER.media_not_ready (user_message from errors.yaml).
 func AppErrorFromMediaNotReady(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_not_ready")
-	return rterr.NewAppError(code, "媒体文件正在处理中，请稍后发布", debugMessage).WithMetadata("media_not_ready", 400).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "媒体文件正在处理中，请稍后发布", debugMessage).WithMetadata("media_not_ready", 400).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromMediaPlaybackNetworkUnavailable returns *AppError for CONTENT.SYSTEM.media_playback_network_unavailable (user_message from errors.yaml).
 func AppErrorFromMediaPlaybackNetworkUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_network_unavailable")
-	return rterr.NewAppError(code, "网络不太稳定", debugMessage).WithMetadata("media_playback_network_unavailable", 0).WithRecovery("retry", 0)
+	return rterr.NewAppError(code, "网络不太稳定", debugMessage).WithMetadata("media_playback_network_unavailable", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMediaPlaybackServiceBusy returns *AppError for CONTENT.SYSTEM.media_playback_service_busy (user_message from errors.yaml).
 func AppErrorFromMediaPlaybackServiceBusy(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_service_busy")
-	return rterr.NewAppError(code, "暂时无法播放", debugMessage).WithMetadata("media_playback_service_busy", 0).WithRecovery("retry", 0)
+	return rterr.NewAppError(code, "暂时无法播放", debugMessage).WithMetadata("media_playback_service_busy", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMediaPlaybackTemporarilyUnavailable returns *AppError for CONTENT.SYSTEM.media_playback_temporarily_unavailable (user_message from errors.yaml).
 func AppErrorFromMediaPlaybackTemporarilyUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_temporarily_unavailable")
-	return rterr.NewAppError(code, "暂时无法播放", debugMessage).WithMetadata("media_playback_temporarily_unavailable", 0).WithRecovery("retry", 0)
+	return rterr.NewAppError(code, "暂时无法播放", debugMessage).WithMetadata("media_playback_temporarily_unavailable", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMediaPlaybackUnavailable returns *AppError for CONTENT.USER.media_playback_unavailable (user_message from errors.yaml).
 func AppErrorFromMediaPlaybackUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_playback_unavailable")
-	return rterr.NewAppError(code, "这条视频暂时无法观看，可以先看看别的内容", debugMessage).WithMetadata("media_playback_unavailable", 0).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "这条视频暂时无法观看，可以先看看别的内容", debugMessage).WithMetadata("media_playback_unavailable", 0).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaPlaybackUnsupported returns *AppError for CONTENT.SYSTEM.media_playback_unsupported (user_message from errors.yaml).
 func AppErrorFromMediaPlaybackUnsupported(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_playback_unsupported")
-	return rterr.NewAppError(code, "这条视频暂不支持播放，可以先看看别的内容", debugMessage).WithMetadata("media_playback_unsupported", 0).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "这条视频暂不支持播放，可以先看看别的内容", debugMessage).WithMetadata("media_playback_unsupported", 0).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaProcessingRejected returns *AppError for CONTENT.USER.media_processing_rejected (user_message from errors.yaml).
 func AppErrorFromMediaProcessingRejected(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_processing_rejected")
-	return rterr.NewAppError(code, "媒体文件无法处理，请更换后重新发布", debugMessage).WithMetadata("media_processing_rejected", 422).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "媒体文件无法处理，请更换后重新发布", debugMessage).WithMetadata("media_processing_rejected", 422).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaSeekFailed returns *AppError for CONTENT.SYSTEM.media_seek_failed (user_message from errors.yaml).
 func AppErrorFromMediaSeekFailed(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_seek_failed")
-	return rterr.NewAppError(code, "暂时无法跳转到这个位置", debugMessage).WithMetadata("media_seek_failed", 0).WithRecovery("retry", 0)
+	return rterr.NewAppError(code, "暂时无法跳转到这个位置", debugMessage).WithMetadata("media_seek_failed", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }

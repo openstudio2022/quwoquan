@@ -28,7 +28,14 @@ business_rules:
 - objectType 与 objectId 的标签集合按 source event version 幂等替换，不做跨轴路径猜测。
 - 对象或 release tombstone 必须移除对应标签绑定并保留 checkpoint。
 lifecycle:
-  source_events: [TagTaxonomyReleaseActivated, ObjectTagsAssigned, ObjectTagsRemoved, TaggedObjectDeleted]
+  source_events:
+  - user.user_account.UserProfileTagsChanged
   checkpoint: taxonomy_release_and_object_event_sequence
-  rebuild: load_active_taxonomy_then_replay_object_tag_events
+  rebuild: load_active_taxonomy_then_replay_user_profile_tag_events
   tombstone: delete_object_tag_bindings_keep_checkpoint
+  event_consumers:
+  - name: ProjectObjectTagIndex
+    kind: projector
+    facet: UserProfileTagConsumer
+    method: processOnce
+    idempotency: aggregate_version

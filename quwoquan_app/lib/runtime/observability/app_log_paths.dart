@@ -1,25 +1,41 @@
-import 'dart:io';
+import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/storage/local_text_file_storage_gateway.dart';
 
-import 'package:path_provider/path_provider.dart';
+final class AppLogDirectoryPath {
+  const AppLogDirectoryPath(this.path);
+
+  final String path;
+}
 
 class AppLogPaths {
-  AppLogPaths({this.rootDirName = 'quwoquan_logs'});
+  AppLogPaths({
+    LocalTextFileStorageGateway? storageGateway,
+    this.rootDirName = 'quwoquan_logs',
+  }) : storageGateway =
+           storageGateway ??
+           requireLocalTextFileStorageGateway(createFileStorageGateway());
 
   final String rootDirName;
+  final LocalTextFileStorageGateway storageGateway;
 
-  Future<Directory> rootDirectory() async {
+  Future<AppLogDirectoryPath> rootDirectory() async {
     try {
-      final support = await getApplicationSupportDirectory();
-      return Directory('${support.path}/$rootDirName');
+      final supportPath = await storageGateway.applicationSupportPath();
+      return AppLogDirectoryPath(
+        storageGateway.joinPath(supportPath, rootDirName),
+      );
     } catch (_) {
-      return Directory('${Directory.systemTemp.path}/$rootDirName');
+      final temporaryPath = await storageGateway.systemTemporaryPath();
+      return AppLogDirectoryPath(
+        storageGateway.joinPath(temporaryPath, rootDirName),
+      );
     }
   }
 
-  Future<Directory> dayDirectory(DateTime time) async {
+  Future<AppLogDirectoryPath> dayDirectory(DateTime time) async {
     final root = await rootDirectory();
     final day = _dayStamp(time);
-    return Directory('${root.path}/$day');
+    return AppLogDirectoryPath(storageGateway.joinPath(root.path, day));
   }
 
   String _dayStamp(DateTime time) {

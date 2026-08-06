@@ -34,7 +34,7 @@ quwoquan_service/services/<service>/contracts/
 - object kind：同服务 `contracts/<context>/<object>/object.yaml.kind`；
 - DDD layer：源码路径中的 layer。
 
-文件内禁止重复 domain、context、object、service、源码路径、测试路径、DDD layer 或 readiness。
+文件内禁止重复 domain、context、object、service、源码路径、DDD layer 或 readiness 结果。唯一测试路径例外是对象 `operations.yaml.readiness_cases[].runner_source_path`：它用于把 case 与真实 runner、`spec_ref` 和受信 receipt 单轨绑定，不是测试清单或通过状态。
 
 声明 `operations.yaml.api_routes` 的对象必须拥有同路径源码根；HTTP adapter、用例、领域规则和
 持久化实现不得借住同服务的“主对象”目录。没有公开 route 的投影、内部事实或 external

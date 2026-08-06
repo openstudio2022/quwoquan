@@ -234,6 +234,7 @@ def _fixture(tmp_path: Path) -> Fixture:
     stable_plan: dict[str, Any] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
+        "executionMode": "central",
         "gitBranch": "dev1.0",
         "gitCommitSha": "1" * 40,
         "sourceRevision": source_revision,

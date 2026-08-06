@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	ports "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/ports"
 	external "quwoquan_service/services/circle-service/internal/circle_management/gathering/infrastructure/external"
 )
 
@@ -42,17 +43,26 @@ func TestChatConversationPortUsesOnlyGatheringProjectionOperations(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	conversationID, err := port.EnsureGroupConversation(
-		context.Background(), "gathering-1", "贡嘎同行", "persona-owner", 8, "create-1",
+	conversationID, err := port.EnsureGatheringConversation(
+		context.Background(),
+		ports.EnsureGatheringConversationCommand{
+			GatheringID: "gathering-1", SourceEventID: "create-1",
+			SourceVersion: 8, OwnerPersonaID: "persona-owner",
+			Title: "贡嘎同行", AccessMode: "active", PostingPolicy: "member_chat",
+		},
 	)
 	if err != nil || conversationID != "conversation-1" {
-		t.Fatalf("EnsureGroupConversation: id=%q err=%v", conversationID, err)
+		t.Fatalf("EnsureGatheringConversation: id=%q err=%v", conversationID, err)
 	}
-	if err := port.ProjectParticipant(
-		context.Background(), "gathering-1", "persona-owner", "persona/2",
-		"joined", 20, "join-1",
+	if err := port.ProjectGatheringMembership(
+		context.Background(),
+		ports.ProjectGatheringMembershipCommand{
+			GatheringID: "gathering-1", PersonaID: "persona/2",
+			SourceEventID: "join-1", SourceVersion: 20,
+			SourceType: "participation", State: "active",
+		},
 	); err != nil {
-		t.Fatalf("ProjectParticipant: %v", err)
+		t.Fatalf("ProjectGatheringMembership: %v", err)
 	}
 	want := []string{
 		"/internal/chat/gathering-conversations/gathering-1",

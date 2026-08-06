@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/spec.md#sit-001
+// readiness_case: shared-admission-api
 package api_integration
 
 import (

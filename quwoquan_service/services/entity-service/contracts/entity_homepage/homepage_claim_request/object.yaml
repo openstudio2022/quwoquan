@@ -41,8 +41,6 @@ relationships:
   reference_fields:
   - reviewerAccountId
   target_object: user.UserAccount
-capabilities:
-- auditable
 business_rules:
 - requester persona 与 homepageId 创建后不可变
 - 同一 requester 对同一 homepage 只能有一个 pending 申请
@@ -54,12 +52,5 @@ lifecycle:
   - pending_review
   - approved
   - rejected
-  transitions:
-  - from: pending_review
-    command: ReviewHomepageClaimRequest.approve
-    to: approved
-  - from: pending_review
-    command: ReviewHomepageClaimRequest.reject
-    to: rejected
   optimistic_concurrency: version
   idempotency: command_receipt

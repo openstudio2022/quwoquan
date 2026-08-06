@@ -72,6 +72,80 @@ func NewLocationProvider(
 	}
 }
 
+func NewPOISearchProvider(
+	binding providerbinding.ResolvedLocationBinding,
+	client *http.Client,
+) (ports.POISearchProvider, error) {
+	if binding.AdapterID != LocationAdapterNominatimID {
+		return nil, fmt.Errorf(
+			"POI search adapter %q is not registered in this composition root",
+			binding.AdapterID,
+		)
+	}
+	if !binding.ProbePassed {
+		return nil, fmt.Errorf("POI search capability probe has not passed")
+	}
+	if err := validatePublicLocationBindingPolicy(binding); err != nil {
+		return nil, err
+	}
+	endpoint, err := requiredLocationBindingValue(
+		binding.Endpoint,
+		locationEndpointRoleBase,
+		"endpoint",
+	)
+	if err != nil {
+		return nil, err
+	}
+	return NewNominatimClient(
+		endpoint,
+		client,
+		RatePolicy{RequestsPerSecond: binding.RateLimitPerSecond},
+	)
+}
+
+func NewRouteReadProvider(
+	binding providerbinding.ResolvedLocationBinding,
+	client *http.Client,
+) (ports.RouteReadProvider, error) {
+	if binding.AdapterID != LocationAdapterOSRMID {
+		return nil, fmt.Errorf(
+			"route read adapter %q is not registered in this composition root",
+			binding.AdapterID,
+		)
+	}
+	if !binding.ProbePassed {
+		return nil, fmt.Errorf("route read capability probe has not passed")
+	}
+	if err := validatePublicLocationBindingPolicy(binding); err != nil {
+		return nil, err
+	}
+	endpoint, err := requiredLocationBindingValue(
+		binding.Endpoint,
+		locationEndpointRoleBase,
+		"endpoint",
+	)
+	if err != nil {
+		return nil, err
+	}
+	return NewOSRMClient(
+		endpoint,
+		client,
+		RatePolicy{RequestsPerSecond: binding.RateLimitPerSecond},
+	)
+}
+
+func validatePublicLocationBindingPolicy(
+	binding providerbinding.ResolvedLocationBinding,
+) error {
+	if strings.TrimSpace(binding.ConfigRef) == "" ||
+		strings.TrimSpace(binding.RatePolicyRef) == "" ||
+		binding.Timeout <= 0 ||
+		binding.RateLimitPerSecond <= 0 {
+		return fmt.Errorf("public location binding policy is incomplete")
+	}
+	return nil
+}
+
 func requiredLocationBindingValue(
 	lookup func(string) (string, bool),
 	key string,

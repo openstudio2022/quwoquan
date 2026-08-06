@@ -24,9 +24,6 @@ relationships:
   target_object: user.UserAccount
 local_identity_reasons:
   sourceId: producer-scoped provenance key; the Notification target carries the typed business destination
-capabilities:
-- commandable
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:
@@ -36,9 +33,63 @@ business_rules:
 - 外部渠道投递由 NotificationDeliveryJob 和 Integration 负责
 - Notification 状态与 outbox 必须在同一 Mongo transaction 提交
 - 互动通知只由业务事件经 durable stream 投影生成，幂等键 notify:{eventType}:{eventId}
+- Gathering invitation 以 gatheringId+recipientPersonaId 唯一折叠；只接受更高 Participation version，或同版本由 pending 推进到 terminal，重放与乱序不得复活 action
+- Gathering invitation card 只消费 Circle 已裁剪 payload，不读取 Conversation、群消息、名单或 Circle 写模型；accept/decline action 必须调用 Circle typed operation
 lifecycle:
   model: monotonic_receipt_milestones
   milestones: [createdAt, deliveredAt, ackedAt, readAt]
   terminal_marker: readAt
   optimistic_concurrency: store_commit
   idempotency: command_receipt
+  source_events:
+  - content.comment.CommentCreated
+  - content.comment.CommentPinChanged
+  - content.content_reaction.ContentReactionSet
+  - content.post.PostPublished
+  - content.report.ReportResolved
+  - content.report.ReportDismissed
+  - user.persona_relationship.PersonaFollowStateChanged
+  - user.greeting_request.GreetingRequestSent
+  - user.greeting_request.GreetingRequestReplied
+  - user.greeting_request.GreetingRequestIgnored
+  - user.greeting_request.GreetingRequestCancelled
+  - circle.circle_membership.CircleMembershipJoined
+  - circle.circle_membership.CircleMembershipRequested
+  - circle.circle_membership.CircleMembershipApproved
+  - circle.circle_membership.CircleMembershipRejected
+  - circle.circle_group_membership.CircleGroupMembershipRequested
+  - circle.circle_group_membership.CircleGroupMembershipActivated
+  - circle.circle_group_membership.CircleGroupMembershipRejected
+  - circle.gathering.GatheringInvitationChanged
+  - circle.gathering.GatheringCancelled
+  - entity.homepage_claim_request.HomepageClaimReviewed
+  - entity.homepage_status_report.HomepageStatusReportReviewed
+  - user.user_account.UserSuspended
+  - user.user_account.UserRestored
+  - user.user_account.UserAccountClosed
+  event_consumers:
+  - name: CreateInteractionNotifications
+    kind: event_handler
+    facet: InteractionNotificationProjection
+    method: project
+    idempotency: event_id
+  - name: ProjectGatheringInvitation
+    kind: event_handler
+    facet: GatheringInvitationProjection
+    method: project
+    idempotency: identity_payload_digest
+  - name: CancelGatheringInvitations
+    kind: event_handler
+    facet: GatheringInvitationProjection
+    method: cancelGathering
+    idempotency: event_id
+  - name: ApplyNotificationAccountRestriction
+    kind: event_handler
+    facet: UserAccountRestrictionProjection
+    method: apply
+    idempotency: event_id
+  - name: ApplyNotificationAccountClosure
+    kind: event_handler
+    facet: UserAccountClosedProjection
+    method: applyUserAccountClosed
+    idempotency: event_id

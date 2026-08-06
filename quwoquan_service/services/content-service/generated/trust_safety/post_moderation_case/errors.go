@@ -17,5 +17,5 @@ var (
 // AppErrorFromModerationCaseNotFound returns *AppError for CONTENT.USER.moderation_case_not_found (user_message from errors.yaml).
 func AppErrorFromModerationCaseNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.moderation_case_not_found")
-	return rterr.NewAppError(code, "未找到当前内容的审核记录", debugMessage).WithMetadata("moderation_case_not_found", 404).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "未找到当前内容的审核记录", debugMessage).WithMetadata("moderation_case_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }

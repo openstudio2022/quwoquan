@@ -1,80 +1,78 @@
-entity: FilterCatalogRelease
-domain: CONTENT
 description: FilterCatalogRelease 发布、读取与回滚错误语义。
 errors:
 - code: CONTENT.USER.filter_catalog_release_not_found
-  kind: USER
   reason: filter_catalog_release_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [ActivateFilterCatalogRelease, RollbackFilterCatalogRelease]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: filterCatalogReleaseNotFound
   go_const: ErrFilterCatalogReleaseNotFound
   user_message:
     zh: 滤镜目录发布不存在
     en: Filter catalog release not found
 - code: CONTENT.USER.filter_catalog_invalid_argument
-  kind: USER
   reason: filter_catalog_invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [StageFilterCatalogRelease]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: filterCatalogInvalidArgument
   go_const: ErrFilterCatalogInvalidArgument
   user_message:
     zh: 滤镜目录内容不合法
     en: Invalid filter catalog
 - code: CONTENT.USER.filter_catalog_digest_mismatch
-  kind: USER
   reason: filter_catalog_digest_mismatch
   http_status: 400
   emitted_by:
   - surface: http
     operations: [StageFilterCatalogRelease]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: filterCatalogDigestMismatch
   go_const: ErrFilterCatalogDigestMismatch
   user_message:
     zh: 滤镜目录校验失败
     en: Filter catalog digest verification failed
 - code: CONTENT.USER.filter_catalog_invalid_transition
-  kind: USER
   reason: filter_catalog_invalid_transition
   http_status: 409
   emitted_by:
   - surface: http
     operations: [ActivateFilterCatalogRelease, RollbackFilterCatalogRelease]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: filterCatalogInvalidTransition
   go_const: ErrFilterCatalogInvalidTransition
   user_message:
     zh: 滤镜目录状态不允许该操作
     en: Filter catalog state does not allow this operation
 - code: CONTENT.USER.filter_catalog_idempotency_conflict
-  kind: USER
   reason: filter_catalog_idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [StageFilterCatalogRelease, ActivateFilterCatalogRelease, RollbackFilterCatalogRelease]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: filterCatalogIdempotencyConflict
   go_const: ErrFilterCatalogIdempotencyConflict
   user_message:
     zh: 重复请求与原滤镜目录操作不一致
     en: The repeated request differs from the original filter catalog operation
 - code: CONTENT.SYSTEM.filter_catalog_unavailable
-  kind: SYSTEM
   reason: filter_catalog_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [GetActiveFilterCatalog]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: filterCatalogUnavailable
   go_const: ErrFilterCatalogUnavailable
@@ -82,13 +80,13 @@ errors:
     zh: 滤镜暂时无法加载，请稍后重试
     en: Filters are temporarily unavailable. Please retry shortly
 - code: CONTENT.SYSTEM.filter_catalog_storage_unavailable
-  kind: SYSTEM
   reason: filter_catalog_storage_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [StageFilterCatalogRelease, ActivateFilterCatalogRelease, RollbackFilterCatalogRelease, GetActiveFilterCatalog]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: filterCatalogStorageUnavailable
   go_const: ErrFilterCatalogStorageUnavailable

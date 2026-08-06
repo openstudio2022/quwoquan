@@ -1,3 +1,8 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// readiness_case: mark-intersections-visited-local
+// readiness_case: get-my-intersection-summary-local
+// readiness_case: list-my-intersections-local
+// readiness_case: get-object-intersections-local
 package local_contract
 
 import (

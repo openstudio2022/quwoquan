@@ -1,54 +1,52 @@
-entity: ProfileInteractionActivityView
-domain: CONTENT
 description: Profile interaction activity projection 的筛选、分页、owner 与可用性错误语义。
 errors:
 - code: CONTENT.USER.interaction_type_invalid
-  kind: USER
   reason: interaction_type_invalid
   http_status: 400
   emitted_by:
   - surface: http
     operations: [ListProfileInteractionActivitiesReceived, ListProfileInteractionActivitiesSent]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: interactionTypeInvalid
   go_const: ErrInteractionTypeInvalid
   user_message:
     zh: 不支持的互动类型
     en: Unsupported interaction type
 - code: CONTENT.USER.interaction_cursor_invalid
-  kind: USER
   reason: interaction_cursor_invalid
   http_status: 400
   emitted_by:
   - surface: http
     operations: [ListProfileInteractionActivitiesReceived, ListProfileInteractionActivitiesSent]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: interactionCursorInvalid
   go_const: ErrInteractionCursorInvalid
   user_message:
     zh: 列表状态已更新，请刷新后重试
     en: The list changed, refresh and retry
 - code: CONTENT.USER.interaction_owner_forbidden
-  kind: USER
   reason: interaction_owner_forbidden
   http_status: 403
   emitted_by:
   - surface: http
     operations: [ListProfileInteractionActivitiesReceived, ListProfileInteractionActivitiesSent]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: interactionOwnerForbidden
   go_const: ErrInteractionOwnerForbidden
   user_message:
     zh: 无权查看该互动记录
     en: You cannot view this interaction history
 - code: CONTENT.SYSTEM.interaction_read_model_unavailable
-  kind: SYSTEM
   reason: interaction_read_model_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [ListProfileInteractionActivitiesReceived, ListProfileInteractionActivitiesSent]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   dart_const: interactionReadModelUnavailable
   go_const: ErrInteractionReadModelUnavailable

@@ -35,6 +35,14 @@ EXECUTION_ID = "20260805--travel-image-m100--china--scale-010"
 OBJECT_REF = "posts/image/九寨沟清晨"
 
 
+@pytest.fixture(autouse=True)
+def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "content.source.professional_image_acquisition.guard_acquisition_source_identity",
+        lambda *_args, **_kwargs: {},
+    )
+
+
 def _digest(seed: str) -> str:
     return "sha256:" + hashlib.sha256(seed.encode("utf-8")).hexdigest()
 
@@ -135,6 +143,7 @@ def _acquisition(
     write_json(manifest_path, manifest)
     return acquire_professional_images(
         manifest_path,
+        handoff_ref=output_root / "handoff.json",
         manual_root=manual_root,
         output_root=acquisition_root,
     )

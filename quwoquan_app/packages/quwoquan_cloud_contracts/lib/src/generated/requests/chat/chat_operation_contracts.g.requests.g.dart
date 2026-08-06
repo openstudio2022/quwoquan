@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../chat/chat_operation_contracts.g.dart';
 
@@ -329,11 +329,21 @@ final class ChatListContactHomeQuery {
 }
 
 final class ChatListContactsQuery {
-  const ChatListContactsQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ChatListContactsQuery({
     String? cursor,
     int limit = 20,
   }) : cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? cursor;
   final int limit;
@@ -353,6 +363,9 @@ final class ChatListContactsQuery {
 }
 
 final class ChatListConversationMembersQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
   ChatListConversationMembersQuery({
     required String conversationId,
     String? cursor,
@@ -368,6 +381,12 @@ final class ChatListConversationMembersQuery {
        query = query {
     if (this.conversationId.isEmpty) {
       throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
     }
     if (!const <String>{"joined_asc", "display_name_asc"}.contains(this.sort)) {
       throw ArgumentError.value(this.sort, "sort", 'unsupported canonical enum value');
@@ -432,11 +451,21 @@ final class ChatListConversationsQuery {
 }
 
 final class ChatListGroupCandidatesQuery {
-  const ChatListGroupCandidatesQuery({
+  static const int defaultLimit = 100;
+  static const int maximumLimit = 100;
+
+  ChatListGroupCandidatesQuery({
     String? conversationId,
     int limit = 100,
   }) : conversationId = conversationId,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
 
   final String? conversationId;
   final int limit;
@@ -456,11 +485,21 @@ final class ChatListGroupCandidatesQuery {
 }
 
 final class ChatListInboxQuery {
-  const ChatListInboxQuery({
+  static const int defaultLimit = 50;
+  static const int maximumLimit = 50;
+
+  ChatListInboxQuery({
     String? cursor,
     int limit = 50,
   }) : cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
 
   final String? cursor;
   final int limit;
@@ -547,6 +586,9 @@ final class ChatListMessagesQuery {
 }
 
 final class ChatListSelectableGroupContactMembersQuery {
+  static const int defaultLimit = 100;
+  static const int maximumLimit = 100;
+
   ChatListSelectableGroupContactMembersQuery({
     required String conversationId,
     String? query,
@@ -558,6 +600,12 @@ final class ChatListSelectableGroupContactMembersQuery {
        limit = limit {
     if (this.conversationId.isEmpty) {
       throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -585,18 +633,28 @@ final class ChatListSelectableGroupContactMembersQuery {
 }
 
 final class ChatListSelectableGroupConversationsQuery {
-  const ChatListSelectableGroupConversationsQuery({
+  static const int defaultLimit = 50;
+  static const int maximumLimit = 50;
+
+  ChatListSelectableGroupConversationsQuery({
     String? query,
-    String? source,
+    SelectableGroupConversationSource? source,
     String? cursor,
     int limit = 50,
   }) : query = query,
        source = source,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
 
   final String? query;
-  final String? source;
+  final SelectableGroupConversationSource? source;
   final String? cursor;
   final int limit;
 
@@ -604,7 +662,7 @@ final class ChatListSelectableGroupConversationsQuery {
     _generatedRequestRejectUnknownFields(map, const <String>{"query", "source", "cursor", "limit"}, path);
     return ChatListSelectableGroupConversationsQuery(
       query: map["query"] == null ? null : _generatedRequestString(map["query"], '$path.query'),
-      source: map["source"] == null ? null : _generatedRequestString(map["source"], '$path.source'),
+      source: map["source"] == null ? null : switch (map["source"]) { "group" => SelectableGroupConversationSource.group, "circle" => SelectableGroupConversationSource.circle, _ => throw FormatException('$path.source' + ' has an invalid enum value'), },
       cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
       limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 50,
     );
@@ -612,7 +670,7 @@ final class ChatListSelectableGroupConversationsQuery {
 
   Map<String, Object?> toWire() => <String, Object?>{
     if (this.query != null) "query": this.query!,
-    if (this.source != null) "source": this.source!,
+    if (this.source != null) "source": this.source!.wireName,
     if (this.cursor != null) "cursor": this.cursor!,
     "limit": this.limit,
   };
@@ -844,6 +902,9 @@ final class ChatSendMessageCommand {
 }
 
 final class ChatSyncMessagesQuery {
+  static const int defaultLimit = 500;
+  static const int maximumLimit = 500;
+
   ChatSyncMessagesQuery({
     required String conversationId,
     required int lastSeq,
@@ -853,6 +914,12 @@ final class ChatSyncMessagesQuery {
        limit = limit {
     if (this.conversationId.isEmpty) {
       throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 500) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 500");
     }
   }
 
@@ -1058,6 +1125,29 @@ final class ChatUpdateGroupGovernanceSettingsCommand {
   };
 }
 
+final class GatheringChatBoardQuery {
+  GatheringChatBoardQuery({
+    required String conversationId,
+  }) : conversationId = conversationId {
+    if (this.conversationId.isEmpty) {
+      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+    }
+  }
+
+  final String conversationId;
+
+  factory GatheringChatBoardQuery.fromWire(Map<String, Object?> map, [String path = "GatheringChatBoardQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+    return GatheringChatBoardQuery(
+      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "conversationId": this.conversationId,
+  };
+}
+
 CloudOperationRequestPayload encodeChatChatInboxViewListInboxGeneratedRequest(ChatListInboxQuery request) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
@@ -1095,6 +1185,14 @@ CloudOperationRequestPayload encodeChatConversationDissolveConversationGenerated
 }
 
 CloudOperationRequestPayload encodeChatConversationGetConversationGeneratedRequest(ChatGetConversationQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "conversationId": request.conversationId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeChatConversationGetGatheringChatBoardGeneratedRequest(GatheringChatBoardQuery request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "conversationId": request.conversationId,
@@ -1179,7 +1277,7 @@ CloudOperationRequestPayload encodeChatConversationListSelectableGroupConversati
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
       if (request.query != null) "query": request.query!,
-      if (request.source != null) "source": request.source!,
+      if (request.source != null) "source": (request.source!.wireName).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
     },
   );

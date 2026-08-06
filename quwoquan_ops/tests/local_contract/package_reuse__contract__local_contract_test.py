@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from contextlib import ExitStack
 import json
-from pathlib import Path
+import os
 import subprocess
 import tempfile
 import unittest
+from contextlib import ExitStack
+from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli.lib import package_reuse
@@ -64,6 +65,7 @@ class PackageReuseContractTest(unittest.TestCase):
         self.legal_dir = self.package_root / "legal-static"
         self.service_root = self.package_root / "services"
         self.active_baseline_id = ""
+        self.active_candidate_root = self.candidate_root
         (self.app_dir / "report.json").parent.mkdir(parents=True, exist_ok=True)
         (self.app_dir / "report.json").write_text("{}\n", encoding="utf-8")
         (self.shared_dir / "manifest.json").parent.mkdir(
@@ -124,14 +126,18 @@ class PackageReuseContractTest(unittest.TestCase):
                 side_effect=lambda target: {
                     "target": target,
                     "baselineId": self.active_baseline_id,
+                    "candidateDir": str(self.active_candidate_root),
                 },
             )
+        )
+        self.validate_candidate_manifest = mock.Mock(
+            side_effect=lambda payload, **_kwargs: payload,
         )
         self.patches.enter_context(
             mock.patch.object(
                 package_reuse,
                 "validate_candidate_manifest",
-                side_effect=lambda payload, **_kwargs: payload,
+                self.validate_candidate_manifest,
             )
         )
 
@@ -163,10 +169,40 @@ class PackageReuseContractTest(unittest.TestCase):
         )
         return path
 
+    def test_workspace_drift_reports_start_and_end_identity(self) -> None:
+        start = package_reuse.workspace_snapshot()
+        changed = self.root / "quwoquan_ops/new-runtime-input.txt"
+        changed.write_text("changed during package\n", encoding="utf-8")
+        end = package_reuse.workspace_snapshot()
+
+        details = package_reuse.workspace_drift_details(start, end)
+
+        self.assertEqual(
+            details[0],
+            "workspace changed while package was being materialized",
+        )
+        self.assertIn(f"startBaselineId={start['baselineId']}", details)
+        self.assertIn(f"endBaselineId={end['baselineId']}", details)
+        self.assertIn(
+            "startDeploymentInputDigest="
+            f"{start['deploymentInputDigest']}",
+            details,
+        )
+        self.assertIn(
+            "endDeploymentInputDigest="
+            f"{end['deploymentInputDigest']}",
+            details,
+        )
+        self.assertEqual(package_reuse.workspace_drift_details(end, end), [])
+
     def test_reuse_binds_current_managed_inputs_and_package_bytes(self) -> None:
         self._write()
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
         self.assertTrue(ok, detail)
+        self.assertEqual(
+            self.validate_candidate_manifest.call_args.kwargs["candidate_root"],
+            self.candidate_root,
+        )
 
         input_path = self.root / "quwoquan_ops/source.txt"
         input_path.write_text("changed\n", encoding="utf-8")
@@ -239,6 +275,151 @@ class PackageReuseContractTest(unittest.TestCase):
         self._write()
         second = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(first["packageContent"], second["packageContent"])
+
+    def test_fingerprint_never_uses_or_overwrites_fixed_temporary_entry(
+        self,
+    ) -> None:
+        path = package_reuse.fingerprint_path("alpha", "alpha-local")
+        fixed_temporary = path.with_name(f".{path.name}.tmp")
+        external = self.root / "external-fingerprint.json"
+        external.write_text("external remains unchanged\n", encoding="utf-8")
+        safe_digest = package_reuse.package_content_digest(
+            "alpha",
+            "alpha-local",
+            service_packages=["content-service", "user-service"],
+        )
+
+        for kind in ("symlink", "fifo", "regular"):
+            with self.subTest(kind=kind):
+                if kind == "symlink":
+                    fixed_temporary.symlink_to(external)
+                elif kind == "fifo":
+                    os.mkfifo(fixed_temporary)
+                else:
+                    fixed_temporary.write_text("occupied\n", encoding="utf-8")
+                before = os.lstat(fixed_temporary)
+                with (
+                    mock.patch.object(
+                        package_reuse,
+                        "package_content_digest",
+                        return_value=safe_digest,
+                    ),
+                    self.assertRaisesRegex(
+                        ValueError,
+                        "legacy temporary path is occupied",
+                    ),
+                ):
+                    self._write()
+                after = os.lstat(fixed_temporary)
+                self.assertEqual(
+                    (before.st_dev, before.st_ino),
+                    (after.st_dev, after.st_ino),
+                )
+                self.assertEqual(
+                    external.read_text(encoding="utf-8"),
+                    "external remains unchanged\n",
+                )
+                fixed_temporary.unlink()
+
+        written = self._write()
+        self.assertTrue(written.is_file())
+        self.assertFalse(written.is_symlink())
+
+    def test_fingerprint_rejects_unsafe_final_entry_without_touching_target(
+        self,
+    ) -> None:
+        path = package_reuse.fingerprint_path("alpha", "alpha-local")
+        external = self.root / "external-final.json"
+        external.write_text("external remains unchanged\n", encoding="utf-8")
+        path.unlink(missing_ok=True)
+        path.symlink_to(external)
+
+        with self.assertRaisesRegex(ValueError, "final path is a symlink"):
+            self._write()
+
+        self.assertTrue(path.is_symlink())
+        self.assertEqual(
+            external.read_text(encoding="utf-8"),
+            "external remains unchanged\n",
+        )
+
+    def test_fingerprint_rejects_a_symlinked_parent_without_external_write(
+        self,
+    ) -> None:
+        external_app = self.root / "external-app"
+        external_app.mkdir()
+        alias_root = self.root / "alias-packages"
+        alias_root.mkdir()
+        alias_app = alias_root / "app"
+        alias_app.symlink_to(external_app, target_is_directory=True)
+        previous_app_dir = self.app_dir
+        self.app_dir = alias_app
+        try:
+            with (
+                mock.patch.object(
+                    package_reuse,
+                    "package_content_digest",
+                    return_value=("sha256:" + "a" * 64, 1),
+                ),
+                self.assertRaisesRegex(ValueError, "symlink or non-directory"),
+            ):
+                self._write()
+        finally:
+            self.app_dir = previous_app_dir
+
+        self.assertFalse(
+            (external_app / package_reuse.FINGERPRINT_NAME).exists()
+        )
+
+    def test_inherited_package_root_override_cannot_select_another_candidate(
+        self,
+    ) -> None:
+        self._write()
+        inherited_packages = self.root / "deployment/other/packages"
+        with mock.patch.dict(
+            os.environ,
+            {package_reuse.PACKAGE_ROOT_OVERRIDE_ENV: str(inherited_packages)},
+        ):
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+            )
+        self.assertFalse(ok)
+        self.assertIn("override is forbidden", detail)
+
+    def test_non_active_candidate_fingerprint_is_not_reused(self) -> None:
+        fingerprint = self._write()
+        self.assertTrue(fingerprint.is_file())
+        self.active_candidate_root = self.root / "deployment/active-candidate"
+
+        ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
+
+        self.assertFalse(ok)
+        self.assertIn(str(self.active_candidate_root), detail)
+        self.assertIn("missing fingerprint", detail)
+
+    def test_explicit_staging_candidate_can_be_reused_before_activation(self) -> None:
+        self._write()
+        self.active_candidate_root = self.root / "deployment/other-active"
+        with mock.patch.dict(
+            os.environ,
+            {
+                package_reuse.PACKAGE_ROOT_OVERRIDE_ENV: str(
+                    self.candidate_root / "packages"
+                )
+            },
+        ):
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                candidate_root=self.candidate_root,
+            )
+
+        self.assertTrue(ok, detail)
+        self.assertEqual(
+            self.validate_candidate_manifest.call_args.kwargs["candidate_root"],
+            self.candidate_root,
+        )
 
 
 if __name__ == "__main__":

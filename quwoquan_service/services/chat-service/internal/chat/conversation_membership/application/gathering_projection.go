@@ -13,15 +13,27 @@ import (
 )
 
 const (
-	GatheringProjectionJoined = "joined"
-	GatheringProjectionLeft   = "left"
+	GatheringProjectionSourceOrganizerAssignment = "organizer_assignment"
+	GatheringProjectionSourceParticipation       = "participation"
+	GatheringProjectionSourceBlock               = "block"
+
+	GatheringProjectionStateActive  = "active"
+	GatheringProjectionStateClosed  = "closed"
+	GatheringProjectionStateRevoked = "revoked"
+	GatheringProjectionStateBlocked = "blocked"
+	GatheringProjectionStateCleared = "cleared"
+
+	GatheringAccessStatusActive  = "active"
+	GatheringAccessStatusRevoked = "revoked"
+
+	GatheringAccessRoleAdmin       = "admin"
+	GatheringAccessRoleParticipant = "participant"
+	GatheringAccessRoleNone        = "none"
 )
 
 type GatheringBinding struct {
 	GatheringID    string
 	ConversationID string
-	OwnerPersonaID string
-	MaxGroupSize   int
 	Active         bool
 }
 
@@ -33,6 +45,7 @@ type GatheringMemberStore interface {
 	CreateMember(context.Context, *membershipmodel.Member) error
 	DeleteMember(context.Context, string, string) error
 	FindMember(context.Context, string, string) (*membershipmodel.Member, error)
+	UpdateMemberRole(context.Context, string, string, string) error
 	CountUserMembers(context.Context, string) (int, error)
 }
 
@@ -65,6 +78,7 @@ type GatheringProjectionState struct {
 	GatheringID    string
 	ConversationID string
 	PersonaID      string
+	SourceType     string
 	SourceVersion  int64
 	State          string
 	LastEventID    string
@@ -72,7 +86,7 @@ type GatheringProjectionState struct {
 }
 
 type GatheringProjectionStateStore interface {
-	LoadGatheringProjectionState(context.Context, string, string) (GatheringProjectionState, bool, error)
+	LoadGatheringProjectionState(context.Context, string, string, string) (GatheringProjectionState, bool, error)
 	SaveGatheringProjectionState(context.Context, GatheringProjectionState) error
 }
 
@@ -94,19 +108,22 @@ type GatheringProjectionOutbox interface {
 }
 
 type GatheringProjectionCommand struct {
-	SourceEventID  string
-	SourceVersion  int64
-	GatheringID    string
-	PersonaID      string
-	OwnerPersonaID string
-	State          string
+	SourceEventID string
+	SourceVersion int64
+	GatheringID   string
+	PersonaID     string
+	SourceType    string
+	State         string
 }
 
 type GatheringProjectionResult struct {
 	GatheringID    string `json:"gatheringId"`
 	ConversationID string `json:"conversationId"`
 	PersonaID      string `json:"personaId"`
+	SourceType     string `json:"sourceType"`
 	State          string `json:"state"`
+	AccessStatus   string `json:"accessStatus"`
+	AccessRole     string `json:"accessRole"`
 }
 
 type GatheringProjectionFacade struct {
@@ -148,13 +165,12 @@ func (facade *GatheringProjectionFacade) Project(
 	command.SourceEventID = strings.TrimSpace(command.SourceEventID)
 	command.GatheringID = strings.TrimSpace(command.GatheringID)
 	command.PersonaID = strings.TrimSpace(command.PersonaID)
-	command.OwnerPersonaID = strings.TrimSpace(command.OwnerPersonaID)
+	command.SourceType = strings.TrimSpace(command.SourceType)
 	command.State = strings.TrimSpace(command.State)
 	if command.SourceEventID == "" || command.SourceVersion <= 0 || command.GatheringID == "" ||
-		command.PersonaID == "" || command.OwnerPersonaID == "" ||
-		(command.State != GatheringProjectionJoined && command.State != GatheringProjectionLeft) {
+		command.PersonaID == "" || !validGatheringProjectionFact(command.SourceType, command.State) {
 		return GatheringProjectionResult{}, generated.AppErrorFromInvalidArgument(
-			"Gathering membership source fact is incomplete",
+			"Gathering access source fact is incomplete or invalid",
 		)
 	}
 	binding, found, err := facade.bindings.ReadGatheringConversation(ctx, command.GatheringID)
@@ -166,31 +182,14 @@ func (facade *GatheringProjectionFacade) Project(
 			"active Gathering conversation binding is missing",
 		)
 	}
-	if binding.OwnerPersonaID != command.OwnerPersonaID {
-		return GatheringProjectionResult{}, generated.AppErrorFromGatheringBindingConflict(
-			"Gathering owner differs from the Chat binding",
-		)
-	}
-	if command.PersonaID == command.OwnerPersonaID && command.State != GatheringProjectionJoined {
-		return GatheringProjectionResult{}, generated.AppErrorFromGatheringBindingConflict(
-			"Gathering owner cannot be removed by participant projection",
-		)
-	}
 
 	result := GatheringProjectionResult{
 		GatheringID: command.GatheringID, ConversationID: binding.ConversationID,
-		PersonaID: command.PersonaID, State: command.State,
-	}
-	profile := GatheringMemberProfile{}
-	if command.State == GatheringProjectionJoined {
-		profile, err = facade.profiles.ReadGatheringMemberProfile(ctx, command.PersonaID)
-		if err != nil {
-			return GatheringProjectionResult{}, err
-		}
+		PersonaID: command.PersonaID, SourceType: command.SourceType, State: command.State,
 	}
 	err = facade.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		current, currentFound, loadErr := facade.states.LoadGatheringProjectionState(
-			txCtx, command.GatheringID, command.PersonaID,
+			txCtx, command.GatheringID, command.PersonaID, command.SourceType,
 		)
 		if loadErr != nil {
 			return loadErr
@@ -202,27 +201,32 @@ func (facade *GatheringProjectionFacade) Project(
 				)
 			}
 			if current.SourceVersion > command.SourceVersion {
-				return nil
+				result.State = current.State
+				return facade.resolveGatheringAccess(txCtx, binding.ConversationID, command, nil, &result)
 			}
 			if current.SourceVersion == command.SourceVersion {
 				if current.LastEventID != command.SourceEventID || current.State != command.State {
 					return generated.AppErrorFromGatheringBindingConflict(
-						"Gathering participant version was reused by another source fact",
+						"Gathering access version was reused by another source fact",
 					)
 				}
-				return nil
+				return facade.resolveGatheringAccess(txCtx, binding.ConversationID, command, nil, &result)
 			}
 		}
 
-		changed, membershipEvents, applyErr := facade.apply(
-			txCtx, binding, command, profile,
-		)
+		access, resolveErr := facade.loadGatheringAccess(txCtx, binding.ConversationID, command, &command)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		result.AccessStatus = access.Status
+		result.AccessRole = access.Role
+		changed, membershipEvents, applyErr := facade.applyAccess(txCtx, binding, command, access)
 		if applyErr != nil {
 			return applyErr
 		}
 		if saveErr := facade.states.SaveGatheringProjectionState(txCtx, GatheringProjectionState{
 			GatheringID: command.GatheringID, ConversationID: binding.ConversationID,
-			PersonaID: command.PersonaID, SourceVersion: command.SourceVersion,
+			PersonaID: command.PersonaID, SourceType: command.SourceType, SourceVersion: command.SourceVersion,
 			State: command.State, LastEventID: command.SourceEventID, UpdatedAt: facade.now().UTC(),
 		}); saveErr != nil {
 			return saveErr
@@ -234,10 +238,8 @@ func (facade *GatheringProjectionFacade) Project(
 		if countErr != nil {
 			return countErr
 		}
-		if count > binding.MaxGroupSize {
-			return generated.AppErrorFromGatheringBindingConflict(
-				"Gathering membership projection exceeded the Chat group capacity",
-			)
+		for index := range membershipEvents {
+			membershipEvents[index].Payload["memberCount"] = count
 		}
 		if rosterErr := facade.roster.BumpGatheringRoster(txCtx, binding.ConversationID, count); rosterErr != nil {
 			return rosterErr
@@ -260,33 +262,110 @@ func (facade *GatheringProjectionFacade) Project(
 	return result, err
 }
 
-func (facade *GatheringProjectionFacade) apply(
+type gatheringResolvedAccess struct {
+	Status string
+	Role   string
+}
+
+func (facade *GatheringProjectionFacade) resolveGatheringAccess(
+	ctx context.Context,
+	conversationID string,
+	command GatheringProjectionCommand,
+	overlay *GatheringProjectionCommand,
+	result *GatheringProjectionResult,
+) error {
+	access, err := facade.loadGatheringAccess(ctx, conversationID, command, overlay)
+	if err != nil {
+		return err
+	}
+	result.AccessStatus = access.Status
+	result.AccessRole = access.Role
+	return nil
+}
+
+func (facade *GatheringProjectionFacade) loadGatheringAccess(
+	ctx context.Context,
+	conversationID string,
+	command GatheringProjectionCommand,
+	overlay *GatheringProjectionCommand,
+) (gatheringResolvedAccess, error) {
+	states := map[string]string{}
+	for _, sourceType := range []string{
+		GatheringProjectionSourceOrganizerAssignment,
+		GatheringProjectionSourceParticipation,
+		GatheringProjectionSourceBlock,
+	} {
+		state, found, err := facade.states.LoadGatheringProjectionState(
+			ctx, command.GatheringID, command.PersonaID, sourceType,
+		)
+		if err != nil {
+			return gatheringResolvedAccess{}, err
+		}
+		if found {
+			if state.ConversationID != "" && state.ConversationID != conversationID {
+				return gatheringResolvedAccess{}, generated.AppErrorFromGatheringBindingConflict(
+					"Gathering access watermark points to another conversation",
+				)
+			}
+			states[sourceType] = state.State
+		}
+	}
+	if overlay != nil {
+		states[overlay.SourceType] = overlay.State
+	}
+	if states[GatheringProjectionSourceBlock] == GatheringProjectionStateBlocked {
+		return gatheringResolvedAccess{Status: GatheringAccessStatusRevoked, Role: GatheringAccessRoleNone}, nil
+	}
+	if states[GatheringProjectionSourceOrganizerAssignment] == GatheringProjectionStateActive {
+		return gatheringResolvedAccess{Status: GatheringAccessStatusActive, Role: GatheringAccessRoleAdmin}, nil
+	}
+	if states[GatheringProjectionSourceParticipation] == GatheringProjectionStateActive {
+		return gatheringResolvedAccess{Status: GatheringAccessStatusActive, Role: GatheringAccessRoleParticipant}, nil
+	}
+	return gatheringResolvedAccess{Status: GatheringAccessStatusRevoked, Role: GatheringAccessRoleNone}, nil
+}
+
+func (facade *GatheringProjectionFacade) applyAccess(
 	ctx context.Context,
 	binding GatheringBinding,
 	command GatheringProjectionCommand,
-	profile GatheringMemberProfile,
+	access gatheringResolvedAccess,
 ) (bool, []GatheringOutboxEvent, error) {
 	member, findErr := facade.members.FindMember(ctx, binding.ConversationID, command.PersonaID)
-	if command.State == GatheringProjectionJoined {
+	if access.Status == GatheringAccessStatusActive {
+		role := "member"
+		if access.Role == GatheringAccessRoleAdmin {
+			role = "admin"
+		}
 		if findErr == nil {
 			if member.MemberType != "user" {
 				return false, nil, generated.AppErrorFromGatheringBindingConflict(
-					"Gathering participant conflicts with a non-user Chat member",
+					"Gathering access conflicts with a non-user Chat member",
 				)
 			}
-			return false, nil, nil
+			if member.Role == role {
+				return false, nil, nil
+			}
+			if err := facade.members.UpdateMemberRole(ctx, binding.ConversationID, command.PersonaID, role); err != nil {
+				return false, nil, err
+			}
+			member.Role = role
+			return true, []GatheringOutboxEvent{{
+				EventID:   projectionEventID(command.SourceEventID, "ConversationMemberRoleChanged"),
+				EventType: "ConversationMemberRoleChanged", AggregateID: member.ID,
+				ConversationID: binding.ConversationID, ActorID: "gathering_projector",
+				Payload: map[string]any{
+					"conversationId": binding.ConversationID, "memberId": member.ID,
+					"userId": member.UserId, "role": member.Role, "changedBy": "gathering_projector",
+				},
+			}}, nil
 		}
 		if !errors.Is(findErr, membershipmodel.ErrNotFound) {
 			return false, nil, findErr
 		}
-		count, err := facade.members.CountUserMembers(ctx, binding.ConversationID)
+		profile, err := facade.profiles.ReadGatheringMemberProfile(ctx, command.PersonaID)
 		if err != nil {
 			return false, nil, err
-		}
-		if count >= binding.MaxGroupSize {
-			return false, nil, generated.AppErrorFromGatheringBindingConflict(
-				"Gathering participant exceeds Chat group capacity",
-			)
 		}
 		joinedAt := facade.now().UTC()
 		member = &membershipmodel.Member{
@@ -294,7 +373,7 @@ func (facade *GatheringProjectionFacade) apply(
 			ConversationId: binding.ConversationID, UserId: command.PersonaID,
 			UserHandle: profile.UserHandle, DisplayName: profile.DisplayName,
 			AvatarUrl: profile.AvatarURL, AvatarAssetId: profile.AvatarAssetID,
-			AvatarVersion: profile.AvatarVersion, MemberType: "user", Role: "member",
+			AvatarVersion: profile.AvatarVersion, MemberType: "user", Role: role,
 			InvitedBy: "gathering_projector", JoinedAt: joinedAt,
 		}
 		if err := facade.members.CreateMember(ctx, member); err != nil {
@@ -310,7 +389,8 @@ func (facade *GatheringProjectionFacade) apply(
 			EventType: "ConversationMemberAdded", AggregateID: member.ID,
 			ConversationID: binding.ConversationID, ActorID: "gathering_projector",
 			Payload: map[string]any{
-				"memberId": member.ID, "userId": member.UserId, "displayName": member.DisplayName,
+				"conversationId": binding.ConversationID, "memberId": member.ID,
+				"userId": member.UserId, "displayName": member.DisplayName,
 				"memberType": member.MemberType, "role": member.Role,
 				"invitedBy": member.InvitedBy, "joinedAt": member.JoinedAt,
 			},
@@ -330,14 +410,28 @@ func (facade *GatheringProjectionFacade) apply(
 		return false, nil, err
 	}
 	return true, []GatheringOutboxEvent{{
-		EventID:   projectionEventID(command.SourceEventID, "ConversationMemberLeft"),
-		EventType: "ConversationMemberLeft", AggregateID: member.ID,
+		EventID:   projectionEventID(command.SourceEventID, "ConversationMemberRemoved"),
+		EventType: "ConversationMemberRemoved", AggregateID: member.ID,
 		ConversationID: binding.ConversationID, ActorID: "gathering_projector",
 		Payload: map[string]any{
-			"memberId": member.ID, "userId": member.UserId, "memberType": member.MemberType,
-			"leftAt": facade.now().UTC(),
+			"conversationId": binding.ConversationID, "memberId": member.ID,
+			"userId": member.UserId, "memberType": member.MemberType,
+			"removedBy": "gathering_projector",
 		},
 	}}, nil
+}
+
+func validGatheringProjectionFact(sourceType, state string) bool {
+	switch sourceType {
+	case GatheringProjectionSourceOrganizerAssignment, GatheringProjectionSourceParticipation:
+		return state == GatheringProjectionStateActive ||
+			state == GatheringProjectionStateClosed ||
+			state == GatheringProjectionStateRevoked
+	case GatheringProjectionSourceBlock:
+		return state == GatheringProjectionStateBlocked || state == GatheringProjectionStateCleared
+	default:
+		return false
+	}
 }
 
 func deterministicMembershipID(gatheringID, personaID string) string {

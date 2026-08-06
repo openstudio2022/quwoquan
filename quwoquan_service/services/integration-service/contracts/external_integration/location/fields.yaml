@@ -49,6 +49,7 @@ types:
       - {name: toProvider, type: enum, enum_ref: LocationProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
       - {name: reason, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
   LocationSearchQueryParams:
+    description: 用户显式 query 与可选粗粒度中心；中心在出站前按约 1km 精度归一化。
     fields:
       - name: q
         type: string
@@ -76,6 +77,26 @@ types:
         type: int
         client_dart_type: int
         client_default: "20"
+  LocationRouteReadQueryParams:
+    description: canonical WGS84 起终点与路线模式；端点不得接收 provider 私有 location 字符串。
+    fields:
+      - {name: originLat, type: double, client_dart_name: originLatitude, client_dart_type: double}
+      - {name: originLng, type: double, client_dart_name: originLongitude, client_dart_type: double}
+      - {name: destinationLat, type: double, client_dart_name: destinationLatitude, client_dart_type: double}
+      - {name: destinationLng, type: double, client_dart_name: destinationLongitude, client_dart_type: double}
+      - {name: travelMode, type: enum, enum_ref: LocationTravelMode, client_dart_type: String, client_default: driving}
+  LocationRoute:
+    description: provider 无关的 canonical 路线读模型；坐标为 WGS84，polyline 使用 Google encoded polyline 算法。
+    fields:
+      - {name: routeRef, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: originLatitude, type: double, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
+      - {name: originLongitude, type: double, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
+      - {name: destinationLatitude, type: double, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
+      - {name: destinationLongitude, type: double, constraints: [NOT_NULL], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
+      - {name: encodedPolyline, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PII, log_policy: drop, api_exposure: read, ops_exposure: none}
+      - {name: durationSeconds, type: int, constraints: [NOT_NULL, NON_NEGATIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: distanceMeters, type: int, constraints: [NOT_NULL, NON_NEGATIVE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: travelMode, type: enum, enum_ref: LocationTravelMode, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   NearbyLocationQueryParams:
     fields:
       - name: lat
@@ -99,3 +120,6 @@ types:
         type: int
         client_dart_type: int
         client_default: "20"
+enums:
+  LocationTravelMode:
+    values: [walking, cycling, driving]

@@ -244,6 +244,7 @@ api_routes:
   - method: GET
     path: /content/personas/{personaId}/posts
     operation: ListUserPosts
+    pagination: {default_items: 20, maximum_items: 100}
     request_bindings:
       path:
         - name: personaId
@@ -536,6 +537,7 @@ api_routes:
   - method: GET
     path: /content/personas/{personaId}/author-impact
     operation: GetAuthorImpact
+    pagination: {default_items: 12, maximum_items: 50}
     request_bindings:
       path:
         - name: personaId
@@ -597,6 +599,7 @@ api_routes:
   - method: GET
     path: /content/personas/{personaId}/author-impact/evidence
     operation: ListAuthorImpactEvidence
+    pagination: {default_items: 20, maximum_items: 50}
     request_bindings:
       path:
         - name: personaId
@@ -783,6 +786,7 @@ api_routes:
   - method: GET
     path: /content/footprint
     operation: GetMyFootprint
+    pagination: {default_items: 20, maximum_items: 100}
     actor: persona
     application:
       kind: query
@@ -1028,3 +1032,292 @@ consumers:
   - name: circle-service
     capabilities:
       - read_post
+readiness_cases:
+  - case_id: apply-post-lifecycle-events-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: content.post}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/media/post_moderation_case__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: apply-post-lifecycle-events-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: content.post}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_text_publication__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-feed-local
+    spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetFeed}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-feed-api
+    spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetFeed}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_feed_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+  - case_id: submit-post-publication-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SubmitPostPublication}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: submit-post-publication-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SubmitPostPublication}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: list-user-posts-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListUserPosts}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/post_query_facet__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-user-posts-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListUserPosts}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_user_list_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-post-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetPost}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/post_query_facet__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-post-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetPost}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: delete-post-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: DeletePost}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: delete-post-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: DeletePost}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: update-post-settings-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: UpdatePostSettings}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: update-post-settings-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: UpdatePostSettings}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_crud_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: promote-post-to-work-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: PromotePostToWork}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: promote-post-to-work-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: PromotePostToWork}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_identity_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: generate-article-summary-local
+    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GenerateArticleSummary}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/application/helper_read_summary__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: generate-article-summary-api
+    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GenerateArticleSummary}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-helper-read-local
+    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetHelperRead}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/application/helper_read_summary__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-helper-read-api
+    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetHelperRead}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-author-impact-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetAuthorImpact}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-author-impact-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetAuthorImpact}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/author_impact_http__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: recommendation-http, digest_binding: candidate}
+  - case_id: list-author-impact-evidence-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListAuthorImpactEvidence}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-author-impact-evidence-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListAuthorImpactEvidence}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/author_impact_http__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: recommendation-http, digest_binding: candidate}
+  - case_id: get-app-config-local
+    spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetAppConfig}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-app-config-api
+    spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetAppConfig}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/app_config__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-counters-local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetCounters}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-counters-api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetCounters}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_comment_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-my-footprint-local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetMyFootprint}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-my-footprint-api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetMyFootprint}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_behavior_contract__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-entity-wishlist-state-local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetEntityWishlistState}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-entity-wishlist-state-api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-005
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetEntityWishlistState}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/entity_wishlist_state__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: post_delete_post_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: DeletePost}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/post/post_delete_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: post_get_app_config_app_local
+    spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetAppConfig}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/post/content_app_config_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: post_get_post_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetPost}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/post/post_remote_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: post_list_user_posts_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListUserPosts}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/post/post_remote_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

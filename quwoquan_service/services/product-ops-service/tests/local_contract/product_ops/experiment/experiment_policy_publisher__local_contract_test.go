@@ -10,6 +10,7 @@ import (
 	experimentmessaging "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/messaging"
 )
 
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
 func TestExperimentPolicyPublisherUsesOnlyDurableObjectOwnedStream(t *testing.T) {
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()

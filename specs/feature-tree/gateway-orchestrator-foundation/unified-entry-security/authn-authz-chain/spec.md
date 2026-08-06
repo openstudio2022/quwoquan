@@ -29,6 +29,13 @@
 
 - 在路由到业务 owner 前完成认证、主体解析和 operation scope 授权，任一步失败均 fail-closed。
 
+<a id="req-002"></a>
+### REQ-002 入口 guard 只强制 deadline 与身份授权三项
+
+- guard 在完成身份验签与 operation 授权的同一环节，按该 operation 描述符声明的预算为请求上下文建立 deadline，业务 owner 只在已带 deadline 的上下文中执行。
+- 描述符缺失、operation 无法解析或预算非正值时按 fail-closed 拒绝，不得放行成为无预算的无限等待。
+- 商用治理态不进入本环节判定，guard 强制的只有 deadline、认证与授权三项。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。

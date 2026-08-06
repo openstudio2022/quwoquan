@@ -48,6 +48,14 @@
 - THEN 通过父能力公开契约交付“圈子生命周期”的可观察结果。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
+<a id="gwt-002"></a>
+### GWT-002 圈子生命周期 Remote API 状态与幂等收敛
+
+- GIVEN 已认证 owner 通过 generated client 与 production Remote 调用 Circle 公开 operation，且服务依赖可用。
+- WHEN 同一幂等身份依次创建并重放创建、更新、读取、归档，再重放无状态变化的命令。
+- THEN 每次响应与最终读取均收敛到服务端 canonical Circle 状态，重放不产生第二个 Circle、额外版本推进或重复领域事实。
+- AND 缺少环境配置、身份或依赖时 fail closed，不以本地 fixture、缓存对象或空成功替代 Remote 结果。
+
 ## 6. 依赖
 
 - 前置要求：[`activity-member-governance`](../spec.md) 的范围、要求与 SIT。

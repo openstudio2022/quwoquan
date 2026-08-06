@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   media_assets:
+    publication_role: not_published
     entity: MediaAsset
     description: MediaAsset 权威聚合；保存原始 CAS 身份及受信图片/视频处理 descriptor，不从 Post 或上传会话内存 map 回退读取。
     indexes:
@@ -29,6 +30,7 @@ collections:
         manualCoverAssetId: 1
         processingStatus: 1
   media_asset_reference_fences:
+    publication_role: not_published
     entity: MediaAsset
     description: Post、Comment 与 manual cover 建立引用时和 owner discard 事务共同触碰的逻辑引用围栏；deleting 状态禁止新引用，关闭先查后写竞态。
     indexes:
@@ -37,6 +39,7 @@ collections:
         _id: 1
       unique: true
   media_object_deletion_fences:
+    publication_role: not_published
     entity: MediaAsset
     description: 共享 CAS 对象物理删除与新 MediaAsset 引用提交的事务栅栏。deleting
       状态拒绝新引用，直到对象存储删除完成；禁止用无锁的“引用数为零”检查直接删除共享 CAS。
@@ -46,6 +49,7 @@ collections:
         _id: 1
       unique: true
   media_asset_command_receipts:
+    publication_role: not_published
     entity: MediaAsset
     description: MediaAsset 创建、处理结果和访问策略变更的幂等结果；与资产版本和 outbox 同事务提交。
     indexes:
@@ -60,8 +64,9 @@ collections:
     - name: idx_media_asset_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   media_asset_outbox:
+    publication_role: transactional_outbox
     entity: MediaAsset
     description: MediaAsset 领域事实；完成上传时与 MediaUploadSession 的完成事实在同一 Mongo transaction 落盘。
     indexes:
@@ -79,6 +84,7 @@ collections:
         aggregateVersion: 1
       unique: true
   media_projection_checkpoints:
+    publication_role: publication_accessory
     entity: MediaAsset
     description: media outbox 消费者 checkpoint（media-processing worker 等）；按 occurredAt/eventId 原子单调推进，多副本陈旧保存不得回退；先投递后落
       checkpoint，重放由 processing 态守卫与命令 digest 幂等吸收。
@@ -88,6 +94,7 @@ collections:
         _id: 1
       unique: true
   media_processing_dead_letters:
+    publication_role: publication_accessory
     entity: MediaAsset
     description: media-processing 在有效 checkpoint 前隔离不可恢复的源记录；只保存事件身份、checkpoint 与稳定原因，不保存原始 payload；同一
       consumer/event 幂等写入后才允许 checkpoint 前进。

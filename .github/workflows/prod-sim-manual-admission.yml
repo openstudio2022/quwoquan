@@ -26,19 +26,21 @@ env:
 jobs:
   prod_sim_admission:
     name: Non-promotable prod-sim first-party prevalidation
-    runs-on: [self-hosted, macOS, prod-release]
+    runs-on: [self-hosted, macOS, ARM64]
     environment: prod-sim-admission
     timeout-minutes: 30
     permissions:
       contents: read
+      attestations: read
       packages: read
-    env:
-      PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+    outputs:
+      prod_sim_receipt_base64: ${{ steps.prod_sim_receipt.outputs.receipt_base64 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
           ref: ${{ inputs.source_sha }}
+          persist-credentials: false
       - name: Require exact reviewed main source
         run: |
           set -euo pipefail
@@ -50,52 +52,36 @@ jobs:
             echo "::error::GATE_BLOCK: prod-sim admission requires an exact commit reachable from main"
             exit 2
           fi
+          if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+            echo "::error::GATE_BLOCK: prod-sim admission source checkout must be clean"
+            exit 2
+          fi
       - name: Login immutable release registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Buildx for release evidence verification
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
       - id: candidate
-        name: Materialize and verify exact deployable candidate
+        name: Verify deployable manifest, OIDC and artifact closure
         env:
-          RELEASE_EVIDENCE_REF: ${{ inputs.release_evidence_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::GATE_BLOCK: prod-sim admission requires an exact immutable GHCR ref"
-            exit 2
-          fi
           ROOT="$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release"
-          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
-            --ref "$RELEASE_EVIDENCE_REF" \
-            --output-dir "$ROOT"
-          VALUES="$(python3 - "$ROOT/manifest.json" <<'PY'
-          import json
-          import sys
-
-          manifest = json.load(open(sys.argv[1], encoding="utf-8"))
-          print(
-              manifest["candidateId"],
-              manifest["artifactDigest"],
-              manifest["source"]["workflowRunId"],
-              sep="\t",
-          )
-          PY
-          )"
-          IFS=$'\t' read -r CANDIDATE_DIGEST ARTIFACT_DIGEST PRODUCER_WORKFLOW_RUN_ID <<< "$VALUES"
-          echo "candidate_digest=$CANDIDATE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "artifact_digest=$ARTIFACT_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "producer_workflow_run_id=$PRODUCER_WORKFLOW_RUN_ID" >> "$GITHUB_OUTPUT"
-          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
-            --manifest "$ROOT/manifest.json" \
-            --expected-candidate "$CANDIDATE_DIGEST" \
-            --expected-artifact-digest "$ARTIFACT_DIGEST" \
-            --expected-workflow-run-id "$PRODUCER_WORKFLOW_RUN_ID" \
+          python3 quwoquan_ops/ci/consume_released_release_evidence.py \
+            --ref "${{ inputs.release_evidence_ref }}" \
+            --repository "${{ github.repository }}" \
+            --require-status deployable \
             --expected-source-sha "${{ inputs.source_sha }}" \
-            --expected-repository "${{ github.repository }}" \
-            --expected-release-ref "$RELEASE_EVIDENCE_REF" \
-            --require-deployable
+            --output-dir "$ROOT" \
+            --github-output "$GITHUB_OUTPUT"
       - name: Materialize isolated prevalidation SSH credentials
         env:
           EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
@@ -119,7 +105,6 @@ jobs:
           python3 quwoquan_ops/cli/stackctl.py deploy \
             --target prod-hosted \
             --mode prevalidate \
-            --ssh-host "$PROD_SSH_HOST" \
             --data-mode isolated \
             --prevalidate-scope first-party \
             --release-manifest "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release/manifest.json" \
@@ -152,10 +137,64 @@ jobs:
             echo "- container deployment: \`passed\`"
             echo "- release eligibility: \`GATE_BLOCK (non-promotable by contract)\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - id: prod_sim_receipt
+        name: Bind and verify canonical prod-sim report
+        run: |
+          set -euo pipefail
+          REPORT="$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/prevalidate/report.json"
+          MANIFEST="$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release/manifest.json"
+          python3 quwoquan_ops/ci/render_environment_stability_attested_receipt.py bind-prod-sim \
+            --report "$REPORT" \
+            --manifest "$MANIFEST" \
+            --expected-candidate "${{ steps.candidate.outputs.candidate_digest }}" \
+            --expected-artifact-digest "${{ steps.candidate.outputs.artifact_digest }}" \
+            --expected-source-sha "${{ inputs.source_sha }}" \
+            --github-output "$GITHUB_OUTPUT"
+          python3 quwoquan_ops/ci/render_environment_stability_attested_receipt.py verify-prod-sim \
+            --receipt "$REPORT"
       - name: Upload non-authoritative prod-sim diagnostics
-        if: ${{ always() }}
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: prod-sim-manual-admission-${{ github.run_id }}
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/prod/runs/prod-sim-admission
           retention-days: 1
+
+  attest_prod_sim_report:
+    name: Attest exact passed non-promotable prod-sim report
+    needs: prod_sim_admission
+    if: ${{ needs.prod_sim_admission.result == 'success' && needs.prod_sim_admission.outputs.prod_sim_receipt_base64 != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      RECEIPT_PATH: ${{ runner.temp }}/prod-hosted-first-party-prevalidation-report.json
+      RECEIPT_BASE64: ${{ needs.prod_sim_admission.outputs.prod_sim_receipt_base64 }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.source_sha }}
+          clean: false
+          persist-credentials: false
+      - name: Materialize exact prod-sim report bytes
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          Path(os.environ["RECEIPT_PATH"]).write_bytes(
+              base64.b64decode(os.environ["RECEIPT_BASE64"], validate=True)
+          )
+          PY
+      - name: Verify passed non-promotable prod-sim report bindings
+        run: |
+          python3 quwoquan_ops/ci/render_environment_stability_attested_receipt.py verify-prod-sim \
+            --receipt "$RECEIPT_PATH"
+      - name: Attest exact prod-sim report bytes
+        uses: actions/attest@f7c2b2a3f1986639bb3d0d22cb88d0e5e1d2c749
+        with:
+          subject-path: ${{ env.RECEIPT_PATH }}

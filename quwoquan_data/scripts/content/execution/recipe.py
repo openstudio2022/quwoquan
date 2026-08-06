@@ -140,8 +140,14 @@ def _readiness(
         raise SystemExit(f"[task execute] execution-readiness rc={rc}")
 
 
-def _runtime_preflight_argv(execution_id: str) -> list[str]:
-    return recipe_support.runtime_preflight_argv(execution_root(execution_id))
+def _runtime_preflight_argv(
+    execution_id: str,
+    semantic_selection_id: str = "default",
+) -> list[str]:
+    return recipe_support.runtime_preflight_argv(
+        execution_root(execution_id),
+        semantic_selection_id,
+    )
 
 
 def _retry_target_names(
@@ -520,7 +526,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     if stage == "readiness-only":
         _readiness(recipe, execution_id, invoke)
         return
-    rc = invoke(_runtime_preflight_argv(execution_id))
+    rc = invoke(_runtime_preflight_argv(execution_id, semantic_selection_id))
     if rc != 0:
         raise SystemExit(f"[task execute] task preflight rc={rc}")
     from content.execution.recipe_checkpoint import execute_recipe_stage

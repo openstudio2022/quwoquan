@@ -146,27 +146,39 @@ func (store *MongoStore) Start(
 	if !store.available() {
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
-	return store.withTransaction(ctx, func(txCtx context.Context) (model.MutationResult, error) {
-		if replay, found, err := store.readReceipt(
+	session, err := store.authorizations.Database().Client().StartSession()
+	if err != nil {
+		return model.MutationResult{}, fmt.Errorf("start connector authorization transaction: %w", err)
+	}
+	defer session.EndSession(ctx)
+
+	var committed model.MutationResult
+	if _, err := session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		replay, found, receiptErr := store.readReceipt(
 			txCtx,
 			command.Authorization.AccountID,
 			command.IdempotencyKey,
 			"start",
 			command.CommandDigest,
-		); found || err != nil {
-			return replay, err
+		)
+		if receiptErr != nil {
+			return nil, receiptErr
 		}
-		if _, err := store.authorizations.InsertOne(txCtx, command.Authorization); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return model.MutationResult{}, model.ErrIdempotencyConflict
+		if found {
+			committed = replay
+			return nil, nil
+		}
+		if _, insertErr := store.authorizations.InsertOne(txCtx, command.Authorization); insertErr != nil {
+			if mongo.IsDuplicateKeyError(insertErr) {
+				return nil, model.ErrIdempotencyConflict
 			}
-			return model.MutationResult{}, err
+			return nil, insertErr
 		}
 		result := model.MutationResult{
 			Authorization:   command.Authorization,
 			ContinuationRef: command.ContinuationRef,
 		}
-		if err := store.commitReceipt(
+		if receiptErr := store.commitReceipt(
 			txCtx,
 			command.Authorization.AccountID,
 			command.IdempotencyKey,
@@ -174,14 +186,22 @@ func (store *MongoStore) Start(
 			command.CommandDigest,
 			result,
 			command.Authorization.CreatedAt,
-		); err != nil {
-			return model.MutationResult{}, err
+		); receiptErr != nil {
+			return nil, receiptErr
 		}
-		if err := store.insertOutbox(txCtx, command.Authorization, "ConnectorAuthorizationStarted"); err != nil {
-			return model.MutationResult{}, err
+		// 事件行与授权状态共用同一个事务句柄：提交成功即事件已可读，任一步失败
+		// 则状态与事件一起回滚。
+		if outboxErr := store.insertOutbox(
+			txCtx, command.Authorization, "ConnectorAuthorizationStarted",
+		); outboxErr != nil {
+			return nil, outboxErr
 		}
-		return result, nil
-	})
+		committed = result
+		return nil, nil
+	}); err != nil {
+		return model.MutationResult{}, err
+	}
+	return committed, nil
 }
 
 func (store *MongoStore) Verify(
@@ -191,40 +211,52 @@ func (store *MongoStore) Verify(
 	if !store.available() {
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
-	return store.withTransaction(ctx, func(txCtx context.Context) (model.MutationResult, error) {
-		if replay, found, err := store.readReceipt(
+	session, err := store.authorizations.Database().Client().StartSession()
+	if err != nil {
+		return model.MutationResult{}, fmt.Errorf("start connector authorization transaction: %w", err)
+	}
+	defer session.EndSession(ctx)
+
+	var committed model.MutationResult
+	if _, err := session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		replay, found, receiptErr := store.readReceipt(
 			txCtx,
 			command.Authorization.AccountID,
 			command.IdempotencyKey,
 			"verify",
 			command.CommandDigest,
-		); found || err != nil {
-			return replay, err
+		)
+		if receiptErr != nil {
+			return nil, receiptErr
 		}
-		updated, err := store.authorizations.ReplaceOne(txCtx, bson.M{
+		if found {
+			committed = replay
+			return nil, nil
+		}
+		updated, replaceErr := store.authorizations.ReplaceOne(txCtx, bson.M{
 			"accountId":       command.Authorization.AccountID,
 			"authorizationId": command.Authorization.AuthorizationID,
 			"status":          model.StatusPending,
 			"revision":        command.ExpectedRevision,
 			"expiresAt":       bson.M{"$gt": command.OccurredAt},
 		}, command.Authorization)
-		if err != nil {
-			return model.MutationResult{}, err
+		if replaceErr != nil {
+			return nil, replaceErr
 		}
 		if updated.MatchedCount != 1 {
-			return model.MutationResult{}, model.ErrRevisionConflict
+			return nil, model.ErrRevisionConflict
 		}
-		if _, err := store.grantReceipts.InsertOne(txCtx, command.GrantReceipt); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return model.MutationResult{}, model.ErrIdempotencyConflict
+		if _, insertErr := store.grantReceipts.InsertOne(txCtx, command.GrantReceipt); insertErr != nil {
+			if mongo.IsDuplicateKeyError(insertErr) {
+				return nil, model.ErrIdempotencyConflict
 			}
-			return model.MutationResult{}, err
+			return nil, insertErr
 		}
 		result := model.MutationResult{
 			Authorization:   command.Authorization,
 			GrantReceiptRef: command.GrantReceiptRef,
 		}
-		if err := store.commitReceipt(
+		if receiptErr := store.commitReceipt(
 			txCtx,
 			command.Authorization.AccountID,
 			command.IdempotencyKey,
@@ -232,14 +264,22 @@ func (store *MongoStore) Verify(
 			command.CommandDigest,
 			result,
 			command.OccurredAt,
-		); err != nil {
-			return model.MutationResult{}, err
+		); receiptErr != nil {
+			return nil, receiptErr
 		}
-		if err := store.insertOutbox(txCtx, command.Authorization, "ConnectorAuthorizationVerified"); err != nil {
-			return model.MutationResult{}, err
+		// 事件行与授权状态共用同一个事务句柄：提交成功即事件已可读，任一步失败
+		// 则状态与事件一起回滚。
+		if outboxErr := store.insertOutbox(
+			txCtx, command.Authorization, "ConnectorAuthorizationVerified",
+		); outboxErr != nil {
+			return nil, outboxErr
 		}
-		return result, nil
-	})
+		committed = result
+		return nil, nil
+	}); err != nil {
+		return model.MutationResult{}, err
+	}
+	return committed, nil
 }
 
 func (store *MongoStore) Consume(
@@ -418,27 +458,6 @@ func (store *MongoStore) insertOutbox(
 		OccurredAt:            authorization.UpdatedAt,
 	})
 	return err
-}
-
-func (store *MongoStore) withTransaction(
-	ctx context.Context,
-	action func(context.Context) (model.MutationResult, error),
-) (model.MutationResult, error) {
-	session, err := store.authorizations.Database().Client().StartSession()
-	if err != nil {
-		return model.MutationResult{}, fmt.Errorf("start connector authorization transaction: %w", err)
-	}
-	defer session.EndSession(ctx)
-	var result model.MutationResult
-	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		var actionErr error
-		result, actionErr = action(txCtx)
-		return nil, actionErr
-	})
-	if err != nil {
-		return model.MutationResult{}, err
-	}
-	return result, nil
 }
 
 func (store *MongoStore) available() bool {

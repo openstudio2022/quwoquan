@@ -43,10 +43,10 @@ type CircleGroupChatSourceEvent struct {
 	OccurredAt time.Time
 }
 
-// CircleGroupChatSyncService is the application boundary for the two Circle
-// source streams. CircleGroup remains the write authority; this service only
-// creates and updates the Chat-side projection.
-type CircleGroupChatSyncService struct {
+// CircleGroupConversationProjectionHandler is the chat.conversation-owned
+// application boundary for CircleGroup source facts. CircleGroup remains the
+// write authority; this handler only creates and updates the Chat projection.
+type CircleGroupConversationProjectionHandler struct {
 	conversations *ConversationService
 	members       *MemberService
 }
@@ -58,17 +58,17 @@ type CircleGroupChatSyncProjector interface {
 	Apply(context.Context, CircleGroupChatSourceEvent) error
 }
 
-func NewCircleGroupChatSyncService(
+func NewCircleGroupConversationProjectionHandler(
 	conversations *ConversationService,
 	members *MemberService,
-) *CircleGroupChatSyncService {
-	return &CircleGroupChatSyncService{
+) *CircleGroupConversationProjectionHandler {
+	return &CircleGroupConversationProjectionHandler{
 		conversations: conversations,
 		members:       members,
 	}
 }
 
-func (s *CircleGroupChatSyncService) Apply(
+func (s *CircleGroupConversationProjectionHandler) Apply(
 	ctx context.Context,
 	event CircleGroupChatSourceEvent,
 ) error {

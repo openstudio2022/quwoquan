@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/core/auth/auth_continuation.dart';
-import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const String loginDismissFallbackQueryParam = 'dismiss_fallback';
@@ -40,6 +40,7 @@ enum AuthGateReason {
   homepageWrite,
   joinCircle,
   addContact,
+  startGathering,
   startGroupChat,
   createCircle,
   startCall,
@@ -253,13 +254,20 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
       AppCloudOperationIds.circleCircleMembershipJoinCircle,
     ],
   ),
-  // 添加联系人 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
+  // 添加联系人 / 发起活动 / 发起群聊 / 建圈子 属「先开面板、动作再登录」的产品级动作门，
   // 登录约束是产品决策而非单一 required API，故 requiredOperations 留空。
   AuthGateReason.addContact: AuthGateEntry(
     reason: AuthGateReason.addContact,
     title: FoundationText.authGateTitleAddContact,
     subtitle: FoundationText.authGateSubtitleAddContact,
     prompt: FoundationText.authGatePromptAddContact,
+    requiredOperations: <String>[],
+  ),
+  AuthGateReason.startGathering: AuthGateEntry(
+    reason: AuthGateReason.startGathering,
+    title: CommunityText.authGateTitleStartGathering,
+    subtitle: CommunityText.authGateSubtitleStartGathering,
+    prompt: CommunityText.authGatePromptStartGathering,
     requiredOperations: <String>[],
   ),
   AuthGateReason.startGroupChat: AuthGateEntry(
@@ -326,6 +334,9 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
       loc.startsWith('${AppRoutePaths.createPathTemplate}/')) {
     return AuthGateReason.createPost;
   }
+  if (loc == AppRoutePaths.gatheringCreate) {
+    return AuthGateReason.startGathering;
+  }
   if (loc == AppRoutePaths.blockedUsers) {
     return AuthGateReason.blockUser;
   }
@@ -333,11 +344,6 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
     return AuthGateReason.settingsAccount;
   }
   if (loc == AppRoutePaths.assistantManagement) {
-    return AuthGateReason.settingsAccount;
-  }
-  if (loc == AppRoutePaths.travelTrips ||
-      loc == AppRoutePaths.travelTemplates ||
-      loc.startsWith('${AppRoutePaths.travelTrips}/')) {
     return AuthGateReason.settingsAccount;
   }
   if (loc == AppRoutePaths.myReports) {

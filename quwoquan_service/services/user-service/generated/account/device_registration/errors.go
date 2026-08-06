@@ -23,31 +23,31 @@ var (
 // AppErrorFromDevicePushInvalidEndpointKind returns *AppError for USER.DEVICE_PUSH.invalid_endpoint_kind (user_message from errors.yaml).
 func AppErrorFromDevicePushInvalidEndpointKind(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushInvalidEndpointKind.Error()))
-	return rerrors.NewAppError(code, "推送通道类型无效", debugMessage).WithMetadata("invalid_endpoint_kind", 400).WithRecoveryDirective("surface", "inline", 0)
+	return rerrors.NewAppError(code, "推送通道类型无效", debugMessage).WithMetadata("invalid_endpoint_kind", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromDevicePushInvalidToken returns *AppError for USER.DEVICE_PUSH.invalid_token (user_message from errors.yaml).
 func AppErrorFromDevicePushInvalidToken(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushInvalidToken.Error()))
-	return rerrors.NewAppError(code, "推送凭证无效，请重新授权通知", debugMessage).WithMetadata("invalid_token", 400).WithRecoveryDirective("surface", "inline", 0)
+	return rerrors.NewAppError(code, "推送凭证无效，请重新授权通知", debugMessage).WithMetadata("invalid_token", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromDevicePushEndpointNotFound returns *AppError for USER.DEVICE_PUSH.endpoint_not_found (user_message from errors.yaml).
 func AppErrorFromDevicePushEndpointNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushEndpointNotFound.Error()))
-	return rerrors.NewAppError(code, "推送通道不存在", debugMessage).WithMetadata("endpoint_not_found", 404).WithRecoveryDirective("none", "silent", 0)
+	return rerrors.NewAppError(code, "推送通道不存在", debugMessage).WithMetadata("endpoint_not_found", 404).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromDevicePushEndpointNotActive returns *AppError for USER.DEVICE_PUSH.endpoint_not_active (user_message from errors.yaml).
 func AppErrorFromDevicePushEndpointNotActive(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushEndpointNotActive.Error()))
-	return rerrors.NewAppError(code, "推送通道已失效", debugMessage).WithMetadata("endpoint_not_active", 409).WithRecoveryDirective("none", "silent", 0)
+	return rerrors.NewAppError(code, "推送通道已失效", debugMessage).WithMetadata("endpoint_not_active", 409).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromDevicePushTokenConflict returns *AppError for USER.DEVICE_PUSH.token_conflict (user_message from errors.yaml).
 func AppErrorFromDevicePushTokenConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushTokenConflict.Error()))
-	return rerrors.NewAppError(code, "推送凭证已被其他设备使用，请刷新后重试", debugMessage).WithMetadata("token_conflict", 409).WithRecoveryDirective("refresh", "inline", 0)
+	return rerrors.NewAppError(code, "推送凭证已被其他设备使用，请刷新后重试", debugMessage).WithMetadata("token_conflict", 409).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromDevicePushVersionConflict returns *AppError for USER.DEVICE_PUSH.version_conflict (user_message from errors.yaml).
@@ -59,11 +59,11 @@ func AppErrorFromDevicePushVersionConflict(debugMessage string) *rerrors.AppErro
 // AppErrorFromDevicePushInvalidInvalidationReason returns *AppError for USER.DEVICE_PUSH.invalid_invalidation_reason (user_message from errors.yaml).
 func AppErrorFromDevicePushInvalidInvalidationReason(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushInvalidInvalidationReason.Error()))
-	return rerrors.NewAppError(code, "推送失效原因无效", debugMessage).WithMetadata("invalid_invalidation_reason", 400).WithRecoveryDirective("none", "silent", 0)
+	return rerrors.NewAppError(code, "推送失效原因无效", debugMessage).WithMetadata("invalid_invalidation_reason", 400).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromDevicePushCryptoFailure returns *AppError for USER.DEVICE_PUSH.crypto_failure (user_message from errors.yaml).
 func AppErrorFromDevicePushCryptoFailure(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDevicePushCryptoFailure.Error()))
-	return rerrors.NewAppError(code, "推送凭证暂时无法处理，请稍后重试", debugMessage).WithMetadata("crypto_failure", 500).WithRecoveryDirective("retry", "blocking", 0)
+	return rerrors.NewAppError(code, "推送凭证暂时无法处理，请稍后重试", debugMessage).WithMetadata("crypto_failure", 500).WithRecoveryDirective("retry", "inlineCard", 0)
 }

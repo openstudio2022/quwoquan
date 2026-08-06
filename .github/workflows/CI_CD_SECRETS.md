@@ -125,10 +125,21 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 | Variable | 用途 |
 |----------|------|
 | VIDEO_PLAYBACK_CANARY_WORK_ID | `environment-smoke` 当前已发布视频对象；缺失时设备矩阵 fail-closed |
+| **RELEASED_RELEASE_EVIDENCE_REF** | Nightly schedule 与 Provider producer 共用的唯一稳定发现指针；值必须是 status=`released` 的 exact `ghcr.io/.../release-artifact@sha256:...`。消费端会校验完整 manifest/文件闭包、BuildKit SBOM/provenance、GitHub OIDC issuer 与 `deploy-prod-auto.yml` signer identity |
 
 ### 说明
 
 - `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `pull_request(main)`、被其他 workflow 调用以及手动调试。
+- Nightly schedule 只读取 `RELEASED_RELEASE_EVIDENCE_REF`；手动 full/release-candidate 与
+  reusable caller 只接受一个 `release_evidence_ref`。`candidateId`、`artifactDigest`、
+  source Git SHA/workflow run、pilot/rollback attestation、Alpha/Beta/Gamma lifecycle 与
+  Green Matrix 均从该 manifest-bound closure 导出，仓库不再配置任何 `NIGHTLY_*`。
+- `provider-release-evidence.yml` 与 schedule 使用同一个稳定指针（手动输入的 exact ref
+  可显式覆盖），并从同一 released candidate 重跑 compiled required nonprod cell set
+  与 Prod user_acceptance cell set。仓库不再配置
+  `PROVIDER_{ALPHA,BETA,GAMMA,IOS,ANDROID}_*` 路径或设备变量。
+- 更新稳定指针时必须一次性写入刚由受控 Prod workflow 发布并完成 OIDC 验证的 terminal
+  digest ref；禁止写 tag、`latest`、candidate/preprod/deployable ref 或裸 manifest 路径。
 - gamma 网关默认从 topology `gamma-local.publicBases.api` 解析，不再依赖 `GAMMA_BASE_URL` GitHub secret。
 - `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
 - `alpha` 设备测试与其他环境使用同一 production Remote composition；第一方业务对象来自已激活 canonical release，所需鉴权按环境 validation profile 配置，禁止 runner/UAT fixture override。
@@ -178,6 +189,11 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 | **PROD_SERVICE_SSH_KEY** | `service` 平面账号 `prod-service-svc` 的 SSH 私钥（各第一方服务自治 workload） |
 | **AI_CI_SHADOW_TOKEN** | 仅可调用脱敏 CI 建议端点的短期只读 token；不得拥有仓库、门禁、部署或云资源权限 |
 | **PROD_PROMETHEUS_URL**（Environment variable） | 生产 Prometheus API base URL，供 `stackctl deploy` 自动回读 error rate/P95/Redis error rate |
+| **PROD_ALERTMANAGER_URL**（Environment variable） | 生产 Alertmanager API base URL，供 full rollout 后 canonical soak 证明无 active firing alerts |
+| **PROD_{EDGE,SERVICE}_SSH_KEY_REFERENCE**（Environment variable） | 凭据管理系统中的不可变安全引用；不得填写私钥、token 或 runner 本地路径 |
+| **PROD_{EDGE,SERVICE}_SSH_KEY_PUBLIC_DIGEST**（Environment variable） | 对规范化 SSH 公钥 bytes 的 `sha256:` 摘要，必须与运行时私钥导出的公钥一致 |
+| **PROD_{EDGE,SERVICE}_SSH_KEY_ISSUER**（Environment variable） | 凭据签发方标识 |
+| **PROD_{EDGE,SERVICE}_SSH_KEY_EXPIRES_AT**（Environment variable） | 带时区的凭据到期时间；过期或缺失会阻断 hosted soak receipt |
 | **PROD_SERVICE_NETWORK**（prod-hosted 主机变量） | Prometheus/Alertmanager/OTel Collector 加入的 service plane 共享 rootless network 名称 |
 | **OTEL_EXPORTER_OTLP_ENDPOINT**（prod-hosted 主机变量，可选） | 服务 trace 的 OTLP/HTTP 接收端（`host:port`）；未设置时使用共享网络内 `otel-collector:4318` |
 | **PROD_OPS_OIDC_ISSUER**（Environment variable） | 运维运营 Portal 的生产 OIDC issuer（`build_portal_release.py` 构建期注入） |

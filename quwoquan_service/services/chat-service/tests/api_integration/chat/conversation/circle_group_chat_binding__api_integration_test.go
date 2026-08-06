@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-001
+// readiness_case: project-circle-group-conversation-api
 package api_integration
 
 import (
@@ -46,7 +48,7 @@ func TestCircleGroupStreamProjectsBoundConversationLifecycle(t *testing.T) {
 		testGroupAvatarScheduler,
 		application.WithRelationshipGate(testRelationshipGate),
 	)
-	syncService := application.NewCircleGroupChatSyncService(conversations, members)
+	syncService := application.NewCircleGroupConversationProjectionHandler(conversations, members)
 	failures := persistence.NewMongoCircleGroupChatSyncFailureStore(requireMongoDB(t))
 	if err := failures.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)

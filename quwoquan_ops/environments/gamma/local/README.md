@@ -55,11 +55,11 @@ upload.gamma.quwoquan.com
 
 ## 本地覆盖边界
 
-本地 mirror 覆盖提交前 `T1 -> T4` 左移：
+本地 mirror 覆盖提交前 repository gate 到 device-UAT 左移：
 
-- `T1`：静态、metadata、拓扑、不可变环境包与 immutable release 绑定。
-- `T2`：模块、Widget、Provider/Journey。
-- `T3`：真实 API、真实存储副作用、错误响应与 generated client/typed Remote Facet。
-- `T4`：模拟器/真机 Patrol 核心旅程。
+- `repository-gate`：静态、metadata、拓扑、不可变环境包与 immutable release 绑定。
+- `local-contract`：模块、Widget、Provider/Journey。
+- `release-consumer`：真实 API、真实存储副作用、错误响应与 generated client/typed Remote Facet。
+- `device-UAT`：模拟器/真机 Patrol 核心旅程。
 
 本地通过不替代云侧 gamma、prod 的 K8s、Ingress/LB、Secret、云观测、SLO、回滚与真实分发验证。

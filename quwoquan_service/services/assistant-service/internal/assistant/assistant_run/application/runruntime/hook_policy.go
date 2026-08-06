@@ -28,10 +28,10 @@ var mandatoryHookPolicyRefs = []string{
 }
 
 type HookAuditRecord struct {
-	HookPolicyRef       string
-	Phase               HookPhase
-	RunDigest           string
-	TaskID              string
+	HookPolicyRef        string
+	Phase                HookPhase
+	RunDigest            string
+	TaskID               string
 	ToolName             string
 	ProtectedFactsDigest string
 	RecordedAt           time.Time
@@ -182,10 +182,10 @@ func (hook auditLifecycleHook) Invoke(
 		return HookResult{}, errors.New("assistant lifecycle audit sink is unavailable")
 	}
 	if err := hook.sink.RecordHookAudit(ctx, HookAuditRecord{
-		HookPolicyRef:       hook.Name(),
-		Phase:               input.Phase,
-		RunDigest:           auditRunDigest(input.Run.RunID),
-		TaskID:              strings.TrimSpace(input.TaskID),
+		HookPolicyRef:        hook.Name(),
+		Phase:                input.Phase,
+		RunDigest:            auditRunDigest(input.Run.RunID),
+		TaskID:               strings.TrimSpace(input.TaskID),
 		ToolName:             strings.TrimSpace(input.ToolName),
 		ProtectedFactsDigest: strings.TrimSpace(input.ProtectedFactsDigest),
 		RecordedAt:           time.Now().UTC(),

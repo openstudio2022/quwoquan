@@ -1,3 +1,5 @@
+// readiness_case: get-helper-read-local
+// readiness_case: generate-article-summary-local
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001
 package post_test
 

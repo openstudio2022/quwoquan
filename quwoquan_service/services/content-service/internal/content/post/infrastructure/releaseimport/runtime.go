@@ -142,9 +142,9 @@ func Run() {
 			"manifestDigest": releaseBinding.ManifestDigest,
 			"mode":           *mode,
 			"deletePolicy":   *deletePolicy,
-			"counts":       ImportLoadedCounts(len(posts), len(desired.DesiredRefs.Entities)),
-			"postBindings": postBindings,
-			"auditEvents":  []string{"DataReleasePrepared"},
+			"counts":         ImportLoadedCounts(len(posts), len(desired.DesiredRefs.Entities)),
+			"postBindings":   postBindings,
+			"auditEvents":    []string{"DataReleasePrepared"},
 		})
 		return
 	}

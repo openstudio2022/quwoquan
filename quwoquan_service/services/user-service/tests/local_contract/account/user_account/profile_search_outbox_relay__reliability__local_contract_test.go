@@ -22,7 +22,7 @@ type fakeProfileSearchOutboxStore struct {
 	pending     int
 }
 
-func (store *fakeProfileSearchOutboxStore) ClaimReady(
+func (store *fakeProfileSearchOutboxStore) ClaimPendingOutbox(
 	context.Context,
 	string,
 	time.Time,
@@ -69,7 +69,7 @@ type fakeProfileSearchProjectionPublisher struct {
 	projected []string
 }
 
-func (publisher *fakeProfileSearchProjectionPublisher) ProjectUserProfileSearch(
+func (publisher *fakeProfileSearchProjectionPublisher) PublishUserProfileSearch(
 	_ context.Context,
 	eventType string,
 	userID string,

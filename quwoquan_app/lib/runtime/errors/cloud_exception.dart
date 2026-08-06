@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/errors/domain_error_code.dart';
+import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 enum CloudErrorType {

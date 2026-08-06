@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
+// readiness_case: report-tag-feedback-api
 package api_integration // TagFeedbackFact HTTP contract
 
 import (

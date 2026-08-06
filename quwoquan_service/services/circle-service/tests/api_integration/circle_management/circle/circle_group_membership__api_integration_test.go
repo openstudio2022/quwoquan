@@ -47,6 +47,15 @@ func TestCircleGroupMembershipRealTransactionLifecycleBOLAAndStream(t *testing.T
 	if count, err := ownerRelay.Drain(context.Background(), 10); err != nil || count != 1 {
 		t.Fatalf("owner membership projection count=%d err=%v", count, err)
 	}
+	if checkpoint, err := groupStore.LoadCheckpoint(context.Background(), "owner-membership-api-test"); err != nil || checkpoint == "" {
+		t.Fatalf("owner membership checkpoint=%q err=%v", checkpoint, err)
+	}
+	if count, err := mongoDB.Collection("circle_group_memberships").CountDocuments(
+		context.Background(),
+		bson.M{"groupId": groupID, "personaId": "persona-owner", "role": "owner", "state": "active"},
+	); err != nil || count != 1 {
+		t.Fatalf("owner membership state count=%d err=%v", count, err)
+	}
 
 	applyPath := "/circles/circle-group-membership/groups/" + groupID + "/memberships"
 	first := executeGroupMembershipCommand(t, http.MethodPost, applyPath, nil, "group-member-apply", "", "persona-member", "ApplyJoinCircleGroup")

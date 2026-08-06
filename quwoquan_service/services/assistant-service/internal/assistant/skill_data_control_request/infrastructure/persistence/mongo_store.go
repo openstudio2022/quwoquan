@@ -42,6 +42,11 @@ type outboxDocument struct {
 	Payload           model.Request `bson:"payload"`
 	OccurredAt        time.Time     `bson:"occurredAt"`
 	PublishedAt       *time.Time    `bson:"publishedAt,omitempty"`
+	ClaimOwner        string        `bson:"claimOwner,omitempty"`
+	ClaimUntil        *time.Time    `bson:"claimUntil,omitempty"`
+	NextAttemptAt     *time.Time    `bson:"nextAttemptAt,omitempty"`
+	AttemptCount      int           `bson:"attemptCount,omitempty"`
+	LastErrorCode     string        `bson:"lastErrorCode,omitempty"`
 }
 
 func NewStore(database *mongo.Database) *Store {
@@ -96,7 +101,12 @@ func (store *Store) EnsureIndexes(ctx context.Context) error {
 				SetUnique(true),
 		},
 		{
-			Keys:    bson.D{{Key: "publishedAt", Value: 1}, {Key: "occurredAt", Value: 1}},
+			Keys: bson.D{
+				{Key: "publishedAt", Value: 1},
+				{Key: "nextAttemptAt", Value: 1},
+				{Key: "claimUntil", Value: 1},
+				{Key: "occurredAt", Value: 1},
+			},
 			Options: options.Index().SetName("idx_skill_data_control_outbox_pending"),
 		},
 		{

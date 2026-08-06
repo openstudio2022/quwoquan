@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+// readiness_case: set-assistant-preference-local
+// readiness_case: list-assistant-preferences-local
+// readiness_case: revoke-assistant-preference-local
+// readiness_case: restore-assistant-preference-local
 package local_contract
 
 import (

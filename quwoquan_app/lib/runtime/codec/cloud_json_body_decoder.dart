@@ -3,10 +3,10 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_json_background_decoder_native.dart'
-    if (dart.library.js_interop) 'package:quwoquan_app/cloud/runtime/codec/cloud_json_background_decoder_web.dart'
+import 'package:quwoquan_app/runtime/codec/cloud_json_background_decoder_native.dart'
+    if (dart.library.js_interop) 'package:quwoquan_app/runtime/codec/cloud_json_background_decoder_web.dart'
     as platform_decoder;
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/runtime/codec/cloud_wire_json_types.dart';
 
 /// JSON responses at or above this size are decoded away from the UI isolate
 /// on native platforms. Smaller responses stay inline to avoid isolate setup

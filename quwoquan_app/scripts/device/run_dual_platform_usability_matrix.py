@@ -32,17 +32,17 @@ DEFAULT_REPORT = (
 )
 DEFAULT_EVIDENCE_ROOT = DEFAULT_REPORT.parent / "evidence"
 COMPONENT_GATE = (
-    APP / "scripts/runtime/verify_dual_platform_usability_baseline.py"
+    APP / "scripts/runtime/platform/verify_dual_platform_usability_baseline.py"
 )
 CANONICAL_VERIFIER = (
-    APP / "scripts/runtime/verify_startup_environment_matrix.py"
+    APP / "scripts/runtime/platform/verify_startup_environment_matrix.py"
 )
 STARTUP_PROBE = APP / "scripts/device/verify_startup_first_frame.py"
 READBACK_RUNNER = (
     ROOT / "quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py"
 )
 READBACK_TARGET = (
-    "test/user_acceptance/patrol/environment/"
+    "test/user_acceptance/journeys/app_startup/"
     "app_core_readback__user_acceptance_test.dart"
 )
 TARGET_ENVIRONMENTS = {
@@ -678,7 +678,7 @@ def main() -> int:
         help="Diagnostic only; forces GATE_BLOCK and cannot produce readiness.",
     )
     parser.add_argument(
-        "--skip-gamma-t3",
+        "--skip-gamma-release-consumer",
         action="store_true",
         help="Diagnostic only; forces GATE_BLOCK and cannot produce readiness.",
     )
@@ -727,8 +727,8 @@ def main() -> int:
     diagnostic_overrides: list[str] = []
     if args.skip_alpha_launch:
         diagnostic_overrides.append("skip-alpha-launch")
-    if args.skip_gamma_t3:
-        diagnostic_overrides.append("skip-gamma-t3")
+    if args.skip_gamma_release_consumer:
+        diagnostic_overrides.append("skip-gamma-release-consumer")
     for override in diagnostic_overrides:
         orchestration_cases.append(
             {
@@ -764,7 +764,7 @@ def main() -> int:
         for case in execution_cases:
             if args.skip_alpha_launch and case["environment"] == "alpha":
                 continue
-            if args.skip_gamma_t3 and case["environment"] == "gamma":
+            if args.skip_gamma_release_consumer and case["environment"] == "gamma":
                 continue
             try:
                 orchestration_cases.append(

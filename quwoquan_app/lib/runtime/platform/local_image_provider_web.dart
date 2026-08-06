@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/core/platform/platform_capability_unavailable.dart';
+import 'package:quwoquan_app/runtime/platform/platform_capability_unavailable.dart';
 
 ImageProvider<Object> createLocalFileImageProvider(String path) {
   throw PlatformCapabilityUnavailableException(

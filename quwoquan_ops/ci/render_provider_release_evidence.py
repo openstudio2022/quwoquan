@@ -57,12 +57,8 @@ def render(
     validate_source(conformance)
     evidence_count = conformance.get("evidenceCount")
     readiness = conformance.get("readiness")
-    if (
-        not isinstance(readiness, dict)
-        or set(readiness) != {"alpha", "beta", "gamma", "prod"}
-        or evidence_count != 140
-    ):
-        raise ValueError("Provider readiness must bind all four environments and 140 cells")
+    if not isinstance(readiness, dict):
+        raise ValueError("Provider readiness must bind all four environments")
 
     images = manifest.get("images")
     if not isinstance(images, dict) or not images:

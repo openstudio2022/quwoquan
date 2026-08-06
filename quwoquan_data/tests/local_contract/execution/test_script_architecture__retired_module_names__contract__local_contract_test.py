@@ -1,6 +1,8 @@
 """The data script gate rejects retired ambiguous orchestration modules."""
 from pathlib import Path
 
+import pytest
+
 from verify import verify_script_architecture
 
 
@@ -80,3 +82,57 @@ def test_script_architecture_rejects_weak_types_in_release_control_module(
     issues = verify_script_architecture.script_architecture_issues()
 
     assert any("release_attestation.py is a strong control module" in issue for issue in issues)
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "runner_" + "t1" + ".py",
+        "runner_" + "t2" + ".py",
+        "runner_" + "t3" + ".py",
+        "runner_" + "t4" + ".py",
+        "gate_" + "m6" + ".py",
+        "gate_" + "m7" + ".py",
+        "gate_" + "b" + "10" + ".py",
+        "reverify_" + "phase" + "0" + ".py",
+        "bootstrap_tags_topic_verticals_" + "part" + "1" + ".py",
+        "bootstrap_tags_topic_verticals_" + "part" + "2" + ".py",
+    ],
+)
+def test_script_architecture_rejects_milestone_filenames(
+    tmp_path: Path,
+    monkeypatch,
+    bad_name: str,
+) -> None:
+    scripts = _minimal_scripts_root(tmp_path)
+    (scripts / "governance" / bad_name).write_text("", encoding="utf-8")
+    monkeypatch.setattr(verify_script_architecture, "SCRIPTS_ROOT", scripts)
+    monkeypatch.setattr(verify_script_architecture, "REPO_ROOT", tmp_path)
+
+    issues = verify_script_architecture.script_architecture_issues()
+
+    assert any("T/M/B/phase/part milestones" in issue for issue in issues)
+
+
+@pytest.mark.parametrize(
+    "safe_name",
+    [
+        "participant.py",
+        "bootstrap_tags_topic_travel.py",
+        "partition_helpers.py",
+        "phase_helpers.py",
+    ],
+)
+def test_script_architecture_allows_non_milestone_filenames(
+    tmp_path: Path,
+    monkeypatch,
+    safe_name: str,
+) -> None:
+    scripts = _minimal_scripts_root(tmp_path)
+    (scripts / "governance" / safe_name).write_text("", encoding="utf-8")
+    monkeypatch.setattr(verify_script_architecture, "SCRIPTS_ROOT", scripts)
+    monkeypatch.setattr(verify_script_architecture, "REPO_ROOT", tmp_path)
+
+    issues = verify_script_architecture.script_architecture_issues()
+
+    assert not any("T/M/B/phase/part milestones" in issue for issue in issues)

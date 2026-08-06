@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: apply-notification-account-restriction-local
 package local_contract
 
 import (
@@ -86,7 +87,7 @@ func TestNotificationConsumerAppliesUserAccountRestrictionInsteadOfIgnoringIt(
 	config.PollInterval = time.Millisecond
 	consumer, err := streamadapter.NewUserAccountClosedConsumer(
 		transport,
-		notificationClosureProjectionStub{},
+		mustNotificationClosureProjection(t, notificationClosureProjectionStub{}),
 		notificationFailureStoreStub{},
 		"notification-account-restriction-contract",
 		nil,
@@ -96,7 +97,11 @@ func TestNotificationConsumerAppliesUserAccountRestrictionInsteadOfIgnoringIt(
 		t.Fatal(err)
 	}
 	projection := &notificationRestrictionProjectionSpy{}
-	consumer.WithUserAccountRestrictionProjection(projection)
+	restrictionFacet, err := application.NewUserAccountRestrictionProjection(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumer.WithUserAccountRestrictionProjection(restrictionFacet)
 	if _, err := client.XAdd(
 		ctx,
 		streamadapter.UserAccountEventStream,
@@ -111,6 +116,18 @@ func TestNotificationConsumerAppliesUserAccountRestrictionInsteadOfIgnoringIt(
 		projection.events[0].AccountVersion != 10 {
 		t.Fatalf("restriction projection events=%+v", projection.events)
 	}
+}
+
+func mustNotificationClosureProjection(
+	t *testing.T,
+	store application.UserAccountClosedProjectionStore,
+) *application.UserAccountClosedProjection {
+	t.Helper()
+	projection, err := application.NewUserAccountClosedProjection(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return projection
 }
 
 func notificationRestrictionEventValues() map[string]string {

@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+
 	rtredis "quwoquan_service/runtime/redis"
 )
 
@@ -152,6 +155,64 @@ func TestRequireConfiguredRedisMessageTransportOnlyPermitsMemoryFixtureInAlpha(t
 		map[string]string{"general": "standalone"},
 	); err == nil {
 		t.Fatal("gamma fixture binding unexpectedly passed message transport preflight")
+	}
+}
+
+func TestMessageTransportLatencySamplesAreHistogramsNotP95Gauges(t *testing.T) {
+	const rootID = "provider-evidence-metric-contract"
+	transport := &RedisMessageTransport{
+		rootID:  rootID,
+		adapter: RedisMessageTransportAdapter,
+	}
+	transport.recordOperation(
+		"durable_append",
+		time.Now().Add(-25*time.Millisecond),
+		nil,
+	)
+	transport.recordOperation(
+		"durable_consume",
+		time.Now().Add(-40*time.Millisecond),
+		nil,
+	)
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("Gather() error = %v", err)
+	}
+	byName := make(map[string]*dto.MetricFamily, len(families))
+	for _, family := range families {
+		byName[family.GetName()] = family
+	}
+	for _, metricName := range []string{
+		"qwq_message_transport_publish_p95",
+		"qwq_message_transport_consume_p95",
+	} {
+		if _, exists := byName[metricName]; exists {
+			t.Fatalf("%s must be a recording rule, not a runtime Gauge", metricName)
+		}
+	}
+	for metricName, operation := range map[string]string{
+		"qwq_message_transport_publish_duration_seconds": "durable_append",
+		"qwq_message_transport_consume_duration_seconds": "durable_consume",
+	} {
+		family := byName[metricName]
+		if family == nil {
+			t.Fatalf("%s was not gathered", metricName)
+		}
+		if family.GetType() != dto.MetricType_HISTOGRAM {
+			t.Fatalf("%s type = %s, want HISTOGRAM", metricName, family.GetType())
+		}
+		metric := metricWithLabels(family, map[string]string{
+			"root":      rootID,
+			"adapter":   RedisMessageTransportAdapter,
+			"operation": operation,
+		})
+		if metric == nil || metric.GetHistogram().GetSampleCount() != 1 {
+			t.Fatalf("%s did not retain the latency sample: %+v", metricName, metric)
+		}
+		if metric.GetHistogram().GetSampleSum() <= 0 {
+			t.Fatalf("%s sample sum must be positive", metricName)
+		}
 	}
 }
 
@@ -346,4 +407,27 @@ func durableFieldValue(fields []DurableField, name string) string {
 		}
 	}
 	return ""
+}
+
+func metricWithLabels(
+	family *dto.MetricFamily,
+	expected map[string]string,
+) *dto.Metric {
+	for _, metric := range family.GetMetric() {
+		labels := make(map[string]string, len(metric.GetLabel()))
+		for _, label := range metric.GetLabel() {
+			labels[label.GetName()] = label.GetValue()
+		}
+		matches := true
+		for name, value := range expected {
+			if labels[name] != value {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return metric
+		}
+	}
+	return nil
 }

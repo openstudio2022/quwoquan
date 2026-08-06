@@ -1,0 +1,15 @@
+events:
+- name: AccountEnforcementDecisionIssued
+  description: 两名不同 reviewer 批准后签发的不可变账号处置决定。decision 行与 account_enforcement_delivery_outbox 行在提交 case 版本的同一个 PostgreSQL 事务内写入；dispatcher
+    以租约认领后至少一次投递到 User 的 suspend/restore 内部端点，失败按退避重试并在超出上限后转入 dead_letter，重放由 decisionId 幂等。
+  delivery_semantics: synchronous_call
+  payload_entity: AccountEnforcementDecision
+  payload_fields:
+  - decisionId
+  - caseId
+  - accountId
+  - action
+  - caseRef
+  - decisionDigest
+  - approvedAt
+  no_consumer_reason: account_enforcement_delivery_outbox 以租约和 decisionId 幂等重试调用 user.user_account.SuspendAccount 或 RestoreAccount typed HTTP operation；该链不是事件订阅，目标 operation 的服务身份与结果回执由 dispatcher 合同验证。

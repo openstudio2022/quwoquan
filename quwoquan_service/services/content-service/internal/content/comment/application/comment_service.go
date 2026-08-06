@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	commenterrors "quwoquan_service/services/content-service/generated/content/comment"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
 	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
-	"quwoquan_service/runtime/commandmeta"
 )
 
 const (
@@ -28,6 +28,13 @@ const (
 	commentModeratedEventType        = "CommentModerated"
 	commentPinChangedEventType       = "CommentPinChanged"
 	commentAttachmentsBoundEventType = "CommentAttachmentsBound"
+)
+
+type commentEventDestination uint8
+
+const (
+	commentEventOutbox commentEventDestination = iota
+	commentEventLog
 )
 
 // RateLimitConfig 是 CreateComment 频控滑动窗口配置；阈值 <=0 表示对应窗口关闭。
@@ -212,6 +219,7 @@ func (s *CommentService) CreateComment(
 		commentCreatedEventType,
 		payload,
 		params.Now,
+		commentEventOutbox,
 		s.authorRateLimit(actorID, params.Now),
 	)
 }
@@ -448,7 +456,7 @@ func (s *CommentService) BindAttachments(
 		if marshalErr != nil {
 			return CommentCommandResult{}, unavailable(marshalErr)
 		}
-		result, commitErr := s.commit(
+		result, commitErr := s.commitEventLog(
 			ctx,
 			actorID,
 			aggregate,
@@ -534,6 +542,33 @@ func (s *CommentService) commit(
 		eventType,
 		eventPayload,
 		now,
+		commentEventOutbox,
+		nil,
+	)
+}
+
+func (s *CommentService) commitEventLog(
+	ctx context.Context,
+	actorID string,
+	aggregate *commentmodel.Comment,
+	expectedVersion int64,
+	commandName string,
+	commandDigest string,
+	eventType string,
+	eventPayload []byte,
+	now time.Time,
+) (CommentCommandResult, error) {
+	return s.commitWithAuthorRateLimit(
+		ctx,
+		actorID,
+		aggregate,
+		expectedVersion,
+		commandName,
+		commandDigest,
+		eventType,
+		eventPayload,
+		now,
+		commentEventLog,
 		nil,
 	)
 }
@@ -548,6 +583,7 @@ func (s *CommentService) commitWithAuthorRateLimit(
 	eventType string,
 	eventPayload []byte,
 	now time.Time,
+	destination commentEventDestination,
 	authorRateLimit *commentports.AuthorRateLimit,
 ) (CommentCommandResult, error) {
 	idempotencyKey, err := scopedIdempotencyKey(ctx, actorID)
@@ -555,7 +591,7 @@ func (s *CommentService) commitWithAuthorRateLimit(
 		return CommentCommandResult{}, err
 	}
 	eventID := eventIdentifier(idempotencyKey, eventType)
-	result, err := s.data.Aggregate.Commit(ctx, commentports.Commit{
+	commit := commentports.Commit{
 		Aggregate:        aggregate,
 		ExpectedVersion:  expectedVersion,
 		IdempotencyKey:   idempotencyKey,
@@ -563,15 +599,30 @@ func (s *CommentService) commitWithAuthorRateLimit(
 		CommandDigest:    commandDigest,
 		ReceiptExpiresAt: now.UTC().Add(commentReceiptTTL),
 		AuthorRateLimit:  authorRateLimit,
-		Events: []commentports.OutboxEvent{{
+	}
+	switch destination {
+	case commentEventOutbox:
+		commit.OutboxEvents = []commentports.OutboxEvent{{
 			EventID:          eventID,
 			EventType:        eventType,
 			AggregateID:      aggregate.ID(),
 			AggregateVersion: aggregate.Version(),
 			Payload:          append([]byte(nil), eventPayload...),
 			OccurredAt:       now.UTC(),
-		}},
-	})
+		}}
+	case commentEventLog:
+		commit.EventLogRecords = []commentports.EventLogRecord{{
+			EventID:          eventID,
+			EventType:        eventType,
+			AggregateID:      aggregate.ID(),
+			AggregateVersion: aggregate.Version(),
+			Payload:          append([]byte(nil), eventPayload...),
+			OccurredAt:       now.UTC(),
+		}}
+	default:
+		return CommentCommandResult{}, unavailable(errors.New("comment event destination is invalid"))
+	}
+	result, err := s.data.Aggregate.Commit(ctx, commit)
 	if err != nil {
 		return CommentCommandResult{}, unavailable(err)
 	}

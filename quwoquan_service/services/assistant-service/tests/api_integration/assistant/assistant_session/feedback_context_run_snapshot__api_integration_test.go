@@ -88,7 +88,7 @@ func TestFeedbackContextFreezesCanonicalProjectionAndConsentIntoAssistantRun(
 	if err != nil {
 		t.Fatalf("start feedback source run: %v", err)
 	}
-	learningFacts := learningapplication.NewService(
+	learningFacts := learningapplication.NewAssistantLearningFactAppender(
 		integrationLearningFactStore,
 		runpersistence.NewMongoRunOwnerReader(integrationMongoDB),
 		func() time.Time { return frozenAt.Add(-time.Minute) },
@@ -384,7 +384,7 @@ func feedbackContextStartCommand(
 
 func appendFeedbackContextFact(
 	t *testing.T,
-	service *learningapplication.Service,
+	service *learningapplication.AssistantLearningFactAppender,
 	runID string,
 	accountID string,
 	personaID string,
@@ -413,12 +413,16 @@ func appendFeedbackContextFact(
 		command.FeedbackText = "private source feedback"
 		command.CorrectionText = "private source correction"
 	}
-	if _, err := service.AppendUserFact(
+	trusted := learningmodel.TrustedContext{
+		UserID:    accountID,
+		PersonaID: personaID,
+	}
+	if _, err := service.Append(
 		t.Context(),
-		command,
-		learningmodel.TrustedContext{
-			UserID:    accountID,
-			PersonaID: personaID,
+		learningapplication.AppendInput{
+			Kind:           learningapplication.AppendKindUserFeedback,
+			Command:        command,
+			TrustedContext: &trusted,
 		},
 	); err != nil {
 		t.Fatalf("append feedback fact %s: %v", eventID, err)

@@ -10,6 +10,7 @@ import (
 	reactiontransport "quwoquan_service/services/content-service/generated/content/content_reaction/transport"
 	intersectionvisittransport "quwoquan_service/services/content-service/generated/content/intersection_visit_state/transport"
 	outboundsharetransport "quwoquan_service/services/content-service/generated/content/outbound_share_fact/transport"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	posttransport "quwoquan_service/services/content-service/generated/content/post/transport"
 	profileactivitytransport "quwoquan_service/services/content-service/generated/content/profile_interaction_activity_view/transport"
 	profilereadfacttransport "quwoquan_service/services/content-service/generated/content/profile_interaction_read_fact/transport"
@@ -56,8 +57,8 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 			rterr.WriteHTTPError(
 				w,
 				rterr.NewAppError(
-					rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "route_not_found"),
-					"接口不存在",
+					rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+					"接口不存在或已下线",
 					"generated content route not found",
 				),
 				rterr.HTTPWriteOptionsFromRequest(r),
@@ -76,6 +77,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		})
 	case "BeginReportReview":
 		h.handleBeginReportReview(w, r)
+	case "AuthorizeGatheringSafetyTermination":
+		h.handleAuthorizeGatheringSafetyTermination(w, r)
 	case "ActivateFilterCatalogRelease":
 		h.handleActivateFilterCatalogRelease(w, r)
 	case "BindMediaAssetsToComment":
@@ -95,11 +98,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 			writeHTTPError(
 				w,
 				r,
-				rterr.NewUnavailable(
-					rterr.ModuleContent,
-					"站外分享服务未配置",
-					"OutboundShareFact HTTP adapter is not configured",
-				),
+				contentgenerated.AppErrorFromRequiredDependencyUnavailable("OutboundShareFact HTTP adapter is not configured"),
 			)
 			return
 		}
@@ -175,6 +174,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.dispatchPostModerationCase(w, r, func(handler postModerationCaseHTTPHandler) { handler.GetPublicationEligibility(w, r) })
 	case "GetReport":
 		h.handleGetReport(w, r)
+	case "GrantGatheringSafetyTermination":
+		h.handleGrantGatheringSafetyTermination(w, r)
 	case "HideComment":
 		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
 			handler.HideComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
@@ -258,16 +259,14 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.dispatchContentBehavior(w, r)
 	case "RequestOriginalImageAccess":
 		if h.mediaOriginalAccessHandler == nil {
-			writeHTTPError(w, r, rterr.NewUnavailable(
-				rterr.ModuleContent,
-				"原图授权事实服务未配置",
-				"MediaOriginalAccessFact HTTP adapter is not configured",
-			))
+			writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("MediaOriginalAccessFact HTTP adapter is not configured"))
 			return
 		}
 		h.mediaOriginalAccessHandler.Request(w, r)
 	case "ResolveReport":
 		h.handleResolveReport(w, r)
+	case "RevokeGatheringSafetyTermination":
+		h.handleRevokeGatheringSafetyTermination(w, r)
 	case "RestoreComment":
 		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
 			handler.RestoreComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
@@ -328,11 +327,7 @@ func (h *ContentHandler) dispatchComment(
 		writeHTTPError(
 			writer,
 			request,
-			rterr.NewUnavailable(
-				rterr.ModuleContent,
-				"评论服务未配置",
-				"Comment HTTP adapter is not configured",
-			),
+			contentgenerated.AppErrorFromRequiredDependencyUnavailable("Comment HTTP adapter is not configured"),
 		)
 		return
 	}
@@ -348,11 +343,7 @@ func (h *ContentHandler) dispatchContentReaction(
 		writeHTTPError(
 			writer,
 			request,
-			rterr.NewUnavailable(
-				rterr.ModuleContent,
-				"互动服务未配置",
-				"ContentReaction HTTP adapter is not configured",
-			),
+			contentgenerated.AppErrorFromRequiredDependencyUnavailable("ContentReaction HTTP adapter is not configured"),
 		)
 		return
 	}
@@ -364,11 +355,7 @@ func (h *ContentHandler) dispatchContentBehavior(
 	request *http.Request,
 ) {
 	if h.behaviorHandler == nil {
-		writeHTTPError(writer, request, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"内容行为事实服务未配置",
-			"ContentBehaviorFact HTTP adapter is not configured",
-		))
+		writeHTTPError(writer, request, contentgenerated.AppErrorFromRequiredDependencyUnavailable("ContentBehaviorFact HTTP adapter is not configured"))
 		return
 	}
 	h.behaviorHandler.Report(writer, request)
@@ -380,11 +367,7 @@ func (h *ContentHandler) dispatchIntersectionVisitState(
 	dispatch func(intersectionVisitStateHTTPHandler),
 ) {
 	if h.intersectionVisitHandler == nil {
-		writeHTTPError(writer, request, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"交集已读状态服务未配置",
-			"IntersectionVisitState HTTP adapter is not configured",
-		))
+		writeHTTPError(writer, request, contentgenerated.AppErrorFromRequiredDependencyUnavailable("IntersectionVisitState HTTP adapter is not configured"))
 		return
 	}
 	dispatch(h.intersectionVisitHandler)
@@ -396,11 +379,7 @@ func (h *ContentHandler) dispatchProfileInteractionActivity(
 	dispatch func(profileInteractionActivityHTTPHandler),
 ) {
 	if h.profileInteractionHandler == nil {
-		writeHTTPError(writer, request, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"互动活动读模型未配置",
-			"ProfileInteractionActivityView HTTP adapter is not configured",
-		))
+		writeHTTPError(writer, request, contentgenerated.AppErrorFromRequiredDependencyUnavailable("ProfileInteractionActivityView HTTP adapter is not configured"))
 		return
 	}
 	dispatch(h.profileInteractionHandler)
@@ -412,11 +391,7 @@ func (h *ContentHandler) dispatchProfileInteractionReadFact(
 	dispatch func(profileInteractionReadFactHTTPHandler),
 ) {
 	if h.profileReadFactHandler == nil {
-		writeHTTPError(writer, request, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"互动已读事实服务未配置",
-			"ProfileInteractionReadFact HTTP adapter is not configured",
-		))
+		writeHTTPError(writer, request, contentgenerated.AppErrorFromRequiredDependencyUnavailable("ProfileInteractionReadFact HTTP adapter is not configured"))
 		return
 	}
 	dispatch(h.profileReadFactHandler)
@@ -431,11 +406,7 @@ func (h *ContentHandler) dispatchMediaUploadSession(
 		writeHTTPError(
 			w,
 			r,
-			rterr.NewUnavailable(
-				rterr.ModuleContent,
-				"媒体上传会话服务未配置",
-				"MediaUploadSession HTTP adapter is required",
-			),
+			contentgenerated.AppErrorFromRequiredDependencyUnavailable("MediaUploadSession HTTP adapter is required"),
 		)
 		return
 	}
@@ -448,11 +419,7 @@ func (h *ContentHandler) dispatchMediaAsset(
 	dispatch func(mediaAssetHTTPHandler),
 ) {
 	if h.mediaAssetHandler == nil {
-		writeHTTPError(w, r, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"媒体资产服务未配置",
-			"MediaAsset HTTP adapter is required",
-		))
+		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("MediaAsset HTTP adapter is required"))
 		return
 	}
 	dispatch(h.mediaAssetHandler)
@@ -464,11 +431,7 @@ func (h *ContentHandler) dispatchPostModerationCase(
 	dispatch func(postModerationCaseHTTPHandler),
 ) {
 	if h.moderationHandler == nil {
-		writeHTTPError(w, r, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"内容审核服务未配置",
-			"PostModerationCase HTTP adapter is required",
-		))
+		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("PostModerationCase HTTP adapter is required"))
 		return
 	}
 	dispatch(h.moderationHandler)
@@ -480,11 +443,7 @@ func (h *ContentHandler) dispatchMediaImageReprocess(
 	dispatch func(mediaImageReprocessHTTPHandler),
 ) {
 	if h.mediaImageReprocessHandler == nil {
-		writeHTTPError(w, r, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"图片重处理任务服务未配置",
-			"MediaImageReprocessRun HTTP adapter is required",
-		))
+		writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("MediaImageReprocessRun HTTP adapter is required"))
 		return
 	}
 	dispatch(h.mediaImageReprocessHandler)
@@ -499,11 +458,7 @@ func (h *ContentHandler) dispatchFilterCatalogRelease(
 		writeHTTPError(
 			w,
 			r,
-			rterr.NewUnavailable(
-				rterr.ModuleContent,
-				"滤镜目录服务未配置",
-				"FilterCatalogRelease HTTP adapter is required",
-			),
+			contentgenerated.AppErrorFromRequiredDependencyUnavailable("FilterCatalogRelease HTTP adapter is required"),
 		)
 		return
 	}

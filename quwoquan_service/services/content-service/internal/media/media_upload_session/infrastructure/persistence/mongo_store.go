@@ -104,6 +104,15 @@ func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 			},
 			Options: options.Index().SetName("idx_media_upload_session_outbox_replay"),
 		},
+		{
+			Keys: bson.D{
+				{Key: "publishedAt", Value: 1},
+				{Key: "nextAttemptAt", Value: 1},
+				{Key: "occurredAt", Value: 1},
+				{Key: "_id", Value: 1},
+			},
+			Options: options.Index().SetName("idx_media_upload_session_outbox_delivery_head"),
+		},
 	}); err != nil {
 		return fmt.Errorf("create media upload session outbox indexes: %w", err)
 	}
@@ -143,13 +152,19 @@ type receiptDocument struct {
 }
 
 type outboxDocument struct {
-	ID               string    `bson:"_id"`
-	EventType        string    `bson:"eventType"`
-	AggregateType    string    `bson:"aggregateType"`
-	AggregateID      string    `bson:"aggregateId"`
-	AggregateVersion int64     `bson:"aggregateVersion"`
-	Payload          []byte    `bson:"payload"`
-	OccurredAt       time.Time `bson:"occurredAt"`
+	ID               string     `bson:"_id"`
+	EventType        string     `bson:"eventType"`
+	AggregateType    string     `bson:"aggregateType"`
+	AggregateID      string     `bson:"aggregateId"`
+	AggregateVersion int64      `bson:"aggregateVersion"`
+	Payload          []byte     `bson:"payload"`
+	OccurredAt       time.Time  `bson:"occurredAt"`
+	PublishedAt      *time.Time `bson:"publishedAt,omitempty"`
+	LeaseOwner       string     `bson:"leaseOwner,omitempty"`
+	LeaseExpiresAt   *time.Time `bson:"leaseExpiresAt,omitempty"`
+	NextAttemptAt    *time.Time `bson:"nextAttemptAt,omitempty"`
+	AttemptCount     int        `bson:"attemptCount,omitempty"`
+	LastErrorCode    string     `bson:"lastErrorCode,omitempty"`
 }
 
 func (s *MongoStore) Load(ctx context.Context, id string) (*sessionmodel.Session, bool, error) {

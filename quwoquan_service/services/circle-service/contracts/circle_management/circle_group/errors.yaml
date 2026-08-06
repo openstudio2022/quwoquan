@@ -1,9 +1,6 @@
-domain: CIRCLE
-aggregate: CircleGroup
 description: 'CircleGroup 对象专属错误码。格式：MODULE.KIND.REASON。'
 errors:
 - code: CIRCLE.USER.group_not_found
-  kind: USER
   reason: group_not_found
   emitted_by:
   - surface: http
@@ -14,14 +11,14 @@ errors:
     - circle.circle_group_membership.ApplyJoinCircleGroup
     - circle.circle_group_membership.ListCircleGroupMemberships
   http_status: 404
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupNotFound
   go_const: ErrGroupNotFound
   user_message:
     zh: 群组不存在
     en: Circle group not found
 - code: CIRCLE.USER.group_archived
-  kind: USER
   reason: group_archived
   emitted_by:
   - surface: http
@@ -29,14 +26,14 @@ errors:
     - UpdateCircleGroup
     - circle.circle_group_membership.ApplyJoinCircleGroup
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupArchived
   go_const: ErrGroupArchived
   user_message:
     zh: 群组已归档
     en: Circle group is archived
 - code: CIRCLE.USER.group_parent_invalid
-  kind: USER
   reason: group_parent_invalid
   emitted_by:
   - surface: http
@@ -44,28 +41,28 @@ errors:
     - CreateCircleGroup
     - UpdateCircleGroup
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupParentInvalid
   go_const: ErrGroupParentInvalid
   user_message:
     zh: 上级群组无效或形成循环
     en: Invalid or cyclic parent group
 - code: CIRCLE.USER.group_default_conflict
-  kind: USER
   reason: group_default_conflict
   emitted_by:
   - surface: http
     operations:
     - CreateCircleGroup
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupDefaultConflict
   go_const: ErrGroupDefaultConflict
   user_message:
     zh: 该圈子已存在默认公共群
     en: The circle already has a default public group
 - code: CIRCLE.USER.group_default_cannot_archive
-  kind: USER
   reason: group_default_cannot_archive
   emitted_by:
   - surface: http
@@ -73,13 +70,13 @@ errors:
     - ArchiveCircleGroup
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: groupDefaultCannotArchive
   go_const: ErrGroupDefaultCannotArchive
   user_message:
     zh: 默认公共群不能归档
     en: The default public group cannot be archived
 - code: CIRCLE.USER.group_version_conflict
-  kind: USER
   reason: group_version_conflict
   emitted_by:
   - surface: http
@@ -87,14 +84,14 @@ errors:
     - ArchiveCircleGroup
     - UpdateCircleGroup
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupVersionConflict
   go_const: ErrGroupVersionConflict
   user_message:
     zh: 群组已更新，请刷新后重试
     en: Circle group changed, refresh and retry
 - code: CIRCLE.USER.group_idempotency_conflict
-  kind: USER
   reason: group_idempotency_conflict
   emitted_by:
   - surface: http
@@ -103,14 +100,14 @@ errors:
     - CreateCircleGroup
     - UpdateCircleGroup
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: groupIdempotencyConflict
   go_const: ErrGroupIdempotencyConflict
   user_message:
     zh: 重复请求与原群组命令不一致
     en: Idempotency key was reused for another group command
 - code: CIRCLE.SYSTEM.group_storage_write_failed
-  kind: SYSTEM
   reason: group_storage_write_failed
   emitted_by:
   - surface: http
@@ -123,6 +120,7 @@ errors:
     - UpdateCircleGroup
   http_status: 500
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: groupStorageWriteFailed
   go_const: ErrGroupStorageWriteFailed

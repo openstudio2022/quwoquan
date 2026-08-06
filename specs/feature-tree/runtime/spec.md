@@ -131,7 +131,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - [`runtime-eventstore`](./runtime-eventstore/spec.md)：MongoDB events 集合持久化领域事件（aggregate_id, event_type, payload, timestamp, trace_id）。
 - [`runtime-experiments`](./runtime-experiments/spec.md)：统一 runtime hash 分桶、推荐/搜索复用、实际流量归因及未绑定控制面 fail-closed。
 - [`runtime-external-integration`](./runtime-external-integration/spec.md)：以能力专属 typed Port、Provider Adapter、构建期 BindingCompiler、统一 Conformance Suite、3×3 证据和双层 readiness 隔离第三方差异；integration-service 只是 runtime 治理的一种部署形态。
-- [`runtime-governance`](./runtime-governance/spec.md)：提供统一服务治理策略引擎：timeout、retry、circuit-breaker、rate-limit、degrade。
+- [`runtime-governance`](./runtime-governance/spec.md)：提供统一服务治理装置：出站熔断、owner 侧并发背压、operation 准入负载摘除与 feature flag 判定。
 - [`runtime-http`](./runtime-http/spec.md)：提供 HTTP server/client 运行时中间件管线与上下文传播封装。
 - [`runtime-interceptor`](./runtime-interceptor/spec.md)：读链：api_exposure 字段过滤 → classification 脱敏（PII mask, SECRET drop）→ log_policy 日志记录。
 - [`runtime-learning`](./runtime-learning/spec.md)：提供统一反馈事件、评分卡、评估记录与优化闭环版本化模型。
@@ -185,17 +185,16 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 
 ## 7. 工程归属
 
-- App：`quwoquan_app`（跨域基础设施与未被更具体 L1 路径认领的 App 工程根）、`quwoquan_app/lib/core`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/cloud/runtime`、`quwoquan_app/lib/app`
+- App：`quwoquan_app`（仅拥有 App 项目级构建与平台壳，不作为业务 domain fallback）、`quwoquan_app/lib/runtime`、`quwoquan_app/lib/design_system`、`quwoquan_app/lib/l10n`、`quwoquan_app/lib/service/integration_service`
 - Metadata：`quwoquan_service/contracts/metadata/_shared`
 - Metadata（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service/contracts`
 - Service：`quwoquan_service`（跨域基础设施、生成链与未被更具体 L1 路径认领的 Service 工程根）、`quwoquan_service/contracts`
 - Service：`quwoquan_service/services/integration-service`（外部能力机制进程）
 - Service（协作引用，不用于代码归属）：`quwoquan_service/runtime`、`quwoquan_ops`
 - 测试：
-  - `local_contract`：`quwoquan_service/runtime`
+  - `local_contract`：`quwoquan_service/runtime`、`quwoquan_app/test/local_contract/journeys/connector_management`
   - `api_integration`：`quwoquan_ops/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/app_startup`
 
 ## 8. 开放事项
 

@@ -94,18 +94,79 @@ type UserAccountRestrictionProjectionResult struct {
 	Affected int64
 }
 
-// UserAccountClosedProjection 必须把 event inbox 与通知数据清理放在同一
-// 存储事务中；相同 eventId 的不同 digest 必须失败关闭。
-type UserAccountClosedProjection interface {
+// UserAccountClosedProjectionStore 是 application facet 的持久化端口。
+// 实现必须把 event inbox 与通知数据清理放在同一存储事务中。
+type UserAccountClosedProjectionStore interface {
 	ApplyUserAccountClosed(
 		ctx context.Context,
 		event UserAccountClosedEvent,
 	) (UserAccountClosedProjectionResult, error)
 }
 
-type UserAccountRestrictionProjection interface {
+// UserAccountClosedProjection 是 Notification 对 UserAccountClosed 的唯一
+// lifecycle application facet。事件校验在进入存储事务前统一完成。
+type UserAccountClosedProjection struct {
+	store UserAccountClosedProjectionStore
+}
+
+func NewUserAccountClosedProjection(
+	store UserAccountClosedProjectionStore,
+) (*UserAccountClosedProjection, error) {
+	if store == nil {
+		return nil, errors.New("notification account closure projection store is required")
+	}
+	return &UserAccountClosedProjection{store: store}, nil
+}
+
+func (projection *UserAccountClosedProjection) ApplyUserAccountClosed(
+	ctx context.Context,
+	event UserAccountClosedEvent,
+) (UserAccountClosedProjectionResult, error) {
+	if projection == nil || projection.store == nil {
+		return UserAccountClosedProjectionResult{}, errors.New(
+			"notification account closure projection is not configured",
+		)
+	}
+	if err := event.Validate(); err != nil {
+		return UserAccountClosedProjectionResult{}, err
+	}
+	return projection.store.ApplyUserAccountClosed(ctx, event)
+}
+
+// UserAccountRestrictionProjectionStore 是可逆限制投影的持久化端口。
+type UserAccountRestrictionProjectionStore interface {
 	Apply(
 		ctx context.Context,
 		event accountrestriction.Event,
 	) (UserAccountRestrictionProjectionResult, error)
+}
+
+// UserAccountRestrictionProjection 是 Notification 对 UserSuspended / UserRestored
+// 的唯一 lifecycle application facet。
+type UserAccountRestrictionProjection struct {
+	store UserAccountRestrictionProjectionStore
+}
+
+func NewUserAccountRestrictionProjection(
+	store UserAccountRestrictionProjectionStore,
+) (*UserAccountRestrictionProjection, error) {
+	if store == nil {
+		return nil, errors.New("notification account restriction projection store is required")
+	}
+	return &UserAccountRestrictionProjection{store: store}, nil
+}
+
+func (projection *UserAccountRestrictionProjection) Apply(
+	ctx context.Context,
+	event accountrestriction.Event,
+) (UserAccountRestrictionProjectionResult, error) {
+	if projection == nil || projection.store == nil {
+		return UserAccountRestrictionProjectionResult{}, errors.New(
+			"notification account restriction projection is not configured",
+		)
+	}
+	if err := event.Validate(); err != nil {
+		return UserAccountRestrictionProjectionResult{}, err
+	}
+	return projection.store.Apply(ctx, event)
 }

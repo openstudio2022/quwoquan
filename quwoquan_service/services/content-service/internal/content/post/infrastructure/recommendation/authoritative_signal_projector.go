@@ -239,7 +239,7 @@ type reportSignalFact struct {
 	Reason     string `json:"reason"`
 }
 
-// ReportSignalProjector 消费 content.report.created 事实注入 report 负信号
+// ReportSignalProjector 消费 content.report.ReportCreated 事实注入 report 负信号
 // （HotPath 负反馈集 + 特征投影 + 训练标签）。
 type ReportSignalProjector struct {
 	sink *AuthoritativeSignalSink
@@ -258,7 +258,7 @@ func (p *ReportSignalProjector) publishFact(ctx context.Context, eventID, eventT
 	if p == nil || p.sink == nil {
 		return fmt.Errorf("report signal projector is not configured")
 	}
-	if eventType != "content.report.created" {
+	if eventType != "content.report.ReportCreated" {
 		return nil
 	}
 	var fact reportSignalFact

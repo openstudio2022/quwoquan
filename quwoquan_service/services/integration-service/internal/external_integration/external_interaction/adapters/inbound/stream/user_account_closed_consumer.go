@@ -89,7 +89,7 @@ func (config UserAccountClosedConsumerConfig) withDefaults() UserAccountClosedCo
 
 type UserAccountClosedConsumer struct {
 	transport  UserAccountClosedTransport
-	projection application.UserAccountClosedProjection
+	projection *application.UserAccountClosedProjection
 	failures   UserAccountClosedFailureStore
 	consumer   string
 	config     UserAccountClosedConsumerConfig
@@ -102,7 +102,7 @@ type UserAccountClosedConsumer struct {
 
 func NewUserAccountClosedConsumer(
 	transport UserAccountClosedTransport,
-	projection application.UserAccountClosedProjection,
+	projection *application.UserAccountClosedProjection,
 	failures UserAccountClosedFailureStore,
 	consumer string,
 	logger *slog.Logger,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -10,6 +11,18 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPTS_ROOT.parent.parent
 ALLOWED_ROOT_ENTRIES = {"cli.py", "core", "content", "governance", "verify", "__init__.py"}
+_MILESTONE_NAME_FRAGMENTS = (
+    "t[1-4]",
+    "m6",
+    "m7",
+    "b" + "10",
+    "ph" + "ase" + "0",
+    "p" + "art" + "[0-9]+",
+)
+MILESTONE_NAME_RE = re.compile(
+    r"(^|[_-])(?:" + "|".join(_MILESTONE_NAME_FRAGMENTS) + r")(?=[_.-]|$)",
+    re.IGNORECASE,
+)
 RETIRED_DIRECTORIES = {
     "annotate", "audit", "build", "data", "download", "env", "explore", "fixture",
     "homepage_assets", "media", "plan", "produce", "publish", "quality", "reconcile",
@@ -179,6 +192,12 @@ def script_architecture_issues() -> list[str]:
         if path.exists():
             issues.append(f"{path.relative_to(REPO_ROOT)}: retired ambiguous module")
     for path in _python_files(SCRIPTS_ROOT):
+        if MILESTONE_NAME_RE.search(path.name):
+            issues.append(
+                f"{path.relative_to(REPO_ROOT)}: "
+                "stable script names must describe behavior, not "
+                "T/M/B/phase/part milestones"
+            )
         text = path.read_text(encoding="utf-8")
         lines = text.count("\n") + 1
         if path.name == "cli.py":

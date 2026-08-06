@@ -227,6 +227,9 @@ func (s *PersonaCommandPostgresStore) commit(
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if err := lockPersonaCommandKey(ctx, tx, meta.IdempotencyKey); err != nil {
+		return personaports.PersonaCommandResult{}, err
+	}
 	if result, replayed, err := s.replay(ctx, tx, meta); err != nil || replayed {
 		if err != nil {
 			return personaports.PersonaCommandResult{}, err
@@ -258,7 +261,8 @@ func (s *PersonaCommandPostgresStore) replay(
 	err := tx.QueryRow(ctx, `
 SELECT command_digest, result_json
 FROM personas_command_receipts
-WHERE idempotency_key=$1`, meta.IdempotencyKey).Scan(&storedDigest, &resultJSON)
+WHERE idempotency_key=$1
+FOR SHARE`, meta.IdempotencyKey).Scan(&storedDigest, &resultJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return personaports.PersonaCommandResult{}, false, nil
 	}
@@ -275,6 +279,22 @@ WHERE idempotency_key=$1`, meta.IdempotencyKey).Scan(&storedDigest, &resultJSON)
 	}
 	result.Replayed = true
 	return result, true, nil
+}
+
+func lockPersonaCommandKey(
+	ctx context.Context,
+	tx pgx.Tx,
+	idempotencyKey string,
+) error {
+	// The event identity is the cross-transaction serialization coordinate for
+	// replay, orphan repair, outbox insert and receipt insert. The lock is taken
+	// once in commit before replay; appendPacket must never acquire it again.
+	_, err := tx.Exec(
+		ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		stablePersonaPacketID("event", idempotencyKey),
+	)
+	return err
 }
 
 func (s *PersonaCommandPostgresStore) appendPacket(
@@ -294,6 +314,22 @@ func (s *PersonaCommandPostgresStore) appendPacket(
 		return err
 	}
 	eventID := stablePersonaPacketID("event", meta.IdempotencyKey)
+	// commit 已按 event identity 持有 transaction-local advisory lock，并在
+	// 锁内以 FOR SHARE 查过 canonical receipt。此时才能把同 identity 下
+	// “有 outbox、无 receipt”的记录判定为旧注销遗留 orphan。
+	if _, err := tx.Exec(ctx, `
+DELETE FROM personas_outbox
+WHERE event_id=$1
+  AND NOT EXISTS (
+    SELECT 1
+    FROM personas_command_receipts
+    WHERE idempotency_key=$2
+  )`,
+		eventID,
+		meta.IdempotencyKey,
+	); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 INSERT INTO personas_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
@@ -302,34 +338,10 @@ INSERT INTO personas_outbox(
 		personaID, version, eventType, payload,
 	); err != nil {
 		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23505" {
-			return err
-		}
-		// Self-heal orphan outbox left after account-close receipt deletion.
-		var ignored string
-		receiptErr := tx.QueryRow(ctx, `
-SELECT idempotency_key
-FROM personas_command_receipts
-WHERE idempotency_key=$1`, meta.IdempotencyKey).Scan(&ignored)
-		if receiptErr == nil {
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return personaports.ErrPersonaIdempotencyConflict
 		}
-		if !errors.Is(receiptErr, pgx.ErrNoRows) {
-			return receiptErr
-		}
-		if _, delErr := tx.Exec(ctx, `
-DELETE FROM personas_outbox WHERE event_id=$1`, eventID); delErr != nil {
-			return delErr
-		}
-		if _, err = tx.Exec(ctx, `
-INSERT INTO personas_outbox(
-  event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
-) VALUES ($1,$2,$3,$4,$5,NOW())`,
-			eventID,
-			personaID, version, eventType, payload,
-		); err != nil {
-			return err
-		}
+		return err
 	}
 	resultJSON, err := json.Marshal(personaports.PersonaCommandResult{
 		PersonaID: personaID,

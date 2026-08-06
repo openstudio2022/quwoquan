@@ -601,18 +601,18 @@ func TestSharedSurfaceAllowsInternalDomainContextWithoutBecomingPublic(t *testin
 	loop := contextAssemblyLoop(t, model)
 	now := time.Now().UTC()
 	sourceDigest := canonicalContextFixtureDigest(struct {
-		TripID         string `json:"tripId"`
-		RevisionNumber int64  `json:"revisionNumber"`
-	}{TripID: "trip-1", RevisionNumber: 2})
+		ConversationID string `json:"conversationId"`
+		MessageCount   int64  `json:"messageCount"`
+	}{ConversationID: "conversation-channel", MessageCount: 2})
 	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
-		DescriptorID:        "travel.trip_context",
-		ResolverRef:         "trip.current_context",
-		OwnerService:        "travel-service",
-		OwnerOperationRefs:  []string{"travel.trip_timeline_view.GetTripTimeline"},
-		InputSchemaRef:      "travel.GetTripTimelineQuery",
-		OutputSchemaRef:     "assistant.TravelContextSegment",
-		ObjectTypeRefs:      []string{"travel.TripTimelineView"},
-		AcceptedSourceKinds: []string{"domain"},
+		DescriptorID:        "chat.conversation_context",
+		ResolverRef:         "conversation.current_context",
+		OwnerService:        "assistant-service",
+		OwnerOperationRefs:  []string{"assistant.assistant_run.GetAssistantRun"},
+		InputSchemaRef:      "assistant.GetAssistantRunQuery",
+		OutputSchemaRef:     "assistant.ContextSegment",
+		ObjectTypeRefs:      []string{"chat.Conversation"},
+		AcceptedSourceKinds: []string{"conversation"},
 		Authority:           assistantgenerated.AssistantContextAuthorityDomainCanonical,
 		Sensitivity:         assistantgenerated.AssistantContextSensitivityInternal,
 		SurfaceKinds: []readermodel.SurfaceKind{
@@ -635,15 +635,15 @@ func TestSharedSurfaceAllowsInternalDomainContextWithoutBecomingPublic(t *testin
 			ResolverRef: descriptor.ResolverRef,
 			Resolver: sharedContextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
 				return skillcontext.ResolvedContext{
-					Kind:        "domain",
-					SourceRef:   "travel.TripTimelineView:trip-1@" + sourceDigest,
+					Kind:        "conversation",
+					SourceRef:   "chat.Conversation:conversation-channel@" + sourceDigest,
 					Authority:   assistantgenerated.AssistantContextAuthorityDomainCanonical,
 					Sensitivity: assistantgenerated.AssistantContextSensitivityInternal,
 					CapturedAt:  now,
 					TokenCost:   32,
 					Value: map[string]any{
-						"tripId":       "trip-1",
-						"sourceDigest": sourceDigest,
+						"conversationId": "conversation-channel",
+						"sourceDigest":   sourceDigest,
 					},
 				}, nil
 			}),
@@ -681,16 +681,16 @@ func TestSharedSurfaceAllowsInternalDomainContextWithoutBecomingPublic(t *testin
 	snapshot := model.assemblies[0].SkillContextSnapshot
 	if snapshot == nil || len(snapshot.Segments) != 1 ||
 		snapshot.Segments[0].Sensitivity != assistantgenerated.AssistantContextSensitivityInternal ||
-		snapshot.Segments[0].Value["tripId"] != "trip-1" {
-		t.Fatalf("shared internal Trip context was rejected or widened: %#v", snapshot)
+		snapshot.Segments[0].Value["conversationId"] != "conversation-channel" {
+		t.Fatalf("shared internal conversation context was rejected or widened: %#v", snapshot)
 	}
 	prompt, err := contextassembly.FormatForPrompt(model.assemblies[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"context[trip_context]",
-		`"tripId":"trip-1"`,
+		"context[conversation_context]",
+		`"conversationId":"conversation-channel"`,
 		"authority=domain_canonical",
 	} {
 		if !strings.Contains(prompt, want) {
@@ -706,7 +706,7 @@ func TestSkillContextPromptFailsClosedWhenCanonicalValueCannotBeEncoded(t *testi
 			SnapshotID: "context-invalid",
 			Segments: []skillcontext.Segment{{
 				SegmentID: "segment-invalid",
-				SlotID:    "trip_context",
+				SlotID:    "gathering_context",
 				Value: map[string]any{
 					"invalid": func() {},
 				},

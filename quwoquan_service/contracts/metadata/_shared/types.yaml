@@ -125,10 +125,10 @@ enums:
   HomepageReviewStatus: [active, deleted]
   ProposalStatus: [pending, confirmed, applying, applied, rolling_back, rolled_back, rejected, expired]
   ProposalSource: [persona, assistant, external]
-  ReportTargetType: [post, comment, user, circle, message]
+  ReportTargetType: [post, comment, user, circle, gathering, message]
   ReportReason: [spam, harassment, violence, adult, copyright, other]
   ReportStatus: [pending, reviewing, resolved, dismissed]
-  ReportResolution: [warn, delete_content, suspend_user, ban, dismiss]
+  ReportResolution: [warn, delete_content, suspend_user, terminate_gathering, ban, dismiss]
   NotificationType: [social, content, circle, system, assistant]
   RunTriggerType: [user_query, suggested_action, skill_select, global_search_handoff]
   BehaviorEventType: [impression, click, dwell, like, dislike, undo_dislike, hide_author, hide_content_type, report, share, comment, intersection_expand, intersection_feedback, wishlist_add, wishlist_remove, skip, follow, join_circle, leave_circle, add_contact, author_view, entity_page_view, tag_click, content_depth, play_progress, effective_play, assistant_interest, onboarding_interest]
@@ -174,6 +174,11 @@ enums:
   MessageCardKind: [profile_qr, content_post, user_profile, entity_profile, circle, gathering, rtc_call_log]
   RelationshipState: [self, not_following, following, followed_by, mutual]
   ProfileOwnerKind: [account, persona, creator]
+  # 关注频道读模型（FollowingSubject / FollowedSubjectVisitState）的并集值域：
+  # persona 行来自 PersonaRelationship，circle 行来自 CircleMembership，
+  # homepage / location 行来自 SubjectFollow。写侧不共享这个值域——
+  # SubjectFollow 只能写 homepage/circle/location，由对象自有
+  # SubjectFollowTargetKind 拥有，避免读并集被当成写许可。
   FollowSubjectKind: [persona, homepage, circle, location]
   SubjectFollowState: [following, unfollowed]
   ProfileSyncApplyScope: [current_subject_only, owner_only, all_personas, selected_subjects]

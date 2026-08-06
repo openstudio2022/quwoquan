@@ -3,10 +3,13 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	taskmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/domain/model"
 )
+
+var ErrProjectionUnavailable = errors.New("assistant task projection is unavailable")
 
 type Reader interface {
 	List(context.Context, string, string, int) ([]taskmodel.Item, error)
@@ -28,11 +31,11 @@ func (f *QueryFacade) ListTasks(ctx context.Context, accountID, status string, l
 		limit = 100
 	}
 	if f == nil || f.reader == nil {
-		return taskmodel.Slice{Items: []taskmodel.Item{}}, nil
+		return taskmodel.Slice{}, ErrProjectionUnavailable
 	}
 	items, err := f.reader.List(ctx, accountID, strings.TrimSpace(status), limit)
 	if err != nil {
-		return taskmodel.Slice{}, err
+		return taskmodel.Slice{}, fmt.Errorf("%w: %v", ErrProjectionUnavailable, err)
 	}
 	if items == nil {
 		items = []taskmodel.Item{}

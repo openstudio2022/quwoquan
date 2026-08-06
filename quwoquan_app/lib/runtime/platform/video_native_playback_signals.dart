@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:quwoquan_app/core/platform/video_native_playback_signals_stub.dart'
-    if (dart.library.io) 'package:quwoquan_app/core/platform/video_native_playback_signals_android.dart'
+import 'package:quwoquan_app/runtime/platform/video_native_playback_signals_stub.dart'
+    if (dart.library.io) 'package:quwoquan_app/runtime/platform/video_native_playback_signals_android.dart'
     as impl;
 
 /// Cross-cutting native playback evidence consumed by [VideoPlaybackSession].

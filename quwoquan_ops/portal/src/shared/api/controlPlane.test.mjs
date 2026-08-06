@@ -428,14 +428,14 @@ test('requests canonical runtime diagnostics from product ops', async () => {
       payload: {
         totalCount: 4,
         dimensions: { signal: { 'app.exception.flutter': 4 } },
-        source: 'sls_aggregate',
+        sourceKind: 'hourly_rollup',
       },
     },
     {
       payload: {
         totalCount: 1,
         items: [{ rowKey: 'runtime-1', signal: 'app.exception.flutter', severity: 'ERROR', message: 'safe' }],
-        source: 'sls_raw',
+        sourceKind: 'raw_records',
       },
     },
   ]);

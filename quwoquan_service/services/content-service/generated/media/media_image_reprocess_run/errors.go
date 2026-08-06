@@ -21,29 +21,29 @@ var (
 // AppErrorFromMediaImageReprocessInvalidArgument returns *AppError for CONTENT.USER.media_image_reprocess_invalid_argument (user_message from errors.yaml).
 func AppErrorFromMediaImageReprocessInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_image_reprocess_invalid_argument")
-	return rterr.NewAppError(code, "图片重处理请求无效", debugMessage).WithMetadata("media_image_reprocess_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "图片重处理请求无效", debugMessage).WithMetadata("media_image_reprocess_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaImageReprocessInvalidTransition returns *AppError for CONTENT.USER.media_image_reprocess_invalid_transition (user_message from errors.yaml).
 func AppErrorFromMediaImageReprocessInvalidTransition(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_image_reprocess_invalid_transition")
-	return rterr.NewAppError(code, "图片重处理任务当前不能执行此操作", debugMessage).WithMetadata("media_image_reprocess_invalid_transition", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "图片重处理任务当前不能执行此操作", debugMessage).WithMetadata("media_image_reprocess_invalid_transition", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromMediaImageReprocessRunNotFound returns *AppError for CONTENT.USER.media_image_reprocess_run_not_found (user_message from errors.yaml).
 func AppErrorFromMediaImageReprocessRunNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_image_reprocess_run_not_found")
-	return rterr.NewAppError(code, "图片重处理任务不存在", debugMessage).WithMetadata("media_image_reprocess_run_not_found", 404).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "图片重处理任务不存在", debugMessage).WithMetadata("media_image_reprocess_run_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaImageReprocessStorageUnavailable returns *AppError for CONTENT.SYSTEM.media_image_reprocess_storage_unavailable (user_message from errors.yaml).
 func AppErrorFromMediaImageReprocessStorageUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.media_image_reprocess_storage_unavailable")
-	return rterr.NewAppError(code, "图片重处理存储暂不可用", debugMessage).WithMetadata("media_image_reprocess_storage_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "图片重处理存储暂不可用", debugMessage).WithMetadata("media_image_reprocess_storage_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromMediaImageReprocessVersionConflict returns *AppError for CONTENT.USER.media_image_reprocess_version_conflict (user_message from errors.yaml).
 func AppErrorFromMediaImageReprocessVersionConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.media_image_reprocess_version_conflict")
-	return rterr.NewAppError(code, "图片重处理任务状态已变化，请重试", debugMessage).WithMetadata("media_image_reprocess_version_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "图片重处理任务状态已变化，请重试", debugMessage).WithMetadata("media_image_reprocess_version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }

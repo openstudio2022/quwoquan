@@ -26,7 +26,13 @@ class _HealthyConsumer:
 def _mark_runtime_ready() -> None:
     app.state.runtime_workload = "full"
     app.state.ranked_window_facade = object()
+    app.state.model_release_command_facade = object()
+    app.state.model_release_outbox_relay = _HealthyConsumer()
+    app.state.model_release_runtime_consumer = _HealthyConsumer()
     app.state.candidate_post_lifecycle_consumer = _HealthyConsumer()
+    app.state.candidate_gathering_lifecycle_consumer = _HealthyConsumer()
+    app.state.candidate_premium_pool_consumer = _HealthyConsumer()
+    app.state.experiment_policy_consumer = _HealthyConsumer()
     app.state.user_account_closed_consumer = _HealthyConsumer()
     app.state.content_behavior_consumer = _HealthyConsumer()
     app.state.feed_page_delivered_consumer = _HealthyConsumer()
@@ -54,6 +60,14 @@ def test_content_slice_health_does_not_claim_experiment_scoring_readiness(worklo
 
 def test_health_fails_closed_when_projection_consumer_is_missing():
     app.state.candidate_post_lifecycle_consumer = None
+    r = client.get("/health")
+    assert r.status_code == 503
+    assert r.json()["detail"] == {"status": "not_ready"}
+
+
+def test_health_fails_closed_when_model_runtime_consumer_is_missing():
+    _mark_runtime_ready()
+    app.state.model_release_runtime_consumer = None
     r = client.get("/health")
     assert r.status_code == 503
     assert r.json()["detail"] == {"status": "not_ready"}

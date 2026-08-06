@@ -1,9 +1,6 @@
-domain: CIRCLE
-aggregate: CircleBehaviorFact
 description: 'CircleBehaviorFact 对象专属错误码。格式：MODULE.KIND.REASON。'
 errors:
 - code: CIRCLE.SYSTEM.behavior_fact_write_failed
-  kind: SYSTEM
   reason: behavior_fact_write_failed
   emitted_by:
   - surface: http
@@ -11,20 +8,21 @@ errors:
     - ReportCircleBehavior
   http_status: 500
   recovery_action: retry
+  disruption_level: snackbar
   dart_const: behaviorFactWriteFailed
   go_const: ErrBehaviorFactWriteFailed
   user_message:
     zh: 行为记录失败，请稍后重试
     en: Failed to record circle behavior, retry later
 - code: CIRCLE.USER.behavior_fact_idempotency_conflict
-  kind: USER
   reason: behavior_fact_idempotency_conflict
   emitted_by:
   - surface: http
     operations:
     - ReportCircleBehavior
   http_status: 409
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: behaviorFactIdempotencyConflict
   go_const: ErrBehaviorFactIdempotencyConflict
   user_message:

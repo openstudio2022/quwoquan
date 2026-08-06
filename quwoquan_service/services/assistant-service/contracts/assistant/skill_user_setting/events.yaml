@@ -1,8 +1,17 @@
 events:
 - name: SkillUserSettingChanged
   description: 个人 Skill 显式设置完成创建或 CAS 更新。
-  producer: assistant-service
-  consumers: [assistant-run]
-  channel: assistant.skill_user_setting
+  delivery_semantics: transactional_event_log
+  topic: assistant.skill_user_setting
   payload_entity: SkillUserSetting
-  payload_fields: [id, accountId, skillId, status, configurationSchemaDigest, memoryPolicy, connectorConnectionRefs, revision, updatedAt]
+  payload_fields:
+  - id
+  - accountId
+  - skillId
+  - status
+  - configurationSchemaDigest
+  - memoryPolicy
+  - connectorConnectionRefs
+  - revision
+  - updatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 setting audit journal；运行时直接读取当前 setting，不订阅该日志。

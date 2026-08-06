@@ -33,7 +33,6 @@ local_identity_reasons:
     只通过所属服务的 typed reader 校验存在性和管理员权限
   disabledSkillIds: >-
     active SkillPackageRelease 内的稳定 Skill key 集合；不是本聚合拥有的子对象身份
-capabilities: [commandable, queryable, idempotent_commands]
 taggable: false
 vector_enabled: false
 business_rules:

@@ -80,9 +80,6 @@ local_identity_reasons:
     an aggregate Store identity
   sourceSurfaceId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
-capabilities:
-- queryable
-- aggregatable
 taggable: false
 vector_enabled: false
 business_rules:

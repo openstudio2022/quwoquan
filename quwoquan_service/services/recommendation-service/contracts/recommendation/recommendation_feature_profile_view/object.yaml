@@ -21,7 +21,52 @@ business_rules:
 - 交集理由只从 PersonaRelationship、CircleMembership、ContentBehaviorFact 与 Post lifecycle 的 typed durable stream 写入对象本地证据投影；全局主体快照可服务任意 channel，精确 channel 快照存在时优先，禁止回读 User、Circle 或 Content 存储。
 - 账号关闭阻断后必须删除可识别特征，并由 closure fact 阻止旧事件重建。
 lifecycle:
-  source_events: [RecommendationExposureRecorded, RecommendationFeedbackRecorded, TagFeedbackRecorded, ContentBehaviorRecorded, PersonaFollowStateChanged, PersonaBlocked, PersonaUnblocked, CircleMembershipRequested, CircleMembershipJoined, CircleMembershipApproved, CircleMembershipLeft, CircleMembershipRoleChanged, CircleMembershipRejected, PostPublished, PostUpdated, PostSettingsUpdated, PostPromotedToWork, PostDeleted, PostPrivacyRedacted, PostPurged, RecommendationSubjectClosed]
+  source_events:
+  - content.content_behavior_fact.ContentBehaviorRecorded
+  - tag.tag_feedback_fact.TagFeedbackRecorded
+  - user.persona_relationship.PersonaFollowStateChanged
+  - user.persona_relationship.PersonaBlocked
+  - user.persona_relationship.PersonaUnblocked
+  - circle.circle_membership.CircleMembershipRequested
+  - circle.circle_membership.CircleMembershipJoined
+  - circle.circle_membership.CircleMembershipApproved
+  - circle.circle_membership.CircleMembershipLeft
+  - circle.circle_membership.CircleMembershipRoleChanged
+  - circle.circle_membership.CircleMembershipRejected
+  - content.post.PostPublished
+  - content.post.PostUpdated
+  - content.post.PostSettingsUpdated
+  - content.post.PostPromotedToWork
+  - content.post.PostDeleted
+  - content.post.PostPrivacyRedacted
+  - content.post.PostPurged
   checkpoint: per_subject_applied_event_revision_with_source_event_receipt
   rebuild: replay_authoritative_facts_and_relationship_events_for_open_subjects
   tombstone: purge_identifying_features_keep_irreversible_closure_checkpoint
+  idempotency: event_id
+  event_consumers:
+  - name: ProjectRecommendationFeatureBehavior
+    kind: projector
+    facet: ContentBehaviorConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ProjectRecommendationTagFeedback
+    kind: projector
+    facet: TagFeedbackConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ProjectRecommendationPersonaRelationship
+    kind: projector
+    facet: PersonaRelationshipConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ProjectRecommendationCircleMembership
+    kind: projector
+    facet: CircleMembershipConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ProjectRecommendationPostLifecycle
+    kind: projector
+    facet: PostLifecycleConsumer
+    method: processOnce
+    idempotency: event_id

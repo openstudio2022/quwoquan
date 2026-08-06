@@ -42,7 +42,7 @@ func newAccountClosureIntegrationConsumer(
 	}
 	consumer, err := streamadapter.NewUserAccountClosedConsumer(
 		transport,
-		notificationAccountClosure,
+		notificationClosureFacet,
 		notificationAccountClosure,
 		"notification-account-closure-integration",
 		nil,
@@ -51,6 +51,7 @@ func newAccountClosureIntegrationConsumer(
 	if err != nil {
 		t.Fatalf("create account-closure consumer: %v", err)
 	}
+	consumer.WithUserAccountRestrictionProjection(notificationRestrictionFacet)
 	return consumer
 }
 

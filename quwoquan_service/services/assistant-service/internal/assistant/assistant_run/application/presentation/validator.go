@@ -1,10 +1,10 @@
 package presentation
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 )
@@ -48,11 +48,12 @@ func ValidateTemplate(template Template) error {
 		}
 	}
 	allowedActions := make(map[string]bool, len(template.AllowedActionIntents))
-	for _, operation := range template.AllowedActionIntents {
-		if !identifierPattern.MatchString(operation) || allowedActions[operation] {
+	for _, kind := range template.AllowedActionIntents {
+		if !validActionIntentKind(ActionIntentKind(kind)) ||
+			allowedActions[kind] {
 			return ErrInvalidTemplate
 		}
-		allowedActions[operation] = true
+		allowedActions[kind] = true
 	}
 	nodes := make(map[string]Node, len(template.Nodes))
 	nodeKinds := make(map[generated.AssistantPresentationNodeKind]bool, len(template.Nodes))
@@ -204,15 +205,76 @@ func validateBinding(binding map[string]string) error {
 }
 
 func validateActionIntent(action ActionIntent, allowed map[string]bool) error {
-	if !allowed[action.Operation] || !identifierPattern.MatchString(action.IntentID) ||
-		!identifierPattern.MatchString(action.Operation) ||
-		!identifierPattern.MatchString(action.ObjectTypeRef) ||
-		!identifierPattern.MatchString(action.ObjectID) ||
-		unsafeActionPayload(action.Payload) {
+	if !allowed[string(action.Kind)] ||
+		!identifierPattern.MatchString(action.IntentID) ||
+		!validActionIntentKind(action.Kind) ||
+		!digestPattern.MatchString(strings.TrimSpace(action.RequestDigest)) ||
+		!identifierPattern.MatchString(strings.TrimSpace(action.JTI)) ||
+		action.IssuedAt.IsZero() ||
+		action.ExpiresAt.IsZero() ||
+		!action.ExpiresAt.After(action.IssuedAt) ||
+		action.ExpiresAt.Sub(action.IssuedAt) > 5*time.Minute {
 		return ErrInvalidTemplate
 	}
-	raw, err := json.Marshal(action.Payload)
-	if err != nil || len(raw) > maxPayloadBytes {
+	subcontracts := 0
+	if action.Navigate != nil {
+		subcontracts++
+	}
+	if action.ApproveTool != nil {
+		subcontracts++
+	}
+	if action.ExecuteDeviceAction != nil {
+		subcontracts++
+	}
+	if action.ProvideInput != nil {
+		subcontracts++
+	}
+	if subcontracts != 1 {
+		return ErrInvalidTemplate
+	}
+	switch action.Kind {
+	case ActionIntentNavigate:
+		if action.Navigate == nil ||
+			!identifierPattern.MatchString(action.Navigate.RouteID) ||
+			!identifierPattern.MatchString(action.Navigate.ObjectTypeRef) ||
+			!identifierPattern.MatchString(action.Navigate.ObjectID) {
+			return ErrInvalidTemplate
+		}
+	case ActionIntentApproveTool:
+		if action.ApproveTool == nil ||
+			!validRunToolTarget(
+				action.ApproveTool.RunID,
+				action.ApproveTool.ToolInvocationID,
+			) ||
+			(action.ApproveTool.Decision != "approved" &&
+				action.ApproveTool.Decision != "rejected") ||
+			!identifierPattern.MatchString(action.ApproveTool.Capability) ||
+			!digestPattern.MatchString(action.ApproveTool.InputDigest) ||
+			!validOpaquePermit(action.ApproveTool.ApprovalPermit) {
+			return ErrInvalidTemplate
+		}
+	case ActionIntentExecuteDeviceAction:
+		device := action.ExecuteDeviceAction
+		if device == nil ||
+			!validRunToolTarget(device.RunID, device.ToolInvocationID) ||
+			!identifierPattern.MatchString(device.InstallationID) ||
+			!identifierPattern.MatchString(device.DeviceID) ||
+			!identifierPattern.MatchString(device.Capability) ||
+			!digestPattern.MatchString(device.InputDigest) ||
+			!identifierPattern.MatchString(device.IdempotencyKey) ||
+			!validOpaquePermit(device.DeviceActionPermit) {
+			return ErrInvalidTemplate
+		}
+	case ActionIntentProvideInput:
+		input := action.ProvideInput
+		if input == nil ||
+			!validRunToolTarget(input.RunID, input.ToolInvocationID) ||
+			!identifierPattern.MatchString(input.InputName) ||
+			!identifierPattern.MatchString(input.InputSchemaRef) ||
+			!validOpaquePermit(input.InputPermit) {
+			return ErrInvalidTemplate
+		}
+	default:
 		return ErrInvalidTemplate
 	}
 	return nil
@@ -232,18 +294,29 @@ func nodeDepth(node Node, nodes map[string]Node) (int, bool) {
 	return depth, false
 }
 
-func unsafeActionPayload(payload map[string]any) bool {
-	for key, value := range payload {
-		normalized := strings.ToLower(strings.ReplaceAll(key, "_", ""))
-		switch normalized {
-		case "url", "route", "callback", "callbackurl", "javascript", "script", "authorization", "cookie":
-			return true
-		}
-		if child, ok := value.(map[string]any); ok && unsafeActionPayload(child) {
-			return true
-		}
+func validActionIntentKind(kind ActionIntentKind) bool {
+	switch kind {
+	case ActionIntentNavigate,
+		ActionIntentApproveTool,
+		ActionIntentExecuteDeviceAction,
+		ActionIntentProvideInput:
+		return true
+	default:
+		return false
 	}
-	return false
+}
+
+func validRunToolTarget(runID string, toolInvocationID string) bool {
+	return identifierPattern.MatchString(strings.TrimSpace(runID)) &&
+		identifierPattern.MatchString(strings.TrimSpace(toolInvocationID))
+}
+
+func validOpaquePermit(value string) bool {
+	value = strings.TrimSpace(value)
+	return len(value) >= 16 && len(value) <= 4096 &&
+		!strings.ContainsAny(value, "\r\n\t ") &&
+		!unsafeURIPattern.MatchString(value) &&
+		!rawHTMLPattern.MatchString(value)
 }
 
 func allowedStyleToken(value string, allowed ...string) bool {

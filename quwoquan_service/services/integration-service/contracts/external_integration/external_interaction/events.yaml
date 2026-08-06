@@ -1,13 +1,8 @@
+description: ExternalInteraction 仅发布已持久化 provider attempt 的规范化结果；账号关闭输入由本对象 operations.yaml 的 typed event handler 独立声明。
 events:
 - name: ExternalInteractionResultReported
-  description: 已记录的 provider attempt 通过 durable event relay 输出；只表示 provider
-    接受或拒绝，不表示终端设备已展示或已送达。
-  producer: integration-service
-  consumers:
-  - user-service
-  - notification-service
-  - platform-ops
-  channel: event_store
+  description: 已记录的 provider attempt 通过 durable event relay 输出；只表示 provider 接受或拒绝，不表示终端设备已展示或已送达。
+  delivery_semantics: transactional_outbox
   payload_entity: ExternalInteractionResultReportedEvent
   payload_fields:
   - eventId
@@ -20,8 +15,3 @@ events:
   - normalizedError
   - recoveryAction
   - occurredAt
-consumption:
-- source_event: UserAccountClosed
-  source_service: user-service
-  channel: events.user.account
-  behavior: durable 幂等删除 Integration 自有的 external request、dead task、recovery receipt、result outbox 与 provider attempt；不得委托 Notification 访问本服务存储。

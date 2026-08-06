@@ -136,7 +136,7 @@ void main() {
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/ui',
+      relativePath: 'quwoquan_app/lib/service',
       pattern: RegExp(
         r'(state\.copyWith\([^;\n]*(?:error|errorMessage)[^;\n]*\.toString\(\)|(?:_error|_errorText)\s*=\s*\w+\.toString\(\))',
       ),
@@ -144,7 +144,7 @@ void main() {
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/core',
+      relativePath: 'quwoquan_app/lib/runtime',
       pattern: RegExp(
         r'(state\.copyWith\([^;\n]*(?:error|errorMessage)[^;\n]*\.toString\(\)|(?:_error|_errorText)\s*=\s*\w+\.toString\(\))',
       ),
@@ -152,19 +152,19 @@ void main() {
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/assistant',
+      relativePath: 'quwoquan_app/lib/service/assistant_service',
       pattern: RegExp(r'\bruntimeFailure:\s*result\.runtimeFailure\b'),
       message: 'assistant failure propagation must use effectiveRuntimeFailure',
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/assistant/protocol',
+      relativePath: 'quwoquan_app/lib/service/assistant_service',
       pattern: RegExp(r'shouldSkipSessionWrite[\s\S]*isDegradedText'),
       message: 'assistant session write must not use text degraded classifier',
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/assistant',
+      relativePath: 'quwoquan_app/lib/service/assistant_service',
       pattern: RegExp(r'AssistantContentFilters\.isDegradedText\('),
       message:
           'assistant production code must not call text degraded classifier',
@@ -255,7 +255,7 @@ void main() {
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/cloud/runtime/codec',
+      relativePath: 'quwoquan_app/lib/runtime',
       pattern: RegExp(r'throw\s+CloudException\('),
       message:
           'cloud response decoder throws CloudException without RuntimeFailure',
@@ -269,13 +269,13 @@ void main() {
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/assistant',
+      relativePath: 'quwoquan_app/lib/service/assistant_service',
       pattern: RegExp(r"'retryable'\s*:|'errorClass'\s*:"),
       message: 'assistant public payload exposes retryable/errorClass',
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/assistant',
+      relativePath: 'quwoquan_app/lib/service/assistant_service',
       pattern: RegExp(
         r'failureCode\s*:\s*[^,\n]+,\s*[\r\n]\s*degraded\s*:',
         dotAll: true,
@@ -285,7 +285,7 @@ void main() {
     ),
     ..._reject(
       repoRoot,
-      relativePath: 'quwoquan_app/lib/assistant',
+      relativePath: 'quwoquan_app/lib/service/assistant_service',
       pattern: RegExp(
         r'current_response|currentErrorCode|current_response_adapter|_currentRuntimeFailureCode',
       ),
@@ -306,12 +306,8 @@ List<String> _rejectAssistantToolFailuresWithoutRuntimeFailure(
   Directory repoRoot,
 ) {
   final roots = <FileSystemEntity>[
-    Directory('${repoRoot.path}/quwoquan_app/lib/assistant/tool/impl'),
-    Directory('${repoRoot.path}/quwoquan_app/lib/assistant/tool/runtime'),
-    Directory('${repoRoot.path}/quwoquan_app/lib/assistant/skill/execution'),
-    Directory('${repoRoot.path}/quwoquan_app/lib/assistant/infrastructure'),
-    File(
-      '${repoRoot.path}/quwoquan_app/lib/assistant/application/remote_assistant_entry.dart',
+    Directory(
+      '${repoRoot.path}/quwoquan_app/lib/service/assistant_service',
     ),
   ].where((entity) => entity.existsSync()).toList(growable: false);
   final failures = <String>[];

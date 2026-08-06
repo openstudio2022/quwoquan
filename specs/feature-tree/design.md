@@ -4,14 +4,14 @@
 
 ## 1. 背景、设计目标与非目标
 
-- 设计目标：趣我圈以内容事实、共同出行、关系与小趣官方 Skill 把一次内容发现转化为可共同计划、现场服务、持续记录和传播的真实经历；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
+- 设计目标：趣我圈以内容事实、单一 Gathering、活动群聊与小趣官方 Skill 把一次内容发现转化为可加入、可协作、可完成和可传播的真实经历；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
 - 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
 ## 2. 全局上下文与所有权
 
 - [`assistant-run-learning`](./assistant-run-learning/spec.md)：让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以版本化策略、学习事件、反馈聚合和用户确认的画像提案持续改进助手行为。
-- [`chat-conversation`](./chat-conversation/spec.md)：让用户在 1v1 与大群会话中可靠发送、接收、同步和治理消息，并在同一会话上下文完成实时通话；容量、权限和失败恢复均保持可观察。
-- [`circle-community`](./circle-community/spec.md)：让用户以清晰的圈子、组织节点与群组边界完成发现、加入、内容参与和成员协作，并保持圈子主页、默认群与共享主页之间的唯一关系语义。
+- [`chat-conversation`](./chat-conversation/spec.md)：拥有 Conversation、ConversationMembership、Message、Announcement、回执与通话事实；活动群聊是有效参与者加入后的默认主场，但不拥有 Gathering、Participation、容量、准入、Revision、Outcome 或 Plan。
+- [`circle-community`](./circle-community/spec.md)：除 Circle 社区事实外，拥有 Gathering、root-owned GatheringParticipation、GatheringRevision、Outcome 与 room binding state，并签发公开详情和活动看板所需的活动投影。
 - [`discovery-content`](./discovery-content/spec.md)：发现流、推荐排序、内容发布、评论互动、媒体处理与帮读能力。
 - [`gateway-orchestrator-foundation`](./gateway-orchestrator-foundation/spec.md)：提供网关统一入口、鉴权限流、防护策略与跨服务编排基础能力。
 - [`global-search-experience`](./global-search-experience/spec.md)：统一搜索覆盖联系人、会话、内容、圈子、主页、地点和网络结果，在本地联想与云侧最终结果之间保持清晰合同，并将反馈归因到搜索和推荐。
@@ -21,13 +21,15 @@
 - [`recommendation-platform`](./recommendation-platform/spec.md)：为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
 - [`runtime`](./runtime/spec.md)：runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integration-service 等独立机制 进程；部署边界不形成新的 L1，业务对象与 Vendor SDK 不得穿透。
 - [`shared-homepage-network`](./shared-homepage-network/spec.md)：让用户发现具体事物的长期主页、挂载内容和评价，并让可信主体通过认领、维护、状态上报与软下线保持主页事实可靠。
-- [`travel-journey`](./travel-journey/spec.md)：拥有 Trip、不可变 Revision、计划项、成员、Moment、Placement、时间线/地图投影、分享快照、模板与 GuideAssignment，把计划、变化、随拍和内容引用收敛到同一共同旅行事实链。
+- [`travel-journey`](./travel-journey/spec.md)：定义 Gathering 上 Plan、Map、Calendar、Experience 的旅行体验组合，并治理现有 travel-service 到 Circle 目标模型的 target-only 迁移；不再把 Trip 定义为长期公共独立根。
 - [`user-identity-profile-relationship`](./user-identity-profile-relationship/spec.md)：让用户以默认账号或明确选择的 Persona 安全进入应用、维护公开资料和设置、建立或解除关系，并在所有业务领域获得一致的主体与权限语义。
 
 ## 3. 跨域协作与数据流
 
 - AppRoot Journey 只编排参与 L1 的公开结果；写事实始终由所属 L1 的 command 完成。
 - 跨域读取使用公开 query/projection，异步变化使用公开 event，任何缓存都不得成为写真相源。
+- 内容驱动 Gathering 的主链固定为：Content 提供 Post/Media 来源引用，Circle 创建并发布 room-ready Gathering，Recommendation 只排序公开投影，Circle 完成准入并投影有效 Participation，Chat 提供活动群聊与 Announcement，Board 组合 owner 读模型，Circle 形成 Outcome，用户确认后 Content 发布回顾。
+- ConversationMembership 是 GatheringParticipation/Organizer authority 的访问投影而非参与真相；投影延迟时保留可恢复等待态，禁止把裸建群、普通 direct、自动 mutual 或 App 本地状态当作降级成功。
 - alpha/beta/gamma/prod 的 App 统一使用 production Remote composition，第一方业务内容经 `quwoquan_data` canonical publish、immutable release、环境 importer 后进入公开 query/projection。
 - Alpha/Beta/Gamma 的用户交易事实由真实非生产主体经领域公开 command/event 产生并绑定候选与清理回执，Prod 只接受真实用户或正式运营行为。
 
@@ -57,17 +59,29 @@
 - 关联要求：`REQ-009`、`REQ-010`
 
 <a id="dec-003"></a>
-### DEC-003 共同旅行以 Travel 真相源和官方 Skill 体验层组合
-- 决策：`travel-journey` 唯一拥有 Trip 计划与共同旅行事实；`assistant-run-learning` 的 `travel_companion` 只通过 active Skill package、公开 Domain Reader、受控 Tool/Connector 和 typed ActionIntent 读取或提议改变这些事实。
-- 理由：一份聊天文本不能承载多人协作、不可变修订、主动提醒、时间线/地图、内容关联和行后传播；反过来，把 Skill 变成 Trip 真相源会造成第二套业务对象与不可恢复的跨域耦合。
-- 被否决方案：由 Prompt 保存行程、由 Chat Message 充当当前计划、在 Assistant 数据库复制 Post/Trip、为旅行 Skill 增加专用 AgentLoop 或 Flutter 页面分支。
-- 约束与影响：`AssistantRun` 冻结 active package digest 并持有运行证据，Travel command 经确认后写入唯一聚合，Presentation 只通过安全语义 AST 与 entity reference 打开领域页面。
+### DEC-003 共同旅行以 Gathering 与可选能力组合
+- 决策：共同旅行的活动身份、Host、Participation、准入、会话、生命周期与 Outcome 由 Circle 的 Gathering 单轨拥有；Plan、Map、Calendar 与 Experience 是可选能力组合。`travel_companion` 只通过 active Skill package、公开 Reader、受控 Tool/Connector 和 typed ActionIntent 读取或提议改变 owner 事实。
+- 理由：1:1、多人兴趣活动和多日旅行共享同一参与与协作不变量；继续让 Trip 成为公共独立根会复制成员、会话、取消与完成状态。聊天文本和 Assistant 状态同样不能承担不可变修订、主动提醒、地图与内容关联。
+- 被否决方案：Trip 与 Gathering 长期双根、Chat Message 充当当前计划、Assistant 保存活动副本、按旅行垂类建立专用 App/Agent 分支。
+- 约束与影响：现有 travel-service 只按逐对象 target-only 流迁移；切流后只读 Circle 目标，不双读、不双写、不保留兼容 fallback。Presentation 只通过安全语义 AST 与 canonical object reference 打开 owner 页面。
 - 关联要求：`REQ-008`、`REQ-012`
+
+<a id="dec-004"></a>
+### DEC-004 Gathering 真相归 Circle，加入后产品主壳归 Chat
+- 决策：Circle 拥有 Gathering root 及其 Participation、Revision、Outcome 与 room binding state；Chat 拥有唯一 contextual Conversation、ConversationMembership、Message 与 Announcement。活动看板是组合两域及可选能力投影的 typed read model，不是 Workspace 聚合。
+- 理由：容量、准入、取消和 Outcome 必须与参与写入同属一个 owner；消息可靠性、公告、已读与文件索引必须留在 Chat。产品默认进入群聊不改变事实所有权。
+- 被否决方案：把 Gathering 迁入 chat-service、以普通建群代替活动、建立 WorkspaceManifest、让 Recommendation 或 Feed 保存可写活动状态。
+- 约束与影响：Publish 必须以 room binding ready 为前置；有效 Participation 才能获得 participant room access，Organizer authority 单独投影管理访问且不占参与席位。退出、移除、Block、取消和安全撤权均通过 owner event 收敛，不建立自动关系。
+- 关联要求：`REQ-013`
 
 ## 6. 质量与运行约束
 
 - 应用根负责跨领域编排、UAT、全局架构、技术约束、观测、灰度和回滚。
 - `UserAccount` 只承担账号、认证和安全；`Persona` 是公开业务主体。
+- Gathering 关键 SLI 包括公开详情可用率、响应成功到 room access 收敛时间、room/board 投影新鲜度、并发超员计数、撤权延迟、Outcome 证据完整率和回顾内容反向关联完整率；30 天窗口目标分别不低于 99.9%、P95 不超过 10 秒、P95 不超过 60 秒、超员为零、P95 不超过 10 秒、证据完整率不低于 99.99%。
+- 生命周期、安全、准入写失败与撤权链路 100% 记录审计；普通读取 trace 可按受治理采样策略采样，在线 trace 默认保留 30 天，聚合漏斗默认保留 13 个月，安全证据按所属 retention contract 执行。
+- 10 分钟窗口内公开详情成功率低于 99%、room access 或撤权 P95 超过 60 秒、任何超员或未授权 room access 立即告警；告警阈值、metric ID 与标签只引用所属 observability contracts。
+- 创建、公开发现、准入、room/board 与 Outcome/回流分别受可独立关闭的受治理 feature flag 控制；回滚 owner 为 Circle 值班负责人，Chat 值班负责人负责 room/board 投影回滚，Content 值班负责人负责回流入口。回滚关闭新写和新曝光，不删除既有 Gathering，不恢复裸建群或双读。
 
 ## 7. 失败与恢复
 

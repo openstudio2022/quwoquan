@@ -104,6 +104,7 @@ func TestPostgresControlPlaneStorePersistsAndIsolatesScopes(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
 func TestExperimentAggregateAndAssignmentUseAtomicPostgresOutbox(t *testing.T) {
 	if controlPlanePGPool == nil {
 		t.Fatal("real PostgreSQL pool was not initialized")
@@ -139,9 +140,13 @@ INSERT INTO experiments(
 	if err != nil {
 		t.Fatalf("insert experiment fixture through postgres: %v", err)
 	}
-	facade, err := experimentapp.NewFacade(store, store, assignmentStore, assignmentStore)
+	facade, err := experimentapp.NewFacade(store, store)
 	if err != nil {
 		t.Fatalf("build experiment facade: %v", err)
+	}
+	assignmentFacade, err := assignmentapp.NewFacade(facade, assignmentStore, assignmentStore)
+	if err != nil {
+		t.Fatalf("build assignment facade: %v", err)
 	}
 
 	experiment, err := facade.Get(ctx, experimentID)
@@ -156,11 +161,11 @@ INSERT INTO experiments(
 		ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
 		SubjectKey: expected.SubjectKey, Variant: expected.Variant, ObservedAt: now,
 	}
-	first, inserted, err := facade.AssignmentFacts().AppendObserved(ctx, observation)
+	first, inserted, err := assignmentFacade.AppendObserved(ctx, observation)
 	if err != nil || !inserted {
 		t.Fatalf("append observed assignment: inserted=%v fact=%+v err=%v", inserted, first, err)
 	}
-	replayed, inserted, err := facade.AssignmentFacts().AppendObserved(ctx, observation)
+	replayed, inserted, err := assignmentFacade.AppendObserved(ctx, observation)
 	if err != nil || inserted || replayed.ID != first.ID || replayed.AssignedAt != first.AssignedAt {
 		t.Fatalf("replay assignment: inserted=%v first=%+v replay=%+v err=%v", inserted, first, replayed, err)
 	}
@@ -184,7 +189,7 @@ INSERT INTO experiments(
 	if err != nil {
 		t.Fatalf("derive delayed revision assignment: %v", err)
 	}
-	lateFact, inserted, err := facade.AssignmentFacts().AppendObserved(
+	lateFact, inserted, err := assignmentFacade.AppendObserved(
 		ctx,
 		assignmentapp.AssignmentObservation{
 			ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
@@ -263,6 +268,7 @@ WHERE aggregate_id IN ($1,$2) AND dispatched_at IS NOT NULL`, experimentID, firs
 	}
 }
 
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
 func TestProductOpsOutboxFailureReleasesLeaseAndSchedulesRetry(t *testing.T) {
 	if controlPlanePGPool == nil {
 		t.Fatal("real PostgreSQL pool was not initialized")
@@ -316,6 +322,7 @@ FROM product_ops_outbox WHERE event_id=$1`, eventID).
 	}
 }
 
+// spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
 func TestApprovedControlPlaneMutationIsAtomicIdempotentAndDispatchable(t *testing.T) {
 	if controlPlanePGPool == nil {
 		t.Fatal("real PostgreSQL pool was not initialized")

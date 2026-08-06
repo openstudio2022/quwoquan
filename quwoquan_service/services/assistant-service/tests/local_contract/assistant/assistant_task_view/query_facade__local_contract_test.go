@@ -1,8 +1,10 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// readiness_case: list-assistant-tasks-local
 package assistant_task_view_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	taskapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/application"
@@ -12,6 +14,14 @@ import (
 type taskReader struct {
 	status string
 	limit  int
+}
+
+func TestTaskProjectionDependencyFailsClosed(t *testing.T) {
+	_, err := taskapplication.NewQueryFacade(nil).
+		ListTasks(t.Context(), "account-1", "", 20)
+	if !errors.Is(err, taskapplication.ErrProjectionUnavailable) {
+		t.Fatalf("unavailable projection dependency returned %v", err)
+	}
 }
 
 func (reader *taskReader) List(_ context.Context, _ string, status string, limit int) ([]taskmodel.Item, error) {

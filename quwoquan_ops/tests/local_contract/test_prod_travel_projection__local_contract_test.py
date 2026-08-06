@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 import unittest
@@ -9,6 +10,10 @@ import yaml
 
 from quwoquan_ops.cli.lib.compose_layout import domain_service_compose_files
 from quwoquan_ops.cli.prod import render_prod_plane_stack as render
+from quwoquan_service.scripts.contracts.build_service_contract_view import (
+    build_config_views,
+    contract_roots,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -18,7 +23,7 @@ TRAVEL_COMPOSE = (
 )
 
 
-class ProdTravelProjectionContractTest(unittest.TestCase):
+class ProdTravelSunsetProjectionContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.access = yaml.safe_load(ACCESS.read_text(encoding="utf-8"))
@@ -27,84 +32,32 @@ class ProdTravelProjectionContractTest(unittest.TestCase):
             for item in cls.access["planes"]
             if item["plane"] == "service"
         )
-        cls.travel = yaml.safe_load(
-            TRAVEL_COMPOSE.read_text(encoding="utf-8")
-        )["services"]["travel-service"]
-
-    def test_travel_is_in_every_service_plane_projection(self) -> None:
+    def test_travel_is_absent_from_every_service_plane_projection(self) -> None:
         prevalidation = self.access["prevalidation"]["planes"]["service"]
-        self.assertIn("travel-service", prevalidation["startupServices"])
-        self.assertIn(39330, prevalidation["exposedPorts"])
+        self.assertNotIn("travel-service", prevalidation["startupServices"])
+        self.assertNotIn(39330, prevalidation["exposedPorts"])
         for field in (
             "governedWorkloads",
             "rootlessGovernedComposeServices",
             "rootlessConfigServices",
         ):
-            self.assertIn("travel-service", self.service_plane[field])
+            self.assertNotIn("travel-service", self.service_plane[field])
         bindings = {
             item["composeService"]: item["ownerWorkload"]
             for item in self.service_plane["rootlessProjectionBindings"]
         }
-        self.assertEqual(bindings["travel-service"], "travel-service")
+        self.assertNotIn("travel-service", bindings)
         self.assertEqual(
             set(self.service_plane["rootlessConfigServices"]),
             set(self.service_plane["rootlessGovernedComposeServices"]),
         )
 
-    def test_compose_scan_and_prod_rewrite_preserve_travel_truth(self) -> None:
-        self.assertIn(TRAVEL_COMPOSE, domain_service_compose_files(ROOT))
-        rendered = render._rewrite_service(
-            "travel-service",
-            self.travel,
-            {
-                "travel-service",
-                "user-service",
-                "content-service",
-                "entity-service",
-                "chat-service",
-                "circle-service",
-                "product-ops-service",
-            },
-            image_version="candidate-tag",
-            config_version="sha256:" + "a" * 64,
-            release_evidence_digest="sha256:" + "b" * 64,
-            versioned_image=True,
-            instance="prod",
-            replica_id="r0",
-            config_root="runtime/config-root",
-            media_root="/runtime/media",
-            legal_root="runtime/legal",
-            portal_root="runtime/portal",
-            web_root="runtime/web",
-            caddyfile_path="runtime/Caddyfile",
-            model_cache_root="runtime/model-cache",
-            data_mode="external",
-        )
-        environment = rendered["environment"]
-        self.assertEqual(environment["APP_ENV"], "prod")
-        self.assertEqual(environment["CONFIG_VERSION"], "sha256:" + "a" * 64)
-        self.assertEqual(
-            environment["TRAVEL_MONGO_URI"],
-            "mongodb://host.containers.internal:19410/?directConnection=true",
-        )
-        self.assertEqual(
-            environment["TRAVEL_REDIS_GENERAL_ADDR"],
-            "host.containers.internal:19420",
-        )
-        self.assertEqual(
-            environment["AUTH_JWT_SECRET"],
-            "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}",
-        )
-        self.assertEqual(
-            rendered["ports"],
-            ["${QWQ_COMPOSE_TRAVEL_PORT:-19460}:18093"],
-        )
-        self.assertIn(
-            "runtime-log-spool:/var/lib/quwoquan/runtime-log-spool",
-            rendered["volumes"],
-        )
+    def test_compose_and_log_projections_reject_retired_source_tree(self) -> None:
+        self.assertFalse(TRAVEL_COMPOSE.exists())
+        self.assertNotIn(TRAVEL_COMPOSE, domain_service_compose_files(ROOT))
+        self.assertNotIn("travel-service", render.RUNTIME_LOG_EXPORT_SERVICES)
 
-    def test_instance_env_projects_unique_travel_ports_and_auth_material(self) -> None:
+    def test_instance_env_never_projects_travel_ports(self) -> None:
         auth = {
             key: f"test-{key.lower()}"
             for key in render.PREVALIDATION_AUTH_SECRET_KEYS
@@ -131,10 +84,50 @@ class ProdTravelProjectionContractTest(unittest.TestCase):
             )
             gray = (root / "stack.env").read_text(encoding="utf-8")
 
-        self.assertIn("QWQ_COMPOSE_TRAVEL_PORT=39330", prevalidate)
+        self.assertNotIn("QWQ_COMPOSE_TRAVEL_PORT", prevalidate)
         self.assertIn("AUTH_JWT_SECRET=test-auth_jwt_secret", prevalidate)
-        self.assertIn("QWQ_COMPOSE_TRAVEL_PORT=29330", gray)
+        self.assertNotIn("QWQ_COMPOSE_TRAVEL_PORT", gray)
         self.assertNotIn("AUTH_JWT_SECRET=", gray)
+
+    def test_canonical_config_view_omits_travel_service_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            build_config_views(ROOT, output, contract_roots(ROOT))
+            platform = yaml.safe_load(
+                (output / "platform/config.yaml").read_text(encoding="utf-8")
+            )
+
+        keys = {entry["key"] for entry in platform["configs"]}
+        self.assertFalse(
+            any(key.startswith("sys.travel-service.") for key in keys)
+        )
+
+    def test_observability_drops_workload_rules_but_keeps_travel_scenario_metrics(
+        self,
+    ) -> None:
+        workload_rules = (
+            ROOT
+            / "quwoquan_ops/observability/monitoring/alerts/travel_contract"
+        )
+        self.assertEqual(list(workload_rules.glob("*.yaml")), [])
+
+        recommendation_alerts = (
+            ROOT
+            / "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "recommendation_behavior_by_attribution_total", recommendation_alerts
+        )
+        self.assertIn('channel=~"travel|premium_stream"', recommendation_alerts)
+
+    def test_coverage_baseline_has_no_retired_cloud_unit(self) -> None:
+        baseline = json.loads(
+            (
+                ROOT / "quwoquan_ops/policies/gates/coverage_baseline.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertNotIn("cloud:travel", baseline["units"])
 
 
 if __name__ == "__main__":

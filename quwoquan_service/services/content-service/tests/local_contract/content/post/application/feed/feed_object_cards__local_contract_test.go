@@ -29,6 +29,13 @@ func rankedObjectCard(kind, id, title string) transport.RecommendationObjectCard
 	}
 }
 
+func rankedGatheringCard(id, title string) transport.RecommendationObjectCard {
+	card := rankedObjectCard("gathering", id, title)
+	card.ReasonKey = "public_gathering"
+	card.RecallPath = "gathering_candidate_index"
+	return card
+}
+
 func newObjectCardFeedService(
 	t *testing.T,
 	cards []transport.RecommendationObjectCard,
@@ -98,6 +105,37 @@ func TestListFeed_ObjectCardsAnchoredByPolicyInterval(t *testing.T) {
 		if card.AnchorIndex > len(resp.Items) {
 			t.Fatalf("anchor %d must not exceed items %d", card.AnchorIndex, len(resp.Items))
 		}
+	}
+}
+
+func TestListFeed_GatheringCardPreservesCanonicalTargetReference(t *testing.T) {
+	svc := newObjectCardFeedService(
+		t,
+		[]transport.RecommendationObjectCard{
+			rankedGatheringCard("gathering-001", "周末山野徒步"),
+		},
+		recpolicy.ObjectCardConfig{
+			Enabled:      true,
+			EveryN:       2,
+			MaxCards:     1,
+			AllowedKinds: []string{"gathering"},
+		},
+		4,
+	)
+
+	resp, err := svc.ListFeed(context.Background(), ListFeedRequest{
+		UserID: "u_gathering_card", SessionID: "s_gathering_card",
+		ChannelID: "recommend", Limit: 4,
+	})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if len(resp.ObjectCards) != 1 {
+		t.Fatalf("gathering cards=%d want 1", len(resp.ObjectCards))
+	}
+	card := resp.ObjectCards[0]
+	if card.ObjectKind != "gathering" || card.ObjectID != "gathering-001" {
+		t.Fatalf("canonical Gathering card reference drifted: %+v", card)
 	}
 }
 

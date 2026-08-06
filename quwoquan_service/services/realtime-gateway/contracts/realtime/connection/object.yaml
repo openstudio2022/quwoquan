@@ -45,8 +45,6 @@ relationships:
     on_delete: detach
 local_identity_reasons:
   nodeId: 运行节点路由标识，不是业务对象引用
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

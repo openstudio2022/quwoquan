@@ -203,14 +203,25 @@ func (s *PgGreetingStore) MarkOutboxPublished(ctx context.Context, eventID, owne
 	return nil
 }
 
-func (s *PgGreetingStore) ReleaseOutboxClaim(ctx context.Context, eventID, ownerID string) error {
-	if _, err := s.pool.Exec(ctx, `
+func (s *PgGreetingStore) ScheduleOutboxRetry(
+	ctx context.Context,
+	eventID string,
+	ownerID string,
+	lease time.Duration,
+	nextAttemptAt time.Time,
+) error {
+	claimedAt := nextAttemptAt.UTC().Add(-lease)
+	tag, err := s.pool.Exec(ctx, `
 		UPDATE greeting_request_outbox
-		SET claim_owner = NULL, claimed_at = NULL
+		SET claimed_at = $3
 		WHERE event_id = $1 AND claim_owner = $2 AND published_at IS NULL`,
-		eventID, ownerID,
-	); err != nil {
-		return fmt.Errorf("release greeting outbox claim: %w", err)
+		eventID, ownerID, claimedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("schedule greeting outbox retry: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return greetingrepo.ErrGreetingOutboxClaimLost
 	}
 	return nil
 }

@@ -133,7 +133,9 @@ def _patrol_target(manifest_path: Path, phase: str) -> str:
         or manifest.get("environment") != "gamma"
         or manifest.get("target") != "gamma-local"
         or manifest.get("composition") != "production_remote"
-        or not target.startswith("test/user_acceptance/patrol/user/")
+        or not target.startswith(
+            "test/user_acceptance/journeys/account_enforcement/"
+        )
         or not target.endswith("__user_acceptance_test.dart")
     ):
         raise ValueError("account-enforcement UAT manifest identity or Patrol target drift")

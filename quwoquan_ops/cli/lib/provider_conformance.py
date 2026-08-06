@@ -193,8 +193,8 @@ CASE_RESULT_REQUIRED_FIELDS = frozenset(
     }
 )
 CASE_RESULT_RELEASE_FIELDS = frozenset({"releaseReadiness"})
-B10_REMOTE_READBACK_SCHEMA = "b10-remote-uat-readback"
-CASE_RESULT_B10_REMOTE_FIELDS = frozenset({"nativeReadback"})
+REMOTE_READBACK_SCHEMA = "provider-remote-uat-readback"
+CASE_RESULT_REMOTE_FIELDS = frozenset({"nativeReadback"})
 NATIVE_READBACK_ARTIFACT_RE = re.compile(
     r"^[a-z0-9][a-z0-9._-]*\.native-device-readback\.json$"
 )
@@ -287,12 +287,35 @@ def evidence_files(root: Path | None = None) -> list[Path]:
     return files
 
 
-def load_evidence(root: Path | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+def load_evidence_paths(
+    paths: Iterable[Path],
+    *,
+    root: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Load one caller-owned evidence set without inheriting historical runs."""
+    configured_root = Path(root) if root is not None else output_root()
+    resolved_root = configured_root.resolve()
     evidence: list[dict[str, Any]] = []
     issues: list[str] = []
-    for path in evidence_files(root):
+    for path in sorted(Path(item) for item in paths):
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            resolved = path.resolve(strict=True)
+            resolved.relative_to(resolved_root)
+        except (OSError, ValueError):
+            issues.append(
+                _issue(
+                    path.as_posix(),
+                    "evidence path must be a regular file inside QWQ_OUTPUT_ROOT",
+                )
+            )
+            continue
+        if path.is_symlink() or not resolved.is_file():
+            issues.append(
+                _issue(path.as_posix(), "evidence path must be a regular non-symlink file")
+            )
+            continue
+        try:
+            payload = json.loads(resolved.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             issues.append(_issue(path.as_posix(), f"invalid evidence JSON: {exc}"))
             continue
@@ -302,6 +325,10 @@ def load_evidence(root: Path | None = None) -> tuple[list[dict[str, Any]], list[
         payload["_source"] = path
         evidence.append(payload)
     return evidence, issues
+
+
+def load_evidence(root: Path | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    return load_evidence_paths(evidence_files(root), root=root)
 
 
 def _is_non_empty_string(value: object) -> bool:
@@ -434,12 +461,10 @@ def provider_conformance_capability_ids(
 def expected_required_cell_keys(
     compiled: Mapping[str, Any],
 ) -> frozenset[tuple[str, str, str]]:
-    """Derive the one canonical 140-cell release set from generated Bindings."""
+    """Derive the canonical release cell set from generated Bindings."""
     capability_ids = provider_conformance_capability_ids(compiled)
-    if len(capability_ids) != 14:
-        raise ValueError(
-            "canonical Provider governance must define exactly 14 capabilities"
-        )
+    if not capability_ids:
+        raise ValueError("canonical Provider governance defines no capabilities")
     cells = {
         (capability_id, environment, layer)
         for capability_id in capability_ids
@@ -449,8 +474,13 @@ def expected_required_cell_keys(
         (capability_id, RELEASE_ENVIRONMENT, "user_acceptance")
         for capability_id in capability_ids
     }
-    if len(cells) != 140:
-        raise AssertionError("Provider release cell contract must remain 140")
+    expected_count = len(capability_ids) * (
+        len(ENVIRONMENTS) * len(LAYERS) + 1
+    )
+    if len(cells) != expected_count:
+        raise AssertionError(
+            "Provider release cell derivation produced duplicate environment/layer keys"
+        )
     return frozenset(cells)
 
 
@@ -491,10 +521,11 @@ def exact_required_cell_issues(
         )
     if duplicate:
         issues.append(f"Provider release evidence contains duplicate cells: {duplicate}")
-    if missing or extra or len(observed) != 140:
+    if missing or extra or len(observed) != len(expected):
         issues.append(
-            "Provider release evidence must contain exactly 140 required cells: "
-            f"observed={len(observed)}, missing={missing}, extra={extra}"
+            "Provider release evidence must contain exactly the compiled required cells: "
+            f"expected={len(expected)}, observed={len(observed)}, "
+            f"missing={missing}, extra={extra}"
         )
     return issues
 
@@ -861,7 +892,7 @@ def resolve_prod_active_candidate(
     if actual_digest != artifact_digest:
         return _inactive_candidate("Prod active candidate readback digest mismatch")
     expected = {
-        "schema": B10_REMOTE_READBACK_SCHEMA,
+        "schema": REMOTE_READBACK_SCHEMA,
         "status": "passed",
         "capabilityId": capability_id,
         "adapterId": adapter_id,
@@ -932,7 +963,7 @@ def active_candidate_receipt_issues(
     if _digest_bytes(raw) != expected_digest:
         return ["Prod active candidate readback receipt digest mismatch"]
     expected = {
-        "schema": B10_REMOTE_READBACK_SCHEMA,
+        "schema": REMOTE_READBACK_SCHEMA,
         "status": "passed",
         "capabilityId": item.get("capabilityId"),
         "adapterId": item.get("adapterId"),
@@ -1312,6 +1343,68 @@ def source_coverage_issues(
     return issues
 
 
+def local_source_coverage_issues(
+    *,
+    compiled: Mapping[str, Any],
+    environment: str,
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]] | None = None,
+) -> list[str]:
+    """Check only this nonprod target's selected Adapter across all three layers."""
+    if environment not in ENVIRONMENTS:
+        return [
+            _issue(
+                "source_coverage",
+                f"unsupported nonprod environment {environment}",
+            )
+        ]
+    catalog, discovery_issues = (
+        discover_test_sources() if sources is None else (dict(sources), [])
+    )
+    issues = list(discovery_issues)
+    selected_bindings = compiled.get("selectedBindings")
+    environment_bindings = (
+        selected_bindings.get(environment)
+        if isinstance(selected_bindings, Mapping)
+        else None
+    )
+    if not isinstance(environment_bindings, Mapping):
+        return [
+            *issues,
+            _issue(
+                f"source_coverage.{environment}",
+                "compiled selected Bindings are unavailable",
+            ),
+        ]
+    for capability_id, binding in sorted(environment_bindings.items()):
+        if not isinstance(capability_id, str) or not isinstance(binding, Mapping):
+            continue
+        if not governance.requires_provider_conformance(binding):
+            continue
+        adapter_id = binding.get("adapter_id")
+        if not isinstance(adapter_id, str):
+            issues.append(
+                _issue(
+                    f"source_coverage.{environment}.{capability_id}",
+                    "selected Binding has no Adapter ID",
+                )
+            )
+            continue
+        missing = [
+            f"{adapter_id}/{layer}"
+            for layer in LAYERS
+            if (capability_id, adapter_id, layer) not in catalog
+        ]
+        if missing:
+            issues.append(
+                _issue(
+                    f"source_coverage.{environment}.{capability_id}",
+                    "missing self-describing executable sources for "
+                    + ", ".join(missing),
+                )
+            )
+    return issues
+
+
 def sign_execution_report(raw: bytes, *, key: str | None = None) -> str:
     """为不可变执行报告生成仅 CI 持有密钥可复核的证明。"""
     signing_key = key or os.environ.get("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY", "")
@@ -1461,19 +1554,19 @@ def _observability_refs_valid(value: object) -> bool:
     )
 
 
-def _b10_native_readback_valid(
+def _native_readback_valid(
     value: object,
     *,
     case_result_path: Path,
 ) -> bool:
-    """Verify the B10 device readback sidecar is present and content-bound."""
+    """Verify the Provider two-device device readback sidecar is present and content-bound."""
     if not isinstance(value, Mapping) or set(value) != {
         "schema",
         "artifactName",
         "artifactDigest",
     }:
         return False
-    if value.get("schema") != B10_REMOTE_READBACK_SCHEMA:
+    if value.get("schema") != REMOTE_READBACK_SCHEMA:
         return False
     artifact_name = value.get("artifactName")
     artifact_digest = value.get("artifactDigest")
@@ -1511,8 +1604,8 @@ def load_case_results(
         environment,
         str(source.get("testLayer") or ""),
     )
-    is_b10_remote_case = is_release_case and str(source.get("target") or "").startswith(
-        "b10-remote-"
+    is_remote_release_case = is_release_case and str(source.get("target") or "").startswith(
+        "provider-remote-"
     )
     expected_fields = (
         CASE_RESULT_REQUIRED_FIELDS | CASE_RESULT_RELEASE_FIELDS
@@ -1520,7 +1613,7 @@ def load_case_results(
         else CASE_RESULT_REQUIRED_FIELDS
     )
     allowed_fields = expected_fields | (
-        CASE_RESULT_B10_REMOTE_FIELDS if is_b10_remote_case else frozenset()
+        CASE_RESULT_REMOTE_FIELDS if is_remote_release_case else frozenset()
     )
     missing = expected_fields - set(result)
     unknown = set(result) - allowed_fields
@@ -1658,9 +1751,9 @@ def load_case_results(
             )
         )
     if (
-        is_b10_remote_case
+        is_remote_release_case
         and "nativeReadback" in result
-        and not _b10_native_readback_valid(
+        and not _native_readback_valid(
             result.get("nativeReadback"),
             case_result_path=artifact_path,
         )
@@ -1668,7 +1761,7 @@ def load_case_results(
         issues.append(
             _issue(
                 str(artifact_path),
-                "B10 Remote CaseResult must bind an existing native-device readback "
+                "Provider two-device Remote CaseResult must bind an existing native-device readback "
                 "sidecar with a matching digest",
             )
         )
@@ -2527,6 +2620,248 @@ def _cells_share_release(
         if len(adapter_digests) != 1 or None in adapter_digests:
             return False
     return True
+
+
+def _cells_share_local_candidate(
+    cells: Iterable[Mapping[str, Any] | None],
+    *,
+    environment: str,
+) -> bool:
+    """Prove one capability's three layers share one active local candidate.
+
+    Local authority is intentionally accepted here, but it remains explicitly
+    non-promotable.  This predicate never participates in release readiness.
+    """
+    evidence_cells = list(cells)
+    if len(evidence_cells) != len(LAYERS) or any(
+        cell is None
+        or cell.get("status") != "passed"
+        or cell.get("environment") != environment
+        or cell.get("candidateStatus") != "active_immutable"
+        for cell in evidence_cells
+    ):
+        return False
+    concrete_cells = [cell for cell in evidence_cells if cell is not None]
+    for cell in concrete_cells:
+        authority = cell.get("attestationAuthority")
+        attestation = cell.get("artifactAttestation")
+        if authority == "local":
+            if (
+                cell.get("nonPromotable") is not True
+                or not isinstance(attestation, str)
+                or not attestation.startswith("local-sha256:")
+            ):
+                return False
+        elif authority == "ci":
+            if (
+                not evidence_is_promotable(
+                    cell,
+                    require_runtime_authority=False,
+                )
+                or not isinstance(attestation, str)
+                or not attestation.startswith("hmac-sha256:")
+            ):
+                return False
+        else:
+            return False
+    candidate_identities = {
+        (
+            _commit_digest(cell.get("commit")),
+            _digest(cell.get("imageDigest")),
+            _digest(cell.get("contractGraphDigest")),
+            cell.get("candidateReceiptRef"),
+            _digest(cell.get("candidateReceiptDigest")),
+        )
+        for cell in concrete_cells
+    }
+    if len(candidate_identities) != 1 or any(
+        value is None or not value
+        for value in next(iter(candidate_identities), ())
+    ):
+        return False
+    if (
+        len({cell.get("adapterId") for cell in concrete_cells}) != 1
+        or len({_digest(cell.get("adapterDigest")) for cell in concrete_cells}) != 1
+        or len({_digest(cell.get("configDigest")) for cell in concrete_cells}) != 1
+        or len({cell.get("typedPort") for cell in concrete_cells}) != 1
+        or len({cell.get("contractRef") for cell in concrete_cells}) != 1
+        or len({_assertion_semantics(cell) for cell in concrete_cells}) != 1
+        or any(_assertion_semantics(cell) is None for cell in concrete_cells)
+    ):
+        return False
+    return all(
+        _digest(cell.get("adapterDigest")) is not None
+        and _digest(cell.get("configDigest")) is not None
+        for cell in concrete_cells
+    )
+
+
+def local_functional_readiness_issues(
+    *,
+    compiled: Mapping[str, Any],
+    evidence: Iterable[Mapping[str, Any]],
+    environment: str,
+) -> list[str]:
+    """Validate one nonprod environment's compiled cells without release claims."""
+    if environment not in ENVIRONMENTS:
+        return [
+            _issue(
+                "local_functional_readiness",
+                f"unsupported nonprod environment {environment}",
+            )
+        ]
+    capability_ids = provider_conformance_capability_ids(compiled)
+    expected = {
+        (capability_id, environment, layer)
+        for capability_id in capability_ids
+        for layer in LAYERS
+    }
+    evidence_cells = list(evidence)
+    observed = [
+        (
+            str(item.get("capabilityId") or ""),
+            str(item.get("environment") or ""),
+            str(item.get("testLayer") or ""),
+        )
+        for item in evidence_cells
+    ]
+    observed_set = set(observed)
+    issues: list[str] = []
+    duplicate = sorted(cell for cell in observed_set if observed.count(cell) > 1)
+    missing = sorted(expected - observed_set)
+    extra = sorted(observed_set - expected)
+    expected_count = len(capability_ids) * len(LAYERS)
+    if not capability_ids or len(expected) != expected_count:
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "generated Bindings must derive a non-empty unique capability/cell set",
+            )
+        )
+    if duplicate:
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                f"current invocation contains duplicate cells: {duplicate}",
+            )
+        )
+    if missing or extra or len(observed) != len(expected):
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "current invocation must contain exactly the environment's "
+                f"{expected_count} compiled cells: observed={len(observed)}, "
+                f"missing={missing}, extra={extra}",
+            )
+        )
+    candidate_identities = {
+        (
+            _commit_digest(item.get("commit")),
+            _digest(item.get("imageDigest")),
+            _digest(item.get("contractGraphDigest")),
+            item.get("candidateReceiptRef"),
+            _digest(item.get("candidateReceiptDigest")),
+        )
+        for item in evidence_cells
+    }
+    if not evidence_cells or len(candidate_identities) != 1 or any(
+        value is None or not value
+        for value in next(iter(candidate_identities), ())
+    ):
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "all cells must bind one active immutable candidate identity",
+            )
+        )
+    by_key = {
+        (
+            str(item.get("capabilityId") or ""),
+            str(item.get("testLayer") or ""),
+        ): item
+        for item in evidence_cells
+        if item.get("environment") == environment
+    }
+    for capability_id in sorted(capability_ids):
+        binding = _selected_binding(
+            compiled,
+            capability_id=capability_id,
+            environment=environment,
+        )
+        selected_adapter = (
+            binding.get("adapter_id") if isinstance(binding, Mapping) else None
+        )
+        cells = [by_key.get((capability_id, layer)) for layer in LAYERS]
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("state") != "enabled"
+            or not governance.requires_provider_conformance(binding)
+            or not isinstance(selected_adapter, str)
+            or any(
+                cell is not None and cell.get("adapterId") != selected_adapter
+                for cell in cells
+            )
+            or not _binding_preflight_ready(
+                compiled,
+                capability_id=capability_id,
+                environment=environment,
+            )
+            or not _cells_share_local_candidate(cells, environment=environment)
+        ):
+            issues.append(
+                _issue(
+                    f"local_functional_readiness.{environment}.{capability_id}",
+                    "selected Adapter lacks a candidate-bound three-layer local closure",
+                )
+            )
+    return issues
+
+
+def load_validate_local_functional_readiness(
+    paths: Iterable[Path],
+    *,
+    environment: str,
+    compiled: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    sources: Mapping[tuple[str, str, str], Mapping[str, Any]],
+    root: Path | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Validate only the evidence emitted by one stackctl environment attempt."""
+    evidence, load_issues = load_evidence_paths(paths, root=root)
+    current_commit = _current_commit()
+    issues = [*load_issues]
+    if evidence and current_commit is None:
+        issues.append(
+            _issue(
+                f"local_functional_readiness.{environment}",
+                "cannot determine the current git revision",
+            )
+        )
+    issues.extend(
+        local_source_coverage_issues(
+            compiled=compiled,
+            environment=environment,
+            sources=sources,
+        )
+    )
+    issues.extend(
+        validate_evidence(
+            evidence,
+            registry=registry,
+            root=root,
+            current_commit=current_commit,
+            compiled=compiled,
+            source_catalog=sources,
+        )
+    )
+    issues.extend(
+        local_functional_readiness_issues(
+            compiled=compiled,
+            evidence=evidence,
+            environment=environment,
+        )
+    )
+    return evidence, list(dict.fromkeys(issues))
 
 
 def derive_readiness(

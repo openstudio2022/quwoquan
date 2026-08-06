@@ -1,6 +1,6 @@
 dart_class: SlotSchemaDto
-library_path: assistant/contracts/slot_schema.dart
-output_path: assistant/generated/contracts/slot_schema.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/slot_schema.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/slot_schema.g.dart
 contract: slot_schema
 kind: runtime_policy_contract
 fields:

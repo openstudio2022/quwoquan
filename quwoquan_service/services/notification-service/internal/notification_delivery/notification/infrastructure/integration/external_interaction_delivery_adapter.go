@@ -22,7 +22,7 @@ import (
 	"quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
+	deliveryapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 const integrationResponseBodyLimit = 1 << 20
@@ -175,21 +175,21 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 
 func (a *ExternalInteractionDeliveryAdapter) SubmitIncomingCall(
 	ctx context.Context,
-	job notification.IncomingCallDeliveryJob,
+	job deliveryapplication.IncomingCallDeliveryJob,
 ) (string, error) {
 	return a.submitIncomingCallPush(ctx, job, "ring")
 }
 
 func (a *ExternalInteractionDeliveryAdapter) SubmitIncomingCallCancellation(
 	ctx context.Context,
-	job notification.IncomingCallDeliveryJob,
+	job deliveryapplication.IncomingCallDeliveryJob,
 ) (string, error) {
 	return a.submitIncomingCallPush(ctx, job, "cancel")
 }
 
 func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 	ctx context.Context,
-	job notification.IncomingCallDeliveryJob,
+	job deliveryapplication.IncomingCallDeliveryJob,
 	action string,
 ) (string, error) {
 	if a == nil || a.client == nil {
@@ -428,7 +428,7 @@ func incomingCallExternalRequestID(
 }
 
 func incomingCallDigest(
-	job notification.IncomingCallDeliveryJob,
+	job deliveryapplication.IncomingCallDeliveryJob,
 	action string,
 	occurredAt time.Time,
 ) string {

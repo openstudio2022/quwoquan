@@ -385,42 +385,7 @@ consumers:
       - ignore_greeting
       - cancel_greeting
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: user-service API (greeting_request)
-      data_source: fields.yaml
-      scenarios:
-        - name: send_greeting_success
-          route: POST /user/greeting-request
-          assertions:
-            - status_201
-            - greeting_in_pending
-            - not_in_chat_list
-        - name: send_greeting_duplicate_blocked
-          route: POST /user/greeting-request
-          seed:
-            - existing_pending_greeting
-          assertions:
-            - status_409
-            - error_code_USER.GREETING.duplicate_pending
-        - name: mutual_contact_greeting_rejected
-          route: POST /user/greeting-request
-          seed:
-            - mutual_persona_relationship
-          assertions:
-            - status_409
-            - error_code_USER.GREETING.already_contact
-        - name: reply_upgrades_conversation
-          route: POST /user/greeting-request/{requestId}/reply
-          assertions:
-            - status_200
-            - greeting_status_replied
-            - conversation_created
-        - name: ignore_greeting
-          route: POST /user/greeting-request/{requestId}/ignore
-          assertions:
-            - status_200
-            - greeting_status_ignored
+  test_strategy:
     service_side:
       description: 使用真实 PostgreSQL 验证状态机与会话升级
       real_engines:
@@ -456,3 +421,100 @@ contract_test:
     - idempotency_tested
     - block_privacy_leak_prevented
     - rate_limit_tested
+readiness_cases:
+  - case_id: send-greeting-request-local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SendGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/relationship/greeting_request/greeting_request_facade__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: send-greeting-request-api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SendGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: list-greeting-inbox-local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListGreetingInbox}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/relationship/greeting_request/greeting_request_facade__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-greeting-inbox-api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListGreetingInbox}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: list-greeting-outbox-local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListGreetingOutbox}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/relationship/greeting_request/greeting_request_facade__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-greeting-outbox-api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListGreetingOutbox}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: reply-greeting-request-local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ReplyGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/relationship/greeting_request/greeting_request_facade__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: reply-greeting-request-api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ReplyGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: ignore-greeting-request-local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: IgnoreGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/relationship/greeting_request/greeting_request_facade__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: ignore-greeting-request-api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: IgnoreGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: cancel-greeting-request-local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: CancelGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/relationship/greeting_request/greeting_request_facade__contract__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: cancel-greeting-request-api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: CancelGreetingRequest}
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

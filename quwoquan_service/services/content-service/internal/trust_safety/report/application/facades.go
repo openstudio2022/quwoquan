@@ -15,12 +15,24 @@ type ReportCommandFacade interface {
 	BeginReview(context.Context, BeginReviewReportCommand) (ReportCommandResult, error)
 	Resolve(context.Context, ResolveReportCommand) (ReportCommandResult, error)
 	Dismiss(context.Context, DismissReportCommand) (ReportCommandResult, error)
+	GrantGatheringSafetyTermination(
+		context.Context,
+		GrantGatheringSafetyTerminationCommand,
+	) (GatheringSafetyTerminationGrantResult, error)
+	RevokeGatheringSafetyTermination(
+		context.Context,
+		RevokeGatheringSafetyTerminationCommand,
+	) (GatheringSafetyTerminationGrantResult, error)
 }
 
 type ReportQueryFacade interface {
 	GetReport(context.Context, GetReportQuery) (ReportDetailSlice, error)
 	ListMyReports(context.Context, ListMyReportsQuery) (MyReportPageSlice, error)
 	ListReports(context.Context, ListReportsQuery) (ReportQueueSlice, error)
+	AuthorizeGatheringSafetyTermination(
+		context.Context,
+		AuthorizeGatheringSafetyTerminationQuery,
+	) (GatheringSafetyTerminationAuthoritySlice, error)
 }
 
 func BindFacades(service *ReportService) *Facades {

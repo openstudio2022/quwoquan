@@ -1,3 +1,15 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-015
+// readiness_case: create-comment-local
+// readiness_case: delete-comment-local
+// readiness_case: pin-comment-local
+// readiness_case: unpin-comment-local
+// readiness_case: bind-media-assets-to-comment-local
+// readiness_case: list-comments-local
+// readiness_case: list-comment-replies-local
+// readiness_case: list-comments-by-author-local
+// readiness_case: list-comments-for-post-author-local
+// readiness_case: hide-comment-local
+// readiness_case: restore-comment-local
 package http_test
 
 // Comment HTTP contract evidence remains object-local while exercising the
@@ -150,6 +162,103 @@ func TestCommentHTTPUsesTypedObjectFacadesAndVersionCAS(t *testing.T) {
 	}
 	if len(ownerPage.Items) != 1 || !ownerPage.Items[0].CanPin {
 		t.Fatalf("post owner must receive canPin capability: %+v", ownerPage)
+	}
+
+	pinned := performCommentRequest(t, handler, http.MethodPost,
+		"/content/posts/post-comment-http/comments/"+createResult.ID+"/pin",
+		nil, "comment-http-pin", "post-owner")
+	if pinned.Code != http.StatusOK {
+		t.Fatalf("pin status=%d body=%s", pinned.Code, pinned.Body.String())
+	}
+	var pinnedResult commentapp.CommentCommandResult
+	if err := json.Unmarshal(pinned.Body.Bytes(), &pinnedResult); err != nil {
+		t.Fatal(err)
+	}
+	if pinnedResult.ID != createResult.ID || pinnedResult.Version <= createResult.Version {
+		t.Fatalf("pin result=%+v", pinnedResult)
+	}
+	pinnedPageRecorder := performCommentRequest(t, handler, http.MethodGet,
+		"/content/posts/post-comment-http/comments", nil, "", "post-owner")
+	var pinnedPage commentapp.CommentPageSlice
+	if err := json.Unmarshal(pinnedPageRecorder.Body.Bytes(), &pinnedPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(pinnedPage.Items) != 1 || !pinnedPage.Items[0].IsPinned {
+		t.Fatalf("pinned projection=%+v", pinnedPage)
+	}
+
+	unpinned := performCommentRequest(t, handler, http.MethodDelete,
+		"/content/posts/post-comment-http/comments/"+createResult.ID+"/pin",
+		nil, "comment-http-unpin", "post-owner")
+	if unpinned.Code != http.StatusOK {
+		t.Fatalf("unpin status=%d body=%s", unpinned.Code, unpinned.Body.String())
+	}
+	var unpinnedResult commentapp.CommentCommandResult
+	if err := json.Unmarshal(unpinned.Body.Bytes(), &unpinnedResult); err != nil {
+		t.Fatal(err)
+	}
+	if unpinnedResult.ID != createResult.ID || unpinnedResult.Version <= pinnedResult.Version {
+		t.Fatalf("unpin result=%+v", unpinnedResult)
+	}
+	unpinnedPageRecorder := performCommentRequest(t, handler, http.MethodGet,
+		"/content/posts/post-comment-http/comments", nil, "", "post-owner")
+	var unpinnedPage commentapp.CommentPageSlice
+	if err := json.Unmarshal(unpinnedPageRecorder.Body.Bytes(), &unpinnedPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(unpinnedPage.Items) != 1 || unpinnedPage.Items[0].IsPinned {
+		t.Fatalf("unpinned projection=%+v", unpinnedPage)
+	}
+
+	bound := performCommentRequest(t, handler, http.MethodPost,
+		"/content/comments/"+createResult.ID+"/media:bind",
+		map[string]any{"attachmentMediaIds": []any{"media-comment-http"}},
+		"comment-http-bind", "comment-author")
+	if bound.Code != http.StatusOK {
+		t.Fatalf("bind media status=%d body=%s", bound.Code, bound.Body.String())
+	}
+	var boundResult commentapp.CommentCommandResult
+	if err := json.Unmarshal(bound.Body.Bytes(), &boundResult); err != nil {
+		t.Fatal(err)
+	}
+	if boundResult.ID != createResult.ID || boundResult.Version <= unpinnedResult.Version {
+		t.Fatalf("bind media result=%+v", boundResult)
+	}
+	boundPageRecorder := performCommentRequest(t, handler, http.MethodGet,
+		"/content/posts/post-comment-http/comments", nil, "", "comment-author")
+	var boundPage commentapp.CommentPageSlice
+	if err := json.Unmarshal(boundPageRecorder.Body.Bytes(), &boundPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(boundPage.Items) != 1 || len(boundPage.Items[0].AttachmentMediaIDs) != 1 ||
+		boundPage.Items[0].AttachmentMediaIDs[0] != "media-comment-http" {
+		t.Fatalf("bound projection=%+v", boundPage)
+	}
+
+	byAuthor := performCommentRequest(t, handler, http.MethodGet,
+		"/content/users/me/comments", nil, "", "comment-author")
+	if byAuthor.Code != http.StatusOK {
+		t.Fatalf("list by author status=%d body=%s", byAuthor.Code, byAuthor.Body.String())
+	}
+	var authored commentapp.AuthorCommentPageSlice
+	if err := json.Unmarshal(byAuthor.Body.Bytes(), &authored); err != nil {
+		t.Fatal(err)
+	}
+	if len(authored.Items) != 1 || authored.Items[0].ID != createResult.ID {
+		t.Fatalf("list by author=%+v", authored)
+	}
+
+	received := performCommentRequest(t, handler, http.MethodGet,
+		"/content/users/me/received-comments", nil, "", "post-owner")
+	if received.Code != http.StatusOK {
+		t.Fatalf("list received status=%d body=%s", received.Code, received.Body.String())
+	}
+	var receivedPage commentapp.ReceivedCommentPageSlice
+	if err := json.Unmarshal(received.Body.Bytes(), &receivedPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(receivedPage.Items) != 2 || receivedPage.Total != 2 {
+		t.Fatalf("list received=%+v", receivedPage)
 	}
 
 	deleted := performCommentRequest(t, handler, http.MethodDelete,

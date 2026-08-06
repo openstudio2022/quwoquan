@@ -1,8 +1,16 @@
 events:
 - name: SkillSurfacePlacementChanged
   description: 群聊或圈子的共享 Skill 策略完成创建或 CAS 更新。
-  producer: assistant-service
-  consumers: [assistant-run, notification-service]
-  channel: assistant.skill_surface_placement
+  delivery_semantics: transactional_event_log
+  topic: assistant.skill_surface_placement
   payload_entity: SkillSurfacePlacement
-  payload_fields: [id, surfaceKind, surfaceId, policy, disabledSkillIds, status, revision, updatedAt]
+  payload_fields:
+  - id
+  - surfaceKind
+  - surfaceId
+  - policy
+  - disabledSkillIds
+  - status
+  - revision
+  - updatedAt
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 placement audit journal；读取方直接查询当前 placement，不订阅该日志。

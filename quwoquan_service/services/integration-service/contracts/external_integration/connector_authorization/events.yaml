@@ -1,42 +1,81 @@
 events:
 - name: ConnectorAuthorizationStarted
   description: 账号启动 native/OAuth 授权；事件只含脱敏状态与 capability 名称。
-  producers: [StartConnectorAuthorization]
-  channel: integration.connector_authorization
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_authorization
   payload_entity: ConnectorAuthorization
-  payload_fields: [authorizationId, accountId, connectorId, authorizationMode, requestedCapabilities, status, expiresAt, revision, createdAt]
-  consumers: []
+  payload_fields:
+  - authorizationId
+  - accountId
+  - connectorId
+  - authorizationMode
+  - requestedCapabilities
+  - status
+  - expiresAt
+  - revision
+  - createdAt
   no_consumer_reason: 当前由 App 轮询授权状态；事件为审计与未来异步 continuation 保留。
 - name: ConnectorAuthorizationVerified
   description: native/OAuth proof 已由受信 adapter 验证；不得携带 proof、credentialRef 或 grant receipt。
-  producers: [CompleteNativeConnectorAuthorization, CompleteOAuthConnectorAuthorization]
-  channel: integration.connector_authorization
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_authorization
   payload_entity: ConnectorAuthorization
-  payload_fields: [authorizationId, accountId, connectorId, authorizationMode, grantedCapabilities, status, expiresAt, verifiedAt, revision, updatedAt]
-  consumers: []
+  payload_fields:
+  - authorizationId
+  - accountId
+  - connectorId
+  - authorizationMode
+  - grantedCapabilities
+  - status
+  - expiresAt
+  - verifiedAt
+  - revision
+  - updatedAt
   no_consumer_reason: ConnectorConnection 通过一次性 grant receipt 同步消费，不从事件重建凭证。
 - name: ConnectorAuthorizationConsumed
   description: grant receipt 已被唯一 ConnectorConnection 消费。
-  producers: [CreateConnectorConnection]
-  channel: integration.connector_authorization
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_authorization
   payload_entity: ConnectorAuthorization
-  payload_fields: [authorizationId, accountId, connectorId, authorizationMode, grantedCapabilities, status, consumedAt, revision, updatedAt]
-  consumers: []
+  payload_fields:
+  - authorizationId
+  - accountId
+  - connectorId
+  - authorizationMode
+  - grantedCapabilities
+  - status
+  - consumedAt
+  - revision
+  - updatedAt
   no_consumer_reason: 仅用于授权生命周期审计，不驱动第二连接投影。
 - name: ConnectorAuthorizationExpired
-  description: 授权或 grant receipt 到期且未被消费。
-  producers: []
-  no_producer_reason: TTL/expiry worker 在运行态依据 expiresAt 生成；当前公开命令不直接触发。
-  channel: integration.connector_authorization
+  description: '授权或 grant receipt 到期且未被消费。
+
+    非 canonical 结构字段迁移注记：原 producer 例外说明：TTL/expiry worker 在运行态依据 expiresAt 生成；当前公开命令不直接触发。。'
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_authorization
   payload_entity: ConnectorAuthorization
-  payload_fields: [authorizationId, accountId, connectorId, authorizationMode, status, expiresAt, revision, updatedAt]
-  consumers: []
+  payload_fields:
+  - authorizationId
+  - accountId
+  - connectorId
+  - authorizationMode
+  - status
+  - expiresAt
+  - revision
+  - updatedAt
   no_consumer_reason: 仅用于授权生命周期审计。
 - name: ConnectorAuthorizationRevoked
   description: 账号连接撤权后对应授权与 credential lifecycle 失效。
-  producers: [RevokeConnectorConnection]
-  channel: integration.connector_authorization
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_authorization
   payload_entity: ConnectorAuthorization
-  payload_fields: [authorizationId, accountId, connectorId, authorizationMode, status, revision, updatedAt]
-  consumers: []
+  payload_fields:
+  - authorizationId
+  - accountId
+  - connectorId
+  - authorizationMode
+  - status
+  - revision
+  - updatedAt
   no_consumer_reason: ConnectorInvocation 在每个安全边界直接复核 Connection；不依赖此事件授权执行。

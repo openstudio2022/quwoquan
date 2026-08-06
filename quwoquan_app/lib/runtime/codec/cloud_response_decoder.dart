@@ -1,7 +1,7 @@
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 
 class CloudResponseDecoder {
   const CloudResponseDecoder._();

@@ -133,25 +133,35 @@ def _trusted_provider(
     evidence: list[dict[str, Any]],
     manifest: dict[str, Any],
 ) -> VerifiedAuthority:
-    assert len(evidence) == 140
-    assert payload["evidenceCount"] == 140
+    compiled, governance_issues = external_provider_governance.load_and_compile()
+    assert governance_issues == []
+    expected_count = len(provider_conformance.expected_required_cell_keys(compiled))
+    assert len(evidence) == expected_count
+    assert payload["evidenceCount"] == expected_count
     return VerifiedAuthority(
         authority="canonical-provider-conformance",
         subject_digest=sha256_file(
             artifact_root / manifest["providerEvidence"]["path"]
         ),
         verification_digest=TEST_DIGEST,
-        claims=frozenset({"provider_readiness", "140_required_cells"}),
+        claims=frozenset({"provider_readiness", "all_required_cells"}),
     )
 
 
 class FinalAcceptanceFixture:
-    def __init__(self, root: Path, *, provider_mode: str = "full") -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        provider_mode: str = "full",
+        pilot_recorded_at: str = OBSERVED_AT,
+    ) -> None:
         self.root = root
         self.artifact = root / "release-artifact"
         self.paths: dict[str, Path] = {}
         self.payloads: dict[str, dict[str, Any]] = {}
         self.provider_mode = provider_mode
+        self.pilot_recorded_at = pilot_recorded_at
         self._build_bound_acceptance_inputs()
         self._build_artifact()
         self._build_external_evidence()
@@ -188,7 +198,7 @@ class FinalAcceptanceFixture:
                 "productLifecycleState": "commercial",
                 "containsUnverifiedAssets": False,
                 "authorizationRequiredAssetIds": [],
-                "recordedAt": OBSERVED_AT,
+                "recordedAt": self.pilot_recorded_at,
             },
         )
         self._store(
@@ -198,7 +208,7 @@ class FinalAcceptanceFixture:
                 "schema": "quwoquan_data.release_attestation",
                 "releaseId": ROLLBACK_ID,
                 "payloadSha256": ROLLBACK_DIGEST,
-                "recordedAt": OBSERVED_AT,
+                "recordedAt": self.pilot_recorded_at,
             },
         )
         for environment in ("alpha", "beta", "gamma"):
@@ -259,16 +269,7 @@ class FinalAcceptanceFixture:
         capability_ids = sorted(
             provider_conformance.provider_conformance_capability_ids(compiled)
         )
-        assert len(capability_ids) == 14
-        cells = [
-            (capability_id, environment, layer)
-            for capability_id in capability_ids
-            for environment in ("alpha", "beta", "gamma")
-            for layer in ("local_contract", "api_integration", "user_acceptance")
-        ] + [
-            (capability_id, "prod", "user_acceptance")
-            for capability_id in capability_ids
-        ]
+        cells = sorted(provider_conformance.expected_required_cell_keys(compiled))
         if self.provider_mode == "three":
             cells = cells[:3]
         elif self.provider_mode == "missing_alpha":
@@ -896,7 +897,7 @@ def test_cli_empty_inputs_exit_one_with_typed_receipt() -> None:
     assert "MISSING_INPUT" in _codes(payload)
 
 
-def test_trusted_producer_verifiers_accept_140_cells_and_closed_artifact() -> None:
+def test_trusted_producer_verifiers_accept_compiled_cells_and_closed_artifact() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         fixture = FinalAcceptanceFixture(Path(temporary))
         validate_manifest_files(fixture.artifact, fixture.manifest)
@@ -908,6 +909,31 @@ def test_trusted_producer_verifiers_accept_140_cells_and_closed_artifact() -> No
     assert payload["inputs"]["recoveryUat"]["ios"]["authority"]["kind"] == (
         "github-actions-oidc"
     )
+
+
+def test_immutable_release_attestations_do_not_expire_with_runtime_evidence() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        fixture = FinalAcceptanceFixture(
+            Path(temporary),
+            pilot_recorded_at="2025-01-01T00:00:00Z",
+        )
+        validate_manifest_files(fixture.artifact, fixture.manifest)
+        payload = _evaluate(fixture, trusted=True)
+
+    assert payload["verdict"] == "PROMOTABLE"
+    assert payload["blockers"] == []
+
+
+def test_immutable_release_attestations_cannot_be_future_dated() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        fixture = FinalAcceptanceFixture(
+            Path(temporary),
+            pilot_recorded_at="2026-08-05T00:00:00Z",
+        )
+        payload = _evaluate(fixture, trusted=True)
+
+    assert payload["verdict"] == "GATE_BLOCK"
+    assert "STALE_EVIDENCE" in _codes(payload)
 
 
 def test_completely_local_synthetic_fixture_is_gate_block() -> None:
@@ -1044,6 +1070,24 @@ def test_local_copy_of_green_matrix_is_not_authoritative() -> None:
 
     assert payload["verdict"] == "GATE_BLOCK"
     assert "UNVERIFIABLE_AUTHORITY" in _codes(payload)
+
+
+def test_emulator_only_green_matrix_cannot_close_final_acceptance() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        fixture = FinalAcceptanceFixture(Path(temporary))
+        emulator_only = {
+            **fixture.payloads["green_matrix"],
+            "claim": "ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN",
+            "deviceProfile": "emulator_only",
+            "nonPromotable": True,
+            "deviceCoverage": ["ios-simulator", "android-emulator"],
+        }
+        _write(fixture.paths["green_matrix"], emulator_only)
+        payload = _evaluate(fixture)
+
+    assert payload["verdict"] == "GATE_BLOCK"
+    assert "NON_PROMOTABLE" in _codes(payload)
+    assert "STATUS_NOT_PASSED" in _codes(payload)
 
 
 @pytest.mark.parametrize(

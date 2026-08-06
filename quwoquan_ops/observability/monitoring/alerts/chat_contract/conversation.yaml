@@ -85,6 +85,26 @@ groups:
           slo_availability_percent: "99.9"
       - record: quwoquan_chat_contract_operation_requests_total
         expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/gathering-conversations/[^/]+/board$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.GetGatheringChatBoard"
+          contract_metric: "chat_gathering_board_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route=~"^/chat/gathering-conversations/[^/]+/board$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.conversation.GetGatheringChatBoard"
+          contract_metric: "chat_gathering_board_query"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
           sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/groups/[^/]+/home$"})
         labels:
           service: "chat-service"

@@ -78,10 +78,17 @@ tools:
     readOnly: false
     capability:
       capabilityKey: calendar.event.create
-      connectorRequirement: required
+      connectorRequirement: none
       consentScopes: [calendar.event.create]
       allowedSurfaceKinds: [personal]
       recheckAtExecution: true
+    bindingPolicy:
+      priority: [device_capability, user_connector]
+      resultType: ResolvedCapabilityGrant
+      noFallbackAfterSelection: true
+    executionPermit:
+      required: true
+      bindTo: [capabilityKey, accountId, typedInputDigest, idempotencyKey]
     confirmation:
       templateRef: assistant.tool_confirmation
       title: 确认创建系统日程
@@ -93,6 +100,111 @@ tools:
         - {inputKey: durationMinutes, label: 时长（分钟）}
         - {inputKey: reminderMinutes, label: 提前提醒（分钟）}
         - {inputKey: notes, label: 备注}
+    resilience: {timeoutMs: 30000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 1}
+    recovery: {action: ask_user, disruptionLevel: partial}
+
+  - toolName: calendar_update_event
+    displayName: 更新日历事项
+    description: 更新当前设备或已授权用户日历连接中的既有事项；必须先展示 typed 变更并取得用户明确确认。
+    namespace: device
+    placement: device_action
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        eventId: {type: string, minLength: 1}
+        title: {type: string, minLength: 1, maxLength: 200}
+        startsAt: {type: string, minLength: 1}
+        durationMinutes: {type: integer, minimum: 1, maximum: 1440}
+        reminderMinutes: {type: integer, minimum: 0, maximum: 10080}
+        notes: {type: string, maxLength: 2000}
+      required: [eventId]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        status: {type: string, enum: [updated, rejected, unavailable, failed]}
+        eventId: {type: string}
+      required: [status]
+    requiresConfirmation: true
+    idempotency: idempotency_key
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: false
+    capability:
+      capabilityKey: calendar.event.update
+      connectorRequirement: none
+      consentScopes: [calendar.event.update]
+      allowedSurfaceKinds: [personal]
+      recheckAtExecution: true
+    bindingPolicy:
+      priority: [device_capability, user_connector]
+      resultType: ResolvedCapabilityGrant
+      noFallbackAfterSelection: true
+    executionPermit:
+      required: true
+      bindTo: [capabilityKey, accountId, typedInputDigest, idempotencyKey]
+    confirmation:
+      templateRef: assistant.tool_confirmation
+      title: 确认更新日历事项
+      description: 确认后，小趣会按以下变更更新日历事项。
+      completionSummary: 日历事项已更新。
+      displayFields:
+        - {inputKey: eventId, label: 日历事项}
+        - {inputKey: title, label: 标题}
+        - {inputKey: startsAt, label: 开始时间}
+        - {inputKey: durationMinutes, label: 时长（分钟）}
+        - {inputKey: reminderMinutes, label: 提前提醒（分钟）}
+        - {inputKey: notes, label: 备注}
+    resilience: {timeoutMs: 30000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 1}
+    recovery: {action: ask_user, disruptionLevel: partial}
+
+  - toolName: calendar_delete_event
+    displayName: 删除日历事项
+    description: 删除当前设备或已授权用户日历连接中的既有事项；必须先展示目标并取得用户明确确认。
+    namespace: device
+    placement: device_action
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        eventId: {type: string, minLength: 1}
+        displaySummary: {type: string, minLength: 1, maxLength: 300}
+      required: [eventId, displaySummary]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        status: {type: string, enum: [deleted, rejected, unavailable, failed]}
+        eventId: {type: string}
+      required: [status]
+    requiresConfirmation: true
+    idempotency: idempotency_key
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: false
+    capability:
+      capabilityKey: calendar.event.delete
+      connectorRequirement: none
+      consentScopes: [calendar.event.delete]
+      allowedSurfaceKinds: [personal]
+      recheckAtExecution: true
+    bindingPolicy:
+      priority: [device_capability, user_connector]
+      resultType: ResolvedCapabilityGrant
+      noFallbackAfterSelection: true
+    executionPermit:
+      required: true
+      bindTo: [capabilityKey, accountId, typedInputDigest, idempotencyKey]
+    confirmation:
+      templateRef: assistant.tool_confirmation
+      title: 确认删除日历事项
+      description: 确认后，小趣会删除以下日历事项。
+      completionSummary: 日历事项已删除。
+      displayFields:
+        - {inputKey: displaySummary, label: 日历事项}
     resilience: {timeoutMs: 30000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 1}
     recovery: {action: ask_user, disruptionLevel: partial}
 
@@ -150,6 +262,104 @@ tools:
     resilience: {timeoutMs: 12000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
     recovery: {action: degrade_answer, disruptionLevel: partial}
 
+  - toolName: location_poi_search
+    displayName: 地点搜索
+    description: 通过环境绑定的公共地图 Provider 搜索标准化 POI；无用户 Connector 生命周期，不按平台名称分支。
+    namespace: location
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        skillId: {type: string}
+        query: {type: string, minLength: 1, maxLength: 200}
+        cityCode: {type: string, minLength: 1}
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+        limit: {type: integer, minimum: 1, maximum: 50}
+      required: [query]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              locationRef: {type: string}
+              name: {type: string}
+              address: {type: string}
+              latitude: {type: number}
+              longitude: {type: number}
+            required: [locationRef, name, latitude, longitude]
+        references: {type: array}
+      required: [items, references]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId, skillId]
+    readOnly: true
+    capability:
+      capabilityKey: location.poi.search
+      connectorRequirement: none
+      consentScopes: []
+      allowedSurfaceKinds: [personal, conversation, circle]
+      recheckAtExecution: true
+    bindingPolicy:
+      priority: [public_provider]
+      resultType: ResolvedCapabilityGrant
+      noFallbackAfterSelection: true
+    resilience: {timeoutMs: 5000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
+    recovery: {action: ask_user, disruptionLevel: partial}
+
+  - toolName: location_route_read
+    displayName: 路线查询
+    description: 通过环境绑定的公共地图 Provider 读取两点间标准化路线；无用户 Connector 生命周期。
+    namespace: location
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        runId: {type: string, minLength: 1}
+        skillId: {type: string}
+        originLocationRef: {type: string, minLength: 1}
+        destinationLocationRef: {type: string, minLength: 1}
+        travelMode: {type: string, enum: [walking, cycling, driving, transit]}
+      required: [originLocationRef, destinationLocationRef, travelMode]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        summary: {type: string}
+        distanceMeters: {type: integer, minimum: 0}
+        durationSeconds: {type: integer, minimum: 0}
+        routeRef: {type: string}
+        references: {type: array}
+      required: [summary, distanceMeters, durationSeconds, routeRef, references]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: [runId, skillId]
+    readOnly: true
+    capability:
+      capabilityKey: location.route.read
+      connectorRequirement: none
+      consentScopes: []
+      allowedSurfaceKinds: [personal, conversation, circle]
+      recheckAtExecution: true
+    bindingPolicy:
+      priority: [public_provider]
+      resultType: ResolvedCapabilityGrant
+      noFallbackAfterSelection: true
+    resilience: {timeoutMs: 8000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
+    recovery: {action: ask_user, disruptionLevel: partial}
+
   - toolName: weather_lookup
     displayName: 天气事实查询
     description: 按地点查询实时天气和预报，并返回可核验的公共来源；不通过 Skill 名称或文本关键词猜测能力。
@@ -192,6 +402,16 @@ tools:
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: [runId, skillId]
     readOnly: true
+    capability:
+      capabilityKey: weather.forecast.read
+      connectorRequirement: none
+      consentScopes: []
+      allowedSurfaceKinds: [personal, conversation, circle]
+      recheckAtExecution: true
+    bindingPolicy:
+      priority: [public_provider]
+      resultType: ResolvedCapabilityGrant
+      noFallbackAfterSelection: true
     research: {operation: discover}
     failure: {providerFailureCode: ASSISTANT.MIDDLEWARE.weather_provider_unavailable}
     resilience: {timeoutMs: 10000, maxAttempts: 2, retryBackoffMs: 200, loopDetectionWindow: 3}
@@ -342,3 +562,730 @@ tools:
     research: {operation: inspect}
     resilience: {timeoutMs: 2000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
     recovery: {action: degrade_answer, disruptionLevel: partial}
+
+  - toolName: gathering.search_public
+    displayName: 搜索公开聚会
+    description: 按 canonical source object 搜索公开 Gathering 摘要，不读取私密地点、参与者或申请内容。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        sourceObjectTypeRef: {type: string, minLength: 1}
+        sourceObjectId: {type: string, minLength: 1}
+        limit: {type: integer, minimum: 1, maximum: 50}
+        cursor: {type: string}
+      required: [sourceObjectTypeRef, sourceObjectId, limit]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gatherings:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              gatheringId: {type: string}
+              title: {type: string}
+              summary: {type: string}
+              startAt: {type: string}
+              endAt: {type: string}
+              meetingPointLabel: {type: string}
+              remainingCapacity: {type: integer}
+              admissionMode: {type: string}
+            required: [gatheringId, title, summary, startAt, endAt, meetingPointLabel, remainingCapacity, admissionMode]
+        nextCursor: {type: string}
+      required: [gatherings]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: low
+    ownerService: circle-service
+    ownerOperationId: circle.gathering.ListGatheringsBySource
+    ownerRequestEntity: GatheringListBySourceQuery
+    ownerResponseEntity: GatheringBySourcePageSlice
+    contractDigest: sha256:72f226a75c02f37994ba81c37150dbe61fcb67c5c099ea5e43e0aad7b43a9e4f
+    requiredAuth:
+      grantKind: delegated_query
+      scopes: [circle.gathering.public.search]
+      resourceType: circle.gathering.source
+      resourceIdSource: sourceObjectTypeRef+sourceObjectId
+    requiredCapability: circle.gathering.public.search
+    capability:
+      capabilityKey: circle.gathering.public.search
+      connectorRequirement: none
+      consentScopes: [circle.gathering.public.search]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: none, userConfirmationRequiredBeforeEffect: false}
+    redaction:
+      policy: public_summary_only
+      omittedFields: [exactPlace, participantRoster, applicationAnswers]
+    audit:
+      eventName: assistant.gathering.public_search
+      includeRequestDigest: true
+      includeGrantJti: true
+      neverLog: [delegatedGrant]
+    resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: gathering.read_public
+    displayName: 读取公开聚会
+    description: 读取一个 Gathering 的公开详情，不返回私密地点、参与者或申请内容。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gatheringId: {type: string, minLength: 1}
+      required: [gatheringId]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gathering:
+          type: object
+          additionalProperties: false
+          properties:
+            gatheringId: {type: string}
+            title: {type: string}
+            summary: {type: string}
+            startAt: {type: string}
+            endAt: {type: string}
+            meetingPointLabel: {type: string}
+            remainingCapacity: {type: integer}
+            admissionMode: {type: string}
+            status: {type: string}
+          required: [gatheringId, title, summary, startAt, endAt, meetingPointLabel, remainingCapacity, admissionMode, status]
+      required: [gathering]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: public
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: low
+    ownerService: circle-service
+    ownerOperationId: circle.gathering.GetPublicGathering
+    ownerRequestEntity: GatheringIDQuery
+    ownerResponseEntity: GatheringPublicDetailSlice
+    contractDigest: sha256:80046369314058efc068a84e61dcff971b145c03177581298be08da61b91b750
+    requiredAuth:
+      grantKind: delegated_query
+      scopes: [circle.gathering.public.read]
+      resourceType: circle.gathering
+      resourceIdSource: gatheringId
+    requiredCapability: circle.gathering.public.read
+    capability:
+      capabilityKey: circle.gathering.public.read
+      connectorRequirement: none
+      consentScopes: [circle.gathering.public.read]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: none, userConfirmationRequiredBeforeEffect: false}
+    redaction:
+      policy: public_detail_only
+      omittedFields: [exactPlace, participantRoster, applicationAnswers]
+    audit:
+      eventName: assistant.gathering.public_read
+      includeRequestDigest: true
+      includeGrantJti: true
+      neverLog: [delegatedGrant]
+    resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: gathering.read_private
+    displayName: 读取私密聚会
+    description: 仅在 Participation 或 Host authority 成立时读取私密详情；参与者身份、申请答案和审核备注始终裁剪。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gatheringId: {type: string, minLength: 1}
+      required: [gatheringId]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gathering:
+          type: object
+          additionalProperties: false
+          properties:
+            gatheringId: {type: string}
+            title: {type: string}
+            purpose: {type: string}
+            startAt: {type: string}
+            endAt: {type: string}
+            exactMeetingPoint: {type: string}
+            capacity: {type: integer}
+            currentParticipants: {type: integer}
+            admissionMode: {type: string}
+            version: {type: integer}
+            viewerAuthority: {type: string, enum: [participation, host]}
+          required: [gatheringId, title, purpose, startAt, endAt, exactMeetingPoint, capacity, currentParticipants, admissionMode, version, viewerAuthority]
+        redactionPolicy: {type: string, enum: [private_detail_without_roster_or_answers]}
+      required: [gathering, redactionPolicy]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: medium
+    ownerService: circle-service
+    ownerOperationId: circle.gathering.GetGathering
+    ownerRequestEntity: GatheringIDQuery
+    ownerResponseEntity: GatheringPrivateDetailSlice
+    contractDigest: sha256:d91c863073da2b87268a3e5f135958ec66747cf8a72c5511c8e4e89eef8cfc68
+    requiredAuth:
+      grantKind: delegated_query
+      scopes: [circle.gathering.private.read]
+      resourceType: circle.gathering
+      resourceIdSource: gatheringId
+      viewerAuthority: [participation, host]
+    requiredCapability: circle.gathering.private.read
+    capability:
+      capabilityKey: circle.gathering.private.read
+      connectorRequirement: none
+      consentScopes: [circle.gathering.private.read]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: none, userConfirmationRequiredBeforeEffect: false}
+    redaction:
+      policy: private_detail_without_roster_or_answers
+      omittedFields: [participantIdentities, applicationAnswers, inviteeIdentities, moderationNotes]
+    audit:
+      eventName: assistant.gathering.private_read
+      includeRequestDigest: true
+      includeGrantJti: true
+      neverLog: [delegatedGrant, exactMeetingPoint]
+    resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: gathering.propose_create_draft
+    displayName: 起草聚会
+    description: 只生成 CreateGatheringDraft typed proposal 与 ApproveTool continuation；确认前不执行 Circle 写入。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        hostSubjectKind: {type: string, enum: [persona, circle, entity]}
+        hostSubjectId: {type: string, minLength: 1}
+        creatorParticipates: {type: boolean}
+        commitments:
+          type: object
+          additionalProperties: false
+          properties:
+            title: {type: string, minLength: 1}
+            summary: {type: string}
+            topicRefs: {type: array, items: {type: string}}
+            requirementRefs: {type: array, items: {type: string}}
+            sourceRefs:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  objectRef:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      objectTypeRef: {type: string, minLength: 1}
+                      objectId: {type: string, minLength: 1}
+                    required: [objectTypeRef, objectId]
+                  routeId: {type: string, minLength: 1}
+                  sourceDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+                required: [objectRef, routeId, sourceDigest]
+            costNotice: {type: string, minLength: 1}
+            costDescription: {type: string}
+            timezone: {type: string, minLength: 1}
+            startAt: {type: string, minLength: 1}
+            endAt: {type: string, minLength: 1}
+            admissionClosesAt: {type: string}
+            placeMode: {type: string, enum: [physical, online, hybrid]}
+            coarsePlaceRef:
+              type: object
+              additionalProperties: false
+              properties:
+                objectTypeRef: {type: string, minLength: 1}
+                objectId: {type: string, minLength: 1}
+              required: [objectTypeRef, objectId]
+            coarsePlaceLabel: {type: string}
+            exactMeetingPoint: {type: string}
+            onlineLocationRef: {type: string}
+            audiencePolicy: {type: string, minLength: 1}
+            admissionPolicy: {type: string, minLength: 1}
+            maxParticipants: {type: integer, minimum: 2}
+            timeDisclosure: {type: string, minLength: 1}
+            placeDisclosure: {type: string, minLength: 1}
+            rosterDisclosure: {type: string, minLength: 1}
+            applicationQuestions:
+              type: array
+              maxItems: 5
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  questionId: {type: string, minLength: 1}
+                  prompt: {type: string, minLength: 1}
+                  kind: {type: string, minLength: 1}
+                  options:
+                    type: array
+                    maxItems: 10
+                    items:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        optionId: {type: string, minLength: 1}
+                        label: {type: string, minLength: 1}
+                      required: [optionId, label]
+                  required: {type: boolean}
+                required: [questionId, prompt, kind, options, required]
+            riskControlPolicyRef: {type: string, minLength: 1}
+            policyDecisionRef: {type: string}
+            policyDigest: {type: string}
+            obligationDigest: {type: string}
+          required: [title, summary, topicRefs, requirementRefs, sourceRefs, costNotice, costDescription, timezone, startAt, endAt, admissionClosesAt, placeMode, coarsePlaceLabel, exactMeetingPoint, onlineLocationRef, audiencePolicy, admissionPolicy, maxParticipants, timeDisclosure, placeDisclosure, rosterDisclosure, applicationQuestions, riskControlPolicyRef, policyDecisionRef, policyDigest, obligationDigest]
+      required: [hostSubjectKind, hostSubjectId, creatorParticipates, commitments]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        proposalId: {type: string}
+        status: {type: string, enum: [awaiting_user_confirmation]}
+        summary: {type: string}
+        requestDigest: {type: string}
+        domainOperationId: {type: string, enum: [circle.gathering.CreateGatheringDraft]}
+        approvalIntentKind: {type: string, enum: [ApproveTool]}
+      required: [proposalId, status, summary, requestDigest, domainOperationId, approvalIntentKind]
+    requiresConfirmation: false
+    idempotency: content_addressed
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: medium
+    ownerService: circle-service
+    ownerOperationId: circle.gathering.CreateGatheringDraft
+    ownerRequestEntity: CreateGatheringDraftCommand
+    ownerResponseEntity: GatheringCommandResult
+    contractDigest: sha256:ed8c7755ddc69846f6b7ed5b3e677998e63a1711c985bb1b1dd69cd14af2dd41
+    requiredAuth:
+      grantKind: delegated_command_after_approval
+      scopes: [circle.gathering.draft.create]
+      resourceType: circle.gathering.draft
+      resourceIdSource: proposalId
+      viewerAuthority: [verified_host]
+    requiredCapability: circle.gathering.draft.create
+    capability:
+      capabilityKey: circle.gathering.draft.create
+      connectorRequirement: none
+      consentScopes: [circle.gathering.draft.create]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: approve_tool, userConfirmationRequiredBeforeEffect: true}
+    redaction: {policy: proposal_summary, omittedFields: [delegatedGrant, capabilityPermit]}
+    audit:
+      eventName: assistant.gathering.create_draft_proposed
+      includeRequestDigest: true
+      includeGrantJti: false
+      neverLog: [delegatedGrant, capabilityPermit]
+    executionPolicy:
+      mode: proposal_only
+      prohibitedOperations: [approve_application, invite_participant, remove_participant, update_capacity, update_material, cancel, complete, acknowledge_revision]
+    resilience: {timeoutMs: 3000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: gathering.propose_update
+    displayName: 起草聚会更新
+    description: 只生成完整 typed UpdateGathering proposal 与 ApproveTool continuation；确认前不执行 Circle 写入。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gatheringId: {type: string, minLength: 1}
+        expectedGatheringVersion: {type: integer, minimum: 1}
+        hostSubjectKind: {type: string, enum: [persona, circle, entity]}
+        hostSubjectId: {type: string, minLength: 1}
+        acknowledgementDeadlineAt: {type: string, minLength: 1}
+        commitments:
+          type: object
+          additionalProperties: false
+          properties:
+            title: {type: string, minLength: 1}
+            summary: {type: string}
+            topicRefs: {type: array, items: {type: string}}
+            requirementRefs: {type: array, items: {type: string}}
+            sourceRefs:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  objectRef:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      objectTypeRef: {type: string, minLength: 1}
+                      objectId: {type: string, minLength: 1}
+                    required: [objectTypeRef, objectId]
+                  routeId: {type: string, minLength: 1}
+                  sourceDigest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+                required: [objectRef, routeId, sourceDigest]
+            costNotice: {type: string, minLength: 1}
+            costDescription: {type: string}
+            timezone: {type: string, minLength: 1}
+            startAt: {type: string, minLength: 1}
+            endAt: {type: string, minLength: 1}
+            admissionClosesAt: {type: string}
+            placeMode: {type: string, enum: [physical, online, hybrid]}
+            coarsePlaceRef:
+              type: object
+              additionalProperties: false
+              properties:
+                objectTypeRef: {type: string, minLength: 1}
+                objectId: {type: string, minLength: 1}
+              required: [objectTypeRef, objectId]
+            coarsePlaceLabel: {type: string}
+            exactMeetingPoint: {type: string}
+            onlineLocationRef: {type: string}
+            audiencePolicy: {type: string, minLength: 1}
+            admissionPolicy: {type: string, minLength: 1}
+            maxParticipants: {type: integer, minimum: 2}
+            timeDisclosure: {type: string, minLength: 1}
+            placeDisclosure: {type: string, minLength: 1}
+            rosterDisclosure: {type: string, minLength: 1}
+            applicationQuestions:
+              type: array
+              maxItems: 5
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  questionId: {type: string, minLength: 1}
+                  prompt: {type: string, minLength: 1}
+                  kind: {type: string, minLength: 1}
+                  options:
+                    type: array
+                    maxItems: 10
+                    items:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        optionId: {type: string, minLength: 1}
+                        label: {type: string, minLength: 1}
+                      required: [optionId, label]
+                  required: {type: boolean}
+                required: [questionId, prompt, kind, options, required]
+            riskControlPolicyRef: {type: string, minLength: 1}
+            policyDecisionRef: {type: string}
+            policyDigest: {type: string}
+            obligationDigest: {type: string}
+          required: [title, summary, topicRefs, requirementRefs, sourceRefs, costNotice, costDescription, timezone, startAt, endAt, admissionClosesAt, placeMode, coarsePlaceLabel, exactMeetingPoint, onlineLocationRef, audiencePolicy, admissionPolicy, maxParticipants, timeDisclosure, placeDisclosure, rosterDisclosure, applicationQuestions, riskControlPolicyRef, policyDecisionRef, policyDigest, obligationDigest]
+      required: [gatheringId, expectedGatheringVersion, hostSubjectKind, hostSubjectId, acknowledgementDeadlineAt, commitments]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        proposalId: {type: string}
+        status: {type: string, enum: [awaiting_user_confirmation]}
+        summary: {type: string}
+        requestDigest: {type: string}
+        domainOperationId: {type: string, enum: [circle.gathering.UpdateGathering]}
+        approvalIntentKind: {type: string, enum: [ApproveTool]}
+      required: [proposalId, status, summary, requestDigest, domainOperationId, approvalIntentKind]
+    requiresConfirmation: false
+    idempotency: content_addressed
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: high
+    ownerService: circle-service
+    ownerOperationId: circle.gathering.UpdateGathering
+    ownerRequestEntity: UpdateGatheringCommand
+    ownerResponseEntity: GatheringCommandResult
+    contractDigest: sha256:9787c9aa0bfff7ed1dbc8d399a9660b81f24dc6071e5a2a66a2de69251badfb3
+    requiredAuth:
+      grantKind: delegated_command_after_approval
+      scopes: [circle.gathering.update]
+      resourceType: circle.gathering
+      resourceIdSource: gatheringId
+      viewerAuthority: [verified_host]
+    requiredCapability: circle.gathering.update
+    capability:
+      capabilityKey: circle.gathering.update
+      connectorRequirement: none
+      consentScopes: [circle.gathering.update]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: approve_tool, userConfirmationRequiredBeforeEffect: true}
+    redaction: {policy: proposal_summary, omittedFields: [delegatedGrant, capabilityPermit]}
+    audit:
+      eventName: assistant.gathering.update_proposed
+      includeRequestDigest: true
+      includeGrantJti: false
+      neverLog: [delegatedGrant, capabilityPermit]
+    executionPolicy:
+      mode: proposal_only
+      prohibitedOperations: [approve_application, invite_participant, remove_participant, cancel, complete, acknowledge_revision]
+    resilience: {timeoutMs: 3000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: gathering.propose_plan
+    displayName: 起草聚会计划
+    description: 只生成 Circle ProposeGatheringPlan typed proposal 与 ApproveTool continuation；确认前不写入，确认后也不自动接受或推进 Revision。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        planId: {type: string, minLength: 1}
+        expectedPlanVersion: {type: integer, minimum: 1}
+        baseRevisionId: {type: string, minLength: 1}
+        baseRevisionNumber: {type: integer, minimum: 1}
+        baseRevisionDigest: {type: string, minLength: 1}
+        items:
+          type: array
+          minItems: 1
+          maxItems: 256
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              itemId: {type: string, minLength: 1}
+              kind: {type: string, enum: [agenda, place, route_segment, task, checklist, note]}
+              order: {type: integer, minimum: 0}
+              agenda:
+                type: object
+                additionalProperties: false
+                properties:
+                  content: {type: string, minLength: 1}
+                  startsAt: {type: string, format: date-time}
+                  durationMinutes: {type: integer, minimum: 0}
+                required: [content]
+              place:
+                type: object
+                additionalProperties: false
+                properties:
+                  placeRef:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      objectTypeRef: {type: string, minLength: 1}
+                      objectId: {type: string, minLength: 1}
+                    required: [objectTypeRef, objectId]
+                  instruction: {type: string}
+                required: [placeRef]
+              routeSegment:
+                type: object
+                additionalProperties: false
+                properties:
+                  fromPlaceRef:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      objectTypeRef: {type: string, minLength: 1}
+                      objectId: {type: string, minLength: 1}
+                    required: [objectTypeRef, objectId]
+                  toPlaceRef:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      objectTypeRef: {type: string, minLength: 1}
+                      objectId: {type: string, minLength: 1}
+                    required: [objectTypeRef, objectId]
+                  travelMode: {type: string, enum: [walk, bicycle, transit, drive, ferry, other]}
+                  estimatedMinutes: {type: integer, minimum: 0}
+                  instruction: {type: string}
+                required: [fromPlaceRef, toPlaceRef, travelMode]
+              task:
+                type: object
+                additionalProperties: false
+                properties:
+                  content: {type: string, minLength: 1}
+                  dueAt: {type: string, format: date-time}
+                  completed: {type: boolean}
+                required: [content, completed]
+              checklist:
+                type: object
+                additionalProperties: false
+                properties:
+                  entries:
+                    type: array
+                    maxItems: 100
+                    items:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        entryId: {type: string, minLength: 1}
+                        content: {type: string, minLength: 1}
+                        checked: {type: boolean}
+                      required: [entryId, content, checked]
+                required: [entries]
+              note:
+                type: object
+                additionalProperties: false
+                properties:
+                  content: {type: string, minLength: 1}
+                required: [content]
+              assigneeRef:
+                type: object
+                additionalProperties: false
+                properties:
+                  gatheringId: {type: string, minLength: 1}
+                  personaId: {type: string, minLength: 1}
+                required: [gatheringId, personaId]
+              sourceRefs:
+                type: array
+                maxItems: 32
+                items:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    objectTypeRef: {type: string, minLength: 1}
+                    objectId: {type: string, minLength: 1}
+                  required: [objectTypeRef, objectId]
+            required: [itemId, kind, order, sourceRefs]
+        acknowledgementPolicy:
+          type: object
+          additionalProperties: false
+          properties:
+            mode: {type: string, enum: [none, affected_participations]}
+            deadlineAt: {type: string, format: date-time}
+          required: [mode]
+        affectedParticipationRefs:
+          type: array
+          maxItems: 512
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              gatheringId: {type: string, minLength: 1}
+              personaId: {type: string, minLength: 1}
+            required: [gatheringId, personaId]
+      required: [planId, expectedPlanVersion, baseRevisionId, baseRevisionNumber, baseRevisionDigest, items, acknowledgementPolicy, affectedParticipationRefs]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        proposalId: {type: string}
+        status: {type: string, enum: [awaiting_user_confirmation]}
+        summary: {type: string}
+        requestDigest: {type: string}
+        domainOperationId: {type: string, enum: [circle.gathering_plan.ProposeGatheringPlan]}
+        approvalIntentKind: {type: string, enum: [ApproveTool]}
+      required: [proposalId, status, summary, requestDigest, domainOperationId, approvalIntentKind]
+    requiresConfirmation: false
+    idempotency: content_addressed
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: medium
+    ownerService: circle-service
+    ownerOperationId: circle.gathering_plan.ProposeGatheringPlan
+    ownerRequestEntity: ProposeGatheringPlanCommand
+    ownerResponseEntity: GatheringPlanCommandResult
+    contractDigest: sha256:5ae4f057e3c109fc5c69973ba989053b8bd8f4533ad3eaddff93909ed4004882
+    requiredAuth:
+      grantKind: delegated_command_after_approval
+      scopes: [circle.gathering.plan.update]
+      resourceType: circle.gathering_plan
+      resourceIdSource: planId
+      viewerAuthority: [verified_host, active_participation]
+    requiredCapability: circle.gathering.plan.propose
+    capability:
+      capabilityKey: circle.gathering.plan.propose
+      connectorRequirement: none
+      consentScopes: [circle.gathering.plan.update]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: approve_tool, userConfirmationRequiredBeforeEffect: true}
+    redaction: {policy: proposal_summary, omittedFields: [delegatedGrant, capabilityPermit]}
+    audit:
+      eventName: assistant.gathering.plan_proposed
+      includeRequestDigest: true
+      includeGrantJti: true
+      neverLog: [delegatedGrant, capabilityPermit]
+    executionPolicy:
+      mode: proposal_only
+      prohibitedOperations: [create_plan, commit_proposal, accept_proposal, reject_proposal, auto_publish_plan, acknowledge_revision]
+    resilience: {timeoutMs: 3000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: gathering.watch_availability
+    displayName: 关注聚会名额
+    description: 生成低风险名额关注 proposal；只有用户确认并取得 single-use DelegatedCommandGrant 后才可执行。
+    namespace: gathering
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        gatheringId: {type: string, minLength: 1}
+        expectedGatheringVersion: {type: integer, minimum: 1}
+        expectedWatchVersion: {type: integer, minimum: 0}
+      required: [gatheringId, expectedGatheringVersion, expectedWatchVersion]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        proposalId: {type: string}
+        status: {type: string, enum: [awaiting_user_confirmation]}
+        summary: {type: string}
+        requestDigest: {type: string}
+        domainOperationId: {type: string, enum: [circle.gathering.WatchGatheringAvailability]}
+        approvalIntentKind: {type: string, enum: [ApproveTool]}
+      required: [proposalId, status, summary, requestDigest, domainOperationId, approvalIntentKind]
+    requiresConfirmation: false
+    idempotency: content_addressed
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: low
+    ownerService: circle-service
+    ownerOperationId: circle.gathering.WatchGatheringAvailability
+    ownerRequestEntity: GatheringAvailabilityWatchCommand
+    ownerResponseEntity: GatheringCommandResult
+    contractDigest: sha256:fce77246ce88b757d8ddea0793ded0b66bc1962d27428777d9fa7ea3be8b638e
+    requiredAuth:
+      grantKind: delegated_command_after_approval
+      scopes: [circle.gathering.availability.watch]
+      resourceType: circle.gathering
+      resourceIdSource: gatheringId
+    requiredCapability: circle.gathering.availability.watch
+    capability:
+      capabilityKey: circle.gathering.availability.watch
+      connectorRequirement: none
+      consentScopes: [circle.gathering.availability.watch]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: approve_tool, userConfirmationRequiredBeforeEffect: true}
+    redaction: {policy: watch_summary, omittedFields: [delegatedGrant, capabilityPermit]}
+    audit:
+      eventName: assistant.gathering.availability_watch_proposed
+      includeRequestDigest: true
+      includeGrantJti: true
+      neverLog: [delegatedGrant, capabilityPermit]
+    executionPolicy:
+      mode: confirmed_low_risk_only
+      prohibitedOperations: [auto_join, auto_approve_application, auto_invite]
+    resilience: {timeoutMs: 3000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}

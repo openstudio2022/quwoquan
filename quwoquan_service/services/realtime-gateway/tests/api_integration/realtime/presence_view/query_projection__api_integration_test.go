@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-002
+// readiness_case: get-persona-presence-api
 package api_integration
 
 import (

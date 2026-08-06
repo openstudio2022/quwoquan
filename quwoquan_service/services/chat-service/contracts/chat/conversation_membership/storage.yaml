@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   conversation_memberships:
+    publication_role: not_published
     entity: ConversationMember
     role: authoritative
     indexes:
@@ -20,14 +21,17 @@ collections:
         displayName: 1
         userId: 1
   conversation_memberships_command_receipts:
+    publication_role: not_published
     entity: ConversationMember
     role: authoritative
     description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
   conversation_memberships_outbox:
+    publication_role: transactional_outbox
     entity: ConversationMember
     role: append_only
     description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
   circle_group_membership_projection_states:
+    publication_role: not_published
     entity: ConversationMember
     role: projection
     description: CircleGroupMembership 到 Chat 名册的 source-version 水位；与 Chat member/UserState/outbox 在同一事务提交，防止重放或乱序事件复活终态成员。
@@ -42,9 +46,10 @@ collections:
         conversationId: 1
         sourceVersion: -1
   gathering_membership_projection_states:
+    publication_role: not_published
     entity: ConversationMember
     role: projection
-    description: Gathering participant 到 Chat 名册的 source-version 水位；与 member/UserState/outbox 同事务提交。
+    description: Gathering OrganizerAssignment、Participation 与 Block 到 Chat access 的分来源 source-version 水位；与 member/UserState/outbox 同事务提交。
     indexes:
     - name: uq_gathering_membership_projection_identity
       keys:

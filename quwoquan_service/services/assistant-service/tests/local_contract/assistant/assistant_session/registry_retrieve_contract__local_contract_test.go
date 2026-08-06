@@ -93,10 +93,11 @@ func assistantSessionRegistryRetrieveContractRetrievalContractTestRegistry() Reg
 			})
 		}
 		return Result{Output: map[string]any{
-			"provider":  "test_search_adapter",
-			"summary":   "typed test result",
-			"results":   results,
-			"citations": []map[string]any{},
+			"provider":       "test_search_adapter",
+			"summary":        "typed test result",
+			"results":        results,
+			"citations":      []map[string]any{},
+			"emergedTagRefs": []string{},
 			"provenance": map[string]any{
 				"provider": "test_search_adapter",
 			},

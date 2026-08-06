@@ -2,23 +2,24 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/ops_event_record_dependencies.dart';
-import 'package:quwoquan_app/core/di/runtime_observability_dependencies.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
-import 'package:quwoquan_app/ops/product_ops/event_record/application/app_telemetry_coordinator.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_session_store.dart';
-import 'package:quwoquan_app/core/telemetry/app_telemetry_transport.dart';
-import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
-import 'package:quwoquan_app/core/telemetry/app_page_experience_tracker.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_outbox_adapter.dart';
+import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/ops_event_record_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_context_provider.dart';
+import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/application/app_telemetry_coordinator.dart';
+import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/adapters/app_telemetry_transport_remote.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_outbox.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_session_store.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_transport.dart';
+import 'package:quwoquan_app/runtime/transport/actor_queue/actor_queue_storage.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_page_experience_tracker.dart';
 
 final actorQueueStorageProvider = Provider<ActorQueueStorage>((ref) {
   return ActorQueueStorage();
@@ -50,7 +51,7 @@ final appTelemetryContextProvider = Provider<AppTelemetryContextProvider>((
 
 final appTelemetryTransportProvider = Provider<AppTelemetryTransport>((ref) {
   return CloudAppTelemetryTransport(
-    writer: ref.watch(opsEventRecordBatchWriterProvider),
+    ref.watch(opsEventRecordBatchWriterProvider),
   );
 });
 

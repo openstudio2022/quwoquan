@@ -110,7 +110,7 @@ groups:
           (
             sum(rate(ops_login_operation_events_total{result="failure"}[10m])) by (operation)
             / clamp_min(sum(rate(ops_login_operation_events_total[10m])) by (operation), 0.001)
-          ) > 0.01
+          ) > 0.05
           and sum(increase(ops_login_operation_events_total[10m])) by (operation) >= 20
         for: 10m
         labels:

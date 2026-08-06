@@ -152,20 +152,19 @@
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart`
-- canonical：`quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart`
-- canonical：`quwoquan_app/test/local_contract/cloud/user/account_identity_facets__contract__local_contract_test.dart`
+- canonical：`quwoquan_app/test/local_contract/service/user_service/account/account_session/login_page_widget__local_contract_test.dart`
+- canonical：`quwoquan_app/test/local_contract/runtime/auth/auth_session_store__local_contract_test.dart`
+- canonical：`quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart`
 - canonical：`quwoquan_service/services/user-service/contracts/account/account_session/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/authentication_challenge/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/tests/api_integration/account/user_account/auth_contract__api_integration_test.go`
-- canonical：`quwoquan_app/test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart`
-- canonical：`quwoquan_app/test/local_contract/ui/user/journeys/commercial_login_recovery_journey__local_contract_test.dart`
+- canonical：`quwoquan_app/test/local_contract/design_system/media/app_cached_network_image__local_contract_test.dart`
+- canonical：`quwoquan_app/test/local_contract/service/user_service/account/account_session/commercial_login_recovery_journey__local_contract_test.dart`
 - canonical：`quwoquan_service/services/user-service/contracts/account/account_session/errors.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/authentication_challenge/errors.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/credential_binding/errors.yaml`
-- canonical：`quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart`
-- canonical：`quwoquan_app/test/local_contract/ui/user/goldens`
+- canonical：`quwoquan_app/test/local_contract/runtime/auth/auth_gate_matrix_contract__local_contract_test.dart`
 
 ## 5. 验收场景
 

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	rterr "quwoquan_service/runtime/errors"
+	skillgenerated "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
 
@@ -212,11 +212,7 @@ func (s *MemoryStore) BeginSkillSubscriptionDelivery(
 	defer s.mu.Unlock()
 	subscription, ok := s.subscriptions[subscriptionID]
 	if !ok || subscription.Owner.OwnerID != userID {
-		return skillmodel.SkillSubscription{}, false, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"订阅不存在",
-			"skill subscription not found",
-		)
+		return skillmodel.SkillSubscription{}, false, skillgenerated.AppErrorFromSubscriptionNotFound("skill subscription not found")
 	}
 	if subscription.Status != skillmodel.SkillSubscriptionStatusActive {
 		return subscription, false, nil
@@ -248,11 +244,7 @@ func (s *MemoryStore) CompleteSkillSubscriptionDelivery(
 	if !ok ||
 		subscription.Owner.OwnerID != userID ||
 		subscription.DeliveryState.PendingDeliveryID != deliveryID {
-		return skillmodel.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"订阅投递状态已变化",
-			"skill subscription delivery state changed",
-		)
+		return skillmodel.SkillSubscription{}, skillgenerated.AppErrorFromSubscriptionInvalidTransition("skill subscription delivery state changed")
 	}
 	deliveredAt = deliveredAt.UTC()
 	subscription.DeliveryState.PendingDeliveryID = ""
@@ -283,11 +275,7 @@ func (s *MemoryStore) RecordSkillSubscriptionDeliveryFailure(
 	if !ok ||
 		subscription.Owner.OwnerID != userID ||
 		subscription.DeliveryState.PendingDeliveryID != deliveryID {
-		return skillmodel.SkillSubscription{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"订阅投递状态已变化",
-			"skill subscription delivery state changed",
-		)
+		return skillmodel.SkillSubscription{}, skillgenerated.AppErrorFromSubscriptionInvalidTransition("skill subscription delivery state changed")
 	}
 	failedAt = failedAt.UTC()
 	subscription.DeliveryState.LastAttemptAt = &failedAt
@@ -313,11 +301,7 @@ func (s *MemoryStore) ClearPendingSkillSubscriptionDelivery(
 	defer s.mu.Unlock()
 	subscription, ok := s.subscriptions[subscriptionID]
 	if !ok || subscription.Owner.OwnerID != userID {
-		return rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"订阅不存在",
-			"skill subscription not found",
-		)
+		return skillgenerated.AppErrorFromSubscriptionNotFound("skill subscription not found")
 	}
 	if subscription.DeliveryState.PendingDeliveryID != deliveryID {
 		return nil

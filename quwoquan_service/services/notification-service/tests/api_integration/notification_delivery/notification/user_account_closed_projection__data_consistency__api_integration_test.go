@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// readiness_case: recover-notification-account-closure-dead-letter-api
+// readiness_case: apply-notification-account-closure-api
 package api_integration
 
 import (
@@ -35,7 +37,7 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 		DecisionRef:    "decision-account-owner-suspended",
 		OccurredAt:     accountClosureContractTime.Add(-time.Minute),
 	}
-	if result, err := notificationRestriction.Apply(
+	if result, err := notificationRestrictionFacet.Apply(
 		context.Background(),
 		suspension,
 	); err != nil || result.Replayed {
@@ -44,7 +46,7 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 	sameVersionConflict := suspension
 	sameVersionConflict.EventID = "evt-account-owner-suspended-conflict"
 	sameVersionConflict.DecisionRef = "decision-account-owner-suspended-conflict"
-	if _, err := notificationRestriction.Apply(
+	if _, err := notificationRestrictionFacet.Apply(
 		context.Background(),
 		sameVersionConflict,
 	); !errors.Is(err, application.ErrUserAccountRestrictionProjectionConflict) {
@@ -145,7 +147,7 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 	lateRestore.AuthEpoch = 12
 	lateRestore.DecisionRef = "decision-account-owner-restore-after-close"
 	lateRestore.OccurredAt = accountClosureContractTime.Add(time.Minute)
-	if late, err := notificationRestriction.Apply(
+	if late, err := notificationRestrictionFacet.Apply(
 		context.Background(),
 		lateRestore,
 	); err != nil || !late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
@@ -157,7 +159,7 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 	delayedSuspend.AuthEpoch = 9
 	delayedSuspend.DecisionRef = "decision-account-owner-delayed-suspend"
 	delayedSuspend.OccurredAt = accountClosureContractTime.Add(-2 * time.Minute)
-	if late, err := notificationRestriction.Apply(
+	if late, err := notificationRestrictionFacet.Apply(
 		context.Background(),
 		delayedSuspend,
 	); err != nil || !late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
@@ -290,7 +292,7 @@ func TestUserAccountClosedConflictStaysPendingThenDLQCanBeRecovered(
 		UpdatedAt:      accountClosureContractTime,
 		OccurredAt:     accountClosureContractTime,
 	}
-	if _, err := notificationAccountClosure.ApplyUserAccountClosed(
+	if _, err := notificationClosureFacet.ApplyUserAccountClosed(
 		context.Background(),
 		firstEvent,
 	); err != nil {

@@ -30,7 +30,7 @@ collections:
     - name: idx_behavior_expire
       keys:
         createdAt: 1
-      expireAfterSeconds: 2592000
+      expire_after_seconds: 2592000
   content_behavior_stream_checkpoints:
     entity: ContentBehaviorStreamCheckpoint
     role: checkpoint
@@ -46,7 +46,7 @@ collections:
     indexes:
     - name: ttl_content_behavior_daily_metrics
       keys: {createdAt: 1}
-      expireAfterSeconds: 7776000
+      expire_after_seconds: 7776000
     - name: uq_content_behavior_daily_metric_dimension
       keys: {date: 1, dimension: 1, dimensionKey: 1}
       unique: true

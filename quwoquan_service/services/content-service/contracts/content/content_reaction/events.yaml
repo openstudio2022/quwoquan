@@ -1,34 +1,37 @@
 events:
 - name: ContentReactionSet
-  description: actor 对 Post 建立 like 或对 Comment 建立 like/dislike 关系的版本化事实。
-  producer: content-service
-  consumers:
-  - content-reaction-runtime-events
-  - content-reaction-profile-interaction
-  - content-reaction-lifecycle-stream
-  - content-reaction-post-like-count
-  - content-reaction-discovery-like-count
-  - content-reaction-recommend-like-count
-  - content-reaction-comment-hot-score
-  - content-reaction-recommend-signal
-  channel: transactional_outbox
+  description: 'actor 对 Post 建立 like 或对 Comment 建立 like/dislike 关系的版本化事实。
+
+    非 canonical 结构字段迁移注记：recommend_impact="hot_path_signal"。'
+  delivery_semantics: transactional_outbox
   payload_entity: ContentReactionChangedPayload
   payload_shape: exact
-  payload_fields: [reactionId, version, targetKind, targetId, targetAuthorId, actorDimension, actorId, reaction, occurredAt, idempotencyKey]
-  recommend_impact: hot_path_signal
+  payload_fields:
+  - reactionId
+  - version
+  - targetKind
+  - targetId
+  - targetAuthorId
+  - actorDimension
+  - actorId
+  - reaction
+  - occurredAt
+  - idempotencyKey
 - name: ContentReactionCleared
-  description: actor 将自身互动关系迁移为 none 的版本化事实；不制造新的通知或正向推荐信号。
-  producer: content-service
-  consumers:
-  - content-reaction-runtime-events
-  - content-reaction-profile-interaction
-  - content-reaction-lifecycle-stream
-  - content-reaction-post-like-count
-  - content-reaction-discovery-like-count
-  - content-reaction-recommend-like-count
-  - content-reaction-comment-hot-score
-  channel: transactional_outbox
+  description: 'actor 将自身互动关系迁移为 none 的版本化事实；不制造新的通知或正向推荐信号。
+
+    非 canonical 结构字段迁移注记：recommend_impact="hot_path_signal"。'
+  delivery_semantics: transactional_outbox
   payload_entity: ContentReactionChangedPayload
   payload_shape: exact
-  payload_fields: [reactionId, version, targetKind, targetId, targetAuthorId, actorDimension, actorId, reaction, occurredAt, idempotencyKey]
-  recommend_impact: hot_path_signal
+  payload_fields:
+  - reactionId
+  - version
+  - targetKind
+  - targetId
+  - targetAuthorId
+  - actorDimension
+  - actorId
+  - reaction
+  - occurredAt
+  - idempotencyKey

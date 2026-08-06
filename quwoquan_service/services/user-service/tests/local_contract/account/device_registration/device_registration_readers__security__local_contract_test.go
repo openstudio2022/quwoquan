@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+// readiness_case: resolve-incoming-call-push-destinations-local
+// readiness_case: resolve-push-endpoint-secret-local
 package local_contract
 
 import (

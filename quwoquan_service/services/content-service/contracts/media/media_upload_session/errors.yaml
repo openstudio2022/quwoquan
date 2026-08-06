@@ -1,5 +1,3 @@
-entity: MediaUploadSession
-domain: CONTENT
 description: 'MediaUploadSession 对象专属的上传准入错误码；共享身份、幂等、版本和存储错误继续由
 
   content/content/post/errors.yaml 与 content/media/media_asset/errors.yaml 定义。
@@ -7,39 +5,39 @@ description: 'MediaUploadSession 对象专属的上传准入错误码；共享�
   '
 errors:
 - code: CONTENT.USER.media_file_too_large
-  kind: USER
   reason: media_file_too_large
   http_status: 413
   emitted_by:
   - surface: http
     operations: [InitMediaUpload]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: mediaFileTooLarge
   go_const: ErrMediaFileTooLarge
   user_message:
     zh: 文件超过 50 MB，请选择更短或更小的媒体
     en: The file exceeds 50 MB. Choose a shorter or smaller media file.
 - code: CONTENT.USER.media_type_unsupported
-  kind: USER
   reason: media_type_unsupported
   http_status: 415
   emitted_by:
   - surface: http
     operations: [InitMediaUpload]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: mediaTypeUnsupported
   go_const: ErrMediaTypeUnsupported
   user_message:
     zh: 暂不支持这种媒体格式
     en: This media format is not supported.
 - code: CONTENT.USER.media_upload_session_expired
-  kind: USER
   reason: media_upload_session_expired
   http_status: 409
   emitted_by:
   - surface: http
     operations: [CompleteMediaUpload]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 0
   dart_const: mediaUploadSessionExpired
   go_const: ErrMediaUploadSessionExpired

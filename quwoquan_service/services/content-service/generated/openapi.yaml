@@ -2109,6 +2109,94 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/reports/{reportId}:grant-gathering-safety-termination:
+        post:
+            operationId: GrantGatheringSafetyTermination
+            x-contract-operation-id: content.report.GrantGatheringSafetyTermination
+            x-object-id: content.report
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ReportCommandFacet
+                method: grantGatheringSafetyTermination
+                aggregateOwner: Report
+            parameters:
+                - name: reportId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/GrantGatheringSafetyTerminationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringSafetyTerminationGrantResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/reports/{reportId}:revoke-gathering-safety-termination:
+        post:
+            operationId: RevokeGatheringSafetyTermination
+            x-contract-operation-id: content.report.RevokeGatheringSafetyTermination
+            x-object-id: content.report
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ReportCommandFacet
+                method: revokeGatheringSafetyTermination
+                aggregateOwner: Report
+            parameters:
+                - name: reportId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeGatheringSafetyTerminationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringSafetyTerminationGrantResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /content/users/me/comments:
         get:
             operationId: ListCommentsByAuthor
@@ -2248,8 +2336,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ContentAccountClosureDeadLetterRecoveryRequest'
             responses:
-                "200":
-                    description: OK
+                "202":
+                    description: Accepted
                     content:
                         application/json:
                             schema:
@@ -2461,6 +2549,39 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/FilterCatalogRelease'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/content/gathering-safety-termination:authorize:
+        post:
+            operationId: AuthorizeGatheringSafetyTermination
+            x-contract-operation-id: content.report.AuthorizeGatheringSafetyTermination
+            x-object-id: content.report
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ReportQueryFacet
+                method: authorizeGatheringSafetyTermination
+                reader: GatheringSafetyTerminationAuthorityReader
+                slice: GatheringSafetyTerminationAuthoritySlice
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AuthorizeGatheringSafetyTerminationRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringSafetyTerminationAuthoritySlice'
                 default:
                     description: Runtime failure
                     content:
@@ -3138,6 +3259,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AuthorPostPageSlice
             x-contract-placeholder: true
+        AuthorizeGatheringSafetyTerminationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AuthorizeGatheringSafetyTerminationRequest
+            x-contract-placeholder: true
         BeginReportReviewRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3258,6 +3384,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FilterCatalogSlice
             x-contract-placeholder: true
+        GatheringSafetyTerminationAuthoritySlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringSafetyTerminationAuthoritySlice
+            x-contract-placeholder: true
+        GatheringSafetyTerminationGrantResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringSafetyTerminationGrantResult
+            x-contract-placeholder: true
         GenerateArticleSummaryRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3282,6 +3418,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetPostPublicationEligibilityResponse
+            x-contract-placeholder: true
+        GrantGatheringSafetyTerminationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GrantGatheringSafetyTerminationRequest
             x-contract-placeholder: true
         HelperReadSlice:
             type: object
@@ -3472,6 +3613,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReviewPostModerationCaseRequest
+            x-contract-placeholder: true
+        RevokeGatheringSafetyTerminationRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RevokeGatheringSafetyTerminationRequest
             x-contract-placeholder: true
         RollbackFilterCatalogReleaseRequest:
             type: object

@@ -1,14 +1,19 @@
 events:
 - name: OutboundShareRecorded
-  description: 站外渠道成功回执已作为不可变事实幂等追加；当前消费者只包含仓内可证明的发布与投影链路。
-  producer: content-service
-  consumers:
-  - content-outbound-share-runtime-events
-  - content-outbound-share-profile-interaction
-  - content-outbound-share-post-count
-  - content-outbound-share-discovery-count
-  channel: transactional_outbox
+  description: '站外渠道成功回执已作为不可变事实幂等追加；当前消费者只包含仓内可证明的发布与投影链路。
+
+    非 canonical 结构字段迁移注记：recommend_impact="engagement_signal"。'
+  delivery_semantics: transactional_outbox
   payload_entity: OutboundShareRecordedPayload
   payload_shape: exact
-  payload_fields: [eventId, postId, actorDimension, actorId, channel, destinationKind, destinationDigest, referralId, providerReceiptDigest, occurredAt]
-  recommend_impact: engagement_signal
+  payload_fields:
+  - eventId
+  - postId
+  - actorDimension
+  - actorId
+  - channel
+  - destinationKind
+  - destinationDigest
+  - referralId
+  - providerReceiptDigest
+  - occurredAt

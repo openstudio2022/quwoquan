@@ -4,18 +4,25 @@ runtime_entrypoints:
 - name: ProjectCircleSearchItem
   kind: projector
   phase: event_projection
-  source_events:
-  - circle.CircleCreated
-  - circle.CircleUpdated
-  - circle.CircleDeleted
-  - entity.HomepageUpdated
-  - entity.HomepageDeleted
-  checkpoint: circle_outbox_sequence
-  rebuild: replay_circle_and_homepage_public_events
-  tombstone: delete_search_item_keep_checkpoint
-  idempotency: aggregate_version
   application:
     kind: command
     facet: CircleSearchItemViewProjector
     method: apply
     object_owner: CircleSearchItemView
+readiness_cases:
+  - case_id: project-circle-search-item-local
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: circle.circle_search_item_view}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_search_item_view/projector_lifecycle__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: project-circle-search-item-api
+    spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: circle.circle_search_item_view}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_search_item_view/elasticsearch_projection__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: elasticsearch, digest_binding: candidate}

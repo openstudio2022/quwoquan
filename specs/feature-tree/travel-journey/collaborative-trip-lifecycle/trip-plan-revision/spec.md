@@ -1,4 +1,4 @@
-# L3 Story：旅行计划与不可变修订 (`trip-plan-revision`)
+# L3 Story：Gathering 旅行计划与不可变修订 (`trip-plan-revision`)
 
 > 所属能力：[共同旅行全生命周期](../spec.md)
 >
@@ -14,65 +14,71 @@
 
 ### In Scope
 
-- TripPlan 创建、生命周期、Revision、Day/Item、角色权限、变更提议/确认、diff 与影响范围。
+- 在既有 Gathering 上按需创建唯一 GatheringPlan。
+- GatheringPlanRevision、typed item、proposal/Host commit、CAS、幂等、diff、历史读取与计划级影响确认引用。
+- legacy TripPlan/TripPlanRevision/TripPlanItem 到 GatheringPlan/Revision/typed item 的历史 crosswalk。
 
 ### Out of Scope
 
 - 预订支付、外部价格保证、通知投递和 AI 文本生成。
+- Gathering 的 Host、Participation、日程、lifecycle、Outcome 与 conversation，以及独立 Trip root、Travel 页面或 Travel Facade。
 
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 计划创建与推进必须原子、可追溯
+### REQ-001 GatheringPlan 创建与推进必须原子、可追溯
 
-- 创建 Trip 必须产生首个不可变 Revision；后续变更以 expected revision 和幂等键提交。
-- Revision 必须记录变更原因、严重等级、结构化 diff 与受影响成员/计划项引用。
+- 同一 Gathering 最多一个 Plan；创建必须产生首个不可变 Revision，后续变更以 expected Plan version、base Revision digest 和幂等键提交。
+- Revision 必须记录结构化 diff、来源与受影响 Participation/计划项 canonical reference；Plan 不复制 Gathering 标题、日程、Host、成员、lifecycle、Outcome 或会话。
 - 未确认提议、冲突、权限拒绝或持久化失败不得推进 current Revision。
 
 <a id="req-002"></a>
-### REQ-002 我的行程必须由 owner-scoped Reader 分页提供
+### REQ-002 计划读取必须从 Gathering/Board 上下文进入
 
-- App 不得用本地缓存、群消息或 Placement 拼出“我的行程”；只读取 `TripPlanReader` 的 organizer-scoped named Slice。
-- 列表按 `updatedAt + tripId` 稳定 keyset 分页，可按生命周期状态筛选，每页有明确上限。
-- 返回摘要只含进入当前行程所需的标题、状态、日期、当前 Revision、计划项数量和更新时间，不泄漏其他组织者的 Trip 或成员信息。
+- App 只通过 canonical Gathering reference 从活动群聊 Board 或 Gathering 详情读取 GatheringPlan current Revision/历史 Slice，不维护“我的 Trip”目录或本地计划真相。
+- Board 摘要只组合进入计划所需的 current Revision、item 摘要、更新时间与 capability 状态；完整 Host、Participation、日程和 lifecycle 继续来自 Gathering owner。
+- 无权、已退出、已取消/完成或引用失效时 fail-closed；离线缓存必须标 freshness，恢复后以 owner current Revision 收敛。
 
 ## 4. 契约引用
 
-- object / projection：`travel.TripPlan`、`travel.TripPlanRevision`、`travel.TripPlanItem`、`travel.TripMembership`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering_plan/object.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering_plan/operations.yaml`
+- current target：`GatheringPlan`、`GatheringPlanRevision` 与 typed PlanItem。
+- historical crosswalk：`TripPlan/TripPlanRevision/TripPlanItem -> Gathering + GatheringPlan/Revision/typed item`；legacy ID 只存在于迁移 receipt。
 
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 多成员并发修订只产生一个当前版本
+### GWT-001 多参与者并发修订只产生一个当前版本
 
-- GIVEN Trip 当前为 revision N，两名成员基于 N 提议不同变化且组织者有确认权限。
-- WHEN 组织者先后确认两个提议。
+- GIVEN 一个已发布 Gathering 的 Plan 当前为 revision N，两名有效参与者基于 N 提议不同变化且 Host 有 commit 权限。
+- WHEN Host 先后 commit 两个提议。
 - THEN 首个成功产生 N+1 与 typed diff，第二个收到 revision conflict 和刷新动作；重试基于 N+1 后才能产生 N+2。
 - AND 每个成功 revision 只发布一个可重放变化事件，失败不发布成功事实。
 
 <a id="gwt-002"></a>
-### GWT-002 组织者只看到自己的稳定分页行程列表
+### GWT-002 Board 只展示目标 Gathering 的当前计划
 
-- GIVEN 同一环境存在该 Persona 和其他 Persona 创建的多个 Trip，且更新时间可能相同。
-- WHEN 该 Persona 按状态和有限 page size 连续读取“我的行程”。
-- THEN 每个自有 Trip 只出现一次，顺序由 `updatedAt + tripId` 稳定决定，cursor 非法时 fail-closed。
-- AND 响应不含其他 Persona 的 Trip、成员名单或私密行程内容，App 点击摘要后再进入当前 Revision 时间线。
+- GIVEN 同一账号可访问多个 Gathering，当前 activity room 明确绑定其中一个，且其他 Gathering 也有 Plan。
+- WHEN 用户从该 room 的 Board 打开计划并翻阅 Revision history。
+- THEN 只返回目标 Gathering 的唯一 Plan、current Revision 与稳定分页历史，非法 cursor 或失效 authority fail-closed。
+- AND 响应不混入其他 Gathering 的计划或成员私密事实，App cache 与群消息都不能覆盖 owner current Revision。
 
 ## 6. 依赖
 
-- 前置要求：Persona 权限、Place/Entity 引用与 Trip store/outbox 可用。
+- 前置要求：Gathering delegated owner port、Persona 权限、Place/Entity 引用与 GatheringPlan store/event publication 可用。
 - 上游事实：用户确认的结构化计划或变更提议。
-- 下游结果：Timeline/Map、Assistant trigger、共享 card 的 revision event。
-- 父级设计：`DEC-001`
+- 下游结果：Chat Board、Timeline/Map、Assistant trigger 与提醒消费的 revision event。
+- 父级设计：`DEC-001`、`DEC-002`
 
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 TripPlan/Revision 尚未完成 App 与真实环境验收
+### OPEN-001 GatheringPlan production Remote 与 Board 验收未闭合
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仍缺并发 Revision 的双版对比/合并体验、真实 Mongo API integration 执行、环境激活回读和真机证据；App 已接通组织者分页目录、空白/模板 Trip 创建、安排新增/改名/删除、变更原因/重要级与冻结 CAS/幂等重试，canonical contracts、独立 Revision、aggregate/store、事务 outbox 与恢复投影已落地。
-- 完成判定：`GWT-001/GWT-002` 具有 object local_contract、Mongo 真实 api_integration 与 App user_acceptance 直接 `spec_ref`。
-- 依赖：Travel service 与 generated Facade。
+- 影响或价值：当前 Circle 的 GatheringPlan target contracts/runtime 与 Mongo API 不能替代用户体验；不存在可复用的旧 Travel 页面或 generated Facade。尚缺实现：App production Remote、Chat Board 读写、可恢复 durable consumer 与并发 diff/冲突展示。尚缺验收证据：Chat/Assistant 跨域 API integration 和 Android/iPhone 结果。
+- 完成判定：`GWT-001`、`GWT-002` 由 Circle object local_contract、真实 Mongo 与 Chat/Assistant 跨域 api_integration、Android/iPhone user_acceptance 直接覆盖；同一 Plan revision/digest 在 owner、Board 与 Assistant 一致，且 event publication/retry/checkpoint 可恢复。
+- 依赖：Circle GatheringPlan production Remote、Gathering delegated owner port、Chat Board 与 Assistant consumer。

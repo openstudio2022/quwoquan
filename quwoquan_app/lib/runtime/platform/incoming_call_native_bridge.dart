@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:quwoquan_app/core/platform/incoming_call_envelope.dart';
+import 'package:quwoquan_app/runtime/platform/incoming_call_envelope.dart';
 
 enum IncomingCallNativeActionType {
   accept('accept'),

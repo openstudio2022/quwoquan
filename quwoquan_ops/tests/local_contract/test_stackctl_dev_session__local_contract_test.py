@@ -434,10 +434,18 @@ class StackctlDevSessionTest(unittest.TestCase):
         )
 
     def test_bounded_workload_reuses_full_and_targeted_down_is_noop(self) -> None:
+        fixed_identity = {
+            "candidateDigest": "sha256:" + "1" * 64,
+            "configurationDigest": "sha256:" + "2" * 64,
+            "providerRuntimeDigest": "sha256:" + "3" * 64,
+            "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+            "imageComposition": {"identity": "full-oci"},
+        }
         full_attempt = {
             "attemptId": "full-1",
             "status": "running",
             "workload": "full",
+            **fixed_identity,
         }
         with (
             tempfile.TemporaryDirectory() as temporary,
@@ -448,12 +456,27 @@ class StackctlDevSessionTest(unittest.TestCase):
             ),
             mock.patch.object(
                 stackctl,
+                "command_health",
+                return_value={"exitCode": 0, "details": ["full health ok"]},
+            ),
+            mock.patch.object(
+                stackctl,
                 "load_startup_attempt",
                 return_value=full_attempt,
+            ),
+            mock.patch.object(
+                stackctl,
+                "_fixed_candidate_runtime_identity",
+                return_value=fixed_identity,
+            ),
+            mock.patch.object(
+                stackctl,
+                "assert_active_deployment_candidate_snapshot",
             ),
         ):
             reused = stackctl._reuse_running_full_for_bounded_workload(
                 argparse.Namespace(workload="content-release"),
+                candidate_snapshot={"baselineId": fixed_identity["candidateDigest"]},
                 target_name="alpha-local",
                 env_name="alpha",
                 report_target="alpha-local",
@@ -474,6 +497,213 @@ class StackctlDevSessionTest(unittest.TestCase):
         self.assertIsNotNone(down)
         self.assertTrue(down["runtimeReused"])
         self.assertEqual(full_attempt["status"], "running")
+
+    def test_fixed_runtime_identity_uses_one_snapshot_for_every_component(
+        self,
+    ) -> None:
+        baseline_id = "sha256:" + "1" * 64
+        candidate_root = Path("/candidate/alpha")
+        snapshot = {"baselineId": baseline_id, "manifest": {}}
+        startup_images = {
+            "environment": "alpha",
+            "target": "alpha-local",
+            "imageVersion": "sha256:" + "5" * 64,
+            "images": {"api": "sha256:" + "6" * 64},
+        }
+        provider = {
+            "composition": {"runtimeCompositionDigest": "sha256:" + "3" * 64}
+        }
+        observability = {
+            "composition": {"composeDigest": "sha256:" + "4" * 64}
+        }
+        with (
+            mock.patch.object(
+                stackctl,
+                "_fixed_candidate_identity",
+                return_value=(baseline_id, candidate_root, {}),
+            ) as fixed_identity,
+            mock.patch.object(
+                stackctl,
+                "_candidate_bindings_from_snapshot",
+                return_value=(provider, observability),
+            ) as candidate_bindings,
+            mock.patch.object(
+                stackctl,
+                "_load_package_bound_local_image_composition",
+                return_value={
+                    "configurationDigest": "sha256:" + "2" * 64,
+                    "startupImageComposition": startup_images,
+                },
+            ) as image_composition,
+        ):
+            actual = stackctl._fixed_candidate_runtime_identity(
+                snapshot,
+                environment_name="alpha",
+                target_name="alpha-local",
+            )
+
+        self.assertEqual(
+            actual,
+            {
+                "candidateDigest": baseline_id,
+                "configurationDigest": "sha256:" + "2" * 64,
+                "providerRuntimeDigest": "sha256:" + "3" * 64,
+                "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+                "imageComposition": startup_images,
+            },
+        )
+        fixed_identity.assert_called_once_with(
+            snapshot,
+            environment_name="alpha",
+            target_name="alpha-local",
+        )
+        candidate_bindings.assert_called_once_with(
+            snapshot,
+            environment_name="alpha",
+            target_name="alpha-local",
+        )
+        image_composition.assert_called_once_with(
+            "alpha",
+            "alpha-local",
+            candidate_snapshot=snapshot,
+        )
+
+    def test_bounded_workload_rejects_receipt_identity_drift_and_pointer_switch(
+        self,
+    ) -> None:
+        expected = {
+            "candidateDigest": "sha256:" + "1" * 64,
+            "configurationDigest": "sha256:" + "2" * 64,
+            "providerRuntimeDigest": "sha256:" + "3" * 64,
+            "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+            "imageComposition": {"identity": "full-oci"},
+        }
+        snapshot = {"baselineId": expected["candidateDigest"]}
+        for field in expected:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                receipt = {
+                    "attemptId": "full-1",
+                    "status": "running",
+                    "workload": "full",
+                    **expected,
+                }
+                receipt[field] = None
+                with (
+                    mock.patch.object(
+                        stackctl,
+                        "load_startup_attempt",
+                        return_value=receipt,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "_fixed_candidate_runtime_identity",
+                        return_value=expected,
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "assert_active_deployment_candidate_snapshot",
+                    ) as snapshot_check,
+                    mock.patch.object(stackctl, "_write_summary_bundle"),
+                ):
+                    result = stackctl._reuse_running_full_for_bounded_workload(
+                        argparse.Namespace(workload="content-release"),
+                        candidate_snapshot=snapshot,
+                        target_name="alpha-local",
+                        env_name="alpha",
+                        report_target="alpha-local",
+                        report_dir=Path(temporary),
+                        started_monotonic=0.0,
+                        started_at="2026-01-01T00:00:00Z",
+                    )
+
+                self.assertEqual(result["exitCode"], 2)
+                self.assertEqual(
+                    result["blockerKind"],
+                    "candidate_identity_mismatch",
+                )
+                snapshot_check.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as temporary, (
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value={
+                    "attemptId": "full-1",
+                    "status": "running",
+                    "workload": "full",
+                    **expected,
+                },
+            )
+        ), mock.patch.object(
+            stackctl,
+            "_fixed_candidate_runtime_identity",
+            return_value=expected,
+        ), mock.patch.object(
+            stackctl,
+            "assert_active_deployment_candidate_snapshot",
+            side_effect=ValueError("pointer switched"),
+        ), mock.patch.object(stackctl, "_write_summary_bundle"):
+            result = stackctl._reuse_running_full_for_bounded_workload(
+                argparse.Namespace(workload="content-release"),
+                candidate_snapshot=snapshot,
+                target_name="alpha-local",
+                env_name="alpha",
+                report_target="alpha-local",
+                report_dir=Path(temporary),
+                started_monotonic=0.0,
+                started_at="2026-01-01T00:00:00Z",
+            )
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["blockerKind"], "candidate_pointer_changed")
+
+    def test_bounded_workload_rejects_unhealthy_full_runtime(self) -> None:
+        expected = {
+            "candidateDigest": "sha256:" + "1" * 64,
+            "configurationDigest": "sha256:" + "2" * 64,
+            "providerRuntimeDigest": "sha256:" + "3" * 64,
+            "observabilityLogSinkDigest": "sha256:" + "4" * 64,
+            "imageComposition": {"identity": "full-oci"},
+        }
+        with tempfile.TemporaryDirectory() as temporary, (
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value={
+                    "attemptId": "full-1",
+                    "status": "running",
+                    "workload": "full",
+                    **expected,
+                },
+            )
+        ), mock.patch.object(
+            stackctl,
+            "_fixed_candidate_runtime_identity",
+            return_value=expected,
+        ), mock.patch.object(
+            stackctl,
+            "assert_active_deployment_candidate_snapshot",
+        ), mock.patch.object(
+            stackctl,
+            "command_health",
+            return_value={
+                "exitCode": 2,
+                "details": ["api-edge healthz failed"],
+            },
+        ), mock.patch.object(stackctl, "_write_summary_bundle"):
+            result = stackctl._reuse_running_full_for_bounded_workload(
+                argparse.Namespace(workload="content-release"),
+                candidate_snapshot={"baselineId": expected["candidateDigest"]},
+                target_name="alpha-local",
+                env_name="alpha",
+                report_target="alpha-local",
+                report_dir=Path(temporary),
+                started_monotonic=0.0,
+                started_at="2026-01-01T00:00:00Z",
+            )
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["blockerKind"], "runtime_health_failed")
 
 
 if __name__ == "__main__":

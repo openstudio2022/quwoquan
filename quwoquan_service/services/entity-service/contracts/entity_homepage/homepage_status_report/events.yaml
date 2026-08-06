@@ -1,9 +1,6 @@
 events:
 - name: HomepageStatusReported
-  producer: entity-service
-  consumers:
-  - platform-ops
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageStatusReport
   payload_fields:
   - reportId
@@ -14,12 +11,7 @@ events:
   - createdAt
   - version
 - name: HomepageStatusReportReviewed
-  producer: entity-service
-  consumers:
-  - platform-ops
-  - homepage-projection
-  - search-service
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: HomepageStatusReport
   payload_fields:
   - reportId

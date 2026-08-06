@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../search/search_operation_contracts.g.dart';
 
@@ -146,6 +146,9 @@ final class DeleteRecentSearchCommand {
 }
 
 final class ListHotQueriesQuery {
+  static const int defaultLimit = 10;
+  static const int maximumLimit = 20;
+
   ListHotQueriesQuery({
     int limit = 10,
   }) : limit = limit {

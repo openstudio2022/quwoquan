@@ -18,6 +18,17 @@ SPEC.loader.exec_module(verifier)
 
 
 class ObjectRelationEdgeTypeContractTest(unittest.TestCase):
+    def test_dart_consumer_is_the_generated_cloud_contract_single_track(self) -> None:
+        self.assertEqual(
+            verifier.DART_PATH.relative_to(ROOT).as_posix(),
+            "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/entity/"
+            "entity_operation_contracts.g.dart",
+        )
+        self.assertEqual(
+            verifier.DART_LABEL_PATH.relative_to(ROOT).as_posix(),
+            "quwoquan_app/lib/design_system/object_page/object_page_sections.dart",
+        )
+
     def test_repository_contract_is_exactly_aligned(self) -> None:
         failures = verifier.validate(
             shared_values=verifier.load_shared_values(verifier.TYPES_PATH),

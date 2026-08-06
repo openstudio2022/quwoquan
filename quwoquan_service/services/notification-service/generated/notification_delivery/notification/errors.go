@@ -22,41 +22,41 @@ var (
 // AppErrorFromUnauthorized returns *AppError for NOTIFICATION.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for NOTIFICATION.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "消息参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAppMessageNotFound returns *AppError for NOTIFICATION.USER.app_message_not_found (user_message from errors.yaml).
 func AppErrorFromAppMessageNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAppMessageNotFound.Error()))
-	return rerrors.NewAppError(code, "消息不存在或已过期", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "消息不存在或已过期", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromIdempotencyConflict returns *AppError for NOTIFICATION.USER.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原消息不一致，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原消息不一致，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromStorageReadFailed returns *AppError for NOTIFICATION.SYSTEM.storage_read_failed (user_message from errors.yaml).
 func AppErrorFromStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "读取消息失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "读取消息失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromStorageWriteFailed returns *AppError for NOTIFICATION.SYSTEM.storage_write_failed (user_message from errors.yaml).
 func AppErrorFromStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "更新消息失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "更新消息失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromInternalError returns *AppError for NOTIFICATION.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "通知服务暂时无法完成该操作", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "通知服务暂时无法完成该操作", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }

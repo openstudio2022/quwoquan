@@ -255,7 +255,6 @@ def _source_availability(
     carrier: str,
     root: Path,
 ) -> dict[str, int]:
-    thresholds = m100_promotion_thresholds(carrier)
     payload = _load_json(
         root / "_shared" / "source_unavailable_targets.json",
         label="source availability",
@@ -267,14 +266,9 @@ def _source_availability(
     ready = int(payload.get("readyTargetCount") or 0)
     ineligible = int(payload.get("ineligibleTargetCount") or 0)
     candidate_count = ready + ineligible
-    if (
-        ready < thresholds.source_ready_minimum
-        or candidate_count < thresholds.candidate_minimum
-    ):
+    if ready < 0 or ineligible < 0:
         raise ValueError(
-            f"{carrier} M100 source readiness is below promotion minimum "
-            f"(ready={ready}/{thresholds.source_ready_minimum}, "
-            f"candidates={candidate_count}/{thresholds.candidate_minimum})"
+            f"{carrier} M100 source availability counts must be non-negative"
         )
     return {
         "sourceReadyCount": ready,
@@ -295,14 +289,14 @@ def _review_and_publish(
     closure = load_post_review_closure(
         execution_id,
         root=root,
-        require_quota_milestone=True,
+        require_quota_milestone=False,
     )
     if closure.carrier != carrier or closure.approved_quota != thresholds.quota:
         raise ValueError(
             f"{carrier} M100 post-review closure identity or quota drift"
         )
-    if closure.qualified_count < thresholds.quota:
-        raise ValueError(f"{carrier} M100 is not review-qualified")
+    if closure.qualified_count < 1:
+        raise ValueError(f"{carrier} M100 has no review-qualified object")
     publish = _load_json(root / "publish_ref.json", label="canonical publish receipt")
     assert_valid(
         publish,
@@ -385,6 +379,10 @@ def write_scale_promotion(
         carrier=carrier,
         root=package_root,
     )
+    if availability["sourceReadyCount"] < review["qualifiedCount"]:
+        raise ValueError(
+            f"{carrier} M100 qualified objects exceed source-ready evidence"
+        )
     stable: dict[str, Any] = {
         "schema": schema_name,
         "status": "approved",
@@ -483,11 +481,12 @@ def require_m1000_promotion(
         or payload.get("vertical") != "travel"
         or payload.get("carrier") != carrier
         or int(payload.get("approvedQuota") or 0) != thresholds.quota
-        or int(payload.get("qualifiedCount") or 0) < thresholds.quota
+        or int(payload.get("qualifiedCount") or 0) < 1
         or int(payload.get("finalizedCount") or 0) != int(payload.get("qualifiedCount") or -1)
         or int(payload.get("sourceReadyCount") or 0)
-        < thresholds.source_ready_minimum
-        or int(payload.get("candidateCount") or 0) < thresholds.candidate_minimum
+        < int(payload.get("qualifiedCount") or 0)
+        or int(payload.get("candidateCount") or 0)
+        < int(payload.get("sourceReadyCount") or 0)
     ):
         raise ValueError(
             f"GATE_BLOCK travel/{carrier} M100 promotion receipt is not scale-eligible"

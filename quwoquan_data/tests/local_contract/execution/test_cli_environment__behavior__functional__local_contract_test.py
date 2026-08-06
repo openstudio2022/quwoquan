@@ -154,10 +154,15 @@ def test_cli_exposes_only_durable_task_facades():
     )
     assert prepare.returncode == 0, prepare.stderr
     for name in (
+        "--phase",
         "--scale",
         "--region-ref",
         "--run-date",
         "--sequence",
+        "--handoff-id",
+        "--handoff-revision",
+        "--supersedes-handoff-ref",
+        "--handoff-ref",
         "--semantic-selection-id",
         "--semantic-preflight-receipt",
         "--homepage-image-input",
@@ -172,6 +177,16 @@ def test_cli_exposes_only_durable_task_facades():
         "--article-image-input",
     ):
         assert forbidden not in prepare.stdout
+
+    for command in ("acquire-images", "acquire-videos"):
+        acquisition = subprocess.run(
+            [sys.executable, str(CLI), "task", command, "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert acquisition.returncode == 0, acquisition.stderr
+        assert "--handoff-ref" in acquisition.stdout
 
     review = subprocess.run(
         [sys.executable, str(CLI), "task", "review-asset", "--help"],

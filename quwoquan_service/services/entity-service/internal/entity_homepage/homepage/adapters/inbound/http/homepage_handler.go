@@ -10,6 +10,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
 	entitygenerated "quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
+	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 )
 
@@ -17,6 +18,7 @@ const homepagesPrefix = "/homepages/"
 
 type Handler struct {
 	service       *application.HomepageService
+	hostAuthority *homepageapp.HostAuthorityEvaluator
 	claims        claimRequestHTTPHandler
 	reviews       homepageReviewHTTPHandler
 	statusReports statusReportHTTPHandler
@@ -24,6 +26,16 @@ type Handler struct {
 
 func NewHandler(service *application.HomepageService) *Handler {
 	return &Handler{service: service}
+}
+
+func (h *Handler) WithHostAuthorityEvaluator(
+	evaluator *homepageapp.HostAuthorityEvaluator,
+) *Handler {
+	if evaluator == nil {
+		panic("EntityHomepage Host authority evaluator is required")
+	}
+	h.hostAuthority = evaluator
+	return h
 }
 
 func (h *Handler) WithClaimRequestHandler(handler claimRequestHTTPHandler) *Handler {
@@ -73,6 +85,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/homepage-status-reports", h.handleStatusReportQueue)
 	mux.HandleFunc("/homepage-reviews/", h.handleReviewByID)
 	mux.HandleFunc(homepagesPrefix, h.handleHomepageRoute)
+	mux.HandleFunc("/internal/entity/homepages/", h.handleInternalHomepageRoute)
 	return mux
 }
 
@@ -320,6 +333,8 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, homepage)
 	case "status-reports":
 		h.handleStatusReports(w, r, homepageID, segments)
+	case "gathering-host-authority:evaluate":
+		h.handleGatheringHostAuthority(w, r, homepageID, segments)
 	default:
 		if strings.HasSuffix(segments[0], ":publish") && r.Method == http.MethodPost {
 			writeRuntimeNotFound(w, r)
@@ -475,8 +490,8 @@ func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
 	rterr.WriteHTTPError(
 		w,
 		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleEntity, rterr.KindUser, "not_found"),
-			"接口不存在",
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+			"接口不存在或已下线",
 			"route not found",
 		),
 		rterr.HTTPWriteOptionsFromRequest(r),

@@ -1,0 +1,249 @@
+schema: vertical-architecture-ratchet
+governance:
+  owner: travel-journey
+  reason: 平台分叉与 contentVertical 存量只减不增；已退役 travel-service 目录及依赖永久为零
+  expires_when: 三个 entries 列表归零时删除本文件并执行全量零缺口门
+  retirement_condition: 平台分叉、contentVertical 与 taxonomy runtime consumer 全部归零
+
+platform_vertical_branches:
+  owner: cross-domain-architecture
+  retirement_condition: 将平台式分叉收敛为 Topic/Distribution/Skill/Presentation registry 数据
+  entries:
+  - path: quwoquan_app/lib/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart
+    count: 1
+    digest: sha256:825af6e6c6f408788c6af51197e991e40672d697a198c60e314477d11247b394
+  - path: quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_provider.dart
+    count: 1
+    digest: sha256:c2239bc34b880c521e36b2fc582ffa58ac3d53f9c379da4dee9248b0381c674a
+  - path: quwoquan_app/lib/service/content_service/content/post/presentation/home_multi_form_feed_post_cards.dart
+    count: 1
+    digest: sha256:689d0b283cddfa01ebfc7fc0bbe96462bb77a5a546670df793808e05df7f0a34
+  - path: quwoquan_app/lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/home_intersection_spotlight_rail.dart
+    count: 2
+    digest: sha256:5911bff005b869ce1ada9c06df7b47eaa962f9a7ab52b223b85ce2cf384abd18
+  - path: quwoquan_app/lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart
+    count: 1
+    digest: sha256:e58fc1f23af4163ef86e964a598fcb59a2f6950ac8a3fb86208a43f6d453bc32
+  - path: quwoquan_app/lib/service/search_service/search/search_index_view/application/public/search_query_contract.dart
+    count: 1
+    digest: sha256:e77041396af17703c023426759c420e015d3f0fd1047b6f3e2ab2d14c9ef14de
+  - path: quwoquan_service/runtime/recommendation/collaborative_recall.go
+    count: 1
+    digest: sha256:d1bbed3496215e0914189a90f45713b614f339a4703a0a0d1300a2e365b0a6a8
+  - path: quwoquan_service/runtime/recommendation/scorer.go
+    count: 2
+    digest: sha256:f06282f68b9a3154df18e935cdc09e512873ced14ddc7cef792f897049c95ef9
+  - path: quwoquan_service/services/chat-service/internal/chat/conversation/application/contact_pagination.go
+    count: 1
+    digest: sha256:4639feedb0705df06c022c16ae9f46c1255530fc80a24d5658b5f598008169eb
+  - path: quwoquan_service/services/content-service/internal/content/post/application/feed/feed_service.go
+    count: 3
+    digest: sha256:e6c4608698a000206119cffa0fccac7d6c099ccd44902178bc23d7d760bb5cde
+  - path: quwoquan_service/services/content-service/internal/content/post/application/post_service_helpers.go
+    count: 1
+    digest: sha256:7c46510288db138b7588e8f4c5ed91b0b8affa6723680dc4bef90a9fef5327ab
+  - path: quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/projection_fields.go
+    count: 1
+    digest: sha256:408095f565864f0cad7695a5f97f9ac94253b942a9d55f9aa2f8b52c8aad044c
+  - path: quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model/homepage.go
+    count: 1
+    digest: sha256:1bce8ceb87b3ac35e8629bb90ee2c9852c60fe39430c160fd1a5828303073313
+
+content_vertical_usage:
+  owner: discovery-content
+  retirement_condition: 归因改为受治理 Topic/Distribution/ExperiencePackage 后 entries 归零
+  entries:
+  - path: quwoquan_app/lib/service/circle_service/circle_management/circle/adapters/circle_feed_post_projection_mapper.dart
+    count: 2
+    digest: sha256:a5ffc2414d0ba2ec747e9649ec4c75e65307b9c952dd8d9a5c46827e3074651c
+  - path: quwoquan_app/lib/service/content_service/content/content_behavior_fact/adapters/content_behavior_outbox_adapter.dart
+    count: 1
+    digest: sha256:efd96d0b3e9044d8061726d67d5b428af7151c52ed1dc1841bec41e3dcb0051d
+  - path: quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/content_behavior_repository.dart
+    count: 13
+    digest: sha256:69c8996fcc1e5cd8cb3dd9431313da9a1aa744eebf47d7dfca6b4a51e1cdb43a
+  - path: quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart
+    count: 41
+    digest: sha256:da43160661c34b4715aa329ab7c95b7ab6ba8d24f29adccd528a3f682afe508b
+  - path: quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/content_behavior_tracker_event_normalization.dart
+    count: 2
+    digest: sha256:bbb143c250ca38236fa69d9689910cf4c94022ef767b968a30006886e3a33462
+  - path: quwoquan_app/lib/service/content_service/content/post/adapters/content_read_model_projection.dart
+    count: 4
+    digest: sha256:f96fe9f72b9498ba26afd055f2e0af6d2148a1e6da5df0b5dce619208dcca8bc
+  - path: quwoquan_app/lib/service/content_service/content/post/domain/content_post_detail_payload.dart
+    count: 2
+    digest: sha256:118c4baeb3e38adfce12c711d31c50ac5b510ba4d16c237c73e5d42478fc4db4
+  - path: quwoquan_app/lib/service/content_service/content/post/domain/content_post_view_data.dart
+    count: 6
+    digest: sha256:285f242e9259983f9a0cb2606a00521a268b6d2d502f8093bd07a9e298c19870
+  - path: quwoquan_app/lib/service/content_service/content/post/presentation/home_multi_form_feed.dart
+    count: 16
+    digest: sha256:0296cc89925126a60975d9207066a03a8d0e4eb9c3877f62208b701701bcecfa
+  - path: quwoquan_app/lib/service/content_service/media/media_asset/domain/work_browser_view_data.dart
+    count: 6
+    digest: sha256:ea31012d063fa3a7ccf82c96083bd42ac301eb983cf9fe64107377e4eef37a05
+  - path: quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_engagement_actions.dart
+    count: 8
+    digest: sha256:2329bf0388284a2a0212bec8b1bd708efc35ac545e89d587e804b5b4cd1c58b9
+  - path: quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_intersection_actions.dart
+    count: 2
+    digest: sha256:cc82d4dd16220070cb239e19d50c1d78b75375d844648b6fde416d673bef264f
+  - path: quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_lifecycle.dart
+    count: 8
+    digest: sha256:b86271c912495d98ca3823466f10f9b804a2f08403632ace391bb851d87b414f
+  - path: quwoquan_app/lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_presentation.dart
+    count: 2
+    digest: sha256:b908485bbc877c4f69cc5fbe48b561c7d905ca3b7efdb67c73e961a4267de567
+  - path: quwoquan_data/scripts/governance/creators/assignment.py
+    count: 8
+    digest: sha256:48727a86c72d3a3ba6b75330b26bb8b5761b1f6457b5b8f8b5356c1f29f217bc
+  - path: quwoquan_service/runtime/recommendation/collaborative_recall.go
+    count: 1
+    digest: sha256:139211427470be3f7a793e5b333baf1a38a676b9fa455586a5dec5fb8abde0eb
+  - path: quwoquan_service/runtime/recommendation/engine.go
+    count: 5
+    digest: sha256:237a44e96c88e7be042facb9c70e34f620721ab4be568378fd666964db7672bf
+  - path: quwoquan_service/runtime/recommendation/hotpath.go
+    count: 2
+    digest: sha256:0992ae552838909e19eeb1e7d7591c1d863145209dda2f9e65df3b3677d346b5
+  - path: quwoquan_service/runtime/recommendation/learning.go
+    count: 4
+    digest: sha256:6c4761eca66d4933a1e47655beb2da0f836be52951145b318be7688f15a08e54
+  - path: quwoquan_service/runtime/recommendation/observability.go
+    count: 2
+    digest: sha256:0767b46ff42b150920c8b4eeec7132286975ad47e96ce0e18102ccc81b2f636a
+  - path: quwoquan_service/runtime/recommendation/ranked_feed_window_entry_budget.go
+    count: 2
+    digest: sha256:600c0aa198d6ce31fc18cbc9b7e71679159c276a33f09f5d8a171b2d0d619593
+  - path: quwoquan_service/runtime/recommendation/scorer.go
+    count: 4
+    digest: sha256:3e8edd6402285725c4918967bacf28959b77b0748918b8696eb07801742dd7bb
+  - path: quwoquan_service/services/circle-service/contracts/circle_management/circle/fields.yaml
+    count: 2
+    digest: sha256:0781aa4994065570ec8bd0c804113cf523c798a8ea250493e35eacaca84dac88
+  - path: quwoquan_service/services/circle-service/internal/circle_management/circle/application/storage_ports.go
+    count: 2
+    digest: sha256:b366cf97cc24835cf6045849235377e30e663e5fa4e39bbc4a5c098afde01d72
+  - path: quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence/mongo_feed_store.go
+    count: 4
+    digest: sha256:c3b645c4cf3068b028971924b9c59ddbb536c7436979a40a0867d86e82c6acd7
+  - path: quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/events/content_post_consumer.go
+    count: 4
+    digest: sha256:c724290ef0392d8a172a99137c7fbefd510763d19125f4e0e36fbccced6ad8f5
+  - path: quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports/aggregate_store.go
+    count: 1
+    digest: sha256:12068a9c4aab03f73204e3d3cfbb41fd382af207f4743dda3ba4cff45e25f964
+  - path: quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/persistence/mongo_post_lifecycle_projection.go
+    count: 2
+    digest: sha256:1d996f142dab7feaf8f82f2ce7dc8a58f44291419eec20d729a7af056f92aa22
+  - path: quwoquan_service/services/content-service/contracts/content/content_behavior_fact/behaviors.yaml
+    count: 2
+    digest: sha256:aa04371d1a2715f6eb6a392758e02786ec935fac6697e8a7d61bfc37c784b41b
+  - path: quwoquan_service/services/content-service/contracts/content/content_behavior_fact/events.yaml
+    count: 1
+    digest: sha256:c3822189360dd09a59bc3f6584221ed780a2b49e76d91d678ea6802f5c3d6f75
+  - path: quwoquan_service/services/content-service/contracts/content/content_behavior_fact/fields.yaml
+    count: 2
+    digest: sha256:c975eb2b6afc40021b8c0d34c5209d9c85632600e95f9d7fb68b44348d1a797a
+  - path: quwoquan_service/services/content-service/contracts/content/feed_delivery_page/fields.yaml
+    count: 2
+    digest: sha256:cd377ea4df4efb7ea40792d5649ac7e2fdf867fe03a90f14aeb769fc3b0437a0
+  - path: quwoquan_service/services/content-service/contracts/content/post/events.yaml
+    count: 4
+    digest: sha256:18c61d510094290500d75bb9c1ea2592bebacf8378cb242bb2123d689d5eb7a5
+  - path: quwoquan_service/services/content-service/contracts/content/post/fields.yaml
+    count: 4
+    digest: sha256:a9a67248f0035fc1bf98b0c62328aa3da15e477244c9f34014ea193da824a76a
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/article_post.yaml
+    count: 1
+    digest: sha256:b0ab07f086e2506f37e33265aa885257d998750a59b09284e9a044ea5f5bed59
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_slice.yaml
+    count: 1
+    digest: sha256:f633081ebf6c7039894113d0b632fda2cf757f06190b86cdcd13f4ce47a6c3e5
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/content_post_projection.yaml
+    count: 1
+    digest: sha256:ce8df1339af93c94268dae3103f709a24604f6350b1e39c98b5ec8ab5694be23
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/discovery_feed.yaml
+    count: 3
+    digest: sha256:81ae8e16dc58f40fd0156b90f9fa8b05aa3a8926a59cbd4e51532dda90e97733
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/micro_post.yaml
+    count: 1
+    digest: sha256:f95b053fca91d4810aea7a732da26d76e9c5e348c4bef7e638edbc08aef8e68f
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/photo_post.yaml
+    count: 1
+    digest: sha256:8e5c267d16545144eb61488bd193756053bbaabfa0d46ae13157614a500e6d41
+  - path: quwoquan_service/services/content-service/contracts/content/post/projections/video_post.yaml
+    count: 1
+    digest: sha256:c8770e5347337c51e05709c5e2bd3f05262397967463acb6df0cc2207245c879
+  - path: quwoquan_service/services/content-service/internal/content/content_behavior_fact/application/behavior_service.go
+    count: 6
+    digest: sha256:af3c1ddaf275018b0819207abb7ff6e4e4f89fcea1da03af3a31cb58f1a97b03
+  - path: quwoquan_service/services/content-service/internal/content/content_behavior_fact/domain/model/fact.go
+    count: 2
+    digest: sha256:351d1e1d33fceae42f8a790bb7ec71a34fd997b0641a6f721fb7c672edd6d214
+  - path: quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/messaging/stream_relay.go
+    count: 4
+    digest: sha256:b14584cc976098d403dfa1437b5c69173ce1842c91d6d51617751d1f708b62c2
+  - path: quwoquan_service/services/content-service/internal/content/feed_delivery_page/domain/model/page.go
+    count: 3
+    digest: sha256:6ad3e55c1adfb5d864b0ab833b0beb46279cc80cea48ebe9b233c4bc8abbc30a
+  - path: quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler.go
+    count: 4
+    digest: sha256:32852214422ae56e3f3baf1a6c9c7f31680a17670196d38746dfe8ae34bf6427
+  - path: quwoquan_service/services/content-service/internal/content/post/application/feed/feed_delivery_page_support.go
+    count: 4
+    digest: sha256:4629c0fbd50e76fc2b86d80f8b6fabc3e09c42fa2c28299e9e0d1432c78304ec
+  - path: quwoquan_service/services/content-service/internal/content/post/application/feed/feed_service.go
+    count: 8
+    digest: sha256:dfd6705ab94be9f11f10c5922f0592863a409ec7233448c2d3dcfe69c1875a3a
+  - path: quwoquan_service/services/content-service/internal/content/post/application/feed/ranked_recommendation_support.go
+    count: 2
+    digest: sha256:48e1ccec443ec7f3ceec9833998e59f491a44934d2068cbc76f64be25fd505ac
+  - path: quwoquan_service/services/content-service/internal/content/post/application/post_service_helpers.go
+    count: 2
+    digest: sha256:7706a816631e25244a29e9d6d0e200b00930a767c39341ac4a5378b55446baf4
+  - path: quwoquan_service/services/content-service/internal/content/post/application/post_value_objects.go
+    count: 3
+    digest: sha256:7486d1f8bb572d9f60ee2143249ff0fa4df9b4353fc54204a22135560b4a243a
+  - path: quwoquan_service/services/content-service/internal/content/post/domain/ports/query.go
+    count: 9
+    digest: sha256:2898723827a1198a643ac1154827bcf285bd6dc56fd5c73d101f553b01c4365a
+  - path: quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_query_reader.go
+    count: 3
+    digest: sha256:a8a4495cae24575f2612e29a04ece117e66aab90d5df9094af81276f7c767d50
+  - path: quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/projection_fields.go
+    count: 2
+    digest: sha256:ceb8c0c333490385b3d58a8b3704770282c263fb0e566ea230d06cb777571ca9
+  - path: quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/projection_value_helpers.go
+    count: 4
+    digest: sha256:d1df7ab722a67c9cfdc570ad81b94b458833f35ceb91cd1811bd138a0c25062f
+  - path: quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime.go
+    count: 1
+    digest: sha256:c8c393dfbb8c0a8f16ca5887b66314b25744c23b1af6d02e903f273b50168cad
+  - path: quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_candidate_index_view/fields.yaml
+    count: 2
+    digest: sha256:162a6c43e73d2f6f6d5d06c62e922943e422f070cc654f7672e5e31f781ddce7
+  - path: quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_model_release/fields.yaml
+    count: 1
+    digest: sha256:2ebf5c1a95e707023ba74e0c40cbde6fc2365b37251cfc26ebd482effef1f343
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/ranked_recommendation_window/infrastructure/mongo_ranker.py
+    count: 2
+    digest: sha256:8f2de3ab345b8105c2448305311e0b2c27a939ce839818d3b445928120c96d99
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/adapters/inbound/stream/post_lifecycle_consumer.py
+    count: 2
+    digest: sha256:ba2e923f8ddbcf11c2be6c942094681c766ab3d181668205450caa5b0e007da8
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/application/projector.py
+    count: 1
+    digest: sha256:967fa914660878b008cb538b24d6bfb18cedd878f36df9a8e9bb297a0b980421
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store.py
+    count: 3
+    digest: sha256:ae1a167d733ffcc431fed22db577a2d3348ac8f831a3a20b6cb85b2d20cb36f6
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/feature_registry.yaml
+    count: 2
+    digest: sha256:33384517d84ea17cba602481e79f11b5cf308ae45375b776f702d7d95ea2c366
+
+domain_taxonomy_runtime_consumers:
+  owner: tag-taxonomy-governance
+  retirement_condition: domain_taxonomy.yaml 仅保留 legacy metadata，运行时消费者持续为零
+  entries: []

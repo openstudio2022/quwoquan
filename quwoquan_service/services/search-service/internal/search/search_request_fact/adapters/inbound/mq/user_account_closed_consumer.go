@@ -9,9 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"quwoquan_service/runtime/accountrestriction"
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	indexapplication "quwoquan_service/services/search-service/internal/search/search_index_view/application"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/application"
 )
 
@@ -89,30 +87,16 @@ func (config UserAccountClosedConsumerConfig) withDefaults() UserAccountClosedCo
 }
 
 type UserAccountClosedConsumer struct {
-	transport    UserAccountClosedTransport
-	projection   application.UserAccountClosedProjection
-	restrictions indexapplication.UserAccountRestrictionProjection
-	failures     UserAccountClosedFailureStore
-	consumer     string
-	config       UserAccountClosedConsumerConfig
-	logger       *slog.Logger
+	transport  UserAccountClosedTransport
+	projection application.UserAccountClosedProjection
+	failures   UserAccountClosedFailureStore
+	consumer   string
+	config     UserAccountClosedConsumerConfig
+	logger     *slog.Logger
 
 	mu                sync.RWMutex
 	lastSuccess       time.Time
 	lastFailureDigest string
-}
-
-// WithUserAccountRestrictionProjection binds the reversible UserSuspended /
-// UserRestored path to this shared account-event consumer. Missing projection
-// is a retry/DLQ failure, never an ignored event.
-func (consumer *UserAccountClosedConsumer) WithUserAccountRestrictionProjection(
-	projection indexapplication.UserAccountRestrictionProjection,
-) *UserAccountClosedConsumer {
-	if consumer == nil || projection == nil {
-		panic("search user account restriction projection is required")
-	}
-	consumer.restrictions = projection
-	return consumer
 }
 
 func NewUserAccountClosedConsumer(
@@ -250,32 +234,6 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		// remains authoritative and unacknowledged until controlled recovery.
 		userAccountClosedConsumerTotal.WithLabelValues("held_for_recovery").Inc()
 		return nil
-	}
-	values := durableFieldsToMap(message.Fields)
-	if restrictionEvent, restrictionErr := accountrestriction.Decode(values); restrictionErr == nil {
-		if consumer.restrictions == nil {
-			return consumer.handleMessageFailure(
-				ctx,
-				message,
-				errors.New("search user account restriction projection is not configured"),
-			)
-		}
-		result, applyErr := consumer.restrictions.Apply(ctx, restrictionEvent)
-		if applyErr != nil {
-			return consumer.handleMessageFailure(ctx, message, applyErr)
-		}
-		if ackErr := consumer.ackAndClear(ctx, message.ID); ackErr != nil {
-			return ackErr
-		}
-		outcome := "restriction_applied"
-		if result.Replayed {
-			outcome = "restriction_replayed"
-		}
-		userAccountClosedConsumerTotal.WithLabelValues(outcome).Inc()
-		userAccountClosedCleanupDuration.Observe(time.Since(startedAt).Seconds())
-		return nil
-	} else if !errors.Is(restrictionErr, accountrestriction.ErrUnsupportedEvent) {
-		return consumer.handleMessageFailure(ctx, message, restrictionErr)
 	}
 	event, err := decodeUserAccountClosed(message)
 	if errors.Is(err, errUnsupportedUserAccountEvent) {

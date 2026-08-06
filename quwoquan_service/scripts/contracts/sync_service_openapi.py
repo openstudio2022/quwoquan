@@ -18,7 +18,6 @@ import yaml
 
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
-REPOSITORY_ROOT = SERVICE_ROOT.parent
 
 
 def contract_roots() -> list[Path]:

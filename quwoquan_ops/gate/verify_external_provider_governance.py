@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -19,7 +19,6 @@ from quwoquan_ops.cli.lib.external_provider_governance import (
     load_and_compile,
     load_registry,
 )
-
 
 MESSAGE_TRANSPORT_CAPABILITY = "runtime.message.transport"
 MESSAGE_TRANSPORT_REQUIRED_METRICS = (
@@ -53,6 +52,40 @@ REDIS_CONSTRUCTOR_RE = re.compile(
 )
 SERVICE_PRIVATE_IMPORT_RE = re.compile(
     r'"quwoquan_service/services/([^/]+)/(?:generated|internal)/'
+)
+PROVIDER_RUNTIME_SOURCE_REQUIREMENTS = {
+    "quwoquan_ops/cli/lib/provider_runtime_composition.py": (
+        "compile_provider_runtime_composition",
+        "validate_provider_runtime_composition",
+        "load_and_compile",
+    ),
+    "quwoquan_ops/cli/lib/deployment_candidate_manifest.py": (
+        '"providerRuntime"',
+        "validate_packaged_provider_runtime",
+        "seal_provider_runtime_package_images",
+    ),
+    "quwoquan_ops/cli/stackctl.py": (
+        "_active_provider_runtime(",
+        "QWQ_PROVIDER_RUNTIME_COMPOSE_FILES",
+        "providerRuntimeDigest",
+    ),
+    "quwoquan_ops/cli/lib/startup_attempt_receipt.py": (
+        '"providerRuntimeDigest"',
+    ),
+    "quwoquan_ops/cli/lib/local_env_gate_matrix.py": (
+        "validate_packaged_provider_runtime",
+    ),
+    "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh": (
+        "QWQ_PROVIDER_RUNTIME_COMPOSE_FILES",
+        "QWQ_PROVIDER_RUNTIME_DIGEST",
+    ),
+}
+LEGACY_PROVIDER_RUNTIME_SELECTORS = (
+    "QWQ_DEBUG_SMS_SUBSTITUTE_ENABLED",
+    "QWQ_DEBUG_PROVIDER_SUBSTITUTE_ENABLED",
+    "debug_sms_substitute",
+    "debug-sms-substitute",
+    "debug-provider-substitute",
 )
 
 
@@ -268,6 +301,38 @@ def message_transport_static_issues(registry: dict[object, object]) -> list[str]
     return issues
 
 
+def provider_runtime_single_track_issues(
+    sources: Mapping[str, str] | None = None,
+) -> list[str]:
+    """Keep Provider launch identity package-bound and free of debug selectors."""
+
+    issues: list[str] = []
+    loaded: dict[str, str] = {}
+    for relative, required_tokens in PROVIDER_RUNTIME_SOURCE_REQUIREMENTS.items():
+        try:
+            source = (
+                sources[relative]
+                if sources is not None
+                else (ROOT / relative).read_text(encoding="utf-8")
+            )
+        except (KeyError, OSError, UnicodeError) as exc:
+            issues.append(f"{relative}: Provider runtime source is unavailable: {exc}")
+            continue
+        loaded[relative] = source
+        for token in required_tokens:
+            if token not in source:
+                issues.append(
+                    f"{relative}: package-bound Provider runtime token is missing: {token}"
+                )
+    for relative, source in loaded.items():
+        for selector in LEGACY_PROVIDER_RUNTIME_SELECTORS:
+            if selector in source:
+                issues.append(
+                    f"{relative}: legacy Provider runtime selector is forbidden: {selector}"
+                )
+    return issues
+
+
 def main() -> int:
     try:
         compiled, issues = load_and_compile()
@@ -275,7 +340,10 @@ def main() -> int:
             *issues,
             *composition_issues(load_registry(), compiled),
         ]
-        static_issues = message_transport_static_issues(load_registry())
+        static_issues = [
+            *message_transport_static_issues(load_registry()),
+            *provider_runtime_single_track_issues(),
+        ]
     except (OSError, ValueError) as exc:
         print(f"[verify_external_provider_governance] FAIL\n  - cannot compile registry: {exc}")
         return 1

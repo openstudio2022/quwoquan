@@ -1,3 +1,7 @@
+// readiness_case: stage-filter-catalog-release-api
+// readiness_case: activate-filter-catalog-release-api
+// readiness_case: rollback-filter-catalog-release-api
+// readiness_case: get-active-filter-catalog-api
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-001
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-002
 

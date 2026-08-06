@@ -35,6 +35,13 @@ type requestModelSpec struct {
 	ValidationKind string
 	DerivedSource  string
 	DerivedSHA256  string
+	Pagination     *requestPaginationSpec
+}
+
+type requestPaginationSpec struct {
+	Field        string
+	DefaultItems int
+	MaximumItems int
 }
 
 const (
@@ -193,6 +200,7 @@ func writeGeneratedOperationRequests(
 		clientModel, err = applyOperationPaginationContract(
 			operation.CanonicalOperationID,
 			clientModel,
+			bodyKind,
 			bindings,
 			operation.Pagination,
 		)
@@ -1031,6 +1039,7 @@ func projectClientRequestModel(
 		ValidationKind: model.ValidationKind,
 		DerivedSource:  model.DerivedSource,
 		DerivedSHA256:  model.DerivedSHA256,
+		Pagination:     model.Pagination,
 	}
 	for _, field := range model.Fields {
 		if _, isInjected := injected[strings.TrimSpace(field.Name)]; isInjected {
@@ -1044,6 +1053,7 @@ func projectClientRequestModel(
 func applyOperationPaginationContract(
 	operationID string,
 	model requestModelSpec,
+	requestBodyKind string,
 	bindings appRequestBindings,
 	policy *appPaginationPolicy,
 ) (requestModelSpec, error) {
@@ -1065,9 +1075,30 @@ func applyOperationPaginationContract(
 			break
 		}
 	}
+	if limitField == "" && strings.TrimSpace(requestBodyKind) == "object" {
+		bound := map[string]struct{}{}
+		for _, values := range [][]appRequestBinding{
+			bindings.Path,
+			bindings.Query,
+			bindings.Header,
+			bindings.Injected,
+		} {
+			for _, binding := range values {
+				bound[strings.TrimSpace(binding.Field)] = struct{}{}
+			}
+		}
+		if _, isNonBodyBinding := bound["limit"]; !isNonBodyBinding {
+			for _, field := range model.Fields {
+				if strings.TrimSpace(field.Name) == "limit" {
+					limitField = "limit"
+					break
+				}
+			}
+		}
+	}
 	if limitField == "" {
 		return requestModelSpec{}, fmt.Errorf(
-			"%s pagination policy requires one canonical limit query binding",
+			"%s pagination policy requires one canonical limit query binding or object-body field",
 			operationID,
 		)
 	}
@@ -1100,6 +1131,11 @@ func applyOperationPaginationContract(
 			"POSITIVE",
 			fmt.Sprintf("MAX_%d", policy.MaximumItems),
 		)
+		model.Pagination = &requestPaginationSpec{
+			Field:        limitField,
+			DefaultItems: policy.DefaultItems,
+			MaximumItems: policy.MaximumItems,
+		}
 		return model, nil
 	}
 	return requestModelSpec{}, fmt.Errorf(
@@ -1164,6 +1200,13 @@ func validateRequestBodyConstants(
 
 func requestModelFingerprint(model requestModelSpec) string {
 	values := []string{model.ValidationKind, model.DerivedSource, model.DerivedSHA256}
+	if model.Pagination != nil {
+		values = append(values, strings.Join([]string{
+			model.Pagination.Field,
+			strconv.Itoa(model.Pagination.DefaultItems),
+			strconv.Itoa(model.Pagination.MaximumItems),
+		}, "\x00"))
+	}
 	for _, field := range model.Fields {
 		values = append(values, strings.Join([]string{
 			field.Name,
@@ -1629,6 +1672,42 @@ func renderRequestModel(
 		fmt.Fprintf(output, "  const %s();\n", model.Name)
 		output.WriteString("}\n\n")
 		return nil
+	}
+	if model.Pagination != nil {
+		if strings.TrimSpace(model.Pagination.Field) == "" ||
+			model.Pagination.DefaultItems <= 0 ||
+			model.Pagination.MaximumItems < model.Pagination.DefaultItems {
+			return fmt.Errorf("%s has invalid generated pagination constants", model.Name)
+		}
+		paginationFieldFound := false
+		for _, field := range model.Fields {
+			if strings.TrimSpace(field.Name) != model.Pagination.Field {
+				continue
+			}
+			if !isRequestNumericField(field) {
+				return fmt.Errorf(
+					"%s pagination field %s must be numeric",
+					model.Name,
+					model.Pagination.Field,
+				)
+			}
+			paginationFieldFound = true
+			break
+		}
+		if !paginationFieldFound {
+			return fmt.Errorf(
+				"%s pagination field %s is absent from generated request model",
+				model.Name,
+				model.Pagination.Field,
+			)
+		}
+		fmt.Fprintf(
+			output,
+			"  static const int defaultLimit = %d;\n"+
+				"  static const int maximumLimit = %d;\n\n",
+			model.Pagination.DefaultItems,
+			model.Pagination.MaximumItems,
+		)
 	}
 	initializers := make([]string, 0, len(model.Fields))
 	allInitializersAreConstSafe := true

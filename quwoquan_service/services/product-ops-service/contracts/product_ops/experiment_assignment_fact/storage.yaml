@@ -3,7 +3,8 @@ tables:
   experiment_assignment_facts:
     entity: ExperimentAssignmentFact
     role: append_only
-    pk: id
+    pk:
+    - id
     columns:
     - name: id
       type: VARCHAR(36)

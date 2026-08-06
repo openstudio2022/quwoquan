@@ -43,21 +43,28 @@ func NewChatConversationPort(
 	}, nil
 }
 
-func (port *ChatConversationPort) EnsureGroupConversation(
+func (port *ChatConversationPort) EnsureGatheringConversation(
 	ctx context.Context,
-	gatheringID string,
-	title string,
-	ownerPersonaID string,
-	maxGroupSize int64,
-	operationKey string,
+	command ports.EnsureGatheringConversationCommand,
 ) (string, error) {
 	var response struct {
 		ConversationID string `json:"conversationId"`
 	}
-	err := port.put(ctx, "/internal/chat/gathering-conversations/"+url.PathEscape(strings.TrimSpace(gatheringID)), operationKey, map[string]any{
-		"sourceEventId": operationKey, "ownerPersonaId": ownerPersonaID,
-		"title": title, "maxGroupSize": maxGroupSize,
-	}, &response)
+	err := port.put(
+		ctx,
+		"/internal/chat/gathering-conversations/"+
+			url.PathEscape(strings.TrimSpace(command.GatheringID)),
+		command.SourceEventID,
+		map[string]any{
+			"sourceEventId":  command.SourceEventID,
+			"sourceVersion":  command.SourceVersion,
+			"ownerPersonaId": command.OwnerPersonaID,
+			"title":          command.Title,
+			"accessMode":     command.AccessMode,
+			"postingPolicy":  command.PostingPolicy,
+		},
+		&response,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -67,20 +74,18 @@ func (port *ChatConversationPort) EnsureGroupConversation(
 	return strings.TrimSpace(response.ConversationID), nil
 }
 
-func (port *ChatConversationPort) ProjectParticipant(
+func (port *ChatConversationPort) ProjectGatheringMembership(
 	ctx context.Context,
-	gatheringID string,
-	ownerPersonaID string,
-	personaID string,
-	state string,
-	sourceVersion int64,
-	operationKey string,
+	command ports.ProjectGatheringMembershipCommand,
 ) error {
-	path := "/internal/chat/gathering-conversations/" + url.PathEscape(strings.TrimSpace(gatheringID)) +
-		"/members/" + url.PathEscape(strings.TrimSpace(personaID))
-	return port.put(ctx, path, operationKey, map[string]any{
-		"sourceEventId": operationKey, "sourceVersion": sourceVersion,
-		"ownerPersonaId": ownerPersonaID, "state": state,
+	path := "/internal/chat/gathering-conversations/" +
+		url.PathEscape(strings.TrimSpace(command.GatheringID)) +
+		"/members/" + url.PathEscape(strings.TrimSpace(command.PersonaID))
+	return port.put(ctx, path, command.SourceEventID, map[string]any{
+		"sourceEventId": command.SourceEventID,
+		"sourceVersion": command.SourceVersion,
+		"sourceType":    command.SourceType,
+		"state":         command.State,
 	}, nil)
 }
 

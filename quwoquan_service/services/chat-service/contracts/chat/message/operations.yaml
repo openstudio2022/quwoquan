@@ -56,6 +56,8 @@ api_routes:
       普通目标必须是当前活跃成员，`__all__` 仅 owner/admin 可用，assistant 仅在助手已入群时合法。
 
       校验后的 canonical mentions 必须同源写入 Message、MessageSent 与同步/列表投影；
+      Conversation accessMode=read_only 或 postingPolicy=announcements_only 时拒绝公开消息，
+      system_announcement 只由 Chat Announcement 命令内部产生；
 
       非群会话不得提交 mentions。
 
@@ -349,6 +351,9 @@ api_routes:
       retry_mode: none
       max_attempts: 1
       idempotency: none
+    pagination:
+      default_items: 500
+      maximum_items: 500
     privacy:
       request_classification: INTERNAL
       response_classification: SENSITIVE
@@ -377,3 +382,140 @@ api_routes:
       visibility: private
     request_entity: ChatSyncMessagesQuery
     request_body_kind: object
+readiness_cases:
+  - case_id: append-rtc-call-log-local
+    spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: object, id: chat.message}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/rtc_call_log_consumer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: append-rtc-call-log-api
+    spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: chat.message}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/rtc_call_log_consumer__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: send-message-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SendMessage}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-assistant-grounding-messages-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListAssistantGroundingMessages}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: send-assistant-delivery-message-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SendAssistantDeliveryMessage}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: recall-message-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: RecallMessage}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-messages-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ListMessages}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: sync-messages-local
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: SyncMessages}
+    runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: send-message-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SendMessage}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-assistant-grounding-messages-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListAssistantGroundingMessages}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: send-assistant-delivery-message-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SendAssistantDeliveryMessage}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: recall-message-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: RecallMessage}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: list-messages-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ListMessages}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: sync-messages-api
+    spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: SyncMessages}
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: message_list_messages_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListMessages}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/message/message_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: message_recall_message_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RecallMessage}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/message/message_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: message_sync_messages_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SyncMessages}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/message/message_commercial_ready_facets__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

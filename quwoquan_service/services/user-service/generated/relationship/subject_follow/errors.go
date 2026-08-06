@@ -16,5 +16,5 @@ var (
 // AppErrorFromSubjectFollowInvalidSubjectType returns *AppError for USER.SUBJECT_FOLLOW.invalid_subject_type (user_message from errors.yaml).
 func AppErrorFromSubjectFollowInvalidSubjectType(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSubjectFollowInvalidSubjectType.Error()))
-	return rerrors.NewAppError(code, "暂不支持关注该类型的对象", debugMessage).WithMetadata("invalid_subject_type", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "暂不支持关注该类型的对象", debugMessage).WithMetadata("invalid_subject_type", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }

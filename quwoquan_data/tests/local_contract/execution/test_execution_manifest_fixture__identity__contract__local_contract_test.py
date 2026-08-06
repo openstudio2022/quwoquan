@@ -71,22 +71,16 @@ def test_fixture_recipe_is_derived_from_content_type(
         shutil.rmtree(workspace.execution_root(execution_id), ignore_errors=True)
 
 
-def test_cursor_auto_manifest_requires_retry_and_freezes_exact_binding() -> None:
+def test_cursor_auto_manifest_first_use_freezes_exact_binding() -> None:
     execution_id = "20260716--travel-article-cursor-auto--test-region-b--pilot-997"
-    predecessor = "20260716--travel-article-cursor-auto--test-region-b--pilot-996"
     try:
-        with pytest.raises(ValueError, match="requires a new execution with retryOf"):
-            build_execution_fixture(
-                execution_id,
-                semantic_selection_id="cursor_auto",
-            )
         _receipt_path, preflight_binding = ready_semantic_preflight("cursor_auto")
         manifest = build_execution_fixture(
             execution_id,
-            retry_of=predecessor,
             semantic_selection_id="cursor_auto",
             semantic_preflight_binding=preflight_binding,
         )
+        assert manifest["retryOf"] is None
         assert manifest["semanticSelectionId"] == "cursor_auto"
         assert manifest["semanticRuntime"] == "local"
         assert manifest["semanticPreflightReceipt"] == preflight_binding
@@ -102,7 +96,6 @@ def test_cursor_auto_manifest_requires_retry_and_freezes_exact_binding() -> None
         with pytest.raises(ValueError, match="does not match expected selection"):
             build_execution_fixture(
                 execution_id,
-                retry_of=predecessor,
                 semantic_selection_id="default",
             )
     finally:

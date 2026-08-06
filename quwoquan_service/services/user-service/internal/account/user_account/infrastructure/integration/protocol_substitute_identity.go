@@ -99,6 +99,12 @@ type ProtocolSubstituteFederatedIdentityVerifier struct {
 	client         *http.Client
 }
 
+type protocolSubstituteFederatedRequest struct {
+	Action   string `json:"action,omitempty"`
+	Provider string `json:"provider"`
+	Code     string `json:"code,omitempty"`
+}
+
 func NewProtocolSubstituteFederatedIdentityVerifier(
 	credentialType credentialmodel.CredentialType,
 	provider string,
@@ -144,9 +150,10 @@ func (v *ProtocolSubstituteFederatedIdentityVerifier) Verify(
 		ctx,
 		v.client,
 		v.endpoint,
-		map[string]string{
-			"provider": v.provider,
-			"code":     authorizationCode,
+		protocolSubstituteFederatedRequest{
+			Action:   "resolveIdentity",
+			Provider: v.provider,
+			Code:     authorizationCode,
 		},
 		&response,
 	)
@@ -162,6 +169,43 @@ func (v *ProtocolSubstituteFederatedIdentityVerifier) Verify(
 		CredentialKey:  response.CredentialKey,
 		DisplayName:    response.DisplayName,
 		AvatarURL:      response.AvatarURL,
+	}, nil
+}
+
+func (v *ProtocolSubstituteFederatedIdentityVerifier) IssueAuthorizationRequest(
+	ctx context.Context,
+) (application.FederatedAuthorizationRequest, error) {
+	if v == nil || strings.TrimSpace(v.provider) == "" {
+		return application.FederatedAuthorizationRequest{},
+			sessiongenerated.AppErrorFromSocialProviderUnavailable(
+				"federated protocol substitute authorization unavailable",
+			)
+	}
+	var response struct {
+		Payload   string    `json:"payload"`
+		ExpiresAt time.Time `json:"expiresAt"`
+	}
+	status, err := postProtocolSubstituteJSON(
+		ctx,
+		v.client,
+		v.endpoint,
+		protocolSubstituteFederatedRequest{
+			Action:   "authorize",
+			Provider: v.provider,
+		},
+		&response,
+	)
+	if err != nil || status != http.StatusOK ||
+		strings.TrimSpace(response.Payload) == "" || response.ExpiresAt.IsZero() ||
+		!response.ExpiresAt.After(time.Now().UTC()) {
+		return application.FederatedAuthorizationRequest{},
+			sessiongenerated.AppErrorFromSocialProviderUnavailable(
+				"federated protocol substitute authorization failed",
+			)
+	}
+	return application.FederatedAuthorizationRequest{
+		Payload:   response.Payload,
+		ExpiresAt: response.ExpiresAt,
 	}, nil
 }
 
@@ -215,3 +259,4 @@ func postProtocolSubstituteJSON(
 
 var _ application.CarrierPhoneResolver = (*ProtocolSubstituteCarrierPhoneResolver)(nil)
 var _ application.FederatedIdentityVerifier = (*ProtocolSubstituteFederatedIdentityVerifier)(nil)
+var _ application.FederatedAuthorizationIssuer = (*ProtocolSubstituteFederatedIdentityVerifier)(nil)

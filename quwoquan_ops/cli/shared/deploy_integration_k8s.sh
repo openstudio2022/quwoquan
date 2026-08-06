@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# K8s 环境装配入口构建，由 deploy_beta_k8s.sh / deploy_gamma_k8s.sh 调用。
+# K8s 环境装配内部实现，只允许 stackctl 的受控环境入口调用。
 # DEPLOY_ENV 必须由调用方设置（beta|gamma）
 set -euo pipefail
 

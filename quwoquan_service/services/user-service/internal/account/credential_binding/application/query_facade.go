@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
+	"quwoquan_service/services/user-service/generated/account/user_account"
 	bindingmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
 	bindingports "quwoquan_service/services/user-service/internal/account/credential_binding/domain/ports"
-	"quwoquan_service/services/user-service/generated/account/user_account"
 )
 
 type CredentialView struct {

@@ -47,7 +47,7 @@ runtime_entrypoints:
   phase: outbound_invocation
   source_objects: [integration.ExternalInteraction, user.DeviceRegistration]
   idempotency: transaction_identity
-  application: {kind: command, facet: PushDeliveryPort, method: deliver, object_owner: PushDelivery}
+  application: {kind: command, facet: PushDeliveryPort, method: send, object_owner: PushDelivery}
 consumers:
 - name: external-interaction
   capabilities:
@@ -80,3 +80,20 @@ contract_test:
       - apns_voip 只调用 APNs
       - fcm 只调用 FCM
       - 任一 provider 失败都不跨 provider fallback
+readiness_cases:
+- case_id: invoke-push-delivery-provider-local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: InvokePushDeliveryProvider}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/push_delivery/push_delivery_dispatch__reliability__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: https-provider, digest_binding: candidate}
+- case_id: invoke-push-delivery-provider-api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: InvokePushDeliveryProvider}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/push_delivery/push_delivery_worker__idempotency__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb-https-provider, digest_binding: candidate}

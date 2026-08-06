@@ -3,15 +3,15 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_json_body_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_transport_failure.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/retry_http_client.dart';
+import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/runtime/codec/cloud_json_body_decoder.dart';
+import 'package:quwoquan_app/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_transport_failure.dart';
+import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/runtime/transport/http/retry_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Callback for API latency instrumentation.

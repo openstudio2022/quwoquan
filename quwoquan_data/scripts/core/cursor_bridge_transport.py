@@ -23,7 +23,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from core.runtime_policy import active_runtime_policy
+
 _DISCOVERY_PREFIX = "cursor-sdk-bridge ready "
+_PROCESS_TERMINATION_TIMEOUT_SECONDS = (
+    active_runtime_policy().process_termination_timeout_seconds
+)
+_CURSOR_BRIDGE_HANDSHAKE_TIMEOUT_SECONDS = (
+    active_runtime_policy().cursor_bridge_handshake_timeout_seconds
+)
+_CURSOR_BRIDGE_MAX_RETRIES = active_runtime_policy().cursor_bridge_max_retries
 _SCRUBBED_ENV_KEYS = frozenset(
     {
         "CURSOR_API_KEY",
@@ -173,18 +182,18 @@ def _terminate(process: subprocess.Popen[str]) -> None:
         return
     process.terminate()
     try:
-        process.wait(timeout=5)
+        process.wait(timeout=_PROCESS_TERMINATION_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         process.kill()
-        process.wait(timeout=5)
+        process.wait(timeout=_PROCESS_TERMINATION_TIMEOUT_SECONDS)
 
 
 @contextmanager
 def protected_cursor_client(
     *,
     workspace: str | os.PathLike[str],
-    timeout: float = 30,
-    max_retries: int = 0,
+    timeout: float = _CURSOR_BRIDGE_HANDSHAKE_TIMEOUT_SECONDS,
+    max_retries: int = _CURSOR_BRIDGE_MAX_RETRIES,
 ) -> Iterator[Any]:
     """Yield a public Cursor client backed by a credential-free bridge argv."""
     from cursor_sdk import Client

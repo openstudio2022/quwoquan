@@ -33,6 +33,14 @@ SOURCE_REVISION = content_source_revision(
 EXECUTION_ID = "20260805--travel-video-m100--china--scale-201"
 
 
+@pytest.fixture(autouse=True)
+def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.guard_acquisition_source_identity",
+        lambda *_args, **_kwargs: {},
+    )
+
+
 def _write_motion_video(path: Path, *, variant: int = 0) -> None:
     writer = cv2.VideoWriter(
         str(path), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (320, 180)
@@ -160,6 +168,7 @@ def _acquisition(tmp_path: Path) -> tuple[Path, list[dict[str, object]]]:
     )
     _, receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=video_root,
     )
@@ -289,8 +298,10 @@ def test_video_plan_and_fetch_consume_only_explicit_capsule_refs_and_root(
         acquisition_root=professional_root,
     )
     plan_path = plan_dir / "video_source_plan.json"
-    payload = read_json(plan_path)["payload"]
-    assert payload["acquisitionReceiptRefs"] == receipt_refs
+    plan = read_json(plan_path)
+    payload = plan["payload"]
+    assert plan["acquisitionReceiptRefs"] == receipt_refs
+    assert "acquisitionReceiptRefs" not in payload
     assert payload["videos"][0]["professionalAcquisitionReceiptRef"] in receipt_refs
 
     monkeypatch.setattr(

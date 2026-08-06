@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class ProdPlaneSshSetupTest(unittest.TestCase):
-    """T2：本地 prod 平面 SSH key 生成与映射产物输出。"""
+    """部署模块：本地 prod 平面 SSH key 生成与映射产物输出。"""
 
     def test_generate_mode_writes_mapping_and_instructions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

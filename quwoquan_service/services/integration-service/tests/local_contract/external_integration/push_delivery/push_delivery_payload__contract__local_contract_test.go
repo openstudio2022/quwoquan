@@ -10,12 +10,17 @@ import (
 	"quwoquan_service/runtime/reliabletask"
 	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
 	externalapp "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
-	integrationsupport "quwoquan_service/services/integration-service/tests/support"
+	attemptadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_attempt_fact/adapters/inbound/runtime"
+	deadletteradapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/adapters/inbound/runtime"
+	deadletterpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/infrastructure/persistence"
 )
 
 func TestPushDeliverySubmitRejectsInvalidTypedPayload(t *testing.T) {
 	service, err := externalapp.NewExternalInteractionService(
-		integrationsupport.NewMemoryExternalStore(reliabletask.NewMemoryStore()),
+		deadletteradapter.NewRuntimeStore(
+			attemptadapter.NewRuntimeStore(reliabletask.NewMemoryStore()),
+			deadletterpersistence.NewMemoryRepository(),
+		),
 		map[string]reliabletask.ExternalProvider{
 			"push_dispatch": payloadContractTestProvider{},
 		},

@@ -30,6 +30,7 @@ def test_source_digest__execution_release__contract__local_contract() -> None:
     assert ".qwq_output" not in document["inputs"]
     assert "quwoquan_data/control_plane" in document["inputs"]
     assert "quwoquan_data/verticals/travel" in document["inputs"]
+    assert "quwoquan_data/requirements-cursor.txt" in document["inputs"]
     assert not any(input_path.startswith("quwoquan_ops/") for input_path in document["inputs"])
 
 

@@ -1,12 +1,18 @@
-package api_integration
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// readiness_case: get-my-intersection-summary-api
+// readiness_case: list-my-intersections-api
+// readiness_case: get-object-intersections-api
+package intersection_visit_state_test
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -20,6 +26,35 @@ import (
 	contenhttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 )
 
+type apiIntersectionSource struct {
+	reasons []intersectionapp.IntersectionReasonView
+}
+
+func (source apiIntersectionSource) FactReasons(
+	context.Context,
+	string,
+	string,
+) ([]intersectionapp.IntersectionReasonView, error) {
+	return append([]intersectionapp.IntersectionReasonView(nil), source.reasons...), nil
+}
+
+func (apiIntersectionSource) AffinityReasons(
+	context.Context,
+	string,
+	string,
+) ([]intersectionapp.IntersectionReasonView, error) {
+	return nil, nil
+}
+
+func (source apiIntersectionSource) ObjectReasons(
+	context.Context,
+	string,
+	string,
+	string,
+) ([]intersectionapp.IntersectionReasonView, error) {
+	return append([]intersectionapp.IntersectionReasonView(nil), source.reasons...), nil
+}
+
 // TestIntersectionVisitHTTPContract 覆盖 content/content/intersection_visit_state 契约
 // （tests/contract.yaml#mark_visited_monotonic_watermark）：
 // POST /content/intersections/visit 经 generated 路由可达、水位 $max 单调推进、
@@ -31,7 +66,9 @@ func TestIntersectionVisitHTTPContract(t *testing.T) {
 		t.Fatalf("start real MongoDB: %v", err)
 	}
 	t.Cleanup(func() {
-		if closeErr := runtime.Close(t.Context()); closeErr != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if closeErr := runtime.Close(cleanupCtx); closeErr != nil {
 			t.Errorf("close real MongoDB: %v", closeErr)
 		}
 	})
@@ -39,12 +76,47 @@ func TestIntersectionVisitHTTPContract(t *testing.T) {
 	coll := db.Collection("rm_intersection_watermark")
 	const viewer = "visit-http-viewer"
 	_, _ = coll.DeleteMany(ctx, bson.M{"_id": viewer})
-	t.Cleanup(func() { _, _ = coll.DeleteMany(ctx, bson.M{"_id": viewer}) })
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = coll.DeleteMany(cleanupCtx, bson.M{"_id": viewer})
+	})
 
 	store := intersectionvisitpersistence.NewMongoWatermarkStore(db, slog.Default())
+	reason := intersectionapp.IntersectionReasonView{
+		IntersectionID:            "intersection-http-reason",
+		IntersectionClass:         "fact",
+		Kind:                      "sharedFollowees",
+		Dimension:                 "relationship",
+		ObjectKind:                "person",
+		ActionTargetID:            "persona-related",
+		DisplayName:               "林清越",
+		Strength:                  0.9,
+		FreshAt:                   time.Now().UTC().Add(-time.Minute).Format(time.RFC3339),
+		ActorEvidenceTotalCount:   1,
+		ActorEvidenceCompleteness: "complete",
+		ActorEvidence: []intersectionapp.IntersectionActorEvidenceView{{
+			ActorID:       "persona-related",
+			DisplayName:   "林清越",
+			RelationLabel: "你关注的人",
+			SourceRef:     "sharedFollowees",
+			PrivacyState:  "visible",
+		}},
+		IntersectionPoints: []intersectionapp.IntersectionPointView{{
+			PointID:     "point-shared-followee",
+			PointClass:  "fact",
+			Dimension:   "relationship",
+			SourceRef:   "sharedFollowees",
+			Label:       "共同关注的人",
+			DisplayText: "共同关注的人",
+			Visibility:  "public",
+			Count:       1,
+		}},
+	}
 	service := intersectionapp.NewIntersectionService(
 		nil,
 		intersectionapp.WithIntersectionWatermarkStore(store),
+		intersectionapp.WithIntersectionSource(apiIntersectionSource{reasons: []intersectionapp.IntersectionReasonView{reason}}),
 	)
 	handler := contenhttp.NewContentHandler(
 		nil, nil, nil, nil, nil, nil, nil,
@@ -149,5 +221,60 @@ func TestIntersectionVisitHTTPContract(t *testing.T) {
 	handler.ServeHTTP(anonymousRecorder, anonymous)
 	if anonymousRecorder.Code == http.StatusOK {
 		t.Fatalf("anonymous visit must not succeed: %s", anonymousRecorder.Body.String())
+	}
+
+	query := func(path string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+			Actor: operation.ActorContext{
+				AccountID: "account-" + viewer,
+				PersonaID: viewer,
+			},
+		}))
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	summary := query("/content/intersections/summary")
+	if summary.Code != http.StatusOK {
+		t.Fatalf("GetMyIntersectionSummary status=%d body=%s", summary.Code, summary.Body.String())
+	}
+	var summaryBody struct {
+		TotalCount int `json:"totalCount"`
+	}
+	if err := json.Unmarshal(summary.Body.Bytes(), &summaryBody); err != nil {
+		t.Fatal(err)
+	}
+	if summaryBody.TotalCount != 1 {
+		t.Fatalf("GetMyIntersectionSummary body=%s", summary.Body.String())
+	}
+
+	listed := query("/content/intersections?dimension=relationship&limit=10")
+	if listed.Code != http.StatusOK {
+		t.Fatalf("ListMyIntersections status=%d body=%s", listed.Code, listed.Body.String())
+	}
+	var listBody struct {
+		Items []intersectionapp.IntersectionReasonView `json:"items"`
+	}
+	if err := json.Unmarshal(listed.Body.Bytes(), &listBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(listBody.Items) != 1 || listBody.Items[0].IntersectionID != reason.IntersectionID {
+		t.Fatalf("ListMyIntersections body=%s", listed.Body.String())
+	}
+
+	object := query("/content/intersections/object?objectId=persona-related&objectType=user&limit=8")
+	if object.Code != http.StatusOK {
+		t.Fatalf("GetObjectIntersections status=%d body=%s", object.Code, object.Body.String())
+	}
+	var objectBody struct {
+		Items []intersectionapp.IntersectionReasonView `json:"items"`
+	}
+	if err := json.Unmarshal(object.Body.Bytes(), &objectBody); err != nil {
+		t.Fatal(err)
+	}
+	if len(objectBody.Items) != 1 || objectBody.Items[0].IntersectionID != reason.IntersectionID {
+		t.Fatalf("GetObjectIntersections body=%s", object.Body.String())
 	}
 }

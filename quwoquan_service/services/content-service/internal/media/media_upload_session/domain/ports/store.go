@@ -2,11 +2,34 @@ package ports
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	assetports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 	"quwoquan_service/services/content-service/internal/media/media_upload_session/domain/model"
 )
+
+var ErrOutboxClaimLost = errors.New("media upload session outbox claim lost")
+
+type OutboxEvent struct {
+	EventID          string
+	EventType        string
+	AggregateType    string
+	AggregateID      string
+	AggregateVersion int64
+	Payload          []byte
+	OccurredAt       time.Time
+	AttemptCount     int
+}
+
+// TransactionalOutbox is the publication seam owned by MediaUploadSession.
+// It stays separate from Store so command/query doubles cannot be composed as
+// a production relay by accident.
+type TransactionalOutbox interface {
+	ClaimPendingOutbox(context.Context, string, time.Time, time.Duration) (OutboxEvent, bool, error)
+	MarkOutboxPublished(context.Context, string, string, time.Time) error
+	ScheduleOutboxRetry(context.Context, string, string, time.Time, string) error
+}
 
 type Event struct {
 	ID               string

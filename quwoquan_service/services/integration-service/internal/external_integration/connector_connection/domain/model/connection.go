@@ -29,27 +29,29 @@ var (
 )
 
 type Connection struct {
-	ConnectionID        string     `json:"connectionId" bson:"connectionId"`
-	AccountID           string     `json:"-" bson:"accountId"`
-	ConnectorID         string     `json:"connectorId" bson:"connectorId"`
-	GrantedCapabilities []string   `json:"grantedCapabilities" bson:"grantedCapabilities"`
-	Status              string     `json:"status" bson:"status"`
-	CredentialRef       string     `json:"-" bson:"credentialRef,omitempty"`
-	GrantReceiptDigest  string     `json:"-" bson:"grantReceiptDigest"`
-	FreshnessAt         time.Time  `json:"freshnessAt" bson:"freshnessAt"`
-	ExpiresAt           *time.Time `json:"expiresAt,omitempty" bson:"expiresAt,omitempty"`
-	RevokedAt           *time.Time `json:"revokedAt,omitempty" bson:"revokedAt,omitempty"`
-	Revision            int64      `json:"revision" bson:"revision"`
-	CreatedAt           time.Time  `json:"createdAt" bson:"createdAt"`
-	UpdatedAt           time.Time  `json:"updatedAt" bson:"updatedAt"`
+	ConnectionID                 string     `json:"connectionId" bson:"connectionId"`
+	AccountID                    string     `json:"-" bson:"accountId"`
+	ConnectorID                  string     `json:"connectorId" bson:"connectorId"`
+	GrantedCapabilities          []string   `json:"grantedCapabilities" bson:"grantedCapabilities"`
+	Status                       string     `json:"status" bson:"status"`
+	CredentialRef                string     `json:"-" bson:"credentialRef,omitempty"`
+	ProviderAccountSubjectDigest string     `json:"-" bson:"providerAccountSubjectDigest,omitempty"`
+	GrantReceiptDigest           string     `json:"-" bson:"grantReceiptDigest"`
+	FreshnessAt                  time.Time  `json:"freshnessAt" bson:"freshnessAt"`
+	ExpiresAt                    *time.Time `json:"expiresAt,omitempty" bson:"expiresAt,omitempty"`
+	RevokedAt                    *time.Time `json:"revokedAt,omitempty" bson:"revokedAt,omitempty"`
+	Revision                     int64      `json:"revision" bson:"revision"`
+	CreatedAt                    time.Time  `json:"createdAt" bson:"createdAt"`
+	UpdatedAt                    time.Time  `json:"updatedAt" bson:"updatedAt"`
 }
 
 type VerifiedGrant struct {
-	AuthorizationID     string
-	CredentialRef       string
-	ReceiptDigest       string
-	GrantedCapabilities []string
-	ExpiresAt           *time.Time
+	AuthorizationID              string
+	CredentialRef                string
+	ProviderAccountSubjectDigest string
+	ReceiptDigest                string
+	GrantedCapabilities          []string
+	ExpiresAt                    *time.Time
 }
 
 type CreateInput struct {
@@ -61,16 +63,17 @@ type CreateInput struct {
 }
 
 type CreateCommand struct {
-	AccountID           string
-	ConnectorID         string
-	AuthorizationID     string
-	GrantedCapabilities []string
-	CredentialRef       string
-	GrantReceiptDigest  string
-	ExpiresAt           *time.Time
-	IdempotencyKey      string
-	CommandDigest       string
-	OccurredAt          time.Time
+	AccountID                    string
+	ConnectorID                  string
+	AuthorizationID              string
+	GrantedCapabilities          []string
+	CredentialRef                string
+	ProviderAccountSubjectDigest string
+	GrantReceiptDigest           string
+	ExpiresAt                    *time.Time
+	IdempotencyKey               string
+	CommandDigest                string
+	OccurredAt                   time.Time
 }
 
 type RevokeInput struct {
@@ -105,12 +108,12 @@ type CapabilityGrantDecision struct {
 }
 
 const (
-	CapabilityReasonAllowed           = "allowed"
-	CapabilityReasonNoConnection      = "no_connection"
+	CapabilityReasonAllowed            = "allowed"
+	CapabilityReasonNoConnection       = "no_connection"
 	CapabilityReasonConnectionInactive = "connection_inactive"
-	CapabilityReasonCapabilityDenied  = "capability_denied"
-	CapabilityReasonSurfaceDenied     = "surface_denied"
-	CapabilityReasonDefinitionMissing = "definition_missing"
+	CapabilityReasonCapabilityDenied   = "capability_denied"
+	CapabilityReasonSurfaceDenied      = "surface_denied"
+	CapabilityReasonDefinitionMissing  = "definition_missing"
 )
 
 func NormalizeResolveCapabilityInput(input ResolveCapabilityInput) (ResolveCapabilityInput, error) {
@@ -136,6 +139,7 @@ func NewCreateCommand(
 	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
 	input.GrantReceiptRef = strings.TrimSpace(input.GrantReceiptRef)
 	grant.CredentialRef = strings.TrimSpace(grant.CredentialRef)
+	grant.ProviderAccountSubjectDigest = strings.TrimSpace(grant.ProviderAccountSubjectDigest)
 	grant.AuthorizationID = strings.TrimSpace(grant.AuthorizationID)
 	grant.ReceiptDigest = strings.TrimSpace(grant.ReceiptDigest)
 	grant.GrantedCapabilities = normalizeUnique(grant.GrantedCapabilities)
@@ -151,16 +155,17 @@ func NewCreateCommand(
 		return CreateCommand{}, err
 	}
 	return CreateCommand{
-		AccountID:           input.AccountID,
-		ConnectorID:         input.ConnectorID,
-		AuthorizationID:     grant.AuthorizationID,
-		GrantedCapabilities: requested,
-		CredentialRef:       grant.CredentialRef,
-		GrantReceiptDigest:  grant.ReceiptDigest,
-		ExpiresAt:           normalizeTimePointer(grant.ExpiresAt),
-		IdempotencyKey:      input.IdempotencyKey,
-		CommandDigest:       commandDigest,
-		OccurredAt:          now.UTC(),
+		AccountID:                    input.AccountID,
+		ConnectorID:                  input.ConnectorID,
+		AuthorizationID:              grant.AuthorizationID,
+		GrantedCapabilities:          requested,
+		CredentialRef:                grant.CredentialRef,
+		ProviderAccountSubjectDigest: grant.ProviderAccountSubjectDigest,
+		GrantReceiptDigest:           grant.ReceiptDigest,
+		ExpiresAt:                    normalizeTimePointer(grant.ExpiresAt),
+		IdempotencyKey:               input.IdempotencyKey,
+		CommandDigest:                commandDigest,
+		OccurredAt:                   now.UTC(),
 	}, nil
 }
 
@@ -217,6 +222,16 @@ func (connection Connection) Grants(capability string) bool {
 		}
 	}
 	return false
+}
+
+func ValidProviderAccountSubjectDigest(value string) bool {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, "sha256:") ||
+		len(value) != len("sha256:")+sha256.Size*2 {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(value, "sha256:"))
+	return err == nil
 }
 
 func normalizeUnique(values []string) []string {

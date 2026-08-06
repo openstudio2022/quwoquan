@@ -531,7 +531,13 @@ jobs:
             --ref "$PROVIDER_EVIDENCE_REF" \
             --expected-digest "$PROVIDER_EVIDENCE_DIGEST" \
             --output-dir "$QWQ_OUTPUT_ROOT" \
-            --require-file provider-candidate.json
+            --require-file provider-candidate.json \
+            --require-file evidence/release/pilot-release-attestation.json \
+            --require-file evidence/release/pilot-rollback-attestation.json \
+            --require-file evidence/release/lifecycle-exit-alpha.json \
+            --require-file evidence/release/lifecycle-exit-beta.json \
+            --require-file evidence/release/lifecycle-exit-gamma.json \
+            --require-file evidence/release/alpha-beta-gamma-green-matrix.json
       - name: Verify executed Provider evidence candidate binding
         env:
           EXPECTED_SOURCE_SHA: ${{ inputs.head_sha }}
@@ -554,7 +560,7 @@ jobs:
               "sourceGitSha": os.environ["EXPECTED_SOURCE_SHA"],
               "componentEvidenceRef": os.environ["EXPECTED_COMPONENT_REF"],
               "expectedImageDigest": os.environ["EXPECTED_IMAGE_DIGEST"],
-              "readinessEnvironment": "prod",
+              "readinessEnvironment": "alpha,beta,gamma,prod",
           }
           if any(metadata.get(key) != value for key, value in expected.items()):
               raise SystemExit(
@@ -562,8 +568,15 @@ jobs:
               )
           if re.fullmatch(r"sha256:[0-9a-f]{64}", expected["expectedImageDigest"]) is None:
               raise SystemExit("GATE_BLOCK: Provider candidate image digest is not immutable")
-          if int(metadata.get("evidenceCount") or 0) <= 0:
-              raise SystemExit("GATE_BLOCK: executed Provider evidence set is empty")
+          evidence_count = metadata.get("evidenceCount")
+          if (
+              isinstance(evidence_count, bool)
+              or not isinstance(evidence_count, int)
+              or evidence_count <= 0
+          ):
+              raise SystemExit(
+                  "GATE_BLOCK: executed Provider evidence set must be non-empty"
+              )
           PY
       - name: Produce canonical Provider conformance source or GATE_BLOCK
         env:
@@ -631,6 +644,12 @@ jobs:
             --api-required search
             --user-acceptance-source "$QWQ_OUTPUT_ROOT/env/repo/runs/imported-user-acceptance/test-evidence.json"
             --user-acceptance-transport-digest "$USER_ACCEPTANCE_EVIDENCE_DIGEST"
+            --pilot-release-attestation "$QWQ_OUTPUT_ROOT/evidence/release/pilot-release-attestation.json"
+            --pilot-rollback-attestation "$QWQ_OUTPUT_ROOT/evidence/release/pilot-rollback-attestation.json"
+            --content-lifecycle-alpha "$QWQ_OUTPUT_ROOT/evidence/release/lifecycle-exit-alpha.json"
+            --content-lifecycle-beta "$QWQ_OUTPUT_ROOT/evidence/release/lifecycle-exit-beta.json"
+            --content-lifecycle-gamma "$QWQ_OUTPUT_ROOT/evidence/release/lifecycle-exit-gamma.json"
+            --local-env-green-matrix "$QWQ_OUTPUT_ROOT/evidence/release/alpha-beta-gamma-green-matrix.json"
           )
           if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--local-required service); fi
           if [[ "$APP_IMPACTED" == "true" ]]; then

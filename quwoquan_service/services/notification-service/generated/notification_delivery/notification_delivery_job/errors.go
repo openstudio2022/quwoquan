@@ -21,35 +21,35 @@ var (
 // AppErrorFromDeliveryJobUnauthorized returns *AppError for NOTIFICATION.USER.delivery_job_unauthorized (user_message from errors.yaml).
 func AppErrorFromDeliveryJobUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeliveryJobUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先使用可信角色和设备身份", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先使用可信角色和设备身份", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromDeliveryJobInvalidArgument returns *AppError for NOTIFICATION.USER.delivery_job_invalid_argument (user_message from errors.yaml).
 func AppErrorFromDeliveryJobInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeliveryJobInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "通知投递作业请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "通知投递作业请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromDeliveryJobNotFound returns *AppError for NOTIFICATION.USER.delivery_job_not_found (user_message from errors.yaml).
 func AppErrorFromDeliveryJobNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeliveryJobNotFound.Error()))
-	return rerrors.NewAppError(code, "投递记录不存在或已不在可处理状态", debugMessage).WithMetadata("not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "投递记录不存在或已不在可处理状态", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromDeliveryJobIdempotencyConflict returns *AppError for NOTIFICATION.USER.delivery_job_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromDeliveryJobIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeliveryJobIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "恢复请求与既有幂等记录冲突", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "恢复请求与既有幂等记录冲突", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromDeliveryJobStorageReadFailed returns *AppError for NOTIFICATION.SYSTEM.delivery_job_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromDeliveryJobStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeliveryJobStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "读取通知投递作业失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "读取通知投递作业失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromDeliveryJobStorageWriteFailed returns *AppError for NOTIFICATION.SYSTEM.delivery_job_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromDeliveryJobStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrDeliveryJobStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "更新通知投递作业失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "更新通知投递作业失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }

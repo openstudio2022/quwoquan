@@ -1,62 +1,60 @@
-domain: OPS
-aggregate: ExperimentAssignmentFact
 description: ExperimentAssignmentFact 查询与统计的对象本地稳定错误语义；追加只接受 Recommendation/Search 的 typed observed event。
 errors:
 - code: OPS.USER.experiment_assignment_unauthorized
-  kind: USER
   reason: unauthorized
   http_status: 401
   emitted_by:
   - {surface: http, operations: [GetExperimentAssignment]}
-  recovery_action: reauth
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: experimentAssignmentUnauthorized
   go_const: ErrExperimentAssignmentUnauthorized
   user_message:
     zh: 请先使用可信角色或设备身份
     en: Sign in with a trusted persona or device
 - code: OPS.USER.experiment_assignment_invalid_argument
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - {surface: http, operations: [GetExperimentAssignment, GetExperimentStats]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: experimentAssignmentInvalidArgument
   go_const: ErrExperimentAssignmentInvalidArgument
   user_message:
     zh: 实验分配请求参数无效
     en: Invalid experiment assignment request
 - code: OPS.USER.experiment_assignment_experiment_not_found
-  kind: USER
   reason: experiment_not_found
   http_status: 404
   emitted_by:
   - {surface: http, operations: [GetExperimentAssignment, GetExperimentStats]}
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: experimentAssignmentExperimentNotFound
   go_const: ErrExperimentAssignmentExperimentNotFound
   user_message:
     zh: 待分配的实验不存在
     en: Experiment for assignment was not found
 - code: OPS.USER.experiment_assignment_not_found
-  kind: USER
   reason: assignment_not_found
   http_status: 404
   emitted_by:
   - {surface: http, operations: [GetExperimentAssignment]}
   recovery_action: retry
+  disruption_level: snackbar
   dart_const: experimentAssignmentNotFound
   go_const: ErrExperimentAssignmentNotFound
   user_message:
     zh: 实验分配尚未生成
     en: Experiment assignment has not been created
 - code: OPS.SYSTEM.experiment_assignment_storage_read_failed
-  kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
   emitted_by:
   - {surface: http, operations: [GetExperimentAssignment, GetExperimentStats]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 2
   dart_const: experimentAssignmentStorageReadFailed
   go_const: ErrExperimentAssignmentStorageReadFailed

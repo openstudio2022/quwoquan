@@ -47,9 +47,9 @@ CHAIN_FILES = (
     "quwoquan_ops/ci/render_provider_release_evidence.py",
     "quwoquan_ops/ci/consume_released_release_evidence.py",
     "quwoquan_ops/ci/provider_release_evidence.py",
-    "quwoquan_ops/ci/provider_conformance/b10_prod_remote_uat.py",
+    "quwoquan_ops/ci/provider_conformance/run_prod_remote_uat.py",
     "quwoquan_ops/ci/provider_conformance/native_case_result.py",
-    "quwoquan_ops/ci/provider_conformance/run_b10_prod_remote_patrol_uat.py",
+    "quwoquan_ops/ci/provider_conformance/run_prod_remote_patrol_uat.py",
     "quwoquan_ops/cli/lib/provider_conformance.py",
     "quwoquan_ops/cli/provider_conformance_runner.py",
     "quwoquan_ops/environments/provider_conformance_evidence.schema.json",
@@ -215,6 +215,8 @@ REQUIRED_SOURCE_TOKENS = {
         "provider-release-evidence-binding",
         "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST",
         "provider_component_evidence_ref",
+        "executed Provider evidence set must be non-empty",
+        "render_provider_conformance_source.py",
     ),
     ".github/workflows/service_pipeline.yml": (
         "outputs.machine_critical_path_seconds",
@@ -275,6 +277,7 @@ REQUIRED_SOURCE_TOKENS = {
         "provider_release_evidence.py execute-nonprod",
         "provider_release_evidence.py execute-prod",
         "provider_release_evidence.py package",
+        "Execute all compiled required nonprod Provider cells",
         "Publish executed Provider evidence OCI",
         "source-only conformance metadata",
         "QWQ_PROVIDER_CONFORMANCE_ATTESTATION_KEY",
@@ -337,9 +340,10 @@ REQUIRED_SOURCE_TOKENS = {
         '"schema": "provider-conformance-prod-candidate-image-set"',
         "load_validate_and_derive",
         "exact_required_cell_issues",
+        "provider_conformance.expected_required_cell_keys(compiled)",
         "command_execute_nonprod",
-        "executed != 126",
-        "len(evidence_paths) != 140",
+        "executed != len(expected_nonprod_cells)",
+        "len(evidence_paths) != len(expected_cells)",
         "provider-conformance",
         "--execute",
         'print(f"provider_release_evidence: GATE_BLOCK: {error}", file=sys.stderr)',
@@ -455,7 +459,8 @@ REQUIRED_SOURCE_TOKENS = {
     "quwoquan_ops/ci/render_provider_conformance_source.py": (
         'SCHEMA = "provider-conformance-source"',
         'report.get("schema") != "provider-conformance-readiness"',
-        'payload.get("evidenceCount") != 140',
+        "expected_required_cell_count_from_readiness(readiness)",
+        "expected_required_cell_keys(",
         "exact_required_cell_issues",
         "validate_source(payload)",
     ),
@@ -496,9 +501,9 @@ FORBIDDEN_LITERAL_FIELDS = (
 )
 PROVIDER_ONLINE_FILES = frozenset(
     {
-        "quwoquan_ops/ci/provider_conformance/b10_prod_remote_uat.py",
+        "quwoquan_ops/ci/provider_conformance/run_prod_remote_uat.py",
         "quwoquan_ops/ci/provider_conformance/native_case_result.py",
-        "quwoquan_ops/ci/provider_conformance/run_b10_prod_remote_patrol_uat.py",
+        "quwoquan_ops/ci/provider_conformance/run_prod_remote_patrol_uat.py",
         "quwoquan_ops/ci/render_provider_conformance_source.py",
         "quwoquan_ops/ci/render_provider_release_evidence.py",
         "quwoquan_ops/ci/provider_release_evidence.py",
@@ -506,6 +511,17 @@ PROVIDER_ONLINE_FILES = frozenset(
         "quwoquan_ops/cli/provider_conformance_runner.py",
         "quwoquan_ops/environments/provider_conformance_evidence.schema.json",
     }
+)
+PROVIDER_FIXED_COUNT_WORKFLOWS = frozenset(
+    {
+        ".github/workflows/delivery-gate.yml",
+        ".github/workflows/provider-release-evidence.yml",
+    }
+)
+PROVIDER_FIXED_COUNT = re.compile(
+    r"(?:\b(?:14|42|126|140)\b[^\n]*(?:Provider|cells?|evidenceCount)|"
+    r"(?:Provider|cells?|evidenceCount)[^\n]*\b(?:14|42|126|140)\b)",
+    re.IGNORECASE,
 )
 SERIALIZED_VERSION_FIELD = re.compile(r"[\"']version[\"']\s*:")
 VERSIONED_IDENTITY = re.compile(
@@ -807,6 +823,15 @@ def evidence_contract_findings(root: Path = ROOT) -> list[Finding]:
                         relative_path,
                         text.count("\n", 0, match.start()) + 1,
                         "Provider online contract version field is forbidden",
+                    )
+                )
+        if relative_path in PROVIDER_FIXED_COUNT_WORKFLOWS:
+            for match in PROVIDER_FIXED_COUNT.finditer(text):
+                findings.append(
+                    Finding(
+                        relative_path,
+                        text.count("\n", 0, match.start()) + 1,
+                        "Provider workflow must delegate exact cell count to canonical Python",
                     )
                 )
         for token in REQUIRED_SOURCE_TOKENS.get(relative_path, ()):

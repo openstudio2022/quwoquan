@@ -7,8 +7,6 @@ import json
 import threading
 from typing import Any
 
-from redis.exceptions import ResponseError
-
 from internal.recommendation.recommendation_feedback_fact.application.appender import (
     Appender,
 )
@@ -123,7 +121,7 @@ class ContentBehaviorConsumer:
                 id="0-0",
                 mkstream=True,
             )
-        except ResponseError as error:
+        except Exception as error:
             if "BUSYGROUP" not in str(error):
                 raise
 

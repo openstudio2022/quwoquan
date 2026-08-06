@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
 part 'app_spacing_helpers.dart';
 part 'app_spacing_grid_values.dart';
 part 'app_spacing_responsive_values.dart';

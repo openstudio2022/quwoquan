@@ -10,12 +10,14 @@ fields:
 - name: allowStrangerMsg
   type: bool
 - name: profileVisibility
-  type: string
+  type: enum
+  enum_ref: ProfileVisibility
 - name: contentLanguage
   type: string
   nullable: true
 - name: feedPreference
-  type: string
+  type: enum
+  enum_ref: FeedPreference
   nullable: true
 - name: assistantEnabled
   type: bool

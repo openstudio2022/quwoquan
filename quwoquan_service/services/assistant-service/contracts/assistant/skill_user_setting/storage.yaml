@@ -2,9 +2,11 @@ backend: postgres
 role: authoritative
 tables:
   skill_user_settings:
+    publication_role: not_published
     entity: SkillUserSetting
     role: authoritative
-    pk: id
+    pk:
+    - id
     columns:
     - {name: id, type: VARCHAR(36), constraints: [PK, NOT_NULL]}
     - {name: account_id, type: VARCHAR(36), constraints: [NOT_NULL]}
@@ -20,12 +22,13 @@ tables:
     indexes:
     - {name: uq_skill_user_settings_account_skill, columns: [account_id, skill_id], unique: true}
     - {name: idx_skill_user_settings_account_status, columns: [account_id, status, updated_at]}
-    optimistic_lock: revision
   skill_user_setting_command_receipts:
+    publication_role: not_published
     entity: SkillUserSetting
     role: authoritative
     description: 与设置聚合和审计事件同事务提交的 owner/idempotency-key 命令回执。
   skill_user_setting_outbox:
+    publication_role: transactional_outbox
     entity: SkillUserSetting
     role: append_only
     description: 与设置聚合和命令回执同事务提交的 SkillUserSettingChanged 事件。

@@ -1,4 +1,4 @@
-# L3 Story：领队导游模板与任务归属 (`trip-guide-template-assignment`)
+# L3 Story：旅行模板来源、任务与专业署名 (`trip-guide-template-assignment`)
 
 > 所属能力：[共同旅行全生命周期](../spec.md)
 >
@@ -14,55 +14,58 @@
 
 ### In Scope
 
-- TripPlanTemplate 创建/复制/修订、GuideAssignment、任务状态、讲解/来源署名和公开资质引用。
+- 把公开路线/讲解/内容作为 source reference 转换为待确认的 GatheringPlan proposal。
+- GatheringPlan task item 的 assignee Persona reference、任务状态、讲解来源与专业署名。
+- User owner 的公开专业声明只读引用，以及 Assistant 通用讲解的来源边界。
+- legacy TripPlanTemplate/TripGuideAssignment 到 proposal source/task item/Persona reference 的历史 crosswalk。
 
 ### Out of Scope
 
 - 导游资格审核真相、私人导游撮合、收费交易、劳动关系或旅行社业务审批。
+- 独立 Template/GuideAssignment aggregate、Travel App guide surface、复制旧成员/住宿/聊天/Connector 数据或由 Assistant 冒充专业身份。
 
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 模板、任务与专业身份保持独立可追溯
+### REQ-001 来源、任务与专业身份保持独立可追溯
 
-- Template 只包含可复用计划结构、建议与来源引用，不包含历史成员、私人住宿、聊天或 Connector 数据。
-- `CreateTripPlanFromTemplate` 必须由模板 owner 发起，并在新 Trip 的首次事务中冻结模板版本、公开 Post 与专业 Persona 署名；住宿只生成待确认占位，不复制原住宿事实。
-- GuideAssignment 必须引用 Trip、任务、负责人 Persona、声明角色和状态；资质展示只引用 User 领域公开声明，Travel 不复制或认证资质。
+- 可复用来源只包含公开计划结构、建议、source version 与署名引用，不包含历史成员、私人住宿、聊天、个人记忆或 Connector 数据。
+- 应用来源只能形成绑定目标 Gathering/current Plan revision 的 typed proposal；Host 确认后由 GatheringPlan owner commit 新 Revision，住宿只生成待确认 item，不复制原事实。
+- 专业分工使用 GatheringPlan task item 的 assignee Persona reference、声明角色与状态；资格展示只读取 User owner 公开声明，本领域不复制或认证资质。
 - AI 生成的通用讲解必须标明来源；专业讲解和路线经验保留作者署名，助手不得冒充持证导游或公共应急服务。
+- legacy Template/GuideAssignment ID 只存在于迁移 receipt，不得恢复 create/copy/assign operation。
 
 ## 4. 契约引用
 
-- object / projection：`travel.TripPlanTemplate`、`travel.TripPlan`、`travel.TripGuideAssignment`
-- operation：`travel.trip_plan_template.CreateTripPlanTemplate`、`travel.trip_plan.CreateTripPlanFromTemplate`
+- current target：Circle `GatheringPlan` proposal/Revision/task item，User `Persona` 公开声明，Content/Assistant source reference。
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering_plan/operations.yaml`
+- historical crosswalk：`TripPlanTemplate -> typed proposal source refs`，`TripGuideAssignment -> Plan task item assignee Persona ref + public professional claim`。
 
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 领队复用模板且不带入旧行程隐私
+### GWT-001 领队复用公开来源且不带入旧旅行隐私
 
-- GIVEN 领队拥有一份含公开路线与专业讲解的模板，原 Trip 含成员、住宿和聊天引用。
-- WHEN 领队基于模板创建新 Trip 并给助理导游分配集合任务。
-- THEN 新 Trip 只复制允许的结构、公开来源和署名，旧成员、住宿、Moment、聊天与 Connector 数据均不存在。
-- AND 任务状态与负责人可独立变更，专业讲解署名不被助手覆盖。
+- GIVEN 领队选择一组含公开路线与专业讲解的来源，来源旅行曾包含成员、私人住宿、Experience、聊天与 Connector 数据。
+- WHEN 领队把来源转换为目标 GatheringPlan proposal，Host 确认后为助理导游建立集合 task item。
+- THEN 新 Revision 只包含允许的 typed items、公开来源和署名，旧参与者、私人住宿、Experience、聊天与 Connector 数据均不存在。
+- AND task 状态与 assignee 通过 Plan Revision 可追溯变更，公开专业声明由 User owner 读取，专业讲解署名不被助手覆盖。
 
 ## 6. 依赖
 
-- 前置要求：Persona/公开资质 Reader、TripPlan command 与内容来源可用。
-- 上游事实：模板、角色声明、任务与公开讲解引用。
-- 下游结果：新 Trip、GuideAssignment、Assistant 讲解上下文与任务提醒。
-- 父级设计：`DEC-001`
+- 前置要求：Persona/公开声明 Reader、GatheringPlan proposal/commit 与 Content/Assistant 来源可用。
+- 上游事实：公开来源、角色声明、task item 与讲解引用。
+- 下游结果：新 Plan Revision、task assignee、Assistant 讲解上下文与任务提醒。
+- 父级设计：`DEC-001`、`DEC-002`
 
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 模板复用与导游角色旅程尚未形成商用证据
+### OPEN-001 模板来源、任务与专业署名尚未形成商用证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：仍缺 Assistant 提醒、法律运营文案审核、真实 API integration、三环境及双端物理真机证据，因此不能宣称该角色旅程已可商用。
-- 当前本地事实：组织者可创建隐私剥离后的独立模板、以 CAS version 和同一重试幂等键修改模板名称/适用说明且保留原计划项与署名，并可从 active 成员中按公开昵称创建或改派任务。任务命令同样保留 CAS version 与同一重试幂等键，持证导游的公开资质引用始终绑定当前负责人。
-- 当前展示事实：App 可显示负责人公开昵称、角色与任务，并允许负责人或组织者接受、开始和完成。模板复制使用 typed command、冻结署名以及公开 Persona/Post fail-closed Reader。
-- 证据边界：上述实现目前只有定向 local contract 与 analyze 证据，不能代替 API、环境和物理真机验收。
-- 完成判定：`GWT-001` 具有 Travel/User local_contract、api_integration 和角色 user_acceptance 直接 `spec_ref`；法律与运营文案审核通过。
-- 依赖：User Persona/资质公开 Reader、Assistant trigger 与 Travel App guide surface。
+- 影响或价值：当前没有可声明已落地的 Travel Template/GuideAssignment runtime 或页面；尚缺 source-to-proposal production Remote、task item/Persona 公开声明组合、Assistant 提醒与外部证据 Provider、法律运营文案审核、跨域 API integration 及 Android/iPhone 证据。
+- 完成判定：`GWT-001` 由 Circle/User/Content/Assistant local_contract、真实跨域 api_integration 和 Android/iPhone 角色 user_acceptance 直接覆盖；Provider unavailable 结构化降级，隐私字段复制与署名覆盖均为零，法律与运营文案审核通过。
+- 依赖：GatheringPlan proposal/task item、User Persona/公开声明 Reader、Content/Assistant source Reader、Integration Provider 与 Chat Board/App production Remote。

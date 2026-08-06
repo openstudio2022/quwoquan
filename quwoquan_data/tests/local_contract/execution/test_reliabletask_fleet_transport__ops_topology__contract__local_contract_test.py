@@ -42,7 +42,17 @@ def test_reliabletask_fleet_transport__ignores_caller_endpoint_variables__contra
 
 def test_campaign_lane__uses_plan_bound_fleet_without_stackctl__local_contract(
     monkeypatch,
+    tmp_path,
 ) -> None:
+    capsule_root = tmp_path / "capsule"
+    capsule_root.mkdir()
+    capsule_stackctl = capsule_root / "quwoquan_ops" / "cli" / "stackctl.py"
+    stackctl_calls: list[tuple[object, ...]] = []
+
+    def reject_stackctl(*args, **_kwargs):
+        stackctl_calls.append(args)
+        raise AssertionError("frozen campaign lane must not invoke stackctl")
+
     transport = reliabletask_transport.ReliableTaskFleetTransport(
         target="data-execution-local",
         mongo_uri="mongodb://127.0.0.1:27117/quwoquan",
@@ -59,15 +69,26 @@ def test_campaign_lane__uses_plan_bound_fleet_without_stackctl__local_contract(
     )
     for name, value in binding.environment().items():
         monkeypatch.setenv(name, value)
+    monkeypatch.setattr(reliabletask_transport, "REPO_ROOT", capsule_root)
+    monkeypatch.setattr(reliabletask_transport, "_STACKCTL_PATH", capsule_stackctl)
     monkeypatch.setattr(
-        reliabletask_transport,
-        "_stackctl_fleet_document",
-        lambda *_args: (_ for _ in ()).throw(
-            AssertionError("frozen campaign lane must not invoke stackctl")
-        ),
+        reliabletask_transport.subprocess,
+        "run",
+        reject_stackctl,
     )
 
+    assert not capsule_stackctl.exists()
     assert reliabletask_transport.resolve_reliabletask_fleet_transport() == transport
+    assert reliabletask_transport.reliabletask_fleet_preflight() == {
+        "checked": True,
+        "ready": True,
+        "target": "data-execution-local",
+        "mongo": True,
+        "redis": True,
+        "owned": True,
+        "issues": [],
+    }
+    assert stackctl_calls == []
 
 
 def test_campaign_lane__rejects_incomplete_or_drifted_fleet_binding__local_contract(

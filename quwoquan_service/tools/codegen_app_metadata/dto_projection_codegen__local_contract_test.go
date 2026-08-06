@@ -193,6 +193,22 @@ func TestRenderTypedPostDtoNestedProjectionEmitsStringKeyMapHelper(
 	}
 }
 
+func TestRenderTypedPostDtoImportsCanonicalContentPostViewDataOwner(t *testing.T) {
+	projection := clientProjection{
+		DartClass: "ProjectedPostDto",
+		BaseClass: "ContentPostViewData",
+	}
+
+	generated := renderTypedPostDtoDart(projection, "fixture.yaml")
+	want := "package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart"
+	if !strings.Contains(generated, want) {
+		t.Fatalf("typed post DTO missing canonical ContentPostViewData import %q:\n%s", want, generated)
+	}
+	if strings.Contains(generated, "cloud/runtime/models/content_post_view_data.dart") {
+		t.Fatalf("typed post DTO retained retired ContentPostViewData import:\n%s", generated)
+	}
+}
+
 func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t *testing.T) {
 	projection := clientProjection{
 		DartClass: "StrictMessageDto",

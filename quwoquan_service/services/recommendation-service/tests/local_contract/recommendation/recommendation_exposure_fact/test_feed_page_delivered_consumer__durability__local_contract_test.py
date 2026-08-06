@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind/spec.md#gwt-001
+# readiness_case: append-exposure-local
 import hashlib
 import json
 

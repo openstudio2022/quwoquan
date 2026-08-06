@@ -15,10 +15,6 @@ access:
   cross_context: public_contract_only
   queries: named_reader
 relationships: []
-capabilities:
-- reliable_async
-- auditable
-- callback_enabled
 taggable: false
 vector_enabled: false
 business_rules:
@@ -43,3 +39,11 @@ lifecycle:
   terminal_events:
   - UserAccountClosed
   terminal_behavior: 删除已关闭 subject 关联的待处理请求、死信、恢复凭据与结果 outbox，并以对象自有 inbox 幂等提交
+  source_events:
+  - user.user_account.UserAccountClosed
+  event_consumers:
+  - name: ApplyExternalInteractionAccountClosure
+    kind: event_handler
+    facet: UserAccountClosedProjection
+    method: applyUserAccountClosed
+    idempotency: event_id

@@ -29,83 +29,83 @@ var (
 // AppErrorFromConnectorAuthorizationInvalidArgument returns *AppError for INTEGRATION.USER.connector_authorization_invalid_argument (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "授权请求无效", debugMessage).WithMetadata("connector_authorization_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "授权请求无效", debugMessage).WithMetadata("connector_authorization_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAuthorizationConnectorDefinitionNotFound returns *AppError for INTEGRATION.USER.authorization_connector_definition_not_found (user_message from errors.yaml).
 func AppErrorFromAuthorizationConnectorDefinitionNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAuthorizationConnectorDefinitionNotFound.Error()))
-	return rerrors.NewAppError(code, "此连接能力暂不可用", debugMessage).WithMetadata("connector_definition_not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "此连接能力暂不可用", debugMessage).WithMetadata("connector_definition_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationNotFound returns *AppError for INTEGRATION.USER.connector_authorization_not_found (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationNotFound.Error()))
-	return rerrors.NewAppError(code, "授权记录不存在，请重新连接", debugMessage).WithMetadata("connector_authorization_not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "授权记录不存在，请重新连接", debugMessage).WithMetadata("connector_authorization_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationUnauthorized returns *AppError for INTEGRATION.USER.connector_authorization_unauthorized (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationUnauthorized.Error()))
-	return rerrors.NewAppError(code, "无权访问此授权", debugMessage).WithMetadata("connector_authorization_unauthorized", 403).WithRecovery("reauthenticate", 0)
+	return rerrors.NewAppError(code, "无权访问此授权", debugMessage).WithMetadata("connector_authorization_unauthorized", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationCapabilityDenied returns *AppError for INTEGRATION.USER.connector_authorization_capability_denied (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationCapabilityDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationCapabilityDenied.Error()))
-	return rerrors.NewAppError(code, "此连接不支持申请的能力", debugMessage).WithMetadata("connector_authorization_capability_denied", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "此连接不支持申请的能力", debugMessage).WithMetadata("connector_authorization_capability_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationModeUnsupported returns *AppError for INTEGRATION.USER.connector_authorization_mode_unsupported (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationModeUnsupported(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationModeUnsupported.Error()))
-	return rerrors.NewAppError(code, "此连接方式暂不可用", debugMessage).WithMetadata("connector_authorization_mode_unsupported", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "此连接方式暂不可用", debugMessage).WithMetadata("connector_authorization_mode_unsupported", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationModeMismatch returns *AppError for INTEGRATION.USER.connector_authorization_mode_mismatch (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationModeMismatch(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationModeMismatch.Error()))
-	return rerrors.NewAppError(code, "授权方式不匹配，请重新连接", debugMessage).WithMetadata("connector_authorization_mode_mismatch", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "授权方式不匹配，请重新连接", debugMessage).WithMetadata("connector_authorization_mode_mismatch", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationExpired returns *AppError for INTEGRATION.USER.connector_authorization_expired (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationExpired.Error()))
-	return rerrors.NewAppError(code, "授权已过期，请重新连接", debugMessage).WithMetadata("connector_authorization_expired", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "授权已过期，请重新连接", debugMessage).WithMetadata("connector_authorization_expired", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorNativeGrantProofInvalid returns *AppError for INTEGRATION.USER.connector_native_grant_proof_invalid (user_message from errors.yaml).
 func AppErrorFromConnectorNativeGrantProofInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorNativeGrantProofInvalid.Error()))
-	return rerrors.NewAppError(code, "系统授权结果无法验证，请重新连接", debugMessage).WithMetadata("connector_native_grant_proof_invalid", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "系统授权结果无法验证，请重新连接", debugMessage).WithMetadata("connector_native_grant_proof_invalid", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorOAuthCallbackInvalid returns *AppError for INTEGRATION.USER.connector_oauth_callback_invalid (user_message from errors.yaml).
 func AppErrorFromConnectorOAuthCallbackInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorOAuthCallbackInvalid.Error()))
-	return rerrors.NewAppError(code, "外部授权结果无法验证，请重新连接", debugMessage).WithMetadata("connector_oauth_callback_invalid", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "外部授权结果无法验证，请重新连接", debugMessage).WithMetadata("connector_oauth_callback_invalid", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationRevisionConflict returns *AppError for INTEGRATION.USER.connector_authorization_revision_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationRevisionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationRevisionConflict.Error()))
-	return rerrors.NewAppError(code, "授权状态已变化，请刷新后重试", debugMessage).WithMetadata("connector_authorization_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "授权状态已变化，请刷新后重试", debugMessage).WithMetadata("connector_authorization_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorAuthorizationIdempotencyConflict returns *AppError for INTEGRATION.USER.connector_authorization_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重试内容与原请求不一致", debugMessage).WithMetadata("connector_authorization_idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "重试内容与原请求不一致", debugMessage).WithMetadata("connector_authorization_idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorAuthorizationProviderUnavailable returns *AppError for INTEGRATION.MIDDLEWARE.connector_authorization_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationProviderUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationProviderUnavailable.Error()))
-	return rerrors.NewAppError(code, "授权服务暂时不可用，请稍后重试", debugMessage).WithMetadata("connector_authorization_provider_unavailable", 503).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "授权服务暂时不可用，请稍后重试", debugMessage).WithMetadata("connector_authorization_provider_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConnectorAuthorizationUnavailable returns *AppError for INTEGRATION.SYSTEM.connector_authorization_unavailable (user_message from errors.yaml).
 func AppErrorFromConnectorAuthorizationUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorAuthorizationUnavailable.Error()))
-	return rerrors.NewAppError(code, "连接服务暂时不可用，请稍后重试", debugMessage).WithMetadata("connector_authorization_unavailable", 503).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "连接服务暂时不可用，请稍后重试", debugMessage).WithMetadata("connector_authorization_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 0)
 }

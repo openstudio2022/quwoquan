@@ -1,4 +1,6 @@
-// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001
+// readiness_case: activate-assistant-policy-rollout-local
+// readiness_case: rollback-assistant-policy-rollout-local
 package assistant_policy_rollout_test
 
 import (

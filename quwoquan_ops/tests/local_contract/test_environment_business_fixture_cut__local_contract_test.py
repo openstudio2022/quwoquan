@@ -13,7 +13,7 @@ from quwoquan_ops.cli.lib.infrastructure_probe_plane import resolve_probe_respon
 
 
 ROOT = Path(__file__).resolve().parents[3]
-BETA_MANUAL = ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
+BETA_MANUAL = ROOT / "quwoquan_app/scripts/tools/device/beta_manual_app.sh"
 BETA_STACK = ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
 PROD_SIM = ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
 PORT_MANIFEST = ROOT / "quwoquan_ops/environments/local_env_port_manifest.yaml"
@@ -48,7 +48,11 @@ class EnvironmentBusinessFixtureCutContractTest(unittest.TestCase):
         self.assertIn("respond 404", script)
 
         stack = BETA_STACK.read_text(encoding="utf-8")
-        self.assertEqual(stack.count("APP_BETA_CMD+=(--content-release)"), 1)
+        self.assertIn("quwoquan_ops/cli/stackctl.py", stack)
+        self.assertIn("--target beta-local", stack)
+        self.assertNotIn("APP_BETA_CMD", stack)
+        self.assertNotIn("go run", stack)
+        self.assertNotIn("docker compose", stack)
         self.assertNotIn("--seed-verify", stack)
         self.assertNotIn("--media-mode", stack)
         self.assertNotIn("--full-matrix", stack)

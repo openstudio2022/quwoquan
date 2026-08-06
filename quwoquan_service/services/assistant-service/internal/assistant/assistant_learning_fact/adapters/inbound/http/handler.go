@@ -18,7 +18,7 @@ import (
 )
 
 type Handler struct {
-	service *learningapplication.Service
+	service *learningapplication.AssistantLearningFactAppender
 	queries *learningapplication.OpsQueryService
 }
 
@@ -48,7 +48,7 @@ type appendRequest struct {
 }
 
 func NewHandler(
-	service *learningapplication.Service,
+	service *learningapplication.AssistantLearningFactAppender,
 	queries ...*learningapplication.OpsQueryService,
 ) *Handler {
 	var opsQueries *learningapplication.OpsQueryService
@@ -65,10 +65,6 @@ func (handler *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(
 		"POST /assistant/learning/facts",
 		handler.handleAppendUserFact,
-	)
-	mux.HandleFunc(
-		"POST /internal/assistant/learning/facts",
-		handler.handleAppendServiceFact,
 	)
 	mux.HandleFunc(
 		"GET /assistant/ops/learning-summary",
@@ -162,56 +158,26 @@ func (handler *Handler) handleAppendUserFact(
 		)
 		return
 	}
-	receipt, err := handler.service.AppendUserFact(
+	trusted := model.TrustedContext{
+		UserID:           principal.Actor.AccountID,
+		PersonaID:        principal.Actor.PersonaID,
+		TraceID:          request.Header.Get("X-Trace-Id"),
+		ClientSessionID:  request.Header.Get("X-Client-Session-Id"),
+		PageVisitID:      request.Header.Get("X-Client-Page-Visit-Id"),
+		PageID:           request.Header.Get("X-Client-Page-Id"),
+		SurfaceID:        request.Header.Get("X-Client-Surface-Id"),
+		RouteID:          request.Header.Get("X-Client-Route-Id"),
+		OperationID:      request.Header.Get("X-Client-Operation-Id"),
+		ExperimentBucket: request.Header.Get("X-Client-Experiment-Bucket"),
+		ClientSentAt:     clientSentAt,
+	}
+	receipt, err := handler.service.Append(
 		request.Context(),
-		command,
-		model.TrustedContext{
-			UserID:           principal.Actor.AccountID,
-			PersonaID:        principal.Actor.PersonaID,
-			TraceID:          request.Header.Get("X-Trace-Id"),
-			ClientSessionID:  request.Header.Get("X-Client-Session-Id"),
-			PageVisitID:      request.Header.Get("X-Client-Page-Visit-Id"),
-			PageID:           request.Header.Get("X-Client-Page-Id"),
-			SurfaceID:        request.Header.Get("X-Client-Surface-Id"),
-			RouteID:          request.Header.Get("X-Client-Route-Id"),
-			OperationID:      request.Header.Get("X-Client-Operation-Id"),
-			ExperimentBucket: request.Header.Get("X-Client-Experiment-Bucket"),
-			ClientSentAt:     clientSentAt,
+		learningapplication.AppendInput{
+			Kind:           learningapplication.AppendKindUserFeedback,
+			Command:        command,
+			TrustedContext: &trusted,
 		},
-	)
-	if err != nil {
-		writeError(writer, request, mapError(err))
-		return
-	}
-	writeJSON(writer, http.StatusOK, receipt)
-}
-
-func (handler *Handler) handleAppendServiceFact(
-	writer http.ResponseWriter,
-	request *http.Request,
-) {
-	principal, ok := rtauth.PrincipalFromContext(request.Context())
-	if !ok || !strings.HasPrefix(
-		strings.TrimSpace(principal.Subject),
-		"service:",
-	) {
-		writeError(
-			writer,
-			request,
-			learningerrors.AppErrorFromLearningFactUnauthorized(
-				"verified service principal is required",
-			),
-		)
-		return
-	}
-	command, err := decodeCommand(request)
-	if err != nil {
-		writeError(writer, request, mapError(err))
-		return
-	}
-	receipt, err := handler.service.AppendServiceFact(
-		request.Context(),
-		command,
 	)
 	if err != nil {
 		writeError(writer, request, mapError(err))

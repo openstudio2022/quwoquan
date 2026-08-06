@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+// readiness_case: invoke-push-delivery-provider-local
 package local_contract
 
 import (

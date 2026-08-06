@@ -153,6 +153,13 @@ func TestOpsRuntimeLogDerivedTypeRejectsAnUnboundEmptyMarker(t *testing.T) {
 	if withoutSource == string(payload) {
 		t.Fatal("RuntimeLogRecordWire derived_from marker was not present")
 	}
+	// The compiler view deliberately uses symlinks back to the service-owned
+	// contract sources.  Break this file's symlink before the negative mutation;
+	// writing through it would corrupt the repository truth source and make the
+	// test outcome depend on execution order.
+	if err := os.Remove(fieldsPath); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(fieldsPath, []byte(withoutSource), 0o644); err != nil {
 		t.Fatal(err)
 	}

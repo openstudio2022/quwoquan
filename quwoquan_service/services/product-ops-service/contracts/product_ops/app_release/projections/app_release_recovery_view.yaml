@@ -3,10 +3,10 @@ source_entities:
 - AppRelease
 description: 启动和运行时恢复页读取的平台当前发布版本与受信更新、恢复地址。
 fields:
-- latestVersion
-- latestBuild
-- updateUrl
-- recoveryUrl
+- {name: latestVersion, type: string}
+- {name: latestBuild, type: string}
+- {name: updateUrl, type: string, nullable: true}
+- {name: recoveryUrl, type: string}
 consistency: strong_config_release
 readers:
 - name: AppReleaseRecoveryReader

@@ -28,7 +28,7 @@ type HTTPClient struct {
 	credentials rtauth.ServiceAuthorizationProvider
 }
 
-var _ ports.EnforcementTarget = (*HTTPClient)(nil)
+var _ ports.EnforcementPublisher = (*HTTPClient)(nil)
 
 func NewHTTPClient(config HTTPClientConfig) (*HTTPClient, error) {
 	baseURL, err := url.Parse(strings.TrimSpace(config.BaseURL))
@@ -64,12 +64,13 @@ type enforcementResponse struct {
 	OccurredAt       time.Time `json:"occurredAt"`
 }
 
-func (client *HTTPClient) Apply(
+func (client *HTTPClient) Publish(
 	ctx context.Context,
 	decision model.Decision,
 ) (ports.DeliveryReceipt, error) {
 	if client == nil || client.baseURL == nil || client.httpClient == nil ||
 		client.credentials == nil || strings.TrimSpace(decision.ID) == "" ||
+		strings.TrimSpace(decision.CaseID) == "" ||
 		strings.TrimSpace(decision.AccountID) == "" ||
 		strings.TrimSpace(decision.CaseRef) == "" ||
 		strings.TrimSpace(decision.DecisionDigest) == "" || decision.ApprovedAt.IsZero() {

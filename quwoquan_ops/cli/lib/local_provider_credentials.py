@@ -11,10 +11,12 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from .external_provider_governance import NONPROD_ENVIRONMENTS, load_and_compile
+from .provider_config import packaged_runtime_bindings
 from .provider_endpoint_contract import load_provider_endpoint_environment
-
+from .provider_runtime_composition import validate_provider_runtime_composition
 
 # Local infrastructure material is owned by its topology materializer.  It is
 # deliberately excluded here so Provider validation does not create a second
@@ -48,12 +50,14 @@ _OWNER_ONLY_FILE_KEYS = frozenset(
     }
 )
 
+
 def load_nonprod_provider_environment(
     *,
     environment: str,
     target_name: str,
     source: Mapping[str, str] | None = None,
     debug_local: bool = True,
+    runtime_composition: Mapping[str, Any] | None = None,
 ) -> dict[str, str]:
     """Return topology-owned substitutes and target-scoped LiveKit secrets."""
 
@@ -72,11 +76,29 @@ def load_nonprod_provider_environment(
     endpoint_keys, secret_keys = _required_material_for_environment(
         environment,
         debug_local=debug_local,
+        target_name=target_name,
+        runtime_composition=runtime_composition,
     )
     # local_topology endpoints are derived below and can never be overridden
     # by the invoking shell. Only target-scoped secrets remain runtime inputs.
     runtime_secret_keys = set(secret_keys)
-    if debug_local:
+    selected_endpoint_keys: set[str] | None = None
+    if runtime_composition is not None:
+        validated = validate_provider_runtime_composition(
+            runtime_composition,
+            expected_environment=environment,
+            expected_target=target_name,
+        )
+        selected_endpoint_keys = set(validated["materialKeys"]["endpoint"])
+        selected_roles = {
+            str(workload["role"])
+            for workload in validated["workloads"]
+        }
+        if debug_local and "sms-provider-substitute" in selected_roles:
+            runtime_secret_keys.add("SMS_SUBSTITUTE_OPERATOR_TOKEN")
+        if debug_local and "provider-protocol-substitute" in selected_roles:
+            runtime_secret_keys.add("PROVIDER_SUBSTITUTE_OPERATOR_TOKEN")
+    elif debug_local:
         runtime_secret_keys.update(
             {
                 "SMS_SUBSTITUTE_OPERATOR_TOKEN",
@@ -131,6 +153,12 @@ def load_nonprod_provider_environment(
         )
 
     values = load_provider_endpoint_environment() if debug_local else {}
+    if selected_endpoint_keys is not None:
+        values = {
+            key: value
+            for key, value in values.items()
+            if key in selected_endpoint_keys
+        }
     values.update({key: str(material[key]).strip() for key in required_keys})
     return values
 
@@ -156,23 +184,53 @@ def _required_material_for_environment(
     environment: str,
     *,
     debug_local: bool = True,
+    target_name: str = "",
+    runtime_composition: Mapping[str, Any] | None = None,
 ) -> tuple[set[str], set[str]]:
-    compiled, issues = load_and_compile()
-    if issues:
-        raise RuntimeError("; ".join(issue.render() for issue in issues))
-    scope = compiled["selectedBindings"][environment]
+    if runtime_composition is None:
+        compiled, issues = load_and_compile()
+        if issues:
+            raise RuntimeError("; ".join(issue.render() for issue in issues))
+        scope = compiled["selectedBindings"][environment]
+    else:
+        target = target_name or f"{environment}-local"
+        validated = validate_provider_runtime_composition(
+            runtime_composition,
+            expected_environment=environment,
+            expected_target=target,
+        )
+        scope = packaged_runtime_bindings(validated)
     endpoint_keys: set[str] = set()
     secret_keys: set[str] = set()
     for capability, binding in scope.items():
         if not isinstance(binding, Mapping) or binding.get("state") != "enabled":
             continue
-        if debug_local and str(capability) == "identity.sms.otp":
-            # The service-owned binding remains the managed Provider truth
-            # for formal Alpha/Beta/Gamma deployments. A local target is
-            # projected to the non-promotable Debug protocol substitute.
-            secret_keys.add("INTEGRATION_SMS_TOKEN")
-            continue
+        adapter_id = str(binding.get("adapter_id") or "")
         endpoint_ref = str(binding.get("endpoint_ref") or "")
+        if str(capability) == "identity.sms.otp":
+            local_capture = adapter_id == "ext.sms.local_capture"
+            local_capture_endpoint = (
+                endpoint_ref == "local_topology:sms-provider-substitute"
+            )
+            if local_capture != local_capture_endpoint:
+                raise ValueError(
+                    "packaged SMS adapter/endpoint selection mismatch"
+                )
+            if debug_local and local_capture:
+                endpoint_envs = binding.get("endpoint_envs") or {}
+                if (
+                    not isinstance(endpoint_envs, Mapping)
+                    or endpoint_envs.get("endpoint") != "INTEGRATION_SMS_ENDPOINT"
+                ):
+                    raise ValueError(
+                        "packaged SMS local-capture endpoint material mismatch"
+                    )
+                secret_keys.update(
+                    str(value)
+                    for value in (binding.get("secret_refs") or [])
+                    if str(value) not in _PLATFORM_OWNED_KEYS
+                )
+                continue
         # Local infrastructure endpoints are resolved by the packaged
         # topology and must not be shadowed by protected Provider input.
         topology_owned = endpoint_ref.startswith(

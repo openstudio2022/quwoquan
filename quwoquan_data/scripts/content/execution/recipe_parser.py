@@ -124,6 +124,9 @@ def register_recipe_parser(
             "review-only",
             "promote-scale",
             "campaign-run",
+            "campaign-freeze",
+            "campaign-lane-run",
+            "campaign-finalize",
             "adopt-reviewed-closure",
         ],
         default="run",
@@ -131,12 +134,12 @@ def register_recipe_parser(
     parser.add_argument(
         "--submission-timeout-seconds",
         type=int,
-        help="campaign-run 等待四份 submission 的有限超时；默认取 runtime policy",
+        help="campaign-run/campaign-freeze 等待四份 submission 的有限超时；默认取 runtime policy",
     )
     parser.add_argument(
         "--campaign-lane-timeout-seconds",
         type=int,
-        help="campaign-run 每个 review/publish lane 的有限超时；默认取 runtime policy",
+        help="campaign-run/campaign-lane-run 每个 review/publish lane 的有限超时；默认取 runtime policy",
     )
     from content.execution.controller.dag import STAGE_NAMES
 

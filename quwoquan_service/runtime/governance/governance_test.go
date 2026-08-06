@@ -1,8 +1,6 @@
 package runtimegovernance
 
 import (
-	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -57,73 +55,5 @@ func TestCircuitBreaker_ClosesOnSuccess(t *testing.T) {
 
 	if !cb.Allow() {
 		t.Error("should be closed after success in half-open")
-	}
-}
-
-func TestRetry_SucceedsFirstTry(t *testing.T) {
-	called := 0
-	err := Retry(context.Background(), ResiliencePolicy{RetryMaxAttempts: 3}, func(_ context.Context) error {
-		called++
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if called != 1 {
-		t.Errorf("expected 1 call, got %d", called)
-	}
-}
-
-func TestRetry_SucceedsOnRetry(t *testing.T) {
-	called := 0
-	err := Retry(context.Background(), ResiliencePolicy{RetryMaxAttempts: 3, RetryBackoffMs: 10}, func(_ context.Context) error {
-		called++
-		if called < 3 {
-			return errors.New("transient")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if called != 3 {
-		t.Errorf("expected 3 calls, got %d", called)
-	}
-}
-
-func TestRetry_ExhaustsAttempts(t *testing.T) {
-	called := 0
-	err := Retry(context.Background(), ResiliencePolicy{RetryMaxAttempts: 2, RetryBackoffMs: 10}, func(_ context.Context) error {
-		called++
-		return errors.New("persistent")
-	})
-	if err == nil {
-		t.Fatal("expected error after retries exhausted")
-	}
-	if called != 3 { // initial + 2 retries
-		t.Errorf("expected 3 calls, got %d", called)
-	}
-}
-
-func TestRetry_RespectsContextCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := Retry(ctx, ResiliencePolicy{RetryMaxAttempts: 5, RetryBackoffMs: 100}, func(ctx context.Context) error {
-		return errors.New("fail")
-	})
-	if err == nil {
-		t.Fatal("expected error from cancelled context")
-	}
-}
-
-func TestStaticPolicyProvider(t *testing.T) {
-	p := StaticPolicyProvider{Value: ResiliencePolicy{TimeoutMs: 500, RetryMaxAttempts: 2}}
-	policy, err := p.Policy(context.Background(), "any_key")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if policy.TimeoutMs != 500 {
-		t.Errorf("timeout: got %d, want 500", policy.TimeoutMs)
 	}
 }

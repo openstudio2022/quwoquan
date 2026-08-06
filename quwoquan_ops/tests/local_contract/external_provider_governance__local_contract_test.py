@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from pathlib import Path
 import tempfile
 import unittest
+from copy import deepcopy
+from pathlib import Path
 from unittest import mock
 
 import yaml
@@ -11,11 +11,31 @@ import yaml
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.gate import verify_external_provider_governance as provider_gate
 
-
 ROOT = Path(__file__).resolve().parents[3]
 
 
 class ExternalProviderGovernanceContractTest(unittest.TestCase):
+    def test_provider_runtime_has_one_package_bound_launch_track(self) -> None:
+        sources = {
+            relative: (ROOT / relative).read_text(encoding="utf-8")
+            for relative in provider_gate.PROVIDER_RUNTIME_SOURCE_REQUIREMENTS
+        }
+        self.assertEqual(
+            provider_gate.provider_runtime_single_track_issues(sources),
+            [],
+        )
+
+        stackctl_path = "quwoquan_ops/cli/stackctl.py"
+        sources[stackctl_path] += "\nQWQ_DEBUG_SMS_SUBSTITUTE_ENABLED\n"
+        self.assertTrue(
+            any(
+                "legacy Provider runtime selector is forbidden" in issue
+                for issue in provider_gate.provider_runtime_single_track_issues(
+                    sources
+                )
+            )
+        )
+
     def test_generated_output_directory_is_not_a_service_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             services_root = Path(temporary)
@@ -333,7 +353,6 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                 "rtc-service",
                 "search-service",
                 "tag-service",
-                "travel-service",
                 "user-service",
             },
         )
@@ -416,20 +435,30 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         registry = governance.load_registry()
         self.assertEqual(issues, [])
         self.assertEqual(compiled["capabilityCount"], len(registry["capabilities"]))
-        self.assertEqual(compiled["capabilityCount"], 17)
-        self.assertEqual(compiled["providerConformanceCapabilityCount"], 14)
+        self.assertEqual(
+            compiled["providerConformanceCapabilityCount"],
+            len(compiled["providerConformanceCapabilityIds"]),
+        )
+        expected_conformance_capabilities = {
+            capability_id
+            for environment_bindings in compiled["selectedBindings"].values()
+            for capability_id, binding in environment_bindings.items()
+            if (
+                binding["state"] != "not_required"
+                and binding.get("adapter_id")
+                and binding["adapter_id"]
+                != governance.FIRST_PARTY_AUTHORITY_ADAPTER
+            )
+        }
         self.assertEqual(
             set(compiled["providerConformanceCapabilityIds"]),
+            expected_conformance_capabilities,
+        )
+        self.assertTrue(
             {
-                capability["capability_id"]
-                for capability in registry["capabilities"]
-                if capability["capability_id"]
-                not in {
-                    "chat.conversation.membership.read",
-                    "circle.membership.self.read",
-                    "integration.connector_grant.read",
-                }
-            },
+                "location.poi.search",
+                "location.route.read",
+            }.isdisjoint(compiled["providerConformanceCapabilityIds"])
         )
         self.assertEqual(compiled["adapterCount"], len(registry["adapters"]))
         self.assertTrue(

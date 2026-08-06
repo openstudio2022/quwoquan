@@ -4,6 +4,7 @@ import (
 	"context"
 	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/content-service/generated/content/post"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"strings"
@@ -51,11 +52,7 @@ func promoteSettingsPayload(payload map[string]any) map[string]any {
 func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
+		return nil, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
 	if err := requirePostOwner(post, userID, "更新内容设置"); err != nil {
 		return nil, err
@@ -81,11 +78,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 		now,
 	)
 	if err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
-			"更新内容设置失败",
-			err.Error(),
-		)
+		return nil, contentgenerated.AppErrorFromStorageWriteFailed("update post settings: " + err.Error())
 	}
 	return post, nil
 }
@@ -93,11 +86,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
+		return nil, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
 	if err := requirePostOwner(post, userID, "升级内容"); err != nil {
 		return nil, err
@@ -204,11 +193,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 		now,
 	)
 	if err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
-			"升级作品失败",
-			err.Error(),
-		)
+		return nil, contentgenerated.AppErrorFromStorageWriteFailed("promote post to work: " + err.Error())
 	}
 	return post, nil
 }
@@ -222,11 +207,7 @@ type PostDeletionReceipt struct {
 func (s *PostService) DeletePost(ctx context.Context, postID, userID string) (PostDeletionReceipt, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
-		return PostDeletionReceipt{}, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
+		return PostDeletionReceipt{}, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
 	if err := requirePostOwner(post, userID, "删除内容"); err != nil {
 		return PostDeletionReceipt{}, err
@@ -267,11 +248,7 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) (Po
 		},
 	)
 	if err != nil {
-		return PostDeletionReceipt{}, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "delete_failed"),
-			"删除内容失败",
-			err.Error(),
-		)
+		return PostDeletionReceipt{}, contentgenerated.AppErrorFromStorageWriteFailed("delete post: " + err.Error())
 	}
 	return PostDeletionReceipt{
 		PostID:   post.ID,

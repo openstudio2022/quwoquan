@@ -71,6 +71,14 @@
 - WHEN 登录用户加入或退出，或游客触发加入。
 - THEN 登录用户的状态收敛为 active 或恢复原状，游客完成登录后只续接一次原加入动作。
 
+<a id="gwt-003"></a>
+### GWT-003 成员 Remote API 身份隔离与幂等收敛
+
+- GIVEN 两个不同的已认证 actor 通过 generated client 与 production Remote 访问同一 Circle，且该 Circle 的加入策略允许当前动作。
+- WHEN 两个 actor 分别执行加入、同幂等身份重放加入、读取成员事实与退出。
+- THEN 每个 actor 只改变并读取自己的 canonical CircleMembership，重放不新增成员或重复推进版本，退出后状态按服务端事实收敛。
+- AND actor 缺失、身份错配、环境配置缺失或依赖不可达时 fail closed，不共享测试身份、不直写存储且不返回伪成功成员状态。
+
 ## 6. 依赖
 
 - 前置要求：[`activity-member-governance`](../spec.md) 的范围、要求与 SIT。

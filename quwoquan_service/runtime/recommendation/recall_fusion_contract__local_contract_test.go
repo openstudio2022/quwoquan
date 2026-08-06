@@ -6,7 +6,7 @@ import (
 	recpolicy "quwoquan_service/runtime/recpolicy"
 )
 
-// W9 轻量融合契约（B10）：源配额截断防单源霸屏、boost 源间校准、
+// W9 轻量融合契约：源配额截断防单源霸屏、boost 源间校准、
 // disabled 零行为（可一键回滚）。
 func TestApplySourceQuotaCapsPerSourceShare(t *testing.T) {
 	candidates := make([]ContentCandidate, 0, 30)

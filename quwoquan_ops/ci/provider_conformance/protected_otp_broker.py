@@ -1,10 +1,12 @@
 """Ephemeral host/device bridge for one-time nonprod OTP Patrol input."""
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 import re
 import secrets
+import ssl
 import threading
 import time
 import urllib.error
@@ -12,7 +14,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
+from quwoquan_ops.cli.lib.local_provider_substitute_tls import (
+    prepare_local_provider_substitute_tls,
+)
 from quwoquan_ops.cli.lib.local_sms_provider_debug import ProtectedDebugOTP
 
 
@@ -23,11 +29,15 @@ OTPReader = Callable[..., ProtectedDebugOTP]
 class ProtectedOTPBrokerBinding:
     url: str
     token: str
+    ca_digest: str
+    certificate_digest: str
 
     def __repr__(self) -> str:
         return (
             "ProtectedOTPBrokerBinding("
-            f"url={self.url!r}, token=<redacted>)"
+            f"url={self.url!r}, token=<redacted>, "
+            f"ca_digest={self.ca_digest!r}, "
+            f"certificate_digest={self.certificate_digest!r})"
         )
 
 
@@ -74,7 +84,28 @@ class ProtectedOTPBroker:
             def log_message(self, _format: str, *args: object) -> None:
                 del args
 
+        tls = prepare_local_provider_substitute_tls(
+            self._target_name,
+            role="protected-otp-broker",
+        )
+        ca_digest = _sha256_file(tls.ca_path)
+        certificate_digest = _sha256_file(tls.certificate_path)
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        try:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_3
+            context.load_cert_chain(
+                certfile=str(tls.certificate_path),
+                keyfile=str(tls.private_key_path),
+            )
+            self._server.socket = context.wrap_socket(
+                self._server.socket,
+                server_side=True,
+            )
+        except (OSError, ssl.SSLError):
+            self._server.server_close()
+            self._server = None
+            raise
         self._thread = threading.Thread(
             target=self._server.serve_forever,
             name="qwq-protected-otp-broker",
@@ -83,8 +114,10 @@ class ProtectedOTPBroker:
         self._thread.start()
         port = int(self._server.server_address[1])
         return ProtectedOTPBrokerBinding(
-            url=f"http://127.0.0.1:{port}/v1/otp",
+            url=f"https://127.0.0.1:{port}/v1/otp",
             token=self._token,
+            ca_digest=ca_digest,
+            certificate_digest=certificate_digest,
         )
 
     def close(self) -> None:
@@ -163,3 +196,7 @@ class ProtectedOTPBroker:
         handler.send_header("Content-Length", str(len(body)))
         handler.end_headers()
         handler.wfile.write(body)
+
+
+def _sha256_file(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()

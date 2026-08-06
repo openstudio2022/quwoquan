@@ -21,41 +21,41 @@ var (
 // AppErrorFromLearningFactIdentityConflict returns *AppError for ASSISTANT.USER.learning_fact_identity_conflict (user_message from errors.yaml).
 func AppErrorFromLearningFactIdentityConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.learning_fact_identity_conflict")
-	return rterr.NewAppError(code, "重复反馈与已确认内容不一致", debugMessage).WithMetadata("learning_fact_identity_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复反馈与已确认内容不一致", debugMessage).WithMetadata("learning_fact_identity_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromLearningFactInvalid returns *AppError for ASSISTANT.USER.learning_fact_invalid (user_message from errors.yaml).
 func AppErrorFromLearningFactInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.learning_fact_invalid")
-	return rterr.NewAppError(code, "助手反馈内容不合法", debugMessage).WithMetadata("learning_fact_invalid", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "助手反馈内容不合法", debugMessage).WithMetadata("learning_fact_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLearningFactOwnerMismatch returns *AppError for ASSISTANT.USER.learning_fact_owner_mismatch (user_message from errors.yaml).
 func AppErrorFromLearningFactOwnerMismatch(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.learning_fact_owner_mismatch")
-	return rterr.NewAppError(code, "无法提交不属于当前用户的助手反馈", debugMessage).WithMetadata("learning_fact_owner_mismatch", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "无法提交不属于当前用户的助手反馈", debugMessage).WithMetadata("learning_fact_owner_mismatch", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLearningFactRunNotFound returns *AppError for ASSISTANT.USER.learning_fact_run_not_found (user_message from errors.yaml).
 func AppErrorFromLearningFactRunNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.learning_fact_run_not_found")
-	return rterr.NewAppError(code, "对应的助手运行不存在", debugMessage).WithMetadata("learning_fact_run_not_found", 404).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "对应的助手运行不存在", debugMessage).WithMetadata("learning_fact_run_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromLearningFactSinkUnavailable returns *AppError for ASSISTANT.SYSTEM.learning_fact_sink_unavailable (user_message from errors.yaml).
 func AppErrorFromLearningFactSinkUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.learning_fact_sink_unavailable")
-	return rterr.NewAppError(code, "助手反馈暂时无法保存，请稍后重试", debugMessage).WithMetadata("learning_fact_sink_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手反馈暂时无法保存，请稍后重试", debugMessage).WithMetadata("learning_fact_sink_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromLearningFactUnauthorized returns *AppError for ASSISTANT.USER.learning_fact_unauthorized (user_message from errors.yaml).
 func AppErrorFromLearningFactUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.learning_fact_unauthorized")
-	return rterr.NewAppError(code, "请登录后再提交助手反馈", debugMessage).WithMetadata("learning_fact_unauthorized", 401).WithRecovery("reauth", 0)
+	return rterr.NewAppError(code, "请登录后再提交助手反馈", debugMessage).WithMetadata("learning_fact_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLearningOpsUnavailable returns *AppError for ASSISTANT.SYSTEM.learning_ops_unavailable (user_message from errors.yaml).
 func AppErrorFromLearningOpsUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.learning_ops_unavailable")
-	return rterr.NewAppError(code, "助手学习摘要暂时无法读取，请稍后重试", debugMessage).WithMetadata("learning_ops_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手学习摘要暂时无法读取，请稍后重试", debugMessage).WithMetadata("learning_ops_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

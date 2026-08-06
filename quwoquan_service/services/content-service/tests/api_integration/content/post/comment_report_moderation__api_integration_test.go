@@ -7,7 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/commandmeta"
-	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
+	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
 	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
@@ -83,7 +83,9 @@ func TestResolvedCommentReportHidesMongoCommentExactlyOnce(t *testing.T) {
 	relay := reportapp.NewOutboxRelay(
 		reportStore,
 		reportStore,
-		moderationapp.NewCommentReportResolutionProjector(testCommentService),
+		commentapp.NewReportResolutionPublisher(
+			commentapp.NewCommentReportResolutionHandler(testCommentService),
+		),
 		"api-integration-comment-report-moderation",
 	)
 	drained, err := relay.Drain(context.Background(), 100)

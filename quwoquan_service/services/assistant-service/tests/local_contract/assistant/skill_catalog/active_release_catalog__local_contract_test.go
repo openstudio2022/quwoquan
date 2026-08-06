@@ -169,6 +169,9 @@ func TestCatalogReadsActiveImmutablePackageOnEveryRequest(t *testing.T) {
 	if !hasSkill(items, "travel_companion") {
 		t.Fatalf("active package catalog misses product-complete travel_companion")
 	}
+	if !hasSkill(items, "gathering_coordinator") {
+		t.Fatalf("active package catalog misses product-complete gathering_coordinator")
+	}
 	var travel catalogmodel.Item
 	for _, item := range items {
 		if item.SkillID == "travel_companion" {
@@ -189,7 +192,6 @@ func TestCatalogReadsActiveImmutablePackageOnEveryRequest(t *testing.T) {
 		len(travel.TargetAudiences) != 6 ||
 		!hasSemanticLabel(travel.ConsentScopeLabels, "assistant.memory.preferences.read") ||
 		!hasSemanticLabel(travel.ConsentScopeLabels, "assistant.learning.feedback_context.read") ||
-		!hasSemanticLabel(travel.ConsentScopeLabels, "travel.trip.read") ||
 		len(travel.Examples) != 3 ||
 		len(travel.SurfaceKinds) != 3 {
 		t.Fatalf("active package catalog metadata is incomplete: %+v", travel)
@@ -200,7 +202,7 @@ func TestCatalogReadsActiveImmutablePackageOnEveryRequest(t *testing.T) {
 			t.Fatalf("active package example is not digest-qualified: %+v", example)
 		}
 	}
-	if len(items) != 1 {
+	if len(items) != 2 {
 		t.Fatalf("only product-complete listed Skills may enter catalog: ids=%v", catalogSkillIDs(items))
 	}
 }

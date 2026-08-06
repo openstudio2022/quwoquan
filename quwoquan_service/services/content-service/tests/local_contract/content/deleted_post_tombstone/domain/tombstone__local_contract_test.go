@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
 package domain_test
 
 import (

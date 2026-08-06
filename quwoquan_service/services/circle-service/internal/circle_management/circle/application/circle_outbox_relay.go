@@ -66,23 +66,48 @@ func (relay *CircleOutboxRelay) Run(ctx context.Context, interval time.Duration)
 	if interval <= 0 {
 		interval = 250 * time.Millisecond
 	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	delay := time.Duration(0)
+	consecutiveFailures := 0
 	for {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
 		if _, err := relay.Drain(ctx, 100); err != nil {
 			relay.recordFailure(err)
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			consecutiveFailures++
+			delay = circleOutboxRetryDelay(interval, consecutiveFailures)
 		} else {
 			relay.recordSuccess()
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
+			consecutiveFailures = 0
+			delay = interval
 		}
 	}
+}
+
+func circleOutboxRetryDelay(base time.Duration, attempt int) time.Duration {
+	if base <= 0 {
+		base = 250 * time.Millisecond
+	}
+	if attempt < 1 {
+		attempt = 1
+	}
+	if attempt > 7 {
+		attempt = 7
+	}
+	delay := base * time.Duration(1<<(attempt-1))
+	if delay > 30*time.Second {
+		return 30 * time.Second
+	}
+	return delay
 }
 
 func (relay *CircleOutboxRelay) Healthy(maxStaleness time.Duration) error {

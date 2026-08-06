@@ -18,11 +18,11 @@ var (
 // AppErrorFromOriginalAccessDenied returns *AppError for CONTENT.USER.original_access_denied (user_message from errors.yaml).
 func AppErrorFromOriginalAccessDenied(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.original_access_denied")
-	return rterr.NewAppError(code, "当前内容不支持查看或保存原图", debugMessage).WithMetadata("original_access_denied", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "当前内容不支持查看或保存原图", debugMessage).WithMetadata("original_access_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromOriginalAccessRateLimited returns *AppError for CONTENT.USER.original_access_rate_limited (user_message from errors.yaml).
 func AppErrorFromOriginalAccessRateLimited(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.original_access_rate_limited")
-	return rterr.NewAppError(code, "原图访问过于频繁，请稍后再试", debugMessage).WithMetadata("original_access_rate_limited", 429).WithRecovery("retry", 60)
+	return rterr.NewAppError(code, "原图访问过于频繁，请稍后再试", debugMessage).WithMetadata("original_access_rate_limited", 429).WithRecoveryDirective("retry", "snackbar", 60)
 }

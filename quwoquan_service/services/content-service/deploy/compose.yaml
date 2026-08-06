@@ -59,8 +59,6 @@ services:
         condition: service_healthy
       recommendation-service:
         condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
     ports:
       - "${QWQ_COMPOSE_CONTENT_PORT:-19220}:18080"
     volumes:

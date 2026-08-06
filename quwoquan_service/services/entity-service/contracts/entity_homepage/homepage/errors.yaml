@@ -1,108 +1,106 @@
-aggregate: Homepage
-domain: ENTITY
 description: 'entity 域共享主页错误码。格式：MODULE.KIND.REASON。
 
   '
 errors:
 - code: ENTITY.USER.invalid_argument
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [entity.homepage_search_item_view.SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
+    operations: [SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, EvaluateEntityHomepageGatheringHostAuthority, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
   user_message:
     zh: 请求参数有误，请检查后重试
     en: Request parameters are invalid
 - code: ENTITY.USER.homepage_not_found
-  kind: USER
   reason: not_found
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.CreateHomepageStatusReport]
+    operations: [PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, EvaluateEntityHomepageGatheringHostAuthority, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.CreateHomepageStatusReport]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: homepageNotFound
   go_const: ErrHomepageNotFound
   user_message:
     zh: 主页不存在或已下线
     en: Homepage not found or offline
 - code: ENTITY.USER.homepage_offline
-  kind: USER
   reason: gone
   http_status: 410
   emitted_by:
   - surface: http
     operations: [GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_review.CreateHomepageReview]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: homepageOffline
   go_const: ErrHomepageOffline
   user_message:
     zh: 主页已下线，仅保留记录信息
     en: Homepage is offline and kept for history only
 - code: ENTITY.USER.invalid_homepage_type
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [IntakeHomepageCandidate, SuggestHomepageCandidate]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidHomepageType
   go_const: ErrInvalidHomepageType
   user_message:
     zh: 不支持的主页类型
     en: Unsupported homepage type
 - code: ENTITY.USER.permission_denied
-  kind: USER
   reason: forbidden
   http_status: 403
   emitted_by:
   - surface: http
-    operations: [ListHomepageCandidates, IntakeHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
+    operations: [ListHomepageCandidates, IntakeHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, EvaluateEntityHomepageGatheringHostAuthority, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: permissionDenied
   go_const: ErrPermissionDenied
   user_message:
     zh: 当前无权限执行此操作
     en: You are not allowed to do this
 - code: ENTITY.USER.version_conflict
-  kind: USER
   reason: version_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_status_report.ReviewHomepageStatusReport]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: versionConflict
   go_const: ErrVersionConflict
   user_message:
     zh: 内容已变更，请刷新后重试
     en: Content changed, refresh and retry
 - code: ENTITY.USER.idempotency_conflict
-  kind: USER
   reason: idempotency_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
   user_message:
     zh: 请求重复提交，请稍后重试
     en: Duplicate request, please retry later
 - code: ENTITY.SYSTEM.internal_error
-  kind: SYSTEM
   reason: internal_error
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [entity.homepage_search_item_view.SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
+    operations: [SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, EvaluateEntityHomepageGatheringHostAuthority, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: internalError
   go_const: ErrInternalError
   user_message:

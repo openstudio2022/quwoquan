@@ -1,9 +1,17 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// readiness_case: list-connector-connections-api
+// readiness_case: get-connector-connection-api
+// readiness_case: create-connector-connection-api
+// readiness_case: revoke-connector-connection-api
+// readiness_case: resolve-connector-capability-grant-api
 package connector_connection_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -11,11 +19,14 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/internal/platform/testinfra"
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	authorizationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/application"
 	authorizationmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/domain/model"
 	connectorgrant "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/grantreceipt"
 	authorizationpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/persistence"
 	authorizationreference "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/reference"
+	connectionhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/adapters/inbound/http"
 	connectionapp "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/application"
 	connectionmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/model"
 	connectionpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/infrastructure/persistence"
@@ -132,15 +143,37 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 	commands := connectionapp.NewCommandFacade(
 		connectionStore, definitionStore, grantVerifier, func() time.Time { return now },
 	)
+	queries := connectionapp.NewCapabilityQueryFacade(
+		connectionStore, definitionStore, func() time.Time { return now },
+	)
+	mux := http.NewServeMux()
+	connectionhttp.NewHandler(commands, queries).RegisterRoutes(mux)
 	create := connectionmodel.CreateInput{
 		AccountID: "account-1", ConnectorID: "system_calendar",
 		RequestedCapabilities: []string{"calendar.event.create"},
 		GrantReceiptRef:       verified.GrantReceiptRef, IdempotencyKey: "connect-calendar",
 	}
-	created, err := commands.Create(startupCtx, create)
-	if err != nil || created.Replayed || created.Connection.Revision != 1 {
-		t.Fatalf("create failed: result=%+v err=%v", created, err)
+	status, createBody := performConnectorConnectionRequest(
+		t,
+		mux,
+		http.MethodPost,
+		"/integrations/connections",
+		map[string]any{
+			"connectorId":           create.ConnectorID,
+			"requestedCapabilities": create.RequestedCapabilities,
+			"grantReceiptRef":       create.GrantReceiptRef,
+		},
+		true,
+		create.IdempotencyKey,
+	)
+	if status != http.StatusOK {
+		t.Fatalf("create route status=%d body=%#v", status, createBody)
 	}
+	connections, err := connectionStore.List(startupCtx, "account-1", 10)
+	if err != nil || len(connections) != 1 || connections[0].Revision != 1 {
+		t.Fatalf("create route did not persist one connection: connections=%+v err=%v", connections, err)
+	}
+	created := connectionmodel.MutationResult{Connection: connections[0]}
 	authorizationAfterCreate, err := authorizationStore.Get(
 		startupCtx, "account-1", started.Authorization.AuthorizationID,
 	)
@@ -158,13 +191,57 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 	if strings.Contains(string(encoded), "protected://") || strings.Contains(string(encoded), "receiptDigest") {
 		t.Fatalf("connection response leaked protected material: %s", encoded)
 	}
-	revoked, err := commands.Revoke(startupCtx, connectionmodel.RevokeInput{
-		AccountID: "account-1", ConnectionID: created.Connection.ConnectionID,
-		ExpectedRevision: 1, IdempotencyKey: "revoke-calendar",
-	})
-	if err != nil || revoked.Connection.Status != connectionmodel.StatusRevoked ||
-		revoked.Connection.Revision != 2 || revoked.Connection.CredentialRef != "" {
-		t.Fatalf("revoke failed closed incorrectly: result=%+v err=%v", revoked, err)
+	status, listBody := performConnectorConnectionRequest(
+		t, mux, http.MethodGet, "/integrations/connections?limit=10", nil, true, "",
+	)
+	items, ok := listBody["items"].([]any)
+	if status != http.StatusOK || !ok || len(items) != 1 {
+		t.Fatalf("list route status=%d body=%#v", status, listBody)
+	}
+	status, getBody := performConnectorConnectionRequest(
+		t, mux, http.MethodGet,
+		"/integrations/connections/"+created.Connection.ConnectionID,
+		nil, true, "",
+	)
+	if status != http.StatusOK || getBody["connectionId"] != created.Connection.ConnectionID {
+		t.Fatalf("get route status=%d body=%#v", status, getBody)
+	}
+	status, resolveBody := performConnectorConnectionRequest(
+		t,
+		mux,
+		http.MethodPost,
+		"/internal/integrations/connector-capability-grants:resolve",
+		map[string]any{
+			"accountId":      "account-1",
+			"capabilityKey":  "calendar.event.create",
+			"surfaceKind":    "personal",
+			"connectionRefs": []string{created.Connection.ConnectionID},
+		},
+		false,
+		"",
+	)
+	if status != http.StatusOK || resolveBody["allowed"] != true ||
+		resolveBody["connectionId"] != created.Connection.ConnectionID {
+		t.Fatalf("resolve route status=%d body=%#v", status, resolveBody)
+	}
+	status, revokeBody := performConnectorConnectionRequest(
+		t,
+		mux,
+		http.MethodPost,
+		"/integrations/connections/"+created.Connection.ConnectionID+"/revoke",
+		map[string]any{"expectedRevision": 1},
+		true,
+		"revoke-calendar",
+	)
+	if status != http.StatusOK {
+		t.Fatalf("revoke route status=%d body=%#v", status, revokeBody)
+	}
+	revokedConnection, err := connectionStore.Get(
+		startupCtx, "account-1", created.Connection.ConnectionID,
+	)
+	if err != nil || revokedConnection.Status != connectionmodel.StatusRevoked ||
+		revokedConnection.Revision != 2 || revokedConnection.CredentialRef != "" {
+		t.Fatalf("revoke failed closed incorrectly: connection=%+v err=%v", revokedConnection, err)
 	}
 	authorizationAfterRevoke, err := authorizationStore.Get(
 		startupCtx, "account-1", started.Authorization.AuthorizationID,
@@ -184,4 +261,54 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 			t.Fatalf("%s count=%d want=%d err=%v", collection, count, want, countErr)
 		}
 	}
+	var auditEvents []bson.M
+	cursor, err := runtime.Database.Collection("connector_connection_outbox").Find(
+		startupCtx,
+		bson.M{},
+	)
+	if err != nil || cursor.All(startupCtx, &auditEvents) != nil || len(auditEvents) != 2 {
+		t.Fatalf("connection audit events=%#v err=%v", auditEvents, err)
+	}
+	for _, event := range auditEvents {
+		if _, stale := event["publishedAt"]; stale {
+			t.Fatalf("self-retained connection audit event has delivery checkpoint: %#v", event)
+		}
+	}
+}
+
+func performConnectorConnectionRequest(
+	t *testing.T,
+	handler http.Handler,
+	method string,
+	path string,
+	body any,
+	authenticated bool,
+	idempotencyKey string,
+) (int, map[string]any) {
+	t.Helper()
+	var payload []byte
+	if body != nil {
+		var err error
+		payload, err = json.Marshal(body)
+		if err != nil {
+			t.Fatalf("encode connector connection request: %v", err)
+		}
+	}
+	request := httptest.NewRequest(method, path, bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	if idempotencyKey != "" {
+		request.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	if authenticated {
+		request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+			Actor: operation.ActorContext{AccountID: "account-1"},
+		}))
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	decoded := map[string]any{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode connector connection response status=%d body=%q: %v", recorder.Code, recorder.Body.String(), err)
+	}
+	return recorder.Code, decoded
 }

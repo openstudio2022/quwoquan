@@ -242,15 +242,42 @@ func (s *MongoNotificationDeliveryJobStore) CreateNotification(
 	}
 
 	var created reliabletask.NotificationOutboxRecord
-	err = s.RunInTransaction(ctx, func(txCtx context.Context) error {
+	// commit 是本对象唯一的提交体：任务状态与 NotificationDeliveryJobCreated 事件行
+	// 共用同一个事务句柄，提交成功即事件必然可投递，任一步失败则两者一起回滚。
+	commit := func(txCtx context.Context) (any, error) {
 		var createErr error
 		created, createErr = s.Store.CreateNotification(txCtx, record)
 		if createErr != nil {
-			return createErr
+			return nil, createErr
 		}
-		return s.appendEvent(txCtx, created, "NotificationDeliveryJobCreated", created.CreatedAt)
-	})
-	return created, err
+		event := newDeliveryJobEvent(created, "NotificationDeliveryJobCreated", created.CreatedAt)
+		if _, appendErr := s.outbox.UpdateOne(
+			txCtx,
+			bson.M{"_id": event.ID},
+			bson.M{"$setOnInsert": event},
+			options.UpdateOne().SetUpsert(true),
+		); appendErr != nil {
+			return nil, appendErr
+		}
+		return nil, nil
+	}
+	// notification 聚合在自己的提交事务里派发投递任务，此时复用外层句柄，
+	// 避免把一次提交拆成两个互不回滚的事务。
+	if mongo.SessionFromContext(ctx) != nil {
+		if _, err := commit(ctx); err != nil {
+			return reliabletask.NotificationOutboxRecord{}, err
+		}
+		return created, nil
+	}
+	session, err := s.db.Client().StartSession()
+	if err != nil {
+		return reliabletask.NotificationOutboxRecord{}, err
+	}
+	defer session.EndSession(ctx)
+	if _, err := session.WithTransaction(ctx, commit); err != nil {
+		return reliabletask.NotificationOutboxRecord{}, err
+	}
+	return created, nil
 }
 
 func (s *MongoNotificationDeliveryJobStore) ClaimNotification(
@@ -493,30 +520,35 @@ func (s *MongoNotificationDeliveryJobStore) RecoverDeliveryJob(
 	return result, err
 }
 
+// newDeliveryJobEvent 是发件箱事件行的唯一构形处：eventId 由 aggregate id、version
+// 与事件名派生，重放同一状态版本只会命中同一个 _id。
+func newDeliveryJobEvent(
+	job reliabletask.NotificationOutboxRecord,
+	eventType string,
+	occurredAt time.Time,
+) notificationDeliveryJobEventDocument {
+	return notificationDeliveryJobEventDocument{
+		ID:               fmt.Sprintf("%s:%020d:%s", job.NotificationID, job.Version, eventType),
+		AggregateID:      job.NotificationID,
+		AggregateVersion: job.Version,
+		EventType:        eventType,
+		Payload:          map[string]string{"id": job.NotificationID},
+		Status:           reliabletask.TaskOutboxStatusPending,
+		CreatedAt:        occurredAt.UTC(),
+	}
+}
+
 func (s *MongoNotificationDeliveryJobStore) appendEvent(
 	ctx context.Context,
 	job reliabletask.NotificationOutboxRecord,
 	eventType string,
 	occurredAt time.Time,
 ) error {
-	eventID := fmt.Sprintf("%s:%020d:%s", job.NotificationID, job.Version, eventType)
+	event := newDeliveryJobEvent(job, eventType, occurredAt)
 	_, err := s.outbox.UpdateOne(
 		ctx,
-		bson.M{"_id": eventID},
-		bson.M{"$setOnInsert": notificationDeliveryJobEventDocument{
-			ID:               eventID,
-			AggregateID:      job.NotificationID,
-			AggregateVersion: job.Version,
-			EventType:        eventType,
-			Payload: map[string]string{
-				"jobId":          job.NotificationID,
-				"notificationId": job.SubjectNotificationID,
-				"channel":        job.Channel,
-				"status":         job.Status,
-			},
-			Status:    reliabletask.TaskOutboxStatusPending,
-			CreatedAt: occurredAt.UTC(),
-		}},
+		bson.M{"_id": event.ID},
+		bson.M{"$setOnInsert": event},
 		options.UpdateOne().SetUpsert(true),
 	)
 	return err

@@ -70,7 +70,6 @@
       "then": {
         "required": ["semanticPreflightReceipt"],
         "properties": {
-          "retryOf": {"type": "string", "minLength": 1},
           "modelBinding": {
             "properties": {
               "provider": {"const": "cursor_sdk"},

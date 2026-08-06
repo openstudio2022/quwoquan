@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
-	"quwoquan_service/runtime/commandmeta"
 	moderationports "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/ports"
 )
 
 const (
-	postModerationDecisionEventType = "content.post_moderation_case.decided"
+	postModerationDecisionEventType = "content.post_moderation_case.PostModerationCaseDecided"
 	postModerationCASMaxAttempts    = 3
 )
 
@@ -167,19 +167,19 @@ func isPostVersionConflict(err error) bool {
 		appError.Code.String() == contentgenerated.ErrVersionConflict.Error()
 }
 
-// PostModerationDecisionConsumer 把已提交的 PostModerationCase decided 事实
+// PostModerationDecisionHandler 把已提交的 PostModerationCase decided 事实
 // 翻译为 Post 对象命令；其它 case 事实是该 consumer 的确定性 no-op。
-type PostModerationDecisionConsumer struct {
+type PostModerationDecisionHandler struct {
 	commands PostModerationDecisionCommandFacet
 }
 
-func NewPostModerationDecisionConsumer(
+func NewPostModerationDecisionHandler(
 	commands PostModerationDecisionCommandFacet,
-) *PostModerationDecisionConsumer {
+) *PostModerationDecisionHandler {
 	if commands == nil {
-		panic("Post moderation decision consumer requires command facet")
+		panic("Post moderation decision handler requires command facet")
 	}
-	return &PostModerationDecisionConsumer{commands: commands}
+	return &PostModerationDecisionHandler{commands: commands}
 }
 
 type postModerationDecidedFact struct {
@@ -193,12 +193,14 @@ type postModerationDecidedFact struct {
 	DecidedAt     time.Time `json:"decidedAt"`
 }
 
-func (c *PostModerationDecisionConsumer) Publish(
+// ApplyPostModerationDecision is the canonical content.post lifecycle method.
+// It validates the producer identity before entering the Post command facet.
+func (h *PostModerationDecisionHandler) ApplyPostModerationDecision(
 	ctx context.Context,
 	event moderationports.OutboxEvent,
 ) error {
-	if c == nil || c.commands == nil {
-		return fmt.Errorf("Post moderation decision consumer is not configured")
+	if h == nil || h.commands == nil {
+		return fmt.Errorf("Post moderation decision handler is not configured")
 	}
 	if event.EventType != postModerationDecisionEventType {
 		return nil
@@ -211,7 +213,7 @@ func (c *PostModerationDecisionConsumer) Publish(
 		fact.Version != event.AggregateVersion {
 		return fmt.Errorf("Post moderation decision %q aggregate identity mismatch", event.EventID)
 	}
-	_, err := c.commands.ApplyPostModerationDecision(ctx, ApplyPostModerationDecisionCommand{
+	_, err := h.commands.ApplyPostModerationDecision(ctx, ApplyPostModerationDecisionCommand{
 		EventID:       event.EventID,
 		CaseID:        fact.ID,
 		CaseVersion:   fact.Version,
@@ -228,4 +230,11 @@ func (c *PostModerationDecisionConsumer) Publish(
 	return nil
 }
 
-var _ moderationports.OutboxPublisher = (*PostModerationDecisionConsumer)(nil)
+func (h *PostModerationDecisionHandler) Publish(
+	ctx context.Context,
+	event moderationports.OutboxEvent,
+) error {
+	return h.ApplyPostModerationDecision(ctx, event)
+}
+
+var _ moderationports.OutboxPublisher = (*PostModerationDecisionHandler)(nil)

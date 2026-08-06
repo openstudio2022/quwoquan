@@ -53,17 +53,22 @@ type DurableMessageTransport interface {
 	runtimemessaging.DurableDeliveryTransport
 }
 
+type GatheringInvitationEventHandler interface {
+	Handle(context.Context, application.InteractionStreamEvent) error
+}
+
 type InteractionNotificationConsumer struct {
-	transport   DurableMessageTransport
-	facade      *application.AppMessageCommandFacade
-	failures    InteractionFailureStore
-	consumer    string
-	streams     []string
-	minIdle     time.Duration
-	logger      *slog.Logger
-	mu          sync.RWMutex
-	lastSuccess time.Time
-	lastFailure error
+	transport            DurableMessageTransport
+	facade               *application.AppMessageCommandFacade
+	gatheringInvitations GatheringInvitationEventHandler
+	failures             InteractionFailureStore
+	consumer             string
+	streams              []string
+	minIdle              time.Duration
+	logger               *slog.Logger
+	mu                   sync.RWMutex
+	lastSuccess          time.Time
+	lastFailure          error
 }
 
 func NewInteractionNotificationConsumer(
@@ -72,6 +77,7 @@ func NewInteractionNotificationConsumer(
 	failures InteractionFailureStore,
 	consumer string,
 	logger *slog.Logger,
+	gatheringInvitations ...GatheringInvitationEventHandler,
 ) (*InteractionNotificationConsumer, error) {
 	if transport == nil || facade == nil || failures == nil {
 		return nil, fmt.Errorf(
@@ -81,11 +87,14 @@ func NewInteractionNotificationConsumer(
 	if logger == nil {
 		logger = slog.Default()
 	}
+	if len(gatheringInvitations) > 1 {
+		return nil, fmt.Errorf("only one Gathering invitation handler is allowed")
+	}
 	consumer = strings.TrimSpace(consumer)
 	if consumer == "" {
 		consumer = "notification-interaction-projector"
 	}
-	return &InteractionNotificationConsumer{
+	result := &InteractionNotificationConsumer{
 		transport: transport,
 		facade:    facade,
 		failures:  failures,
@@ -93,7 +102,11 @@ func NewInteractionNotificationConsumer(
 		streams:   append([]string(nil), application.InteractionNotificationStreams...),
 		minIdle:   interactionDefaultMinIdleTime,
 		logger:    logger,
-	}, nil
+	}
+	if len(gatheringInvitations) == 1 {
+		result.gatheringInvitations = gatheringInvitations[0]
+	}
+	return result, nil
 }
 
 func (c *InteractionNotificationConsumer) EnsureGroups(ctx context.Context) error {
@@ -232,17 +245,26 @@ func (c *InteractionNotificationConsumer) processMessage(
 	event, err := normalizeInteractionMessage(stream, message)
 	errorClass := "invalid_event"
 	if err == nil {
-		var commands []*application.CreateAppMessageCommand
-		commands, err = application.ProjectInteractionNotification(event)
 		errorClass = "projection_failed"
-		for _, command := range commands {
-			if err != nil {
-				break
+		if event.EventType == "GatheringInvitationChanged" ||
+			event.EventType == "GatheringCancelled" {
+			if c.gatheringInvitations == nil {
+				err = fmt.Errorf("Gathering invitation projection is not configured")
+			} else {
+				err = c.gatheringInvitations.Handle(ctx, event)
 			}
-			if command == nil {
-				continue
+		} else {
+			var commands []*application.CreateAppMessageCommand
+			commands, err = (application.InteractionNotificationProjection{}).Project(event)
+			for _, command := range commands {
+				if err != nil {
+					break
+				}
+				if command == nil {
+					continue
+				}
+				_, err = c.facade.Create(ctx, *command)
 			}
-			_, err = c.facade.Create(ctx, *command)
 		}
 	}
 	if err != nil {

@@ -27,6 +27,9 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: none
+  pagination:
+    default_items: 50
+    maximum_items: 50
   error_codes:
   - CHAT.USER.unauthorized
   - CHAT.SYSTEM.internal_error
@@ -60,39 +63,8 @@ api_routes:
     visibility: private
   request_entity: ChatListInboxQuery
   request_body_kind: none
-runtime_entrypoints:
-- name: ProjectChatInbox
-  kind: projector
-  phase: event_projection
-  source_events:
-  - chat.ConversationCreated
-  - chat.ConversationUpdated
-  - chat.ConversationDissolved
-  - chat.MessageSent
-  - chat.ConversationUserSettingsChanged
-  - chat.ConversationReadWatermarkAdvanced
-  checkpoint: chat_outbox_sequence
-  rebuild: replay_chat_authoritative_outbox
-  tombstone: hide_conversation_and_retain_checkpoint
-  idempotency: aggregate_version
-  application:
-    kind: command
-    facet: ChatInboxViewProjector
-    method: apply
-    object_owner: ChatInboxView
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: chat-service API
-      data_source: fields.yaml
-      scenarios:
-      - name: inbox_list
-        route: GET /chat/inbox
-        assertions:
-        - status_200
-        - items_match_schema
-        - sorted_by_pinned_then_last_message_time_then_conversation_id
-        - unread_and_mention_counts_present
+  test_strategy:
     service_side:
       description: 使用真实 MongoDB 验证物化分页、per-source checkpoint、rebuild 与 tombstone；禁止 mock store 代替 api_integration。
       real_engines:
@@ -105,3 +77,44 @@ contract_test:
         - pinned rows sort first
         - opaque cursor does not duplicate or skip rows
         - tombstone hides content and retains source checkpoints
+readiness_cases:
+- case_id: list-inbox-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListInbox}
+  runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/chat_inbox_view/projector_lifecycle__contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-inbox-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListInbox}
+  runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/chat_inbox_view/mongo_store_and_http__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: project-chat-inbox-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: chat.chat_inbox_view}
+  runner_source_path: quwoquan_service/services/chat-service/tests/local_contract/chat/chat_inbox_view/projector_lifecycle__contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: project-chat-inbox-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: chat.chat_inbox_view}
+  runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/chat_inbox_view/mongo_store_and_http__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: chat_inbox_view_list_inbox_app_local
+  spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListInbox}
+  runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

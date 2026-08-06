@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+// readiness_case: list-homepage-claim-requests-local
+// readiness_case: create-homepage-claim-request-local
+// readiness_case: review-homepage-claim-request-local
 package local_contract
 
 import (

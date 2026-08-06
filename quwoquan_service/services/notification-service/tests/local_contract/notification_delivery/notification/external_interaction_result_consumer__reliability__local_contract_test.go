@@ -14,7 +14,7 @@ import (
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 type externalResultProjectionFake struct {

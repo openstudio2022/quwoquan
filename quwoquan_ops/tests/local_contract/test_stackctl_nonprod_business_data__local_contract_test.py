@@ -223,6 +223,11 @@ class StackctlNonprodBusinessDataContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "env_runs_root", return_value=root),
                 mock.patch.object(
                     stackctl,
+                    "active_deployment_candidate",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    stackctl,
                     "_candidate_workspace_report",
                     return_value={
                         "status": "current",

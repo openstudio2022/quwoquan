@@ -23,47 +23,47 @@ var (
 // AppErrorFromPersonaNotFound returns *AppError for USER.PERSONA.not_found (user_message from errors.yaml).
 func AppErrorFromPersonaNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPersonaNotFound.Error()))
-	return rerrors.NewAppError(code, "Persona不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "Persona不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLastPersona returns *AppError for USER.PERSONA.last_persona (user_message from errors.yaml).
 func AppErrorFromLastPersona(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLastPersona.Error()))
-	return rerrors.NewAppError(code, "无法删除，这是您的最后一个账号", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "无法删除，这是您的最后一个账号", debugMessage).WithMetadata("constraint_violation", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPersonaQuotaReached returns *AppError for USER.PERSONA.quota_reached (user_message from errors.yaml).
 func AppErrorFromPersonaQuotaReached(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPersonaQuotaReached.Error()))
-	return rerrors.NewAppError(code, "分身数量已达上限，请先整理现有分身", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "分身数量已达上限，请先整理现有分身", debugMessage).WithMetadata("constraint_violation", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPrimaryPersonaGuard returns *AppError for USER.PERSONA.primary_guard (user_message from errors.yaml).
 func AppErrorFromPrimaryPersonaGuard(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPrimaryPersonaGuard.Error()))
-	return rerrors.NewAppError(code, "主分身不能退役", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "主分身不能退役", debugMessage).WithMetadata("constraint_violation", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromActivePersonaGuard returns *AppError for USER.PERSONA.active_guard (user_message from errors.yaml).
 func AppErrorFromActivePersonaGuard(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrActivePersonaGuard.Error()))
-	return rerrors.NewAppError(code, "请先切换到其他分身后再继续", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先切换到其他分身后再继续", debugMessage).WithMetadata("constraint_violation", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromRetiredPersonaGuard returns *AppError for USER.PERSONA.retired_guard (user_message from errors.yaml).
 func AppErrorFromRetiredPersonaGuard(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRetiredPersonaGuard.Error()))
-	return rerrors.NewAppError(code, "该分身已退役，当前操作不可继续", debugMessage).WithMetadata("invalid_status_transition", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该分身已退役，当前操作不可继续", debugMessage).WithMetadata("invalid_status_transition", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPersonaHandleTaken returns *AppError for USER.PERSONA.handle_taken (user_message from errors.yaml).
 func AppErrorFromPersonaHandleTaken(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPersonaHandleTaken.Error()))
-	return rerrors.NewAppError(code, "该分身号已被占用，请换一个", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该分身号已被占用，请换一个", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPersonaHandleReadonly returns *AppError for USER.PERSONA.handle_readonly (user_message from errors.yaml).
 func AppErrorFromPersonaHandleReadonly(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPersonaHandleReadonly.Error()))
-	return rerrors.NewAppError(code, "趣我圈号由系统分配，暂不支持手动修改", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "趣我圈号由系统分配，暂不支持手动修改", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }

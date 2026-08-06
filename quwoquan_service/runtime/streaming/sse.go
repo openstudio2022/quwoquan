@@ -66,7 +66,7 @@ func (s *SSEServer) Handler() http.HandlerFunc {
 		if !ok {
 			rerrors.WriteHTTPError(
 				w,
-				rerrors.NewUnavailable(rerrors.ModuleGateway, "当前连接不支持实时流", "streaming not supported"),
+				rerrors.NewUnavailable(rerrors.ModuleGateway, "当前连接不支持实时流，请稍后重试", "streaming not supported"),
 				rerrors.HTTPWriteOptionsFromRequest(r),
 			)
 			return

@@ -43,7 +43,7 @@ type MongoUserAccountClosedProjection struct {
 	attempts         application.AttemptSubjectClosure
 }
 
-var _ application.UserAccountClosedProjection = (*MongoUserAccountClosedProjection)(nil)
+var _ application.UserAccountClosedProjectionStore = (*MongoUserAccountClosedProjection)(nil)
 
 func NewMongoUserAccountClosedProjection(
 	db *mongo.Database,

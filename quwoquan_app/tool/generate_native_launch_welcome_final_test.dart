@@ -5,12 +5,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
-import 'package:quwoquan_app/ui/welcome/widgets/welcome_brand_cluster.dart';
-import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/runtime/shell/welcome/welcome_appearance.dart';
+import 'package:quwoquan_app/runtime/shell/welcome/welcome_brand_cluster.dart';
+import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
 
 /// 导出与 Flutter 欢迎终态同构的原生启动静态帧。
 ///

@@ -95,16 +95,12 @@ routes:
     path: /assistant/management
   - id: assistantSkills
     path: /assistant/skills
-  - id: travelTrips
-    path: /travel/trips
-  - id: travelTemplates
-    path: /travel/templates
-  - id: travelTimeline
-    path: /travel/trips/{id}/timeline
-  - id: travelMap
-    path: /travel/trips/{id}/map
-  - id: travelShare
-    path: /travel/share-snapshots/{id}
+  - id: gatheringCreate
+    path: /gatherings/create
+  - id: gatheringDetail
+    path: /gatherings/{id}
+  - id: gatheringBoard
+    path: /chat/{id}/board
   - id: settings
     path: /settings
   - id: settingsPermissions

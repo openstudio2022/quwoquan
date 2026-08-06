@@ -40,7 +40,19 @@ business_rules:
 - viewerPersonaId、subjectType、subjectId 唯一确定一行，访问水位不得覆盖 owner 的关注事实。
 - subject tombstone 或 viewer 账号关闭必须删除可见行并保留 projector checkpoint。
 lifecycle:
-  source_events: [PersonaRelationshipChanged, SubjectFollowChanged, CircleMembershipChanged, HomepageFollowChanged, SubjectDeleted, UserAccountClosed]
+  source_events:
+  - user.persona_relationship.PersonaFollowStateChanged
+  - user.persona_relationship.PersonaBlocked
+  - user.persona_relationship.PersonaUnblocked
+  - user.subject_follow.SubjectFollowStateChanged
+  - user.followed_subject_visit_state.FollowedSubjectVisited
+  - user.user_account.UserAccountClosed
   checkpoint: per_owner_event_sequence
   rebuild: replay_all_typed_follow_subject_events
   tombstone: delete_following_subject_keep_checkpoint
+  event_consumers:
+  - name: ProjectFollowingSubject
+    kind: projector
+    facet: FollowingSubjectProjector
+    method: apply
+    idempotency: aggregate_version

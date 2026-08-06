@@ -7,8 +7,6 @@ import json
 import threading
 from typing import Any, Protocol
 
-from redis.exceptions import ResponseError
-
 from internal.recommendation.recommendation_subject_closure_fact.application.appender import (
     Appender,
     SubjectClosureFact,
@@ -144,7 +142,7 @@ class UserAccountClosedConsumer:
     def ensure_group(self) -> None:
         try:
             self._redis.xgroup_create(USER_ACCOUNT_STREAM, CONSUMER_GROUP, id="0-0", mkstream=True)
-        except ResponseError as error:
+        except Exception as error:
             if "BUSYGROUP" not in str(error):
                 raise
 

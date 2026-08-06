@@ -1,55 +1,53 @@
-domain: OPS
-aggregate: ConfigInstanceReport
 description: 实例配置 ACK 的身份、候选版本与存储失败语义。
 errors:
 - code: OPS.USER.config_instance_report_unauthorized
-  kind: USER
   reason: unauthorized
   http_status: 401
   emitted_by:
   - {surface: http, operations: [ReportConfigInstance]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: configInstanceReportUnauthorized
   go_const: ErrConfigInstanceReportUnauthorized
   user_message: {zh: 实例配置报告服务身份未授权, en: The service identity is not authorized to report this instance}
 - code: OPS.USER.config_instance_report_invalid
-  kind: USER
   reason: config_instance_report_invalid
   http_status: 400
   emitted_by:
   - {surface: http, operations: [ReportConfigInstance, IngestAlertmanagerWebhook, AcknowledgeAlert]}
-  recovery_action: configure
+  recovery_action: surface
+  disruption_level: inlineCard
   dart_const: configInstanceReportInvalid
   go_const: ErrConfigInstanceReportInvalid
   user_message: {zh: 实例配置报告无效, en: The instance config report is invalid}
 - code: OPS.USER.config_instance_report_conflict
-  kind: USER
   reason: config_instance_report_conflict
   http_status: 409
   emitted_by:
   - {surface: http, operations: [ReportConfigInstance]}
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: configInstanceReportConflict
   go_const: ErrConfigInstanceReportConflict
   user_message: {zh: 实例配置报告与当前候选版本不一致, en: The instance config report conflicts with the current candidate}
 - code: OPS.SYSTEM.config_instance_report_candidate_unavailable
-  kind: SYSTEM
   reason: config_instance_report_candidate_unavailable
   http_status: 503
   emitted_by:
   - {surface: http, operations: [ReportConfigInstance]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 2
   dart_const: configInstanceReportCandidateUnavailable
   go_const: ErrConfigInstanceReportCandidateUnavailable
   user_message: {zh: 当前发布候选尚未就绪, en: The current release candidate is not ready}
 - code: OPS.SYSTEM.config_instance_report_storage_failed
-  kind: SYSTEM
   reason: config_instance_report_storage_failed
   http_status: 500
   emitted_by:
   - {surface: http, operations: [ListConfigInstanceReports, ReportConfigInstance, ListReleaseCandidateAcks, ListRuntimeServices, ListRuntimeInstances, IngestAlertmanagerWebhook, ListActiveAlerts, AcknowledgeAlert, ListPlatformAudits, ListPlatformApprovals, GetPlatformProjectionSummary, GetPlatformTriageSummary]}
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 2
   dart_const: configInstanceReportStorageFailed
   go_const: ErrConfigInstanceReportStorageFailed

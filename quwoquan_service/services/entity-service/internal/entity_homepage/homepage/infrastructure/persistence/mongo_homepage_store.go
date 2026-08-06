@@ -36,10 +36,9 @@ type MongoHomepageStore struct {
 	details     *mongo.Collection
 	followers   *mongo.Collection
 	checkpoints *mongo.Collection
-	supportsTxn bool
 }
 
-func NewMongoHomepageStore(db *mongo.Database, supportsTransactions bool) *MongoHomepageStore {
+func NewMongoHomepageStore(db *mongo.Database) *MongoHomepageStore {
 	return &MongoHomepageStore{
 		homepages:   db.Collection(homepageCollection),
 		receipts:    db.Collection(homepageReceiptsCollection),
@@ -47,7 +46,6 @@ func NewMongoHomepageStore(db *mongo.Database, supportsTransactions bool) *Mongo
 		details:     db.Collection(homepageDetailsCollection),
 		followers:   db.Collection(homepageFollowersCollection),
 		checkpoints: db.Collection(homepageCheckpointCollection),
-		supportsTxn: supportsTransactions,
 	}
 }
 
@@ -183,6 +181,7 @@ type homepageDocument struct {
 	Location             *geoJSONPoint                     `bson:"location,omitempty"`
 	OwnerUserID          string                            `bson:"ownerUserId,omitempty"`
 	OwnerPersonaID       string                            `bson:"ownerPersonaId,omitempty"`
+	ManagerPersonaIDs    []string                          `bson:"managerPersonaIds,omitempty"`
 	Verified             bool                              `bson:"verified"`
 	EstablishedYear      *int                              `bson:"establishedYear,omitempty"`
 	IntroductionMarkdown string                            `bson:"introductionMarkdown,omitempty"`
@@ -242,6 +241,7 @@ func documentFromSnapshot(snapshot homepagemodel.Snapshot) homepageDocument {
 		Location:             geoJSONFromGeoPoint(snapshot.Location),
 		OwnerUserID:          snapshot.OwnerUserID,
 		OwnerPersonaID:       snapshot.OwnerPersonaID,
+		ManagerPersonaIDs:    snapshot.ManagerPersonaIDs,
 		Verified:             snapshot.Verified,
 		EstablishedYear:      snapshot.EstablishedYear,
 		IntroductionMarkdown: snapshot.IntroductionMarkdown,
@@ -279,6 +279,7 @@ func (d homepageDocument) snapshot() homepagemodel.Snapshot {
 		Location:             d.Location.geoPoint(),
 		OwnerUserID:          d.OwnerUserID,
 		OwnerPersonaID:       d.OwnerPersonaID,
+		ManagerPersonaIDs:    d.ManagerPersonaIDs,
 		Verified:             d.Verified,
 		EstablishedYear:      d.EstablishedYear,
 		IntroductionMarkdown: d.IntroductionMarkdown,
@@ -683,9 +684,6 @@ func (s *MongoHomepageStore) Commit(
 	if err := validateCommit(commit); err != nil {
 		return homepageports.CommitResult{}, err
 	}
-	if !s.supportsTxn {
-		return s.commitBody(ctx, commit)
-	}
 	session, err := s.homepages.Database().Client().StartSession()
 	if err != nil {
 		return homepageports.CommitResult{}, err
@@ -693,9 +691,74 @@ func (s *MongoHomepageStore) Commit(
 	defer session.EndSession(ctx)
 	var result homepageports.CommitResult
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		committed, commitErr := s.commitBody(txCtx, commit)
-		result = committed
-		return nil, commitErr
+		if replayed, found, replayErr := s.FindReceipt(
+			txCtx, commit.ActorID, commit.IdempotencyKey, commit.CommandName, commit.CommandDigest,
+		); replayErr != nil || found {
+			result = replayed
+			return nil, replayErr
+		}
+		record := documentFromSnapshot(commit.Aggregate.Snapshot())
+		if commit.ExpectedVersion == 0 {
+			if _, insertErr := s.homepages.InsertOne(txCtx, record); insertErr != nil {
+				if mongo.IsDuplicateKeyError(insertErr) {
+					return nil, generated.AppErrorFromVersionConflict(
+						"homepage canonical or source identity already exists",
+					)
+				}
+				return nil, insertErr
+			}
+		} else {
+			replaced, replaceErr := s.homepages.ReplaceOne(
+				txCtx,
+				bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
+				record,
+			)
+			if replaceErr != nil {
+				if mongo.IsDuplicateKeyError(replaceErr) {
+					return nil, generated.AppErrorFromVersionConflict(
+						"homepage canonical or source identity already exists",
+					)
+				}
+				return nil, replaceErr
+			}
+			if replaced.MatchedCount != 1 {
+				return nil, generated.AppErrorFromVersionConflict(
+					"homepage version changed before commit",
+				)
+			}
+		}
+		// 事件行与聚合状态共用同一个事务句柄：提交成功即事件已可投递，任一步失败
+		// 则状态与事件一起回滚，不存在「状态已改、事件丢失」的中间态。
+		if _, insertErr := s.outbox.InsertOne(txCtx, outboxDocument{
+			ID:               commit.Event.EventID,
+			EventType:        commit.Event.EventType,
+			AggregateID:      commit.Event.AggregateID,
+			AggregateVersion: commit.Event.AggregateVersion,
+			Payload:          append([]byte(nil), commit.Event.Payload...),
+			OccurredAt:       commit.Event.OccurredAt.UTC(),
+		}); insertErr != nil {
+			return nil, insertErr
+		}
+		if _, insertErr := s.receipts.InsertOne(txCtx, receiptDocument{
+			ID:               receiptID(commit.ActorID, commit.IdempotencyKey),
+			ActorID:          strings.TrimSpace(commit.ActorID),
+			IdempotencyKey:   strings.TrimSpace(commit.IdempotencyKey),
+			AggregateID:      record.ID,
+			AggregateVersion: record.Version,
+			CommandName:      commit.CommandName,
+			CommandDigest:    commit.CommandDigest,
+			Result:           record,
+			CreatedAt:        time.Now().UTC(),
+			ExpiresAt:        normalizedExpiry(commit.ReceiptExpiresAt),
+		}); insertErr != nil {
+			return nil, insertErr
+		}
+		aggregate, aggregateErr := record.aggregate()
+		if aggregateErr != nil {
+			return nil, aggregateErr
+		}
+		result = homepageports.CommitResult{Aggregate: aggregate}
+		return nil, nil
 	})
 	if err != nil {
 		replayed, found, receiptErr := s.FindReceipt(
@@ -710,75 +773,6 @@ func (s *MongoHomepageStore) Commit(
 		return homepageports.CommitResult{}, err
 	}
 	return result, nil
-}
-
-// commitBody 在事务模式下原子提交；alpha 单节点降级沿用 Review packet 的固定顺序，
-// state CAS 仍原子，命令可通过 actor-scoped receipt 重放收敛。
-func (s *MongoHomepageStore) commitBody(
-	ctx context.Context,
-	commit homepageports.Commit,
-) (homepageports.CommitResult, error) {
-	if replayed, found, err := s.FindReceipt(
-		ctx, commit.ActorID, commit.IdempotencyKey, commit.CommandName, commit.CommandDigest,
-	); err != nil || found {
-		return replayed, err
-	}
-	record := documentFromSnapshot(commit.Aggregate.Snapshot())
-	if commit.ExpectedVersion == 0 {
-		if _, err := s.homepages.InsertOne(ctx, record); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return homepageports.CommitResult{}, generated.AppErrorFromVersionConflict(
-					"homepage canonical or source identity already exists",
-				)
-			}
-			return homepageports.CommitResult{}, err
-		}
-	} else {
-		result, err := s.homepages.ReplaceOne(
-			ctx,
-			bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
-			record,
-		)
-		if err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return homepageports.CommitResult{}, generated.AppErrorFromVersionConflict(
-					"homepage canonical or source identity already exists",
-				)
-			}
-			return homepageports.CommitResult{}, err
-		}
-		if result.MatchedCount != 1 {
-			return homepageports.CommitResult{}, generated.AppErrorFromVersionConflict(
-				"homepage version changed before commit",
-			)
-		}
-	}
-	if _, err := s.outbox.InsertOne(ctx, outboxDocument{
-		ID:               commit.Event.EventID,
-		EventType:        commit.Event.EventType,
-		AggregateID:      commit.Event.AggregateID,
-		AggregateVersion: commit.Event.AggregateVersion,
-		Payload:          append([]byte(nil), commit.Event.Payload...),
-		OccurredAt:       commit.Event.OccurredAt.UTC(),
-	}); err != nil {
-		return homepageports.CommitResult{}, err
-	}
-	if _, err := s.receipts.InsertOne(ctx, receiptDocument{
-		ID:               receiptID(commit.ActorID, commit.IdempotencyKey),
-		ActorID:          strings.TrimSpace(commit.ActorID),
-		IdempotencyKey:   strings.TrimSpace(commit.IdempotencyKey),
-		AggregateID:      record.ID,
-		AggregateVersion: record.Version,
-		CommandName:      commit.CommandName,
-		CommandDigest:    commit.CommandDigest,
-		Result:           record,
-		CreatedAt:        time.Now().UTC(),
-		ExpiresAt:        normalizedExpiry(commit.ReceiptExpiresAt),
-	}); err != nil {
-		return homepageports.CommitResult{}, err
-	}
-	aggregate, err := record.aggregate()
-	return homepageports.CommitResult{Aggregate: aggregate}, err
 }
 
 func validateCommit(commit homepageports.Commit) error {

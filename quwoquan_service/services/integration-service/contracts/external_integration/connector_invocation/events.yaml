@@ -1,9 +1,20 @@
 events:
 - name: ConnectorInvocationChanged
   description: Connector 调用进入等待确认、执行或脱敏终态。
-  producer: integration-service
-  consumers: [assistant-service]
-  channel: integration.connector_invocation
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_invocation
   payload_entity: ConnectorInvocation
-  payload_fields: [invocationId, accountId, connectionId, assistantRunId, capability, status, continuationRef, normalizedFailureCode, recoveryAction, revision, updatedAt, completedAt]
-
+  payload_fields:
+  - invocationId
+  - accountId
+  - connectionId
+  - assistantRunId
+  - capability
+  - status
+  - continuationRef
+  - normalizedFailureCode
+  - recoveryAction
+  - revision
+  - updatedAt
+  - completedAt
+  no_consumer_reason: 调用状态、脱敏结果引用与审计记录在同一 Mongo transaction 内提交；Assistant continuation 由同步返回的 continuationRef 驱动，不存在异步状态消费者。

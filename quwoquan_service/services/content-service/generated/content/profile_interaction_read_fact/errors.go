@@ -18,11 +18,11 @@ var (
 // AppErrorFromProfileInteractionReadFactOwnerForbidden returns *AppError for CONTENT.USER.profile_interaction_read_fact_owner_forbidden (user_message from errors.yaml).
 func AppErrorFromProfileInteractionReadFactOwnerForbidden(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.profile_interaction_read_fact_owner_forbidden")
-	return rterr.NewAppError(code, "无权更新该互动记录", debugMessage).WithMetadata("profile_interaction_read_fact_owner_forbidden", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "无权更新该互动记录", debugMessage).WithMetadata("profile_interaction_read_fact_owner_forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileInteractionReadFactTargetUnavailable returns *AppError for CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable (user_message from errors.yaml).
 func AppErrorFromProfileInteractionReadFactTargetUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable")
-	return rterr.NewAppError(code, "互动记录暂时不可用，请稍后重试", debugMessage).WithMetadata("profile_interaction_read_fact_target_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "互动记录暂时不可用，请稍后重试", debugMessage).WithMetadata("profile_interaction_read_fact_target_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

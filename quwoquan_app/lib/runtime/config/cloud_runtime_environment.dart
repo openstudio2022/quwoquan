@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 
 enum CloudEnvironment { alpha, beta, gamma, prod }
 

@@ -57,7 +57,7 @@
 - `RealtimeConnectionNotifier` 是 UI 层唯一可见入口；页面不得直接 new `LongPollTransport` / `WebSocketTransport`
 - 四环境 realtime source 禁止 import alpha/mock package、fixture loader 或任意 mock 数据目录。
 - 环境事件 payload 只来自 Remote gateway；测试事件只存在测试树，未登记会话不得由 runner/UAT 生成伪造 realtime 事件。
-- Long-poll 请求路径与 page id 必须来自 `realtime_api_metadata.g.dart` 与 `realtime_request_page_ids.g.dart`
+- Long-poll 请求路径必须来自 `quwoquan_cloud_contracts` 的 generated operation contract，page id 必须来自 `runtime/transport/generated/realtime/realtime_request_page_ids.g.dart`。
 - Remote 与测试树 typed event 必须复用同一个 `RealtimeMessageHandler`，不得维护第二条消息插入链路。
 - 测试树必须证明 `ConversationMemberAdded` 分支会产生系统消息。
 - 页面卸载、退后台不得留下 leaked timer 或继续追加延迟推送；runtime mode 变化不得替换 realtime delegate。
@@ -89,11 +89,11 @@
 
 - 测试 fixture：`quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json`
 - canonical：`quwoquan_service/services/realtime-gateway/contracts/realtime/connection/operations.yaml`
-- canonical：`quwoquan_app/lib/cloud/runtime/generated/realtime/realtime_api_metadata.g.dart`
-- canonical：`quwoquan_app/lib/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart`
+- canonical：`quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/realtime/realtime_operation_contracts.g.dart`
+- canonical：`quwoquan_app/lib/runtime/transport/generated/realtime/realtime_request_page_ids.g.dart`
 - canonical：[`app-cloud-business-object-commercial-closure`](../../../runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#req-004)
-- canonical：`quwoquan_app/lib/cloud/services/realtime/remote_realtime_connection_delegate.dart`
-- local_contract double：`quwoquan_app/test/support/fixtures/chat/fixture_realtime_connection_delegate.dart`
+- canonical：`quwoquan_app/lib/service/realtime_gateway/realtime/connection/adapters/remote_realtime_connection_delegate.dart`
+- local_contract double：`quwoquan_app/test/support/service/realtime_gateway/realtime/connection/connection_typed_double.dart`
 
 ## 5. 验收场景
 

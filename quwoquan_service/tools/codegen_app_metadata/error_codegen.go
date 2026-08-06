@@ -79,6 +79,9 @@ func renderChatErrorsDart(ef *errorsFile) string {
 
 	b.WriteString("enum ChatErrorCode {\n")
 	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
 		b.WriteString(fmt.Sprintf("  %s('%s', '%s', %d),\n", e.DartConst, e.Code, strings.ReplaceAll(e.UserMessage["zh"], "'", "\\'"), e.HTTPStatus))
 	}
 	b.WriteString("  unknown('', '消息服务异常，请稍后重试', 500);\n\n")
@@ -100,6 +103,9 @@ func renderChatErrorsDart(ef *errorsFile) string {
 	b.WriteString("  const ChatErrorMessages._();\n\n")
 	b.WriteString("  static const Map<ChatErrorCode, String> zh = <ChatErrorCode, String>{\n")
 	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
 		if msg, ok := e.UserMessage["zh"]; ok {
 			b.WriteString(fmt.Sprintf("    ChatErrorCode.%s: '%s',\n", e.DartConst, strings.ReplaceAll(msg, "'", "\\'")))
 		}
@@ -107,6 +113,9 @@ func renderChatErrorsDart(ef *errorsFile) string {
 	b.WriteString("  };\n\n")
 	b.WriteString("  static const Map<ChatErrorCode, String> en = <ChatErrorCode, String>{\n")
 	for _, e := range ef.Errors {
+		if e.DartConst == "" {
+			continue
+		}
 		if msg, ok := e.UserMessage["en"]; ok {
 			b.WriteString(fmt.Sprintf("    ChatErrorCode.%s: '%s',\n", e.DartConst, strings.ReplaceAll(msg, "'", "\\'")))
 		}
@@ -240,20 +249,14 @@ func goErrorUserMessage(e errorDef) string {
 }
 
 func effectiveRecoveryAction(e errorDef) string {
-	if action := strings.TrimSpace(e.Recovery.Action); action != "" {
-		return action
-	}
 	return strings.TrimSpace(e.RecoveryAction)
 }
 
 func effectiveRecoveryDisruptionLevel(e errorDef) string {
-	return strings.TrimSpace(e.Recovery.DisruptionLevel)
+	return strings.TrimSpace(e.DisruptionLevel)
 }
 
 func effectiveRecoveryAfterSeconds(e errorDef) int {
-	if e.Recovery.AfterSeconds > 0 {
-		return e.Recovery.AfterSeconds
-	}
 	return e.RecoveryAfterSecs
 }
 

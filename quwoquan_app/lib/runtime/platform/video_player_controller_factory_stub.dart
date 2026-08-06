@@ -11,3 +11,9 @@ VideoPlayerController createLocalFileVideoController(
     'AppVideoPlayerControllerFactory.localFilePath is unavailable on web',
   );
 }
+
+VideoPlayerController createLocalFileVideoReadinessProbeController(
+  String path,
+) {
+  throw UnsupportedError('local video readiness probes are unavailable on web');
+}

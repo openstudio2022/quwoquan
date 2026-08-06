@@ -89,3 +89,17 @@ fields:
   api_exposure: write
   ops_exposure: read
   role: append_only_fact
+types:
+  ReportRecoveryFailureRequest:
+    description: 启动或运行时不可恢复异常的匿名十字段上报；客户端只提交脱敏事实，幂等摘要与接收时间由服务端生成。
+    fields:
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: appVersion, source: appVersion, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: buildNumber, source: buildNumber, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: platform, source: platform, type: string, constraints: [NOT_NULL, ENUM_ios_android], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: osVersion, source: osVersion, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: deviceModel, source: deviceModel, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: errorSource, source: errorSource, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: errorType, source: errorType, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: errorMessage, source: errorMessage, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: redact, api_exposure: write, ops_exposure: none}
+    - {name: stackTrace, source: stackTrace, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: redact, api_exposure: write, ops_exposure: none}

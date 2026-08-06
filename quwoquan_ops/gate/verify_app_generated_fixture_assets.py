@@ -15,7 +15,7 @@ SOURCE = (
 )
 GENERATED = (
     ROOT
-    / "quwoquan_app/test/support/cloud_services/content/home_showcase_core_fixture.g.dart"
+    / "quwoquan_app/test/support/service/content_service/content/post/home_showcase_core_fixture.g.dart"
 )
 
 

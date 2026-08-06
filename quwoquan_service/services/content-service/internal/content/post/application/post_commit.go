@@ -10,6 +10,7 @@ import (
 
 	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
@@ -60,12 +61,12 @@ func (s *PostService) commitPostCommandWithResult(
 	}
 	commandJSON, err := json.Marshal(commandPayload)
 	if err != nil {
-		return nil, false, rterr.NewUnavailable(rterr.ModuleContent, "内容提交失败", err.Error())
+		return nil, false, contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 	}
 	commandHash := sha256.Sum256(commandJSON)
 	eventJSON, err := json.Marshal(eventPayload)
 	if err != nil {
-		return nil, false, rterr.NewUnavailable(rterr.ModuleContent, "内容事件生成失败", err.Error())
+		return nil, false, contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 	}
 	events := []postports.OutboxEvent{}
 	if eventType != "" {
@@ -97,11 +98,7 @@ func (s *PostService) commitPostCommandWithResult(
 		return nil, false, err
 	}
 	if result.Post == nil {
-		return nil, false, rterr.NewUnavailable(
-			rterr.ModuleContent,
-			"内容提交失败",
-			fmt.Sprintf("%s returned an empty aggregate", commandName),
-		)
+		return nil, false, contentgenerated.AppErrorFromRequiredDependencyUnavailable(fmt.Sprintf("%s returned an empty aggregate", commandName))
 	}
 	return result.Post, result.Replayed, nil
 }

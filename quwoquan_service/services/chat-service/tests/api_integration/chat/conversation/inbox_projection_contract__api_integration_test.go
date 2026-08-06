@@ -16,7 +16,7 @@ import (
 func newInboxProjectionEnv(t *testing.T) (
 	*application.InboxService,
 	*application.MessageService,
-	*inboxapp.Projector,
+	*inboxapp.ChatInboxViewProjector,
 ) {
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
@@ -38,7 +38,7 @@ func (noopConversationCache) InvalidateConversation(context.Context, string) err
 	return nil
 }
 
-func drainInboxProjector(t *testing.T, projector *inboxapp.Projector) {
+func drainInboxProjector(t *testing.T, projector *inboxapp.ChatInboxViewProjector) {
 	t.Helper()
 	for range 10 {
 		count, err := projector.Drain(context.Background(), 100)

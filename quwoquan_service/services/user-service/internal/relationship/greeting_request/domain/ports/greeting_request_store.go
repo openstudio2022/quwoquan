@@ -56,5 +56,5 @@ type GreetingOutboxEvent struct {
 type GreetingOutbox interface {
 	ClaimPendingOutbox(ctx context.Context, ownerID string, lease time.Duration, limit int) ([]GreetingOutboxEvent, error)
 	MarkOutboxPublished(ctx context.Context, eventID, ownerID string) error
-	ReleaseOutboxClaim(ctx context.Context, eventID, ownerID string) error
+	ScheduleOutboxRetry(ctx context.Context, eventID, ownerID string, lease time.Duration, nextAttemptAt time.Time) error
 }

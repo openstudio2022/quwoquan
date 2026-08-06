@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001
+// readiness_case: report-circle-behavior-local
 package local_contract
 
 import (

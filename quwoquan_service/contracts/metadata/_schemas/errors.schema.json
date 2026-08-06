@@ -2,21 +2,129 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://quwoquan.local/contracts/metadata/errors.schema.json",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "required": ["errors"],
   "properties": {
+    "description": {
+      "description": "文件级散文说明。散文只允许出现在 description，不得另起 debug_hint / note 等同义键。",
+      "type": "string",
+      "minLength": 1
+    },
     "errors": {
+      "description": "允许显式空集。errors 键本身是必填，因此「无对象专属错误码」必须写成 errors: [] 并在 description 里说明复用了谁的声明；缺省该键才是缺陷。禁止 minItems，否则显式空集这种更精确的表达会被判非法。",
       "type": "array",
       "items": {
         "type": "object",
-        "additionalProperties": true,
-        "required": ["code"],
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "reason",
+          "emitted_by",
+          "recovery_action",
+          "disruption_level",
+          "user_message"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "emitted_by": {
+                  "contains": {
+                    "anyOf": [
+                      { "enum": ["http", "gateway"] },
+                      {
+                        "type": "object",
+                        "required": ["surface"],
+                        "properties": {
+                          "surface": { "enum": ["http", "gateway"] }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": ["emitted_by"]
+            },
+            "then": { "required": ["http_status"] },
+            "else": { "not": { "required": ["http_status"] } }
+          },
+          {
+            "if": { "required": ["dart_const"] },
+            "then": {
+              "properties": {
+                "user_message": { "required": ["zh", "en"] }
+              }
+            }
+          }
+        ],
         "properties": {
-          "code": { "type": "string", "minLength": 1 },
+          "code": {
+            "description": "稳定错误码，格式固定为 MODULE.KIND.REASON。KIND 段即错误分类，不再另设 kind 键。",
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*$"
+          },
+          "reason": {
+            "description": "进入 AppError.WithMetadata 的稳定 reason 短语，snake_case。",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
           "http_status": {
+            "description": "HTTP 边界状态码。codegen_service_errors 的 validateEntry 同样按 400..599 校验。",
             "type": "integer",
-            "minimum": 100,
+            "minimum": 400,
             "maximum": 599
+          },
+          "recovery_action": {
+            "description": "恢复动作，值域与 runtime_recovery_policy.schema.yaml 的 RuntimeRecoveryAction 一致。",
+            "enum": [
+              "absorb",
+              "retry",
+              "fallback",
+              "surface",
+              "escalate",
+              "compensate"
+            ]
+          },
+          "recovery_after_seconds": {
+            "description": "恢复动作可用前的等待秒数，随 recovery_action 一起下发。",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "disruption_level": {
+            "description": "该错误允许打断用户的强度，取值域与 runtime_recovery_policy.schema.yaml 的 UserDisruptionLevel 一致；必须显式声明，禁止由端侧静默猜测。",
+            "enum": [
+              "silent",
+              "passiveIndicator",
+              "snackbar",
+              "inlineCard",
+              "permissionCard"
+            ]
+          },
+          "go_const": {
+            "description": "生成 Go sentinel 与 AppErrorFrom* 工厂的常量名。",
+            "type": "string",
+            "pattern": "^Err[A-Za-z0-9]+$"
+          },
+          "dart_const": {
+            "description": "生成端侧 *ErrorCode enum 成员名。只有被 codegen_app_metadata 登记了 Dart 产物的对象才允许声明。",
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]*$"
+          },
+          "user_message": {
+            "description": "面向用户的文案。zh 进入生成的 AppError 与端侧文案表，en 进入端侧产物。含英文逗号的值必须加引号，否则 flow 映射会把逗号后半句解析成新键并截断文案。",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["zh"],
+            "properties": {
+              "zh": { "type": "string", "minLength": 1 },
+              "en": { "type": "string", "minLength": 1 }
+            }
+          },
+          "description": {
+            "description": "该错误条目的散文说明，例如触发条件或排查线索。",
+            "type": "string",
+            "minLength": 1
           },
           "emitted_by": {
             "type": "array",

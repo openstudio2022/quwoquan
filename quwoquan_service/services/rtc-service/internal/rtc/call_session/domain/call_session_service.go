@@ -8,10 +8,17 @@ import (
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
 )
 
-type CallSessionService struct{}
+type CallSessionService struct {
+	ringTimeoutPolicy RingTimeoutPolicy
+}
 
-func NewCallSessionService() *CallSessionService {
-	return &CallSessionService{}
+func NewCallSessionService(
+	ringTimeoutPolicy RingTimeoutPolicy,
+) (*CallSessionService, error) {
+	if err := ringTimeoutPolicy.validate(); err != nil {
+		return nil, err
+	}
+	return &CallSessionService{ringTimeoutPolicy: ringTimeoutPolicy}, nil
 }
 
 func (s *CallSessionService) InitiateCall(
@@ -291,17 +298,18 @@ func (s *CallSessionService) InviteToCall(session *model.CallSession, inviteeIDs
 	return nil
 }
 
-// RingTimeout 返回该会话的振铃超时阈值（1v1 30s / 群 60s），
-// 与 storage.yaml lifecycle_timers.ring_timeout 同源。
+// RingTimeout returns the validated timeout for the session shape. The value
+// is injected once from typed service configuration at the composition root.
 func (s *CallSessionService) RingTimeout(session *model.CallSession) time.Duration {
-	if session.MaxParticipants > model.MaxParticipants1v1 {
-		return 60 * time.Second
-	}
-	return 30 * time.Second
+	return s.ringTimeoutPolicy.For(session)
 }
 
-// HandleTimeout checks whether the call has reached the ring timeout
-// (30s for 1v1, 60s for group). Returns true if the call was timed out.
+func (s *CallSessionService) RingTimeoutPolicy() RingTimeoutPolicy {
+	return s.ringTimeoutPolicy
+}
+
+// HandleTimeout checks whether the call has reached its configured ring
+// timeout. Returns true if the call was timed out.
 // 振铃期无人接听的终态是 no_answer（对齐 contract.yaml call_no_answer_timeout
 // 与「未接来电」读模型语义）；now 由 application 注入，保证边界可确定测试。
 func (s *CallSessionService) HandleTimeout(session *model.CallSession, now time.Time) (bool, error) {

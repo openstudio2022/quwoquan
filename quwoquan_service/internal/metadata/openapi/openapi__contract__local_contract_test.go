@@ -310,6 +310,51 @@ func TestGenerateCarriesTypedAppendSinkWithoutAggregateOwner(t *testing.T) {
 	}
 }
 
+func TestGenerateCarriesTypedLifecycleOwnerWithoutAggregateOrAppendOwner(t *testing.T) {
+	operation := commandOperation(
+		"search.search_request_fact.RecoverSearchAccountClosureDeadLetter",
+		"RecoverSearchAccountClosureDeadLetter",
+		"search",
+		"search.search_request_fact",
+		"POST",
+		"/internal/search/account-closure/dead-letters:recover",
+		"SearchAccountClosureDeadLetterRecoveryRequest",
+		"SearchAccountClosureDeadLetterRecoveryAccepted",
+	)
+	operation.AggregateOwner = ""
+	operation.LifecycleOwner = "SearchRequestFact"
+	operation.ResponseBodyKind = "object"
+	operation.SuccessStatus = 202
+
+	snapshots, err := Generate(&graph.ContractGraph{Operations: []ast.Operation{operation}})
+	if err != nil {
+		t.Fatalf("generate lifecycle owner OpenAPI: %v", err)
+	}
+	document := decodeSnapshot(t, snapshots[0])
+	rendered := operationAt(t, document, operation.PathTemplate, "post")
+	application := rendered["x-application"].(map[string]any)
+	if got, want := application["lifecycleOwner"], "SearchRequestFact"; got != want {
+		t.Fatalf("lifecycle owner = %v, want %s", got, want)
+	}
+	if _, exists := application["aggregateOwner"]; exists {
+		t.Fatalf("lifecycle recovery must not expose aggregateOwner: %#v", application)
+	}
+	if _, exists := application["appendSink"]; exists {
+		t.Fatalf("lifecycle recovery must not expose appendSink: %#v", application)
+	}
+	responses := rendered["responses"].(map[string]any)
+	accepted, exists := responses["202"].(map[string]any)
+	if !exists {
+		t.Fatalf("typed recovery must generate HTTP 202: %#v", responses)
+	}
+	assertSchemaRef(
+		t,
+		accepted,
+		"content",
+		"#/components/schemas/SearchAccountClosureDeadLetterRecoveryAccepted",
+	)
+}
+
 func TestGenerateExpandsCommandAndQuerySchemasWithoutAnonymousMaps(t *testing.T) {
 	contractGraph := &graph.ContractGraph{
 		Operations: []ast.Operation{

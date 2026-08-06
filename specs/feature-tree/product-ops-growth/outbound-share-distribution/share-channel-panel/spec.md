@@ -57,7 +57,7 @@
 
 - canonical：`specs/feature-tree/product-ops-growth/outbound-share-distribution/share-channel-panel/spec.md`
 - canonical：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml`
-- canonical：`quwoquan_app/lib/core/auth/auth_continuation.dart`
+- canonical：`quwoquan_app/lib/runtime/auth/auth_continuation.dart`
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md`
 - canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_post_placement/operations.yaml`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`

@@ -17,7 +17,7 @@ fields:
 - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read, role: authoritative_state}
 types:
   RecommendationObjectCard:
-    description: 排序窗口内冻结的个性化对象卡；Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。
+    description: 排序窗口内冻结的个性化对象卡；objectKind 支持 entity_homepage 与 gathering，Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。
     fields:
     - {name: objectKind, source: objectKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}

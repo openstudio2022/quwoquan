@@ -1,10 +1,10 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/core/auth/auth_continuation.dart';
-import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 String runtimeErrorDisplayMessage(Object error) {

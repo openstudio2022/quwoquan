@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// readiness_case: mark-intersections-visited-api
 package intersection_visit_state_test
 
 import (

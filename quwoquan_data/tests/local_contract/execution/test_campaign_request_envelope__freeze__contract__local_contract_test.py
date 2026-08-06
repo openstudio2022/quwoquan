@@ -49,6 +49,23 @@ def _patch_envelope_deps(monkeypatch) -> None:
         "entity_catalog_digest",
         lambda _ref: "sha256:" + ("b" * 64),
     )
+    monkeypatch.setattr(
+        envelopes,
+        "freeze_carrier_pre_acquisition_inputs",
+        lambda *_args, **_kwargs: (
+            [],
+            {
+                "handoffId": "local-contract",
+                "handoffRevision": 1,
+                "handoffRef": (
+                    "data/local/workspace/content-pre-acquisition-handoffs/"
+                    "local-contract/revision-001.json"
+                ),
+                "handoffDigest": "sha256:" + "9" * 64,
+                "handoffFileDigest": "sha256:" + "8" * 64,
+            },
+        ),
+    )
 
 
 def _expected_count(quota: int) -> int:
@@ -133,10 +150,10 @@ def _approved_video_promotion() -> dict[str, object]:
         "sourceReadyCount": 60,
         "sourceIneligibleCount": 30,
         "candidateCount": 90,
-        "approvedQuota": 50,
-        "qualifiedCount": 50,
-        "finalizedCount": 50,
-        "discardedCount": 40,
+        "approvedQuota": 10,
+        "qualifiedCount": 10,
+        "finalizedCount": 10,
+        "discardedCount": 80,
         "shortfallCount": 0,
     }
     return {
@@ -225,7 +242,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 "sampleRate": 0.1,
                 "minimumSampleCount": 10,
                 "smallBatchPolicy": "all",
-                "acceptedObjectCount": 50 if carrier == "video" else 100,
+                "acceptedObjectCount": 10 if carrier == "video" else 100,
                 "requiredSampleCount": 10,
                 "selectedObjectRefs": [
                     f"{carrier}-calibration-object-{index:02d}"
@@ -265,14 +282,56 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "entityCatalogDigest": "sha256:" + ("b" * 64),
             "targetScale": "M100",
             "carrierCounts": [
-                {"carrier": "homepage", "researchAcceptedCount": 100},
-                {"carrier": "article", "researchAcceptedCount": 100},
-                {"carrier": "image", "researchAcceptedCount": 100},
-                {"carrier": "video", "researchAcceptedCount": 50},
+                {
+                    "carrier": carrier,
+                    "targetCount": 10 if carrier == "video" else 100,
+                    "qualifiedCount": 10 if carrier == "video" else 100,
+                    "finalizedCount": 10 if carrier == "video" else 100,
+                    "selectedCount": 10 if carrier == "video" else 100,
+                    "discardedCount": 0,
+                    "shortfallCount": 0,
+                    "researchAcceptedCount": 10 if carrier == "video" else 100,
+                }
+                for carrier in ("homepage", "article", "image", "video")
             ],
+            "statistics": {
+                "objectPassRate": {
+                    "numerator": 310,
+                    "denominator": 310,
+                    "rate": 1.0,
+                },
+                "illustratedRate": {
+                    "numerator": 90,
+                    "denominator": 100,
+                    "rate": 0.9,
+                },
+                "automaticRecoveryRate": {
+                    "numerator": 19,
+                    "denominator": 20,
+                    "rate": 0.95,
+                },
+                "firstPassRate": {
+                    "numerator": 4,
+                    "denominator": 4,
+                    "rate": 1.0,
+                },
+                "discardRate": {
+                    "numerator": 0,
+                    "denominator": 310,
+                    "rate": 0.0,
+                },
+                "quotaAttainmentByCarrier": [
+                    {
+                        "carrier": carrier,
+                        "numerator": 10 if carrier == "video" else 100,
+                        "denominator": 10 if carrier == "video" else 100,
+                        "rate": 1.0,
+                    }
+                    for carrier in ("homepage", "article", "image", "video")
+                ],
+            },
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,
-            "articleIllustratedRate": 0.9,
             "resourceIsolationPassed": True,
             "soakDurationSeconds": 3600,
             "semanticJobsByLane": semantic_jobs,
@@ -283,9 +342,6 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "allSemanticJobsTerminalAt": "2026-08-05T01:00:00Z",
             "terminalResidualSampleAt": "2026-08-05T01:01:00Z",
             "automaticRecoveryStatus": "MEASURED",
-            "recoveryEligibleCount": 20,
-            "automaticRecoveredCount": 19,
-            "automaticRecoveryRate": 0.95,
             "campaignEvidenceRef": "data/local/campaign/evidence.json",
             "campaignEvidenceDigest": "sha256:" + "1" * 64,
             "resourceSoakEvidenceRef": "data/local/campaign/resource-soak.json",
@@ -324,8 +380,8 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     assert '"vertical": "travel"' in payload
     assert "travel/M100/homepage.json" in homepage.as_posix()
     video_payload = envelopes.read_json(first["video"])
-    assert video_payload["quota"] == 50
-    assert video_payload["count"] == _expected_count(50)
+    assert video_payload["quota"] == 10
+    assert video_payload["count"] == _expected_count(10)
 
     second = envelopes.write_scale_envelopes(
         "M100",
@@ -408,6 +464,45 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         )
 
 
+def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = Path(__file__).resolve().parents[4]
+    _patch_envelope_deps(monkeypatch)
+
+    def bind(carrier: str, *_args, **_kwargs):
+        return (
+            [],
+            {
+                "handoffId": "local-contract",
+                "handoffRevision": 1 if carrier == "homepage" else 2,
+                "handoffRef": (
+                    "data/local/workspace/content-pre-acquisition-handoffs/"
+                    "local-contract/revision-001.json"
+                ),
+                "handoffDigest": "sha256:" + "9" * 64,
+                "handoffFileDigest": "sha256:" + "8" * 64,
+            },
+        )
+
+    monkeypatch.setattr(
+        envelopes,
+        "freeze_carrier_pre_acquisition_inputs",
+        bind,
+    )
+
+    with pytest.raises(ValueError, match="handoff identity changed"):
+        envelopes.write_scale_envelopes(
+            "M100",
+            region_ref="china",
+            repo_root=repo,
+            output_root=tmp_path,
+            day="20260731",
+        )
+    assert not tuple(tmp_path.rglob("*.json"))
+
+
 def test_campaign_retry_envelope_requires_one_matching_predecessor(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -472,15 +567,18 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
     )
     assert cursor_retry["semanticSelectionId"] == "cursor_auto"
     assert cursor_retry["semanticPreflightReceipt"] == _preflight_binding
-    with pytest.raises(ValueError, match="cursor_auto.*retryOf"):
-        envelopes.build_envelope(
-            scale="M3",
-            carrier="image",
-            region_ref="china",
-            repo_root=repo,
-            day="20260805",
-            semantic_selection_id="cursor_auto",
-        )
+    cursor_first = envelopes.build_envelope(
+        scale="M3",
+        carrier="image",
+        region_ref="china",
+        repo_root=repo,
+        day="20260805",
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_output_root=preflight_root,
+    )
+    assert cursor_first["retryOf"] is None
+    assert cursor_first["semanticSelectionId"] == "cursor_auto"
     with pytest.raises(ValueError, match="preserve execution scope"):
         envelopes.build_envelope(
             scale="M3",
@@ -704,8 +802,8 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
         day="20260731",
         promotion_receipt=approved,
     )
-    assert envelope["quota"] == 300
-    assert envelope["count"] == _expected_count(300)
+    assert envelope["quota"] == 100
+    assert envelope["count"] == _expected_count(100)
     assert envelope["researchScalePromotion"]["promotionId"] == "research-m100-1"
 
     drifted = _research_m100_receipt(
@@ -780,21 +878,23 @@ def test_scale_promotion_uses_frozen_digest_without_live_git_cleanliness() -> No
         scale_promotion._require_frozen_source_inputs({"inputs": []})
 
 
-def test_scale_promotion_blocks_auto_model_pair_before_m1000() -> None:
-    with pytest.raises(
-        RuntimeError,
-        match="DATA.AGENT.SCALE_CALIBRATION_REQUIRED",
-    ):
-        scale_promotion.require_scale_promotion_model_binding(
-            {
-                "provider": "cursor_sdk",
-                "authorModel": "auto",
-                "authorModelFamily": "auto",
-                "reviewerModel": "auto",
-                "reviewerModelFamily": "auto",
-            },
-            label="video M100 scale promotion",
-        )
+def test_scale_promotion_accepts_governed_auto_model_pair_before_m1000() -> None:
+    assert scale_promotion.require_scale_promotion_model_binding(
+        {
+            "provider": "cursor_sdk",
+            "authorModel": "auto",
+            "authorModelFamily": "auto",
+            "reviewerModel": "auto",
+            "reviewerModelFamily": "auto",
+        },
+        label="video M100 scale promotion",
+    ) == {
+        "provider": "cursor_sdk",
+        "authorModel": "auto",
+        "authorModelFamily": "auto",
+        "reviewerModel": "auto",
+        "reviewerModelFamily": "auto",
+    }
 
     assert scale_promotion.require_scale_promotion_model_binding(
         _approved_video_promotion()["modelBinding"],
@@ -819,17 +919,13 @@ def test_scale_promotion_blocks_auto_model_pair_before_m1000() -> None:
     }
     stable = {key: value for key, value in auto_receipt.items() if key != "receiptDigest"}
     auto_receipt["receiptDigest"] = scale_promotion._sha256(stable)
-    with pytest.raises(
-        RuntimeError,
-        match="DATA.AGENT.SCALE_CALIBRATION_REQUIRED",
-    ):
-        scale_promotion.require_video_m1000_promotion(
-            auto_receipt,
-            git_branch=str(auto_receipt["gitBranch"]),
-            git_commit_sha=str(auto_receipt["gitCommitSha"]),
-            source_digest=auto_receipt["sourceDigest"],
-            entity_catalog_digest=str(auto_receipt["entityCatalogDigest"]),
-        )
+    assert scale_promotion.require_video_m1000_promotion(
+        auto_receipt,
+        git_branch=str(auto_receipt["gitBranch"]),
+        git_commit_sha=str(auto_receipt["gitCommitSha"]),
+        source_digest=auto_receipt["sourceDigest"],
+        entity_catalog_digest=str(auto_receipt["entityCatalogDigest"]),
+    ) == auto_receipt
 
 
 def test_video_scale_promotion_writes_immutable_m100_receipt(
@@ -888,11 +984,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
         "_review_and_publish",
         lambda *_args, **_kwargs: (
             {
-                "approvedQuota": 50,
-                "qualifiedCount": 50,
-                "finalizedCount": 50,
-                "discardedCount": 40,
-                "shortfallCount": 0,
+                "approvedQuota": 10,
+                "qualifiedCount": 1,
+                "finalizedCount": 1,
+                "discardedCount": 89,
+                "shortfallCount": 9,
             },
             {"schema": "quwoquan_data.post_review_closure"},
             {"schema": "quwoquan_data.publish_ref"},
@@ -910,8 +1006,8 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "familyRef": "content/travel/video/video",
             "regionRef": "china",
             "selector": "priority",
-            "quota": 50,
-            "count": 90,
+            "quota": 10,
+            "count": _expected_count(10),
             "topic": None,
             "targetNames": [],
             "sourceProviders": [],
@@ -923,14 +1019,24 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "executionId": execution_id,
             "gitBranch": approved["gitBranch"],
             "gitCommitSha": approved["gitCommitSha"],
-                "sourceDigest": approved["sourceDigest"],
-                "sourceRevision": envelopes.content_source_revision(
-                    source_digest=str(approved["sourceDigest"]["digest"]),
-                    entity_catalog_digest=str(approved["entityCatalogDigest"]),
+            "sourceDigest": approved["sourceDigest"],
+            "sourceRevision": envelopes.content_source_revision(
+                source_digest=str(approved["sourceDigest"]["digest"]),
+                entity_catalog_digest=str(approved["entityCatalogDigest"]),
+            ),
+            "entityCatalogDigest": approved["entityCatalogDigest"],
+            "preAcquisitionHandoff": {
+                "handoffId": "local-contract",
+                "handoffRevision": 1,
+                "handoffRef": (
+                    "data/local/workspace/content-pre-acquisition-handoffs/"
+                    "local-contract/revision-001.json"
                 ),
-                "entityCatalogDigest": approved["entityCatalogDigest"],
-                "externalInputRefs": [],
-                "externalInputsDigest": envelopes.external_inputs_digest([]),
+                "handoffDigest": "sha256:" + "9" * 64,
+                "handoffFileDigest": "sha256:" + "8" * 64,
+            },
+            "externalInputRefs": [],
+            "externalInputsDigest": envelopes.external_inputs_digest([]),
             "allowedStage": "submit-only",
             "operatorPrompt": "执行视频内容生成",
             "requestDigest": approved["predecessorInputDigest"],
@@ -942,46 +1048,57 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
     assert path.is_file()
     stored = scale_promotion.load_video_scale_promotion(path)
     assert stored["predecessorExecutionId"] == execution_id
-    assert stored["qualifiedCount"] == 50
+    assert stored["qualifiedCount"] == 1
+    assert stored["shortfallCount"] == 9
     assert (
         scale_promotion.write_video_scale_promotion(
             predecessor_execution_id=execution_id,
             predecessor_envelope={
-                    "schema": "quwoquan_data.content_campaign_request_envelope",
-                    "scale": "M100",
-                    "carrier": "video",
-                    "operation": "video.generate",
-                    "vertical": "travel",
-                    "familyRef": "content/travel/video/video",
-                    "regionRef": "china",
-                    "selector": "priority",
-                    "quota": 50,
-                    "count": 90,
-                    "topic": None,
-                    "targetNames": [],
-                    "sourceProviders": [],
-                    "semanticSelectionId": "default",
-                    "retryOf": None,
-                    "rootExecutionId": (
-                        "20260731--travel-homepage-m100--china--scale-002"
+                "schema": "quwoquan_data.content_campaign_request_envelope",
+                "scale": "M100",
+                "carrier": "video",
+                "operation": "video.generate",
+                "vertical": "travel",
+                "familyRef": "content/travel/video/video",
+                "regionRef": "china",
+                "selector": "priority",
+                "quota": 10,
+                "count": _expected_count(10),
+                "topic": None,
+                "targetNames": [],
+                "sourceProviders": [],
+                "semanticSelectionId": "default",
+                "retryOf": None,
+                "rootExecutionId": (
+                    "20260731--travel-homepage-m100--china--scale-002"
+                ),
+                "executionId": execution_id,
+                "gitBranch": approved["gitBranch"],
+                "gitCommitSha": approved["gitCommitSha"],
+                "sourceDigest": approved["sourceDigest"],
+                "sourceRevision": envelopes.content_source_revision(
+                    source_digest=str(approved["sourceDigest"]["digest"]),
+                    entity_catalog_digest=str(
+                        approved["entityCatalogDigest"]
                     ),
-                    "executionId": execution_id,
-                        "gitBranch": approved["gitBranch"],
-                        "gitCommitSha": approved["gitCommitSha"],
-                        "sourceDigest": approved["sourceDigest"],
-                        "sourceRevision": envelopes.content_source_revision(
-                            source_digest=str(approved["sourceDigest"]["digest"]),
-                            entity_catalog_digest=str(
-                                approved["entityCatalogDigest"]
-                            ),
-                        ),
-                        "entityCatalogDigest": approved["entityCatalogDigest"],
-                        "externalInputRefs": [],
-                        "externalInputsDigest": envelopes.external_inputs_digest([]),
-                    "allowedStage": "submit-only",
-                    "operatorPrompt": "执行视频内容生成",
-                    "requestDigest": approved["predecessorInputDigest"],
-                    "frozenAt": "2026-07-31T00:00:00+00:00"
+                ),
+                "entityCatalogDigest": approved["entityCatalogDigest"],
+                "preAcquisitionHandoff": {
+                    "handoffId": "local-contract",
+                    "handoffRevision": 1,
+                    "handoffRef": (
+                        "data/local/workspace/content-pre-acquisition-handoffs/"
+                        "local-contract/revision-001.json"
+                    ),
+                    "handoffDigest": "sha256:" + "9" * 64,
+                    "handoffFileDigest": "sha256:" + "8" * 64,
+                },
+                "externalInputRefs": [],
+                "externalInputsDigest": envelopes.external_inputs_digest([]),
+                "allowedStage": "submit-only",
+                "operatorPrompt": "执行视频内容生成",
+                "requestDigest": approved["predecessorInputDigest"],
+                "frozenAt": "2026-07-31T00:00:00+00:00",
             },
             root=tmp_path / "receipts",
         )
@@ -991,8 +1108,8 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
         package_root / "0.plan" / "request.json",
         {
             "familyRef": "content/travel/video/video",
-            "quota": 50,
-            "count": 90,
+            "quota": 10,
+            "count": _expected_count(10),
         },
     )
     monkeypatch.setattr(

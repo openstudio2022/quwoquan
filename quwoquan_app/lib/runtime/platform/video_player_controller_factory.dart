@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
-import 'package:quwoquan_app/core/platform/video_native_playback_signals.dart';
-import 'package:quwoquan_app/core/platform/video_player_controller_factory_io.dart'
-    if (dart.library.js_interop) 'package:quwoquan_app/core/platform/video_player_controller_factory_stub.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/video_native_playback_signals.dart';
+import 'package:quwoquan_app/runtime/platform/video_player_controller_factory_io.dart'
+    if (dart.library.js_interop) 'package:quwoquan_app/runtime/platform/video_player_controller_factory_stub.dart';
 import 'package:video_player/video_player.dart';
 
 /// A controller plus its platform-scoped native playback evidence stream.
@@ -57,6 +57,12 @@ class AppVideoPlayerControllerFactory {
       seekSettleEvidenceCapability: _seekSettleEvidenceCapability,
     );
   }
+
+  /// Creates the short-lived controller used only to prove that a local file
+  /// can initialize. It intentionally preserves the plugin's default options
+  /// and does not allocate a native playback telemetry token.
+  static VideoPlayerController localFileReadinessProbe(String path) =>
+      createLocalFileVideoReadinessProbeController(path);
 
   static AppVideoPlayerControllerHandle networkUri(
     Uri uri, {

@@ -26,6 +26,7 @@ var (
 	ErrAccountDeleted             = errors.New("USER.AUTH.account_deleted")
 	ErrTokenStale                 = errors.New("USER.AUTH.token_stale")
 	ErrAccountSecurityUnavailable = errors.New("USER.AUTH.account_security_unavailable")
+	ErrMfaRequired                = errors.New("USER.AUTH.mfa_required")
 )
 
 // AppErrorFromLoginLocked returns *AppError for USER.AUTH.login_locked (user_message from errors.yaml).
@@ -122,4 +123,10 @@ func AppErrorFromTokenStale(debugMessage string) *rerrors.AppError {
 func AppErrorFromAccountSecurityUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountSecurityUnavailable.Error()))
 	return rerrors.NewAppError(code, "账号安全校验暂不可用，请稍后重试", debugMessage).WithMetadata("account_security_unavailable", 503).WithRecoveryDirective("retry", "inlineCard", 3)
+}
+
+// AppErrorFromMfaRequired returns *AppError for USER.AUTH.mfa_required (user_message from errors.yaml).
+func AppErrorFromMfaRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrMfaRequired.Error()))
+	return rerrors.NewAppError(code, "该操作需要多因子认证，请用已启用 MFA 的运营账号重新登录", debugMessage).WithMetadata("mfa_required", 0).WithRecoveryDirective("escalate", "inlineCard", 0)
 }

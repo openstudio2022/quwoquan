@@ -36,7 +36,12 @@ ALLOWED_TRACKED_ROOT_DIRS = {
     "tests",          # 测试
     "verticals",      # 垂类资产（coverage/rights 等）
 }
-ALLOWED_TRACKED_ROOT_FILES = {"AGENTS.md", "README.md", "requirements.txt"}
+ALLOWED_TRACKED_ROOT_FILES = {
+    "AGENTS.md",
+    "README.md",
+    "requirements.txt",
+    "requirements-cursor.txt",
+}
 
 
 def _tracked_root_entries() -> set[str]:

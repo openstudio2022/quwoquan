@@ -66,15 +66,6 @@ type fieldsFile struct {
 
 // ── post/operations.yaml ─────────────────────────────────────────────────────────
 
-type routeSecurity struct {
-	AuthMode        string   `yaml:"auth_mode"`
-	Principal       string   `yaml:"principal"`
-	Permissions     []string `yaml:"permissions"`
-	TokenTransport  string   `yaml:"token_transport"`
-	AnonymousPolicy string   `yaml:"anonymous_policy"`
-	Visibility      string   `yaml:"visibility"`
-}
-
 type requestBindingDef struct {
 	Name     string `yaml:"name"`
 	Field    string `yaml:"field"`
@@ -98,11 +89,11 @@ type routeDef struct {
 	RequestEntity   string             `yaml:"request_entity"`
 	RequestBodyKind string             `yaml:"request_body_kind"`
 	ResponseEntity  string             `yaml:"response_entity"`
-	// 框架级响应契约（R-ID02）：response_body 指向 projection read_model，
-	// response_body_kind ∈ object|page|ack（ack 无读模型，仅状态确认）。
-	ResponseBody     string        `yaml:"response_body"`
-	ResponseBodyKind string        `yaml:"response_body_kind"`
-	Security         routeSecurity `yaml:"security"`
+	// 框架级响应契约（R-ID02）：response_body 指向 projection read_model。
+	// response_body_kind ∈ object|page|ack|upgrade；ack 可以返回 typed receipt，
+	// 也可以与 upgrade 一样使用 void/decodeEmptyResponse 表达无 JSON 响应体。
+	ResponseBody     string `yaml:"response_body"`
+	ResponseBodyKind string `yaml:"response_body_kind"`
 }
 
 func (r routeDef) queryBindingNames() []string {
@@ -115,18 +106,6 @@ func (r routeDef) queryBindingNames() []string {
 	return names
 }
 
-// resolveAuthMode 返回 public | optional | required 三态。
-// 只认 security.auth_mode；未知或缺失声明一律收紧为 required，禁止 fail-open，
-// 同时禁止旧 auth/auth_required 双轨。
-func (r routeDef) resolveAuthMode() string {
-	mode := strings.ToLower(strings.TrimSpace(r.Security.AuthMode))
-	switch mode {
-	case "public", "optional", "required":
-		return mode
-	}
-	return "required"
-}
-
 type serviceInfo struct {
 	Name   string `yaml:"name"`
 	Domain string `yaml:"domain"`
@@ -135,12 +114,6 @@ type serviceInfo struct {
 type serviceFile struct {
 	Service   serviceInfo `yaml:"service"`
 	APIRoutes []routeDef  `yaml:"api_routes"`
-}
-
-// integration/external_integration/location/operations.yaml 专用，含 response_list_key
-type integrationLocationServiceFile struct {
-	ResponseListKey string     `yaml:"response_list_key"`
-	APIRoutes       []routeDef `yaml:"api_routes"`
 }
 
 // ── {domain}/{entity}/projections/*.yaml ─────────────────────────────────────
@@ -211,42 +184,8 @@ type projectionBinding struct {
 
 // ── errors.yaml ───────────────────────────────────────────────────────────────
 
-type errorRecoveryDef = contractcodegen.ErrorRecovery
 type errorDef = contractcodegen.ErrorDefinition
 type errorsFile = contractcodegen.ErrorsFile
-
-// ── behaviors.yaml ─────────────────────────────────────────────────────────────
-
-type behaviorEventDef struct {
-	Type           string   `yaml:"type"`
-	Description    string   `yaml:"description"`
-	Trigger        string   `yaml:"trigger"`
-	Batch          bool     `yaml:"batch"`
-	BatchRoute     string   `yaml:"batch_route"`
-	DartMethod     string   `yaml:"dart_method"`
-	DedicatedRoute string   `yaml:"dedicated_route"`
-	PayloadFields  []string `yaml:"payload_fields"`
-	MLSignal       string   `yaml:"ml_signal"`
-}
-
-type behaviorsFile struct {
-	BehaviorEvents []behaviorEventDef `yaml:"behavior_events"`
-}
-
-// ── privacy.yaml ─────────────────────────────────────────────────────────────
-
-type appLogPolicyDef struct {
-	Field          string `yaml:"field"`
-	Classification string `yaml:"classification"`
-	AppLog         string `yaml:"app_log"`
-	MaskStrategy   string `yaml:"mask_strategy"`
-	TruncateChars  int    `yaml:"truncate_chars"`
-	Description    string `yaml:"description"`
-}
-
-type privacyFile struct {
-	AppLogPolicy []appLogPolicyDef `yaml:"app_log_policy"`
-}
 
 // ── ui_config.yaml ────────────────────────────────────────────────────────────
 
@@ -408,6 +347,7 @@ type emptyStateDef struct {
 }
 
 type uiConfigFile struct {
+	FeedRequestTypeByCategory      map[string]string                  `yaml:"feed_request_type_by_category"`
 	HomeChannels                   []homeChannelDef                   `yaml:"home_channels"`
 	DiscoveryTabs                  []discoveryTabDef                  `yaml:"discovery_tabs"`
 	DiscoveryRails                 []discoveryRailDef                 `yaml:"discovery_rails"`
@@ -468,7 +408,6 @@ type onboardingInterestDimensionDef struct {
 
 type requestContextFile struct {
 	DomainOperationPageIDs map[string]map[string]string `yaml:"domain_operation_page_ids"`
-	StandalonePageIDs      map[string]string            `yaml:"standalone_page_ids"`
 }
 
 var sharedRequestContext requestContextFile

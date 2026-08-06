@@ -1,11 +1,128 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 library;
 
 import '../operation_request_payload.dart';
 
 part '../generated/requests/ops/ops_operation_contracts.g.requests.g.dart';
+
+enum StartupRecoveryAction {
+  none("none"),
+  openUpdate("open_update"),
+  openWeb("open_web"),
+  externalReturn("external_return"),
+  runtimeReentry("runtime_reentry");
+
+  const StartupRecoveryAction(this.wireName);
+
+  final String wireName;
+
+  static StartupRecoveryAction fromWire(Object? value, String path) {
+    return switch (value) {
+      "none" => StartupRecoveryAction.none,
+      "open_update" => StartupRecoveryAction.openUpdate,
+      "open_web" => StartupRecoveryAction.openWeb,
+      "external_return" => StartupRecoveryAction.externalReturn,
+      "runtime_reentry" => StartupRecoveryAction.runtimeReentry,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum StartupRecoveryLifecycle {
+  enter("enter"),
+  phaseChange("phase_change"),
+  externalAction("external_action"),
+  runtimeReentry("runtime_reentry"),
+  exit("exit"),
+  failure("failure");
+
+  const StartupRecoveryLifecycle(this.wireName);
+
+  final String wireName;
+
+  static StartupRecoveryLifecycle fromWire(Object? value, String path) {
+    return switch (value) {
+      "enter" => StartupRecoveryLifecycle.enter,
+      "phase_change" => StartupRecoveryLifecycle.phaseChange,
+      "external_action" => StartupRecoveryLifecycle.externalAction,
+      "runtime_reentry" => StartupRecoveryLifecycle.runtimeReentry,
+      "exit" => StartupRecoveryLifecycle.exit,
+      "failure" => StartupRecoveryLifecycle.failure,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum StartupRecoveryMount {
+  bootstrap("bootstrap"),
+  runtimeBoundary("runtime_boundary"),
+  safeShell("safe_shell"),
+  routerError("router_error");
+
+  const StartupRecoveryMount(this.wireName);
+
+  final String wireName;
+
+  static StartupRecoveryMount fromWire(Object? value, String path) {
+    return switch (value) {
+      "bootstrap" => StartupRecoveryMount.bootstrap,
+      "runtime_boundary" => StartupRecoveryMount.runtimeBoundary,
+      "safe_shell" => StartupRecoveryMount.safeShell,
+      "router_error" => StartupRecoveryMount.routerError,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum StartupRecoveryPhase {
+  startupChecking("startup_checking"),
+  startupUpdateRequired("startup_update_required"),
+  startupLatest("startup_latest"),
+  startupVersionUnavailable("startup_version_unavailable"),
+  runtimeUnavailable("runtime_unavailable"),
+  runtimeReentering("runtime_reentering"),
+  runtimeVersionChecking("runtime_version_checking"),
+  runtimeUpdateRequired("runtime_update_required"),
+  runtimeLatest("runtime_latest"),
+  runtimeVersionUnavailable("runtime_version_unavailable");
+
+  const StartupRecoveryPhase(this.wireName);
+
+  final String wireName;
+
+  static StartupRecoveryPhase fromWire(Object? value, String path) {
+    return switch (value) {
+      "startup_checking" => StartupRecoveryPhase.startupChecking,
+      "startup_update_required" => StartupRecoveryPhase.startupUpdateRequired,
+      "startup_latest" => StartupRecoveryPhase.startupLatest,
+      "startup_version_unavailable" => StartupRecoveryPhase.startupVersionUnavailable,
+      "runtime_unavailable" => StartupRecoveryPhase.runtimeUnavailable,
+      "runtime_reentering" => StartupRecoveryPhase.runtimeReentering,
+      "runtime_version_checking" => StartupRecoveryPhase.runtimeVersionChecking,
+      "runtime_update_required" => StartupRecoveryPhase.runtimeUpdateRequired,
+      "runtime_latest" => StartupRecoveryPhase.runtimeLatest,
+      "runtime_version_unavailable" => StartupRecoveryPhase.runtimeVersionUnavailable,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum StartupRecoverySurface {
+  pageAppStartupRecovery("page.app.startup_recovery");
+
+  const StartupRecoverySurface(this.wireName);
+
+  final String wireName;
+
+  static StartupRecoverySurface fromWire(Object? value, String path) {
+    return switch (value) {
+      "page.app.startup_recovery" => StartupRecoverySurface.pageAppStartupRecovery,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
 
 enum VisitTargetType {
   page("page"),
@@ -26,6 +143,37 @@ enum VisitTargetType {
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
+}
+
+final class AppReleaseRecoveryView {
+  const AppReleaseRecoveryView({
+    required this.latestVersion,
+    required this.latestBuild,
+    this.updateUrl,
+    required this.recoveryUrl,
+  });
+
+  final String latestVersion;
+  final String latestBuild;
+  final String? updateUrl;
+  final String recoveryUrl;
+
+  factory AppReleaseRecoveryView.fromWire(Map<String, Object?> map, [String path = "AppReleaseRecoveryView"]) {
+    _rejectUnknownFields(map, const <String>{"latestVersion", "latestBuild", "updateUrl", "recoveryUrl"}, path);
+    return AppReleaseRecoveryView(
+      latestVersion: _requiredString(map["latestVersion"], '$path.latestVersion'),
+      latestBuild: _requiredString(map["latestBuild"], '$path.latestBuild'),
+      updateUrl: map["updateUrl"] == null ? null : _requiredString(map["updateUrl"], '$path.updateUrl'),
+      recoveryUrl: _requiredString(map["recoveryUrl"], '$path.recoveryUrl'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "latestVersion": latestVersion,
+    "latestBuild": latestBuild,
+    if (updateUrl != null) "updateUrl": updateUrl!,
+    "recoveryUrl": recoveryUrl,
+  };
 }
 
 final class EventRecordBatchReceipt {
@@ -109,6 +257,9 @@ final class StartupTelemetryBatchReceipt {
   };
 }
 
+AppReleaseRecoveryView decodeAppReleaseRecoveryView(Object? response) =>
+    AppReleaseRecoveryView.fromWire(_requiredObject(response, "AppReleaseRecoveryView"), "AppReleaseRecoveryView");
+
 EventRecordBatchReceipt decodeEventRecordBatchReceipt(Object? response) =>
     EventRecordBatchReceipt.fromWire(_requiredObject(response, "EventRecordBatchReceipt"), "EventRecordBatchReceipt");
 
@@ -117,6 +268,12 @@ RecordVisitReceipt decodeRecordVisitReceipt(Object? response) =>
 
 StartupTelemetryBatchReceipt decodeStartupTelemetryBatchReceipt(Object? response) =>
     StartupTelemetryBatchReceipt.fromWire(_requiredObject(response, "StartupTelemetryBatchReceipt"), "StartupTelemetryBatchReceipt");
+
+void decodeEmptyResponse(Object? response) {
+  if (response != null) {
+    throw const FormatException('empty response must not contain a body');
+  }
+}
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {

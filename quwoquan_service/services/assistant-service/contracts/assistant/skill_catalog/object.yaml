@@ -25,8 +25,6 @@ relationships:
   target_object: assistant.SkillPackageRelease
 local_identity_reasons:
   domainId: stable Skill domain classification from the immutable manifest; it groups and routes catalog entries but is not the SkillCatalog projection identity
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:
@@ -39,7 +37,6 @@ business_rules:
 - 同一 skillId 只能存在一个目录项，清单项按 skillId 稳定排序后返回
 - 目录不得拼接、复制或推断账号 Consent、Setting 与 Subscription 状态
 lifecycle:
-  source_events: [SkillCatalogReleaseActivated]
   checkpoint: active_skill_package_release_digest
   rebuild: resolve_active_release_and_decode_digest_verified_assets
-  tombstone: active_release_rollback_or_replacement_removes_old_catalog_projection
+  tombstone: active_release_switch_removes_retired_catalog_items

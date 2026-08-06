@@ -11,8 +11,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from quwoquan_ops.ci.provider_conformance import b10_prod_remote_uat
-from quwoquan_ops.ci.provider_conformance import run_b10_prod_remote_patrol_uat
+from quwoquan_ops.ci.provider_conformance import run_prod_remote_uat
+from quwoquan_ops.ci.provider_conformance import run_prod_remote_patrol_uat
 from quwoquan_ops.ci.render_provider_conformance_source import render as render_source
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
@@ -256,7 +256,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             case_path = run_root / "case-results.json"
             readback_path = run_root / "provider.native-device-readback.json"
             payload = {
-                "schema": provider_conformance.B10_REMOTE_READBACK_SCHEMA,
+                "schema": provider_conformance.REMOTE_READBACK_SCHEMA,
                 "status": "passed",
                 "capabilityId": "rtc.room.transport",
                 "adapterId": "infra.livekit_sfu",
@@ -312,16 +312,25 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         self.assertFalse(missing["active"])
         self.assertFalse(stale["active"])
 
-    def test_release_cell_set_is_exactly_140_and_rejects_legacy_duplicates(
+    def test_release_cell_set_is_compiled_and_rejects_legacy_duplicates(
         self,
     ) -> None:
         compiled = {
             "providerConformanceCapabilityIds": [
-                f"provider.capability.{index:02d}" for index in range(14)
+                f"provider.capability.{index:02d}" for index in range(2)
             ]
         }
         expected = provider_conformance.expected_required_cell_keys(compiled)
-        self.assertEqual(len(expected), 140)
+        self.assertEqual(len(expected), 20)
+        extended = provider_conformance.expected_required_cell_keys(
+            {
+                "providerConformanceCapabilityIds": [
+                    *compiled["providerConformanceCapabilityIds"],
+                    "provider.capability.02",
+                ]
+            }
+        )
+        self.assertEqual(len(extended), 30)
         evidence = []
         for capability_id, environment, layer in sorted(expected):
             item = {
@@ -348,7 +357,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             evidence[:-1],
             compiled=compiled,
         )
-        self.assertTrue(any("exactly 140" in issue for issue in missing))
+        self.assertTrue(any("compiled required cells" in issue for issue in missing))
         duplicate = provider_conformance.exact_required_cell_issues(
             [*evidence, evidence[0]],
             compiled=compiled,
@@ -434,20 +443,20 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             provider_conformance._assertion_semantics(release),
         )
 
-    def test_b10_prod_remote_sources_are_discovered(self) -> None:
+    def test_provider_two_device_prod_remote_sources_are_discovered(self) -> None:
         sources, issues = provider_conformance.discover_test_sources()
         self.assertEqual(issues, [])
         self.assertEqual(
             sources[
                 ("rtc.room.transport", "infra.livekit_sfu", "user_acceptance")
             ]["target"],
-            "b10-remote-rtc.room.transport",
+            "provider-remote-rtc.room.transport",
         )
         self.assertEqual(
             sources[
                 ("integration.push.delivery", "ext.push.dispatch", "user_acceptance")
             ]["target"],
-            "b10-remote-integration.push.delivery",
+            "provider-remote-integration.push.delivery",
         )
         self.assertEqual(
             sources[
@@ -457,50 +466,50 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                     "user_acceptance",
                 )
             ]["target"],
-            "b10-remote-runtime.message.transport",
+            "provider-remote-runtime.message.transport",
         )
 
-    def test_b10_remote_readback_requires_both_device_directions(self) -> None:
+    def test_provider_two_device_remote_readback_requires_both_device_directions(self) -> None:
         environment = {
-            "QWQ_B10_IOS_DEVICE_ID": "ios-device",
-            "QWQ_B10_ANDROID_DEVICE_ID": "android-device",
+            "QWQ_PROVIDER_UAT_IOS_DEVICE_ID": "ios-device",
+            "QWQ_PROVIDER_UAT_ANDROID_DEVICE_ID": "android-device",
         }
         evidence = [
             {
                 "platform": "ios",
-                "deviceHash": b10_prod_remote_uat._device_hash("ios-device"),
+                "deviceHash": run_prod_remote_uat._device_hash("ios-device"),
                 "applicationDigest": "sha256:" + "1" * 64,
                 "caseDirection": "ios_to_android",
             },
             {
                 "platform": "android",
-                "deviceHash": b10_prod_remote_uat._device_hash("android-device"),
+                "deviceHash": run_prod_remote_uat._device_hash("android-device"),
                 "applicationDigest": "sha256:" + "2" * 64,
                 "caseDirection": "ios_to_android",
             },
         ]
         environment.update(
             {
-                "QWQ_B10_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
-                "QWQ_B10_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
+                "QWQ_PROVIDER_UAT_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
+                "QWQ_PROVIDER_UAT_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
             }
         )
         with mock.patch.dict(os.environ, environment, clear=True):
             with self.assertRaisesRegex(ValueError, "both iOS-to-Android"):
-                b10_prod_remote_uat._validate_device_evidence(evidence)
+                run_prod_remote_uat._validate_device_evidence(evidence)
 
-    def test_b10_remote_rejects_one_device_masquerading_as_two_platforms(self) -> None:
+    def test_provider_two_device_remote_rejects_one_device_masquerading_as_two_platforms(self) -> None:
         device_id = "physical-device"
         evidence = [
             {
                 "platform": "ios",
-                "deviceHash": b10_prod_remote_uat._device_hash(device_id),
+                "deviceHash": run_prod_remote_uat._device_hash(device_id),
                 "applicationDigest": "sha256:" + "1" * 64,
                 "caseDirection": "ios_to_android",
             },
             {
                 "platform": "android",
-                "deviceHash": b10_prod_remote_uat._device_hash(device_id),
+                "deviceHash": run_prod_remote_uat._device_hash(device_id),
                 "applicationDigest": "sha256:" + "2" * 64,
                 "caseDirection": "android_to_ios",
             },
@@ -508,23 +517,24 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         with mock.patch.dict(
             os.environ,
             {
-                "QWQ_B10_IOS_DEVICE_ID": device_id,
-                "QWQ_B10_ANDROID_DEVICE_ID": device_id,
-                "QWQ_B10_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
-                "QWQ_B10_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
+                "QWQ_PROVIDER_UAT_IOS_DEVICE_ID": device_id,
+                "QWQ_PROVIDER_UAT_ANDROID_DEVICE_ID": device_id,
+                "QWQ_PROVIDER_UAT_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
+                "QWQ_PROVIDER_UAT_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
             },
             clear=True,
         ):
             with self.assertRaisesRegex(ValueError, "distinct iOS and Android"):
-                b10_prod_remote_uat._validate_device_evidence(evidence)
+                run_prod_remote_uat._validate_device_evidence(evidence)
 
-    def test_b10_operator_readback_is_bound_to_active_candidate_digests(self) -> None:
+    def test_provider_two_device_operator_readback_is_bound_to_active_candidate_digests(self) -> None:
         digest = "sha256:" + "a" * 64
         receipt_id = "b" * 64
+        assertion_ids = ["provider.success", "provider.rtc_transport"]
         call_id = "call-1"
-        call_digest = run_b10_prod_remote_patrol_uat._sha256(call_id.encode("utf-8"))
+        call_digest = run_prod_remote_patrol_uat._sha256(call_id.encode("utf-8"))
         payload = {
-            "schema": "b10-prod-operator-readback",
+            "schema": "provider-prod-operator-readback",
             "imageDigest": digest,
             "configDigest": digest,
             "contractGraphDigest": digest,
@@ -564,7 +574,22 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "alertReceiptRef": "receipt:alert-ok",
                 "rollbackReceiptRef": "receipt:rollback-ok",
             },
-            "observabilityRefs": {},
+            "assertions": [
+                {
+                    "assertionId": assertion_id,
+                    "status": "passed",
+                    "sceneReceiptRef": f"receipt:scene-{index}",
+                    "logRef": "log:provider-uat",
+                    "traceRef": "trace:provider-uat",
+                    "metricRefs": ["metric:provider-uat"],
+                }
+                for index, assertion_id in enumerate(assertion_ids)
+            ],
+            "observabilityRefs": {
+                "logs": ["log:provider-uat"],
+                "traces": ["trace:provider-uat"],
+                "metrics": ["metric:provider-uat"],
+            },
             "releaseReadiness": {
                 "bindingPreflightReceiptRef": "receipt:binding-preflight",
                 "adapterHealthReceiptRef": "receipt:adapter-health",
@@ -579,11 +604,14 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             path = Path(temporary) / "operator-readback.json"
             path.write_text(json.dumps(payload), encoding="utf-8")
             environment = {
-                "QWQ_B10_OPERATOR_READBACK_PATH": str(path),
+                "QWQ_PROVIDER_UAT_OPERATOR_READBACK_PATH": str(path),
                 "QWQ_PROVIDER_CONFORMANCE_EXPECTED_IMAGE_DIGEST": digest,
                 "QWQ_PROVIDER_CONFORMANCE_CONFIG_DIGEST": digest,
                 "QWQ_PROVIDER_CONFORMANCE_CONTRACT_GRAPH_DIGEST": digest,
                 "QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST": digest,
+                "QWQ_PROVIDER_CONFORMANCE_ASSERTION_IDS": json.dumps(
+                    assertion_ids
+                ),
             }
             def hosted_receipt_readback(
                 command: list[str],
@@ -609,12 +637,12 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 )
 
             with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(
-                run_b10_prod_remote_patrol_uat.subprocess,
+                run_prod_remote_patrol_uat.subprocess,
                 "run",
                 side_effect=hosted_receipt_readback,
             ):
                 self.assertEqual(
-                    run_b10_prod_remote_patrol_uat._load_operator_receipts(
+                    run_prod_remote_patrol_uat._load_operator_receipts(
                         call_ids=(call_id,),
                     ),
                     payload,
@@ -622,52 +650,59 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 payload["adapterDigest"] = "sha256:" + "b" * 64
                 path.write_text(json.dumps(payload), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "active image, config"):
-                    run_b10_prod_remote_patrol_uat._load_operator_receipts(
+                    run_prod_remote_patrol_uat._load_operator_receipts(
                         call_ids=(call_id,),
                     )
                 payload["adapterDigest"] = digest
                 payload["callIdDigests"] = [
-                    run_b10_prod_remote_patrol_uat._sha256(b"stale-call"),
+                    run_prod_remote_patrol_uat._sha256(b"stale-call"),
                 ]
                 path.write_text(json.dumps(payload), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "every executed call"):
-                    run_b10_prod_remote_patrol_uat._load_operator_receipts(
+                    run_prod_remote_patrol_uat._load_operator_receipts(
+                        call_ids=(call_id,),
+                    )
+                payload["callIdDigests"] = [call_digest]
+                payload["assertions"] = []
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "observed scene"):
+                    run_prod_remote_patrol_uat._load_operator_receipts(
                         call_ids=(call_id,),
                     )
 
-    def test_b10_remote_rejects_dynamic_patrol_command(self) -> None:
+    def test_provider_two_device_remote_rejects_dynamic_patrol_command(self) -> None:
         with mock.patch.dict(
             os.environ,
-            {"QWQ_B10_REMOTE_UAT_COMMAND_JSON": '["untrusted-runner"]'},
+            {"QWQ_PROVIDER_UAT_REMOTE_UAT_COMMAND_JSON": '["untrusted-runner"]'},
             clear=True,
         ):
             with self.assertRaisesRegex(ValueError, "source-owned Patrol"):
-                b10_prod_remote_uat._load_command()
+                run_prod_remote_uat._load_command()
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertEqual(
-                b10_prod_remote_uat._load_command(),
-                list(b10_prod_remote_uat.SOURCE_OWNED_PATROL_COMMAND),
+                run_prod_remote_uat._load_command(),
+                list(run_prod_remote_uat.SOURCE_OWNED_PATROL_COMMAND),
             )
 
-    def test_b10_remote_patrol_passes_only_role_required_dart_defines(self) -> None:
-        caller_command = run_b10_prod_remote_patrol_uat._patrol_command(
+    def test_provider_two_device_remote_patrol_passes_only_role_required_dart_defines(self) -> None:
+        caller_command = run_prod_remote_patrol_uat._patrol_command(
             "ios",
             role="caller",
         )
-        callee_command = run_b10_prod_remote_patrol_uat._patrol_command(
+        callee_command = run_prod_remote_patrol_uat._patrol_command(
             "android",
             role="callee",
         )
-        self.assertIn("QWQ_PROVIDER_UAT_B10_CALL_ID", caller_command)
+        self.assertIn("QWQ_PROVIDER_UAT_CALL_ID", caller_command)
         self.assertNotIn(
-            "QWQ_PROVIDER_UAT_B10_EXPECTED_CALLER_NAME",
+            "QWQ_PROVIDER_UAT_EXPECTED_CALLER_NAME",
             caller_command,
         )
         self.assertIn(
-            "QWQ_PROVIDER_UAT_B10_EXPECTED_CALLER_NAME",
+            "QWQ_PROVIDER_UAT_EXPECTED_CALLER_NAME",
             callee_command,
         )
-        self.assertNotIn("QWQ_PROVIDER_UAT_B10_CALL_ID", callee_command)
+        self.assertNotIn("QWQ_PROVIDER_UAT_CALL_ID", callee_command)
 
     def test_source_coverage_gaps_are_preserved_in_release_readiness(self) -> None:
         compiled, compile_issues = governance.load_and_compile()
@@ -681,7 +716,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         self.assertEqual(
             coverage,
             [],
-            "all 14 external Provider capabilities must have three-layer sources; "
+            "all compiled required Provider capabilities must have three-layer sources; "
             "first-party HTTP authority bindings are outside Provider Conformance",
         )
         with tempfile.TemporaryDirectory() as temporary:
@@ -697,7 +732,61 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         for issue in coverage:
             self.assertIn(issue, readiness)
 
-    def test_b10_remote_readback_emits_only_test_owned_case_results(self) -> None:
+    def test_local_source_coverage_isolated_from_prod_harnesses(self) -> None:
+        compiled, compile_issues = governance.load_and_compile()
+        self.assertEqual(compile_issues, [])
+        sources, discovery_issues = provider_conformance.discover_test_sources()
+        self.assertEqual(discovery_issues, [])
+        prod_only_key = next(
+            (
+                capability_id,
+                prod_binding["adapter_id"],
+                "user_acceptance",
+            )
+            for capability_id, prod_binding in compiled["selectedBindings"][
+                "prod"
+            ].items()
+            if governance.requires_provider_conformance(prod_binding)
+            and prod_binding["adapter_id"]
+            != compiled["selectedBindings"]["alpha"][capability_id]["adapter_id"]
+        )
+        without_prod = dict(sources)
+        without_prod.pop(prod_only_key)
+
+        self.assertTrue(
+            any(
+                prod_only_key[0] in issue
+                for issue in provider_conformance.source_coverage_issues(
+                    compiled=compiled,
+                    sources=without_prod,
+                )
+            )
+        )
+        self.assertEqual(
+            provider_conformance.local_source_coverage_issues(
+                compiled=compiled,
+                environment="alpha",
+                sources=without_prod,
+            ),
+            [],
+        )
+
+        alpha_binding = compiled["selectedBindings"]["alpha"][prod_only_key[0]]
+        without_alpha = dict(sources)
+        without_alpha.pop(
+            (prod_only_key[0], alpha_binding["adapter_id"], "api_integration")
+        )
+        alpha_issues = provider_conformance.local_source_coverage_issues(
+            compiled=compiled,
+            environment="alpha",
+            sources=without_alpha,
+        )
+        self.assertTrue(
+            any("api_integration" in issue for issue in alpha_issues),
+            alpha_issues,
+        )
+
+    def test_provider_two_device_remote_readback_emits_only_test_owned_case_results(self) -> None:
         assertion_ids = [
             "provider.success",
             "provider.validation",
@@ -717,16 +806,16 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as temporary:
             result_path = Path(temporary) / "case-results.json"
-            ios_hash = b10_prod_remote_uat._device_hash("ios-device")
-            android_hash = b10_prod_remote_uat._device_hash("android-device")
+            ios_hash = run_prod_remote_uat._device_hash("ios-device")
+            android_hash = run_prod_remote_uat._device_hash("android-device")
             refs = {
-                "logs": ["log:b10-uat"],
-                "traces": ["trace:b10-uat"],
-                "metrics": ["metric:b10-uat"],
+                "logs": ["log:provider-uat"],
+                "traces": ["trace:provider-uat"],
+                "metrics": ["metric:provider-uat"],
             }
             call_digests = ["sha256:" + "d" * 64, "sha256:" + "e" * 64]
             readback = {
-                "schema": b10_prod_remote_uat.READBACK_SCHEMA,
+                "schema": run_prod_remote_uat.READBACK_SCHEMA,
                 "status": "passed",
                 "capabilityId": "rtc.room.transport",
                 "adapterId": "infra.livekit_sfu",
@@ -808,9 +897,9 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                     {
                         "assertionId": assertion_id,
                         "status": "passed",
-                        "logRef": "log:b10-uat",
-                        "traceRef": "trace:b10-uat",
-                        "metricRefs": ["metric:b10-uat"],
+                        "logRef": "log:provider-uat",
+                        "traceRef": "trace:provider-uat",
+                        "metricRefs": ["metric:provider-uat"],
                     }
                     for assertion_id in assertion_ids
                 ],
@@ -830,7 +919,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             def write_native_readback(
                 _command: list[str], *, env: dict[str, str], **_kwargs: object
             ) -> mock.Mock:
-                Path(env["QWQ_B10_REMOTE_UAT_READBACK_PATH"]).write_text(
+                Path(env["QWQ_PROVIDER_UAT_REMOTE_UAT_READBACK_PATH"]).write_text(
                     json.dumps(readback),
                     encoding="utf-8",
                 )
@@ -846,21 +935,21 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "QWQ_PROVIDER_CONFORMANCE_ADAPTER_DIGEST": "sha256:" + "f" * 64,
                 "QWQ_PROVIDER_CONFORMANCE_TYPED_PORT": "MediaTransportPort",
                 "QWQ_PROVIDER_CONFORMANCE_CONTRACT_REF": "quwoquan_service/services/rtc-service/contracts/rtc/call_session/operations.yaml",
-                "QWQ_B10_IOS_DEVICE_ID": "ios-device",
-                "QWQ_B10_ANDROID_DEVICE_ID": "android-device",
-                "QWQ_B10_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
-                "QWQ_B10_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
+                "QWQ_PROVIDER_UAT_IOS_DEVICE_ID": "ios-device",
+                "QWQ_PROVIDER_UAT_ANDROID_DEVICE_ID": "android-device",
+                "QWQ_PROVIDER_UAT_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
+                "QWQ_PROVIDER_UAT_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
             }
             with (
                 mock.patch.dict(os.environ, environment, clear=True),
                 mock.patch.object(
-                    b10_prod_remote_uat.subprocess,
+                    run_prod_remote_uat.subprocess,
                     "run",
                     side_effect=write_native_readback,
                 ),
             ):
                 self.assertEqual(
-                    b10_prod_remote_uat.run(
+                    run_prod_remote_uat.run(
                         "rtc.room.transport",
                         "infra.livekit_sfu",
                     ),
@@ -873,7 +962,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             native_readback = dict(case_result["nativeReadback"])
             self.assertEqual(
                 native_readback["schema"],
-                b10_prod_remote_uat.READBACK_SCHEMA,
+                run_prod_remote_uat.READBACK_SCHEMA,
             )
             self.assertTrue(
                 (
@@ -1201,6 +1290,98 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                     {**spoofed_context, "commit": commit},
                 )
             )
+
+    def test_local_candidate_readiness_accepts_nonpromotable_checksum_only(self) -> None:
+        compiled, compile_issues = governance.load_and_compile()
+        self.assertEqual(compile_issues, [])
+        capability_ids = provider_conformance.provider_conformance_capability_ids(
+            compiled
+        )
+        candidate_receipt_ref = (
+            ".qwq_output/env/alpha/local/alpha-local/process/startup_attempt.json"
+        )
+        evidence: list[dict[str, object]] = []
+        selected = compiled["selectedBindings"]["alpha"]
+        for capability_index, capability_id in enumerate(sorted(capability_ids)):
+            adapter_id = selected[capability_id]["adapter_id"]
+            for layer in provider_conformance.LAYERS:
+                evidence.append(
+                    {
+                        "status": "passed",
+                        "capabilityId": capability_id,
+                        "adapterId": adapter_id,
+                        "environment": "alpha",
+                        "testLayer": layer,
+                        "candidateStatus": "active_immutable",
+                        "candidateReceiptRef": candidate_receipt_ref,
+                        "candidateReceiptDigest": "sha256:" + "9" * 64,
+                        "commit": "a" * 40,
+                        "imageDigest": "sha256:" + "1" * 64,
+                        "contractGraphDigest": "sha256:" + "2" * 64,
+                        "adapterDigest": "sha256:"
+                        + f"{capability_index + 1:064x}",
+                        "configDigest": "sha256:"
+                        + f"{capability_index + 101:064x}",
+                        "assertionIds": sorted(
+                            provider_conformance.PUBLIC_ASSERTION_IDS
+                        ),
+                        "typedPort": f"Capability{capability_index}Port",
+                        "contractRef": f"contracts/{capability_id}.yaml",
+                        "attestationAuthority": "local",
+                        "artifactAttestation": "local-sha256:" + "3" * 64,
+                        "nonPromotable": True,
+                        "sourceTreeState": "dirty",
+                        "commitReview": "unreviewed",
+                    }
+                )
+
+        with (
+            mock.patch.object(
+                provider_conformance,
+                "_binding_preflight_ready",
+                return_value=True,
+            ),
+            mock.patch.object(
+                provider_conformance,
+                "ci_attestation_authority_available",
+                return_value=False,
+            ),
+        ):
+            issues = provider_conformance.local_functional_readiness_issues(
+                compiled=compiled,
+                evidence=evidence,
+                environment="alpha",
+            )
+
+        self.assertEqual(issues, [])
+        first_capability_cells = [
+            item
+            for item in evidence
+            if item["capabilityId"] == min(capability_ids)
+        ]
+        self.assertFalse(
+            provider_conformance._cells_share_release(
+                first_capability_cells,
+                expected_environments=["alpha"],
+                require_adapter_digest=True,
+            ),
+            "local functional evidence must never become release evidence",
+        )
+        evidence[0]["nonPromotable"] = False
+        with mock.patch.object(
+            provider_conformance,
+            "_binding_preflight_ready",
+            return_value=True,
+        ):
+            blocked = provider_conformance.local_functional_readiness_issues(
+                compiled=compiled,
+                evidence=evidence,
+                environment="alpha",
+            )
+        self.assertTrue(
+            any("three-layer local closure" in issue for issue in blocked),
+            blocked,
+        )
 
     def test_reviewed_clean_ci_identity_is_promotable(self) -> None:
         commit = "b" * 40

@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+// readiness_case: get-user-profile-api
+// readiness_case: get-profile-edit-snapshot-api
+// readiness_case: get-profile-qr-card-api
+// readiness_case: resolve-profile-qr-token-api
 package api_integration
 
 import (

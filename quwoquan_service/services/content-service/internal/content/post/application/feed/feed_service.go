@@ -17,8 +17,8 @@ import (
 	recpolicy "quwoquan_service/runtime/recpolicy"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
-	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	"quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
+	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 

@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   conversations:
+    publication_role: not_published
     entity: Conversation
     indexes:
     - name: idx_conv_type_updated
@@ -27,29 +28,33 @@ collections:
     - name: idx_conv_last_msg_time
       keys:
         lastMessageTime: -1
-    search_indexes:
     - name: search_conv_title
       source: search_conv_title
       type: text
       fields:
       - title
   conversations_command_receipts:
+    publication_role: not_published
     entity: Conversation
     role: authoritative
     description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
   conversations_outbox:
+    publication_role: transactional_outbox
     entity: Conversation
     role: append_only
     description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
   chat_aggregate_outbox_sequences:
+    publication_role: publication_accessory
     entity: Conversation
     role: authoritative
     description: chat 域三个非 Message 聚合 outbox 的共享全序分配器（_id 为 outbox 集合名），与事件写入同事务推进。
   chat_projection_checkpoints:
+    publication_role: publication_accessory
     entity: Conversation
     role: projection
     description: chat 域 relay/projector 各 consumer 独立保存的可重放水位。
   circle_group_chat_binding_projection_states:
+    publication_role: not_published
     entity: Conversation
     role: projection
     description: CircleGroupCreated/Archived source-version 水位；处理跨 Stream 乱序时防止已归档 CircleGroup 被迟到创建事件重新
@@ -64,6 +69,7 @@ collections:
         status: 1
         sourceVersion: -1
   circle_group_chat_sync_failures:
+    publication_role: not_published
     entity: Conversation
     role: projection
     description: CircleGroup 到 Conversation 绑定投影的有限重试状态；只保存事件引用、错误摘要和 TTL。
@@ -71,8 +77,9 @@ collections:
     - name: ttl_circle_group_chat_sync_failures
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   chat_user_account_closed_inbox:
+    publication_role: not_published
     entity: Conversation
     role: projection
     description: UserAccountClosed 清理的不可逆幂等 inbox；不保存原账号或 persona 原值。
@@ -81,6 +88,7 @@ collections:
       keys:
         eventDigest: 1
   chat_user_account_closed_failures:
+    publication_role: not_published
     entity: Conversation
     role: projection
     description: UserAccountClosed 有限重试状态，只保存 source message reference、
@@ -93,21 +101,24 @@ collections:
     - name: ttl_chat_user_account_closed_failures
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
 streams:
   events.chat.circle-group-conversations:
+    publication_role: publication_accessory
     entity: Conversation
     role: append_only
     idempotency_key: eventId
     retention_seconds: 604800
     description: Conversation outbox 中 CircleGroupConversationProvisioned 的唯一 durable transport。
   events.rtc.call_ended-dlq:
+    publication_role: not_published
     entity: Conversation
     role: dead_letter
     idempotency_key: sourceStreamId
     retention_seconds: 604800
     description: Chat 无法解释的 CallEnded typed event 脱敏失败记录。
   events.user.account.chat-service.dlq:
+    publication_role: not_published
     entity: Conversation
     role: dead_letter
     idempotency_key: sourceStreamId

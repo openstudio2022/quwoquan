@@ -31,7 +31,7 @@ type fakeCloseOutboxStore struct {
 	terminalErr   error
 }
 
-func (store *fakeCloseOutboxStore) ClaimReady(
+func (store *fakeCloseOutboxStore) ClaimPendingOutbox(
 	context.Context,
 	string,
 	time.Time,
@@ -155,7 +155,7 @@ func (publisher *signalingCloseOutboxPublisher) PublishUserAccountEvent(
 
 type canceledCloseOutboxStore struct{}
 
-func (canceledCloseOutboxStore) ClaimReady(
+func (canceledCloseOutboxStore) ClaimPendingOutbox(
 	ctx context.Context,
 	_ string,
 	_ time.Time,

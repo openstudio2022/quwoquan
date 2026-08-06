@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class RecommendationObjectCard(BaseModel):
-    """排序窗口内冻结的个性化对象卡；Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。"""
+    """排序窗口内冻结的个性化对象卡；objectKind 支持 entity_homepage 与 gathering，Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。"""
     objectKind: str
     objectId: str
     title: str

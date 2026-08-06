@@ -7,6 +7,7 @@ type DataPorts struct {
 	Detail    DetailReader
 	Queue     QueueReader
 	MyReports MyReportReader
+	Safety    reportports.GatheringSafetyAuthorityStore
 }
 
 func BindDataPorts(adapter interface {
@@ -15,10 +16,15 @@ func BindDataPorts(adapter interface {
 	QueueReader
 	MyReportReader
 }) DataPorts {
+	var safety reportports.GatheringSafetyAuthorityStore
+	if candidate, ok := any(adapter).(reportports.GatheringSafetyAuthorityStore); ok {
+		safety = candidate
+	}
 	return DataPorts{
 		Aggregate: adapter,
 		Detail:    adapter,
 		Queue:     adapter,
 		MyReports: adapter,
+		Safety:    safety,
 	}
 }

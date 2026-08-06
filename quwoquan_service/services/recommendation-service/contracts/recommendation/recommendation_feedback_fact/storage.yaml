@@ -8,13 +8,13 @@ collections:
     indexes:
     - {name: uq_recommendation_feedback_source_event, keys: {sourceEventId: 1}, unique: true}
     - {name: idx_recommendation_feedback_exposure_time, keys: {exposureId: 1, occurredAt: -1}}
-    - {name: ttl_recommendation_feedback_facts, keys: {recordedAt: 1}, ttl_days: 30}
+    - {name: ttl_recommendation_feedback_facts, keys: {recordedAt: 1}, expire_after_seconds: 2592000}
   recommendation_feedback_failures:
     entity: RecommendationFeedbackFailure
     role: reliable_task
     description: events.content.behavior_facts 消费失败的有界尝试状态，成功或进入脱敏 DLQ 后删除。
     indexes:
-    - {name: ttl_recommendation_feedback_failures, keys: {updatedAt: 1}, ttl_days: 7}
+    - {name: ttl_recommendation_feedback_failures, keys: {updatedAt: 1}, expire_after_seconds: 604800}
 streams:
   events.content.behavior_facts.recommendation-feedback.dlq:
     entity: RecommendationFeedbackFact

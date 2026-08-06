@@ -43,6 +43,9 @@
   runtime identity 和 immutable release；跨 target 回执或数据命中必须 `GATE_BLOCK`。
 - matrix 结果只能来自唯一 run 目录内的 live 子报告；测试替身不得写入 canonical live
   report 根，缺 `exitCode`、子报告、状态、environment 或 runtime identity 一律失败。
+- matrix 的设备覆盖必须显式选择 `full` 或 `emulator_only`。`emulator_only` 仅覆盖 iOS
+  Simulator 与 Android Emulator，结果必须使用独立 claim 并标记 `nonPromotable=true`；
+  缺 Android 真机时禁止复用正式 `ALPHA_BETA_GAMMA_LOCAL_GREEN`。
 
 <a id="req-002"></a>
 ### REQ-002 启动事务、清理与设备实例边界
@@ -93,6 +96,9 @@
   runtime receipt、release receipt 与 report 互不相同，候选 baselineId 相同。
 - THEN 每段使用真实 phase 时长和唯一 report 目录，Feed 证据命中当前 release，最终结果
   只在所有 live 子报告身份一致且成功时为 passed。
+- THEN `emulator_only` 通过时只生成
+  `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`，记录设备覆盖与 Android 真机 waiver；
+  final acceptance 与 release receipt 必须拒绝其关闭正式发布 blocker。
 - THEN `dev-session --all-nonprod` 复用同一串行资源合同；重复执行健康 target 不改变 runtime 事实，bounded content 任务结束后 full receipt 仍为 running。
 - AND 任一启动、清理、证据或身份失败返回 canonical `GATE_BLOCK`，完成 partial teardown，
   不覆盖旧报告、不继续下一个 target、不产生伪成功事实。

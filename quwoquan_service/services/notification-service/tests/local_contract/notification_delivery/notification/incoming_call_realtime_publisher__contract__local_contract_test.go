@@ -8,8 +8,8 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
 	notificationrealtime "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/realtime"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
 func TestIncomingCallPublisherUsesCanonicalRTCEnvelopeAndTransportOnlyDeviceRoute(t *testing.T) {

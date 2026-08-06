@@ -1,37 +1,78 @@
+description: Gathering owner 事务事件；InvitationChanged 由 Notification 的可靠幂等投影消费，其余未落地 consumer 的事件不伪造订阅。
 events:
-- name: GatheringCreated
-  producer: circle-service
-  consumers: [gathering-conversation-binding, recommendation-engine]
-  channel: transactional_outbox
-  payload_entity: Gathering
-  payload_fields: [_id, creatorPersonaId, targetRef, startAt, endAt, capacity, joinPolicy, status, createdAt]
-- name: GatheringConversationBound
-  producer: circle-service
-  consumers: [recommendation-engine]
-  channel: transactional_outbox
-  payload_entity: Gathering
-  payload_fields: [_id, conversationId, status, updatedAt]
-- name: GatheringConversationBindingFailed
-  producer: circle-service
-  consumers: [gathering-conversation-binding]
-  channel: transactional_outbox
-  payload_entity: Gathering
-  payload_fields: [_id, conversationBindingStatus, status, updatedAt]
-- name: GatheringParticipantStateChanged
-  producer: circle-service
-  consumers: [gathering-conversation-membership, recommendation-engine]
-  channel: transactional_outbox
-  payload_entity: Gathering
-  payload_fields: [_id, status, participants, updatedAt]
+- name: GatheringDraftCreated
+  description: Gathering draft 与初始 revision pointer 已在 owner 事务提交。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, roomBindingStatus, occurredAt]
+  no_consumer_reason: M1 只建立 owner 合约与事务日志；CreateDraft 尚无独立下游 consumer，公开投影只能在 Publish 后产生。
+- name: GatheringRoomBindingChanged
+  description: Circle-owned conversation reference 与 room binding state 已变化。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, roomBindingStatus, conversationId, occurredAt]
+  no_consumer_reason: Chat room ensure 的目标 runtime 与回执 consumer 尚未实现；M1 不把同步端口或计划中的 consumer 伪装成已存在订阅。
+- name: GatheringPublished
+  description: room-ready Gathering 已从 draft 原子进入 published。
+  delivery_semantics: transactional_outbox
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, roomBindingStatus, conversationId, occurredAt]
+- name: GatheringRevisionAppended
+  description: append-only GatheringRevision 已追加并推进 root current revision pointer。
+  delivery_semantics: transactional_outbox
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, occurredAt]
+- name: GatheringParticipationChanged
+  description: 同一 root-owned Participation 的 attempt、state、seat hold、attendance 或 acknowledgement 已变化；Recommendation 据此重读 canonical PublicCard 收敛满员与恢复。
+  delivery_semantics: transactional_outbox
+  topic: events.circle.gatherings
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, participantPersonaId, participationState, revisionId, revisionNumber, revisionDigest, occurredAt]
+- name: GatheringInvitationChanged
+  description: 邀请创建、接受、拒绝或撤回后，向 Notification 发布 disclosure-safe typed 邀请投影；Gathering 取消由同 stream 的 GatheringCancelled 批量失效卡片，Circle 仍是 Participation 唯一事实 owner。
+  delivery_semantics: transactional_outbox
+  topic: events.circle.gatherings
+  payload_entity: GatheringInvitationEventPayload
+  payload_shape: exact
+  payload_fields: [gatheringId, inviterPersonaId, recipientPersonaId, purposeSummary, schedule, place, participationVersion, status, actionIntents, expiresAt, occurredAt]
+- name: GatheringAdmissionControlChanged
+  description: 人工 admission control 的 open 或 paused 事实已版本化变化；Recommendation 据此重读 canonical PublicCard。
+  delivery_semantics: transactional_outbox
+  topic: events.circle.gatherings
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, admissionControlStatus, occurredAt]
 - name: GatheringCancelled
-  producer: circle-service
-  consumers: [gathering-conversation-membership, recommendation-engine]
-  channel: transactional_outbox
-  payload_entity: Gathering
-  payload_fields: [_id, conversationId, status, updatedAt]
+  description: upcoming Gathering 已按普通取消路径进入 cancelled；Notification 据 gatheringId 幂等批量失效仍 pending 的邀请 action。
+  delivery_semantics: transactional_outbox
+  topic: events.circle.gatherings
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, roomBindingStatus, conversationId, occurredAt]
+- name: GatheringEndedEarly
+  description: in-progress Gathering 已由 organizer 提前结束并形成 ended_early Outcome。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, occurredAt]
+  no_consumer_reason: Chat 与 Content 下游尚未实现该终态 consumer；M1 不伪造 ready。
+- name: GatheringSafetyTerminated
+  description: Trust & Safety authority 已终止 Gathering 并形成 safety_terminated Outcome。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, occurredAt]
+  no_consumer_reason: 安全撤权与申诉 consumer 属于后续 runtime；当前只保留 owner 事务日志与 outbox 承接结构。
 - name: GatheringCompleted
-  producer: circle-service
-  consumers: [gathering-conversation-membership, recommendation-engine]
-  channel: transactional_outbox
-  payload_entity: Gathering
-  payload_fields: [_id, conversationId, status, updatedAt]
+  description: temporalPhase=ended 的 Gathering 已完成并提交 owner-calculated Outcome。
+  delivery_semantics: transactional_outbox
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, occurredAt]
+- name: GatheringOutcomeCalculated
+  description: Circle 根据独立参与证据计算并冻结 Outcome。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, outcomeStatus, occurredAt]
+  no_consumer_reason: Outcome 下游读取当前通过 owner projection；跨域 consumer 将在真实实现落地后登记。
+- name: GatheringAvailabilityWatchChanged
+  description: Circle-owned AvailabilityWatch 已创建、取消或完成通知。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringEventPayload
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, watchStatus, occurredAt]
+  no_consumer_reason: 名额通知 worker 尚未存在；M1 不把 AvailabilityWatch 误登记为已投递能力。

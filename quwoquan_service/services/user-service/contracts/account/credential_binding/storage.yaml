@@ -1,6 +1,7 @@
 backend: postgres
 tables:
   credential_bindings:
+    publication_role: not_published
     entity: CredentialBinding
     role: authoritative
     description: credentialType + credentialKey 全局唯一约束承载绑定幂等，不设独立 receipt 表。
@@ -42,11 +43,13 @@ tables:
       - NOT_NULL
       default: '1'
   credential_bindings_outbox:
+    publication_role: transactional_event_log
     entity: CredentialBinding
     role: append_only
     infrastructure_only: true
-    description: bind/revoke 安全审计事实，与 aggregate state 同一 postgres transaction 提交。
+    description: bind/revoke 安全审计事实，与 aggregate state 同一 postgres transaction 提交；可靠追加即完成领域义务。基础设施 audit mirror 只把同一脱敏事实复制到受保留审计流并在 transport ACK 后推进 published_at，不构造业务 consumer。
   federated_phone_binding_tickets:
+    publication_role: not_published
     entity: CredentialBinding
     role: authoritative
     infrastructure_only: true

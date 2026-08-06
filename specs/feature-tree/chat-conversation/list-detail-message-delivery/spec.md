@@ -66,6 +66,14 @@
 - Message.seq 由服务端 Redis INCR 原子生成，客户端禁止自行分配
 - 端侧消息列表必须按 seq 排序，禁止按 timestamp 排序
 
+<a id="req-003"></a>
+### REQ-003 联系人候选来源与群会话过滤使用受控闭集
+
+- 联系人候选行的 `source` 是 conversation、mutual、following、contact_discovery、circle 与 group 六值闭集，未知来源统一回落 contact_discovery，行输出永不为空。
+- 候选行 `relationState` 复用共享 `RelationshipState`，chat 侧不得二次定义关系状态值域。
+- 可选群会话过滤只接受 group 与 circle，group 只保留无 `circleId` 的自建群，circle 只保留圈子群，不传表示两者都要。
+- 过滤入参出现闭集外取值时必须以 `CHAT.USER.invalid_argument` 拒绝，不得静默忽略或退化为全量返回。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`chat-conversation`](../spec.md) 声明的领域入口。

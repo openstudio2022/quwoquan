@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+// readiness_case: apply-search-experiment-policy-local
 package local_contract
 
 import (

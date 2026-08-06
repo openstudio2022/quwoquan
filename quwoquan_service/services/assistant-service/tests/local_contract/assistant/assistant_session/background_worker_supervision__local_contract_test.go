@@ -13,7 +13,7 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
+	sessionstream "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/stream"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/scheduling"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 )
@@ -106,7 +106,7 @@ func TestAssistantMentionedConsumerHealthTracksDurablePoll(t *testing.T) {
 	redis := rtredis.NewMemoryClient()
 	base := assistantSessionAssistantMentionedConsumerNewTestMessageTransport(t, redis)
 	transport := &switchableReadTransport{DurableDeliveryTransport: base}
-	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+	consumer := sessionstream.NewAssistantMentionedConsumerWithTransport(
 		transport,
 		&assistantSessionAssistantMentionedConsumerMentionHandlerSpy{},
 		"mentioned-health-worker",

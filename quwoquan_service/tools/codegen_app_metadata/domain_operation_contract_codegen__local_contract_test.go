@@ -118,8 +118,8 @@ func TestHomepageTypeUsesTheCrossDomainGeneratedEnumOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	wanted := map[string]struct{}{
-		"circle.circle.GetCircle":                          {},
-		"entity.homepage_search_item_view.SearchHomepages": {},
+		"circle.circle.GetCircle":         {},
+		"entity.homepage.SearchHomepages": {},
 	}
 	lock := appContractLock{}
 	for index, operation := range graphOperations {
@@ -203,96 +203,18 @@ func TestCrossDomainEnumWithoutSharedCanonicalOwnerFailsClosed(t *testing.T) {
 	}
 }
 
-func TestTravelAppSurfaceGeneratesOneTypedOwnerForAllOperations(t *testing.T) {
+func TestRetiredTravelDomainCannotRegenerateAppContracts(t *testing.T) {
 	metadataDir := contractsview.Build(t)
 	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 		t.Fatal(err)
 	}
-	graphSourceOperations := activeMetadataSource.Graph().Operations
-	payload, err := json.Marshal(graphSourceOperations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var graphOperations []appExposedOperation
-	if err := json.Unmarshal(payload, &graphOperations); err != nil {
-		t.Fatal(err)
-	}
-	lock := appContractLock{}
-	for index, operation := range graphOperations {
-		operation.CanonicalOperationID = graphSourceOperations[index].ID
-		operation.LocalOperationID = graphSourceOperations[index].LocalID
-		if operation.Domain != "travel" || operation.ClientContract == nil {
-			continue
+	for _, operation := range activeMetadataSource.Graph().Operations {
+		if operation.Domain == "travel" {
+			t.Fatalf(
+				"retired travel domain operation %q can regenerate App contracts",
+				operation.ID,
+			)
 		}
-		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
-	}
-	if got := len(lock.AppExposedOperations); got != 31 {
-		t.Fatalf("Travel App-exposed operations = %d, want 31", got)
-	}
-	assertCanonicalRequestInputs(t, lock.AppExposedOperations)
-
-	appDir := t.TempDir()
-	provided, err := generateDomainOperationContracts(metadataDir, appDir, lock)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := generatedDomainOperationOwnerImport("travel")
-	if len(provided[owner]) == 0 {
-		t.Fatal("Travel owner did not provide any canonical response models")
-	}
-	artifacts, err := writeGeneratedOperationRequests(appDir, lock, provided)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := len(artifacts); got != 31 {
-		t.Fatalf("Travel typed request artifacts = %d, want 31", got)
-	}
-
-	ownerPayload := readGeneratedTestFile(t, filepath.Join(
-		appDir,
-		"packages/quwoquan_cloud_contracts/lib/src/travel/travel_operation_contracts.g.dart",
-	))
-	requestPayload := readGeneratedTestFile(t, filepath.Join(
-		appDir,
-		"packages/quwoquan_cloud_contracts/lib/src/generated/requests/travel/travel_operation_contracts.g.requests.g.dart",
-	))
-	for _, expected := range []string{
-		"final class TripPlanCommandResult",
-		"final class TripPlanListSlice",
-		"final class TripPlanSummarySlice",
-		"TripPlanCommandResult decodeTripPlanCommandResult(Object? response)",
-		"enum TripPlanStatus",
-		"part '../generated/requests/travel/travel_operation_contracts.g.requests.g.dart';",
-	} {
-		if !strings.Contains(ownerPayload, expected) {
-			t.Fatalf("Travel owner is missing %q", expected)
-		}
-	}
-	for _, expected := range []string{
-		"final class CreateTripPlanFromTemplateCommand",
-		"final class ListTripPlansQuery",
-		"final class ListTripGuideAssignmentsQuery",
-		"final class GetTripMapQuery",
-		"final class ListTripPlanTemplatesQuery",
-		"final class GetTripShareSnapshotQuery",
-		"encodeTravelTripPlanCreateTripPlanFromTemplateGeneratedRequest",
-		"this.items.map((value) => value.toWire()).toList(growable: false)",
-	} {
-		if !strings.Contains(requestPayload, expected) {
-			t.Fatalf("Travel request part is missing %q", expected)
-		}
-	}
-	for model := range provided[owner] {
-		if strings.Contains(requestPayload, "final class "+model+" {") {
-			t.Fatalf("Travel request part redeclared owner model %s", model)
-		}
-	}
-	if strings.Contains(ownerPayload, "trip_plan_contracts.dart") ||
-		strings.Contains(requestPayload, "trip_plan_contracts.dart") {
-		t.Fatal("Travel generated ABI retained a split handwritten owner")
-	}
-	if strings.Contains(ownerPayload, "_travelObject") {
-		t.Fatal("Travel decoder referenced a nonexistent domain-specific helper")
 	}
 }
 
@@ -421,8 +343,8 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 44 {
-		t.Fatalf("Circle App-exposed operations = %d, want 44", got)
+	if got := len(lock.AppExposedOperations); got != 64 {
+		t.Fatalf("Circle App-exposed operations = %d, want 64", got)
 	}
 
 	appDir := t.TempDir()
@@ -434,8 +356,8 @@ func TestCircleAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 44 {
-		t.Fatalf("Circle typed request artifacts = %d, want 44", got)
+	if got := len(artifacts); got != 64 {
+		t.Fatalf("Circle typed request artifacts = %d, want 64", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -504,8 +426,8 @@ func TestChatAppSurfaceUsesObjectLocalCanonicalResponsesAndOneGeneratedOwner(t *
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	if got := len(lock.AppExposedOperations); got != 32 {
-		t.Fatalf("Chat App-exposed operations = %d, want 32", got)
+	if got := len(lock.AppExposedOperations); got != 33 {
+		t.Fatalf("Chat App-exposed operations = %d, want 33", got)
 	}
 
 	appDir := t.TempDir()
@@ -517,8 +439,8 @@ func TestChatAppSurfaceUsesObjectLocalCanonicalResponsesAndOneGeneratedOwner(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 32 {
-		t.Fatalf("Chat typed request artifacts = %d, want 32", got)
+	if got := len(artifacts); got != 33 {
+		t.Fatalf("Chat typed request artifacts = %d, want 33", got)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,
@@ -933,7 +855,7 @@ func TestEntityAppSurfaceUsesCanonicalProjectionDependencies(t *testing.T) {
 	}
 	for _, expected := range []string{
 		"final class HomepageSearchQuery",
-		"encodeEntityHomepageSearchItemViewSearchHomepagesGeneratedRequest",
+		"encodeEntityHomepageSearchHomepagesGeneratedRequest",
 	} {
 		if !strings.Contains(requestPayload, expected) {
 			t.Fatalf("Entity request part is missing %q", expected)

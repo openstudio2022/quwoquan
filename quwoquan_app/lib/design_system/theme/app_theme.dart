@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/platform/app_font_families.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/design_system/typography/app_font_families.dart';
 
 class AppTheme {
   static ThemeData get lightTheme => _buildTheme(Brightness.light);

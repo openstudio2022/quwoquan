@@ -1,9 +1,9 @@
-import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/auth/auth_policy.g.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/errors/ui_error_appearance.dart';
-import 'package:quwoquan_app/core/errors/ui_error_models.dart';
+import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 /// 一个恢复组对应唯一一套用户可见语义。
@@ -332,7 +332,7 @@ final class AppUserRecoveryContract {
 
   static bool _isGuestCapableOperation(String? sourceOperationId) {
     final operationId = sourceOperationId?.trim() ?? '';
-    final mode = AuthApiPolicy.operationToAuthMode[operationId];
+    final mode = appCloudOperationContracts[operationId]?.authMode;
     return mode == 'public' || mode == 'optional';
   }
 

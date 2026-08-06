@@ -20,13 +20,13 @@ import (
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/reliabletask"
-	httpadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/http"
-	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream"
-	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
 	integrationclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/integration"
 	realtimeclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/realtime"
 	userclient "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/user"
+	deliveryhttp "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/adapters/inbound/http"
+	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/adapters/inbound/stream"
+	"quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
 func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
@@ -562,33 +562,25 @@ func newIncomingCallHTTPHandler(
 	coordinator *application.IncomingCallDeliveryCoordinator,
 ) http.Handler {
 	t.Helper()
-	appCommands, err := application.NewAppMessageCommandFacade(
-		notificationAppMessageStore,
-		notificationAppMessageStore,
+	commands, err := application.NewNotificationDeliveryJobCommandFacade(
 		notificationReliableStore,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	appQueries, err := application.NewAppMessageQueryFacade(
-		notificationAppMessageStore,
-		notificationAppMessageStore,
-		notificationAppMessageStore,
+	queries, err := application.NewNotificationDeliveryJobQueryFacade(
+		notificationReliableStore,
+		notificationReliableStore,
+		notificationReliableStore,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler, err := httpadapter.NewHandler(
-		httpadapter.HandlerDependencies{
-			AppMessageCommands: appCommands,
-			AppMessageQueries:  appQueries,
-			IncomingCalls:      coordinator,
-		},
-	)
+	handler, err := deliveryhttp.NewHandler(commands, queries)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return handler.Routes()
+	return handler.WithIncomingCallCoordinator(coordinator).Routes()
 }
 
 type emptyPushDestinationReader struct{}

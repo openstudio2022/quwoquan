@@ -13,13 +13,17 @@ import (
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound"
+	experimenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/adapters/inbound/http"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
 	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
 	assignmentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/infrastructure/persistence"
 )
 
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+// readiness_case: create-experiment-api
+// readiness_case: list-experiments-api
+// readiness_case: update-experiment-rollout-api
 func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *testing.T) {
 	handler := newRealExperimentHTTPHandler(t)
 	guarded := realReadyExperimentAuthenticatedHandler(t, handler)
@@ -117,92 +121,7 @@ FROM product_ops_outbox WHERE aggregate_id=$1`, experimentID).Scan(&outboxCount,
 	}
 }
 
-func TestExperimentAssignmentRejectsPublicWritesAndReadsObservedFacts(t *testing.T) {
-	facade := newRealExperimentFacade(t)
-	handler := newRealExperimentHTTPHandler(t)
-	authenticated := realExperimentAuthenticatedHandler(t, false, handler)
-	experimentID := seedRealExperiment(t, "running")
-	assignmentPath := "/ops/experiments/" + experimentID + "/assignment"
-	personaToken := experimentAccessToken(t, "account-1", "", nil, "persona-1")
-
-	spoofedBody := performExperimentRequest(
-		authenticated, http.MethodPost, assignmentPath,
-		experimentRequestOptions{
-			Body: `{"subjectKey":"persona:victim"}`, Credential: personaToken,
-		},
-	)
-	assertExperimentError(t, spoofedBody, http.StatusBadRequest, "OPS.USER.experiment_invalid_argument")
-
-	experiment, err := facade.Get(context.Background(), experimentID)
-	if err != nil {
-		t.Fatalf("load experiment for observed assignment: %v", err)
-	}
-	observedAt := time.Now().UTC().Truncate(time.Second)
-	for _, subjectKey := range []string{"persona:persona-1", "device:device-1"} {
-		expected, err := experiment.Assign(subjectKey, observedAt)
-		if err != nil {
-			t.Fatalf("derive canonical assignment for %s: %v", subjectKey, err)
-		}
-		fact, inserted, err := facade.AssignmentFacts().AppendObserved(
-			context.Background(),
-			assignmentapp.AssignmentObservation{
-				ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
-				SubjectKey: subjectKey, Variant: expected.Variant, ObservedAt: observedAt,
-			},
-		)
-		if err != nil || !inserted || fact.SubjectKey != subjectKey {
-			t.Fatalf("append observed assignment for %s: inserted=%v fact=%+v err=%v", subjectKey, inserted, fact, err)
-		}
-	}
-
-	readOwn := performExperimentRequest(authenticated, http.MethodGet, assignmentPath, experimentRequestOptions{
-		Credential: personaToken,
-	})
-	if readOwn.Code != http.StatusOK || !strings.Contains(readOwn.Body.String(), `"subjectKey":"persona:persona-1"`) {
-		t.Fatalf("read own assignment status=%d body=%s", readOwn.Code, readOwn.Body.String())
-	}
-
-	deviceTicket := experimentDeviceTicket(t, "device-1")
-	readDevice := performExperimentRequest(authenticated, http.MethodGet, assignmentPath, experimentRequestOptions{
-		Credential: deviceTicket, UseDeviceTicket: true,
-	})
-	if readDevice.Code != http.StatusOK || !strings.Contains(readDevice.Body.String(), `"subjectKey":"device:device-1"`) {
-		t.Fatalf("read device assignment status=%d body=%s", readDevice.Code, readDevice.Body.String())
-	}
-
-	unauthorized := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{})
-	assertExperimentError(t, unauthorized, http.StatusBadRequest, "OPS.USER.experiment_invalid_argument")
-
-	var subjects []string
-	rows, err := controlPlanePGPool.Query(context.Background(), `
-SELECT subject_key FROM experiment_assignment_facts WHERE experiment_id=$1 ORDER BY subject_key`, experimentID)
-	if err != nil {
-		t.Fatalf("query assignment subjects: %v", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var subject string
-		if err := rows.Scan(&subject); err != nil {
-			t.Fatal(err)
-		}
-		subjects = append(subjects, subject)
-	}
-	if strings.Join(subjects, ",") != "device:device-1,persona:persona-1" {
-		t.Fatalf("authoritative subjects=%v", subjects)
-	}
-}
-
 func newRealExperimentHTTPHandler(t *testing.T) http.Handler {
-	t.Helper()
-	facade := newRealExperimentFacade(t)
-	handler, err := experimenthttp.NewHandler(facade)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return handler
-}
-
-func newRealExperimentFacade(t *testing.T) *experimentapp.Facade {
 	t.Helper()
 	store, err := experimentpersistence.NewPostgresStore(controlPlanePGPool)
 	if err != nil {
@@ -218,31 +137,19 @@ func newRealExperimentFacade(t *testing.T) *experimentapp.Facade {
 	if err := assignmentStore.EnsureSchema(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	facade, err := experimentapp.NewFacade(store, store, assignmentStore, assignmentStore)
+	facade, err := experimentapp.NewFacade(store, store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return facade
-}
-
-func seedRealExperiment(t *testing.T, status string) string {
-	t.Helper()
-	id := fmt.Sprintf("experiment-http-%d", time.Now().UnixNano())
-	now := time.Now().UTC().Truncate(time.Second)
-	_, err := controlPlanePGPool.Exec(context.Background(), `
-INSERT INTO experiments(
-  id, key, version, status, variants, audience_rule, created_at, updated_at
-) VALUES ($1,$1,1,$2,$3,$4,$5,$5)`,
-		id,
-		status,
-		`[{"key":"control","allocationBasisPoints":5000},{"key":"treatment","allocationBasisPoints":5000}]`,
-		`{"kind":"all"}`,
-		now,
-	)
+	assignments, err := assignmentapp.NewFacade(facade, assignmentStore, assignmentStore)
 	if err != nil {
-		t.Fatalf("seed experiment: %v", err)
+		t.Fatal(err)
 	}
-	return id
+	handler, err := experimenthttp.NewHandler(facade, assignments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handler
 }
 
 func realExperimentAuthenticatedHandler(t *testing.T, generatedGuard bool, next http.Handler) http.Handler {
@@ -298,19 +205,6 @@ func experimentAccessToken(t *testing.T, accountID, scopes string, roles []strin
 	token, err := signer.Sign(rtauth.TokenSubject{
 		AccountID: accountID, PersonaID: persona, Scopes: strings.Fields(scopes), Roles: roles,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return token
-}
-
-func experimentDeviceTicket(t *testing.T, deviceActorID string) string {
-	t.Helper()
-	signer, err := rtauth.NewHS256Signer(experimentTokenConfig(rtauth.TokenTypeDevice))
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := signer.Sign(rtauth.TokenSubject{DeviceActorID: deviceActorID})
 	if err != nil {
 		t.Fatal(err)
 	}

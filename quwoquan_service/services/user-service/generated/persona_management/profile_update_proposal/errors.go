@@ -21,35 +21,35 @@ var (
 // AppErrorFromProfileProposalNotFound returns *AppError for USER.PROFILE_PROPOSAL.not_found (user_message from errors.yaml).
 func AppErrorFromProfileProposalNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalNotFound.Error()))
-	return rerrors.NewAppError(code, "资料修改提案不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "资料修改提案不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileProposalInvalidArgument returns *AppError for USER.PROFILE_PROPOSAL.invalid_argument (user_message from errors.yaml).
 func AppErrorFromProfileProposalInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "提案内容无效，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "提案内容无效，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileProposalInvalidTransition returns *AppError for USER.PROFILE_PROPOSAL.invalid_transition (user_message from errors.yaml).
 func AppErrorFromProfileProposalInvalidTransition(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalInvalidTransition.Error()))
-	return rerrors.NewAppError(code, "提案状态已变化，请刷新后重试", debugMessage).WithMetadata("invalid_transition", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "提案状态已变化，请刷新后重试", debugMessage).WithMetadata("invalid_transition", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromProfileProposalVersionConflict returns *AppError for USER.PROFILE_PROPOSAL.version_conflict (user_message from errors.yaml).
 func AppErrorFromProfileProposalVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalVersionConflict.Error()))
-	return rerrors.NewAppError(code, "资料已更新，请刷新后重新确认", debugMessage).WithMetadata("version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "资料已更新，请刷新后重新确认", debugMessage).WithMetadata("version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromProfileProposalIdempotencyConflict returns *AppError for USER.PROFILE_PROPOSAL.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromProfileProposalIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求内容不一致，请重新操作", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "重复请求内容不一致，请重新操作", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileProposalRollbackExpired returns *AppError for USER.PROFILE_PROPOSAL.rollback_expired (user_message from errors.yaml).
 func AppErrorFromProfileProposalRollbackExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileProposalRollbackExpired.Error()))
-	return rerrors.NewAppError(code, "提案回滚窗口已结束，请刷新资料", debugMessage).WithMetadata("rollback_expired", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "提案回滚窗口已结束，请刷新资料", debugMessage).WithMetadata("rollback_expired", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }

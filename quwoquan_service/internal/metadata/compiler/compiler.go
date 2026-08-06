@@ -8,9 +8,10 @@ import (
 	"quwoquan_service/internal/metadata/validate"
 )
 
-// Build 是 metadata 到 ContractGraph 的唯一编译入口。
-func Build(metadataDir string) (*graph.ContractGraph, error) {
-	catalog, err := load.Load(metadataDir)
+// Build 是 metadata 到 ContractGraph 的唯一编译入口。options 透传给 loader，
+// 例如 load.WithRepoRoot 打开派生式 readiness evidence。
+func Build(metadataDir string, options ...load.Option) (*graph.ContractGraph, error) {
+	catalog, err := load.Load(metadataDir, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -25,8 +26,9 @@ func Build(metadataDir string) (*graph.ContractGraph, error) {
 func Validate(
 	metadataDir string,
 	profile validate.Profile,
+	options ...load.Option,
 ) (*graph.ContractGraph, []validate.Issue, error) {
-	contractGraph, err := Build(metadataDir)
+	contractGraph, err := Build(metadataDir, options...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -41,8 +43,9 @@ func Validate(
 func RequireValid(
 	metadataDir string,
 	profile validate.Profile,
+	options ...load.Option,
 ) (*graph.ContractGraph, error) {
-	contractGraph, issues, err := Validate(metadataDir, profile)
+	contractGraph, issues, err := Validate(metadataDir, profile, options...)
 	if err != nil {
 		return nil, err
 	}

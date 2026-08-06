@@ -477,6 +477,7 @@ def test_runner_rejects_static_derived_source_without_emitting_evidence() -> Non
 def test_matrix_executes_every_actual_binding_cell() -> None:
     compiled, _ = governance.load_and_compile()
     calls: list[tuple[str, str, str]] = []
+    evidence_paths: list[Path] = []
 
     def execute_cell(
         args: argparse.Namespace,
@@ -505,7 +506,8 @@ def test_matrix_executes_every_actual_binding_cell() -> None:
                 "--execute",
                 "--image-digest",
                 f"sha256:{'1' * 64}",
-            ]
+            ],
+            evidence_paths_out=evidence_paths,
         )
 
     expected = [
@@ -521,6 +523,11 @@ def test_matrix_executes_every_actual_binding_cell() -> None:
     ]
     assert result == 0
     assert calls == expected
+    assert evidence_paths == [
+        Path(f"/tmp/{environment}-{layer}.evidence.json")
+        for environment in provider_conformance.ENVIRONMENTS
+        for layer in provider_conformance.LAYERS
+    ]
 
 
 def test_runner_rejects_stale_image_digest_before_emitting_evidence() -> None:

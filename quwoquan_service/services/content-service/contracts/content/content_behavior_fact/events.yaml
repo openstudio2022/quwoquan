@@ -1,8 +1,36 @@
 events:
 - name: ContentBehaviorRecorded
   description: ContentBehaviorFact 权威 Mongo 事实的可重放跨域传输；Recommendation 只消费该流，不读取 Content Mongo。
-  producer: content-service
-  consumers: [recommendation-service]
-  channel: events.content.behavior_facts
+  delivery_semantics: durable_stream
+  topic: events.content.behavior_facts
   payload_entity: ContentBehaviorFact
-  payload_fields: [clientEventId, personaId, deviceActorId, sessionId, contentId, contentType, objectId, objectKind, displayName, sourceSurface, action, state, duration, feedRequestId, tagRefs, entityRefs, authorId, impactHelpType, channelId, recallPath, contentVertical, supplySource, intersectionDimension, intersectionTagRefs, intersectionId, intersectionClass, intersectionSourceRef, intersectionEvidenceId, occurredAt]
+  payload_fields:
+  - clientEventId
+  - personaId
+  - deviceActorId
+  - sessionId
+  - contentId
+  - contentType
+  - objectId
+  - objectKind
+  - displayName
+  - sourceSurface
+  - action
+  - state
+  - duration
+  - feedRequestId
+  - tagRefs
+  - entityRefs
+  - authorId
+  - impactHelpType
+  - channelId
+  - recallPath
+  - contentVertical
+  - supplySource
+  - intersectionDimension
+  - intersectionTagRefs
+  - intersectionId
+  - intersectionClass
+  - intersectionSourceRef
+  - intersectionEvidenceId
+  - occurredAt

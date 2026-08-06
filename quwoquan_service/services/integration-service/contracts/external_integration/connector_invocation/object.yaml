@@ -14,7 +14,6 @@ relationships:
 - {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: eventual, on_delete: cascade}
 - {name: connectorConnection, kind: reference, target_object: integration.ConnectorConnection, cardinality: 'N:1', reference_fields: [connectionId], access: named_reader, consistency: strong, on_delete: restrict}
 - {name: assistantRun, kind: reference, target_object: assistant.AssistantRun, cardinality: 'N:1', reference_fields: [assistantRunId], access: named_reader, consistency: eventual, on_delete: detach}
-capabilities: [commandable, queryable, idempotent_commands, auditable]
 taggable: false
 vector_enabled: false
 business_rules:

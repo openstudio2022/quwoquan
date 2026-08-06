@@ -27,7 +27,6 @@ local_identity_reasons:
   sourceTaskId: >-
     可选的上游任务溯源 token，只用于关联一次准入来源；它不是业务对象身份，
     也不得作为跨对象查询或写入入口
-capabilities: [commandable, queryable]
 taggable: false
 vector_enabled: false
 business_rules:

@@ -14,7 +14,7 @@ from quwoquan_ops.cli.probes import run_environment_integration_probe as probe
 
 ROOT = Path(__file__).resolve().parents[3]
 INTERSECTION_SMOKE_RUNNER = (
-    ROOT / "quwoquan_app" / "scripts" / "gamma" / "run_intersection_remote_smoke.py"
+    ROOT / "quwoquan_app" / "scripts" / "tools" / "gamma" / "intersection_remote_smoke.py"
 )
 
 
@@ -196,7 +196,7 @@ def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None
             sys,
             "argv",
             [
-                "run_intersection_remote_smoke.py",
+                "intersection_remote_smoke.py",
                 "--base-url",
                 "http://127.0.0.1:19220",
                 "--release-readiness",

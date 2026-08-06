@@ -30,89 +30,89 @@ var (
 // AppErrorFromUserNotFound returns *AppError for USER.USER.not_found (user_message from errors.yaml).
 func AppErrorFromUserNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUserNotFound.Error()))
-	return rerrors.NewAppError(code, "用户不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "用户不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for USER.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromForbidden returns *AppError for USER.USER.forbidden (user_message from errors.yaml).
 func AppErrorFromForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrForbidden.Error()))
-	return rerrors.NewAppError(code, "无权访问该资源", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "无权访问该资源", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for USER.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求参数有误", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAccountEnforcementDecisionInvalid returns *AppError for USER.ACCOUNT.enforcement_decision_invalid (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementDecisionInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementDecisionInvalid.Error()))
-	return rerrors.NewAppError(code, "账号处置决策无效", debugMessage).WithMetadata("enforcement_decision_invalid", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "账号处置决策无效", debugMessage).WithMetadata("enforcement_decision_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAccountStateConflict returns *AppError for USER.ACCOUNT.state_conflict (user_message from errors.yaml).
 func AppErrorFromAccountStateConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountStateConflict.Error()))
-	return rerrors.NewAppError(code, "账号当前状态无法执行该操作", debugMessage).WithMetadata("state_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "账号当前状态无法执行该操作", debugMessage).WithMetadata("state_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for USER.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "登录服务暂不可用，请使用其他方式登录", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "登录服务暂不可用，请使用其他方式登录", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileInvalidRegion returns *AppError for USER.PROFILE.invalid_region (user_message from errors.yaml).
 func AppErrorFromProfileInvalidRegion(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileInvalidRegion.Error()))
-	return rerrors.NewAppError(code, "请选择有效的省市地区", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请选择有效的省市地区", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileInvalidTagRef returns *AppError for USER.PROFILE.invalid_tag_ref (user_message from errors.yaml).
 func AppErrorFromProfileInvalidTagRef(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileInvalidTagRef.Error()))
-	return rerrors.NewAppError(code, "所选标签不可用，请重新选择", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "所选标签不可用，请重新选择", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileTaxonomyReleaseConflict returns *AppError for USER.PROFILE.taxonomy_release_conflict (user_message from errors.yaml).
 func AppErrorFromProfileTaxonomyReleaseConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileTaxonomyReleaseConflict.Error()))
-	return rerrors.NewAppError(code, "标签目录已更新，请刷新后重新选择", debugMessage).WithMetadata("conflict", 409).WithRecovery("reload", 0)
+	return rerrors.NewAppError(code, "标签目录已更新，请刷新后重新选择", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromProfileVersionConflict returns *AppError for USER.PROFILE.version_conflict (user_message from errors.yaml).
 func AppErrorFromProfileVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileVersionConflict.Error()))
-	return rerrors.NewAppError(code, "资料已在其他会话中更新，请刷新后重试", debugMessage).WithMetadata("conflict", 409).WithRecovery("reload", 0)
+	return rerrors.NewAppError(code, "资料已在其他会话中更新，请刷新后重试", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromProfileIdempotencyConflict returns *AppError for USER.PROFILE.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromProfileIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复保存请求的内容不一致，请重新操作", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "重复保存请求的内容不一致，请重新操作", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileInvalidMediaAsset returns *AppError for USER.PROFILE.invalid_media_asset (user_message from errors.yaml).
 func AppErrorFromProfileInvalidMediaAsset(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileInvalidMediaAsset.Error()))
-	return rerrors.NewAppError(code, "图片上传未完成，请重新选择并保存", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "图片上传未完成，请重新选择并保存", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileQrTokenInvalid returns *AppError for USER.PROFILE.qr_token_invalid (user_message from errors.yaml).
 func AppErrorFromProfileQrTokenInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileQrTokenInvalid.Error()))
-	return rerrors.NewAppError(code, "二维码已失效，请让对方重新分享", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "二维码已失效，请让对方重新分享", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromProfileQrTokenExpired returns *AppError for USER.PROFILE.qr_token_expired (user_message from errors.yaml).
 func AppErrorFromProfileQrTokenExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProfileQrTokenExpired.Error()))
-	return rerrors.NewAppError(code, "二维码已过期，请让对方重新分享", debugMessage).WithMetadata("expired", 410).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "二维码已过期，请让对方重新分享", debugMessage).WithMetadata("expired", 410).WithRecoveryDirective("surface", "inlineCard", 0)
 }

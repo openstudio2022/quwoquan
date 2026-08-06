@@ -1,0 +1,20 @@
+description: GatheringPlan owner transactional event log；Assistant/Chat/App consumer 未接线前不声明可投递 publication。
+events:
+- name: GatheringPlanCreated
+  description: canonical Gathering 的唯一 optional Plan 与 initial immutable Revision 已原子创建。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringPlanEventPayload
+  payload_fields: [planId, gatheringId, aggregateVersion, actorPersonaId, revisionId, revisionNumber, revisionDigest, occurredAt]
+  no_consumer_reason: owner transaction 仅追加 typed event log；Chat Board/App Remote consumer 尚未实现。
+- name: GatheringPlanProposalRecorded
+  description: current Host 或 active Participation 已基于 current Revision 记录 typed Plan Proposal，尚未推进 current pointer。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringPlanEventPayload
+  payload_fields: [planId, gatheringId, aggregateVersion, actorPersonaId, proposalId, proposalDigest, revisionId, revisionNumber, revisionDigest, occurredAt]
+  no_consumer_reason: Assistant dispatcher 与 Board proposal consumer 属于后续独立接线；M3 不声明虚假消费能力。
+- name: GatheringPlanRevisionCommitted
+  description: current Host 已 commit 匹配 CAS 与 digest 的 Proposal，append immutable Revision 并推进 current pointer。
+  delivery_semantics: transactional_event_log
+  payload_entity: GatheringPlanEventPayload
+  payload_fields: [planId, gatheringId, aggregateVersion, actorPersonaId, proposalId, proposalDigest, revisionId, revisionNumber, revisionDigest, occurredAt]
+  no_consumer_reason: Chat Board、通知与 App Remote projection 尚未接线；当前义务止于 owner typed event log 的可靠追加。

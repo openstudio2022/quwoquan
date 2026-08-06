@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+// readiness_case: project-homepage-search-item-api
 package api_integration
 
 import (

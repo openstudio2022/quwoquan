@@ -19,6 +19,18 @@ APP_ENTITY_ROOT = REPO_ROOT / "quwoquan_app/lib/ui/entity"
 HOMEPAGE_FIELDS = (
     SERVICE_ROOT / "contracts/entity_homepage/homepage/fields.yaml"
 )
+MONITORING_ROOT = REPO_ROOT / "quwoquan_ops/observability/monitoring"
+ENTITY_ALERTS = MONITORING_ROOT / "alerts/quwoquan_alerts.yaml"
+ENTITY_DASHBOARD = MONITORING_ROOT / "dashboards/l2_entity_objects.json"
+
+# homepage-import 是离线批任务，指标不来自 ContractGraph operation，
+# 因此这两条导入告警与看板证据由本域主线门禁守卫；operation 级覆盖统一由
+# quwoquan_service/scripts/verify/verify_object_alert_coverage.py 判定。
+REQUIRED_IMPORT_ALERTS = ("HomepageImportIssuesPresent", "HomepageImportStale")
+REQUIRED_DASHBOARD_EVIDENCE = (
+    "quwoquan_homepage_import_objects",
+    "runtime_health_check_status",
+)
 
 FORBIDDEN_SERVICE = {
     "HomepageStateSnapshot": "单文档 homepage_state 快照",
@@ -61,6 +73,37 @@ def _go_sources() -> list[Path]:
 
 def _dart_sources() -> list[Path]:
     return sorted(APP_ENTITY_ROOT.rglob("*.dart"))
+
+
+def _observability_issues() -> list[str]:
+    issues: list[str] = []
+    for pattern in ("**/*.yaml", "**/*.yml", "**/*.json"):
+        for path in sorted(MONITORING_ROOT.glob(pattern)):
+            if "homepage_state" in path.read_text(encoding="utf-8"):
+                issues.append(
+                    f"{path.relative_to(REPO_ROOT)}: 观测定义仍引用已退役 homepage_state"
+                )
+
+    if ENTITY_ALERTS.is_file():
+        alerts_text = ENTITY_ALERTS.read_text(encoding="utf-8")
+        issues.extend(
+            f"{ENTITY_ALERTS.relative_to(REPO_ROOT)}: 缺少 homepage-import 告警 {alert}"
+            for alert in REQUIRED_IMPORT_ALERTS
+            if f"alert: {alert}" not in alerts_text
+        )
+    else:
+        issues.append("缺少 quwoquan_alerts.yaml")
+
+    if ENTITY_DASHBOARD.is_file():
+        dashboard_text = ENTITY_DASHBOARD.read_text(encoding="utf-8")
+        issues.extend(
+            f"{ENTITY_DASHBOARD.relative_to(REPO_ROOT)}: 缺少真实 PromQL 证据 {evidence}"
+            for evidence in REQUIRED_DASHBOARD_EVIDENCE
+            if evidence not in dashboard_text
+        )
+    else:
+        issues.append("缺少 entity 对象看板 l2_entity_objects.json")
+    return issues
 
 
 def main() -> int:
@@ -106,6 +149,8 @@ def main() -> int:
                     )
     else:
         issues.append("缺少 entity homepage canonical fields.yaml")
+
+    issues.extend(_observability_issues())
 
     if issues:
         print("[entity-homepage-object-mainline] FAIL")

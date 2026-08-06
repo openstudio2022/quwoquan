@@ -1,3 +1,5 @@
+# spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+# readiness_case: append-subject-closure-local
 import hashlib
 import json
 

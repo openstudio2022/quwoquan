@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+// readiness_case: project-object-tag-index-local
 package local_contract
 
 import (
@@ -8,8 +10,8 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
+	projectionmessaging "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/adapters/inbound/stream"
 	ports "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/ports"
-	projectionmessaging "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/infrastructure/messaging"
 )
 
 func TestUserProfileTagConsumerAppliesAndAcknowledgesTypedProjection(

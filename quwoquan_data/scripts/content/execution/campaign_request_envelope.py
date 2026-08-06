@@ -18,7 +18,6 @@ from core.source_digest import current_source_digest
 from governance.coverage.distribution import load_content_distribution_policy
 
 from content.execution.campaign_external_inputs import (
-    bind_external_input_refs,
     content_source_revision,
     external_inputs_digest,
 )
@@ -37,6 +36,9 @@ from content.execution.model_contract import (
     DEFAULT_SEMANTIC_SELECTION_ID,
     normalize_semantic_selection_id,
 )
+from content.execution.pre_acquisition_handoff import (
+    freeze_carrier_pre_acquisition_inputs,
+)
 from content.execution.request import resolve_candidate_pool
 from content.execution.runtime_contract import file_sha256
 from content.execution.semantic_preflight_admission import bind_semantic_preflight_receipt
@@ -45,22 +47,16 @@ from content.execution.workspace import entity_catalog_digest
 ENVELOPE_SCHEMA = "quwoquan_data.content_campaign_request_envelope"
 
 _OPERATIONS = {
-    "homepage": "homepage.generate",
-    "article": "article.generate",
-    "image": "image.generate",
-    "video": "video.generate",
+    "homepage": "homepage.generate", "article": "article.generate",
+    "image": "image.generate", "video": "video.generate",
 }
 _SELECTORS = {
-    "homepage": "source-ready-priority",
-    "article": "priority",
-    "image": "priority",
-    "video": "source-ready-priority",
+    "homepage": "source-ready-priority", "article": "priority",
+    "image": "priority", "video": "source-ready-priority",
 }
 _OPERATOR_PROMPTS = {
-    "homepage": "执行实体内容生成",
-    "article": "执行文章内容生成",
-    "image": "执行图片内容生成",
-    "video": "执行视频内容生成",
+    "homepage": "执行实体内容生成", "article": "执行文章内容生成",
+    "image": "执行图片内容生成", "video": "执行视频内容生成",
 }
 _SCOPE_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _VERTICAL_RE = re.compile(r"^[a-z][a-z0-9-]*$")
@@ -276,6 +272,8 @@ def build_envelope(
     semantic_preflight_output_root: Path | None = None,
     predecessor_reconciliation: Mapping[str, Any] | None = None,
     promotion_receipt: Path | None = None,
+    pre_acquisition_handoff: Path | None = None,
+    pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs: Iterable[Mapping[str, Any]] = (),
     acquisition_root: Path | None = None,
 ) -> dict[str, Any]:
@@ -313,18 +311,27 @@ def build_envelope(
         source_digest=str(source["digest"]),
         entity_catalog_digest=catalog_digest,
     )
-    frozen_external_refs = bind_external_input_refs(
+    stamp = day or datetime.now(timezone.utc).strftime("%Y%m%d")
+    scope = normalize_execution_scope(region_ref, topic)
+    frozen_external_refs, handoff_binding = freeze_carrier_pre_acquisition_inputs(
         carrier,
         external_input_refs,
         acquisition_root=(
             acquisition_root or paths.SOURCE_ACQUISITION_ROOT
         ).resolve(),
+        handoff_ref=pre_acquisition_handoff,
+        scale=resolved.scale,
+        vertical=vertical_id,
+        scope=scope,
+        region_ref=region_ref,
+        topic=topic,
+        run_date=stamp,
+        campaign_sequence=sequence,
         source_revision=source_revision,
         source_digest=str(source["digest"]),
         entity_catalog_digest=catalog_digest,
+        handoff_output_root=pre_acquisition_handoff_output_root,
     )
-    stamp = day or datetime.now(timezone.utc).strftime("%Y%m%d")
-    scope = normalize_execution_scope(region_ref, topic)
     ids = _execution_ids(
         scale=resolved.scale,
         vertical=vertical_id,
@@ -357,15 +364,6 @@ def build_envelope(
         else None
     )
     if frozen_semantic_selection_id == CURSOR_AUTO_SEMANTIC_SELECTION_ID:
-        from core.runtime_policy import active_runtime_policy
-
-        explicit = active_runtime_policy().explicit_semantic_selection(
-            frozen_semantic_selection_id
-        )
-        if explicit.requires_new_retry_of and retry_of is None:
-            raise ValueError(
-                "campaign cursor_auto selection requires a new execution with retryOf"
-            )
         if semantic_preflight_binding is None:
             raise ValueError(
                 "campaign cursor_auto selection requires a fresh semantic preflight receipt"
@@ -429,6 +427,7 @@ def build_envelope(
         "sourceRevision": source_revision,
         "sourceDigest": source,
         "entityCatalogDigest": catalog_digest,
+        "preAcquisitionHandoff": handoff_binding,
         "externalInputRefs": frozen_external_refs,
         "externalInputsDigest": external_inputs_digest(frozen_external_refs),
         "allowedStage": "submit-only",
@@ -486,6 +485,8 @@ def write_scale_envelopes(
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
+    pre_acquisition_handoff: Path | None = None,
+    pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
 ) -> dict[str, Path]:
@@ -515,6 +516,8 @@ def write_scale_envelopes(
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
+        pre_acquisition_handoff=pre_acquisition_handoff,
+        pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
         acquisition_root=acquisition_root,
     )
@@ -542,6 +545,8 @@ def write_campaign_envelopes(
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
+    pre_acquisition_handoff: Path | None = None,
+    pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
 ) -> dict[str, dict[str, Path]]:
@@ -570,6 +575,8 @@ def write_campaign_envelopes(
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
+        pre_acquisition_handoff=pre_acquisition_handoff,
+        pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
         acquisition_root=acquisition_root,
     )

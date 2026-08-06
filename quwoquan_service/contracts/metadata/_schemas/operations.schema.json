@@ -93,6 +93,24 @@
               }
             }
           },
+          "observability": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "metrics"
+            ],
+            "properties": {
+              "metrics": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                }
+              }
+            }
+          },
           "scenes": {
             "type": "array",
             "minItems": 1,
@@ -130,6 +148,11 @@
                     "required": [
                       "adapterContracts"
                     ]
+                  },
+                  {
+                    "required": [
+                      "observability"
+                    ]
                   }
                 ]
               }
@@ -142,6 +165,14 @@
             }
           }
         ]
+      }
+    },
+    "readiness_cases": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/readinessCase"
       }
     },
     "response_list_key": {
@@ -159,6 +190,38 @@
           "operation",
           "actor",
           "application"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "path"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "\\{[^{}]+\\}"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "request_bindings"
+              ],
+              "properties": {
+                "request_bindings": {
+                  "required": [
+                    "path"
+                  ],
+                  "properties": {
+                    "path": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
         ],
         "properties": {
           "method": {
@@ -216,6 +279,9 @@
           },
           "request_body_kind": {
             "enum": ["object", "none"]
+          },
+          "success_status": {
+            "enum": [200, 201, 202, 204]
           },
           "transport": {
             "enum": ["json", "sse"]
@@ -331,14 +397,6 @@
                 "type": "string",
                 "minLength": 1
               },
-              "permissions": {
-                "type": "array",
-                "uniqueItems": true,
-                "items": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              },
               "token_transport": {
                 "type": "string",
                 "minLength": 1
@@ -382,6 +440,10 @@
                 "minLength": 1
               },
               "append_sink": {
+                "type": "string",
+                "minLength": 1
+              },
+              "lifecycle_owner": {
                 "type": "string",
                 "minLength": 1
               },
@@ -429,6 +491,11 @@
                     {
                       "required": [
                         "append_sink"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "lifecycle_owner"
                       ]
                     }
                   ]
@@ -555,16 +622,60 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "timeout_ms",
               "cancellation",
               "retry_mode",
               "max_attempts",
               "idempotency"
             ],
+            "oneOf": [
+              {
+                "required": [
+                  "timeout_ms"
+                ],
+                "not": {
+                  "required": [
+                    "stream_budget"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "stream_budget"
+                ],
+                "not": {
+                  "required": [
+                    "timeout_ms"
+                  ]
+                }
+              }
+            ],
             "properties": {
               "timeout_ms": {
                 "type": "integer",
                 "minimum": 1
+              },
+              "stream_budget": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "handshake_ms",
+                  "idle_ms",
+                  "max_duration_ms"
+                ],
+                "properties": {
+                  "handshake_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "idle_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_duration_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
               },
               "cancellation": {
                 "enum": [
@@ -603,12 +714,12 @@
               "default_items": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 300
+                "maximum": 500
               },
               "maximum_items": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 300
+                "maximum": 500
               }
             }
           },
@@ -754,7 +865,7 @@
     },
     "runtime_entrypoints": {
       "type": "array",
-      "maxItems": 1,
+      "maxItems": 32,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -773,6 +884,7 @@
             "enum": [
               "middleware",
               "projector",
+              "event_handler",
               "subscription",
               "internal_port",
               "external_port"
@@ -782,19 +894,11 @@
             "enum": [
               "post_authorization_pre_owner_proxy",
               "event_projection",
+              "event_command",
               "event_ingest",
               "transactional_append",
               "outbound_invocation"
             ]
-          },
-          "source_events": {
-            "type": "array",
-            "minItems": 1,
-            "uniqueItems": true,
-            "items": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]+$"
-            }
           },
           "source_objects": {
             "type": "array",
@@ -804,18 +908,6 @@
               "type": "string",
               "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]+$"
             }
-          },
-          "checkpoint": {
-            "type": "string",
-            "minLength": 1
-          },
-          "rebuild": {
-            "type": "string",
-            "minLength": 1
-          },
-          "tombstone": {
-            "type": "string",
-            "minLength": 1
           },
           "idempotency": {
             "enum": [
@@ -840,7 +932,7 @@
               },
               "facet": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Za-z0-9]*(Facade|Projector|Appender|Port)$"
+                "pattern": "^[A-Z][A-Za-z0-9]*(Facade|Projector|Projection|Appender|Consumer|Port|Coordinator|Recorder|Orchestrator|Handler)$"
               },
               "method": {
                 "type": "string",
@@ -865,11 +957,7 @@
               },
               "not": {
                 "anyOf": [
-                  { "required": ["source_events"] },
                   { "required": ["source_objects"] },
-                  { "required": ["checkpoint"] },
-                  { "required": ["rebuild"] },
-                  { "required": ["tombstone"] },
                   { "required": ["idempotency"] }
                 ]
               }
@@ -878,24 +966,51 @@
           {
             "if": { "properties": { "kind": { "const": "projector" } } },
             "then": {
-              "required": ["source_events", "checkpoint", "rebuild", "tombstone", "idempotency"],
               "properties": {
                 "phase": { "const": "event_projection" },
                 "application": {
                   "properties": { "kind": { "const": "command" } }
                 }
+              },
+              "not": {
+                "anyOf": [
+                  { "required": ["source_objects"] },
+                  { "required": ["idempotency"] }
+                ]
+              }
+            }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "event_handler" } } },
+            "then": {
+              "properties": {
+                "phase": { "const": "event_command" },
+                "application": {
+                  "properties": { "kind": { "const": "command" } }
+                }
+              },
+              "not": {
+                "anyOf": [
+                  { "required": ["source_objects"] },
+                  { "required": ["idempotency"] }
+                ]
               }
             }
           },
           {
             "if": { "properties": { "kind": { "const": "subscription" } } },
             "then": {
-              "required": ["source_events", "idempotency"],
               "properties": {
                 "phase": { "const": "event_ingest" },
                 "application": {
                   "properties": { "kind": { "const": "command" } }
                 }
+              },
+              "not": {
+                "anyOf": [
+                  { "required": ["source_objects"] },
+                  { "required": ["idempotency"] }
+                ]
               }
             }
           },
@@ -1010,6 +1125,142 @@
     }
   },
   "$defs": {
+    "readinessTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {
+          "enum": ["operation", "page", "object"]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "readinessExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["env", "platform", "device", "provider", "digest_binding"],
+      "properties": {
+        "env": {
+          "enum": ["alpha", "beta", "gamma", "prod"]
+        },
+        "platform": {
+          "$ref": "#/$defs/readinessIdentity"
+        },
+        "device": {
+          "$ref": "#/$defs/readinessIdentity"
+        },
+        "provider": {
+          "$ref": "#/$defs/readinessIdentity"
+        },
+        "digest_binding": {
+          "enum": ["candidate", "release", "candidate_or_release"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "env": { "const": "prod" }
+            },
+            "required": ["env"]
+          },
+          "then": {
+            "properties": {
+              "digest_binding": { "const": "release" }
+            }
+          }
+        }
+      ]
+    },
+    "readinessIdentity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "readinessCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id", "spec_ref", "producer", "layer", "target", "runner_source_path", "executions"],
+      "properties": {
+        "case_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "spec_ref": {
+          "type": "string",
+          "pattern": "^specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\\.md#(?:uat|dom|sit|gwt)-[0-9]{3,}$"
+        },
+        "producer": {
+          "enum": ["service", "app", "ops"]
+        },
+        "layer": {
+          "enum": [
+            "local_contract",
+            "api_integration",
+            "user_acceptance",
+            "environment_acceptance",
+            "rollback",
+            "replay"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/readinessTarget"
+        },
+        "runner_source_path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$"
+        },
+        "executions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/readinessExecution"
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "producer": { "const": "service" },
+            "layer": { "enum": ["local_contract", "api_integration"] },
+            "target": {
+              "properties": { "kind": { "enum": ["operation", "object"] } }
+            }
+          }
+        },
+        {
+          "properties": {
+            "producer": { "const": "app" },
+            "layer": { "enum": ["local_contract", "api_integration"] },
+            "target": {
+              "properties": { "kind": { "const": "operation" } }
+            }
+          }
+        },
+        {
+          "properties": {
+            "producer": { "const": "app" },
+            "layer": { "const": "user_acceptance" },
+            "target": {
+              "properties": { "kind": { "const": "page" } }
+            }
+          }
+        },
+        {
+          "properties": {
+            "producer": { "const": "ops" },
+            "layer": { "enum": ["environment_acceptance", "rollback", "replay"] },
+            "target": {
+              "properties": { "kind": { "const": "object" } }
+            }
+          }
+        }
+      ]
+    },
     "requestBinding": {
       "type": "object",
       "additionalProperties": false,

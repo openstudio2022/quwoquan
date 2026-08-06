@@ -359,7 +359,6 @@ def write_image_lane(
         plan_dir / "image_source_plan.json",
             "image",
             {
-                "acquisitionReceiptRefs": list(acquisition_receipt_refs or []),
                 "collections": collections,
                 "imageDiscoveryDiagnostics": {
                     "imageAssetStrategy": image_strategy,
@@ -398,6 +397,9 @@ def write_image_lane(
                 ),
             },
             force=force,
+            top_level_update={
+                "acquisitionReceiptRefs": list(acquisition_receipt_refs or []),
+            },
         ):
             updated.append(
                 {

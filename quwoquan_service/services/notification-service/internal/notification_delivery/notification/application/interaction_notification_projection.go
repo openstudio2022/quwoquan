@@ -42,6 +42,7 @@ var InteractionNotificationStreams = []string{
 	"events.user.greeting",
 	"events.circle.memberships",
 	"events.circle.group-memberships",
+	"events.circle.gatherings",
 	"events.entity.homepage_lifecycle",
 }
 
@@ -64,11 +65,15 @@ const (
 	interactionTitleStatusResult  = "主页状态上报处理完成"
 )
 
-// ProjectInteractionNotification 将一条 durable 互动事件映射为零或多条
+// InteractionNotificationProjection 是 durable interaction stream 的唯一应用入口。
+// 它既生成属于触发矩阵的 AppMessage command，也明确确认无需通知的同流事件。
+type InteractionNotificationProjection struct{}
+
+// Project 将一条 durable 互动事件映射为零或多条
 // CreateAppMessageCommand（如 CommentCreated 同时产生回复通知与 @提及通知）。
 // 返回空切片表示按触发矩阵跳过；返回 error 表示事件不完整
 // （进入失败计数与 DLQ），绝不伪造接收者。
-func ProjectInteractionNotification(
+func (InteractionNotificationProjection) Project(
 	event InteractionStreamEvent,
 ) ([]*CreateAppMessageCommand, error) {
 	switch event.EventType {
@@ -80,7 +85,7 @@ func ProjectInteractionNotification(
 		return single(projectReactionSet(event))
 	case "PostPublished":
 		return single(projectQuotedPublish(event))
-	case "content.report.resolved", "content.report.dismissed":
+	case "content.report.ReportResolved", "content.report.ReportDismissed":
 		return single(projectReportResult(event))
 	case "PersonaFollowStateChanged":
 		return single(projectFollowChanged(event))
@@ -200,7 +205,7 @@ func projectReportResult(
 		return nil, fmt.Errorf("report result identity is incomplete")
 	}
 	summary := "你提交的举报已处理，可查看最新进度"
-	if event.EventType == "content.report.dismissed" {
+	if event.EventType == "content.report.ReportDismissed" {
 		summary = "举报审核已完成，暂未发现违规"
 	}
 	return interactionCommand(

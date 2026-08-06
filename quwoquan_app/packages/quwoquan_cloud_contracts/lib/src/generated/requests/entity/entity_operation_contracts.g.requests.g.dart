@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../entity/entity_operation_contracts.g.dart';
 
@@ -322,6 +322,9 @@ final class HomepageObjectPageBundleQuery {
 }
 
 final class HomepageReviewListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   HomepageReviewListQuery({
     required String homepageId,
     String? cursor,
@@ -331,6 +334,12 @@ final class HomepageReviewListQuery {
        limit = limit {
     if (this.homepageId.isEmpty) {
       throw ArgumentError.value(this.homepageId, "homepageId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
     }
   }
 
@@ -355,7 +364,10 @@ final class HomepageReviewListQuery {
 }
 
 final class HomepageSearchQuery {
-  const HomepageSearchQuery({
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 500;
+
+  HomepageSearchQuery({
     required String query,
     String? homepageType,
     String? city,
@@ -367,7 +379,14 @@ final class HomepageSearchQuery {
        city = city,
        status = status,
        cursor = cursor,
-       limit = limit;
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 500) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 500");
+    }
+  }
 
   final String query;
   final String? homepageType;
@@ -656,6 +675,19 @@ CloudOperationRequestPayload encodeEntityHomepageGetObjectPageBundleGeneratedReq
   );
 }
 
+CloudOperationRequestPayload encodeEntityHomepageSearchHomepagesGeneratedRequest(HomepageSearchQuery request) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      "query": request.query,
+      if (request.homepageType != null) "homepageType": request.homepageType!,
+      if (request.city != null) "city": request.city!,
+      if (request.status != null) "status": request.status!,
+      if (request.cursor != null) "cursor": request.cursor!,
+      "limit": (request.limit).toString(),
+    },
+  );
+}
+
 CloudOperationRequestPayload encodeEntityHomepageSuggestHomepageCandidateGeneratedRequest(SuggestHomepageCandidateCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
@@ -759,19 +791,6 @@ CloudOperationRequestPayload encodeEntityHomepageReviewUpdateHomepageReviewGener
       "tagRefs": request.tagRefs.map((value) => value).toList(growable: false),
       if (request.authorDisplayNameSnapshot != null) "authorDisplayNameSnapshot": request.authorDisplayNameSnapshot!,
       if (request.authorAvatarUrlSnapshot != null) "authorAvatarUrlSnapshot": request.authorAvatarUrlSnapshot!,
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeEntityHomepageSearchItemViewSearchHomepagesGeneratedRequest(HomepageSearchQuery request) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      "query": request.query,
-      if (request.homepageType != null) "homepageType": request.homepageType!,
-      if (request.city != null) "city": request.city!,
-      if (request.status != null) "status": request.status!,
-      if (request.cursor != null) "cursor": request.cursor!,
-      "limit": (request.limit).toString(),
     },
   );
 }

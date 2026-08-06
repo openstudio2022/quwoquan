@@ -1,6 +1,9 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+// readiness_case: append-recommendation-signal-local
 package local_contract
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -60,6 +63,41 @@ func TestSearchSignalStreamValuesSeparateQueryFromRealClick(t *testing.T) {
 	if clickValues["createdAt"] != createdAt.Format(time.RFC3339Nano) {
 		t.Fatalf("createdAt=%q", clickValues["createdAt"])
 	}
+}
+
+func TestRecommendationSignalAppenderOwnsTheRuntimeEntrypoint(t *testing.T) {
+	publisher := &readinessSignalPublisher{}
+	appender, err := signalapplication.NewAppender(publisher)
+	if err != nil {
+		t.Fatalf("NewAppender() error = %v", err)
+	}
+	fact := signalapplication.Signal{
+		SignalID:         "query:readiness-request",
+		SignalType:       "query",
+		SearchRequestID:  "readiness-request",
+		NormalizedQuery:  "成都旅行",
+		ExperimentBucket: "control",
+		ResultCount:      2,
+		CreatedAt:        time.Now().UTC(),
+	}
+	if err := appender.Append(t.Context(), fact); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+	if len(publisher.facts) != 1 || publisher.facts[0].SignalID != fact.SignalID {
+		t.Fatalf("published facts = %+v", publisher.facts)
+	}
+}
+
+type readinessSignalPublisher struct {
+	facts []signalapplication.Signal
+}
+
+func (publisher *readinessSignalPublisher) PublishSearchSignal(
+	_ context.Context,
+	fact signalapplication.Signal,
+) error {
+	publisher.facts = append(publisher.facts, fact)
+	return nil
 }
 
 func TestSearchSignalStreamValuesRejectFabricatedEngagement(t *testing.T) {

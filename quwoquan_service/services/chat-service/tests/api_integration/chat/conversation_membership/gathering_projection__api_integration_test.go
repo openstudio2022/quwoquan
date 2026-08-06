@@ -1,17 +1,24 @@
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-001
+// readiness_case: project-gathering-conversation-membership-api
 package api_integration
 
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	conversationapp "quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	conversationpersistence "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
+	membershiphttp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/adapters/inbound/http"
 	membershipapp "quwoquan_service/services/chat-service/internal/chat/conversation_membership/application"
 	membershipmodel "quwoquan_service/services/chat-service/internal/chat/conversation_membership/domain/model"
 	userstatemodel "quwoquan_service/services/chat-service/internal/chat/conversation_user_state/domain/model"
@@ -35,7 +42,6 @@ func (reader realGatheringBindingReader) ReadGatheringConversation(
 	}
 	return membershipapp.GatheringBinding{
 		GatheringID: conversation.GatheringId, ConversationID: conversation.ID,
-		OwnerPersonaID: conversation.CreatorId, MaxGroupSize: conversation.MaxGroupSize,
 		Active: conversation.Status == conversationmodel.ConversationStatusActive,
 	}, true, nil
 }
@@ -174,9 +180,10 @@ func TestGatheringProjectionCommitsMemberUserStateRosterWatermarkAndOutboxAtomic
 	}
 
 	command := membershipapp.GatheringProjectionCommand{
-		SourceEventID: "gathering-api:join:persona-2:20", SourceVersion: 20,
-		GatheringID: "gathering-api", PersonaID: "persona-2", OwnerPersonaID: "persona-owner",
-		State: membershipapp.GatheringProjectionJoined,
+		SourceEventID: "gathering-api:participation:persona-2:20", SourceVersion: 20,
+		GatheringID: "gathering-api", PersonaID: "persona-2",
+		SourceType: membershipapp.GatheringProjectionSourceParticipation,
+		State:      membershipapp.GatheringProjectionStateActive,
 	}
 	failedFacade := membershipapp.NewGatheringProjectionFacade(
 		chatStore, realGatheringBindingReader{chatStore}, membershipStore,
@@ -200,9 +207,23 @@ func TestGatheringProjectionCommitsMemberUserStateRosterWatermarkAndOutboxAtomic
 		realGatheringProfileReader{}, membershipStore,
 		realGatheringOutbox{membership: membershipOutbox, conversation: conversationOutbox},
 	)
-	result, err := facade.Project(ctx, command)
-	if err != nil || result.State != membershipapp.GatheringProjectionJoined {
-		t.Fatalf("project joined result=%+v err=%v", result, err)
+	routes := http.NewServeMux()
+	membershiphttp.NewGatheringProjectionHandler(facade).Register(routes)
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/internal/chat/gathering-conversations/gathering-api/members/persona-2",
+		strings.NewReader(`{"sourceEventId":"gathering-api:participation:persona-2:20","sourceVersion":20,"sourceType":"participation","state":"active"}`),
+	)
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{
+			Subject: "service:circle-service", Scope: "chat.gathering.write", Roles: []string{"service"},
+		},
+		Actor: operation.ActorContext{AccountID: "service:circle-service"},
+	}))
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("project joined status=%d body=%s", response.Code, response.Body.String())
 	}
 	assertMongoCount(t, "conversation_memberships", bson.M{"userId": "persona-2"}, 1)
 	assertMongoCount(t, "conversation_user_states", bson.M{"userId": "persona-2"}, 1)
@@ -220,18 +241,40 @@ func TestGatheringProjectionCommitsMemberUserStateRosterWatermarkAndOutboxAtomic
 	assertMongoCount(t, "conversation_memberships_outbox", bson.M{}, 1)
 	assertMongoCount(t, "conversations_outbox", bson.M{}, 1)
 
-	left := command
-	left.SourceEventID = "gathering-api:leave:persona-2:30"
-	left.SourceVersion = 30
-	left.State = membershipapp.GatheringProjectionLeft
-	if _, err := facade.Project(ctx, left); err != nil {
-		t.Fatalf("project left: %v", err)
+	organizer := command
+	organizer.SourceEventID = "gathering-api:organizer:persona-2:30"
+	organizer.SourceVersion = 30
+	organizer.SourceType = membershipapp.GatheringProjectionSourceOrganizerAssignment
+	if result, err := facade.Project(ctx, organizer); err != nil {
+		t.Fatalf("project organizer: %v", err)
+	} else if result.AccessRole != membershipapp.GatheringAccessRoleAdmin {
+		t.Fatalf("organizer role=%s want admin", result.AccessRole)
+	}
+	assertMongoCount(t, "conversation_memberships", bson.M{"userId": "persona-2", "role": "admin"}, 1)
+
+	blocked := command
+	blocked.SourceEventID = "gathering-api:block:persona-2:40"
+	blocked.SourceVersion = 40
+	blocked.SourceType = membershipapp.GatheringProjectionSourceBlock
+	blocked.State = membershipapp.GatheringProjectionStateBlocked
+	if result, err := facade.Project(ctx, blocked); err != nil {
+		t.Fatalf("project Block: %v", err)
+	} else if result.AccessStatus != membershipapp.GatheringAccessStatusRevoked {
+		t.Fatalf("Block access=%s want revoked", result.AccessStatus)
 	}
 	assertMongoCount(t, "conversation_memberships", bson.M{"userId": "persona-2"}, 0)
 	assertMongoCount(t, "conversation_user_states", bson.M{"userId": "persona-2"}, 0)
-	assertMongoCount(t, "gathering_membership_projection_states", bson.M{"userId": "persona-2", "sourceVersion": int64(30), "state": "left"}, 1)
-	assertMongoCount(t, "conversation_memberships_outbox", bson.M{}, 2)
-	assertMongoCount(t, "conversations_outbox", bson.M{}, 2)
+	assertMongoCount(t, "gathering_membership_projection_states", bson.M{
+		"userId": "persona-2", "sources.block.sourceVersion": int64(40), "sources.block.state": "blocked",
+	}, 1)
+
+	staleParticipation := command
+	staleParticipation.SourceEventID = "gathering-api:participation:persona-2:10"
+	staleParticipation.SourceVersion = 10
+	if _, err := facade.Project(ctx, staleParticipation); err != nil {
+		t.Fatalf("stale Participation must be no-op: %v", err)
+	}
+	assertMongoCount(t, "conversation_memberships", bson.M{"userId": "persona-2"}, 0)
 }
 
 func assertMongoCount(t *testing.T, collection string, filter bson.M, want int64) {

@@ -4,7 +4,7 @@ package local_contract
 import (
 	"context"
 	"errors"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/stream"
 	"testing"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"

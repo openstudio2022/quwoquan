@@ -10,67 +10,284 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrGatheringNotFound                  = errors.New("CIRCLE.USER.gathering_not_found")
-	ErrGatheringNotOpen                   = errors.New("CIRCLE.USER.gathering_not_open")
-	ErrGatheringFull                      = errors.New("CIRCLE.USER.gathering_full")
-	ErrGatheringPermissionDenied          = errors.New("CIRCLE.USER.gathering_permission_denied")
-	ErrGatheringParticipantStateInvalid   = errors.New("CIRCLE.USER.gathering_participant_state_invalid")
-	ErrGatheringIdempotencyConflict       = errors.New("CIRCLE.USER.gathering_idempotency_conflict")
-	ErrGatheringConversationBindingFailed = errors.New("CIRCLE.DEPENDENCY.gathering_conversation_binding_failed")
-	ErrGatheringTargetUnavailable         = errors.New("CIRCLE.DEPENDENCY.gathering_target_unavailable")
-	ErrGatheringStorageFailed             = errors.New("CIRCLE.SYSTEM.gathering_storage_failed")
+	ErrGatheringNotFound                      = errors.New("CIRCLE.USER.gathering_not_found")
+	ErrGatheringPermissionDenied              = errors.New("CIRCLE.USER.gathering_permission_denied")
+	ErrGatheringInvitationRecipientMismatch   = errors.New("CIRCLE.USER.gathering_invitation_recipient_mismatch")
+	ErrGatheringDraftIncomplete               = errors.New("CIRCLE.USER.gathering_draft_incomplete")
+	ErrGatheringHostAuthorityInvalid          = errors.New("CIRCLE.USER.gathering_host_authority_invalid")
+	ErrGatheringPublishObligationMissing      = errors.New("CIRCLE.USER.gathering_publish_obligation_missing")
+	ErrGatheringDisclosureInvalid             = errors.New("CIRCLE.USER.gathering_disclosure_invalid")
+	ErrGatheringScheduleInvalid               = errors.New("CIRCLE.USER.gathering_schedule_invalid")
+	ErrGatheringAdmissionClosed               = errors.New("CIRCLE.USER.gathering_admission_closed")
+	ErrGatheringAdmissionPaused               = errors.New("CIRCLE.USER.gathering_admission_paused")
+	ErrGatheringCapacityFull                  = errors.New("CIRCLE.USER.gathering_capacity_full")
+	ErrGatheringParticipationConflict         = errors.New("CIRCLE.USER.gathering_participation_conflict")
+	ErrGatheringAlreadyActive                 = errors.New("CIRCLE.USER.gathering_already_active")
+	ErrGatheringInvitationExpired             = errors.New("CIRCLE.USER.gathering_invitation_expired")
+	ErrGatheringInvitationInactive            = errors.New("CIRCLE.USER.gathering_invitation_inactive")
+	ErrGatheringSeatHoldExpired               = errors.New("CIRCLE.USER.gathering_seat_hold_expired")
+	ErrGatheringTransitionForbidden           = errors.New("CIRCLE.USER.gathering_transition_forbidden")
+	ErrGatheringCancellationWindowClosed      = errors.New("CIRCLE.USER.gathering_cancellation_window_closed")
+	ErrGatheringOperationNotAllowedInProgress = errors.New("CIRCLE.USER.gathering_operation_not_allowed_in_progress")
+	ErrGatheringCapacityBelowOccupiedSeats    = errors.New("CIRCLE.USER.gathering_capacity_below_occupied_seats")
+	ErrGatheringReconfirmationRequired        = errors.New("CIRCLE.USER.gathering_reconfirmation_required")
+	ErrGatheringReconfirmationExpired         = errors.New("CIRCLE.USER.gathering_reconfirmation_expired")
+	ErrGatheringOrganizerTransferRequired     = errors.New("CIRCLE.USER.gathering_organizer_transfer_required")
+	ErrGatheringAttendanceConflict            = errors.New("CIRCLE.USER.gathering_attendance_conflict")
+	ErrGatheringOutcomeUnverified             = errors.New("CIRCLE.USER.gathering_outcome_unverified")
+	ErrGatheringOutcomeDisputed               = errors.New("CIRCLE.USER.gathering_outcome_disputed")
+	ErrGatheringRoomProvisionPending          = errors.New("CIRCLE.DEPENDENCY.gathering_room_provision_pending")
+	ErrGatheringRoomProvisionFailed           = errors.New("CIRCLE.DEPENDENCY.gathering_room_provision_failed")
+	ErrGatheringActiveParticipationRequired   = errors.New("CIRCLE.USER.gathering_active_participation_required")
+	ErrGatheringAccessRevoked                 = errors.New("CIRCLE.USER.gathering_access_revoked")
+	ErrGatheringControlRequired               = errors.New("CIRCLE.USER.gathering_control_required")
+	ErrGatheringSafetyTerminationDenied       = errors.New("CIRCLE.USER.gathering_safety_termination_denied")
+	ErrGatheringSafetyAuthorityUnavailable    = errors.New("CIRCLE.DEPENDENCY.gathering_safety_authority_unavailable")
+	ErrGatheringQualificationRequired         = errors.New("CIRCLE.USER.gathering_qualification_required")
+	ErrGatheringCommercialAuthorityRequired   = errors.New("CIRCLE.USER.gathering_commercial_authority_required")
+	ErrGatheringPolicyDenied                  = errors.New("CIRCLE.USER.gathering_policy_denied")
+	ErrGatheringTargetUnavailable             = errors.New("CIRCLE.DEPENDENCY.gathering_target_unavailable")
+	ErrGatheringVersionConflict               = errors.New("CIRCLE.USER.gathering_version_conflict")
+	ErrGatheringIdempotencyConflict           = errors.New("CIRCLE.USER.gathering_idempotency_conflict")
+	ErrGatheringStorageFailed                 = errors.New("CIRCLE.SYSTEM.gathering_storage_failed")
 )
 
 // AppErrorFromGatheringNotFound returns *AppError for CIRCLE.USER.gathering_not_found (user_message from errors.yaml).
 func AppErrorFromGatheringNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringNotFound.Error()))
-	return rerrors.NewAppError(code, "相聚不存在", debugMessage).WithMetadata("gathering_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGatheringNotOpen returns *AppError for CIRCLE.USER.gathering_not_open (user_message from errors.yaml).
-func AppErrorFromGatheringNotOpen(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringNotOpen.Error()))
-	return rerrors.NewAppError(code, "这次相聚当前不可加入", debugMessage).WithMetadata("gathering_not_open", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGatheringFull returns *AppError for CIRCLE.USER.gathering_full (user_message from errors.yaml).
-func AppErrorFromGatheringFull(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringFull.Error()))
-	return rerrors.NewAppError(code, "这次相聚人数已满", debugMessage).WithMetadata("gathering_full", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "活动不存在或已不可访问", debugMessage).WithMetadata("gathering_not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGatheringPermissionDenied returns *AppError for CIRCLE.USER.gathering_permission_denied (user_message from errors.yaml).
 func AppErrorFromGatheringPermissionDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringPermissionDenied.Error()))
-	return rerrors.NewAppError(code, "你无权执行此操作", debugMessage).WithMetadata("gathering_permission_denied", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "你无权执行此活动操作", debugMessage).WithMetadata("gathering_permission_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
-// AppErrorFromGatheringParticipantStateInvalid returns *AppError for CIRCLE.USER.gathering_participant_state_invalid (user_message from errors.yaml).
-func AppErrorFromGatheringParticipantStateInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringParticipantStateInvalid.Error()))
-	return rerrors.NewAppError(code, "参与状态已变化，请刷新", debugMessage).WithMetadata("gathering_participant_state_invalid", 409).WithRecovery("refresh", 0)
+// AppErrorFromGatheringInvitationRecipientMismatch returns *AppError for CIRCLE.USER.gathering_invitation_recipient_mismatch (user_message from errors.yaml).
+func AppErrorFromGatheringInvitationRecipientMismatch(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringInvitationRecipientMismatch.Error()))
+	return rerrors.NewAppError(code, "这份活动邀请不属于你", debugMessage).WithMetadata("gathering_invitation_recipient_mismatch", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
-// AppErrorFromGatheringIdempotencyConflict returns *AppError for CIRCLE.USER.gathering_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromGatheringIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原操作不一致", debugMessage).WithMetadata("gathering_idempotency_conflict", 409).WithRecovery("refresh", 0)
+// AppErrorFromGatheringDraftIncomplete returns *AppError for CIRCLE.USER.gathering_draft_incomplete (user_message from errors.yaml).
+func AppErrorFromGatheringDraftIncomplete(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringDraftIncomplete.Error()))
+	return rerrors.NewAppError(code, "请先补全活动发布所需信息", debugMessage).WithMetadata("gathering_draft_incomplete", 422).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
-// AppErrorFromGatheringConversationBindingFailed returns *AppError for CIRCLE.DEPENDENCY.gathering_conversation_binding_failed (user_message from errors.yaml).
-func AppErrorFromGatheringConversationBindingFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringConversationBindingFailed.Error()))
-	return rerrors.NewAppError(code, "相聚会话暂时未就绪，请重试", debugMessage).WithMetadata("gathering_conversation_binding_failed", 503).WithRecovery("retry", 3)
+// AppErrorFromGatheringHostAuthorityInvalid returns *AppError for CIRCLE.USER.gathering_host_authority_invalid (user_message from errors.yaml).
+func AppErrorFromGatheringHostAuthorityInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringHostAuthorityInvalid.Error()))
+	return rerrors.NewAppError(code, "当前 Host 授权无效，请重新选择或验证", debugMessage).WithMetadata("gathering_host_authority_invalid", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringPublishObligationMissing returns *AppError for CIRCLE.USER.gathering_publish_obligation_missing (user_message from errors.yaml).
+func AppErrorFromGatheringPublishObligationMissing(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringPublishObligationMissing.Error()))
+	return rerrors.NewAppError(code, "尚未满足活动发布所需的风险义务", debugMessage).WithMetadata("gathering_publish_obligation_missing", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringDisclosureInvalid returns *AppError for CIRCLE.USER.gathering_disclosure_invalid (user_message from errors.yaml).
+func AppErrorFromGatheringDisclosureInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringDisclosureInvalid.Error()))
+	return rerrors.NewAppError(code, "当前活动信息披露设置无效", debugMessage).WithMetadata("gathering_disclosure_invalid", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringScheduleInvalid returns *AppError for CIRCLE.USER.gathering_schedule_invalid (user_message from errors.yaml).
+func AppErrorFromGatheringScheduleInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringScheduleInvalid.Error()))
+	return rerrors.NewAppError(code, "活动时间安排无效，请检查后重试", debugMessage).WithMetadata("gathering_schedule_invalid", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringAdmissionClosed returns *AppError for CIRCLE.USER.gathering_admission_closed (user_message from errors.yaml).
+func AppErrorFromGatheringAdmissionClosed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringAdmissionClosed.Error()))
+	return rerrors.NewAppError(code, "本次活动当前已关闭报名", debugMessage).WithMetadata("gathering_admission_closed", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringAdmissionPaused returns *AppError for CIRCLE.USER.gathering_admission_paused (user_message from errors.yaml).
+func AppErrorFromGatheringAdmissionPaused(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringAdmissionPaused.Error()))
+	return rerrors.NewAppError(code, "主办方暂时停止接收新参与者", debugMessage).WithMetadata("gathering_admission_paused", 409).WithRecoveryDirective("retry", "snackbar", 5)
+}
+
+// AppErrorFromGatheringCapacityFull returns *AppError for CIRCLE.USER.gathering_capacity_full (user_message from errors.yaml).
+func AppErrorFromGatheringCapacityFull(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringCapacityFull.Error()))
+	return rerrors.NewAppError(code, "本次活动名额已满", debugMessage).WithMetadata("gathering_capacity_full", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringParticipationConflict returns *AppError for CIRCLE.USER.gathering_participation_conflict (user_message from errors.yaml).
+func AppErrorFromGatheringParticipationConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringParticipationConflict.Error()))
+	return rerrors.NewAppError(code, "参与状态已变化，请刷新后重试", debugMessage).WithMetadata("gathering_participation_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
+}
+
+// AppErrorFromGatheringAlreadyActive returns *AppError for CIRCLE.USER.gathering_already_active (user_message from errors.yaml).
+func AppErrorFromGatheringAlreadyActive(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringAlreadyActive.Error()))
+	return rerrors.NewAppError(code, "你已经是本次活动的有效参与者", debugMessage).WithMetadata("gathering_already_active", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringInvitationExpired returns *AppError for CIRCLE.USER.gathering_invitation_expired (user_message from errors.yaml).
+func AppErrorFromGatheringInvitationExpired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringInvitationExpired.Error()))
+	return rerrors.NewAppError(code, "这份活动邀请已失效", debugMessage).WithMetadata("gathering_invitation_expired", 410).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringInvitationInactive returns *AppError for CIRCLE.USER.gathering_invitation_inactive (user_message from errors.yaml).
+func AppErrorFromGatheringInvitationInactive(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringInvitationInactive.Error()))
+	return rerrors.NewAppError(code, "这份活动邀请已被处理、撤回或取消", debugMessage).WithMetadata("gathering_invitation_inactive", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringSeatHoldExpired returns *AppError for CIRCLE.USER.gathering_seat_hold_expired (user_message from errors.yaml).
+func AppErrorFromGatheringSeatHoldExpired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringSeatHoldExpired.Error()))
+	return rerrors.NewAppError(code, "邀请保留名额已到期", debugMessage).WithMetadata("gathering_seat_hold_expired", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringTransitionForbidden returns *AppError for CIRCLE.USER.gathering_transition_forbidden (user_message from errors.yaml).
+func AppErrorFromGatheringTransitionForbidden(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringTransitionForbidden.Error()))
+	return rerrors.NewAppError(code, "当前状态下不能执行此操作", debugMessage).WithMetadata("gathering_transition_forbidden", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringCancellationWindowClosed returns *AppError for CIRCLE.USER.gathering_cancellation_window_closed (user_message from errors.yaml).
+func AppErrorFromGatheringCancellationWindowClosed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringCancellationWindowClosed.Error()))
+	return rerrors.NewAppError(code, "活动已开场，不能再按普通取消处理", debugMessage).WithMetadata("gathering_cancellation_window_closed", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringOperationNotAllowedInProgress returns *AppError for CIRCLE.USER.gathering_operation_not_allowed_in_progress (user_message from errors.yaml).
+func AppErrorFromGatheringOperationNotAllowedInProgress(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringOperationNotAllowedInProgress.Error()))
+	return rerrors.NewAppError(code, "当前活动阶段不允许此操作", debugMessage).WithMetadata("gathering_operation_not_allowed_in_progress", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringCapacityBelowOccupiedSeats returns *AppError for CIRCLE.USER.gathering_capacity_below_occupied_seats (user_message from errors.yaml).
+func AppErrorFromGatheringCapacityBelowOccupiedSeats(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringCapacityBelowOccupiedSeats.Error()))
+	return rerrors.NewAppError(code, "新容量不能小于当前已占席位", debugMessage).WithMetadata("gathering_capacity_below_occupied_seats", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringReconfirmationRequired returns *AppError for CIRCLE.USER.gathering_reconfirmation_required (user_message from errors.yaml).
+func AppErrorFromGatheringReconfirmationRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringReconfirmationRequired.Error()))
+	return rerrors.NewAppError(code, "请先确认最新的活动重大变更", debugMessage).WithMetadata("gathering_reconfirmation_required", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringReconfirmationExpired returns *AppError for CIRCLE.USER.gathering_reconfirmation_expired (user_message from errors.yaml).
+func AppErrorFromGatheringReconfirmationExpired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringReconfirmationExpired.Error()))
+	return rerrors.NewAppError(code, "本次变更确认期限已结束", debugMessage).WithMetadata("gathering_reconfirmation_expired", 410).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringOrganizerTransferRequired returns *AppError for CIRCLE.USER.gathering_organizer_transfer_required (user_message from errors.yaml).
+func AppErrorFromGatheringOrganizerTransferRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringOrganizerTransferRequired.Error()))
+	return rerrors.NewAppError(code, "请先转移主办责任再继续", debugMessage).WithMetadata("gathering_organizer_transfer_required", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringAttendanceConflict returns *AppError for CIRCLE.USER.gathering_attendance_conflict (user_message from errors.yaml).
+func AppErrorFromGatheringAttendanceConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringAttendanceConflict.Error()))
+	return rerrors.NewAppError(code, "到场状态已变化，请刷新后重试", debugMessage).WithMetadata("gathering_attendance_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
+}
+
+// AppErrorFromGatheringOutcomeUnverified returns *AppError for CIRCLE.USER.gathering_outcome_unverified (user_message from errors.yaml).
+func AppErrorFromGatheringOutcomeUnverified(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringOutcomeUnverified.Error()))
+	return rerrors.NewAppError(code, "当前证据不足以确认活动真实发生", debugMessage).WithMetadata("gathering_outcome_unverified", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringOutcomeDisputed returns *AppError for CIRCLE.USER.gathering_outcome_disputed (user_message from errors.yaml).
+func AppErrorFromGatheringOutcomeDisputed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringOutcomeDisputed.Error()))
+	return rerrors.NewAppError(code, "活动结果存在争议，已进入复核", debugMessage).WithMetadata("gathering_outcome_disputed", 409).WithRecoveryDirective("escalate", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringRoomProvisionPending returns *AppError for CIRCLE.DEPENDENCY.gathering_room_provision_pending (user_message from errors.yaml).
+func AppErrorFromGatheringRoomProvisionPending(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringRoomProvisionPending.Error()))
+	return rerrors.NewAppError(code, "活动群聊正在准备，请稍后重试", debugMessage).WithMetadata("gathering_room_provision_pending", 503).WithRecoveryDirective("retry", "snackbar", 3)
+}
+
+// AppErrorFromGatheringRoomProvisionFailed returns *AppError for CIRCLE.DEPENDENCY.gathering_room_provision_failed (user_message from errors.yaml).
+func AppErrorFromGatheringRoomProvisionFailed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringRoomProvisionFailed.Error()))
+	return rerrors.NewAppError(code, "活动群聊准备失败，请稍后重试", debugMessage).WithMetadata("gathering_room_provision_failed", 503).WithRecoveryDirective("retry", "inlineCard", 5)
+}
+
+// AppErrorFromGatheringActiveParticipationRequired returns *AppError for CIRCLE.USER.gathering_active_participation_required (user_message from errors.yaml).
+func AppErrorFromGatheringActiveParticipationRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringActiveParticipationRequired.Error()))
+	return rerrors.NewAppError(code, "需要有效参与资格才能继续", debugMessage).WithMetadata("gathering_active_participation_required", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringAccessRevoked returns *AppError for CIRCLE.USER.gathering_access_revoked (user_message from errors.yaml).
+func AppErrorFromGatheringAccessRevoked(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringAccessRevoked.Error()))
+	return rerrors.NewAppError(code, "你的活动访问权限已被撤销", debugMessage).WithMetadata("gathering_access_revoked", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringControlRequired returns *AppError for CIRCLE.USER.gathering_control_required (user_message from errors.yaml).
+func AppErrorFromGatheringControlRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringControlRequired.Error()))
+	return rerrors.NewAppError(code, "请先完成所需的安全控制措施", debugMessage).WithMetadata("gathering_control_required", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringSafetyTerminationDenied returns *AppError for CIRCLE.USER.gathering_safety_termination_denied (user_message from errors.yaml).
+func AppErrorFromGatheringSafetyTerminationDenied(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringSafetyTerminationDenied.Error()))
+	return rerrors.NewAppError(code, "当前无法执行安全终止", debugMessage).WithMetadata("gathering_safety_termination_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringSafetyAuthorityUnavailable returns *AppError for CIRCLE.DEPENDENCY.gathering_safety_authority_unavailable (user_message from errors.yaml).
+func AppErrorFromGatheringSafetyAuthorityUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringSafetyAuthorityUnavailable.Error()))
+	return rerrors.NewAppError(code, "安全授权服务暂时不可用，请稍后重试", debugMessage).WithMetadata("gathering_safety_authority_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
+}
+
+// AppErrorFromGatheringQualificationRequired returns *AppError for CIRCLE.USER.gathering_qualification_required (user_message from errors.yaml).
+func AppErrorFromGatheringQualificationRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringQualificationRequired.Error()))
+	return rerrors.NewAppError(code, "发布此活动需要补充有效资质", debugMessage).WithMetadata("gathering_qualification_required", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringCommercialAuthorityRequired returns *AppError for CIRCLE.USER.gathering_commercial_authority_required (user_message from errors.yaml).
+func AppErrorFromGatheringCommercialAuthorityRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringCommercialAuthorityRequired.Error()))
+	return rerrors.NewAppError(code, "该活动需要有效的商业主体授权", debugMessage).WithMetadata("gathering_commercial_authority_required", 422).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromGatheringPolicyDenied returns *AppError for CIRCLE.USER.gathering_policy_denied (user_message from errors.yaml).
+func AppErrorFromGatheringPolicyDenied(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringPolicyDenied.Error()))
+	return rerrors.NewAppError(code, "当前政策不允许创建或发布此活动", debugMessage).WithMetadata("gathering_policy_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGatheringTargetUnavailable returns *AppError for CIRCLE.DEPENDENCY.gathering_target_unavailable (user_message from errors.yaml).
 func AppErrorFromGatheringTargetUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringTargetUnavailable.Error()))
-	return rerrors.NewAppError(code, "目标对象暂时不可验证，请重试", debugMessage).WithMetadata("gathering_target_unavailable", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "来源对象暂时无法验证，请稍后重试", debugMessage).WithMetadata("gathering_target_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
+}
+
+// AppErrorFromGatheringVersionConflict returns *AppError for CIRCLE.USER.gathering_version_conflict (user_message from errors.yaml).
+func AppErrorFromGatheringVersionConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringVersionConflict.Error()))
+	return rerrors.NewAppError(code, "活动已被更新，请刷新后重试", debugMessage).WithMetadata("gathering_version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
+}
+
+// AppErrorFromGatheringIdempotencyConflict returns *AppError for CIRCLE.USER.gathering_idempotency_conflict (user_message from errors.yaml).
+func AppErrorFromGatheringIdempotencyConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGatheringIdempotencyConflict.Error()))
+	return rerrors.NewAppError(code, "重复请求与原活动操作不一致", debugMessage).WithMetadata("gathering_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromGatheringStorageFailed returns *AppError for CIRCLE.SYSTEM.gathering_storage_failed (user_message from errors.yaml).
 func AppErrorFromGatheringStorageFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringStorageFailed.Error()))
-	return rerrors.NewAppError(code, "相聚操作失败，请稍后重试", debugMessage).WithMetadata("gathering_storage_failed", 500).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "活动操作失败，请稍后重试", debugMessage).WithMetadata("gathering_storage_failed", 500).WithRecoveryDirective("retry", "snackbar", 5)
 }

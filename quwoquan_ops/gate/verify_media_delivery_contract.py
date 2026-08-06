@@ -106,6 +106,9 @@ SKIP_PATHS = {
 }
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
 APP_RUNTIME_CONFIG_DIR = ROOT / "quwoquan_app" / "configs"
+APP_RUNTIME_CONFIG_SOURCE = (
+    ROOT / "quwoquan_app" / "lib" / "runtime" / "config" / "cloud_runtime_config.dart"
+)
 APP_RUNTIME_DEFINE_SCRIPT = (
     ROOT / "quwoquan_app" / "scripts" / "env" / "print_app_env_dart_defines.py"
 )
@@ -565,10 +568,11 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
         ROOT
         / "quwoquan_app"
         / "lib"
-        / "components"
+        / "service"
+        / "content_service"
         / "media"
-        / "video"
-        / "player"
+        / "media_asset"
+        / "presentation"
         / "video_player_widget.dart"
     )
     player_api = player.with_name("video_player_widget_api.dart")
@@ -586,7 +590,8 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
         ROOT
         / "quwoquan_app"
         / "lib"
-        / "core"
+        / "runtime"
+        / "transport"
         / "media"
         / "content_media_url.dart"
     )
@@ -671,9 +676,7 @@ def _validate_runtime_config_authority_parity(issues: list[str]) -> None:
                     f"{topology_field} 保持一致"
                 )
 
-    runtime_config_source = (
-        ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "cloud_runtime_config.dart"
-    ).read_text(encoding="utf-8")
+    runtime_config_source = APP_RUNTIME_CONFIG_SOURCE.read_text(encoding="utf-8")
     for define_key in (
         "CLOUD_GATEWAY_BASE_URL",
         *(define_key for _, define_key in APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()),
@@ -719,7 +722,7 @@ def _validate_video_playback_patrol_contract(issues: list[str]) -> None:
     """防止环境 smoke 退回只验证页面节点出现的通用测试。"""
 
     target = (
-        "test/user_acceptance/patrol/environment/"
+        "test/user_acceptance/journeys/home_video_playback/"
         "video_playback_canary__user_acceptance_test.dart"
     )
     patrol_runner_path = (
@@ -745,7 +748,7 @@ def _validate_video_playback_patrol_contract(issues: list[str]) -> None:
     if "video_playback_canary__user_acceptance_test.dart" not in patrol_runner_source:
         issues.append("环境 Patrol 默认 target 必须是 video playback canary")
     if target not in stackctl_source:
-        issues.append("stackctl T4 环境 smoke 必须执行 video playback canary")
+        issues.append("stackctl runtime-media 环境 smoke 必须执行 video playback canary")
     if not patrol_test_path.is_file():
         issues.append(f"视频播放 Patrol target 缺失: {target}")
         return
@@ -773,8 +776,8 @@ def _validate_avatar_media_patrol_contract(issues: list[str]) -> None:
         / "quwoquan_app"
         / "test"
         / "user_acceptance"
-        / "patrol"
-        / "environment"
+        / "journeys"
+        / "app_startup"
         / "basic_viability__user_acceptance_test.dart"
     )
     if not target.is_file():

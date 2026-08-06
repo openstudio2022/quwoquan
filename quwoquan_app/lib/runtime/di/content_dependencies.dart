@@ -1,28 +1,44 @@
-import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
-import 'package:quwoquan_app/application/content/post/post_publication_status_reader.dart';
-import 'package:quwoquan_app/content/media/filter_catalog_release/adapters/filter_catalog_remote.dart';
-import 'package:quwoquan_app/content/media/media_upload_session/adapters/content_media_object_uploader.dart';
-import 'package:quwoquan_app/cloud/remote/content/media/content_media_remote.dart';
-import 'package:quwoquan_app/content/content/outbound_share_fact/adapters/outbound_share_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/author_impact_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/content_app_config_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/content_behavior_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/post_delete_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/post_publication_remote.dart';
-import 'package:quwoquan_app/content/trust_safety/report/adapters/report_query_remote.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/content/content/comment/adapters/comment_facets_remote.dart';
-import 'package:quwoquan_app/content/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/footprint_query_remote.dart';
-import 'package:quwoquan_app/content/content/content_reaction/adapters/post_reaction_facets_remote.dart';
-import 'package:quwoquan_app/content/content/post/adapters/post_reader_remote.dart';
-import 'package:quwoquan_app/content/trust_safety/report/adapters/report_command_remote.dart';
-import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
-import 'package:quwoquan_app/content/content/post/adapters/cached_content_post_reader.dart';
-import 'package:quwoquan_app/core/services/cache/cached_content_repository.dart';
-import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
-import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_status_reader.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/adapters/profile_interaction_activity_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_read_fact/adapters/profile_interaction_read_fact_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/adapters/filter_catalog_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_asset_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_original_access_fact/adapters/media_original_access_fact_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/content_media_object_uploader.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/platform_media_picker_adapter.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/media_upload_session_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_picker_port.dart';
+import 'package:quwoquan_app/service/content_service/content/outbound_share_fact/adapters/outbound_share_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_visit_writer.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/author_impact_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/content_app_config_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_command_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/post_delete_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/post_publication_remote.dart';
+import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_query_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_outbox_adapter.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/adapters/comment_facets_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/footprint_query_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/content_reaction/adapters/post_reaction_facets_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
+import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_command_remote.dart';
+import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
+import 'package:quwoquan_app/runtime/platform/media/photo_manager_media_library_gateway.dart';
+import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/runtime/transport/actor_queue/actor_queue_storage.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/cached_content_post_reader.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/cached_content_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/content_cache_services.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/user_profile_cache_service.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 
 /// content domain 的 production Remote adapter 种类。
 ///
@@ -37,6 +53,8 @@ enum ContentProductionAdapter {
   outboundShare,
   postPublication,
   postReaction,
+  profileInteractionActivity,
+  profileInteractionReadFact,
   reportCommand,
   reportQuery,
 }
@@ -44,12 +62,12 @@ enum ContentProductionAdapter {
 /// content 读写与缓存图的唯一 production owner。
 final class AppProductionContentFacets {
   const AppProductionContentFacets({
-    required this.read,
+    required this.feedQuery,
     required this.postDeleteWriter,
     required this.behaviorWriter,
   });
 
-  final ContentReadRepository read;
+  final ContentDiscoveryFeedQuery feedQuery;
   final ContentPostDeleteCommandWriter postDeleteWriter;
   final ContentBehaviorCommandWriter behaviorWriter;
 }
@@ -69,9 +87,127 @@ final class AppProductionContentPostReaderFacets {
   final ContentEntityWishlistStateReader wishlistState;
 }
 
+final class AppProductionBehaviorRepository {
+  AppProductionBehaviorRepository({
+    required this.repository,
+    required this.onDispose,
+  });
+
+  final BehaviorRepository repository;
+  final void Function() onDispose;
+
+  void dispose() => onDispose();
+}
+
+/// 三个 media 对象的 public facet 组合；generated method 的唯一 owner 仍分别位于
+/// 各对象 adapter，本组合只做显式 port 委派。
+final class AppProductionContentMediaFacet implements ContentMediaFacet {
+  const AppProductionContentMediaFacet({
+    required this.upload,
+    required this.asset,
+    required this.originalAccess,
+  });
+
+  final RemoteContentMediaUploadSessionAdapter upload;
+  final RemoteContentMediaAssetAdapter asset;
+  final ContentMediaOriginalAccessWriter originalAccess;
+
+  @override
+  Future<MediaUploadSessionCommandResult> initUpload(
+    InitContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
+  ) => upload.initUpload(command, context);
+
+  @override
+  Future<MediaUploadSessionCommandResult> completeUpload(
+    CompleteContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
+  ) => upload.completeUpload(command, context);
+
+  @override
+  Future<MediaUploadSessionCommandResult> abortUpload(
+    AbortContentMediaUploadCommand command,
+    ContentMediaUploadCommandContext context,
+  ) => upload.abortUpload(command, context);
+
+  @override
+  Future<MediaUploadSessionSlice> getUploadSession(
+    GetContentMediaUploadSessionQuery query,
+  ) => upload.getUploadSession(query);
+
+  @override
+  Future<MediaAssetSlice> getMediaAsset(GetContentMediaAssetQuery query) =>
+      asset.getMediaAsset(query);
+
+  @override
+  Future<MediaAssetDiscardResult> discardMediaAsset(
+    DiscardContentMediaAssetCommand command,
+    ContentMediaAssetCommandContext context,
+  ) => asset.discardMediaAsset(command, context);
+
+  @override
+  Future<MediaCoverSelectionResult> selectAutoCover(
+    SelectAutoContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
+  ) => asset.selectAutoCover(command, context);
+
+  @override
+  Future<MediaCoverSelectionResult> selectManualCover(
+    SelectManualContentMediaCoverCommand command,
+    ContentMediaAssetCommandContext context,
+  ) => asset.selectManualCover(command, context);
+
+  @override
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
+    RequestContentMediaOriginalAccessCommand command,
+  ) => originalAccess.requestOriginalAccess(command);
+}
+
 /// content domain 的唯一 production 装配入口。
 final class ContentProductionComposition {
   const ContentProductionComposition._();
+
+  static AppProductionBehaviorRepository behaviorRepository({
+    required ContentBehaviorCommandWriter writer,
+    required ActorQueuePartition queuePartition,
+    required ActorQueueStorage queueStorage,
+    String Function()? feedSessionIdProvider,
+  }) {
+    final remote = DurableContentBehaviorRepository(
+      writer: writer,
+      feedSessionIdProvider: feedSessionIdProvider,
+      queuePartition: queuePartition,
+      queueStorage: queueStorage,
+    );
+    return AppProductionBehaviorRepository(
+      repository: remote,
+      onDispose: remote.dispose,
+    );
+  }
+
+  static IntersectionRepository intersectionRepository({
+    required GeneratedCloudOperationClient client,
+    required Object myIntersectionsInvocationContext,
+    required Object objectIntersectionsInvocationContext,
+  }) {
+    return RemoteIntersectionRepository(
+      client: client,
+      myIntersectionsInvocationContext:
+          myIntersectionsInvocationContext as dynamic,
+      objectIntersectionsInvocationContext:
+          objectIntersectionsInvocationContext as dynamic,
+    );
+  }
+
+  static IntersectionVisitWriter intersectionVisitWriter({
+    required GeneratedCloudOperationClient client,
+    required Object invocationContext,
+  }) {
+    return RemoteIntersectionVisitWriter(
+      client: client,
+      invocationContext: invocationContext as dynamic,
+    );
+  }
 
   static AppProductionContentFacets contentFacets({
     required GeneratedCloudOperationClient client,
@@ -88,7 +224,6 @@ final class ContentProductionComposition {
       invocationContext: invocationContext,
       blockedKeywordsLoader: blockedKeywordsLoader,
     );
-    final remote = RemoteContentRepository(discoveryFeedQuery: discoveryFeed);
     final deleteWriter = RemoteContentPostDeleteCommandWriter(
       client: client,
       invocationContext: deleteInvocationContext,
@@ -98,7 +233,7 @@ final class ContentProductionComposition {
       invocationContext: invocationContext,
     );
     final cached = CachedContentRepository(
-      readDelegate: remote,
+      feedDelegate: discoveryFeed,
       deleteDelegate: deleteWriter,
       postCache: postCache,
       querySnapshotStore: querySnapshotStore,
@@ -107,7 +242,7 @@ final class ContentProductionComposition {
       telemetrySink: telemetrySink,
     );
     return AppProductionContentFacets(
-      read: cached,
+      feedQuery: cached,
       postDeleteWriter: cached,
       behaviorWriter: behavior,
     );
@@ -119,6 +254,10 @@ final class ContentProductionComposition {
     final uploader = RemoteContentMediaObjectUploader();
     onDispose(uploader.dispose);
     return uploader.uploadStream;
+  }
+
+  static MediaPickerPort mediaPickerPort() {
+    return PlatformMediaPickerAdapter(PhotoManagerMediaLibraryGateway());
   }
 
   static AppProductionContentPostReaderFacets contentPostReaderFacets({
@@ -176,9 +315,19 @@ final class ContentProductionComposition {
         client: client,
         invocationContext: context,
       ),
-      ContentProductionAdapter.media => RemoteContentMediaFacet(
-        client: client,
-        invocationContext: context,
+      ContentProductionAdapter.media => AppProductionContentMediaFacet(
+        upload: RemoteContentMediaUploadSessionAdapter(
+          client: client,
+          invocationContext: context,
+        ),
+        asset: RemoteContentMediaAssetAdapter(
+          client: client,
+          invocationContext: context,
+        ),
+        originalAccess: RemoteContentMediaOriginalAccessFactWriter(
+          client: client,
+          invocationContext: context,
+        ),
       ),
       ContentProductionAdapter.outboundShare =>
         RemoteContentOutboundShareAppendWriter(
@@ -194,6 +343,16 @@ final class ContentProductionComposition {
         client: client,
         invocationContext: context,
       ),
+      ContentProductionAdapter.profileInteractionActivity =>
+        RemoteProfileInteractionActivityQuery(
+          client: client,
+          invocationContext: context,
+        ),
+      ContentProductionAdapter.profileInteractionReadFact =>
+        RemoteProfileInteractionReadFactWriter(
+          client: client,
+          invocationContext: context,
+        ),
       ContentProductionAdapter.reportCommand => RemoteContentReportAdapter(
         client: client,
         invocationContext: context,

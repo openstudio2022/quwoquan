@@ -1,12 +1,6 @@
 events:
 - name: CirclePostPlaced
-  producer: circle-service
-  consumers:
-  - content-service
-  - recommendation-engine
-  - search-service
-  - homepage-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CirclePostPlacement
   payload_fields:
   - _id
@@ -18,13 +12,7 @@ events:
   - state
   - createdAt
 - name: CirclePostPlacementRemoved
-  producer: circle-service
-  consumers:
-  - content-service
-  - recommendation-engine
-  - search-service
-  - homepage-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CirclePostPlacement
   payload_fields:
   - _id
@@ -35,11 +23,7 @@ events:
   - state
   - updatedAt
 - name: CirclePostPlacementPresentationChanged
-  producer: circle-service
-  consumers:
-  - recommendation-engine
-  - circle-feed-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CirclePostPlacement
   payload_fields:
   - _id

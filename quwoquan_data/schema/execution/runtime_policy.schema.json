@@ -41,7 +41,7 @@
                   "model": { "const": "auto" },
                   "modelParameters": { "const": [] },
                   "runtime": { "const": "local" },
-                  "requiresNewRetryOf": { "const": true }
+                  "requiresNewRetryOf": { "const": false }
                 },
                 "required": [
                   "selectionId", "provider", "model", "modelParameters",
@@ -322,7 +322,7 @@
         "model": { "type": "string", "minLength": 1 },
         "modelParameters": { "$ref": "#/$defs/modelParameters" },
         "runtime": { "enum": ["local", "cloud"] },
-        "requiresNewRetryOf": { "const": true }
+        "requiresNewRetryOf": { "type": "boolean" }
       },
       "required": [
         "selectionId", "provider", "model", "modelParameters",

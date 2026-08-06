@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
+	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
 // ExternalInteractionResultStore owns the transactional inbox, DeliveryJob CAS,

@@ -21,41 +21,41 @@ var (
 // AppErrorFromSkillDataControlActionFailed returns *AppError for ASSISTANT.SYSTEM.skill_data_control_action_failed (user_message from errors.yaml).
 func AppErrorFromSkillDataControlActionFailed(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_data_control_action_failed")
-	return rterr.NewAppError(code, "部分数据控制操作尚未完成，请稍后重试", debugMessage).WithMetadata("skill_data_control_action_failed", 0).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "部分数据控制操作尚未完成，请稍后重试", debugMessage).WithMetadata("skill_data_control_action_failed", 0).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromSkillDataControlIdempotencyConflict returns *AppError for ASSISTANT.USER.skill_data_control_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromSkillDataControlIdempotencyConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_data_control_idempotency_conflict")
-	return rterr.NewAppError(code, "重复请求与原操作不一致", debugMessage).WithMetadata("skill_data_control_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "重复请求与原操作不一致", debugMessage).WithMetadata("skill_data_control_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillDataControlInvalidArgument returns *AppError for ASSISTANT.USER.skill_data_control_invalid_argument (user_message from errors.yaml).
 func AppErrorFromSkillDataControlInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_data_control_invalid_argument")
-	return rterr.NewAppError(code, "数据控制选项无效，请重新选择", debugMessage).WithMetadata("skill_data_control_invalid_argument", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "数据控制选项无效，请重新选择", debugMessage).WithMetadata("skill_data_control_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillDataControlNotFound returns *AppError for ASSISTANT.USER.skill_data_control_not_found (user_message from errors.yaml).
 func AppErrorFromSkillDataControlNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_data_control_not_found")
-	return rterr.NewAppError(code, "数据控制请求不存在或已失效", debugMessage).WithMetadata("skill_data_control_not_found", 404).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "数据控制请求不存在或已失效", debugMessage).WithMetadata("skill_data_control_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillDataControlRevisionConflict returns *AppError for ASSISTANT.USER.skill_data_control_revision_conflict (user_message from errors.yaml).
 func AppErrorFromSkillDataControlRevisionConflict(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_data_control_revision_conflict")
-	return rterr.NewAppError(code, "请求状态已变化，请刷新后重试", debugMessage).WithMetadata("skill_data_control_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "请求状态已变化，请刷新后重试", debugMessage).WithMetadata("skill_data_control_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromSkillDataControlUnauthorized returns *AppError for ASSISTANT.USER.skill_data_control_unauthorized (user_message from errors.yaml).
 func AppErrorFromSkillDataControlUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_data_control_unauthorized")
-	return rterr.NewAppError(code, "请先登录后管理 Skill 数据", debugMessage).WithMetadata("skill_data_control_unauthorized", 401).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "请先登录后管理 Skill 数据", debugMessage).WithMetadata("skill_data_control_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillDataControlUnavailable returns *AppError for ASSISTANT.SYSTEM.skill_data_control_unavailable (user_message from errors.yaml).
 func AppErrorFromSkillDataControlUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.skill_data_control_unavailable")
-	return rterr.NewAppError(code, "数据控制服务暂不可用，请稍后重试", debugMessage).WithMetadata("skill_data_control_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "数据控制服务暂不可用，请稍后重试", debugMessage).WithMetadata("skill_data_control_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }

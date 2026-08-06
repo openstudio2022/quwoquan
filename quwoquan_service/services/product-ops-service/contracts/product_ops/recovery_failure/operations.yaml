@@ -2,7 +2,7 @@ api_routes:
 - method: POST
   path: /ops/recovery-failures
   operation: ReportRecoveryFailure
-  actor: device
+  actor: none
   application:
     kind: command
     facet: RecoveryFailureCommandFacade
@@ -21,6 +21,9 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 1
     idempotency: payload_digest_server_side
+  request_entity: ReportRecoveryFailureRequest
+  request_body_kind: object
+  response_body_kind: ack
   error_codes:
   - OPS.USER.recovery_failure_invalid
   - OPS.SYSTEM.recovery_failure_unavailable
@@ -46,15 +49,36 @@ consumers:
 - name: app
   capabilities: [report_recovery_failure]
 contract_test:
-  mock_strategy:
-    app_side:
-      scenarios:
-      - name: offline_queue
-        route: POST /ops/recovery-failures
-        assertions: [non_blocking, retry_on_next_opportunity]
+  test_strategy:
     service_side:
       description: 严格十字段、未知字段拒绝、敏感信息二次脱敏并复用现有日志存储。
       scenarios:
       - name: exact_recovery_failure
         command: ReportRecoveryFailure
         assertions: [status_2xx, exact_input_fields, existing_runtime_log_store]
+
+readiness_cases:
+- case_id: report-recovery-failure-local
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ReportRecoveryFailure}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/recovery_failure/runtime_log_http__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: report-recovery-failure-api
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReportRecoveryFailure}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/recovery_failure/runtime_log_elasticsearch_http__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: elasticsearch-redis, digest_binding: candidate}
+- case_id: recovery_failure_report_recovery_failure_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-003
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportRecoveryFailure}
+  runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/recovery_failure/recovery_failure_reporting__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// readiness_case: list-homepage-status-reports-local
+// readiness_case: create-homepage-status-report-local
+// readiness_case: review-homepage-status-report-local
 package local_contract
 
 import (

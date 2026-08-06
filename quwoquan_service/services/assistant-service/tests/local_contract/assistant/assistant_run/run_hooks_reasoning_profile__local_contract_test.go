@@ -468,6 +468,25 @@ func TestDurableWorkerPersistsPerRequirementMissingAndFailedVerdict(t *testing.T
 		!stringSliceContainsAny(verdict["failed"], "evidence_present") {
 		t.Fatalf("per-requirement verdict=%#v", verdict)
 	}
+	evidenceRows := verificationEvidenceRows(verdict["evidence"])
+	if len(evidenceRows) == 0 {
+		t.Fatalf("expected persisted verification evidence rows, verdict=%#v", verdict)
+	}
+	seenFixSuggestion := false
+	for _, row := range evidenceRows {
+		if strings.TrimSpace(asString(row["verifierId"])) == "" {
+			t.Fatalf("verification evidence missing verifierId: %#v", row)
+		}
+		if passed, _ := row["passed"].(bool); !passed {
+			if strings.TrimSpace(asString(row["fixSuggestion"])) == "" {
+				t.Fatalf("failed verification evidence missing fixSuggestion: %#v", row)
+			}
+			seenFixSuggestion = true
+		}
+	}
+	if !seenFixSuggestion {
+		t.Fatalf("expected at least one failed evidence row with fixSuggestion, verdict=%#v", verdict)
+	}
 }
 
 func TestDurableWorkerRunsCompletionBlockAndStopHooks(t *testing.T) {
@@ -630,21 +649,22 @@ func (e *hookConfirmationExecutor) Execute(
 		request.RunID,
 		e.confirmationRef,
 	)
+	approveTool := map[string]any{
+		"runId":            request.RunID,
+		"toolInvocationId": e.confirmationRef,
+		"decision":         "approved",
+		"capability":       "assistant_completion_confirmation",
+		"inputDigest":      "sha256:" + strings.Repeat("a", 64),
+		"approvalPermit":   continuationToken,
+	}
 	result.Presentation["nodes"] = []map[string]any{{
 		"nodeId": "root",
 		"kind":   "confirmation_card",
 		"action": map[string]any{
-			"operation":     "ContinueAssistantToolUse",
-			"objectTypeRef": "assistant_tool_use",
-			"objectId":      e.confirmationRef,
-			"payload": map[string]any{
-				"decision":          "approved",
-				"continuationToken": continuationToken,
-				"deviceAction": map[string]any{
-					"kind":           "assistant_completion_confirmation",
-					"idempotencyKey": e.confirmationRef,
-				},
-			},
+			"kind":          "ApproveTool",
+			"requestDigest": testActionIntentDigest(approveTool),
+			"expiresAt":     time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano),
+			"approveTool":   approveTool,
 		},
 	}}
 	return result, nil
@@ -681,4 +701,28 @@ func stringSliceContainsAny(value any, target string) bool {
 		}
 	}
 	return false
+}
+
+func verificationEvidenceRows(value any) []map[string]any {
+	switch rows := value.(type) {
+	case []map[string]any:
+		return append([]map[string]any(nil), rows...)
+	case []any:
+		out := make([]map[string]any, 0, len(rows))
+		for _, raw := range rows {
+			row, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			out = append(out, row)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func asString(value any) string {
+	text, _ := value.(string)
+	return text
 }

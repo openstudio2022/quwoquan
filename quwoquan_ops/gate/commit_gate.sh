@@ -106,13 +106,17 @@ run_static_check() {
   case "$check" in
     branch_policy) return 0 ;;
     feature_tree) make verify-feature-tree ;;
+    python_script_governance)
+      python3 -B quwoquan_ops/gate/verify_python_script_governance.py \
+        --scope all --mode check
+      ;;
     service_architecture) make verify-service-architecture ;;
     app_generated_manifest) make verify-app-generated-manifest ;;
     app_contract_handoff) make verify-app-contract-handoff ;;
     verify-app-mock-isolation) make verify-app-mock-isolation ;;
     verify-app-cloud-package-boundaries) make verify-app-cloud-package-boundaries ;;
     verify-app-login-entry-loop) make verify-app-login-entry-loop-contract ;;
-    metadata_contract) bash quwoquan_service/scripts/contract/verify_contract_metadata.sh ;;
+    metadata_contract) bash quwoquan_service/scripts/verify/verify_contract_metadata.sh ;;
     commercial_contract) make verify-commercial-contract-generation ;;
     pageflip_backward_mainline) make verify-app-pageflip-back-mainline ;;
     data_verify) python3 quwoquan_data/scripts/cli.py verify all ;;

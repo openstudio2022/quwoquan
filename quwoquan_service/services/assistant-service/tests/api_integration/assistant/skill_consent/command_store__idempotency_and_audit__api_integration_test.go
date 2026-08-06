@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+// readiness_case: grant-skill-consent-api
+// readiness_case: revoke-skill-consent-api
+// readiness_case: list-consents-api
 package api_integration
 
 import (
@@ -66,7 +69,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScopes": []string{"assistant.memory.preferences.read", "travel.trip.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read"}},
 	)
 	if granted.Code != http.StatusOK {
 		t.Fatalf("grant status=%d body=%s", granted.Code, granted.Body.String())
@@ -99,7 +102,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-grant",
-		map[string]any{"grantedScopes": []string{"travel.trip.read", "assistant.memory.preferences.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.learning.feedback_context.read", "assistant.memory.preferences.read"}},
 	)
 	if replay.Code != http.StatusOK ||
 		!strings.Contains(replay.Body.String(), `"replayed":true`) {
@@ -131,7 +134,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 	)
 	if list.Code != http.StatusOK ||
 		!strings.Contains(list.Body.String(), `"granted":true`) ||
-		!strings.Contains(list.Body.String(), `"grantedScopes":["assistant.memory.preferences.read","travel.trip.read"]`) {
+		!strings.Contains(list.Body.String(), `"grantedScopes":["assistant.learning.feedback_context.read","assistant.memory.preferences.read"]`) {
 		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
 	}
 
@@ -142,7 +145,7 @@ func TestSkillConsentHTTPContractPersistsReceiptAndEvent(t *testing.T) {
 		path,
 		"consent-http-account",
 		"consent-http-scope-conflict",
-		map[string]any{"grantedScopes": []string{"assistant.memory.preferences.read", "travel.trip.read", "travel.stay.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read", "assistant.unregistered.scope"}},
 	)
 	if scopeConflict.Code != http.StatusConflict ||
 		!strings.Contains(scopeConflict.Body.String(), "consent_scope_conflict") {
@@ -203,7 +206,7 @@ func TestSkillConsentConcurrentGrantKeepsOneActiveFact(t *testing.T) {
 				key,
 				"concurrent-account",
 				"travel_companion",
-				[]string{"assistant.memory.preferences.read", "travel.trip.read"},
+				[]string{"assistant.memory.preferences.read", "assistant.learning.feedback_context.read"},
 			)
 			results <- commandResult{result: result, err: err}
 		}()
@@ -248,7 +251,7 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		"history-grant-first",
 		"history-account",
 		"travel_companion",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	)
 	if err != nil || first.Consent == nil {
 		t.Fatalf("first grant result=%+v error=%v", first, err)
@@ -266,7 +269,7 @@ func TestSkillConsentGrantRevokeGrantKeepsImmutableHistory(t *testing.T) {
 		"history-grant-second",
 		"history-account",
 		"travel_companion",
-		[]string{"travel.trip.read"},
+		[]string{"assistant.learning.feedback_context.read"},
 	)
 	if err != nil || second.Consent == nil {
 		t.Fatalf("second grant result=%+v error=%v", second, err)
@@ -306,7 +309,7 @@ func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T)
 		path,
 		"",
 		"unauthorized-command",
-		map[string]any{"grantedScopes": []string{"travel.trip.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.learning.feedback_context.read"}},
 	)
 	if unauthorized.Code != http.StatusUnauthorized ||
 		!strings.Contains(unauthorized.Body.String(), "ASSISTANT.USER.consent_unauthorized") {
@@ -319,7 +322,7 @@ func TestSkillConsentHTTPRejectsMissingPrincipalAndCommandIdentity(t *testing.T)
 		path,
 		"identity-account",
 		"",
-		map[string]any{"grantedScopes": []string{"travel.trip.read"}},
+		map[string]any{"grantedScopes": []string{"assistant.learning.feedback_context.read"}},
 	)
 	if missingKey.Code != http.StatusBadRequest ||
 		!strings.Contains(missingKey.Body.String(), "consent_invalid_argument") {

@@ -221,14 +221,17 @@ func validateAppSurfaceOperation(
 		))
 	}
 	responseEntity := strings.TrimSpace(operation.ResponseEntity)
-	if responseEntity == "" {
+	responseBodyKind := strings.TrimSpace(operation.ResponseBodyKind)
+	responseEntityRequired := responseBodyKind != "ack" &&
+		responseBodyKind != "upgrade"
+	if responseEntity == "" && responseEntityRequired {
 		issues = append(issues, issue(
 			"CONTRACT.APP_SURFACE.RESPONSE_ENTITY_REQUIRED",
 			operation.SourcePath,
-			"App operation %q must declare response_entity; ack/response_body/response_fields cannot own the client ABI",
+			"App operation %q must declare response_entity; response_body/response_fields cannot own the client ABI",
 			operation.ID,
 		))
-	} else {
+	} else if responseEntity != "" {
 		issues = append(
 			issues,
 			validateAppSurfaceResponseEntity(contractGraph, operation)...,
@@ -256,6 +259,17 @@ func validateAppSurfaceOperation(
 				operation.ClientContract.ResponseDecoder,
 			))
 		}
+	} else if operation.ClientContract.ResponseType != "void" ||
+		operation.ClientContract.ResponseDecoder != "decodeEmptyResponse" {
+		issues = append(issues, issue(
+			"CONTRACT.APP_SURFACE.CLIENT_ABI_NOT_DERIVED",
+			operation.SourcePath,
+			"App operation %q %s response must derive the void/decodeEmptyResponse transport handshake ABI, got %s/%s",
+			operation.ID,
+			responseBodyKind,
+			operation.ClientContract.ResponseType,
+			operation.ClientContract.ResponseDecoder,
+		))
 	}
 	if len(operation.ErrorCodes) == 0 {
 		issues = append(issues, issue(

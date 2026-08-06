@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md#sit-003
+// readiness_case: read-account-security-api
+// readiness_case: check-account-security-authority-api
 package api_integration
 
 import (
@@ -111,6 +114,10 @@ func TestReadAccountSecurity_RejectsUnscopedOrNonServiceCallers(t *testing.T) {
 			"service:untrusted-service",
 			"user.account.security.read",
 		),
+		"retired travel service": serviceHeadersFor(
+			"service:travel-service",
+			"user.account.security.read",
+		),
 	} {
 		t.Run(name, func(t *testing.T) {
 			response := doRequest(
@@ -152,6 +159,27 @@ func TestCheckAccountSecurityAuthority_RejectsUntrustedScopedService(t *testing.
 	}
 }
 
+func TestCheckAccountSecurityAuthority_RejectsRetiredTravelService(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	response := doRequest(
+		t,
+		http.MethodGet,
+		"/internal/user/account-security/health",
+		"",
+		serviceHeadersFor(
+			"service:travel-service",
+			"user.account.security.read",
+		),
+	)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf(
+			"retired travel service authority health: expected 403, got %d: %s",
+			response.Code,
+			response.Body.String(),
+		)
+	}
+}
+
 func TestReadAccountSecurity_MissingSubjectIsNotConflatedWithAuthorityFailure(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	response := doRequest(
@@ -179,7 +207,6 @@ func TestCheckAccountSecurityAuthority_VerifiesScopedReadinessWithoutSubject(t *
 		"service:api-edge",
 		"service:search-service",
 		"service:tag-service",
-		"service:travel-service",
 	} {
 		t.Run(servicePrincipal, func(t *testing.T) {
 			response := doRequest(

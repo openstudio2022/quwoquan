@@ -51,7 +51,7 @@ func TestHomepageReviewMongoStoreRealCASAndReceipts(t *testing.T) {
 	}
 	defer func() { _ = client.Disconnect(context.Background()) }()
 	db := client.Database("entity_review_it")
-	store := reviewpersistence.NewMongoReviewStore(db, true)
+	store := reviewpersistence.NewMongoReviewStore(db)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatalf("ensure indexes: %v", err)
 	}

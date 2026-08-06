@@ -1,16 +1,18 @@
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: project-content-post-lifecycle-local
 package local_contract
 
 import (
 	"context"
 	"errors"
-	. "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/infrastructure/messaging"
+	. "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/events"
 	"strconv"
 	"testing"
 	"time"
 
-	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
+	"quwoquan_service/services/circle-service/tests/support"
 )
 
 type postProjectionSpy struct {
@@ -45,7 +47,7 @@ func TestContentPostConsumerProjectsTypedStreamFactAndAcks(t *testing.T) {
 	client := rtredis.NewMemoryClient()
 	spy := &postProjectionSpy{}
 	consumer := NewContentPostConsumer(
-		newCircleTestMessageTransport(t, client), spy, spy, "test", nil,
+		support.NewRedisMessageTransport(t, client), spy, spy, "test", nil,
 	).WithDiscoveryFeedCacheInvalidator(func(ctx context.Context) error {
 		_, err := client.Incr(ctx, "cache:circle-discovery:generation")
 		return err
@@ -78,7 +80,7 @@ func TestContentPostConsumerRecordsFailedProjection(t *testing.T) {
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()
 	spy := &postProjectionSpy{fail: true}
-	consumer := NewContentPostConsumer(newCircleTestMessageTransport(t, client), spy, spy, "test", nil)
+	consumer := NewContentPostConsumer(support.NewRedisMessageTransport(t, client), spy, spy, "test", nil)
 	if _, err := client.XAdd(ctx, ContentPostLifecycleStream, postLifecycleValues("evt-fail", 1)); err != nil {
 		t.Fatal(err)
 	}
@@ -102,21 +104,4 @@ func postLifecycleValues(eventID string, version int64) map[string]string {
 			"\"publishedAt\":\"2026-07-14T08:30:00Z\"}",
 		"occurredAt": time.Date(2026, 7, 14, 9, 0, 0, 0, time.UTC).Format(time.RFC3339Nano),
 	}
-}
-
-func newCircleTestMessageTransport(
-	t *testing.T,
-	client rtredis.Client,
-) *runtimemessaging.RedisMessageTransport {
-	t.Helper()
-	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
-		"circle-service-test",
-		runtimemessaging.RedisMessageTransportFixture,
-		client,
-		client,
-	)
-	if err != nil {
-		t.Fatalf("new circle test message transport: %v", err)
-	}
-	return transport
 }

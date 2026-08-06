@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   homepage_status_reports:
+    publication_role: not_published
     entity: HomepageStatusReport
     role: authoritative
     indexes:
@@ -29,6 +30,7 @@ collections:
       unique: true
       description: HomepageStatusReport CAS commit predicate
   homepage_status_report_command_receipts:
+    publication_role: not_published
     entity: HomepageStatusReport
     description: HomepageStatusReport command 幂等回执；与聚合版本和 outbox 在同一 Mongo transaction 提交。
     indexes:
@@ -39,8 +41,9 @@ collections:
     - name: idx_status_report_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   homepage_status_report_outbox:
+    publication_role: transactional_outbox
     entity: HomepageStatusReport
     description: 状态上报领域事实 outbox；审核 confirmed_offline 由 Homepage 投影消费者幂等推进下线。
     indexes:
@@ -54,6 +57,7 @@ collections:
         aggregateVersion: 1
       unique: true
   homepage_status_report_projection_checkpoints:
+    publication_role: publication_accessory
     entity: HomepageStatusReport
     role: projection
     indexes:

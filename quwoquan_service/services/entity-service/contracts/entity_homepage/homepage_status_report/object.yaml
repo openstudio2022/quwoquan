@@ -41,8 +41,6 @@ relationships:
   reference_fields:
   - reviewerAccountId
   target_object: user.UserAccount
-capabilities:
-- auditable
 business_rules:
 - reporter persona、homepageId 与 evidence 创建后不可变
 - 同一 reporter 对同一 homepage 的相同原因活动上报必须去重
@@ -54,12 +52,5 @@ lifecycle:
   - pending_review
   - confirmed_offline
   - dismissed
-  transitions:
-  - from: pending_review
-    command: ReviewHomepageStatusReport.confirm_offline
-    to: confirmed_offline
-  - from: pending_review
-    command: ReviewHomepageStatusReport.dismiss
-    to: dismissed
   optimistic_concurrency: version
   idempotency: command_receipt

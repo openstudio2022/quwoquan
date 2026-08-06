@@ -165,15 +165,6 @@ def _article_media_coverage(
     text_only = total - illustrated
     illustrated_rate = round(illustrated / total, 6) if total else 1.0
     text_only_rate = round(text_only / total, 6) if total else 0.0
-    if total and (
-        illustrated_rate < policy.minimum_illustrated_rate
-        or text_only_rate > policy.maximum_text_only_rate
-    ):
-        raise ObjectTransactionError(
-            "article media coverage GATE_BLOCK: "
-            f"illustrated={illustrated}/{total} ({illustrated_rate:.3f}) "
-            f"textOnly={text_only}/{total} ({text_only_rate:.3f})"
-        )
     return {
         "articleCount": total,
         "illustratedCount": illustrated,

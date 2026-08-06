@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/spec.md#dom-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+// readiness_case: materialize-active-persona-profile-api
+// readiness_case: list-personas-api
 package api_integration
 
 import (
@@ -5,6 +9,7 @@ import (
 	"net/http"
 	"testing"
 
+	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 )
 
@@ -54,9 +59,15 @@ func TestPersona_ActivateSwitchesExclusively(t *testing.T) {
 	// 激活 sub_b
 	rec := doRequest(t, http.MethodPost, "/user/personas/sa_id_b/activate", "", authHeaders("sub_owner_2"))
 	if rec.Code != http.StatusOK {
-		projector, projectorErr := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+		projectionStore, projectorErr := useraccountpersistence.NewPersonaProfileProjector(pgPool)
 		if projectorErr == nil {
-			_, projectorErr = projector.ProjectNext(context.Background())
+			var projector *useraccountapp.PersonaProfileProjector
+			projector, projectorErr = useraccountapp.NewPersonaProfileProjector(
+				projectionStore,
+			)
+			if projectorErr == nil {
+				_, projectorErr = projector.ProjectNext(context.Background())
+			}
 		}
 		t.Fatalf(
 			"activate persona: expected 200, got %d: %s; pending projector diagnosis: %v",
@@ -125,9 +136,13 @@ SET profile_projected_at=NULL
 WHERE aggregate_id=$1 AND event_type='PersonaActivated'`, "sa_id_b"); err != nil {
 		t.Fatalf("prepare Persona projection recovery checkpoint: %v", err)
 	}
-	projector, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	projectionStore, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
 	if err != nil {
 		t.Fatalf("create Persona profile projector: %v", err)
+	}
+	projector, err := useraccountapp.NewPersonaProfileProjector(projectionStore)
+	if err != nil {
+		t.Fatalf("create Persona profile application facet: %v", err)
 	}
 	didWork, err := projector.ProjectNext(context.Background())
 	if err != nil {

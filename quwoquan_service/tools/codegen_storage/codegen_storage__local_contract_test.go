@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestSourceRoutesGeneratedOwnershipToObjectPacket(t *testing.T) {
@@ -37,6 +39,26 @@ func TestFieldTypeToGoTypeAcceptsCanonicalStringSlice(t *testing.T) {
 
 	if got := fieldTypeToGoType(nil, "OverriddenProfileFields", "[]string", false); got != "[]string" {
 		t.Fatalf("canonical []string mapped to %q, want []string", got)
+	}
+}
+
+func TestStorageYAMLAcceptsCanonicalPrimaryKeyList(t *testing.T) {
+	t.Parallel()
+
+	var storage StorageYAML
+	if err := yaml.Unmarshal([]byte(`
+backend: postgres
+tables:
+  user_profiles:
+    entity: UserAccount
+    pk:
+      - user_id
+`), &storage); err != nil {
+		t.Fatal(err)
+	}
+	primaryKey := storage.Tables["user_profiles"].PK
+	if len(primaryKey) != 1 || primaryKey[0] != "user_id" {
+		t.Fatalf("primary key = %#v, want [user_id]", primaryKey)
 	}
 }
 

@@ -502,7 +502,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// release-bound recall set so an approved canonical release candidate cannot
 	// be crowded out solely by source quota or pre-rank window truncation.
 	releaseBoundRecall := append([]ContentCandidate(nil), allCandidates...)
-	// Stage 2.5: Recall fusion source quota (W9/B10 轻量融合)：按 policy 源配额
+	// Stage 2.5: Recall fusion source quota (source-quota 轻量融合)：按 policy 源配额
 	// 截断单源候选占比，防单源霸屏；boost 在打分后应用（applyRecallSourceBoost）。
 	rankedWindowLimit := rankedFeedWindowLimit(req.Limit)
 	allCandidates = applySourceQuota(allCandidates, e.policyStore.Current().RecallFusion, rankedWindowLimit)

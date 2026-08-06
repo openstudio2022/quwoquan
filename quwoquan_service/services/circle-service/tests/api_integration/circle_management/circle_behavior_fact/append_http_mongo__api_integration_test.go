@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001
+// readiness_case: report-circle-behavior-api
 package api_integration
 
 import (
@@ -30,7 +31,7 @@ func TestAppendCircleBehaviorFactHTTPCommitsFactAndOutboxAtomically(t *testing.T
 	handler := httpadapter.NewHandler(app.NewWriter(store, store))
 	request := testsupport.Request(t, http.MethodPost, "/circles/behaviors", map[string]any{
 		"circleId": "circle-behavior-object", "eventType": "impression",
-	}, "circle.circle_behavior_fact.AppendCircleBehaviorFact", "persona-behavior", "behavior-object-1")
+	}, "circle.circle_behavior_fact.ReportCircleBehavior", "persona-behavior", "behavior-object-1")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
@@ -46,7 +47,7 @@ func TestAppendCircleBehaviorFactHTTPCommitsFactAndOutboxAtomically(t *testing.T
 
 	replayRequest := testsupport.Request(t, http.MethodPost, "/circles/behaviors", map[string]any{
 		"circleId": "circle-behavior-object", "eventType": "impression",
-	}, "circle.circle_behavior_fact.AppendCircleBehaviorFact", "persona-behavior", "behavior-object-1")
+	}, "circle.circle_behavior_fact.ReportCircleBehavior", "persona-behavior", "behavior-object-1")
 	replay := httptest.NewRecorder()
 	handler.ServeHTTP(replay, replayRequest)
 	if replay.Code != http.StatusOK {

@@ -422,7 +422,7 @@ def test_professional_acquisition_without_frozen_review_is_gate_blocked(
         )
 
 
-def test_article_media_coverage_requires_ninety_percent() -> None:
+def test_article_media_coverage_reports_target_shortfall_without_blocking() -> None:
     policy = load_content_distribution_policy()
     illustrated = {
         "carrier": "article",
@@ -465,11 +465,17 @@ def test_article_media_coverage_requires_ninety_percent() -> None:
     )
     assert coverage["illustratedRate"] == 0.9
 
-    with pytest.raises(ObjectTransactionError, match="article media coverage"):
-        _article_media_coverage(
-            [illustrated] * 8 + [text_only] * 2,
-            policy=policy,
-        )
+    below_target = _article_media_coverage(
+        [illustrated] * 8 + [text_only] * 2,
+        policy=policy,
+    )
+    assert below_target == {
+        "articleCount": 10,
+        "illustratedCount": 8,
+        "textOnlyCount": 2,
+        "illustratedRate": 0.8,
+        "textOnlyRate": 0.2,
+    }
 
 
 def test_article_release_rejects_two_cover_assets_despite_two_bindings(

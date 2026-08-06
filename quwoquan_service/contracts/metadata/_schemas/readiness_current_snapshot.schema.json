@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/readiness_current_snapshot.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "commitSha",
+    "contractGraphSourceHash",
+    "deployments",
+    "candidateDigest",
+    "releaseDigest"
+  ],
+  "properties": {
+    "commitSha": { "$ref": "#/$defs/gitCommit" },
+    "contractGraphSourceHash": { "$ref": "#/$defs/sha256" },
+    "deployments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alpha", "beta", "gamma", "prod"],
+      "properties": {
+        "alpha": { "$ref": "#/$defs/deployment" },
+        "beta": { "$ref": "#/$defs/deployment" },
+        "gamma": { "$ref": "#/$defs/deployment" },
+        "prod": { "$ref": "#/$defs/deployment" }
+      }
+    },
+    "candidateDigest": { "$ref": "#/$defs/digest" },
+    "releaseDigest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "gitCommit": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "nonSecretIdentity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$"
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deploymentTarget",
+        "baselineId",
+        "packageDigest",
+        "configurationDigest",
+        "candidateManifestSha256"
+      ],
+      "properties": {
+        "deploymentTarget": { "$ref": "#/$defs/nonSecretIdentity" },
+        "baselineId": { "$ref": "#/$defs/nonSecretIdentity" },
+        "packageDigest": { "$ref": "#/$defs/digest" },
+        "configurationDigest": { "$ref": "#/$defs/digest" },
+        "candidateManifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

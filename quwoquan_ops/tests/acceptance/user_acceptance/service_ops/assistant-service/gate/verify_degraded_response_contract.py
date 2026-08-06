@@ -23,8 +23,16 @@ def _find_repo_root() -> Path:
     raise RuntimeError("cannot locate quwoquan repo root")
 
 ROOT = _find_repo_root()
-GATEWAY_FILE = ROOT / "quwoquan_app/lib/assistant/application/capability_gateway.dart"
-AGENT_LOOP_FILE = ROOT / "quwoquan_app/lib/assistant/internal_current/engine/agent_loop.dart"
+GATEWAY_FILE = (
+    ROOT
+    / "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/"
+    "adapters/assistant_run_remote.dart"
+)
+AGENT_LOOP_FILE = (
+    ROOT
+    / "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/"
+    "application/personal_assistant_stream_controller.dart"
+)
 
 
 def error(msg: str) -> None:
@@ -164,6 +172,11 @@ def main() -> int:
     all_violations: list[str] = []
 
     dart_files_to_check = [GATEWAY_FILE, AGENT_LOOP_FILE]
+    missing = [path for path in dart_files_to_check if not path.is_file()]
+    if missing:
+        for path in missing:
+            error(f"声明的降级响应扫描路径不存在: {path.relative_to(ROOT)}")
+        return 2
 
     for f in dart_files_to_check:
         all_violations += check_unavailable_has_error_code(f)

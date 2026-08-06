@@ -242,6 +242,16 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "gathering_create",
+      "route_id": "gatheringCreate"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "gathering_detail",
+      "route_id": "gatheringDetail"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "create",
       "route_id": "create"
     },
@@ -344,31 +354,6 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "assistant_skills",
       "route_id": "assistantSkills"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "travel_timeline",
-      "route_id": "travelTimeline"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "travel_map",
-      "route_id": "travelMap"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "travel_trips",
-      "route_id": "travelTrips"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "travel_templates",
-      "route_id": "travelTemplates"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "travel_share",
-      "route_id": "travelShare"
     },
     {
       "collect_page_access": true,
@@ -504,6 +489,11 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "chat_announcement",
       "route_id": "chatAnnouncement"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "gathering_board",
+      "route_id": "gatheringBoard"
     },
     {
       "collect_page_access": true,

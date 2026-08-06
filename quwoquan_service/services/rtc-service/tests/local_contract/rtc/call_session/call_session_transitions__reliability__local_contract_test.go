@@ -4,14 +4,13 @@ import (
 	"testing"
 	"time"
 
-	callsession "quwoquan_service/services/rtc-service/internal/rtc/call_session/domain"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
 )
 
 func TestCallSessionTimeoutFacetUsesOneToOneAndGroupBoundaries(t *testing.T) {
 	t.Parallel()
 
-	service := callsession.NewCallSessionService()
+	service := newTestCallSessionService(t, 17*time.Second, 41*time.Second)
 	now := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
@@ -21,27 +20,27 @@ func TestCallSessionTimeoutFacetUsesOneToOneAndGroupBoundaries(t *testing.T) {
 		wantTimedOut    bool
 	}{
 		{
-			name:            "one-to-one remains ringing before thirty seconds",
+			name:            "one-to-one remains ringing before configured timeout",
 			maxParticipants: model.MaxParticipants1v1,
-			age:             30*time.Second - time.Nanosecond,
+			age:             17*time.Second - time.Nanosecond,
 			wantTimedOut:    false,
 		},
 		{
-			name:            "one-to-one times out at thirty seconds",
+			name:            "one-to-one times out at configured timeout",
 			maxParticipants: model.MaxParticipants1v1,
-			age:             30 * time.Second,
+			age:             17 * time.Second,
 			wantTimedOut:    true,
 		},
 		{
-			name:            "group remains ringing before sixty seconds",
+			name:            "group remains ringing before configured timeout",
 			maxParticipants: model.MaxParticipantsGroup,
-			age:             60*time.Second - time.Nanosecond,
+			age:             41*time.Second - time.Nanosecond,
 			wantTimedOut:    false,
 		},
 		{
-			name:            "group times out at sixty seconds",
+			name:            "group times out at configured timeout",
 			maxParticipants: model.MaxParticipantsGroup,
-			age:             60 * time.Second,
+			age:             41 * time.Second,
 			wantTimedOut:    true,
 		},
 	}
@@ -81,7 +80,7 @@ func TestCallSessionTimeoutFacetUsesOneToOneAndGroupBoundaries(t *testing.T) {
 func TestCallSessionConnectedFacetRequiresConnectingAndStartsAtSecondParticipant(t *testing.T) {
 	t.Parallel()
 
-	service := callsession.NewCallSessionService()
+	service := newTestCallSessionService(t, 17*time.Second, 41*time.Second)
 	now := time.Date(2026, time.July, 20, 12, 5, 0, 0, time.UTC)
 	session := connectingSession(now.Add(-time.Second))
 
@@ -120,7 +119,7 @@ func TestCallSessionConnectedFacetRequiresConnectingAndStartsAtSecondParticipant
 func TestCallSessionConnectedFacetRejectsRingingAndEndedParticipants(t *testing.T) {
 	t.Parallel()
 
-	service := callsession.NewCallSessionService()
+	service := newTestCallSessionService(t, 17*time.Second, 41*time.Second)
 	now := time.Date(2026, time.July, 20, 12, 10, 0, 0, time.UTC)
 
 	ringing := ringingSession(now.Add(-time.Second), model.MaxParticipants1v1)

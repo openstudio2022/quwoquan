@@ -53,5 +53,5 @@ def test_lane_scale_promotion_rejects_conflict_and_uses_carrier_targets(
 
     video = m100_promotion_thresholds("video")
     image = m100_promotion_thresholds("image")
-    assert (video.quota, video.candidate_minimum) == (50, 90)
+    assert (video.quota, video.candidate_minimum) == (10, 18)
     assert (image.quota, image.candidate_minimum) == (100, 180)

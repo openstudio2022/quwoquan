@@ -9,7 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
-VERIFIER = APP / "scripts/runtime/verify_cloud_package_boundaries.py"
+VERIFIER = APP / "scripts/runtime/cloud/verify_cloud_package_boundaries.py"
 
 
 class CloudPackageBoundariesContractTest(unittest.TestCase):

@@ -1,9 +1,16 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// readiness_case: publish-connector-definition-api
+// readiness_case: list-connector-definitions-api
+// readiness_case: get-connector-definition-api
 package connector_definition_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -12,12 +19,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"quwoquan_service/internal/platform/testinfra"
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
+	definitionhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/adapters/inbound/http"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_definition/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_definition/domain/model"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_definition/infrastructure/persistence"
 )
 
-func TestConnectorDefinitionMongoCommitsDefinitionReceiptAndOutboxAtomically(t *testing.T) {
+func TestConnectorDefinitionMongoCommitsDefinitionReceiptAndEventLogAtomically(t *testing.T) {
 	testinfra.ConfigureLocalContainerRuntime()
 	startupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -76,6 +86,89 @@ func TestConnectorDefinitionMongoCommitsDefinitionReceiptAndOutboxAtomically(t *
 	assertCount(t, startupCtx, runtime.Database.Collection("connector_definitions"), 1)
 	assertCount(t, startupCtx, runtime.Database.Collection("connector_definition_command_receipts"), 1)
 	assertCount(t, startupCtx, runtime.Database.Collection("connector_definition_outbox"), 1)
+	var auditEvent bson.M
+	if err := runtime.Database.Collection("connector_definition_outbox").FindOne(
+		startupCtx,
+		bson.M{"eventType": "ConnectorDefinitionPublished"},
+	).Decode(&auditEvent); err != nil {
+		t.Fatalf("read definition audit event: %v", err)
+	}
+	if auditEvent["connectorId"] != definition.ConnectorID ||
+		auditEvent["releaseDigest"] != definition.ReleaseDigest {
+		t.Fatalf("definition audit event=%#v", auditEvent)
+	}
+	if _, stale := auditEvent["deliveredAt"]; stale {
+		t.Fatalf("self-retained definition audit event has delivery checkpoint: %#v", auditEvent)
+	}
+
+	mux := http.NewServeMux()
+	definitionhttp.NewHandler(commands, queries).RegisterRoutes(mux)
+	httpDefinition := definition
+	httpDefinition.ConnectorID = "map_navigation"
+	httpDefinition.DisplayName = "地图导航"
+	httpDefinition.Capabilities = []string{"map.route.open"}
+	httpDefinition.ReleaseDigest = "sha256:" + strings.Repeat("a", 64)
+	status, publishedBody := performConnectorDefinitionRequest(
+		t, mux, http.MethodPut, "/internal/integrations/connectors/map_navigation",
+		httpDefinition, false, "publish-map-navigation",
+	)
+	if status != http.StatusOK {
+		t.Fatalf("publish route status=%d body=%#v", status, publishedBody)
+	}
+	status, listedBody := performConnectorDefinitionRequest(
+		t, mux, http.MethodGet,
+		"/integrations/connectors?capability=map.route.open&limit=10",
+		nil, true, "",
+	)
+	listedItems, ok := listedBody["items"].([]any)
+	if status != http.StatusOK || !ok || len(listedItems) != 1 {
+		t.Fatalf("list route status=%d body=%#v", status, listedBody)
+	}
+	status, getBody := performConnectorDefinitionRequest(
+		t, mux, http.MethodGet, "/integrations/connectors/map_navigation",
+		nil, true, "",
+	)
+	if status != http.StatusOK || getBody["connectorId"] != "map_navigation" ||
+		getBody["releaseDigest"] != httpDefinition.ReleaseDigest {
+		t.Fatalf("get route status=%d body=%#v", status, getBody)
+	}
+}
+
+func performConnectorDefinitionRequest(
+	t *testing.T,
+	handler http.Handler,
+	method string,
+	path string,
+	body any,
+	authenticated bool,
+	idempotencyKey string,
+) (int, map[string]any) {
+	t.Helper()
+	var payload []byte
+	if body != nil {
+		var err error
+		payload, err = json.Marshal(body)
+		if err != nil {
+			t.Fatalf("encode connector definition request: %v", err)
+		}
+	}
+	request := httptest.NewRequest(method, path, bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	if idempotencyKey != "" {
+		request.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	if authenticated {
+		request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+			Actor: operation.ActorContext{AccountID: "account-1"},
+		}))
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	decoded := map[string]any{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode connector definition response status=%d body=%q: %v", recorder.Code, recorder.Body.String(), err)
+	}
+	return recorder.Code, decoded
 }
 
 func assertCount(t *testing.T, ctx context.Context, collection *mongo.Collection, want int64) {

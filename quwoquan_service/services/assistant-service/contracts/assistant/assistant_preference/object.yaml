@@ -41,9 +41,6 @@ relationships:
   reference_fields:
   - sourceSessionId
   target_object: assistant.AssistantSession
-capabilities:
-- queryable
-- owner_mutable
 taggable: false
 vector_enabled: false
 business_rules:

@@ -54,8 +54,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RealtimeAccountClosureDeadLetterRecoveryRequest'
             responses:
-                "200":
-                    description: OK
+                "202":
+                    description: Accepted
                     content:
                         application/json:
                             schema:
@@ -208,12 +208,8 @@ paths:
                   schema:
                     type: string
             responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/WebSocketUpgradeResponse'
+                "101":
+                    description: Switching Protocols
                 default:
                     description: Runtime failure
                     content:
@@ -261,9 +257,4 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RealtimeAccountClosureDeadLetterRecoveryRequest
-            x-contract-placeholder: true
-        WebSocketUpgradeResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: WebSocketUpgradeResponse
             x-contract-placeholder: true

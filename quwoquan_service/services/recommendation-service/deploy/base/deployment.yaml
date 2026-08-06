@@ -48,6 +48,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.annotations['quwoquan.io/image-version']
+            - name: CIRCLE_SERVICE_BASE_URL
+              value: http://circle-service:18082
           volumeMounts:
             - name: runtime-config
               mountPath: /etc/qwq/config/recommendation-service.yaml

@@ -82,11 +82,6 @@ local_identity_reasons:
   publishIntentId: 一次发布意图在所属作者内的永久幂等键，不是 Post 聚合主身份
   sourceTaskId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
-capabilities:
-- queryable
-- searchable
-- aggregatable
-- vector_searchable
 taggable: true
 vector_enabled: true
 counter_strategy:
@@ -136,30 +131,22 @@ lifecycle:
   - published
   - rejected
   - deleted
-  transitions:
-  - from: none
-    command: SubmitPostPublication
-    to: pending_review
-  - from: none
-    command: SubmitPostPublication
-    to: published
-  - from: pending_review
-    command: ApplyPostModerationDecision
-    to: published
-  - from: pending_review
-    command: ApplyPostModerationDecision
-    to: rejected
-  - from: published
-    command: ApplyPostModerationDecision
-    to: rejected
-  - from: published
-    command: DeletePost
-    to: deleted
-  - from: pending_review
-    command: DeletePost
-    to: deleted
-  - from: rejected
-    command: DeletePost
-    to: deleted
   optimistic_concurrency: server_owned_version
   idempotency: publish_intent_unique_fields_plus_command_receipt
+  source_events:
+  - content.comment.CommentCreated
+  - content.comment.CommentDeleted
+  - content.comment.CommentModerated
+  - content.comment.CommentsTombstoned
+  - content.post_moderation_case.PostModerationCaseDecided
+  event_consumers:
+  - name: ProjectCommentCount
+    kind: event_handler
+    facet: CommentCountProjectionHandler
+    method: apply
+    idempotency: event_id
+  - name: ApplyPostModerationDecision
+    kind: event_handler
+    facet: PostModerationDecisionHandler
+    method: applyPostModerationDecision
+    idempotency: event_id

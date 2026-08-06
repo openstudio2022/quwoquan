@@ -80,4 +80,38 @@ func TestEventRecordGrowthProjectionsAreIdempotentAndRebuildable(t *testing.T) {
 		!items[0].UpdatedAt.Equal(activity.UpdatedAt) {
 		t.Fatalf("daily projection is not a single rebuilt row: %+v", items)
 	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	todayActivity := application.DailyActivity{
+		Date:         today.Format("2006-01-02"),
+		ActorHashes:  []string{"actor-current-a", "actor-current-b"},
+		DAU:          2,
+		PV:           3,
+		SessionCount: 2,
+		NewActors:    2,
+		UpdatedAt:    today.Add(time.Hour),
+	}
+	if err := store.UpsertDailyActivity(startupCtx, todayActivity); err != nil {
+		t.Fatalf("upsert current growth projection: %v", err)
+	}
+	service := application.NewGrowthService(store, readinessGrowthSessions{})
+	overview, err := service.Overview(startupCtx, 1)
+	if err != nil {
+		t.Fatalf("GetGrowthOverview application query: %v", err)
+	}
+	if overview.TodayDAU != 2 || overview.TodayPV != 3 ||
+		overview.Source != "user_activity_daily" || len(overview.Days) != 1 {
+		t.Fatalf("growth overview = %+v", overview)
+	}
+}
+
+type readinessGrowthSessions struct{}
+
+func (readinessGrowthSessions) ListDistinctSessions(
+	context.Context,
+	time.Time,
+	time.Time,
+	int,
+) ([]string, int64, error) {
+	return nil, 0, nil
 }

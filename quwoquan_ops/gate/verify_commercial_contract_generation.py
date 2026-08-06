@@ -22,7 +22,7 @@ DART_CLIENT = (
     / "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/"
     "operation_contracts.g.dart"
 )
-REMOTE_ROOT = ROOT / "quwoquan_app/lib/cloud/services"
+SERVICE_ROOT = ROOT / "quwoquan_app/lib/service"
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -67,6 +67,33 @@ def _has_response_decoder(source: str, decoder: str) -> bool:
         rf"\bresponseDecoder:\s*{_qualified_symbol_pattern(decoder)}\b",
         source,
     ) is not None
+
+
+def _has_typed_upgrade_descriptor(
+    source: str,
+    *,
+    request_type: str,
+    method_name: str,
+    request_encoder: str,
+) -> bool:
+    qualified_request = _qualified_symbol_pattern(request_type)
+    qualified_encoder = _qualified_symbol_pattern(request_encoder)
+    return re.search(
+        rf"\bstatic\s+final\s+CloudOperationUpgradeDescriptor<"
+        rf"{qualified_request}>\s+{re.escape(method_name)}\s*=\s*"
+        rf"CloudOperationUpgradeDescriptor<{qualified_request}>\s*\("
+        rf"[\s\S]*?\boperation:\s*appCloudOperationContracts\["
+        rf"AppCloudOperationIds\.{re.escape(method_name)}\]!\s*,"
+        rf"[\s\S]*?\brequestEncoder:\s*{qualified_encoder}\s*,"
+        rf"[\s\S]*?\)\s*;",
+        source,
+    ) is not None
+
+
+def _generated_request_encoder_name(method_name: str) -> str:
+    if not method_name:
+        return ""
+    return "encode" + method_name[:1].upper() + method_name[1:] + "GeneratedRequest"
 
 
 def main() -> int:
@@ -162,6 +189,30 @@ def main() -> int:
             failures.append(f"{operation_id}: App operation lacks clientContract")
             continue
         method_name = _method_name(operation_id)
+        response_body_kind = str(operation.get("responseBodyKind", "")).strip()
+        if response_body_kind == "upgrade":
+            request_type = str(operation.get("requestEntity", "")).strip()
+            request_encoder = _generated_request_encoder_name(method_name)
+            if not request_type:
+                failures.append(f"{operation_id}: upgrade requestEntity is empty")
+            elif not _has_typed_upgrade_descriptor(
+                dart_source,
+                request_type=request_type,
+                method_name=method_name,
+                request_encoder=request_encoder,
+            ):
+                failures.append(f"{operation_id}: typed upgrade descriptor missing")
+            response_type = str(client.get("responseType", "")).strip() or "void"
+            if _has_typed_method(
+                dart_source,
+                response_type=response_type,
+                method_name=method_name,
+                transport="json",
+            ):
+                failures.append(
+                    f"{operation_id}: upgrade must not expose a JSON Future method"
+                )
+            continue
         response_type = str(client.get("responseType", "")).strip()
         if not response_type:
             failures.append(f"{operation_id}: responseType is empty")
@@ -180,7 +231,6 @@ def main() -> int:
         if not _has_response_decoder(dart_source, decoder):
             failures.append(f"{operation_id}: response decoder not wired")
         response_body = str(operation.get("responseBody", "")).strip()
-        response_body_kind = str(operation.get("responseBodyKind", "")).strip()
         if response_body and response_body_kind not in {"object", "page", "ack"}:
             failures.append(
                 f"{operation_id}: responseBody requires explicit object/page/ack "
@@ -200,7 +250,9 @@ def main() -> int:
     if typed_exposed == 0:
         failures.append("no App-exposed operation has a typed client")
 
-    for source_path in sorted(REMOTE_ROOT.rglob("*.dart")):
+    for source_path in sorted(
+        SERVICE_ROOT.glob("*_service/*/*/adapters/**/*.dart")
+    ):
         source = source_path.read_text(encoding="utf-8")
         if re.search(r"\bGeneratedCloudOperationClient\b[\s\S]*?\.execute<", source):
             failures.append(

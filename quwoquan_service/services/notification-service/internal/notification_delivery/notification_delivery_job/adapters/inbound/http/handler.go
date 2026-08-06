@@ -7,14 +7,27 @@ import (
 	"strconv"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	jobgenerated "quwoquan_service/services/notification-service/generated/notification_delivery/notification_delivery_job"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
+	deliverydomain "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
 type Handler struct {
-	commands *application.NotificationDeliveryJobCommandFacade
-	queries  *application.NotificationDeliveryJobQueryFacade
+	commands      *application.NotificationDeliveryJobCommandFacade
+	queries       *application.NotificationDeliveryJobQueryFacade
+	incomingCalls *application.IncomingCallDeliveryCoordinator
+}
+
+func (handler *Handler) WithIncomingCallCoordinator(
+	coordinator *application.IncomingCallDeliveryCoordinator,
+) *Handler {
+	if handler == nil || coordinator == nil {
+		panic("notification delivery job HTTP handler requires incoming-call coordinator")
+	}
+	handler.incomingCalls = coordinator
+	return handler
 }
 
 func NewHandler(
@@ -31,10 +44,61 @@ func NewHandler(
 }
 
 func (handler *Handler) RegisterRoutes(mux *http.ServeMux) {
+	if handler.incomingCalls != nil {
+		mux.HandleFunc(
+			"POST /notifications/incoming-calls/presentation:ack",
+			handler.ackIncomingCallPresentation,
+		)
+	}
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/metrics", handler.metrics)
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/incoming-call-timeline", handler.incomingCallTimeline)
 	mux.HandleFunc("GET /internal/notifications/delivery-jobs/dead-letters", handler.listDeadLetters)
 	mux.HandleFunc("POST /internal/notifications/delivery-jobs/{jobAction}", handler.recover)
+}
+
+func (handler *Handler) ackIncomingCallPresentation(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok ||
+		strings.TrimSpace(principal.Actor.AccountID) == "" ||
+		strings.TrimSpace(principal.Actor.PersonaID) == "" ||
+		strings.TrimSpace(principal.Actor.DeviceActorID) == "" {
+		writeError(w, r, jobgenerated.AppErrorFromDeliveryJobUnauthorized(
+			"incoming call presentation ACK requires trusted persona and device",
+		))
+		return
+	}
+	var command struct {
+		DeliveryKey string `json:"deliveryKey"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&command); err != nil ||
+		strings.TrimSpace(command.DeliveryKey) == "" {
+		debugMessage := "deliveryKey is required"
+		if err != nil {
+			debugMessage = err.Error()
+		}
+		writeError(w, r, jobgenerated.AppErrorFromDeliveryJobInvalidArgument(debugMessage))
+		return
+	}
+	result, err := handler.incomingCalls.AckPresentation(
+		r.Context(),
+		principal.Actor.PersonaID,
+		principal.Actor.DeviceActorID,
+		command.DeliveryKey,
+	)
+	if err != nil {
+		if errors.Is(err, deliverydomain.ErrDeliveryJobNotFound) {
+			writeError(w, r, jobgenerated.AppErrorFromDeliveryJobNotFound(err.Error()))
+			return
+		}
+		writeError(w, r, jobgenerated.AppErrorFromDeliveryJobStorageWriteFailed(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (handler *Handler) incomingCallTimeline(w http.ResponseWriter, r *http.Request) {

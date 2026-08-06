@@ -1,206 +1,626 @@
-description: Gathering 聚合、参与者名单与 App 读切片的服务本地单轨契约。
+description: Gathering 聚合、root-owned Participation、append-only Revision、Outcome 与 typed projection 的服务本地单轨契约。
 fields:
-- name: _id
-  type: string
-  constraints: [PK, NOT_NULL]
-  role: authoritative_state
-- name: version
-  type: int64
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: creatorPersonaId
-  type: string
-  constraints: [NOT_NULL]
-  role: authoritative_state
-  reference: true
-- name: title
-  type: string
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: description
-  type: string
-  constraints: [NULLABLE]
-  role: authoritative_state
-- name: targetRef
-  type: GatheringTargetRef
-  constraints: [NOT_NULL]
-  role: owned_value
-- name: startAt
-  type: timestamp
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: endAt
-  type: timestamp
-  constraints: [NULLABLE]
-  role: authoritative_state
-- name: capacity
-  type: int
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: joinPolicy
-  type: enum
-  enum_ref: GatheringJoinPolicy
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: status
-  type: enum
-  enum_ref: GatheringStatus
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: conversationId
-  type: string
-  constraints: [NULLABLE]
-  role: authoritative_state
-  reference: true
-- name: conversationBindingStatus
-  type: enum
-  enum_ref: GatheringConversationBindingStatus
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: participants
-  type: '[]GatheringParticipant'
-  constraints: [NOT_NULL]
-  role: owned_value
-- name: createdAt
-  type: timestamp
-  constraints: [NOT_NULL]
-  role: authoritative_state
-- name: updatedAt
-  type: timestamp
-  constraints: [NOT_NULL]
-  role: authoritative_state
+- {name: _id, type: string, constraints: [PK, NOT_NULL], role: authoritative_state}
+- {name: version, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version, role: authoritative_state}
+- {name: createdByPersonaId, type: string, constraints: [NOT_NULL], role: authoritative_state, reference: true}
+- {name: hostBinding, type: HostBinding, constraints: [NOT_NULL], role: owned_value}
+- {name: organizerAssignments, type: '[]OrganizerAssignment', constraints: [NOT_NULL], role: owned_value}
+- {name: purpose, type: GatheringPurpose, constraints: [NOT_NULL], role: owned_value}
+- {name: schedule, type: GatheringSchedule, constraints: [NOT_NULL], role: owned_value}
+- {name: place, type: GatheringPlace, constraints: [NOT_NULL], role: owned_value}
+- {name: policySet, type: GatheringPolicySet, constraints: [NOT_NULL], role: owned_value}
+- {name: admissionControl, type: GatheringAdmissionControl, constraints: [NOT_NULL], role: owned_value}
+- {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL], role: authoritative_state}
+- {name: outcome, type: GatheringOutcome, constraints: [NULLABLE], role: owned_value}
+- {name: conversationId, type: string, constraints: [NULLABLE], role: authoritative_state, reference: true}
+- {name: roomBindingStatus, type: enum, enum_ref: GatheringRoomBindingStatus, constraints: [NOT_NULL], role: authoritative_state}
+- {name: currentGatheringRevisionId, type: string, constraints: [NULLABLE], role: authoritative_state}
+- {name: currentGatheringRevisionNumber, type: int, constraints: [NOT_NULL, DEFAULT_0], role: authoritative_state}
+- {name: participations, type: '[]GatheringParticipation', constraints: [NOT_NULL], role: owned_value}
+- {name: revisions, type: '[]GatheringRevision', constraints: [NOT_NULL], role: owned_value}
+- {name: availabilityWatches, type: '[]GatheringAvailabilityWatch', constraints: [NOT_NULL], role: owned_value}
+- {name: createdAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, role: authoritative_state}
+- {name: updatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant, role: authoritative_state}
+- {name: cancelledAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant, role: authoritative_state}
+- {name: completedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant, role: authoritative_state}
 types:
-  GatheringTargetRef:
-    description: 可导航目标对象引用；不得携带展示文案或客户端 URL。
+  CanonicalObjectRef:
+    description: 只包含 owner 对象身份的 canonical reference，不复制展示事实。
     fields:
-    - name: objectTypeRef
-      type: string
-      constraints: [NOT_BLANK]
-    - name: objectId
-      type: string
-      constraints: [NOT_BLANK]
-    - name: routeId
-      type: string
-      constraints: [NOT_BLANK]
-  GatheringParticipant:
-    description: Gathering 聚合内参与者值对象；数量由 joined 状态实时派生。
+    - {name: objectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: objectId, type: string, constraints: [NOT_BLANK]}
+  GatheringSourceRef:
+    description: 可验证且可导航的 Gathering 来源引用。
     fields:
-    - name: personaId
-      type: string
-      constraints: [NOT_BLANK]
-    - name: role
-      type: enum
-      enum_ref: GatheringParticipantRole
-      constraints: [NOT_NULL]
-    - name: state
-      type: enum
-      enum_ref: GatheringParticipantState
-      constraints: [NOT_NULL]
-    - name: requestedAt
-      type: timestamp
-      constraints: [NOT_NULL]
-    - name: decidedAt
-      type: timestamp
-      constraints: [NULLABLE]
-  GatheringSlice:
-    description: Gathering 详情 named Slice；participantCount 由 participants 中 joined 条目派生。
+    - {name: objectRef, type: CanonicalObjectRef, constraints: [NOT_NULL]}
+    - {name: routeId, type: string, constraints: [NOT_BLANK]}
+    - {name: sourceDigest, type: string, constraints: [NOT_BLANK]}
+  HostBinding:
+    description: 公开 Host subject 与 owner authority evidence 的冻结绑定。
+    fields:
+    - {name: hostSubjectKind, type: enum, enum_ref: GatheringHostSubjectKind, constraints: [NOT_NULL]}
+    - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: authorityExpiresAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  GatheringHostSnapshot:
+    description: GatheringRevision 冻结的 Host 摘要，不替代当前 authority 事实。
+    fields:
+    - {name: hostSubjectKind, type: enum, enum_ref: GatheringHostSubjectKind, constraints: [NOT_NULL]}
+    - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: hostDigest, type: string, constraints: [NOT_BLANK]}
+  OrganizerAssignment:
+    description: Gathering owned 管理授权；不表达参与或席位。
+    fields:
+    - {name: personaId, type: string, constraints: [NOT_BLANK]}
+    - {name: role, type: enum, enum_ref: GatheringOrganizerRole, constraints: [NOT_NULL]}
+    - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: assignedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+    - {name: revokedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+  GatheringPurpose:
+    description: 不含 activity、travel 或 date 形态枚举的活动目的与来源。
+    fields:
+    - {name: title, type: string, constraints: [NULLABLE], max_utf8_bytes: 360}
+    - {name: summary, type: string, constraints: [NULLABLE], max_utf8_bytes: 6000}
+    - {name: coverRef, type: CanonicalObjectRef, constraints: [NULLABLE]}
+    - {name: topicRefs, type: '[]string', constraints: [NOT_NULL], max_items: 32, item_max_utf8_bytes: 256}
+    - {name: requirementRefs, type: '[]string', constraints: [NOT_NULL], max_items: 32, item_max_utf8_bytes: 256}
+    - {name: sourceObjectRefs, type: '[]GatheringSourceRef', constraints: [NOT_NULL], max_items: 16}
+    - {name: costNotice, type: enum, enum_ref: GatheringCostNotice, constraints: [NOT_NULL]}
+    - {name: costDescription, type: string, constraints: [NULLABLE], max_utf8_bytes: 1200}
+  GatheringSchedule:
+    description: 草稿可不完整、Publish 前必须完整且经 Host 确认的时间承诺。
+    fields:
+    - {name: timezone, type: string, constraints: [NULLABLE]}
+    - {name: startAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: endAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: admissionClosesAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  GatheringPlace:
+    description: 物理、在线或混合地点承诺；披露精度由 GatheringDisclosurePolicy 决定。
+    fields:
+    - {name: mode, type: enum, enum_ref: GatheringPlaceMode, constraints: [NOT_NULL]}
+    - {name: coarsePlaceRef, type: CanonicalObjectRef, constraints: [NULLABLE]}
+    - {name: coarsePlaceLabel, type: string, constraints: [NULLABLE], max_utf8_bytes: 600}
+    - {name: exactMeetingPoint, type: string, constraints: [NULLABLE], max_utf8_bytes: 1200}
+    - {name: onlineLocationRef, type: string, constraints: [NULLABLE], max_utf8_bytes: 600}
+  GatheringCapacityPolicy:
+    description: 活动参与者席位总数，不包含未参加活动的 organizer。
+    fields:
+    - {name: maxParticipants, type: int, constraints: [NOT_NULL]}
+  GatheringDisclosurePolicy:
+    description: 加入前后对时间、地点与名单采用的最小披露策略。
+    fields:
+    - {name: timeDisclosure, type: enum, enum_ref: GatheringTimeDisclosure, constraints: [NOT_NULL]}
+    - {name: placeDisclosure, type: enum, enum_ref: GatheringPlaceDisclosure, constraints: [NOT_NULL]}
+    - {name: rosterDisclosure, type: enum, enum_ref: GatheringRosterDisclosure, constraints: [NOT_NULL]}
+  GatheringApplicationQuestionOption:
+    description: 审批问题的 typed 选项。
+    fields:
+    - {name: optionId, type: string, constraints: [NOT_BLANK]}
+    - {name: label, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 360}
+  GatheringApplicationQuestion:
+    description: Host 发布前定义的审批问题，最多五题。
+    fields:
+    - {name: questionId, type: string, constraints: [NOT_BLANK]}
+    - {name: prompt, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 360}
+    - {name: kind, type: enum, enum_ref: GatheringApplicationQuestionKind, constraints: [NOT_NULL]}
+    - {name: options, type: '[]GatheringApplicationQuestionOption', constraints: [NOT_NULL], max_items: 10}
+    - {name: required, type: bool, constraints: [NOT_NULL]}
+  GatheringPolicySet:
+    description: Audience、admission、capacity、disclosure 与 risk obligations 的正交政策。
+    fields:
+    - {name: audiencePolicy, type: enum, enum_ref: GatheringAudiencePolicy, constraints: [NOT_NULL]}
+    - {name: admissionPolicy, type: enum, enum_ref: GatheringAdmissionPolicy, constraints: [NOT_NULL]}
+    - {name: capacityPolicy, type: GatheringCapacityPolicy, constraints: [NOT_NULL]}
+    - {name: disclosurePolicy, type: GatheringDisclosurePolicy, constraints: [NOT_NULL]}
+    - {name: applicationQuestions, type: '[]GatheringApplicationQuestion', constraints: [NOT_NULL], max_items: 5}
+    - {name: riskControlPolicyRef, type: string, constraints: [NOT_BLANK]}
+    - {name: policyDecisionRef, type: string, constraints: [NULLABLE]}
+    - {name: policyDigest, type: string, constraints: [NULLABLE]}
+    - {name: obligationDigest, type: string, constraints: [NULLABLE]}
+  GatheringAdmissionControl:
+    description: 可版本化的人工暂停位；最终 admissionState 仍由 named Slice 派生。
+    fields:
+    - {name: status, type: enum, enum_ref: GatheringAdmissionControlStatus, constraints: [NOT_NULL]}
+    - {name: pausedByPersonaId, type: string, constraints: [NULLABLE]}
+    - {name: reasonRef, type: string, constraints: [NULLABLE]}
+    - {name: pausedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+  GatheringApplicationAnswer:
+    description: 一条申请问题回答；只对有权 organizer 披露。
+    fields:
+    - {name: questionId, type: string, constraints: [NOT_BLANK]}
+    - {name: answerText, type: string, constraints: [NULLABLE], max_utf8_bytes: 480}
+    - {name: selectedOptionIds, type: '[]string', constraints: [NOT_NULL], max_items: 10}
+  GatheringAttendance:
+    description: 参与者本人声明与 owner evidence 组成的出席事实，不保存连续轨迹。
+    fields:
+    - {name: status, type: enum, enum_ref: GatheringAttendanceStatus, constraints: [NOT_NULL]}
+    - {name: declaredAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: evidenceRefs, type: '[]CanonicalObjectRef', constraints: [NOT_NULL], max_items: 16}
+  GatheringRevisionAcknowledgement:
+    description: Participation 当前重大变更确认，始终绑定单一 GatheringRevision。
+    fields:
+    - {name: revisionId, type: string, constraints: [NULLABLE]}
+    - {name: revisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: revisionDigest, type: string, constraints: [NULLABLE]}
+    - {name: status, type: enum, enum_ref: GatheringRevisionAcknowledgementStatus, constraints: [NOT_NULL]}
+    - {name: deadlineAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: acknowledgedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  GatheringParticipation:
+    description: Gathering root-owned entity；每个 gatheringId 与 personaId 组合只有一条当前记录。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: personaId, type: string, constraints: [NOT_BLANK]}
+    - {name: invitedByPersonaId, type: string, constraints: [NULLABLE]}
+    - {name: state, type: enum, enum_ref: GatheringParticipationState, constraints: [NOT_NULL]}
+    - {name: admissionSource, type: enum, enum_ref: GatheringAdmissionSource, constraints: [NOT_NULL]}
+    - {name: closedReason, type: enum, enum_ref: GatheringParticipationClosedReason, constraints: [NULLABLE]}
+    - {name: attemptNo, type: int, constraints: [NOT_NULL]}
+    - {name: seatHoldUntil, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: joinedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: closedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: closedByPersonaId, type: string, constraints: [NULLABLE]}
+    - {name: reasonRef, type: string, constraints: [NULLABLE]}
+    - {name: reviewExpectedBy, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: applicationAnswers, type: '[]GatheringApplicationAnswer', constraints: [NOT_NULL]}
+    - {name: attendance, type: GatheringAttendance, constraints: [NOT_NULL]}
+    - {name: currentChangeAcknowledgement, type: GatheringRevisionAcknowledgement, constraints: [NOT_NULL]}
+  GatheringRevision:
+    description: append-only owned value；revisionNumber 与 digest 独立于 Gathering aggregate version。
+    fields:
+    - {name: revisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: revisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: purpose, type: GatheringPurpose, constraints: [NOT_NULL]}
+    - {name: schedule, type: GatheringSchedule, constraints: [NOT_NULL]}
+    - {name: place, type: GatheringPlace, constraints: [NOT_NULL]}
+    - {name: policySet, type: GatheringPolicySet, constraints: [NOT_NULL]}
+    - {name: hostSnapshot, type: GatheringHostSnapshot, constraints: [NOT_NULL]}
+    - {name: digest, type: string, constraints: [NOT_BLANK]}
+    - {name: materialChange, type: bool, constraints: [NOT_NULL]}
+    - {name: createdByPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: createdAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringOutcome:
+    description: Circle owner 根据独立参与证据计算的活动结果；completed 不等于 occurred。
+    fields:
+    - {name: status, type: enum, enum_ref: GatheringOutcomeStatus, constraints: [NOT_NULL]}
+    - {name: independentEvidenceCount, type: int, constraints: [NOT_NULL]}
+    - {name: evidenceRefs, type: '[]CanonicalObjectRef', constraints: [NOT_NULL], max_items: 32}
+    - {name: calculatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+    - {name: calculationDigest, type: string, constraints: [NOT_BLANK]}
+  GatheringAvailabilityWatch:
+    description: Circle-owned 名额提醒，不占座、不授予 room access，也不是 Participation。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: personaId, type: string, constraints: [NOT_BLANK]}
+    - {name: status, type: enum, enum_ref: GatheringAvailabilityWatchStatus, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL]}
+    - {name: createdAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringHostSummarySlice:
+    description: PublicCard 与 public detail 可披露的 Host 摘要。
+    fields:
+    - {name: hostSubjectKind, type: enum, enum_ref: GatheringHostSubjectKind, constraints: [NOT_NULL]}
+    - {name: hostSubjectId, type: string, constraints: [NOT_NULL]}
+    - {name: hostDigest, type: string, constraints: [NOT_NULL]}
+  GatheringPublicPurposeSlice:
+    description: 公开投影允许披露的 Purpose typed projection。
+    fields:
+    - {name: title, type: string, constraints: [NOT_NULL]}
+    - {name: summary, type: string, constraints: [NULLABLE]}
+    - {name: coverRef, type: CanonicalObjectRef, constraints: [NULLABLE]}
+    - {name: topicRefs, type: '[]string', constraints: [NOT_NULL]}
+    - {name: requirementRefs, type: '[]string', constraints: [NOT_NULL]}
+    - {name: costNotice, type: enum, enum_ref: GatheringCostNotice, constraints: [NOT_NULL]}
+    - {name: costDescription, type: string, constraints: [NULLABLE]}
+  GatheringPublicScheduleSlice:
+    description: 按 DisclosurePolicy 裁剪后的公开日程。
+    fields:
+    - {name: timezone, type: string, constraints: [NOT_NULL]}
+    - {name: startAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: endAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: dateLabel, type: string, constraints: [NULLABLE]}
+  GatheringPublicPlaceSlice:
+    description: 按 DisclosurePolicy 裁剪后的公开地点。
+    fields:
+    - {name: mode, type: enum, enum_ref: GatheringPlaceMode, constraints: [NOT_NULL]}
+    - {name: coarsePlaceRef, type: CanonicalObjectRef, constraints: [NULLABLE]}
+    - {name: coarsePlaceLabel, type: string, constraints: [NULLABLE]}
+    - {name: exactMeetingPoint, type: string, constraints: [NULLABLE]}
+  GatheringCapacitySlice:
+    description: 由 active 与未过期 invited_pending 唯一公式派生的容量 named Slice。
+    fields:
+    - {name: maxParticipants, type: int, constraints: [NOT_NULL]}
+    - {name: activeSeatCount, type: int, constraints: [NOT_NULL]}
+    - {name: invitedSeatHoldCount, type: int, constraints: [NOT_NULL]}
+    - {name: occupiedSeats, type: int, constraints: [NOT_NULL]}
+    - {name: remainingSeats, type: int, constraints: [NOT_NULL]}
+    - {name: full, type: bool, constraints: [NOT_NULL]}
+  GatheringTemporalPhaseSlice:
+    description: 只由 Schedule 与当前时间派生的时间阶段 named Slice。
+    fields:
+    - {name: temporalPhase, type: enum, enum_ref: GatheringTemporalPhase, constraints: [NOT_NULL]}
+    - {name: evaluatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringAdmissionStateSlice:
+    description: 由 policy、capacity、deadline、pause 与 temporalPhase 派生的准入 named Slice。
+    fields:
+    - {name: admissionState, type: enum, enum_ref: GatheringAdmissionState, constraints: [NOT_NULL]}
+    - {name: reasonRef, type: string, constraints: [NULLABLE]}
+    - {name: evaluatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringRevisionSummarySlice:
+    description: public detail 可披露的 immutable revision 摘要。
+    fields:
+    - {name: revisionId, type: string, constraints: [NOT_NULL]}
+    - {name: revisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: digest, type: string, constraints: [NOT_NULL]}
+    - {name: materialChange, type: bool, constraints: [NOT_NULL]}
+    - {name: createdAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringPublicCardSlice:
+    description: Circle 签发、可供发现排序但不可写回的唯一 Gathering PublicCard。
     fields:
     - {name: gatheringId, type: string, constraints: [NOT_NULL]}
-    - {name: version, type: int64, constraints: [NOT_NULL]}
-    - {name: creatorPersonaId, type: string, constraints: [NOT_NULL]}
-    - {name: title, type: string, constraints: [NOT_NULL]}
-    - {name: description, type: string, constraints: [NULLABLE]}
-    - {name: targetRef, type: object, object_ref: GatheringTargetRef, constraints: [NOT_NULL]}
-    - {name: startAt, type: timestamp, constraints: [NOT_NULL]}
-    - {name: endAt, type: timestamp, constraints: [NULLABLE]}
-    - {name: capacity, type: int, constraints: [NOT_NULL]}
-    - {name: joinPolicy, type: enum, enum_ref: GatheringJoinPolicy, constraints: [NOT_NULL]}
-    - {name: status, type: enum, enum_ref: GatheringStatus, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: cardDigest, type: string, constraints: [NOT_NULL]}
+    - {name: host, type: GatheringHostSummarySlice, constraints: [NOT_NULL]}
+    - {name: purpose, type: GatheringPublicPurposeSlice, constraints: [NOT_NULL]}
+    - {name: schedule, type: GatheringPublicScheduleSlice, constraints: [NOT_NULL]}
+    - {name: place, type: GatheringPublicPlaceSlice, constraints: [NOT_NULL]}
+    - {name: capacity, type: GatheringCapacitySlice, constraints: [NOT_NULL]}
+    - {name: temporal, type: GatheringTemporalPhaseSlice, constraints: [NOT_NULL]}
+    - {name: admission, type: GatheringAdmissionStateSlice, constraints: [NOT_NULL]}
+    - {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL]}
+    - {name: outcomeStatus, type: enum, enum_ref: GatheringOutcomeStatus, constraints: [NULLABLE]}
+    - {name: currentGatheringRevisionId, type: string, constraints: [NOT_NULL]}
+    - {name: currentGatheringRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringPublicDetailSlice:
+    description: 未加入 viewer 的披露裁剪详情，不含申请答案、完整名单或精确私密事实。
+    fields:
+    - {name: card, type: GatheringPublicCardSlice, constraints: [NOT_NULL]}
+    - {name: audiencePolicy, type: enum, enum_ref: GatheringAudiencePolicy, constraints: [NOT_NULL]}
+    - {name: admissionPolicy, type: enum, enum_ref: GatheringAdmissionPolicy, constraints: [NOT_NULL]}
+    - {name: disclosurePolicy, type: GatheringDisclosurePolicy, constraints: [NOT_NULL]}
+    - {name: revisions, type: '[]GatheringRevisionSummarySlice', constraints: [NOT_NULL]}
+    - {name: viewerParticipationState, type: enum, enum_ref: GatheringParticipationState, constraints: [NULLABLE]}
     - {name: conversationId, type: string, constraints: [NULLABLE]}
-    - {name: participantCount, type: int, constraints: [NOT_NULL]}
-    - {name: participants, type: '[]GatheringParticipant', constraints: [NOT_NULL]}
-    - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
-    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
-  CreateGatheringCommand:
+  GatheringPrivateDetailSlice:
+    description: Host 或有权参与者读取的 typed private detail；字段仍按 viewer authority 裁剪。
     fields:
-    - name: title
-      type: string
-      client_dart_type: String
-    - name: description
-      type: string
-      constraints: [NULLABLE]
-      client_dart_type: String?
-    - name: targetRef
-      type: GatheringTargetRef
-      client_dart_type: GatheringTargetRef
-      client_wire: toWire
-    - name: startAt
-      type: timestamp
-      client_dart_type: DateTime
-    - name: endAt
-      type: timestamp
-      constraints: [NULLABLE]
-      client_dart_type: DateTime?
-    - name: capacity
-      type: int
-      client_dart_type: int
-    - name: joinPolicy
-      type: GatheringJoinPolicy
-      enum_ref: GatheringJoinPolicy
-      client_dart_type: GatheringJoinPolicy
-  GatheringIDCommand:
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: createdByPersonaId, type: string, constraints: [NOT_NULL]}
+    - {name: hostBinding, type: HostBinding, constraints: [NOT_NULL]}
+    - {name: organizerAssignments, type: '[]OrganizerAssignment', constraints: [NOT_NULL]}
+    - {name: purpose, type: GatheringPurpose, constraints: [NOT_NULL]}
+    - {name: schedule, type: GatheringSchedule, constraints: [NOT_NULL]}
+    - {name: place, type: GatheringPlace, constraints: [NOT_NULL]}
+    - {name: policySet, type: GatheringPolicySet, constraints: [NOT_NULL]}
+    - {name: admissionControl, type: GatheringAdmissionControl, constraints: [NOT_NULL]}
+    - {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL]}
+    - {name: outcome, type: GatheringOutcome, constraints: [NULLABLE]}
+    - {name: conversationId, type: string, constraints: [NULLABLE]}
+    - {name: roomBindingStatus, type: enum, enum_ref: GatheringRoomBindingStatus, constraints: [NOT_NULL]}
+    - {name: currentGatheringRevisionId, type: string, constraints: [NULLABLE]}
+    - {name: currentGatheringRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: capacity, type: GatheringCapacitySlice, constraints: [NOT_NULL]}
+    - {name: temporal, type: GatheringTemporalPhaseSlice, constraints: [NOT_NULL]}
+    - {name: admission, type: GatheringAdmissionStateSlice, constraints: [NOT_NULL]}
+    - {name: createdAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringApplicationInboxItemSlice:
+    description: Organizer application inbox 的 typed item，申请答案不进入其他投影。
     fields:
-    - name: gatheringId
-      type: string
-      client_dart_type: String
-  ApproveGatheringParticipantCommand:
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: personaId, type: string, constraints: [NOT_NULL]}
+    - {name: participationVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: attemptNo, type: int, constraints: [NOT_NULL]}
+    - {name: answers, type: '[]GatheringApplicationAnswer', constraints: [NOT_NULL]}
+    - {name: reviewExpectedBy, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringApplicationInboxPageSlice:
+    description: Host 审批箱 typed keyset page。
     fields:
-    - name: gatheringId
-      type: string
-      client_dart_type: String
-    - name: participantPersonaId
-      type: string
-      client_dart_type: String
+    - {name: items, type: '[]GatheringApplicationInboxItemSlice', constraints: [NOT_NULL]}
+    - {name: nextCursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: hasMore, type: bool, constraints: [NOT_NULL]}
+  GatheringRosterItemSlice:
+    description: 按 viewer 权限裁剪的 roster typed item，不含 application answers。
+    fields:
+    - {name: personaId, type: string, constraints: [NOT_NULL]}
+    - {name: state, type: enum, enum_ref: GatheringParticipationState, constraints: [NOT_NULL]}
+    - {name: admissionSource, type: enum, enum_ref: GatheringAdmissionSource, constraints: [NOT_NULL]}
+    - {name: joinedAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: attendanceStatus, type: enum, enum_ref: GatheringAttendanceStatus, constraints: [NOT_NULL]}
+    - {name: currentAcknowledgementStatus, type: enum, enum_ref: GatheringRevisionAcknowledgementStatus, constraints: [NOT_NULL]}
+  GatheringRosterPageSlice:
+    description: Gathering roster typed keyset page 与同源容量计数。
+    fields:
+    - {name: items, type: '[]GatheringRosterItemSlice', constraints: [NOT_NULL]}
+    - {name: capacity, type: GatheringCapacitySlice, constraints: [NOT_NULL]}
+    - {name: nextCursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: hasMore, type: bool, constraints: [NOT_NULL]}
+  GatheringByHostPageSlice:
+    description: 由 Host canonical identity 查询的 PublicCard typed page。
+    fields:
+    - {name: items, type: '[]GatheringPublicCardSlice', constraints: [NOT_NULL]}
+    - {name: nextCursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: hasMore, type: bool, constraints: [NOT_NULL]}
+  GatheringBySourcePageSlice:
+    description: 由 canonical source identity 查询的 PublicCard typed page。
+    fields:
+    - {name: items, type: '[]GatheringPublicCardSlice', constraints: [NOT_NULL]}
+    - {name: nextCursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: hasMore, type: bool, constraints: [NOT_NULL]}
+  CreateGatheringDraftCommand:
+    description: 只创建 draft；room ensure 与 Publish 是后续独立 owner operation。
+    fields:
+    - {name: hostBinding, type: HostBinding, constraints: [NOT_NULL]}
+    - {name: creatorParticipates, type: bool, constraints: [NOT_NULL]}
+    - {name: purpose, type: GatheringPurpose, constraints: [NOT_NULL]}
+    - {name: schedule, type: GatheringSchedule, constraints: [NOT_NULL]}
+    - {name: place, type: GatheringPlace, constraints: [NOT_NULL]}
+    - {name: policySet, type: GatheringPolicySet, constraints: [NOT_NULL]}
+  GatheringIDQuery:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+  GatheringListByHostQuery:
+    fields:
+    - {name: hostSubjectKind, type: enum, enum_ref: GatheringHostSubjectKind, constraints: [NOT_NULL]}
+    - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+    - {name: cursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: limit, type: int, constraints: [NOT_NULL]}
+  GatheringListBySourceQuery:
+    fields:
+    - {name: sourceObjectTypeRef, type: string, constraints: [NOT_BLANK]}
+    - {name: sourceObjectId, type: string, constraints: [NOT_BLANK]}
+    - {name: cursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: limit, type: int, constraints: [NOT_NULL]}
+  GatheringPageQuery:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: cursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: limit, type: int, constraints: [NOT_NULL]}
+  GatheringVersionCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+  UpdateGatheringCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: purpose, type: GatheringPurpose, constraints: [NOT_NULL]}
+    - {name: schedule, type: GatheringSchedule, constraints: [NOT_NULL]}
+    - {name: place, type: GatheringPlace, constraints: [NOT_NULL]}
+    - {name: policySet, type: GatheringPolicySet, constraints: [NOT_NULL]}
+    - {name: hostBinding, type: HostBinding, constraints: [NOT_NULL]}
+    - {name: acknowledgementDeadlineAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  GatheringParticipationVersionCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  ApplyToGatheringCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: answers, type: '[]GatheringApplicationAnswer', constraints: [NOT_NULL]}
+  ReviewGatheringApplicationCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: participantPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: decision, type: enum, enum_ref: GatheringApplicationReviewDecision, constraints: [NOT_NULL]}
+    - {name: reasonRef, type: string, constraints: [NULLABLE]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  InviteToGatheringCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: participantPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: seatHoldUntil, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  TargetGatheringParticipationCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: participantPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: reasonRef, type: string, constraints: [NULLABLE]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  ChangeGatheringCapacityCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: maxParticipants, type: int, constraints: [NOT_NULL]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: acknowledgementDeadlineAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+  ChangeGatheringAdmissionCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: reasonRef, type: string, constraints: [NULLABLE]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedAdmissionControlVersion, type: int64, constraints: [NOT_NULL]}
+  AssignGatheringCoHostCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: coHostPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+  TransferGatheringOrganizerCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: newPrimaryOrganizerPersonaId, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityEvidenceRef, type: string, constraints: [NOT_BLANK]}
+    - {name: authorityVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+  AcknowledgeGatheringRevisionCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: revisionId, type: string, constraints: [NOT_BLANK]}
+    - {name: revisionDigest, type: string, constraints: [NOT_BLANK]}
+    - {name: decision, type: enum, enum_ref: GatheringRevisionAcknowledgementDecision, constraints: [NOT_NULL]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  GatheringReasonCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: reasonRef, type: string, constraints: [NOT_BLANK]}
+    - {name: evidenceRefs, type: '[]CanonicalObjectRef', constraints: [NOT_NULL], max_items: 16}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+  DeclareGatheringAttendanceCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: evidenceRefs, type: '[]CanonicalObjectRef', constraints: [NOT_NULL], max_items: 16}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  GatheringAvailabilityWatchCommand:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedWatchVersion, type: int64, constraints: [NOT_NULL]}
   GatheringCommandResult:
     fields:
     - {name: gatheringId, type: string, constraints: [NOT_NULL]}
-    - {name: version, type: int64, constraints: [NOT_NULL]}
-    - {name: status, type: enum, enum_ref: GatheringStatus, constraints: [NOT_NULL]}
-    - {name: participantState, type: enum, enum_ref: GatheringParticipantState, constraints: [NULLABLE]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL]}
+    - {name: participationState, type: enum, enum_ref: GatheringParticipationState, constraints: [NULLABLE]}
+    - {name: participationVersion, type: int64, constraints: [NULLABLE]}
+    - {name: currentGatheringRevisionId, type: string, constraints: [NULLABLE]}
+    - {name: currentGatheringRevisionNumber, type: int, constraints: [NOT_NULL]}
+    - {name: outcomeStatus, type: enum, enum_ref: GatheringOutcomeStatus, constraints: [NULLABLE]}
     - {name: conversationId, type: string, constraints: [NULLABLE]}
+    - {name: roomBindingStatus, type: enum, enum_ref: GatheringRoomBindingStatus, constraints: [NOT_NULL]}
     - {name: idempotentReplay, type: bool, constraints: [NOT_NULL]}
   GatheringCommandReceipt:
     fields:
     - {name: _id, type: string, constraints: [PK, NOT_NULL]}
     - {name: commandDigest, type: string, constraints: [NOT_NULL]}
+    - {name: operationId, type: string, constraints: [NOT_NULL]}
     - {name: gatheringId, type: string, constraints: [NOT_NULL]}
-    - {name: version, type: int64, constraints: [NOT_NULL]}
-    - {name: status, type: enum, enum_ref: GatheringStatus, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL]}
     - {name: aggregateSnapshot, type: object, object_ref: Gathering, constraints: [NOT_NULL]}
-    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL]}
+    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringEventPayload:
+    description: 事务日志与 outbox 共用的 typed Gathering event payload。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL]}
+    - {name: actorPersonaId, type: string, constraints: [NULLABLE]}
+    - {name: participantPersonaId, type: string, constraints: [NULLABLE]}
+    - {name: participationState, type: enum, enum_ref: GatheringParticipationState, constraints: [NULLABLE]}
+    - {name: revisionId, type: string, constraints: [NULLABLE]}
+    - {name: revisionNumber, type: int, constraints: [NULLABLE]}
+    - {name: revisionDigest, type: string, constraints: [NULLABLE]}
+    - {name: roomBindingStatus, type: enum, enum_ref: GatheringRoomBindingStatus, constraints: [NOT_NULL]}
+    - {name: conversationId, type: string, constraints: [NULLABLE]}
+    - {name: admissionControlStatus, type: enum, enum_ref: GatheringAdmissionControlStatus, constraints: [NOT_NULL]}
+    - {name: outcomeStatus, type: enum, enum_ref: GatheringOutcomeStatus, constraints: [NULLABLE]}
+    - {name: watchStatus, type: enum, enum_ref: GatheringAvailabilityWatchStatus, constraints: [NULLABLE]}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringInvitationScheduleSnapshot:
+    description: 邀请事件中按未加入 viewer 披露策略裁剪的日程快照；after_join 禁止携带精确时间。
+    fields:
+    - {name: timezone, type: string, constraints: [NOT_NULL]}
+    - {name: startAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: endAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: dateLabel, type: string, constraints: [NULLABLE]}
+  GatheringInvitationPlaceSnapshot:
+    description: 邀请事件中按未加入 viewer 披露策略裁剪的地点快照；禁止携带群内容、名单与 after_join 精确地点。
+    fields:
+    - {name: mode, type: enum, enum_ref: GatheringPlaceMode, constraints: [NOT_NULL]}
+    - {name: coarsePlaceLabel, type: string, constraints: [NULLABLE]}
+    - {name: exactMeetingPoint, type: string, constraints: [NULLABLE]}
+  GatheringInvitationActionIntent:
+    description: App 将 intent 映射到 Circle typed operation；Notification/Chat 不得据此直接改写 Participation。
+    fields:
+    - {name: action, type: enum, enum_ref: GatheringInvitationAction, constraints: [NOT_NULL]}
+    - {name: expectedGatheringVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
+    - {name: expectedParticipationVersion, type: int64, constraints: [NOT_NULL]}
+  GatheringInvitationEventPayload:
+    description: Circle 事务 outbox 发布给 Notification 的最小邀请投影；不含 conversationId、群消息、名单、申请答案或未披露地点。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_NULL]}
+    - {name: inviterPersonaId, type: string, constraints: [NOT_NULL]}
+    - {name: recipientPersonaId, type: string, constraints: [NOT_NULL]}
+    - {name: purposeSummary, type: string, constraints: [NOT_NULL]}
+    - {name: schedule, type: GatheringInvitationScheduleSnapshot, constraints: [NOT_NULL]}
+    - {name: place, type: GatheringInvitationPlaceSnapshot, constraints: [NOT_NULL]}
+    - {name: participationVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: status, type: enum, enum_ref: GatheringInvitationStatus, constraints: [NOT_NULL]}
+    - {name: actionIntents, type: '[]GatheringInvitationActionIntent', constraints: [NOT_NULL], max_items: 2}
+    - {name: expiresAt, type: timestamp, constraints: [NULLABLE], semantic_type: instant}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
   GatheringOutbox:
     fields:
     - {name: _id, type: string, constraints: [PK, NOT_NULL]}
-    - {name: outboxSequence, type: int64, constraints: [NOT_NULL]}
+    - {name: outboxSequence, type: int64, constraints: [NOT_NULL], semantic_type: sequence}
     - {name: eventType, type: string, constraints: [NOT_NULL]}
     - {name: aggregateId, type: string, constraints: [NOT_NULL]}
-    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL]}
+    - {name: aggregateVersion, type: int64, constraints: [NOT_NULL], semantic_type: aggregate_version}
     - {name: payloadJson, type: json, constraints: [NOT_NULL]}
-    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL]}
+    - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
   GatheringReconciliationCheckpoint:
     description: Gathering 到 Chat 的对象本地投影 checkpoint；version 只允许单调递增。
     fields:
     - {name: _id, type: string, constraints: [PK, NOT_NULL]}
-    - {name: version, type: int64, constraints: [NOT_NULL]}
-    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+    - {name: version, type: int64, constraints: [NOT_NULL], semantic_type: watermark_sequence}
+    - {name: updatedAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
 enums:
-  GatheringStatus:
-    values: [draft, open, full, cancelled, completed]
-  GatheringJoinPolicy:
-    values: [open, approval]
-  GatheringParticipantRole:
-    values: [owner, member]
-  GatheringParticipantState:
-    values: [pending, joined, left, rejected]
-  GatheringConversationBindingStatus:
-    values: [pending, bound, failed]
+  GatheringHostSubjectKind:
+    values: [persona, entity_homepage, circle]
+  GatheringOrganizerRole:
+    values: [primary_organizer, co_host]
+  GatheringCostNotice:
+    values: [free, estimated, external_payment_required]
+  GatheringPlaceMode:
+    values: [physical, online, hybrid]
+  GatheringAudiencePolicy:
+    values: [public, unlisted, community_members, invite_only]
+  GatheringAdmissionPolicy:
+    values: [open, approval, invite_only]
+  GatheringTimeDisclosure:
+    values: [exact, date_only, after_join]
+  GatheringPlaceDisclosure:
+    values: [exact, coarse, after_join]
+  GatheringRosterDisclosure:
+    values: [count_only, joined_members, public_opt_in]
+  GatheringApplicationQuestionKind:
+    values: [text, single_select, multi_select]
+  GatheringAdmissionControlStatus:
+    values: [open, paused]
+  GatheringLifecycleStatus:
+    values: [draft, published, cancelled, completed]
+  GatheringOutcomeStatus:
+    values: [occurred, did_not_happen, ended_early, safety_terminated, disputed, unverified]
+  GatheringParticipationState:
+    values: [invited_pending, application_pending, active, closed]
+  GatheringAdmissionSource:
+    values: [open, application, invitation]
+  GatheringParticipationClosedReason:
+    values: [declined, revoked, expired, withdrawn, rejected, left, removed, safety_removed]
+  GatheringAttendanceStatus:
+    values: [not_declared, arrived, left_early, completed, no_show]
+  GatheringRevisionAcknowledgementStatus:
+    values: [not_required, pending, accepted, declined, expired]
+  GatheringRoomBindingStatus:
+    values: [pending, ready, failed]
+  GatheringTemporalPhase:
+    values: [upcoming, in_progress, ended]
+  GatheringAdmissionState:
+    values: [accepting, full, paused, closed]
+  GatheringApplicationReviewDecision:
+    values: [approve, reject]
+  GatheringRevisionAcknowledgementDecision:
+    values: [accept, decline]
+  GatheringAvailabilityWatchStatus:
+    values: [active, cancelled, notified]
+  GatheringInvitationStatus:
+    values: [pending, accepted, declined, revoked, cancelled, expired]
+  GatheringInvitationAction:
+    values: [accept, decline]

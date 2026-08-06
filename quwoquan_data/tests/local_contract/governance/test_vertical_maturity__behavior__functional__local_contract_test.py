@@ -178,7 +178,24 @@ def test_travel_image_rights_requires_generated_asset_provenance():
     assert allowed == [], allowed
 
 
-def test_travel_rights_audit_records_gaps_without_blocking_research_collection():
+def test_travel_rights_audit_records_gaps_without_blocking_research_collection(
+    monkeypatch,
+):
+    from dataclasses import replace
+
+    from governance.coverage import distribution
+
+    research_policy = distribution.load_content_distribution_policy()
+    research_only = replace(
+        research_policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
+        release_class=distribution.ReleaseClass.RESEARCH,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: research_only,
+    )
     payload = {
         "url": "https://images.example.com/place.jpg",
         "platform": "test-gallery",

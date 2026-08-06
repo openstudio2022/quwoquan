@@ -295,10 +295,49 @@ class MongoCandidateRanker:
             and math.isfinite(float(value))
             and float(value) > 0
         }
-        if not affinities:
-            return ()
-        selected: dict[str, tuple[float, RecommendationObjectCard]] = {}
-        for document in self._candidates.list_object_card_candidates(limit=400):
+        selected: dict[tuple[str, str], tuple[float, RecommendationObjectCard]] = {}
+        for ordinal, document in enumerate(
+            self._candidates.list_object_card_candidates(limit=400)
+        ):
+            object_kind = str(document.get("objectKind") or "").strip()
+            if object_kind == "gathering":
+                gathering_id = str(document.get("sourceKey") or "").strip()
+                title = str(document.get("title") or "").strip()
+                card_digest = str(document.get("cardDigest") or "").strip()
+                source_version = int(document.get("sourceVersion") or 0)
+                if (
+                    not gathering_id
+                    or not title
+                    or source_version <= 0
+                    or len(card_digest) != 64
+                ):
+                    continue
+                tags = tuple(
+                    dict.fromkeys(
+                        str(tag).strip()
+                        for tag in document.get("tagRefs") or []
+                        if str(tag).strip()
+                    )
+                )
+                gathering_card = RecommendationObjectCard(
+                    object_kind="gathering",
+                    object_id=gathering_id,
+                    title=title,
+                    subtitle=(
+                        str(document.get("summary") or "").strip() or None
+                    ),
+                    # Circle signs a canonical cover reference. Recommendation
+                    # must not turn that reference into a fabricated media URL.
+                    cover_url=None,
+                    tag_refs=tags,
+                    reason_key="public_gathering",
+                    recall_path="gathering_candidate_index",
+                )
+                selected[("gathering", gathering_id)] = (
+                    0.25 / float(ordinal + 1),
+                    gathering_card,
+                )
+                continue
             snapshot = document.get("primaryHomepageSnapshot")
             if not isinstance(snapshot, Mapping):
                 continue
@@ -327,9 +366,10 @@ class MongoCandidateRanker:
                 reason_key="affinity",
                 recall_path="entity_card_affinity",
             )
-            previous = selected.get(homepage_id)
+            identity = ("entity_homepage", homepage_id)
+            previous = selected.get(identity)
             if previous is None or score > previous[0]:
-                selected[homepage_id] = (score, card)
+                selected[identity] = (score, card)
         return tuple(
             card
             for _, card in sorted(

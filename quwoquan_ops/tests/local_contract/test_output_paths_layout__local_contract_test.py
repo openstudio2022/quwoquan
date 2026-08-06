@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import sys
 from argparse import Namespace
 from datetime import datetime, timezone
@@ -24,7 +26,6 @@ MANIFEST = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml
 GATE_REPO = ROOT / "quwoquan_ops" / "gate" / "gate_repo.sh"
 MAKEFILE = ROOT / "Makefile"
 DEPLOY_BASH_ENTRIES = {
-    ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh": "beta-local",
     ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh": "prod-sim",
     ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh": "prod-hosted",
 }
@@ -107,7 +108,36 @@ def test_path_resolver_honors_custom_root_and_orthogonal_scopes(
     assert output_paths.data_releases_root() == root / "data/releases"
 
 
-def test_package_root_switches_atomically_to_activated_candidate(
+def _install_full_candidate_loader(
+    monkeypatch,
+) -> list[tuple[str, str, str, bool]]:
+    from quwoquan_ops.cli.lib import deployment_candidate_manifest
+
+    calls: list[tuple[str, str, str, bool]] = []
+
+    def load_candidate_manifest(
+        environment: str,
+        target: str,
+        baseline_id: str,
+        *,
+        require_full: bool,
+    ) -> dict[str, str]:
+        calls.append((environment, target, baseline_id, require_full))
+        return {
+            "candidateType": "runtime-full",
+            "target": target,
+            "baselineId": baseline_id,
+        }
+
+    monkeypatch.setattr(
+        deployment_candidate_manifest,
+        "load_candidate_manifest",
+        load_candidate_manifest,
+    )
+    return calls
+
+
+def test_package_root_switches_atomically_to_fully_validated_candidate(
     tmp_path: Path, monkeypatch
 ) -> None:
     deploy_root = tmp_path / "deploy-work"
@@ -127,6 +157,16 @@ def test_package_root_switches_atomically_to_activated_candidate(
         + "\n",
         encoding="utf-8",
     )
+    validation_calls = _install_full_candidate_loader(monkeypatch)
+    directory_fsyncs: list[int] = []
+    actual_fsync = os.fsync
+
+    def recording_fsync(descriptor: int) -> None:
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            directory_fsyncs.append(descriptor)
+        actual_fsync(descriptor)
+
+    monkeypatch.setattr(output_paths.os, "fsync", recording_fsync)
 
     pointer = output_paths.activate_deployment_candidate(
         "alpha-local",
@@ -143,6 +183,229 @@ def test_package_root_switches_atomically_to_activated_candidate(
         "baselineId": baseline_id,
         "candidateDir": str(candidate),
     }
+    assert validation_calls
+    assert set(validation_calls) == {
+        ("alpha", "alpha-local", baseline_id, True),
+    }
+    assert directory_fsyncs
+
+
+def test_fixed_candidate_snapshot_detects_an_active_pointer_switch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    first = f"sha256:{'a' * 64}"
+    second = f"sha256:{'b' * 64}"
+    for baseline_id in (first, second):
+        candidate = output_paths.deployment_candidate_dir(
+            "alpha-local",
+            baseline_id,
+        )
+        (candidate / "packages").mkdir(parents=True)
+        (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+    _install_full_candidate_loader(monkeypatch)
+    output_paths.activate_deployment_candidate("alpha-local", first)
+
+    snapshot = output_paths.active_deployment_candidate_snapshot("alpha-local")
+
+    assert snapshot is not None
+    assert snapshot["baselineId"] == first
+    assert snapshot["manifest"]["baselineId"] == first
+    output_paths.activate_deployment_candidate("alpha-local", second)
+    with pytest.raises(ValueError, match="changed during operation"):
+        output_paths.assert_active_deployment_candidate_snapshot(snapshot)
+
+
+def test_active_candidate_rejects_resolved_candidate_directory_alias(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    baseline_id = f"sha256:{'a' * 64}"
+    candidate = output_paths.deployment_candidate_dir("alpha-local", baseline_id)
+    (candidate / "packages").mkdir(parents=True)
+    (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+    _install_full_candidate_loader(monkeypatch)
+    pointer = output_paths.activate_deployment_candidate(
+        "alpha-local",
+        baseline_id,
+    )
+    payload = json.loads(pointer.read_text(encoding="utf-8"))
+    payload["candidateDir"] = (
+        f"{candidate.parent}/../runtime-full/{candidate.name}"
+    )
+    pointer.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="identity mismatch"):
+        output_paths.active_deployment_candidate("alpha-local")
+
+
+def test_candidate_activation_rejects_incomplete_and_symlinked_manifests(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    baseline_id = f"sha256:{'a' * 64}"
+    candidate = output_paths.deployment_candidate_dir("alpha-local", baseline_id)
+    (candidate / "packages").mkdir(parents=True)
+    manifest = candidate / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "candidateType": "runtime-full",
+                "target": "alpha-local",
+                "baselineId": baseline_id,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid full candidate"):
+        output_paths.activate_deployment_candidate("alpha-local", baseline_id)
+    assert not output_paths.active_candidate_manifest_path("alpha-local").exists()
+
+    external = tmp_path / "external-candidate-manifest.json"
+    external.write_text(manifest.read_text(encoding="utf-8"), encoding="utf-8")
+    manifest.unlink()
+    manifest.symlink_to(external)
+    with pytest.raises(ValueError, match="invalid full candidate"):
+        output_paths.activate_deployment_candidate("alpha-local", baseline_id)
+    assert not output_paths.active_candidate_manifest_path("alpha-local").exists()
+
+
+def test_active_candidate_rejects_pointer_and_parent_symlinks_without_overwrite(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    baseline_id = f"sha256:{'a' * 64}"
+    candidate = output_paths.deployment_candidate_dir("alpha-local", baseline_id)
+    (candidate / "packages").mkdir(parents=True)
+    (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+    _install_full_candidate_loader(monkeypatch)
+
+    pointer = output_paths.active_candidate_manifest_path("alpha-local")
+    external_pointer = tmp_path / "external-pointer.json"
+    sentinel = '{"external":"must-survive"}\n'
+    external_pointer.write_text(sentinel, encoding="utf-8")
+    pointer.symlink_to(external_pointer)
+    with pytest.raises(ValueError, match="symlink or non-regular"):
+        output_paths.active_deployment_candidate("alpha-local")
+    with pytest.raises(ValueError, match="symlink or non-regular"):
+        output_paths.activate_deployment_candidate("alpha-local", baseline_id)
+    assert external_pointer.read_text(encoding="utf-8") == sentinel
+
+    pointer.unlink()
+    target_root = deploy_root / "alpha-local"
+    real_target_root = deploy_root / "real-alpha"
+    target_root.rename(real_target_root)
+    target_root.symlink_to(real_target_root, target_is_directory=True)
+    with pytest.raises(ValueError, match="parent cannot be a symbolic link"):
+        output_paths.active_deployment_candidate("alpha-local")
+    with pytest.raises(ValueError, match="parent cannot be a symbolic link"):
+        output_paths.activate_deployment_candidate("alpha-local", baseline_id)
+
+
+def test_failed_candidate_validation_preserves_the_existing_pointer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from quwoquan_ops.cli.lib import deployment_candidate_manifest
+
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    active_baseline = f"sha256:{'a' * 64}"
+    rejected_baseline = f"sha256:{'b' * 64}"
+    for baseline_id in (active_baseline, rejected_baseline):
+        candidate = output_paths.deployment_candidate_dir(
+            "alpha-local",
+            baseline_id,
+        )
+        (candidate / "packages").mkdir(parents=True)
+        (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+
+    def selective_loader(
+        _environment: str,
+        target: str,
+        baseline_id: str,
+        *,
+        require_full: bool,
+    ) -> dict[str, str]:
+        assert require_full is True
+        if baseline_id == rejected_baseline:
+            raise ValueError("incomplete candidate")
+        return {
+            "candidateType": "runtime-full",
+            "target": target,
+            "baselineId": baseline_id,
+        }
+
+    monkeypatch.setattr(
+        deployment_candidate_manifest,
+        "load_candidate_manifest",
+        selective_loader,
+    )
+    pointer = output_paths.activate_deployment_candidate(
+        "alpha-local",
+        active_baseline,
+    )
+    before = pointer.read_bytes()
+
+    with pytest.raises(ValueError, match="incomplete candidate"):
+        output_paths.activate_deployment_candidate(
+            "alpha-local",
+            rejected_baseline,
+        )
+
+    assert pointer.read_bytes() == before
+
+
+def test_failed_pointer_replace_preserves_existing_pointer_and_removes_temp(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    active_baseline = f"sha256:{'a' * 64}"
+    next_baseline = f"sha256:{'b' * 64}"
+    for baseline_id in (active_baseline, next_baseline):
+        candidate = output_paths.deployment_candidate_dir(
+            "alpha-local",
+            baseline_id,
+        )
+        (candidate / "packages").mkdir(parents=True)
+        (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+    _install_full_candidate_loader(monkeypatch)
+    pointer = output_paths.activate_deployment_candidate(
+        "alpha-local",
+        active_baseline,
+    )
+    before = pointer.read_bytes()
+
+    def reject_replace(*_args: object, **_kwargs: object) -> None:
+        raise OSError("injected atomic replace failure")
+
+    monkeypatch.setattr(output_paths.os, "replace", reject_replace)
+    with pytest.raises(OSError, match="injected atomic replace failure"):
+        output_paths.activate_deployment_candidate(
+            "alpha-local",
+            next_baseline,
+        )
+
+    assert pointer.read_bytes() == before
+    assert list(pointer.parent.glob(f".{pointer.name}.*.tmp")) == []
 
 
 def test_concurrent_run_evidence_paths_never_share_a_directory(
@@ -276,7 +539,7 @@ def test_deployment_cleanup_and_output_parameters_fail_closed(
     render_root = output_paths.deployment_render_dir(
         "prod",
         target="prod-hosted",
-        name="service-prod",
+        name="service-prod-r0",
     )
     assert render._resolve_render_output_dir(
         render_root,
@@ -311,7 +574,9 @@ def test_deploy_bash_entries_reuse_the_python_target_resolver() -> None:
     ).read_text(encoding="utf-8")
     assert "deployment_target_path(" in alpha_source
     assert "certificate_paths(" in alpha_source
-    assert "deployment_render_dir(" in beta_source
+    assert "quwoquan_ops/cli/stackctl.py" in beta_source
+    assert "--target beta-local" in beta_source
+    assert "deployment_render_dir(" not in beta_source
     assert "deployment_render_dir(" in prod_sim_source
     assert "deployment_target_path(" in prod_sim_source
 

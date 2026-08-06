@@ -24,10 +24,6 @@ from core.schema import assert_valid
 SCALE_SEMANTIC_PROMOTION_ISSUE_CODE = (
     DataIssueCode.AGENT_SCALE_CALIBRATION_REQUIRED.value
 )
-SCALE_PROMOTION_PROVIDER = "codex_sdk"
-SCALE_PROMOTION_AUTHOR_MODEL = "gpt-5.6-terra"
-SCALE_PROMOTION_REVIEWER_MODEL = "gpt-5.6-terra"
-SCALE_PROMOTION_MODEL_FAMILY = "gpt"
 SCALE_CALIBRATION_PROVIDER = "codex_sdk"
 SCALE_CALIBRATION_MODEL = "gpt-5.6-sol"
 SCALE_CALIBRATION_MODEL_FAMILY = "gpt"
@@ -50,28 +46,30 @@ def require_scale_promotion_model_binding(
     *,
     label: str,
 ) -> dict[str, str]:
-    """Require Codex Terra for both primary author and independent reviewer."""
+    """Validate the exact frozen author/reviewer binding without provider bias."""
 
     if not isinstance(binding, Mapping):
         raise ScaleSemanticPromotionError(f"{label} modelBinding is missing")
-    expected = {
-        "provider": SCALE_PROMOTION_PROVIDER,
-        "authorModel": SCALE_PROMOTION_AUTHOR_MODEL,
-        "authorModelFamily": SCALE_PROMOTION_MODEL_FAMILY,
-        "reviewerModel": SCALE_PROMOTION_REVIEWER_MODEL,
-        "reviewerModelFamily": SCALE_PROMOTION_MODEL_FAMILY,
-    }
-    mismatches = [
-        field
-        for field, value in expected.items()
-        if str(binding.get(field) or "").strip() != value
-    ]
-    if mismatches:
-        raise ScaleSemanticPromotionError(
-            f"{label} requires Codex Terra author and independent Terra reviewer; "
-            f"mismatches={','.join(mismatches)}"
+    frozen = {
+        field: str(binding.get(field) or "").strip()
+        for field in (
+            "provider",
+            "authorModel",
+            "authorModelFamily",
+            "reviewerModel",
+            "reviewerModelFamily",
         )
-    return dict(expected)
+    }
+    if (
+        frozen["provider"] not in {"codex_sdk", "cursor_sdk"}
+        or any(not value for value in frozen.values())
+        or frozen["authorModel"] != frozen["reviewerModel"]
+        or frozen["authorModelFamily"] != frozen["reviewerModelFamily"]
+    ):
+        raise ScaleSemanticPromotionError(
+            f"{label} requires one complete governed author/reviewer model binding"
+        )
+    return frozen
 
 
 def scale_calibration_sample_count(accepted_count: int) -> int:

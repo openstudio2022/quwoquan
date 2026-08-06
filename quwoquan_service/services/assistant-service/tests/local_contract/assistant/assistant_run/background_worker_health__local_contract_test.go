@@ -25,6 +25,7 @@ func (store *terminalLearningHealthStore) setClaimError(err error) {
 func (store *terminalLearningHealthStore) ClaimPendingTerminalEvents(
 	context.Context,
 	string,
+	time.Time,
 	time.Duration,
 	int,
 ) ([]runruntime.TerminalEvent, error) {
@@ -33,7 +34,18 @@ func (store *terminalLearningHealthStore) ClaimPendingTerminalEvents(
 	return nil, store.claimErr
 }
 
-func (*terminalLearningHealthStore) MarkTerminalEventProcessed(
+func (*terminalLearningHealthStore) ScheduleTerminalEventRetry(
+	context.Context,
+	string,
+	string,
+	time.Time,
+	time.Time,
+	string,
+) error {
+	return nil
+}
+
+func (*terminalLearningHealthStore) AcknowledgeTerminalEvent(
 	context.Context,
 	string,
 	string,
@@ -95,6 +107,12 @@ func TestTerminalRunRelayHealthTracksCompletedBusinessScans(t *testing.T) {
 	store := &terminalLearningHealthStore{}
 	relay := runruntime.NewTerminalRunRelay(
 		store,
+		runruntime.TerminalEventPublisherFunc(func(
+			context.Context,
+			runruntime.TerminalEvent,
+		) error {
+			return nil
+		}),
 		[]runruntime.TerminalEventHandler{runruntime.TerminalEventHandlerFunc(func(
 			context.Context,
 			runruntime.TerminalEvent,

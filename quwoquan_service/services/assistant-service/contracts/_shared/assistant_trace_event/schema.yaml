@@ -1,10 +1,11 @@
 dart_class: AssistantTraceEventWire
-library_path: assistant/generated/contracts/assistant_trace_event.g.dart
-output_path: assistant/generated/contracts/assistant_trace_event.g.dart
+library_path: package:quwoquan_cloud_contracts/src/generated/assistant/assistant_trace_event.g.dart
+output_path: packages/quwoquan_cloud_contracts/lib/src/generated/assistant/assistant_trace_event.g.dart
 contract: assistant_trace_event
 kind: shared_wire_contract
 imports:
-  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
+  - assistant_runtime_enums.g.dart
+  - assistant_runtime_failure.g.dart
 fields:
   - { name: traceEventId, type: string, required: true }
   - { name: sessionId, type: string, required: true }

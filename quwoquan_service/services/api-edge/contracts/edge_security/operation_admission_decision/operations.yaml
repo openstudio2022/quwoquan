@@ -1,0 +1,33 @@
+description: >-
+  准入判定由 runtime/auth 的 generated operation guard 在 credential verification 之后、
+  shared admission 之前对每个 generated operation 执行，不公开第二条判定 API，也不复制
+  ContractGraph operation 表；因此本对象没有 api_routes。
+api_routes: []
+runtime_entrypoints:
+- name: EvaluateGeneratedOperationAdmission
+  kind: external_port
+  phase: outbound_invocation
+  source_objects: [gateway.OperationAdmissionDecision]
+  idempotency: identity_payload_digest
+  application:
+    kind: query
+    facet: OperationAdmissionPort
+    method: wrap
+    object_owner: OperationAdmissionDecision
+readiness_cases:
+- case_id: generated-operation-admission-local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: EvaluateGeneratedOperationAdmission}
+  runner_source_path: quwoquan_service/services/api-edge/tests/local_contract/edge_security/operation_admission_decision/operation_admission_port__contract__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: generated-operation-admission-api
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: EvaluateGeneratedOperationAdmission}
+  runner_source_path: quwoquan_service/services/api-edge/tests/api_integration/edge_security/operation_admission_decision/generated_operation_admission__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}

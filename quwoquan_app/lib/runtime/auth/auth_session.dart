@@ -5,18 +5,18 @@ import 'dart:developer' as developer;
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
+import 'package:quwoquan_app/runtime/shell/state/startup_auth_restore_gate_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
-import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
-import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart'
+import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
+import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/runtime/auth/terminal_account_cleanup_receipt_store.dart';
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/runtime/platform/media/app_image_cache_controller.dart';
+import 'package:quwoquan_app/runtime/di/app_providers.dart'
     show
         accountSessionLifecycleCommandWriterProvider,
         accountSessionLoginCommandWriterProvider;

@@ -92,3 +92,15 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：completed 上传产生耐久事实，worker 以 checkpoint 至少一次消费并把资产推进到 ready 或 rejected。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 媒体用途上下文与类型命名族缺 typed 边界
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 `quwoquan_service/services/content-service/contracts/media/media_upload_session/fields.yaml` 没有 typed 用途上下文字段，上传会话无法声明该媒体将用于头像、封面、正文还是随拍。
+- 缺用途上下文时，尺寸守卫、派生 profile 与访问策略只能由调用方口头约定，服务端无法按用途失败关闭。
+- `quwoquan_service/services/content-service/contracts/content/post/fields.yaml` 的 `contentType` 表示内容载体类型，与媒体侧 `mediaType` 和 `mimeType` 构成同名族语义冲突，跨对象阅读时容易把两层类型混用。
+- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 依赖：媒体用途上下文值域裁决与内容、媒体类型命名族边界裁决。

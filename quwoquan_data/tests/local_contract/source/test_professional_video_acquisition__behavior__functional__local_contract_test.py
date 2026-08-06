@@ -33,6 +33,10 @@ def _explicit_research_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
             product_lifecycle_state=ProductLifecycleState.RESEARCH
         ),
     )
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.guard_acquisition_source_identity",
+        lambda *_args, **_kwargs: {},
+    )
 
 
 def _write_video(path: Path, *, moving: bool, seed: int) -> None:
@@ -206,6 +210,7 @@ def _acquire(
     write_json(manifest_path, _manifest(items, manifest_id=manifest_id))
     receipt, receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=output_root,
     )
@@ -244,6 +249,7 @@ def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_acc
 
     receipt, receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=output_root,
     )
@@ -285,6 +291,7 @@ def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_acc
     ) == receipt
     repeated, repeated_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=output_root,
     )
@@ -327,6 +334,7 @@ def test_prior_receipt_deduplication_is_scoped_to_exact_source_identity(
         )
         return acquire_professional_videos(
             manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
             manual_root=manual_root,
             output_root=output_root,
         )
@@ -391,6 +399,7 @@ def test_foreign_identity_legacy_receipt_body_does_not_block_fresh_acquisition(
 
     receipt, _receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=output_root,
     )
@@ -430,6 +439,7 @@ def test_same_identity_corrupt_receipt_body_still_fails_closed(
     with pytest.raises(ValueError, match="schema violation"):
         acquire_professional_videos(
             manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
             manual_root=manual_root,
             output_root=output_root,
         )
@@ -453,6 +463,7 @@ def test_popularity_never_invents_comparability(tmp_path: Path) -> None:
     write_json(manifest_path, _manifest(items, manifest_id="no-fake-rank"))
     receipt, receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=tmp_path / "acquisition",
     )
@@ -506,6 +517,7 @@ def test_slideshow_is_not_counted_as_sourced_or_premium_video(tmp_path: Path) ->
     )
     receipt, _receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=tmp_path / "acquisition",
     )
@@ -546,6 +558,7 @@ def test_commercial_lifecycle_rejects_unverified_acquired_video(
     )
     receipt, _receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=tmp_path / "acquisition",
     )
@@ -586,6 +599,7 @@ def test_commercial_lifecycle_emits_commercial_plan_for_verified_video(
 
     receipt, _receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=tmp_path / "acquisition",
     )
@@ -656,6 +670,7 @@ def test_receipt_and_plan_bindings_fail_closed_on_tamper(tmp_path: Path) -> None
     output_root = tmp_path / "acquisition"
     receipt, receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=output_root,
     )
@@ -683,6 +698,7 @@ def test_auto_plan_selects_highest_comparable_professional_video(tmp_path: Path)
     output_root = tmp_path / "acquisition"
     _receipt, receipt_path = acquire_professional_videos(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=output_root,
     )
@@ -698,10 +714,12 @@ def test_auto_plan_selects_highest_comparable_professional_video(tmp_path: Path)
         acquisition_receipt_refs=[receipt_path.relative_to(output_root).as_posix()],
         acquisition_root=output_root,
     )
-    payload = read_json(plan_dir / "video_source_plan.json")["payload"]
-    assert payload["acquisitionReceiptRefs"] == [
+    plan = read_json(plan_dir / "video_source_plan.json")
+    payload = plan["payload"]
+    assert plan["acquisitionReceiptRefs"] == [
         receipt_path.relative_to(output_root).as_posix()
     ]
+    assert "acquisitionReceiptRefs" not in payload
     assert payload["videos"][0]["professionalAssetId"] == "high"
     assert report["videoDiscovery"][0]["professionalAcquisitionCandidates"] == 2
     assert report["videoDiscovery"][0]["rankingEligibleCandidates"] == 2

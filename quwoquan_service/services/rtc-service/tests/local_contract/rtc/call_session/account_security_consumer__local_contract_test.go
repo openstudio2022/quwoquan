@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// readiness_case: recover-rtc-account-closure-dead-letter-local
 package local_contract
 
 import (

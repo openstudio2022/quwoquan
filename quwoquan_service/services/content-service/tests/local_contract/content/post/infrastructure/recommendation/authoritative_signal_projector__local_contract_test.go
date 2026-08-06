@@ -3,7 +3,7 @@ package recommendation_test
 // N0-3 契约：服务端权威信号投影语义。
 //  - ContentReactionSet(like, post) → BehaviorSignal{action=like}，进 HotPath 与持久轨；
 //  - ContentReactionCleared / 非 like / 非 post 不产生信号（unlike 无负信号）；
-//  - CommentCreated → action=comment；content.report.created(post) → action=report；
+//  - CommentCreated → action=comment；content.report.ReportCreated(post) → action=report；
 //  - clientEventId 使用 "authoritative:"+EventID（确定性，唯一索引兜底重放幂等）。
 
 import (
@@ -180,7 +180,7 @@ func TestReportSignalProjector_PostReportProducesNegativeSignal(t *testing.T) {
 	occurred := time.Now().UTC()
 	err := projector.Publish(context.Background(), reportports.OutboxEvent{
 		EventID:    "report:rpt1:1",
-		EventType:  "content.report.created",
+		EventType:  "content.report.ReportCreated",
 		OccurredAt: occurred,
 		Payload: mustJSON(t, map[string]any{
 			"reportId":   "rpt1",
@@ -214,7 +214,7 @@ func TestReportSignalProjector_NonPostTargetIgnored(t *testing.T) {
 
 	err := projector.Publish(context.Background(), reportports.OutboxEvent{
 		EventID:   "report:rpt2:1",
-		EventType: "content.report.created",
+		EventType: "content.report.ReportCreated",
 		Payload: mustJSON(t, map[string]any{
 			"reportId":   "rpt2",
 			"reporterId": "user_2",

@@ -56,10 +56,6 @@ local_identity_reasons:
   suggestedActionId: Run 冻结建议动作中的局部标识，不是独立聚合 identity
   surfaceId: 可信请求上下文中的界面标识，不是业务对象 identity
   traceId: 可信请求上下文中的可观测关联键，不是业务对象 identity
-capabilities:
-- append_only
-- deduplicated_append
-- transactional_outbox
 business_rules:
 - eventId 是唯一事实身份；相同 eventId 与 payload digest 重放返回同一 receipt
 - 相同 eventId 但 payload digest 不同必须冲突，不得静默吞掉或覆盖
@@ -71,3 +67,11 @@ business_rules:
 - trainingEligible 必须显式给出；敏感原文字段存在时默认不得训练
 lifecycle:
   immutable: true
+  source_events:
+  - assistant.assistant_run.AssistantRunCompleted
+  event_consumers:
+  - name: AppendTerminalAssistantLearningFact
+    kind: subscription
+    facet: AssistantLearningFactAppender
+    method: appendTerminalRun
+    idempotency: event_id

@@ -12,7 +12,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 VERIFIER_PATH = (
     REPO_ROOT
-    / "quwoquan_app/scripts/runtime/verify_ops_event_schema_completeness.py"
+    / "quwoquan_app/scripts/runtime/observability/verify_ops_event_schema_completeness.py"
 )
 GOLDEN_CATALOG_PATH = (
     REPO_ROOT

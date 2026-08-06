@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application"
-	callsession "quwoquan_service/services/rtc-service/internal/rtc/call_session/domain"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
 )
 
@@ -18,10 +17,10 @@ func TestRingTimeoutSweeperFacetUsesNamedCutoffsAndMutationPipeline(t *testing.T
 
 	now := time.Date(2026, time.July, 20, 13, 0, 0, 0, time.UTC)
 	firstStore := newSweeperCallStore(ringingSession(
-		now.Add(-30*time.Second),
+		now.Add(-17*time.Second),
 		model.MaxParticipants1v1,
 	))
-	first := newSweeperOrchestrator(firstStore, now)
+	first := newSweeperOrchestrator(t, firstStore, now)
 
 	swept, err := first.SweepRingTimeouts(context.Background())
 	if err != nil {
@@ -32,10 +31,10 @@ func TestRingTimeoutSweeperFacetUsesNamedCutoffsAndMutationPipeline(t *testing.T
 	}
 
 	firstStore.mu.Lock()
-	if !firstStore.oneToOneCutoff.Equal(now.Add(-30 * time.Second)) {
+	if !firstStore.oneToOneCutoff.Equal(now.Add(-17 * time.Second)) {
 		t.Fatalf("one-to-one cutoff = %v", firstStore.oneToOneCutoff)
 	}
-	if !firstStore.groupCutoff.Equal(now.Add(-60 * time.Second)) {
+	if !firstStore.groupCutoff.Equal(now.Add(-41 * time.Second)) {
 		t.Fatalf("group cutoff = %v", firstStore.groupCutoff)
 	}
 	if firstStore.findByIDCalls != 1 {
@@ -77,10 +76,10 @@ func TestRingTimeoutSweeperFacetUsesNamedCutoffsAndMutationPipeline(t *testing.T
 	}
 
 	secondStore := newSweeperCallStore(ringingSession(
-		now.Add(-30*time.Second),
+		now.Add(-17*time.Second),
 		model.MaxParticipants1v1,
 	))
-	second := newSweeperOrchestrator(secondStore, now)
+	second := newSweeperOrchestrator(t, secondStore, now)
 	if _, err := second.SweepRingTimeouts(context.Background()); err != nil {
 		t.Fatalf("second deterministic sweep: %v", err)
 	}
@@ -97,7 +96,7 @@ func TestRingTimeoutSweeperFacetStopsWhenContextIsCancelled(t *testing.T) {
 
 	now := time.Date(2026, time.July, 20, 13, 5, 0, 0, time.UTC)
 	store := newSweeperCallStore(nil)
-	orchestrator := newSweeperOrchestrator(store, now)
+	orchestrator := newSweeperOrchestrator(t, store, now)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
@@ -121,16 +120,29 @@ func TestRingTimeoutSweeperFacetStopsWhenContextIsCancelled(t *testing.T) {
 	}
 }
 
+func TestRingTimeoutSweeperFacetRejectsMissingInterval(t *testing.T) {
+	t.Parallel()
+
+	orchestrator := newSweeperOrchestrator(
+		t,
+		newSweeperCallStore(nil),
+		time.Date(2026, time.July, 20, 13, 7, 0, 0, time.UTC),
+	)
+	if err := orchestrator.RunRingTimeoutSweeper(context.Background(), 0); err == nil {
+		t.Fatal("RunRingTimeoutSweeper() accepted an absent configured interval")
+	}
+}
+
 func TestRingTimeoutSweeperFacetRechecksAggregateAfterCASConflict(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.July, 20, 13, 10, 0, 0, time.UTC)
 	store := newSweeperCallStore(ringingSession(
-		now.Add(-30*time.Second),
+		now.Add(-17*time.Second),
 		model.MaxParticipants1v1,
 	))
 	store.conflictOnce = true
-	orchestrator := newSweeperOrchestrator(store, now)
+	orchestrator := newSweeperOrchestrator(t, store, now)
 
 	swept, err := orchestrator.SweepRingTimeouts(context.Background())
 	if err != nil {
@@ -154,11 +166,16 @@ func TestRingTimeoutSweeperFacetRechecksAggregateAfterCASConflict(t *testing.T) 
 	}
 }
 
-func newSweeperOrchestrator(store application.CallStore, now time.Time) *application.CallOrchestrator {
+func newSweeperOrchestrator(
+	tb testing.TB,
+	store application.CallStore,
+	now time.Time,
+) *application.CallOrchestrator {
+	tb.Helper()
 	return application.NewCallOrchestrator(
 		store,
 		noopCallStateCache{},
-		callsession.NewCallSessionService(),
+		newTestCallSessionService(tb, 17*time.Second, 41*time.Second),
 		nil,
 		application.AllowRelationshipGateForTest(),
 		application.WithClock(func() time.Time { return now }),

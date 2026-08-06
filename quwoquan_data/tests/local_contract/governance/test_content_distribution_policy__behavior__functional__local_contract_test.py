@@ -37,18 +37,20 @@ def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
     assert policy.image_generation_allowed is False
     assert policy.video_generation_allowed is False
     assert policy.image_provider_priority[:2] == ("pinterest", "tuchong")
-    assert policy.minimum_illustrated_rate == 0.9
+    assert policy.illustrated_rate_target == 0.9
+    assert policy.text_only_rate_target == 0.1
+    assert policy.automatic_recovery_rate_target == 0.95
     assert dict(policy.m100_targets) == {
         "homepage": 100,
         "article": 100,
         "image": 100,
-        "video": 50,
+        "video": 10,
     }
     assert dict(policy.m1000_targets) == {
         "homepage": 1000,
         "article": 1000,
         "image": 1000,
-        "video": 300,
+        "video": 100,
     }
 
 

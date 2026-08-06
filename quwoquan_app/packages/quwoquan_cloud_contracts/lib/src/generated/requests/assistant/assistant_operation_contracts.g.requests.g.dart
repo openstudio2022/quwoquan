@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../assistant/assistant_operation_contracts.g.dart';
 
@@ -99,6 +99,50 @@ final class AssistantAnswerRunIntent {
   };
 }
 
+final class AssistantApproveToolUseRequest {
+  const AssistantApproveToolUseRequest({
+    required String runId,
+    required String toolInvocationId,
+    required String decision,
+    required String approvalPermit,
+    String? installationId,
+    String? deviceId,
+  }) : runId = runId,
+       toolInvocationId = toolInvocationId,
+       decision = decision,
+       approvalPermit = approvalPermit,
+       installationId = installationId,
+       deviceId = deviceId;
+
+  final String runId;
+  final String toolInvocationId;
+  final String decision;
+  final String approvalPermit;
+  final String? installationId;
+  final String? deviceId;
+
+  factory AssistantApproveToolUseRequest.fromWire(Map<String, Object?> map, [String path = "AssistantApproveToolUseRequest"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "toolInvocationId", "decision", "approvalPermit", "installationId", "deviceId"}, path);
+    return AssistantApproveToolUseRequest(
+      runId: _generatedRequestString(map["runId"], '$path.runId'),
+      toolInvocationId: _generatedRequestString(map["toolInvocationId"], '$path.toolInvocationId'),
+      decision: _generatedRequestString(map["decision"], '$path.decision'),
+      approvalPermit: _generatedRequestString(map["approvalPermit"], '$path.approvalPermit'),
+      installationId: map["installationId"] == null ? null : _generatedRequestString(map["installationId"], '$path.installationId'),
+      deviceId: map["deviceId"] == null ? null : _generatedRequestString(map["deviceId"], '$path.deviceId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "runId": this.runId,
+    "toolInvocationId": this.toolInvocationId,
+    "decision": this.decision,
+    "approvalPermit": this.approvalPermit,
+    if (this.installationId != null) "installationId": this.installationId!,
+    if (this.deviceId != null) "deviceId": this.deviceId!,
+  };
+}
+
 final class AssistantConsentMatrix {
   const AssistantConsentMatrix({
     required bool canReadCurrentPage,
@@ -160,45 +204,6 @@ final class AssistantContextSnapshot {
     if (this.userActions != null) "userActions": this.userActions!.map((value) => value.toWire()).toList(growable: false),
     if (this.intersectionEvidenceRefs != null) "intersectionEvidenceRefs": this.intersectionEvidenceRefs!.map((value) => value.toWire()).toList(growable: false),
     if (this.consentMatrix != null) "consentMatrix": this.consentMatrix!.toWire(),
-  };
-}
-
-final class AssistantContinueToolUseRequest {
-  const AssistantContinueToolUseRequest({
-    required String runId,
-    required String toolUseId,
-    required String decision,
-    required String continuationToken,
-    AssistantDeviceActionExecutionReceipt? executionReceipt,
-  }) : runId = runId,
-       toolUseId = toolUseId,
-       decision = decision,
-       continuationToken = continuationToken,
-       executionReceipt = executionReceipt;
-
-  final String runId;
-  final String toolUseId;
-  final String decision;
-  final String continuationToken;
-  final AssistantDeviceActionExecutionReceipt? executionReceipt;
-
-  factory AssistantContinueToolUseRequest.fromWire(Map<String, Object?> map, [String path = "AssistantContinueToolUseRequest"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "toolUseId", "decision", "continuationToken", "executionReceipt"}, path);
-    return AssistantContinueToolUseRequest(
-      runId: _generatedRequestString(map["runId"], '$path.runId'),
-      toolUseId: _generatedRequestString(map["toolUseId"], '$path.toolUseId'),
-      decision: _generatedRequestString(map["decision"], '$path.decision'),
-      continuationToken: _generatedRequestString(map["continuationToken"], '$path.continuationToken'),
-      executionReceipt: map["executionReceipt"] == null ? null : AssistantDeviceActionExecutionReceipt.fromWire(_generatedRequestObject(map["executionReceipt"], '$path.executionReceipt'), '$path.executionReceipt'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "runId": this.runId,
-    "toolUseId": this.toolUseId,
-    "decision": this.decision,
-    "continuationToken": this.continuationToken,
-    if (this.executionReceipt != null) "executionReceipt": this.executionReceipt!.toWire(),
   };
 }
 
@@ -268,20 +273,32 @@ final class AssistantCreationRunIntent {
 
 final class AssistantDeviceActionExecutionReceipt {
   const AssistantDeviceActionExecutionReceipt({
-    required String actionKind,
+    required String installationId,
+    required String deviceId,
+    required String capability,
+    required String inputDigest,
+    required String permit,
     required String idempotencyKey,
     required String outcome,
     required DateTime executedAt,
     String? deviceObjectId,
     String? failureCode,
-  }) : actionKind = actionKind,
+  }) : installationId = installationId,
+       deviceId = deviceId,
+       capability = capability,
+       inputDigest = inputDigest,
+       permit = permit,
        idempotencyKey = idempotencyKey,
        outcome = outcome,
        executedAt = executedAt,
        deviceObjectId = deviceObjectId,
        failureCode = failureCode;
 
-  final String actionKind;
+  final String installationId;
+  final String deviceId;
+  final String capability;
+  final String inputDigest;
+  final String permit;
   final String idempotencyKey;
   final String outcome;
   final DateTime executedAt;
@@ -289,9 +306,13 @@ final class AssistantDeviceActionExecutionReceipt {
   final String? failureCode;
 
   factory AssistantDeviceActionExecutionReceipt.fromWire(Map<String, Object?> map, [String path = "AssistantDeviceActionExecutionReceipt"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"actionKind", "idempotencyKey", "outcome", "executedAt", "deviceObjectId", "failureCode"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"installationId", "deviceId", "capability", "inputDigest", "permit", "idempotencyKey", "outcome", "executedAt", "deviceObjectId", "failureCode"}, path);
     return AssistantDeviceActionExecutionReceipt(
-      actionKind: _generatedRequestString(map["actionKind"], '$path.actionKind'),
+      installationId: _generatedRequestString(map["installationId"], '$path.installationId'),
+      deviceId: _generatedRequestString(map["deviceId"], '$path.deviceId'),
+      capability: _generatedRequestString(map["capability"], '$path.capability'),
+      inputDigest: _generatedRequestString(map["inputDigest"], '$path.inputDigest'),
+      permit: _generatedRequestString(map["permit"], '$path.permit'),
       idempotencyKey: _generatedRequestString(map["idempotencyKey"], '$path.idempotencyKey'),
       outcome: _generatedRequestString(map["outcome"], '$path.outcome'),
       executedAt: _generatedRequestTimestamp(map["executedAt"], '$path.executedAt'),
@@ -301,7 +322,11 @@ final class AssistantDeviceActionExecutionReceipt {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    "actionKind": this.actionKind,
+    "installationId": this.installationId,
+    "deviceId": this.deviceId,
+    "capability": this.capability,
+    "inputDigest": this.inputDigest,
+    "permit": this.permit,
     "idempotencyKey": this.idempotencyKey,
     "outcome": this.outcome,
     "executedAt": this.executedAt.toUtc().toIso8601String(),
@@ -761,11 +786,20 @@ final class AssistantSessionByIdQuery {
 }
 
 final class AssistantSessionListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
   AssistantSessionListQuery({
     int limit = 20,
     String? cursor,
   }) : limit = limit,
        cursor = _normalizeGeneratedOptionalText(cursor) {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
   }
 
   final int limit;
@@ -809,11 +843,20 @@ final class AssistantSkillSubscriptionByIdQuery {
 }
 
 final class AssistantSkillSubscriptionListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
   AssistantSkillSubscriptionListQuery({
     int limit = 20,
     String? status,
   }) : limit = limit,
        status = _normalizeGeneratedOptionalText(status) {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
   }
 
   final int limit;
@@ -903,6 +946,35 @@ final class AssistantSteerRunRequest {
   Map<String, Object?> toWire() => <String, Object?>{
     "runId": this.runId,
     "instruction": this.instruction,
+  };
+}
+
+final class AssistantSubmitDeviceActionReceiptRequest {
+  const AssistantSubmitDeviceActionReceiptRequest({
+    required String runId,
+    required String toolInvocationId,
+    required AssistantDeviceActionExecutionReceipt receipt,
+  }) : runId = runId,
+       toolInvocationId = toolInvocationId,
+       receipt = receipt;
+
+  final String runId;
+  final String toolInvocationId;
+  final AssistantDeviceActionExecutionReceipt receipt;
+
+  factory AssistantSubmitDeviceActionReceiptRequest.fromWire(Map<String, Object?> map, [String path = "AssistantSubmitDeviceActionReceiptRequest"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"runId", "toolInvocationId", "receipt"}, path);
+    return AssistantSubmitDeviceActionReceiptRequest(
+      runId: _generatedRequestString(map["runId"], '$path.runId'),
+      toolInvocationId: _generatedRequestString(map["toolInvocationId"], '$path.toolInvocationId'),
+      receipt: AssistantDeviceActionExecutionReceipt.fromWire(_generatedRequestObject(map["receipt"], '$path.receipt'), '$path.receipt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "runId": this.runId,
+    "toolInvocationId": this.toolInvocationId,
+    "receipt": this.receipt.toWire(),
   };
 }
 
@@ -1748,24 +1820,25 @@ CloudOperationRequestPayload encodeAssistantAssistantPreferenceSetAssistantPrefe
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunCancelAssistantRunGeneratedRequest(AssistantRunCommandRequest request) {
+CloudOperationRequestPayload encodeAssistantAssistantRunApproveAssistantToolUseGeneratedRequest(AssistantApproveToolUseRequest request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "runId": request.runId,
+      "toolInvocationId": request.toolInvocationId,
+    },
+    body: <String, Object?>{
+      "decision": request.decision,
+      "approvalPermit": request.approvalPermit,
+      if (request.installationId != null) "installationId": request.installationId!,
+      if (request.deviceId != null) "deviceId": request.deviceId!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeAssistantAssistantRunContinueAssistantToolUseGeneratedRequest(AssistantContinueToolUseRequest request) {
+CloudOperationRequestPayload encodeAssistantAssistantRunCancelAssistantRunGeneratedRequest(AssistantRunCommandRequest request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "runId": request.runId,
-      "toolUseId": request.toolUseId,
-    },
-    body: <String, Object?>{
-      "decision": request.decision,
-      "continuationToken": request.continuationToken,
-      if (request.executionReceipt != null) "executionReceipt": request.executionReceipt!.toWire(),
     },
   );
 }
@@ -1831,6 +1904,18 @@ CloudOperationRequestPayload encodeAssistantAssistantRunStreamAssistantRunEvents
     },
     queryParameters: <String, String>{
       if (request.resumeToken != null) "resumeToken": request.resumeToken!,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeAssistantAssistantRunSubmitDeviceActionReceiptGeneratedRequest(AssistantSubmitDeviceActionReceiptRequest request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "runId": request.runId,
+      "toolInvocationId": request.toolInvocationId,
+    },
+    body: <String, Object?>{
+      "receipt": request.receipt.toWire(),
     },
   );
 }

@@ -2,9 +2,11 @@ backend: postgres
 role: authoritative
 tables:
   account_enforcement_cases:
+    publication_role: not_published
     entity: AccountEnforcementCase
     role: authoritative
-    pk: id
+    pk:
+    - id
     columns:
     - {name: id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: case_kind, type: VARCHAR(32), constraints: [NOT_NULL]}
@@ -22,23 +24,27 @@ tables:
     - name: uq_account_enforcement_pending_account
       columns: [account_id]
       unique: true
-      predicate: status = 'pending_approval'
+      condition: status = 'pending_approval'
     - name: idx_account_enforcement_case_status_updated
       columns: [status, updated_at]
-    optimistic_lock: version
   account_enforcement_case_reviews:
+    publication_role: not_published
     entity: AccountEnforcementCase
     role: authoritative
-    pk: [case_id, reviewer_id]
+    pk:
+    - case_id
+    - reviewer_id
     columns:
     - {name: case_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: reviewer_id, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
     - {name: verdict, type: VARCHAR(16), constraints: [NOT_NULL]}
     - {name: reviewed_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   account_enforcement_decisions:
-    entity: AccountEnforcementCase
+    publication_role: not_published
+    entity: AccountEnforcementDecision
     role: append_only
-    pk: decision_id
+    pk:
+    - decision_id
     columns:
     - {name: decision_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: decision_sequence, type: BIGINT, constraints: [NOT_NULL, UNIQUE]}
@@ -50,9 +56,11 @@ tables:
     - {name: approved_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
     - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   account_enforcement_command_receipts:
+    publication_role: not_published
     entity: AccountEnforcementCase
     role: authoritative
-    pk: idempotency_key
+    pk:
+    - idempotency_key
     description: 每个 operator command 的摘要与稳定结果；与对应聚合提交同事务写入。
     columns:
     - {name: idempotency_key, type: VARCHAR(160), constraints: [PK, NOT_NULL]}
@@ -62,9 +70,11 @@ tables:
     - {name: result_snapshot, type: JSONB, constraints: [NOT_NULL]}
     - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   account_enforcement_delivery_outbox:
-    entity: AccountEnforcementCase
+    publication_role: transactional_outbox
+    entity: AccountEnforcementDecision
     role: authoritative
-    pk: decision_id
+    pk:
+    - decision_id
     description: 只投递 UserAccount internal Suspend/Restore contract；不存在消息与同步调用双轨。
     columns:
     - {name: decision_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
@@ -81,9 +91,11 @@ tables:
     - name: idx_account_enforcement_delivery_due
       columns: [status, next_attempt_at, created_at]
   account_enforcement_delivery_receipts:
+    publication_role: publication_accessory
     entity: AccountEnforcementCase
     role: append_only
-    pk: decision_id
+    pk:
+    - decision_id
     columns:
     - {name: decision_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
     - {name: account_state, type: VARCHAR(32), constraints: [NOT_NULL]}
@@ -92,9 +104,12 @@ tables:
     - {name: remote_occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
     - {name: delivered_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
   account_enforcement_delivery_dead_letters:
+    publication_role: publication_accessory
     entity: AccountEnforcementCase
     role: append_only
-    pk: [decision_id, retry_generation]
+    pk:
+    - decision_id
+    - retry_generation
     description: terminal DLQ 只保存不透明 decision id、代次、错误类别与次数，禁止 PII/证据/审核人。
     columns:
     - {name: decision_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}

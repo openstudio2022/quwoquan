@@ -1,6 +1,7 @@
 backend: postgres
 tables:
   account_sessions:
+    publication_role: not_published
     entity: AccountSession
     role: authoritative
     description: refresh token 只保存不可逆哈希；rotation lineage 支持重放检测后整链吊销。
@@ -63,6 +64,7 @@ tables:
       - NOT_NULL
       default: NOW()
   account_sessions_outbox:
+    publication_role: transactional_event_log
     entity: AccountSession
     role: append_only
     description: 与 session 状态同事务提交的持久化审计事实；当前未装配 relay，不声明异步 consumer。

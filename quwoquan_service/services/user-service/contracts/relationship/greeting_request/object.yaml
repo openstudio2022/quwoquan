@@ -42,9 +42,6 @@ relationships:
   reference_fields:
   - targetPersonaId
   target_object: user.Persona
-capabilities:
-- queryable
-- cacheable
 taggable: false
 vector_enabled: false
 business_rules:

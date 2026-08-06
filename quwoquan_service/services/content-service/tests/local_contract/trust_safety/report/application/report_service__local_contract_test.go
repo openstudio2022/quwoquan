@@ -1,7 +1,14 @@
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/content-action-intent-contract/spec.md#gwt-001
+// readiness_case: list-my-reports-local
+// readiness_case: grant-gathering-safety-termination-local
+// readiness_case: revoke-gathering-safety-termination-local
+// readiness_case: authorize-gathering-safety-termination-local
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
 package report_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +17,7 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
+	reportports "quwoquan_service/services/content-service/internal/trust_safety/report/domain/ports"
 )
 
 func TestReportCommandAndQueryFacetsStaySeparated(t *testing.T) {
@@ -331,6 +339,7 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 
 	store := testsupport.NewReportStore()
 	service := reportapp.NewReportService(reportapp.BindDataPorts(store))
+	facade := reportapp.BindFacades(service)
 	create := func(key, reporterID, targetID string) {
 		t.Helper()
 		if _, err := service.CreateReport(
@@ -350,7 +359,7 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 	create("other-report", "persona-other", "post-other")
 	create("my-report-2", "persona-owner", "post-2")
 
-	first, err := service.ListMyReports(
+	first, err := facade.ListMyReports(
 		context.Background(),
 		reportapp.ListMyReportsQuery{
 			ReporterID: "persona-owner",
@@ -367,7 +376,7 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 		t.Fatalf("other persona report leaked: %+v", first.Items[0])
 	}
 
-	second, err := service.ListMyReports(
+	second, err := facade.ListMyReports(
 		context.Background(),
 		reportapp.ListMyReportsQuery{
 			ReporterID: "persona-owner",
@@ -387,10 +396,171 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 		t.Fatalf("last page must not expose next cursor: %+v", second)
 	}
 
-	if _, err := service.ListMyReports(
+	if _, err := facade.ListMyReports(
 		context.Background(),
 		reportapp.ListMyReportsQuery{ReporterID: "persona-owner", Cursor: "bad"},
 	); err == nil {
 		t.Fatal("invalid cursor must fail closed")
 	}
+	if _, err := facade.ListMyReports(
+		context.Background(),
+		reportapp.ListMyReportsQuery{Limit: 1},
+	); err == nil {
+		t.Fatal("missing verified reporter persona must fail closed")
+	}
+}
+
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+func TestGatheringSafetyAuthorityGrantAndFailClosedDecisions(t *testing.T) {
+	t.Parallel()
+	store := &gatheringSafetyReportStore{ReportStore: testsupport.NewReportStore()}
+	service := reportapp.NewReportService(reportapp.BindDataPorts(store))
+	if _, err := service.GrantGatheringSafetyTermination(
+		context.Background(),
+		reportapp.GrantGatheringSafetyTerminationCommand{
+			ReportID:              "report-1",
+			ExpectedReportVersion: 3,
+			ActorPersonaID:        "persona-safety",
+			ExpiresAt:             time.Now().UTC().Add(6 * time.Minute),
+			IdempotencyKey:        "grant-too-long",
+		},
+	); err == nil ||
+		!strings.Contains(err.Error(), "gathering_safety_authorization_invalid") ||
+		store.issueCalls != 0 {
+		t.Fatalf("grant beyond five-minute TTL must fail before persistence: %v", err)
+	}
+	expiresAt := time.Now().UTC().Add(2 * time.Minute)
+	grant, err := service.GrantGatheringSafetyTermination(
+		context.Background(),
+		reportapp.GrantGatheringSafetyTerminationCommand{
+			ReportID:              "report-1",
+			ExpectedReportVersion: 3,
+			ActorPersonaID:        "persona-safety",
+			ExpiresAt:             expiresAt,
+			IdempotencyKey:        "grant-1",
+		},
+	)
+	if err != nil {
+		t.Fatalf("grant Gathering safety authority: %v", err)
+	}
+	if grant.DecisionVersion != 3 ||
+		grant.ActorPersonaID != "persona-safety" ||
+		grant.GatheringID != "gathering-1" ||
+		grant.Action != reportapp.GatheringSafetyActionTerminate ||
+		grant.EvidenceRef != "content.report/report-1" ||
+		grant.DecisionRef != "content.report/report-1@3#terminate_gathering" ||
+		grant.DecisionDigest == "" ||
+		!grant.ExpiresAt.Equal(expiresAt) {
+		t.Fatalf("grant omitted canonical decision binding: %+v", grant)
+	}
+	query := reportapp.AuthorizeGatheringSafetyTerminationQuery{
+		ActorPersonaID: grant.ActorPersonaID,
+		GatheringID:    grant.GatheringID,
+		Action:         grant.Action,
+		EvidenceRef:    grant.EvidenceRef,
+		DecisionRef:    grant.DecisionRef,
+	}
+	allowed, err := service.AuthorizeGatheringSafetyTermination(
+		context.Background(),
+		query,
+	)
+	if err != nil || !allowed.Allowed ||
+		allowed.DecisionVersion != grant.DecisionVersion ||
+		allowed.DecisionDigest != grant.DecisionDigest {
+		t.Fatalf("exact authority decision was not allowed: %+v err=%v", allowed, err)
+	}
+
+	mismatch := query
+	mismatch.ActorPersonaID = "persona-attacker"
+	denied, err := service.AuthorizeGatheringSafetyTermination(
+		context.Background(),
+		mismatch,
+	)
+	if err != nil || denied.Allowed {
+		t.Fatalf("identity mismatch must return opaque deny: %+v err=%v", denied, err)
+	}
+
+	store.authorization.ExpiresAt = time.Now().UTC().Add(-time.Second)
+	expired, err := service.AuthorizeGatheringSafetyTermination(
+		context.Background(),
+		query,
+	)
+	if err != nil || expired.Allowed {
+		t.Fatalf("expired authority must fail closed: %+v err=%v", expired, err)
+	}
+
+	store.authorization.ExpiresAt = time.Now().UTC().Add(time.Minute)
+	revocation, err := service.RevokeGatheringSafetyTermination(
+		context.Background(),
+		reportapp.RevokeGatheringSafetyTerminationCommand{
+			ReportID:       "report-1",
+			DecisionRef:    grant.DecisionRef,
+			IdempotencyKey: "revoke-1",
+		},
+	)
+	if err != nil || revocation.RevokedAt == nil {
+		t.Fatalf("revoke Gathering safety authority: %+v err=%v", revocation, err)
+	}
+	revoked, err := service.AuthorizeGatheringSafetyTermination(
+		context.Background(),
+		query,
+	)
+	if err != nil || revoked.Allowed {
+		t.Fatalf("revoked authority must fail closed: %+v err=%v", revoked, err)
+	}
+
+	store.readErr = errors.New("authority database unavailable")
+	if _, err := service.AuthorizeGatheringSafetyTermination(
+		context.Background(),
+		query,
+	); err == nil || !strings.Contains(
+		err.Error(),
+		"gathering_safety_authority_unavailable",
+	) {
+		t.Fatalf("dependency failure must map to canonical unavailable: %v", err)
+	}
+}
+
+type gatheringSafetyReportStore struct {
+	*testsupport.ReportStore
+	authorization reportports.GatheringSafetyAuthorization
+	issueCalls    int
+	readErr       error
+}
+
+func (store *gatheringSafetyReportStore) IssueGatheringSafetyAuthorization(
+	_ context.Context,
+	request reportports.IssueGatheringSafetyAuthorizationRequest,
+) (reportports.GatheringSafetyAuthorization, bool, error) {
+	store.issueCalls++
+	store.authorization = reportports.GatheringSafetyAuthorization{
+		ActorPersonaID:  request.ActorPersonaID,
+		GatheringID:     "gathering-1",
+		Action:          reportports.GatheringSafetyActionTerminate,
+		EvidenceRef:     "content.report/" + request.ReportID,
+		DecisionRef:     "content.report/" + request.ReportID + "@3#terminate_gathering",
+		DecisionVersion: request.ExpectedReportVersion,
+		DecisionDigest:  strings.Repeat("ab", 32),
+		ExpiresAt:       request.ExpiresAt,
+		IssuedAt:        time.Now().UTC(),
+	}
+	return store.authorization, false, nil
+}
+
+func (store *gatheringSafetyReportStore) RevokeGatheringSafetyAuthorization(
+	_ context.Context,
+	request reportports.RevokeGatheringSafetyAuthorizationRequest,
+) (reportports.GatheringSafetyAuthorization, bool, error) {
+	store.authorization.RevokedAt = request.RevokedAt
+	return store.authorization, false, nil
+}
+
+func (store *gatheringSafetyReportStore) ReadGatheringSafetyAuthorization(
+	_ context.Context,
+	decisionRef string,
+) (reportports.GatheringSafetyAuthorization, bool, error) {
+	if store.readErr != nil {
+		return reportports.GatheringSafetyAuthorization{}, false, store.readErr
+	}
+	return store.authorization, store.authorization.DecisionRef == decisionRef, nil
 }

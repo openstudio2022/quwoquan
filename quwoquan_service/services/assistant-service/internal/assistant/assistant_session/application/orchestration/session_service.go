@@ -6,9 +6,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	rterr "quwoquan_service/runtime/errors"
 	rtid "quwoquan_service/runtime/id"
 	rtobs "quwoquan_service/runtime/observability"
+	sessiongenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 )
@@ -40,27 +40,15 @@ func (service *AssistantService) CreateSession(
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return assistant.AssistantSession{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"userId 不能为空",
-			"missing userId",
-		)
+		return assistant.AssistantSession{}, sessiongenerated.AppErrorFromSessionInvalidArgument("missing userId")
 	}
 	input.ClientRequestID = strings.TrimSpace(input.ClientRequestID)
 	if input.ClientRequestID == "" {
-		return assistant.AssistantSession{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"clientRequestId 不能为空",
-			"missing clientRequestId",
-		)
+		return assistant.AssistantSession{}, sessiongenerated.AppErrorFromSessionInvalidArgument("missing clientRequestId")
 	}
 	sessionID, err := rtid.Generate(rtid.PrefixAssistantSession)
 	if err != nil {
-		return assistant.AssistantSession{}, rterr.NewUnavailable(
-			rterr.ModuleAssistant,
-			"生成对话 ID 失败",
-			err.Error(),
-		)
+		return assistant.AssistantSession{}, sessiongenerated.AppErrorFromSessionStorageUnavailable("generate assistant session id: " + err.Error())
 	}
 	now := service.now()
 	session := assistant.AssistantSession{
@@ -127,11 +115,7 @@ func (service *AssistantService) ListSessions(
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return assistant.AssistantSessionListView{}, rterr.NewInvalidArgument(
-			rterr.ModuleAssistant,
-			"userId 不能为空",
-			"missing userId",
-		)
+		return assistant.AssistantSessionListView{}, sessiongenerated.AppErrorFromSessionInvalidArgument("missing userId")
 	}
 	items, nextCursor, err := store.ListSessions(
 		ctx,
@@ -141,11 +125,7 @@ func (service *AssistantService) ListSessions(
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid sessions cursor") {
-			return assistant.AssistantSessionListView{}, rterr.NewInvalidArgument(
-				rterr.ModuleAssistant,
-				"分页游标无效",
-				err.Error(),
-			)
+			return assistant.AssistantSessionListView{}, sessiongenerated.AppErrorFromSessionInvalidArgument("invalid sessions cursor: " + err.Error())
 		}
 		return assistant.AssistantSessionListView{},
 			assistantSessionStorageUnavailable(err.Error())

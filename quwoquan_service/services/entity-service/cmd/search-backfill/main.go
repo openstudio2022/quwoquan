@@ -76,7 +76,7 @@ func main() {
 	}()
 
 	database := client.Database(*entityDB)
-	store := homepagepersistence.NewMongoHomepageStore(database, false)
+	store := homepagepersistence.NewMongoHomepageStore(database)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("[search-backfill] ensure homepage indexes: %v", err)
 	}

@@ -21,7 +21,7 @@ fields:
     reference: true
   - name: subjectType
     type: enum
-    enum_ref: FollowSubjectKind
+    enum_ref: SubjectFollowTargetKind
     constraints:
       - NOT_NULL
     classification: PUBLIC
@@ -104,7 +104,7 @@ types:
         ops_exposure: read
       - name: subjectType
         type: enum
-        enum_ref: FollowSubjectKind
+        enum_ref: SubjectFollowTargetKind
         constraints:
           - NOT_NULL
         classification: PUBLIC
@@ -291,7 +291,7 @@ types:
     fields:
       - name: subjectType
         type: enum
-        enum_ref: FollowSubjectKind
+        enum_ref: SubjectFollowTargetKind
       - name: subjectId
         type: string
         constraints:
@@ -308,10 +308,21 @@ types:
     fields:
       - name: subjectType
         type: enum
-        enum_ref: FollowSubjectKind
+        enum_ref: SubjectFollowTargetKind
       - name: subjectId
         type: string
         constraints:
           - NOT_BLANK
         client_dart_type: String
         client_normalization: trim
+enums:
+  SubjectFollowTargetKind:
+    description: >-
+      SubjectFollow 聚合可写入的主体类型闭集。persona 之间的关注只归
+      PersonaRelationship，写入本聚合时必须被 USER.SUBJECT_FOLLOW.invalid_subject_type
+      拒绝，因此这里不含 persona；关注频道读模型的并集值域由
+      _shared FollowSubjectKind 拥有。
+    values:
+      - homepage
+      - circle
+      - location

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: project-circle-group-search-local
 package local_contract
 
 import (
@@ -8,11 +10,12 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
+	groupsearch "quwoquan_service/services/circle-service/internal/circle_management/circle_group/adapters/inbound/events"
 	groupapp "quwoquan_service/services/circle-service/internal/circle_management/circle_group/application"
 	groupevent "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/event"
 	groupmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/model"
 	groupports "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/ports"
-	groupsearch "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
+	groupbackfill "quwoquan_service/services/circle-service/internal/circle_management/circle_group/infrastructure/searchindex"
 )
 
 func TestCircleGroupProjectorUsesSharedProjectionAndRetriesFailures(
@@ -20,13 +23,13 @@ func TestCircleGroupProjectorUsesSharedProjectionAndRetriesFailures(
 ) {
 	group := publicSearchGroup("group-1")
 	indexer := &recordingGroupIndexer{}
-	projector := groupsearch.NewProjector(
+	projector := groupsearch.NewCircleGroupSearchIndexHandler(
 		indexer,
 		groupLoader{groups: map[string]groupmodel.CircleGroup{
 			group.ID: group,
 		}},
 	)
-	if err := projector.Publish(context.Background(), groupports.OutboxEvent{
+	if err := projector.Apply(context.Background(), groupports.OutboxEvent{
 		EventType:   groupevent.CircleGroupCreated,
 		AggregateID: group.ID,
 	}); err != nil {
@@ -61,7 +64,7 @@ func TestCircleGroupProjectorDeletesPrivateAndArchivedGroups(t *testing.T) {
 	private := publicSearchGroup("group-private")
 	private.Visibility = groupmodel.CircleGroupVisibilityPrivate
 	indexer := &recordingGroupIndexer{}
-	projector := groupsearch.NewProjector(
+	projector := groupsearch.NewCircleGroupSearchIndexHandler(
 		indexer,
 		groupLoader{groups: map[string]groupmodel.CircleGroup{
 			private.ID: private,
@@ -77,7 +80,7 @@ func TestCircleGroupProjectorDeletesPrivateAndArchivedGroups(t *testing.T) {
 			AggregateID: "group-archived",
 		},
 	} {
-		if err := projector.Publish(context.Background(), event); err != nil {
+		if err := projector.Apply(context.Background(), event); err != nil {
 			t.Fatalf("publish %s: %v", event.EventType, err)
 		}
 	}
@@ -99,7 +102,7 @@ func TestCircleGroupBackfillReconcilesEveryVisibility(t *testing.T) {
 	archived := publicSearchGroup("group-archived")
 	archived.Status = groupmodel.CircleGroupStatusArchived
 	indexer := &recordingGroupBulk{}
-	report, err := groupsearch.Backfill(
+	report, err := groupbackfill.Backfill(
 		context.Background(),
 		indexer,
 		groupLister{groups: []groupmodel.CircleGroup{

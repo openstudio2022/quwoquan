@@ -209,7 +209,12 @@ public class MainActivity extends FlutterFragmentActivity {
                   context.put("buildNumber", BuildConfig.VERSION_CODE);
                   context.put("osVersion", Build.VERSION.RELEASE);
                   context.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
+                  context.put("environment", BuildConfig.QWQ_RUNTIME_ENVIRONMENT);
                   context.put("recoveryBaseUrl", BuildConfig.QWQ_RECOVERY_BASE_URL);
+                  context.put("runtimeConfigDigest", BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST);
+                  context.put(
+                      "effectiveLaunchManifestDigest",
+                      BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
                   context.put("publicWebUrl", BuildConfig.QWQ_PUBLIC_WEB_URL);
                   context.put(
                       "appDownloadBaseUrl",

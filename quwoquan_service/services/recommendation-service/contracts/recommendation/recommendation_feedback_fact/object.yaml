@@ -2,6 +2,14 @@ kind: append_only_fact
 lifecycle:
   immutable: true
   subject_closure: hard_delete_identifying_fact_after_terminal_closure_is_persisted
+  source_events:
+  - content.content_behavior_fact.ContentBehaviorRecorded
+  event_consumers:
+  - name: AppendRecommendationFeedback
+    kind: subscription
+    facet: ContentBehaviorConsumer
+    method: processOnce
+    idempotency: event_id
 description: Recommendation 对 ContentBehaviorFact 归因到已交付曝光后追加的不可变反馈事实，作为学习与评测唯一在线输入。
 identity:
   fields:

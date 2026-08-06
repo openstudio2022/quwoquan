@@ -15,6 +15,7 @@ type ContractGraph struct {
 	RuntimeEntrypoints []ast.RuntimeEntrypoint       `json:"runtimeEntrypoints"`
 	Projections        []ast.Projection              `json:"projections"`
 	BusinessObjectMaps []ast.BusinessObjectMap       `json:"businessObjectMaps"`
+	ReadinessCases     []ast.ReadinessCaseContract   `json:"readinessCases"`
 	ReadinessEvidence  []ast.ObjectReadinessEvidence `json:"readinessEvidence"`
 	ObjectReadiness    []ObjectReadiness             `json:"objectReadiness"`
 	Sources            []ast.SourceDigest            `json:"sources"`
@@ -30,6 +31,32 @@ type ObjectReadiness struct {
 	Implemented     bool     `json:"implemented"`
 	CommercialReady bool     `json:"commercialReady"`
 	Missing         []string `json:"missing"`
+}
+
+// publicationDuty 是对象级的「事务性事件发布义务」派生结果。
+type publicationDuty struct {
+	required bool
+}
+
+// derivePublicationDuties 按每个对象自己声明的领域事件投递保证派生发布义务。
+// 分类口径见 ast.ClassifyEventDelivery：只有全部事件都是自留/瞬时语义时才不要求 seam。
+//
+// 这里不再带出「未知取值 / 缺键」触发原因：`delivery_semantics` 由
+// `_schemas/events.schema.json` 的 enum 与 required 强制，两类情况都已不可能通过校验，
+// 留着就是留一个永远为空的维度。分类函数仍对未知取值 fail-safe 到要求侧，防的是绕过
+// schema 的调用路径，不是可发生的契约状态。
+func derivePublicationDuties(packets []ast.ObjectGovernance) map[string]publicationDuty {
+	duties := map[string]publicationDuty{}
+	for _, packet := range packets {
+		duty := duties[packet.ObjectID]
+		for _, event := range packet.Events {
+			if ast.ClassifyEventDelivery(event.DeliverySemantics).RequiresReliablePublication() {
+				duty.required = true
+			}
+		}
+		duties[packet.ObjectID] = duty
+	}
+	return duties
 }
 
 type Coverage struct {
@@ -50,6 +77,7 @@ type Coverage struct {
 	BoundedContexts          int            `json:"boundedContexts"`
 	RegisteredObjects        int            `json:"registeredObjects"`
 	ObjectRelationships      int            `json:"objectRelationships"`
+	ReadinessCases           int            `json:"readinessCases"`
 	ReadinessEvidencePackets int            `json:"readinessEvidencePackets"`
 	ReadinessEvidenceObjects int            `json:"readinessEvidenceObjects"`
 	ReadinessModeled         int            `json:"readinessModeled"`
@@ -74,6 +102,10 @@ func Build(catalog *ast.Catalog) *ContractGraph {
 			[]ast.BusinessObjectMap{},
 			catalog.BusinessObjectMaps...,
 		),
+		ReadinessCases: make(
+			[]ast.ReadinessCaseContract,
+			len(catalog.ReadinessCases),
+		),
 		ReadinessEvidence: append(
 			[]ast.ObjectReadinessEvidence{},
 			catalog.ReadinessEvidence...,
@@ -81,6 +113,13 @@ func Build(catalog *ast.Catalog) *ContractGraph {
 		Sources:    append([]ast.SourceDigest{}, catalog.Sources...),
 		Documents:  append([]ast.SourceDocument{}, catalog.Documents...),
 		Governance: catalog.Governance,
+	}
+	for index, readinessCase := range catalog.ReadinessCases {
+		result.ReadinessCases[index] = readinessCase
+		result.ReadinessCases[index].Executions = append(
+			[]ast.ReadinessExecutionRequirement(nil),
+			readinessCase.Executions...,
+		)
 	}
 	deriveClientContracts(result)
 	sort.Slice(result.Objects, func(i, j int) bool {
@@ -107,25 +146,69 @@ func Build(catalog *ast.Catalog) *ContractGraph {
 	sort.Slice(result.ReadinessEvidence, func(i, j int) bool {
 		return result.ReadinessEvidence[i].ObjectID < result.ReadinessEvidence[j].ObjectID
 	})
+	sort.Slice(result.ReadinessCases, func(i, j int) bool {
+		left, right := result.ReadinessCases[i], result.ReadinessCases[j]
+		if left.ObjectID != right.ObjectID {
+			return left.ObjectID < right.ObjectID
+		}
+		if left.CaseID != right.CaseID {
+			return left.CaseID < right.CaseID
+		}
+		if left.Producer != right.Producer {
+			return left.Producer < right.Producer
+		}
+		if left.Layer != right.Layer {
+			return left.Layer < right.Layer
+		}
+		if left.Target.Kind != right.Target.Kind {
+			return left.Target.Kind < right.Target.Kind
+		}
+		return left.Target.ID < right.Target.ID
+	})
+	for index := range result.ReadinessCases {
+		executions := result.ReadinessCases[index].Executions
+		sort.Slice(executions, func(i, j int) bool {
+			left, right := executions[i], executions[j]
+			if left.Environment != right.Environment {
+				return left.Environment < right.Environment
+			}
+			if left.Platform != right.Platform {
+				return left.Platform < right.Platform
+			}
+			if left.DeviceClass != right.DeviceClass {
+				return left.DeviceClass < right.DeviceClass
+			}
+			if left.Provider != right.Provider {
+				return left.Provider < right.Provider
+			}
+			return left.DigestBinding < right.DigestBinding
+		})
+	}
 	for index := range result.ReadinessEvidence {
 		evidence := &result.ReadinessEvidence[index]
 		sort.Strings(evidence.OperationIDs)
-		sortEvidenceArtifacts(evidence.DomainBehavior)
-		sortEvidenceArtifacts(evidence.Store)
-		sortEvidenceArtifacts(evidence.Outbox)
-		sortEvidenceArtifacts(evidence.Reader)
-		sortEvidenceArtifacts(evidence.Transport)
-		sortEvidenceArtifacts(evidence.AppClient)
-		sortEvidenceArtifacts(evidence.Page)
-		sortEvidenceArtifacts(evidence.LocalContract)
-		sortEvidenceArtifacts(evidence.APIIntegration)
-		sortEvidenceArtifacts(evidence.UserAcceptance)
-		if evidence.Environments == nil {
-			evidence.Environments = []ast.EnvironmentEvidence{}
+		for _, artifacts := range [][]ast.EvidenceArtifact{
+			evidence.Service.Domain,
+			evidence.Service.Store,
+			evidence.Service.Reader,
+			evidence.Service.Transport,
+			evidence.Service.LocalContract,
+			evidence.Service.APIIntegration,
+			evidence.App.Domain,
+			evidence.App.Application,
+			evidence.App.Adapters,
+			evidence.App.Presentation,
+			evidence.App.LocalContract,
+			evidence.App.APIIntegration,
+			evidence.App.UserAcceptance,
+			evidence.Ops.EnvironmentAcceptance,
+			evidence.Ops.RollbackRunner,
+			evidence.Ops.ReplayRunner,
+		} {
+			sortEvidenceArtifacts(artifacts)
 		}
-		sort.Slice(evidence.Environments, func(i, j int) bool {
-			return evidence.Environments[i].Name < evidence.Environments[j].Name
-		})
+		sortStorageEvidence(evidence.Service.Outbox)
+		sortStorageEvidence(evidence.PublicationDelivery)
 	}
 	for index := range result.BusinessObjectMaps {
 		sort.Slice(
@@ -230,8 +313,9 @@ func deriveClientContracts(contractGraph *ContractGraph) {
 			continue
 		}
 		responseEntity := strings.TrimSpace(operation.ResponseEntity)
+		responseBodyKind := strings.TrimSpace(operation.ResponseBodyKind)
 		if responseEntity == "" &&
-			strings.TrimSpace(operation.ResponseBodyKind) == "ack" {
+			(responseBodyKind == "ack" || responseBodyKind == "upgrade") {
 			operation.ClientContract = &ast.ClientContract{
 				DartImport: "../" + operation.Domain + "/" + operation.Domain +
 					"_operation_contracts.g.dart",
@@ -385,6 +469,15 @@ func sortEvidenceArtifacts(values []ast.EvidenceArtifact) {
 	sort.Slice(values, func(i, j int) bool { return values[i].Path < values[j].Path })
 }
 
+func sortStorageEvidence(values []ast.StorageEvidence) {
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].Storage != values[j].Storage {
+			return values[i].Storage < values[j].Storage
+		}
+		return values[i].Artifact.Path < values[j].Artifact.Path
+	})
+}
+
 func deriveObjectReadiness(contractGraph *ContractGraph) []ObjectReadiness {
 	registered := map[string]struct{}{}
 	for _, objectMap := range contractGraph.BusinessObjectMaps {
@@ -402,11 +495,19 @@ func deriveObjectReadiness(contractGraph *ContractGraph) []ObjectReadiness {
 	for _, operation := range contractGraph.Operations {
 		operationsByObject[operation.ObjectID] = append(operationsByObject[operation.ObjectID], operation)
 	}
+	// 领域事件的**投递语义**是 outbox 必需性的唯一来源，见 implementationEvidenceReady。
+	publicationDuties := derivePublicationDuties(contractGraph.Governance.Objects)
 	runtimeEntrypointsByObject := map[string][]ast.RuntimeEntrypoint{}
 	for _, entrypoint := range contractGraph.RuntimeEntrypoints {
 		runtimeEntrypointsByObject[entrypoint.ObjectID] = append(
 			runtimeEntrypointsByObject[entrypoint.ObjectID],
 			entrypoint,
+		)
+	}
+	readinessCasesByObject := map[string][]ast.ReadinessCaseContract{}
+	for _, readinessCase := range contractGraph.ReadinessCases {
+		readinessCasesByObject[readinessCase.ObjectID] = append(
+			readinessCasesByObject[readinessCase.ObjectID], readinessCase,
 		)
 	}
 	result := make([]ObjectReadiness, 0, len(contractGraph.Objects))
@@ -433,25 +534,41 @@ func deriveObjectReadiness(contractGraph *ContractGraph) []ObjectReadiness {
 			missing["readiness.evidence.duplicate"] = struct{}{}
 			hasEvidence = false
 		}
+		duty := publicationDuties[object.ID]
 		implemented := contractReady && hasEvidence && implementationEvidenceReady(
 			object,
 			operations,
 			runtimeEntrypoints,
+			readinessCasesByObject[object.ID],
+			duty.required,
 			evidence,
 			missing,
 		)
 		if contractReady && evidenceCountByObject[object.ID] == 0 {
 			missing["readiness.evidence"] = struct{}{}
 		}
-		commercialReady := implemented && commercialEvidenceReady(
-			operations,
-			evidence,
-			missing,
-		)
+		// 反方向缺陷与「有没有发布义务」无关：任何对象的实现树里出现「事务性写入一张全仓
+		// 无人声明的关系」，都意味着有一张表在契约外承重。它与「声明了但没观测到写入」
+		// 修法不同（补声明 vs 补实现），所以是独立维度，且不参与 implemented 判定——
+		// 它是契约覆盖缺陷，不是本对象的实现缺陷。
+		if len(evidence.UndeclaredStorageWrites) != 0 {
+			missing["contract.storage_declaration_missing"] = struct{}{}
+		}
+		// Static ContractGraph never consumes environment execution history.
+		// Commercial closure is evaluated separately from a current
+		// readiness.ReadinessResultBundle. Keep the policy and missing dynamic
+		// input visible, but never advance beyond implemented here.
+		commercialReady := false
+		for _, operation := range operations {
+			if operation.Commercial.Status != "ready" {
+				missing["commercial.operation."+operation.LocalID] = struct{}{}
+			}
+		}
+		if implemented {
+			missing["commercial.result_bundle"] = struct{}{}
+		}
 		stage := "modeled"
 		switch {
-		case commercialReady:
-			stage = "commercial-ready"
 		case implemented:
 			stage = "implemented"
 		case contractReady:
@@ -474,6 +591,105 @@ func deriveObjectReadiness(contractGraph *ContractGraph) []ObjectReadiness {
 	return result
 }
 
+// requirePublicationSeam 把「事务性事件发布 seam 是否成立」拆成三条**互斥**缺口，一个对象
+// 一次只拿到一条原因，三条的关闭方式各不相同：
+//
+//   - `contract.storage_publication_unannotated`：该对象声明了存储但没标注 `publication_role`，
+//     判别位缺失，连「哪张表是发件箱」都无法回答。未标注不许被当成「不发布」静默豁免。
+//     关闭方式：契约侧补标注。
+//   - `contract.storage_publication_undeclared`：标注齐全，但没有任何一张存储被标注为发布
+//     seam——契约明确说自己没有发件箱，却又声明了要求可靠投递的领域事件，两边相互否定。
+//     关闭方式：补声明归属，或把事件的 `channel` 改成自留语义。
+//   - `implementation.outbox`：归属声明齐全，代码里也不存在这张关系，属真缺口——
+//     「声明了一张没人写、甚至根本不存在的表」。关闭方式：补实现或撤声明。
+//   - `blindspot.publication_write_tracking`：关系名在服务里被绑定过，但写入发生在 Go AST
+//     跟不动的地方（构造参数注入的集合句柄、调用方传入的事务上下文）。它是**维度盲点**
+//     不是缺口：把跟不动的地方报成缺口，等于让人去补一份本来就存在的实现。
+//   - `blindspot.python_store_invisible`：实现是 Python，但受支持的 PyMongo AST 形状仍
+//     无法证明事务写入。既不判达标也不把写入误报成缺口；一旦写入已经证明，后续缺失的
+//     delivery 就是正常结构缺口，不能继续借 Python 身份隐藏。
+//
+// 反方向的 `contract.storage_declaration_missing`（有事务性写入但全仓无声明位）不在这里
+// 判：它与本对象是否有发布义务无关，任何对象都要报，见 deriveObjectReadiness。
+//
+// 归属与真实性必须合成，任何一半单独都会判错，理由见 load/publication_evidence.go 的说明。
+func requirePublicationSeam(
+	evidence ast.ObjectReadinessEvidence,
+	missing map[string]struct{},
+) bool {
+	if len(evidence.PublicationStores) == 0 {
+		if len(evidence.UnannotatedStores) != 0 {
+			missing["contract.storage_publication_unannotated"] = struct{}{}
+		} else {
+			missing["contract.storage_publication_undeclared"] = struct{}{}
+		}
+		return false
+	}
+	unresolved := map[string]struct{}{}
+	for _, storage := range evidence.UnresolvedPublicationWrites {
+		unresolved[storage] = struct{}{}
+	}
+	proven := map[string]struct{}{}
+	for _, binding := range evidence.Service.Outbox {
+		if strings.TrimSpace(binding.Artifact.SHA256) != "" &&
+			strings.TrimSpace(binding.Artifact.Path) != "" {
+			proven[binding.Storage] = struct{}{}
+		}
+	}
+	ready := true
+	// 声明了多张发布 seam 时逐张判：少一张就是少一条发布链，不能被另一张的证据盖过去。
+	for _, storage := range evidence.PublicationStores {
+		if _, ok := proven[storage]; ok {
+			continue
+		}
+		ready = false
+		switch {
+		case evidence.PythonImplementation:
+			missing["blindspot.python_store_invisible"] = struct{}{}
+		case containsKey(unresolved, storage):
+			missing["blindspot.publication_write_tracking"] = struct{}{}
+		default:
+			missing["implementation.outbox"] = struct{}{}
+		}
+	}
+	// 投递实现只对事务性发件箱要求：事务性事件表按定义没有具名消费者。
+	delivered := map[string]struct{}{}
+	for _, artifact := range evidence.PublicationDelivery {
+		delivered[artifact.Storage] = struct{}{}
+	}
+	for _, storage := range evidence.DeliveryStores {
+		if _, ok := delivered[storage]; ok {
+			continue
+		}
+		if _, unproven := proven[storage]; !unproven {
+			// 连写入都没证明的存储不再叠加投递缺口：一个对象一次只拿一条可执行的原因。
+			continue
+		}
+		ready = false
+		switch {
+		case containsValue(evidence.UnresolvedPublicationDelivery, storage):
+			missing["blindspot.publication_delivery_tracking"] = struct{}{}
+		default:
+			missing["implementation.publication_delivery"] = struct{}{}
+		}
+	}
+	return ready
+}
+
+func containsValue(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containsKey(values map[string]struct{}, key string) bool {
+	_, ok := values[key]
+	return ok
+}
+
 func objectContractReady(
 	object ast.Object,
 	operations []ast.Operation,
@@ -484,8 +700,16 @@ func objectContractReady(
 		missing["entrypoint.dual_track"] = struct{}{}
 		return false
 	}
+	if !lifecycleEventConsumersReady(object) {
+		missing["lifecycle.event_consumer"] = struct{}{}
+		return false
+	}
 	if len(operations) == 0 {
-		if len(runtimeEntrypoints) == 1 {
+		if len(runtimeEntrypoints) >= 1 {
+			if len(runtimeEntrypoints) > 1 {
+				missing["runtime_entrypoint.unique"] = struct{}{}
+				return false
+			}
 			entrypoint := runtimeEntrypoints[0]
 			if entrypoint.Facet == "" ||
 				entrypoint.FacadeMethod == "" ||
@@ -495,10 +719,6 @@ func objectContractReady(
 				return false
 			}
 			return true
-		}
-		if len(runtimeEntrypoints) > 1 {
-			missing["runtime_entrypoint.unique"] = struct{}{}
-			return false
 		}
 		missing["operation.entrypoint"] = struct{}{}
 		return false
@@ -512,7 +732,17 @@ func objectContractReady(
 		}
 		switch operation.Kind {
 		case ast.OperationKindCommand:
-			if (operation.AggregateOwner == "") == (operation.AppendSink == "") {
+			ownerCount := 0
+			for _, owner := range []string{
+				operation.AggregateOwner,
+				operation.AppendSink,
+				operation.LifecycleOwner,
+			} {
+				if owner != "" {
+					ownerCount++
+				}
+			}
+			if ownerCount != 1 {
 				missing[prefix+"mutation_owner"] = struct{}{}
 				ready = false
 			}
@@ -554,6 +784,15 @@ func objectContractReady(
 	return ready
 }
 
+func runtimeEntrypointApplicationReady(
+	object ast.Object,
+	entrypoint ast.RuntimeEntrypoint,
+) bool {
+	return entrypoint.Facet != "" && entrypoint.FacadeMethod != "" &&
+		entrypoint.ObjectOwner == object.Name &&
+		runtimeEntrypointMatchesObject(entrypoint, object)
+}
+
 func runtimeEntrypointMatchesObject(
 	entrypoint ast.RuntimeEntrypoint,
 	object ast.Object,
@@ -567,14 +806,17 @@ func runtimeEntrypointMatchesObject(
 		return object.Kind == ast.ObjectKindProjection &&
 			entrypoint.Phase == "event_projection" &&
 			entrypoint.ApplicationKind == ast.OperationKindCommand &&
-			len(entrypoint.SourceEvents) > 0 &&
-			entrypoint.Checkpoint != "" && entrypoint.Rebuild != "" &&
-			entrypoint.Tombstone != "" && entrypoint.Idempotency != ""
+			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
+	case "event_handler":
+		return object.Kind == ast.ObjectKindAggregateRoot &&
+			entrypoint.Phase == "event_command" &&
+			entrypoint.ApplicationKind == ast.OperationKindCommand &&
+			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
 	case "subscription":
 		return object.Kind == ast.ObjectKindAppendOnlyFact &&
 			entrypoint.Phase == "event_ingest" &&
 			entrypoint.ApplicationKind == ast.OperationKindCommand &&
-			len(entrypoint.SourceEvents) > 0 && entrypoint.Idempotency != ""
+			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
 	case "internal_port":
 		return object.Kind == ast.ObjectKindAppendOnlyFact &&
 			entrypoint.Phase == "transactional_append" &&
@@ -589,10 +831,70 @@ func runtimeEntrypointMatchesObject(
 	}
 }
 
+func lifecycleEventConsumersReady(object ast.Object) bool {
+	lifecycle := object.Lifecycle
+	if lifecycle == nil {
+		return true
+	}
+	if (len(lifecycle.SourceEvents) == 0) != (len(lifecycle.EventConsumers) == 0) {
+		return false
+	}
+	seenSources := map[string]struct{}{}
+	for _, sourceEvent := range lifecycle.SourceEvents {
+		if !ast.IsCanonicalEventRef(sourceEvent) {
+			return false
+		}
+		if _, duplicate := seenSources[sourceEvent]; duplicate {
+			return false
+		}
+		seenSources[sourceEvent] = struct{}{}
+	}
+	seenConsumers := map[string]struct{}{}
+	for _, consumer := range lifecycle.EventConsumers {
+		if consumer.Name == "" || consumer.Facet == "" || consumer.Method == "" ||
+			consumer.Idempotency == "" ||
+			(consumer.Kind != "projector" && consumer.Kind != "event_handler" &&
+				consumer.Kind != "subscription") {
+			return false
+		}
+		expectedKind := map[string]ast.ObjectKind{
+			"projector":     ast.ObjectKindProjection,
+			"event_handler": ast.ObjectKindAggregateRoot,
+			"subscription":  ast.ObjectKindAppendOnlyFact,
+		}[consumer.Kind]
+		if object.Kind != expectedKind {
+			return false
+		}
+		if _, duplicate := seenConsumers[consumer.Name]; duplicate {
+			return false
+		}
+		seenConsumers[consumer.Name] = struct{}{}
+	}
+	return true
+}
+
+func lifecycleConsumerMatchesEntrypoint(
+	object ast.Object,
+	entrypoint ast.RuntimeEntrypoint,
+) bool {
+	if !lifecycleEventConsumersReady(object) || object.Lifecycle == nil {
+		return false
+	}
+	for _, consumer := range object.Lifecycle.EventConsumers {
+		if consumer.Name == entrypoint.LocalID && consumer.Kind == entrypoint.RuntimeKind &&
+			consumer.Facet == entrypoint.Facet && consumer.Method == entrypoint.FacadeMethod {
+			return true
+		}
+	}
+	return false
+}
+
 func implementationEvidenceReady(
 	object ast.Object,
 	operations []ast.Operation,
 	runtimeEntrypoints []ast.RuntimeEntrypoint,
+	readinessCases []ast.ReadinessCaseContract,
+	publishesDomainEvents bool,
 	evidence ast.ObjectReadinessEvidence,
 	missing map[string]struct{},
 ) bool {
@@ -618,10 +920,10 @@ func implementationEvidenceReady(
 		missing["implementation.operation_coverage"] = struct{}{}
 		ready = false
 	}
-	require("domain_behavior", evidence.DomainBehavior)
-	require("transport", evidence.Transport)
-	require("local_contract", evidence.LocalContract)
-	require("api_integration", evidence.APIIntegration)
+	require("service.domain", evidence.Service.Domain)
+	require("service.transport", evidence.Service.Transport)
+	require("service.local_contract", evidence.Service.LocalContract)
+	require("service.api_integration", evidence.Service.APIIntegration)
 	hasCommand := false
 	hasQuery := false
 	hasClient := false
@@ -630,49 +932,72 @@ func implementationEvidenceReady(
 		hasQuery = hasQuery || operation.Kind == ast.OperationKindQuery
 		hasClient = hasClient || operation.ClientContract != nil
 	}
-	if object.Kind == ast.ObjectKindAggregateRoot || object.Kind == ast.ObjectKindRuntimeSession {
-		require("store", evidence.Store)
+	if object.Kind == ast.ObjectKindAggregateRoot || object.Kind == ast.ObjectKindRuntimeSession ||
+		object.Kind == ast.ObjectKindAppendOnlyFact {
+		require("service.store", evidence.Service.Store)
 	}
-	if hasCommand && object.Kind == ast.ObjectKindAggregateRoot {
-		require("outbox", evidence.Outbox)
+	// outbox 的必需性由对象自己声明的领域事件**投递保证**派生，既不由 kind 派生，也不由
+	// 「是否声明了事件」一刀切：发件箱存在的唯一理由是「状态已提交、事件却可能丢失」这一
+	// 跨边界后果。声明 `events: []` 的聚合没有可发布的东西（`user.invitation` 的 events.yaml
+	// 甚至写着「仓内没有 invitation outbox/publisher，禁止声明虚假 producer-consumer 链」）；
+	// 声明了 `not_published` / `best_effort_ephemeral` 的聚合，事件是自留事实或尽力而为的
+	// 瞬时信号，为它们建发件箱与 relay 只会造出永远没有下游的空转 relay。两种情形都是「为
+	// 门禁写代码」，规则不能与契约相互否定。
+	//
+	// 这不是放宽：分类只认自留/瞬时语义为豁免（见 ast.ClassifyEventDelivery），而
+	// `delivery_semantics` 的取值域由 schema enum 强制，所以把 `transactional_outbox` 敲错
+	// 会在 schema 层直接失败，不会换来一个达标；消费侧也无法订阅未声明的事件（validate 的
+	// CONTRACT.EVENT.UNKNOWN_PRODUCER 与 projector 的 source_events 解析都会拦住）。聚合
+	// 完全没有 events.yaml（既没声明也没否认）由
+	// `quwoquan_ops/gate/verify_object_evidence_closure.py` 在契约侧报独立缺口。
+	if hasCommand && object.Kind == ast.ObjectKindAggregateRoot && publishesDomainEvents {
+		if !requirePublicationSeam(evidence, missing) {
+			ready = false
+		}
 	}
 	if hasQuery {
-		require("reader", evidence.Reader)
+		require("service.reader", evidence.Service.Reader)
 	}
 	if hasClient {
-		require("app_client", evidence.AppClient)
-		require("page", evidence.Page)
+		require("app.application", evidence.App.Application)
+		require("app.adapters", evidence.App.Adapters)
+		require("app.local_contract", evidence.App.LocalContract)
+		require("app.api_integration", evidence.App.APIIntegration)
 	}
-	return ready
-}
-
-func commercialEvidenceReady(
-	operations []ast.Operation,
-	evidence ast.ObjectReadinessEvidence,
-	missing map[string]struct{},
-) bool {
-	ready := true
-	if !evidenceArtifactsReady(evidence.UserAcceptance) {
-		missing["commercial.user_acceptance"] = struct{}{}
-		ready = false
+	// A participant consumes the owning page through public application ports;
+	// it does not create a second presentation root. Only the object encoded by
+	// the canonical source_path physical location owns presentation and UAT.
+	if evidence.App.PageOwned {
+		require("app.presentation", evidence.App.Presentation)
+		require("app.user_acceptance", evidence.App.UserAcceptance)
 	}
-	for _, operation := range operations {
-		if operation.Commercial.Status != "ready" {
-			missing["commercial.operation."+operation.LocalID] = struct{}{}
-			ready = false
+	// Ops evidence is only a static runner entrypoint. It is required when the
+	// object declares an Ops-owned dynamic case, but it never carries a status
+	// and therefore can advance the static graph only as far as implemented.
+	needEnvironmentRunner := false
+	needRollbackRunner := false
+	needReplayRunner := false
+	for _, readinessCase := range readinessCases {
+		if readinessCase.Producer != ast.ReadinessProducerOps {
+			continue
+		}
+		switch readinessCase.Layer {
+		case ast.ReadinessLayerEnvironmentAcceptance:
+			needEnvironmentRunner = true
+		case ast.ReadinessLayerRollback:
+			needRollbackRunner = true
+		case ast.ReadinessLayerReplay:
+			needReplayRunner = true
 		}
 	}
-	environments := map[string]bool{}
-	for _, environment := range evidence.Environments {
-		if evidenceArtifactReady(environment.Artifact) {
-			environments[environment.Name] = true
-		}
+	if needEnvironmentRunner {
+		require("ops.environment_acceptance", evidence.Ops.EnvironmentAcceptance)
 	}
-	for _, required := range []string{"alpha", "beta", "gamma", "prod"} {
-		if !environments[required] {
-			missing["commercial.environment."+required] = struct{}{}
-			ready = false
-		}
+	if needRollbackRunner {
+		require("ops.rollback_runner", evidence.Ops.RollbackRunner)
+	}
+	if needReplayRunner {
+		require("ops.replay_runner", evidence.Ops.ReplayRunner)
 	}
 	return ready
 }
@@ -729,6 +1054,7 @@ func (g *ContractGraph) Coverage() Coverage {
 		Operations:         len(g.Operations),
 		RuntimeEntrypoints: len(g.RuntimeEntrypoints),
 		Projections:        len(g.Projections),
+		ReadinessCases:     len(g.ReadinessCases),
 		ObjectsByKind:      map[string]int{},
 		OperationsByKind:   map[string]int{},
 		ObjectsByReadiness: map[string]int{},
@@ -782,7 +1108,8 @@ func (g *ContractGraph) Coverage() Coverage {
 		if operation.Facet != "" && operation.FacadeMethod != "" {
 			switch operation.Kind {
 			case ast.OperationKindCommand:
-				if operation.AggregateOwner != "" || operation.AppendSink != "" {
+				if operation.AggregateOwner != "" || operation.AppendSink != "" ||
+					operation.LifecycleOwner != "" {
 					result.BoundOperations++
 				}
 			case ast.OperationKindQuery:

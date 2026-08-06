@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// readiness_case: list-assistant-tasks-api
 package api_integration
 
 import (

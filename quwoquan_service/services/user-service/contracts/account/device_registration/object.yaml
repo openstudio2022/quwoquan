@@ -29,10 +29,6 @@ relationships:
 local_identity_reasons:
   deviceId: account-scoped stable device lookup key; the DeviceRegistration aggregate identity remains
     id
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - identity 固定为 accountId + deviceId
 - DevicePushEndpoint identity 固定为 accountId + deviceId + endpointKind，不能独立于父聚合访问

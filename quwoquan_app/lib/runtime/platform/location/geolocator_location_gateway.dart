@@ -1,6 +1,6 @@
 import 'package:geolocator/geolocator.dart';
-import 'package:quwoquan_app/core/platform/location/location_gateway.dart';
-import 'package:quwoquan_app/core/platform/startup_deferred_plugins.dart';
+import 'package:quwoquan_app/runtime/platform/location/location_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/startup_deferred_plugins.dart';
 
 final class GeolocatorLocationGateway implements LocationGateway {
   const GeolocatorLocationGateway();

@@ -9,6 +9,7 @@
     "runtimeEntrypoints",
     "projections",
     "businessObjectMaps",
+    "readinessCases",
     "readinessEvidence",
     "objectReadiness",
     "sources",
@@ -19,7 +20,55 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "domain", "name", "kind", "kindExplicit", "sourcePath"]
+        "additionalProperties": false,
+        "required": ["id", "domain", "name", "kind", "kindExplicit", "sourcePath"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "domain": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "kind": {
+            "enum": ["aggregate_root", "owned_entity", "value_object", "projection", "external_reference", "append_only_fact", "runtime_session"]
+          },
+          "kindExplicit": { "type": "boolean" },
+          "aggregateOwner": { "type": "string", "minLength": 1 },
+          "storageBackend": { "type": "string", "minLength": 1 },
+          "sourcePath": { "type": "string", "minLength": 1 },
+          "members": {
+            "type": "array",
+            "items": { "type": "object" }
+          },
+          "lifecycle": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "states": { "$ref": "#/$defs/stringList" },
+              "stateField": { "type": "string", "minLength": 1 },
+              "immutable": { "type": "boolean" },
+              "sourceEvents": { "$ref": "#/$defs/stringList" },
+              "checkpoint": { "type": "string", "minLength": 1 },
+              "rebuild": { "type": "string", "minLength": 1 },
+              "tombstone": { "type": "string", "minLength": 1 },
+              "idempotency": { "type": "string", "minLength": 1 },
+              "eventConsumers": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "kind", "facet", "method", "idempotency"],
+                  "properties": {
+                    "name": { "type": "string", "minLength": 1 },
+                    "kind": { "enum": ["projector", "event_handler", "subscription"] },
+                    "facet": { "type": "string", "minLength": 1 },
+                    "method": { "type": "string", "minLength": 1 },
+                    "idempotency": { "type": "string", "minLength": 1 },
+                    "implementation": { "$ref": "#/$defs/evidenceArtifact" }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "operations": {
@@ -80,6 +129,7 @@
           "facadeMethod": { "type": "string", "minLength": 1 },
           "aggregateOwner": { "type": "string", "minLength": 1 },
           "appendSink": { "type": "string", "minLength": 1 },
+          "lifecycleOwner": { "type": "string", "minLength": 1 },
           "mutationTarget": { "type": "string", "minLength": 1 },
           "invariantTarget": { "type": "string", "minLength": 1 },
           "sessionOwner": { "type": "string", "minLength": 1 },
@@ -146,6 +196,7 @@
           },
           "responseBody": { "type": "string", "minLength": 1 },
           "responseBodyKind": { "type": "string", "minLength": 1 },
+          "successStatus": { "enum": [200, 201, 202, 204] },
           "sourcePath": { "type": "string", "minLength": 1 },
           "security": {
             "type": "object",
@@ -197,6 +248,20 @@
             "additionalProperties": false,
             "properties": {
               "timeoutMilliseconds": { "type": "integer", "minimum": 1 },
+              "streamBudget": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "handshakeMilliseconds",
+                  "idleMilliseconds",
+                  "maxDurationMilliseconds"
+                ],
+                "properties": {
+                  "handshakeMilliseconds": { "type": "integer", "minimum": 1 },
+                  "idleMilliseconds": { "type": "integer", "minimum": 1 },
+                  "maxDurationMilliseconds": { "type": "integer", "minimum": 1 }
+                }
+              },
               "cancellation": { "enum": ["supported", "none"] },
               "retryMode": { "enum": ["none", "idempotent"] },
               "maxAttempts": { "type": "integer", "minimum": 1 },
@@ -218,12 +283,12 @@
               "defaultItems": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 300
+                "maximum": 500
               },
               "maximumItems": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 300
+                "maximum": 500
               }
             }
           },
@@ -320,7 +385,8 @@
             "then": {
               "oneOf": [
                 { "required": ["aggregateOwner"] },
-                { "required": ["appendSink"] }
+                { "required": ["appendSink"] },
+                { "required": ["lifecycleOwner"] }
               ]
             }
           },
@@ -416,15 +482,15 @@
           "domain": { "type": "string", "minLength": 1 },
           "objectId": { "type": "string", "minLength": 1 },
           "runtimeKind": {
-            "enum": ["middleware", "projector", "subscription", "internal_port", "external_port"]
+            "enum": ["middleware", "projector", "event_handler", "subscription", "internal_port", "external_port"]
           },
           "phase": {
-            "enum": ["post_authorization_pre_owner_proxy", "event_projection", "event_ingest", "transactional_append", "outbound_invocation"]
+            "enum": ["post_authorization_pre_owner_proxy", "event_projection", "event_command", "event_ingest", "transactional_append", "outbound_invocation"]
           },
           "applicationKind": { "enum": ["command", "query", "session"] },
           "facet": {
             "type": "string",
-            "pattern": "^[A-Z][A-Za-z0-9]*(Facade|Projector|Appender|Port)$"
+            "pattern": "^[A-Z][A-Za-z0-9]*(Facade|Projector|Projection|Appender|Consumer|Port|Coordinator|Recorder|Orchestrator|Handler)$"
           },
           "facadeMethod": {
             "type": "string",
@@ -434,11 +500,7 @@
             "type": "string",
             "pattern": "^[A-Z][A-Za-z0-9]*$"
           },
-          "sourceEvents": { "$ref": "#/$defs/stringList" },
           "sourceObjects": { "$ref": "#/$defs/stringList" },
-          "checkpoint": { "type": "string", "minLength": 1 },
-          "rebuild": { "type": "string", "minLength": 1 },
-          "tombstone": { "type": "string", "minLength": 1 },
           "idempotency": {
             "enum": ["event_id", "aggregate_version", "identity_payload_digest", "transaction_identity"]
           },
@@ -573,41 +635,181 @@
         }
       }
     },
+    "readinessCases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectId", "specRef", "caseId", "producer", "layer", "target", "runnerSourcePath", "executions", "sourcePath"
+        ],
+        "properties": {
+          "objectId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+          },
+          "specRef": {
+            "type": "string",
+            "pattern": "^specs/feature-tree/.+/spec\\.md#(?:uat|dom|sit|gwt)-[0-9]{3,}$"
+          },
+          "caseId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          },
+          "producer": {
+            "enum": ["service", "app", "ops"]
+          },
+          "layer": {
+            "enum": [
+              "local_contract", "api_integration", "user_acceptance",
+              "environment_acceptance", "rollback", "replay"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "id"],
+            "properties": {
+              "kind": { "enum": ["operation", "page", "object"] },
+              "id": { "type": "string", "minLength": 1 }
+            }
+          },
+          "runnerSourcePath": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$"
+          },
+          "executions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "environment", "platform", "deviceClass", "provider", "digestBinding"
+              ],
+              "properties": {
+                "environment": { "enum": ["alpha", "beta", "gamma", "prod"] },
+                "platform": { "type": "string", "minLength": 1 },
+                "deviceClass": { "type": "string", "minLength": 1 },
+                "provider": { "type": "string", "minLength": 1 },
+                "digestBinding": {
+                  "enum": ["candidate", "release", "candidate_or_release"]
+                }
+              }
+            }
+          },
+          "sourcePath": { "type": "string", "minLength": 1 }
+        },
+        "oneOf": [
+          {
+            "required": ["producer", "layer"],
+            "properties": {
+              "producer": { "const": "service" },
+              "layer": { "enum": ["local_contract", "api_integration"] },
+              "target": {
+                "properties": { "kind": { "enum": ["operation", "object"] } }
+              }
+            }
+          },
+          {
+            "required": ["producer", "layer"],
+            "properties": {
+              "producer": { "const": "app" },
+              "layer": { "enum": ["local_contract", "api_integration"] },
+              "target": {
+                "properties": { "kind": { "const": "operation" } }
+              }
+            }
+          },
+          {
+            "required": ["producer", "layer"],
+            "properties": {
+              "producer": { "const": "app" },
+              "layer": { "const": "user_acceptance" },
+              "target": {
+                "properties": { "kind": { "const": "page" } }
+              }
+            }
+          },
+          {
+            "required": ["producer", "layer"],
+            "properties": {
+              "producer": { "const": "ops" },
+              "layer": { "enum": ["environment_acceptance", "rollback", "replay"] },
+              "target": {
+                "properties": { "kind": { "const": "object" } }
+              }
+            }
+          }
+        ]
+      }
+    },
     "readinessEvidence": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "objectId", "operationIds", "domainBehavior", "store", "outbox",
-          "reader", "transport", "appClient", "page", "localContract",
-          "apiIntegration", "userAcceptance", "environments", "sourcePath"
+          "objectId", "operationIds", "service", "app", "ops", "sourcePath"
         ],
         "properties": {
           "objectId": { "type": "string", "minLength": 1 },
           "operationIds": { "$ref": "#/$defs/stringList" },
-          "domainBehavior": { "$ref": "#/$defs/evidenceArtifacts" },
-          "store": { "$ref": "#/$defs/evidenceArtifacts" },
-          "outbox": { "$ref": "#/$defs/evidenceArtifacts" },
-          "reader": { "$ref": "#/$defs/evidenceArtifacts" },
-          "transport": { "$ref": "#/$defs/evidenceArtifacts" },
-          "appClient": { "$ref": "#/$defs/evidenceArtifacts" },
-          "page": { "$ref": "#/$defs/evidenceArtifacts" },
-          "localContract": { "$ref": "#/$defs/evidenceArtifacts" },
-          "apiIntegration": { "$ref": "#/$defs/evidenceArtifacts" },
-          "userAcceptance": { "$ref": "#/$defs/evidenceArtifacts" },
-          "environments": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["name", "artifact"],
-              "properties": {
-                "name": { "enum": ["alpha", "beta", "gamma", "prod"] },
-                "artifact": { "$ref": "#/$defs/evidenceArtifact" }
-              }
+          "service": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "domain", "store", "outbox", "reader", "transport",
+              "localContract", "apiIntegration"
+            ],
+            "properties": {
+              "domain": { "$ref": "#/$defs/evidenceArtifacts" },
+              "store": { "$ref": "#/$defs/evidenceArtifacts" },
+              "outbox": { "$ref": "#/$defs/storageEvidenceList" },
+              "reader": { "$ref": "#/$defs/evidenceArtifacts" },
+              "transport": { "$ref": "#/$defs/evidenceArtifacts" },
+              "localContract": { "$ref": "#/$defs/evidenceArtifacts" },
+              "apiIntegration": { "$ref": "#/$defs/evidenceArtifacts" }
             }
           },
+          "app": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "domain", "application", "adapters", "presentation",
+              "localContract", "apiIntegration", "userAcceptance",
+              "pageParticipant", "pageOwned"
+            ],
+            "properties": {
+              "domain": { "$ref": "#/$defs/evidenceArtifacts" },
+              "application": { "$ref": "#/$defs/evidenceArtifacts" },
+              "adapters": { "$ref": "#/$defs/evidenceArtifacts" },
+              "presentation": { "$ref": "#/$defs/evidenceArtifacts" },
+              "localContract": { "$ref": "#/$defs/evidenceArtifacts" },
+              "apiIntegration": { "$ref": "#/$defs/evidenceArtifacts" },
+              "userAcceptance": { "$ref": "#/$defs/evidenceArtifacts" },
+              "pageParticipant": { "type": "boolean" },
+              "pageOwned": { "type": "boolean" }
+            }
+          },
+          "ops": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["environmentAcceptance", "rollbackRunner", "replayRunner"],
+            "properties": {
+              "environmentAcceptance": { "$ref": "#/$defs/evidenceArtifacts" },
+              "rollbackRunner": { "$ref": "#/$defs/evidenceArtifacts" },
+              "replayRunner": { "$ref": "#/$defs/evidenceArtifacts" }
+            }
+          },
+          "publicationStores": { "$ref": "#/$defs/stringList" },
+          "deliveryStores": { "$ref": "#/$defs/stringList" },
+          "publicationDelivery": { "$ref": "#/$defs/storageEvidenceList" },
+          "unannotatedStores": { "$ref": "#/$defs/stringList" },
+          "unresolvedPublicationWrites": { "$ref": "#/$defs/stringList" },
+          "unresolvedPublicationDelivery": { "$ref": "#/$defs/stringList" },
+          "undeclaredStorageWrites": { "$ref": "#/$defs/stringList" },
+          "pythonImplementation": { "type": "boolean" },
           "sourcePath": { "type": "string", "minLength": 1 }
         }
       }
@@ -623,7 +825,7 @@
         ],
         "properties": {
           "objectId": { "type": "string", "minLength": 1 },
-          "stage": { "enum": ["unmodeled", "modeled", "contract-ready", "implemented", "commercial-ready"] },
+          "stage": { "enum": ["unmodeled", "modeled", "contract-ready", "implemented"] },
           "modeled": { "type": "boolean" },
           "contractReady": { "type": "boolean" },
           "implemented": { "type": "boolean" },
@@ -710,7 +912,7 @@
         "targetObject": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$" },
         "targetObjects": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$" }
         },
@@ -748,6 +950,19 @@
     "evidenceArtifacts": {
       "type": "array",
       "items": { "$ref": "#/$defs/evidenceArtifact" }
+    },
+    "storageEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["storage", "artifact"],
+      "properties": {
+        "storage": { "type": "string", "minLength": 1 },
+        "artifact": { "$ref": "#/$defs/evidenceArtifact" }
+      }
+    },
+    "storageEvidenceList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/storageEvidence" }
     },
     "objectIdentity": {
       "type": "object",

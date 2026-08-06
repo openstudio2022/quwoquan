@@ -16,8 +16,8 @@ import (
 	"quwoquan_service/runtime/operation"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 )
 
 func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
@@ -161,10 +161,10 @@ func TestAssistantRunSSEFollowsJournalUntilWorkerTerminalEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start streamed run: %v", err)
 	}
-	handler := assistanthttp.NewHandler(
+	handler := assistantingress.Routes(
 		service,
-		assistanthttp.WithRunCommandService(commands),
-	).Routes()
+		assistantingress.WithRunCommandService(commands),
+	)
 	request := httptest.NewRequest(
 		http.MethodGet,
 		"/assistant/runs/"+run.RunID+"/events",
@@ -261,10 +261,10 @@ func TestAssistantRunFailedSSECarriesStructuredRuntimeFailure(t *testing.T) {
 		t.Fatalf("process failed run: worked=%t err=%v", worked, processErr)
 	}
 
-	handler := assistanthttp.NewHandler(
+	handler := assistantingress.Routes(
 		service,
-		assistanthttp.WithRunCommandService(commands),
-	).Routes()
+		assistantingress.WithRunCommandService(commands),
+	)
 	response := assistantAPIRequest(
 		t,
 		handler,

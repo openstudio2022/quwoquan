@@ -1,39 +1,37 @@
-entity: TagNodeView
-domain: TAG
 errors:
 - code: TAG.USER.invalid_argument
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [ResolveTag, ListTagChildren, SharedTags, InvertedObjects, SuggestTags, ValidateTagRefs, SearchTags, RelatedTags, SearchByTags, TagCooccurrence, RelatedObjects, tag.tag_feedback_fact.ReportTagFeedback]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: tagInvalidArgument
   go_const: ErrTagInvalidArgument
   user_message:
     zh: 标签请求参数不正确
     en: Invalid tag request
 - code: TAG.USER.tag_not_found
-  kind: USER
   reason: tag_not_found
   http_status: 404
   emitted_by:
   - {surface: http, operations: [ResolveTag, ListTagChildren, tag.tag_feedback_fact.ReportTagFeedback]}
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: tagNotFound
   go_const: ErrTagNotFound
   user_message:
     zh: 标签不存在或已下线
     en: Tag not found or retired
 - code: TAG.SYSTEM.storage_read_failed
-  kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
   emitted_by:
   - surface: http
     operations: [ResolveTag, ListTagChildren, SharedTags, InvertedObjects, ListDimensions, SuggestTags, ValidateTagRefs, SearchTags, RelatedTags, SearchByTags, TagCooccurrence, RelatedObjects]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: tagStorageReadFailed
   go_const: ErrTagStorageReadFailed

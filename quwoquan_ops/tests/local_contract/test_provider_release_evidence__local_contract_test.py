@@ -3,7 +3,10 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from quwoquan_ops.ci.render_provider_conformance_source import render as render_source
+from quwoquan_ops.ci.render_provider_conformance_source import (
+    expected_required_cell_count_from_readiness,
+    render as render_source,
+)
 from quwoquan_ops.ci.render_provider_release_evidence import render
 
 
@@ -36,8 +39,10 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             payload["prod_remote_release_ready"] = ready
         return payload
 
-    def _readiness(self) -> dict[str, dict]:
-        capability_ids = [f"fixture.capability.{index:02d}" for index in range(14)]
+    def _readiness(self, capability_count: int = 2) -> dict[str, dict]:
+        capability_ids = [
+            f"fixture.capability.{index:02d}" for index in range(capability_count)
+        ]
         return {
             environment: {
                 capability_id: self._capability(
@@ -64,14 +69,16 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             },
         }
 
-    def test_exact_140_cell_four_environment_readiness_passes(self) -> None:
+    def test_readiness_derived_size_fixture_passes(self) -> None:
+        readiness = self._readiness()
+        evidence_count = expected_required_cell_count_from_readiness(readiness)
         conformance = {
             "schema": "provider-conformance-source",
-            "evidenceCount": 140,
-            "sourceEvidence": self._source_evidence(140),
+            "evidenceCount": evidence_count,
+            "sourceEvidence": self._source_evidence(evidence_count),
             "issues": [],
             "sourceCoverageIssues": [],
-            "readiness": self._readiness(),
+            "readiness": readiness,
         }
         with patch(
             "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
@@ -83,16 +90,61 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
                 generated_at="2026-07-28T00:00:00Z",
             )
         self.assertEqual(payload["status"], "passed")
-        self.assertEqual(payload["evidenceCount"], 140)
+        self.assertEqual(payload["evidenceCount"], evidence_count)
 
-    def test_required_unready_capability_blocks(self) -> None:
+    def test_cell_count_tracks_an_arbitrary_capability_set(self) -> None:
+        readiness = self._readiness(capability_count=2)
+        evidence_count = expected_required_cell_count_from_readiness(readiness)
         conformance = {
             "schema": "provider-conformance-source",
-            "evidenceCount": 140,
-            "sourceEvidence": self._source_evidence(140),
+            "evidenceCount": evidence_count,
+            "sourceEvidence": self._source_evidence(evidence_count),
             "issues": [],
             "sourceCoverageIssues": [],
-            "readiness": self._readiness(),
+            "readiness": readiness,
+        }
+        with patch(
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+        ):
+            payload = render(
+                manifest=self._manifest(),
+                contract_graph_digest="sha256:" + "d" * 64,
+                conformance=conformance,
+                generated_at="2026-07-28T00:00:00Z",
+            )
+        self.assertEqual(payload["evidenceCount"], evidence_count)
+
+        conformance["evidenceCount"] = evidence_count + 1
+        conformance["sourceEvidence"] = self._source_evidence(evidence_count + 1)
+        with patch(
+            "quwoquan_ops.ci.render_provider_release_evidence.validate_manifest"
+        ), self.assertRaisesRegex(ValueError, "readiness-derived required cell count"):
+            render(
+                manifest=self._manifest(),
+                contract_graph_digest="sha256:" + "d" * 64,
+                conformance=conformance,
+                generated_at="2026-07-28T00:00:00Z",
+            )
+
+    def test_capability_set_drift_across_environments_blocks(self) -> None:
+        readiness = self._readiness(capability_count=2)
+        readiness["beta"].pop("fixture.capability.01")
+        with self.assertRaisesRegex(
+            ValueError,
+            "capability set differs across environments",
+        ):
+            expected_required_cell_count_from_readiness(readiness)
+
+    def test_required_unready_capability_blocks(self) -> None:
+        readiness = self._readiness()
+        evidence_count = expected_required_cell_count_from_readiness(readiness)
+        conformance = {
+            "schema": "provider-conformance-source",
+            "evidenceCount": evidence_count,
+            "sourceEvidence": self._source_evidence(evidence_count),
+            "issues": [],
+            "sourceCoverageIssues": [],
+            "readiness": readiness,
         }
         conformance["readiness"]["prod"]["fixture.capability.00"][
             "capability_ready"
@@ -111,7 +163,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
         conformance = {
             "schema": "provider-conformance-readiness",
             "version": 1,
-            "evidenceCount": 140,
+            "evidenceCount": 1,
             "issues": [],
             "sourceCoverageIssues": [],
             "readiness": {"prod": {}},
@@ -127,12 +179,14 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
             )
 
     def test_source_projection_drops_repository_report_identity(self) -> None:
+        readiness = self._readiness()
+        evidence_count = expected_required_cell_count_from_readiness(readiness)
         report = {
             "schema": "provider-conformance-readiness",
-            "evidenceCount": 140,
+            "evidenceCount": evidence_count,
             "executableSourceCount": 4,
             "sourceCoverageIssues": [],
-            "readiness": self._readiness(),
+            "readiness": readiness,
             "issues": [],
         }
         with patch(
@@ -143,7 +197,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
                 report,
                 validation_issues=[],
                 environment="prod",
-                source_evidence=self._source_evidence(140),
+                source_evidence=self._source_evidence(evidence_count),
             )
         self.assertEqual(payload["schema"], "provider-conformance-source")
         self.assertNotIn("version", payload)
@@ -167,7 +221,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             },
         }
 
-    def test_workflow_requires_clean_reviewed_ci_and_exact_140_cells(self) -> None:
+    def test_workflow_delegates_exact_cell_ownership_to_canonical_python(self) -> None:
         from pathlib import Path
 
         root = Path(__file__).resolve().parents[3]
@@ -184,7 +238,22 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
         self.assertIn("vars.RELEASED_RELEASE_EVIDENCE_REF", workflow)
         self.assertIn("execute-nonprod", workflow)
         self.assertIn("--environment-matrix", producer)
-        self.assertIn('!= "140"', workflow)
+        self.assertIn(
+            "Execute all compiled required nonprod Provider cells",
+            workflow,
+        )
+        self.assertIn(
+            "provider_conformance.expected_required_cell_keys(compiled)",
+            producer,
+        )
+        self.assertIn("exact_required_cell_issues", producer)
+        for fixed_count_token in (
+            "126 nonprod",
+            "140-cell",
+            '!= "140"',
+            "exactly 140",
+        ):
+            self.assertNotIn(fixed_count_token, workflow)
         self.assertIn("${{ runner.temp }}", workflow)
         self.assertNotIn("local-sha256", workflow)
         self.assertNotIn("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY: local", workflow)
@@ -305,7 +374,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                                         "adapter_id": f"ext.provider.canonical.{index:02d}",
                                         "adapter_kind": "external",
                                     }
-                                    for index in range(14)
+                                    for index in range(2)
                                 },
                                 "blocked.capability": {
                                     "state": "blocked",
@@ -314,7 +383,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                             }
                         },
                         "providerConformanceCapabilityIds": [
-                            f"required.capability.{index:02d}" for index in range(14)
+                            f"required.capability.{index:02d}" for index in range(2)
                         ],
                     },
                     [],
@@ -334,7 +403,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                     )
                 )
             self.assertEqual(code, 0)
-            self.assertEqual(len(commands), 14)
+            self.assertEqual(len(commands), 2)
             command = commands[0]
             self.assertEqual(command[1:4], [
                 "quwoquan_ops/cli/stackctl.py",
@@ -375,7 +444,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 return type("Completed", (), {"stdout": ""})()
 
             capability_ids = [
-                f"required.capability.{index:02d}" for index in range(14)
+                f"required.capability.{index:02d}" for index in range(2)
             ]
             with patch.object(
                 producer,
@@ -461,7 +530,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 producer.provider_conformance,
                 "exact_required_cell_issues",
                 return_value=[],
-            ), self.assertRaisesRegex(ValueError, "exactly 140"):
+            ), self.assertRaisesRegex(ValueError, "defines no capabilities"):
                 producer.command_package(
                     argparse.Namespace(
                         release_manifest=manifest_path,

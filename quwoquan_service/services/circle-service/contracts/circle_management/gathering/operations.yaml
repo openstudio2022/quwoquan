@@ -1,130 +1,2257 @@
-description: Gathering 对象专属 Command Facade 与 named Reader；所有命令由服务端裁决状态、容量、权限与幂等。
+description: Gathering aggregate owner 的专用 Command Facade 与 typed named Reader；禁止通用 SetStatus 或独立 Participation 写入口。
 commercial_defaults:
   status: blocked
-  block_reason: 缺真实群会话绑定、三层测试、四环境与回滚证据
+  block_reason: 尚未暴露到 App 的 Gathering 运维与次级生命周期操作仍缺三层测试、四环境 SLO 与回滚证据
   gap_id: CIRCLE_GATHERING_COMMERCIAL_CLOSURE
   target_story: circle-community-gathering-coordination
 api_routes:
-  - method: POST
-    path: /gatherings
-    operation: CreateGathering
-    actor: persona
-    security: {auth_mode: required}
-    application:
-      kind: command
-      facet: GatheringCommandFacet
-      method: createGathering
-      aggregate_owner: Gathering
-      mutation_target: Gathering
-      invariant_target: Gathering
-    request_entity: CreateGatheringCommand
-    response_entity: GatheringCommandResult
-    authorization: {principal: persona, ownership_policy: creator_becomes_owner}
-    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.DEPENDENCY.gathering_target_unavailable, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_create, trace: true, attributes: [outcome, join_policy, binding_status]}
-    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    request_body_kind: object
-  - method: GET
-    path: /gatherings/{gatheringId}
-    operation: GetGathering
-    request_bindings:
-      path: [{name: gatheringId, field: gatheringId}]
-    actor: persona
-    security: {auth_mode: required}
-    application: {kind: query, facet: GatheringQueryFacet, method: getGathering, reader: GatheringReader, slice: GatheringSlice}
-    request_entity: GatheringIDCommand
-    response_entity: GatheringSlice
-    authorization: {principal: persona, ownership_policy: authenticated_gathering_read}
-    reliability: {timeout_ms: 1000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_get, trace: true, attributes: [outcome, status]}
-    slo: {latency_p95_ms: 400, availability_percent: 99.9}
-    request_body_kind: none
-  - method: POST
-    path: /gatherings/{gatheringId}:join
-    operation: JoinGathering
-    request_bindings:
-      path: [{name: gatheringId, field: gatheringId}]
-    actor: persona
-    security: {auth_mode: required}
-    application: {kind: command, facet: GatheringCommandFacet, method: joinGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
-    request_entity: GatheringIDCommand
-    response_entity: GatheringCommandResult
-    authorization: {principal: persona, ownership_policy: authenticated_join_request}
-    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_not_open, CIRCLE.USER.gathering_full, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_join, trace: true, attributes: [outcome, join_policy, participant_state]}
-    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    request_body_kind: none
-  - method: POST
-    path: /gatherings/{gatheringId}:approve
-    operation: ApproveGatheringParticipant
-    request_bindings:
-      path: [{name: gatheringId, field: gatheringId}]
-    actor: persona
-    security: {auth_mode: required}
-    application: {kind: command, facet: GatheringCommandFacet, method: approveGatheringParticipant, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
-    request_entity: ApproveGatheringParticipantCommand
-    response_entity: GatheringCommandResult
-    authorization: {principal: persona, ownership_policy: gathering_creator_only}
-    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_not_open, CIRCLE.USER.gathering_full, CIRCLE.USER.gathering_permission_denied, CIRCLE.USER.gathering_participant_state_invalid, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_participant_approve, trace: true, attributes: [outcome, status]}
-    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    request_body_kind: object
-  - method: POST
-    path: /gatherings/{gatheringId}:leave
-    operation: LeaveGathering
-    request_bindings:
-      path: [{name: gatheringId, field: gatheringId}]
-    actor: persona
-    security: {auth_mode: required}
-    application: {kind: command, facet: GatheringCommandFacet, method: leaveGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
-    request_entity: GatheringIDCommand
-    response_entity: GatheringCommandResult
-    authorization: {principal: persona, ownership_policy: gathering_participant_self}
-    reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_not_open, CIRCLE.USER.gathering_participant_state_invalid, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.DEPENDENCY.gathering_conversation_binding_failed, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_leave, trace: true, attributes: [outcome, status]}
-    slo: {latency_p95_ms: 1500, availability_percent: 99.9}
-    request_body_kind: none
-  - method: POST
-    path: /gatherings/{gatheringId}:cancel
-    operation: CancelGathering
-    request_bindings:
-      path: [{name: gatheringId, field: gatheringId}]
-    actor: persona
-    security: {auth_mode: required}
-    application: {kind: command, facet: GatheringCommandFacet, method: cancelGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
-    request_entity: GatheringIDCommand
-    response_entity: GatheringCommandResult
-    authorization: {principal: persona, ownership_policy: gathering_creator_only}
-    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_permission_denied, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_cancel, trace: true, attributes: [outcome, previous_status]}
-    slo: {latency_p95_ms: 700, availability_percent: 99.9}
-    request_body_kind: none
-  - method: POST
-    path: /gatherings/{gatheringId}:complete
-    operation: CompleteGathering
-    request_bindings:
-      path: [{name: gatheringId, field: gatheringId}]
-    actor: persona
-    security: {auth_mode: required}
-    application: {kind: command, facet: GatheringCommandFacet, method: completeGathering, aggregate_owner: Gathering, mutation_target: Gathering, invariant_target: Gathering}
-    request_entity: GatheringIDCommand
-    response_entity: GatheringCommandResult
-    authorization: {principal: persona, ownership_policy: gathering_creator_only}
-    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.USER.gathering_not_found, CIRCLE.USER.gathering_permission_denied, CIRCLE.USER.gathering_idempotency_conflict, CIRCLE.SYSTEM.gathering_storage_failed]
-    privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
-    telemetry: {metric: gathering_complete, trace: true, attributes: [outcome, previous_status]}
-    slo: {latency_p95_ms: 700, availability_percent: 99.9}
-    request_body_kind: none
+- method: POST
+  path: /gatherings
+  operation: CreateGatheringDraft
+  commercial:
+    status: ready
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: createGatheringDraft
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 创建 Gathering draft；不得隐式 Publish 或把 room binding failure 合成成功。
+  request_entity: CreateGatheringDraftCommand
+  response_entity: GatheringCommandResult
+  success_status: 201
+  authorization:
+    principal: persona
+    ownership_policy: verified_host_authority_creates_draft
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_host_authority_invalid
+  - CIRCLE.USER.gathering_policy_denied
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.DEPENDENCY.gathering_target_unavailable
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_draft_create
+    trace: true
+    attributes:
+    - outcome
+    - host_subject_kind
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:publish
+  operation: PublishGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: publishGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 仅在 Host、承诺、风险义务与 roomBindingStatus=ready 时发布。
+  request_entity: GatheringVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_draft_incomplete
+  - CIRCLE.USER.gathering_host_authority_invalid
+  - CIRCLE.USER.gathering_publish_obligation_missing
+  - CIRCLE.USER.gathering_disclosure_invalid
+  - CIRCLE.USER.gathering_schedule_invalid
+  - CIRCLE.USER.gathering_control_required
+  - CIRCLE.USER.gathering_qualification_required
+  - CIRCLE.USER.gathering_commercial_authority_required
+  - CIRCLE.USER.gathering_policy_denied
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.DEPENDENCY.gathering_room_provision_pending
+  - CIRCLE.DEPENDENCY.gathering_room_provision_failed
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_publish
+    trace: true
+    attributes:
+    - outcome
+    - room_binding_status
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: PUT
+  path: /gatherings/{gatheringId}
+  operation: UpdateGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: updateGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 以完整 typed 核心承诺追加 GatheringRevision 并推进 current pointer。
+  request_entity: UpdateGatheringCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_host_authority_invalid
+  - CIRCLE.USER.gathering_disclosure_invalid
+  - CIRCLE.USER.gathering_schedule_invalid
+  - CIRCLE.USER.gathering_operation_not_allowed_in_progress
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_update
+    trace: true
+    attributes:
+    - outcome
+    - material_change
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: GET
+  path: /gatherings/{gatheringId}
+  operation: GetGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: query
+    facet: GatheringQueryFacet
+    method: getGathering
+    reader: GatheringReader
+    slice: GatheringPrivateDetailSlice
+  description: Host 或有权参与者读取按 viewer 裁剪的 private detail。
+  request_entity: GatheringIDQuery
+  response_entity: GatheringPrivateDetailSlice
+  authorization:
+    principal: persona
+    ownership_policy: organizer_or_authorized_participant_detail
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_active_participation_required
+  - CIRCLE.USER.gathering_access_revoked
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_get
+    trace: true
+    attributes:
+    - outcome
+    - viewer_authority
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
+  path: /public/gatherings/{gatheringId}
+  operation: GetPublicGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: none
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+  application:
+    kind: query
+    facet: GatheringPublicQueryFacet
+    method: getPublicGathering
+    reader: GatheringPublicReader
+    slice: GatheringPublicDetailSlice
+  description: 未加入 viewer 读取 disclosure 裁剪后的公开详情。
+  request_entity: GatheringIDQuery
+  response_entity: GatheringPublicDetailSlice
+  authorization:
+    principal: public
+    ownership_policy: published_gathering_disclosure
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_access_revoked
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: PUBLIC
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_public_get
+    trace: true
+    attributes:
+    - outcome
+    - lifecycle_status
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
+  path: /gatherings/by-host
+  operation: ListGatheringsByHost
+  request_bindings:
+    query:
+    - name: hostSubjectKind
+      field: hostSubjectKind
+    - name: hostSubjectId
+      field: hostSubjectId
+    - name: cursor
+      field: cursor
+      required: false
+    - name: limit
+      field: limit
+  actor: none
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+  application:
+    kind: query
+    facet: GatheringPublicQueryFacet
+    method: listGatheringsByHost
+    reader: GatheringPublicReader
+    slice: GatheringByHostPageSlice
+  description: 按 Host canonical identity 返回 PublicCard typed page。
+  request_entity: GatheringListByHostQuery
+  response_entity: GatheringByHostPageSlice
+  authorization:
+    principal: public
+    ownership_policy: published_gathering_disclosure
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  pagination:
+    default_items: 20
+    maximum_items: 50
+  error_codes:
+  - CIRCLE.USER.gathering_host_authority_invalid
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: PUBLIC
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_list_by_host
+    trace: true
+    attributes:
+    - outcome
+    - host_subject_kind
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
+  path: /gatherings/by-source
+  operation: ListGatheringsBySource
+  request_bindings:
+    query:
+    - name: sourceObjectTypeRef
+      field: sourceObjectTypeRef
+    - name: sourceObjectId
+      field: sourceObjectId
+    - name: cursor
+      field: cursor
+      required: false
+    - name: limit
+      field: limit
+  actor: none
+  security:
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+  application:
+    kind: query
+    facet: GatheringPublicQueryFacet
+    method: listGatheringsBySource
+    reader: GatheringPublicReader
+    slice: GatheringBySourcePageSlice
+  description: 按 canonical source identity 返回 PublicCard typed page。
+  request_entity: GatheringListBySourceQuery
+  response_entity: GatheringBySourcePageSlice
+  authorization:
+    principal: public
+    ownership_policy: published_gathering_disclosure
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  pagination:
+    default_items: 20
+    maximum_items: 50
+  error_codes:
+  - CIRCLE.DEPENDENCY.gathering_target_unavailable
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: PUBLIC
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_list_by_source
+    trace: true
+    attributes:
+    - outcome
+    - source_object_type
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
+  path: /gatherings/{gatheringId}/applications
+  operation: ListGatheringApplications
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+    query:
+    - name: cursor
+      field: cursor
+      required: false
+    - name: limit
+      field: limit
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: query
+    facet: GatheringQueryFacet
+    method: listGatheringApplications
+    reader: GatheringReader
+    slice: GatheringApplicationInboxPageSlice
+  description: 有权 organizer 读取包含 typed answers 的 application inbox。
+  request_entity: GatheringPageQuery
+  response_entity: GatheringApplicationInboxPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  pagination:
+    default_items: 20
+    maximum_items: 50
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_access_revoked
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: none
+  telemetry:
+    metric: gathering_application_inbox_list
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
+  path: /gatherings/{gatheringId}/roster
+  operation: ListGatheringRoster
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+    query:
+    - name: cursor
+      field: cursor
+      required: false
+    - name: limit
+      field: limit
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: query
+    facet: GatheringQueryFacet
+    method: listGatheringRoster
+    reader: GatheringReader
+    slice: GatheringRosterPageSlice
+  description: 按 viewer authority 返回不含申请答案的 typed roster page。
+  request_entity: GatheringPageQuery
+  response_entity: GatheringRosterPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: organizer_or_disclosed_participant_roster
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  pagination:
+    default_items: 50
+    maximum_items: 100
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_active_participation_required
+  - CIRCLE.USER.gathering_access_revoked
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: none
+  telemetry:
+    metric: gathering_roster_list
+    trace: true
+    attributes:
+    - outcome
+    - roster_disclosure
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: POST
+  path: /gatherings/{gatheringId}:join-open
+  operation: JoinOpenGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: joinOpenGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: open admission 下原子创建或推进同一 Participation 为 active。
+  request_entity: GatheringParticipationVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_open_admission
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_admission_paused
+  - CIRCLE.USER.gathering_capacity_full
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_already_active
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_join_open
+    trace: true
+    attributes:
+    - outcome
+    - admission_state
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:apply
+  operation: ApplyToGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: applyToGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: approval admission 下写同一 Participation 的 application_pending 与 typed answers。
+  request_entity: ApplyToGatheringCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_application
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_admission_paused
+  - CIRCLE.USER.gathering_capacity_full
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_already_active
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: none
+  telemetry:
+    metric: gathering_apply
+    trace: true
+    attributes:
+    - outcome
+    - admission_state
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:withdraw-application
+  operation: WithdrawGatheringApplication
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: withdrawGatheringApplication
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 申请人撤回 application_pending 并关闭同一 Participation attempt。
+  request_entity: GatheringParticipationVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_application
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_application_withdraw
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:review-application
+  operation: ReviewGatheringApplication
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: reviewGatheringApplication
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Organizer 以 approve 或 reject 决策审批同一 application Participation。
+  request_entity: ReviewGatheringApplicationCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_capacity_full
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: none
+  telemetry:
+    metric: gathering_application_review
+    trace: true
+    attributes:
+    - outcome
+    - decision
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:invite
+  operation: InviteToGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: inviteToGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Organizer 创建 invited_pending 并在 seatHoldUntil 前占用一个席位。
+  request_entity: InviteToGatheringCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_admission_paused
+  - CIRCLE.USER.gathering_capacity_full
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_already_active
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_invite
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:accept-invitation
+  operation: AcceptGatheringInvitation
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: acceptGatheringInvitation
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 仅 authenticated recipient 可用消息 action intent 中的 owner versions 接受未过期 seat hold，并由 Circle 原子进入 active；Notification/Chat 不得代写 Participation。
+  request_entity: GatheringParticipationVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_invitation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_invitation_recipient_mismatch
+  - CIRCLE.USER.gathering_invitation_inactive
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_capacity_full
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_already_active
+  - CIRCLE.USER.gathering_invitation_expired
+  - CIRCLE.USER.gathering_seat_hold_expired
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_invitation_accept
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:decline-invitation
+  operation: DeclineGatheringInvitation
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: declineGatheringInvitation
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 仅 authenticated recipient 可用消息 action intent 中的 owner versions 拒绝邀请，并由 Circle 以 closedReason=declined 关闭当前 attempt。
+  request_entity: GatheringParticipationVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_invitation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_invitation_recipient_mismatch
+  - CIRCLE.USER.gathering_invitation_inactive
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_invitation_expired
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_invitation_decline
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:revoke-invitation
+  operation: RevokeGatheringInvitation
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: revokeGatheringInvitation
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Organizer 撤销 invited_pending 并释放 seat hold。
+  request_entity: TargetGatheringParticipationCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_invitation_revoke
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:leave
+  operation: LeaveGathering
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: leaveGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: active 参与者退出；开场后只关闭本人 Participation，不恢复 admission。
+  request_entity: GatheringParticipationVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_active_participation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_organizer_transfer_required
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_leave
+    trace: true
+    attributes:
+    - outcome
+    - temporal_phase
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:remove
+  operation: RemoveGatheringParticipant
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: removeGatheringParticipant
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Organizer 以稳定 reasonRef 移除 active participant；不等于申请拒绝。
+  request_entity: TargetGatheringParticipationCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_participant_remove
+    trace: true
+    attributes:
+    - outcome
+    - temporal_phase
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:reinstate
+  operation: ReinstateGatheringParticipant
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: reinstateGatheringParticipant
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Organizer 只可恢复普通 removed；safety_removed 永久禁止重入。
+  request_entity: TargetGatheringParticipationCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_capacity_full
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_participant_reinstate
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:pause-admission
+  operation: PauseGatheringAdmission
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: pauseGatheringAdmission
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Organizer 版本化暂停人工 admission control。
+  request_entity: ChangeGatheringAdmissionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_admission_pause
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:resume-admission
+  operation: ResumeGatheringAdmission
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: resumeGatheringAdmission
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 仅在其他派生条件仍允许时恢复人工 admission control。
+  request_entity: ChangeGatheringAdmissionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_admission_closed
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_admission_resume
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:change-capacity
+  operation: ChangeGatheringCapacity
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: changeGatheringCapacity
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 在 occupiedSeats 下界与开场前窗口内变更容量，并按需创建 material Revision。
+  request_entity: ChangeGatheringCapacityCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_capacity_below_occupied_seats
+  - CIRCLE.USER.gathering_operation_not_allowed_in_progress
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_capacity_change
+    trace: true
+    attributes:
+    - outcome
+    - material_change
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:assign-co-host
+  operation: AssignGatheringCoHost
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: assignGatheringCoHost
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 经 owner authority evidence 任命 co-host；不创建 Participation 或占席。
+  request_entity: AssignGatheringCoHostCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: primary_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_host_authority_invalid
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_cohost_assign
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:revoke-co-host
+  operation: RevokeGatheringCoHost
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: revokeGatheringCoHost
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 撤销 co-host 管理授权；不改变其独立 Participation。
+  request_entity: TargetGatheringParticipationCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: primary_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_cohost_revoke
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:transfer-organizer
+  operation: TransferGatheringOrganizer
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: transferGatheringOrganizer
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 开场前经 owner authority evidence 转移 primary organizer，并形成 material Revision。
+  request_entity: TransferGatheringOrganizerCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: primary_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_host_authority_invalid
+  - CIRCLE.USER.gathering_organizer_transfer_required
+  - CIRCLE.USER.gathering_operation_not_allowed_in_progress
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_organizer_transfer
+    trace: true
+    attributes:
+    - outcome
+    - material_change
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:acknowledge-revision
+  operation: AcknowledgeGatheringRevision
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: acknowledgeGatheringRevision
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 参与者对指定 revision digest 独立接受或拒绝重大变更。
+  request_entity: AcknowledgeGatheringRevisionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_active_participation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_active_participation_required
+  - CIRCLE.USER.gathering_reconfirmation_required
+  - CIRCLE.USER.gathering_reconfirmation_expired
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_revision_acknowledge
+    trace: true
+    attributes:
+    - outcome
+    - decision
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:cancel
+  operation: CancelGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: cancelGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 仅在 temporalPhase=upcoming 时取消；开场后必须使用 early 或 safety operation。
+  request_entity: GatheringReasonCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_cancellation_window_closed
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_cancel
+    trace: true
+    attributes:
+    - outcome
+    - temporal_phase
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:declare-arrival
+  operation: DeclareGatheringArrival
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: declareGatheringArrival
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: active participant 声明到场并附 typed evidence refs。
+  request_entity: DeclareGatheringAttendanceCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_active_participation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_active_participation_required
+  - CIRCLE.USER.gathering_attendance_conflict
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_arrival_declare
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:leave-early
+  operation: DeclareGatheringLeaveEarly
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: declareGatheringLeaveEarly
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 开场后 participant 声明提前离开；不等于取消 Gathering。
+  request_entity: DeclareGatheringAttendanceCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_active_participation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_active_participation_required
+  - CIRCLE.USER.gathering_operation_not_allowed_in_progress
+  - CIRCLE.USER.gathering_attendance_conflict
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_leave_early_declare
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:complete-self
+  operation: CompleteGatheringSelf
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: completeGatheringSelf
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 只写 participant 自身完成事实，不直接改变 lifecycle 或指定 occurred。
+  request_entity: DeclareGatheringAttendanceCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_active_participation
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_active_participation_required
+  - CIRCLE.USER.gathering_attendance_conflict
+  - CIRCLE.USER.gathering_participation_conflict
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_self_complete
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:complete
+  operation: CompleteGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: completeGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 仅 temporalPhase=ended 时终结，并由 Circle 计算 Outcome。
+  request_entity: GatheringVersionCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_or_reconciler
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_outcome_unverified
+  - CIRCLE.USER.gathering_outcome_disputed
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_complete
+    trace: true
+    attributes:
+    - outcome
+    - outcome_status
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:end-early
+  operation: EndGatheringEarly
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: endGatheringEarly
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: in_progress organizer 原子完成并写 outcome=ended_early。
+  request_entity: GatheringReasonCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: active_organizer_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_operation_not_allowed_in_progress
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_end_early
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:safety-terminate
+  operation: SafetyTerminateGathering
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: safetyTerminateGathering
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: Trust & Safety authority 原子完成并写 outcome=safety_terminated；不复用普通 Cancel。
+  request_entity: GatheringReasonCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    permissions:
+    - circle.gathering.safety_terminate
+    ownership_policy: trust_and_safety_authority
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.USER.gathering_control_required
+  - CIRCLE.USER.gathering_safety_termination_denied
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.DEPENDENCY.gathering_safety_authority_unavailable
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: none
+  telemetry:
+    metric: gathering_safety_terminate
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:watch-availability
+  operation: WatchGatheringAvailability
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: watchGatheringAvailability
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 创建或恢复名额提醒；不占座、不创建 Participation、不授予 room access。
+  request_entity: GatheringAvailabilityWatchCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_availability_watch
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_availability_watch
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+- method: POST
+  path: /gatherings/{gatheringId}:unwatch-availability
+  operation: UnwatchGatheringAvailability
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: command
+    facet: GatheringCommandFacet
+    method: unwatchGatheringAvailability
+    aggregate_owner: Gathering
+    mutation_target: Gathering
+    invariant_target: Gathering
+  description: 取消本人名额提醒，不改变 Gathering admission 或 Participation。
+  request_entity: GatheringAvailabilityWatchCommand
+  response_entity: GatheringCommandResult
+  authorization:
+    principal: persona
+    ownership_policy: self_availability_watch
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_transition_forbidden
+  - CIRCLE.USER.gathering_version_conflict
+  - CIRCLE.USER.gathering_idempotency_conflict
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: gathering_availability_unwatch
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 1500
+    availability_percent: 99.9
+  request_body_kind: object
+readiness_cases:
+- case_id: create-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_lifecycle_scope_a__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: publish-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_lifecycle_scope_a__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: join-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_participation_scope_b__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: create-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: join-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: get-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_query_projection__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: approve-gathering-participant-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_participation_scope_b__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: leave-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_participation_scope_b__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: cancel-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_lifecycle_scope_a__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: complete-gathering-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_lifecycle_scope_a__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: get-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: approve-gathering-participant-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: leave-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: cancel-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate
+- case_id: complete-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - env: beta
+    platform: service
+    device: runner
+    provider: mongodb
+    digest_binding: candidate

@@ -165,11 +165,9 @@ func (s *MediaService) ActivateReprocessedImageDescriptor(
 	if err != nil {
 		return ImageDescriptorActivationResult{}, mapMediaDomainError(err)
 	}
-	payload, err := json.Marshal(mediaAssetImageDescriptorActivatedPayload{
-		AssetID:           asset.ID(),
-		RunID:             command.RunID,
-		PreviousRevision:  previousRevision,
-		ActivatedRevision: activatedRevision,
+	payload, err := json.Marshal(mediaAssetProcessingUpdatedPayload{
+		AssetID:    asset.ID(),
+		Processing: asset.ProcessingStatus(),
 	})
 	if err != nil {
 		return ImageDescriptorActivationResult{}, unavailable(err)
@@ -180,7 +178,7 @@ func (s *MediaService) ActivateReprocessedImageDescriptor(
 		expectedVersion,
 		"ActivateReprocessedImageDescriptor",
 		commandDigest,
-		"content.media_asset.image_descriptor_activated",
+		"content.media_asset.processing_updated",
 		payload,
 		now,
 	)
@@ -229,11 +227,9 @@ func (s *MediaService) RollbackReprocessedImageDescriptor(
 	); err != nil {
 		return MediaAssetCommandResult{}, mapMediaDomainError(err)
 	}
-	payload, err := json.Marshal(mediaAssetImageDescriptorRolledBackPayload{
-		AssetID:           asset.ID(),
-		RunID:             command.RunID,
-		PreviousRevision:  command.PreviousRevision,
-		ActivatedRevision: command.ActivatedRevision,
+	payload, err := json.Marshal(mediaAssetProcessingUpdatedPayload{
+		AssetID:    asset.ID(),
+		Processing: asset.ProcessingStatus(),
 	})
 	if err != nil {
 		return MediaAssetCommandResult{}, unavailable(err)
@@ -244,7 +240,7 @@ func (s *MediaService) RollbackReprocessedImageDescriptor(
 		expectedVersion,
 		"RollbackReprocessedImageDescriptor",
 		commandDigest,
-		"content.media_asset.image_descriptor_rolled_back",
+		"content.media_asset.processing_updated",
 		payload,
 		now,
 	)
@@ -441,10 +437,10 @@ func (s *MediaService) SelectAutoMediaCover(
 		}
 		return s.decorateCoverResult(ctx, result, asset, nil)
 	}
-	payload, _ := json.Marshal(map[string]any{
-		"assetId": asset.ID(), "coverStrategy": asset.CoverStrategy(), "coverFrameTimeMs": asset.CoverFrameTimeMs(),
+	payload, _ := json.Marshal(mediaAssetProcessingUpdatedPayload{
+		AssetID: asset.ID(), Processing: asset.ProcessingStatus(),
 	})
-	result, err := s.commitAsset(ctx, asset, expectedVersion, "SelectAutoMediaCover", commandDigest, "content.media_asset.cover_selected", payload, now)
+	result, err := s.commitAsset(ctx, asset, expectedVersion, "SelectAutoMediaCover", commandDigest, "content.media_asset.processing_updated", payload, now)
 	if err != nil {
 		return MediaAssetCommandResult{}, err
 	}
@@ -522,11 +518,10 @@ func (s *MediaService) SelectManualMediaCover(
 		}
 		return s.decorateCoverResult(ctx, result, asset, cover)
 	}
-	payload, _ := json.Marshal(map[string]any{
-		"assetId": asset.ID(), "coverStrategy": asset.CoverStrategy(),
-		"manualCoverAssetId": asset.ManualCoverAssetID(), "coverFrameTimeMs": asset.CoverFrameTimeMs(),
+	payload, _ := json.Marshal(mediaAssetProcessingUpdatedPayload{
+		AssetID: asset.ID(), Processing: asset.ProcessingStatus(),
 	})
-	result, err := s.commitAsset(ctx, asset, expectedVersion, "SelectManualMediaCover", commandDigest, "content.media_asset.cover_selected", payload, now)
+	result, err := s.commitAsset(ctx, asset, expectedVersion, "SelectManualMediaCover", commandDigest, "content.media_asset.processing_updated", payload, now)
 	if err != nil {
 		return MediaAssetCommandResult{}, err
 	}

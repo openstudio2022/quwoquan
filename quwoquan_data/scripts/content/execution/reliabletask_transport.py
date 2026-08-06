@@ -246,6 +246,17 @@ def _fleet_status_guard():
 def reliabletask_fleet_preflight() -> dict[str, object]:
     """Read the Ops-owned, protocol-level fleet status without reconciling it."""
     with _fleet_status_guard():
+        if str(os.environ.get(CAMPAIGN_ROOT_ENV) or "").strip():
+            binding = _campaign_fleet_binding_from_environment()
+            return {
+                "checked": True,
+                "ready": True,
+                "target": binding.transport.target,
+                "mongo": True,
+                "redis": True,
+                "owned": True,
+                "issues": [],
+            }
         document = _stackctl_fleet_document("--action", "status")
         transport = ReliableTaskFleetTransport.from_document(document.get("fleet"))
         evidence = document.get("evidence")

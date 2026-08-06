@@ -108,7 +108,7 @@ func (relay *UserAccountOutboxRelay) RelayOnce(
 		relay.recordFailure(now, failure)
 		return false, newUserAccountOutboxRelayError(failure)
 	}
-	event, found, err := relay.store.ClaimReady(
+	event, found, err := relay.store.ClaimPendingOutbox(
 		ctx,
 		relay.owner,
 		now,

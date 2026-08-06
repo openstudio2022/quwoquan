@@ -22,41 +22,41 @@ var (
 // AppErrorFromStorageQuotaExceeded returns *AppError for CIRCLE.USER.storage_quota_exceeded (user_message from errors.yaml).
 func AppErrorFromStorageQuotaExceeded(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStorageQuotaExceeded.Error()))
-	return rerrors.NewAppError(code, "存储空间已满，无法上传", debugMessage).WithMetadata("quota_exceeded", 413).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "存储空间已满，无法上传", debugMessage).WithMetadata("quota_exceeded", 413).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFileNotFound returns *AppError for CIRCLE.USER.file_not_found (user_message from errors.yaml).
 func AppErrorFromFileNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrFileNotFound.Error()))
-	return rerrors.NewAppError(code, "文件不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "文件不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFileParentInvalid returns *AppError for CIRCLE.USER.file_parent_invalid (user_message from errors.yaml).
 func AppErrorFromFileParentInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrFileParentInvalid.Error()))
-	return rerrors.NewAppError(code, "目标文件夹无效", debugMessage).WithMetadata("validation_failed", 422).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "目标文件夹无效", debugMessage).WithMetadata("validation_failed", 422).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromFileAssetInvalid returns *AppError for CIRCLE.USER.file_asset_invalid (user_message from errors.yaml).
 func AppErrorFromFileAssetInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrFileAssetInvalid.Error()))
-	return rerrors.NewAppError(code, "媒体文件尚未就绪或不属于当前身份", debugMessage).WithMetadata("validation_failed", 422).WithRecovery("resubmit", 0)
+	return rerrors.NewAppError(code, "媒体文件尚未就绪或不属于当前身份", debugMessage).WithMetadata("validation_failed", 422).WithRecoveryDirective("compensate", "inlineCard", 0)
 }
 
 // AppErrorFromFileVersionConflict returns *AppError for CIRCLE.USER.file_version_conflict (user_message from errors.yaml).
 func AppErrorFromFileVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrFileVersionConflict.Error()))
-	return rerrors.NewAppError(code, "文件已被更新，请刷新后重试", debugMessage).WithMetadata("conflict", 409).WithRecovery("reload", 0)
+	return rerrors.NewAppError(code, "文件已被更新，请刷新后重试", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromFileIdempotencyConflict returns *AppError for CIRCLE.USER.file_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromFileIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrFileIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求内容不一致", debugMessage).WithMetadata("conflict", 409).WithRecovery("resubmit", 0)
+	return rerrors.NewAppError(code, "重复请求内容不一致", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("compensate", "inlineCard", 0)
 }
 
 // AppErrorFromFileStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.file_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromFileStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrFileStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "文件服务暂不可用，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 503).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "文件服务暂不可用，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 503).WithRecoveryDirective("retry", "snackbar", 0)
 }

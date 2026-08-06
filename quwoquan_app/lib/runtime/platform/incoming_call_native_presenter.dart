@@ -3,9 +3,9 @@ import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/platform/incoming_call_envelope.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/runtime/platform/incoming_call_envelope.dart';
 
 final class IncomingCallPresentationResult {
   const IncomingCallPresentationResult({

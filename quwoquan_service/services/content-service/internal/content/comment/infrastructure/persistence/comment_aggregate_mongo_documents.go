@@ -140,6 +140,15 @@ type commentOutboxDocument struct {
 	OccurredAt       time.Time `bson:"occurredAt"`
 }
 
+type commentEventLogDocument struct {
+	ID               string    `bson:"_id"`
+	EventType        string    `bson:"eventType"`
+	AggregateID      string    `bson:"aggregateId"`
+	AggregateVersion int64     `bson:"aggregateVersion"`
+	Payload          []byte    `bson:"payload"`
+	OccurredAt       time.Time `bson:"occurredAt"`
+}
+
 type commentCheckpointDocument struct {
 	ID         string    `bson:"_id"`
 	Checkpoint string    `bson:"checkpoint"`

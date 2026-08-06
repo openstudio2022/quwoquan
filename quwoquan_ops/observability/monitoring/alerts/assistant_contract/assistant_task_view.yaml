@@ -10,7 +10,7 @@ groups:
           service: "assistant-service"
           operation: "assistant.assistant_task_view.ListAssistantTasks"
           contract_metric: "assistant_task_view_query"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.5"
       - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
@@ -20,6 +20,6 @@ groups:
           service: "assistant-service"
           operation: "assistant.assistant_task_view.ListAssistantTasks"
           contract_metric: "assistant_task_view_query"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "500"
           slo_availability_percent: "99.5"

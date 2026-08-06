@@ -31,10 +31,6 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.SkillCapabilityGrant
-capabilities:
-- auditable
-- idempotent_commands
-- queryable
 business_rules:
 - packageId、packageVersion、releaseDigest、assets、runtimeCompatibility、provenance、signature 与 capabilityGrants 在 Stage 后不可改写
 - releaseDigest 必须等于 canonical package descriptor 的 SHA-256，所有 assetDigest 必须在暴露资产前逐项复算

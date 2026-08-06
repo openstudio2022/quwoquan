@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	"quwoquan_service/runtime/commandmeta"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
@@ -57,7 +57,7 @@ func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing
 	submissionRelay := postapp.NewOutboxRelay(
 		postStore,
 		postStore,
-		moderationapp.NewSubmissionCaseOpener(moderationService),
+		moderationapp.NewPostSubmissionModerationHandler(moderationService),
 		"content-post-submission-moderation-test",
 	)
 	delivered, err := submissionRelay.Drain(context.Background(), 10)
@@ -67,7 +67,7 @@ func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing
 	replayRelay := postapp.NewOutboxRelay(
 		postStore,
 		postStore,
-		moderationapp.NewSubmissionCaseOpener(moderationService),
+		moderationapp.NewPostSubmissionModerationHandler(moderationService),
 		"content-post-submission-moderation-replay-test",
 	)
 	if replayed, replayErr := replayRelay.Drain(
@@ -119,7 +119,7 @@ func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing
 	decisionRelay := moderationapp.NewOutboxRelay(
 		moderationStore,
 		moderationStore,
-		postapp.NewPostModerationDecisionConsumer(postService),
+		postapp.NewPostModerationDecisionHandler(postService),
 		"content-moderation-post-lifecycle-test",
 	)
 	delivered, err = decisionRelay.Drain(context.Background(), 10)
@@ -179,7 +179,7 @@ func TestPendingPublicationRejectionNeverEntersPublicReadModel(t *testing.T) {
 	submissionRelay := postapp.NewOutboxRelay(
 		postStore,
 		postStore,
-		moderationapp.NewSubmissionCaseOpener(moderationService),
+		moderationapp.NewPostSubmissionModerationHandler(moderationService),
 		"content-post-submission-rejection-test",
 	)
 	if delivered, relayErr := submissionRelay.Drain(
@@ -219,7 +219,7 @@ func TestPendingPublicationRejectionNeverEntersPublicReadModel(t *testing.T) {
 	decisionRelay := moderationapp.NewOutboxRelay(
 		moderationStore,
 		moderationStore,
-		postapp.NewPostModerationDecisionConsumer(postService),
+		postapp.NewPostModerationDecisionHandler(postService),
 		"content-moderation-post-rejection-test",
 	)
 	if delivered, relayErr := decisionRelay.Drain(

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: update-circle-sections-api
 package api_integration
 
 import (

@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 
 class NativeStartupProcessSegments {
   const NativeStartupProcessSegments({

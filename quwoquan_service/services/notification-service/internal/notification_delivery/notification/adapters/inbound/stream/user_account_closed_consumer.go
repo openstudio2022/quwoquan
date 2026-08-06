@@ -90,8 +90,8 @@ func (config UserAccountClosedConsumerConfig) withDefaults() UserAccountClosedCo
 
 type UserAccountClosedConsumer struct {
 	transport    DurableMessageTransport
-	projection   application.UserAccountClosedProjection
-	restrictions application.UserAccountRestrictionProjection
+	projection   *application.UserAccountClosedProjection
+	restrictions *application.UserAccountRestrictionProjection
 	failures     UserAccountClosedFailureStore
 	consumer     string
 	config       UserAccountClosedConsumerConfig
@@ -103,7 +103,7 @@ type UserAccountClosedConsumer struct {
 }
 
 func (consumer *UserAccountClosedConsumer) WithUserAccountRestrictionProjection(
-	projection application.UserAccountRestrictionProjection,
+	projection *application.UserAccountRestrictionProjection,
 ) *UserAccountClosedConsumer {
 	if consumer == nil || projection == nil {
 		panic("notification user account restriction projection is required")
@@ -114,7 +114,7 @@ func (consumer *UserAccountClosedConsumer) WithUserAccountRestrictionProjection(
 
 func NewUserAccountClosedConsumer(
 	transport DurableMessageTransport,
-	projection application.UserAccountClosedProjection,
+	projection *application.UserAccountClosedProjection,
 	failures UserAccountClosedFailureStore,
 	consumer string,
 	logger *slog.Logger,

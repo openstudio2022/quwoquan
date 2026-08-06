@@ -1,3 +1,2 @@
-role: authoritative
-events: []
 description: Invitation 当前仅由 PostgreSQL aggregate store 同步提交状态；仓内没有 invitation outbox/publisher，禁止声明虚假 producer-consumer 链。
+events: []

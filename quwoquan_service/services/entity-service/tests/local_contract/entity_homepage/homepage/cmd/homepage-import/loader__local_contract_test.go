@@ -229,6 +229,28 @@ func TestLoadHomepageProjectionsMapsPilotScopePlaceTypes(t *testing.T) {
 	}
 }
 
+func TestLoadHomepageProjectionsKeepsSchoolDistinctFromUniversity(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "entities", "机构", "学校", "新东方学校")
+	writeFile(t, filepath.Join(dir, "_entity.json"),
+		`{"label":"新东方学校","domain":"机构","type":"学校",`+sourceFieldsJSON+`}`)
+	writeSemanticHomepagePackage(t, dir, "新东方学校", true)
+
+	inputs, issues, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil {
+		t.Fatalf("load school homepage: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("school homepage must be admitted without issues: %v", issues)
+	}
+	if len(inputs) != 1 {
+		t.Fatalf("school homepage projections = %d, want 1", len(inputs))
+	}
+	if got := inputs[0].HomepageType; got != "school" {
+		t.Fatalf("school homepage type = %q, want school", got)
+	}
+}
+
 func TestLoadHomepageProjectionsRequiresEnvironmentMediaBase(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", true)

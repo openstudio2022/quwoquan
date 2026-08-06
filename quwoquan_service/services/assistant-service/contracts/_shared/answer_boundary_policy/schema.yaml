@@ -1,6 +1,6 @@
 dart_class: AnswerBoundaryPolicyDto
-library_path: assistant/contracts/answer_boundary_policy.dart
-output_path: assistant/generated/contracts/answer_boundary_policy.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/answer_boundary_policy.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/answer_boundary_policy.g.dart
 contract: answer_boundary_policy
 kind: runtime_policy_contract
 fields:

@@ -75,8 +75,8 @@
 - canonical：`quwoquan_service/services/content-service/tests/local_contract/content/content_behavior_fact/application/onboarding_interest_taxonomy__local_contract_test.go`
 - canonical：`quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/taxonomyvalidation/http_active_leaf_validator__local_contract_test.go`
 - canonical：`quwoquan_service/services/content-service/tests/api_integration/content/post/post_behavior_contract__api_integration_test.go`
-- canonical：`quwoquan_app/test/api_integration/cloud/content/onboarding_author_impact_gamma__api_integration_test.dart`
-- canonical：`quwoquan_app/test/user_acceptance/patrol/discovery/interest_onboarding__user_acceptance_test.dart`
+- canonical：`quwoquan_app/test/api_integration/service/content_service/content/content_behavior_fact/onboarding_interest_gamma__api_integration_test.dart`
+- canonical：`quwoquan_app/test/user_acceptance/service/content_service/content/post/interest_onboarding__user_acceptance_test.dart`
 
 ## 5. 验收场景
 

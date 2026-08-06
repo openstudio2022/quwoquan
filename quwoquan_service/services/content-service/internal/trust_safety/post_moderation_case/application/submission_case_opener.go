@@ -12,19 +12,19 @@ import (
 
 const postSubmittedForReviewEventType = "PostSubmittedForReview"
 
-// SubmissionCaseOpener 把不可公开的 pending_review Post 事实翻译为审核 Case 命令。
+// PostSubmissionModerationHandler 把不可公开的 pending_review Post 事实翻译为审核 Case 命令。
 // Case 仍按 postId+version+digest 唯一，Post outbox 重放不会创建重复 Case。
-type SubmissionCaseOpener struct {
+type PostSubmissionModerationHandler struct {
 	commands PostModerationCaseCommandFacet
 }
 
-func NewSubmissionCaseOpener(
+func NewPostSubmissionModerationHandler(
 	commands PostModerationCaseCommandFacet,
-) *SubmissionCaseOpener {
+) *PostSubmissionModerationHandler {
 	if commands == nil {
-		panic("SubmissionCaseOpener requires moderation command facet")
+		panic("PostSubmissionModerationHandler requires moderation command facet")
 	}
-	return &SubmissionCaseOpener{commands: commands}
+	return &PostSubmissionModerationHandler{commands: commands}
 }
 
 type postSubmittedForReviewFact struct {
@@ -34,12 +34,14 @@ type postSubmittedForReviewFact struct {
 	ContentDigest    string `json:"contentDigest"`
 }
 
-func (o *SubmissionCaseOpener) Publish(
+// OpenPostModerationCase is the canonical lifecycle method for a committed
+// PostSubmittedForReview fact.
+func (h *PostSubmissionModerationHandler) OpenPostModerationCase(
 	ctx context.Context,
 	event postports.OutboxEvent,
 ) error {
-	if o == nil || o.commands == nil {
-		return fmt.Errorf("submission case opener is not configured")
+	if h == nil || h.commands == nil {
+		return fmt.Errorf("post submission moderation handler is not configured")
 	}
 	if event.EventType != postSubmittedForReviewEventType {
 		return nil
@@ -69,7 +71,7 @@ func (o *SubmissionCaseOpener) Publish(
 		ctx,
 		"post-submission-moderation:"+strings.TrimSpace(event.EventID),
 	)
-	_, err := o.commands.OpenPostModerationCase(
+	_, err := h.commands.OpenPostModerationCase(
 		ctx,
 		OpenPostModerationCaseCommand{
 			PostID:        postID,
@@ -87,4 +89,11 @@ func (o *SubmissionCaseOpener) Publish(
 	return nil
 }
 
-var _ postports.OutboxPublisher = (*SubmissionCaseOpener)(nil)
+func (h *PostSubmissionModerationHandler) Publish(
+	ctx context.Context,
+	event postports.OutboxEvent,
+) error {
+	return h.OpenPostModerationCase(ctx, event)
+}
+
+var _ postports.OutboxPublisher = (*PostSubmissionModerationHandler)(nil)

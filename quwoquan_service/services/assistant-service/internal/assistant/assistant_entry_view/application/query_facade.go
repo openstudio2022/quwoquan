@@ -3,13 +3,17 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	entrymodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_entry_view/domain/model"
 	pagecontextmodel "quwoquan_service/services/assistant-service/internal/assistant/page_context/domain/model"
 )
 
-var ErrInvalidPageContext = errors.New("assistant entry page context is invalid")
+var (
+	ErrInvalidPageContext    = errors.New("assistant entry page context is invalid")
+	ErrProjectionUnavailable = errors.New("assistant entry projection is unavailable")
+)
 
 type Reader interface {
 	Get(context.Context, string) (*entrymodel.View, error)
@@ -40,15 +44,16 @@ func (f *QueryFacade) GetEntry(
 	if accountID == "" {
 		return entrymodel.View{}, errors.New("assistant entry requires accountId")
 	}
+	if f == nil || f.reader == nil {
+		return entrymodel.View{}, ErrProjectionUnavailable
+	}
 	view := entrymodel.Empty()
-	if f != nil && f.reader != nil {
-		stored, err := f.reader.Get(ctx, accountID)
-		if err != nil {
-			return entrymodel.View{}, err
-		}
-		if stored != nil {
-			view = *stored
-		}
+	stored, err := f.reader.Get(ctx, accountID)
+	if err != nil {
+		return entrymodel.View{}, fmt.Errorf("%w: %v", ErrProjectionUnavailable, err)
+	}
+	if stored != nil {
+		view = *stored
 	}
 	if pageType != "" || objectID != "" {
 		if f == nil || f.contexts == nil {

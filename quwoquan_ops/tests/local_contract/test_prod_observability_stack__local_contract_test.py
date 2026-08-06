@@ -61,6 +61,7 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             deploy_root = Path(temporary) / "deploy"
             output = deploy_root / "prod-hosted/rendered/service-prod"
+            remote_root = "/srv/quwoquan/service/instances/prod/service-a"
             with mock.patch.dict(
                 os.environ,
                 {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)},
@@ -70,6 +71,7 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
                     output,
                     "service",
                     render_name="service-prod",
+                    remote_root=remote_root,
                 )
 
             rendered_compose = output / "observability/docker-compose.prod.yml"
@@ -86,6 +88,7 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
             self.assertTrue(unit.is_file())
             unit_source = unit.read_text(encoding="utf-8")
             self.assertIn("RemainAfterExit=yes", unit_source)
+            self.assertIn(f"WorkingDirectory={remote_root}", unit_source)
             self.assertIn("ExecStart=/usr/bin/podman compose", unit_source)
             self.assertIn("ExecStop=/usr/bin/podman compose", unit_source)
             self.assertFalse((output / "observability/monitoring.env").exists())
@@ -140,7 +143,7 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
 
     def test_deploy_orchestrates_observability_before_traffic_routing(self) -> None:
         source = DEPLOY.read_text(encoding="utf-8")
-        self.assertIn("deploy_observability_stack()", source)
+        self.assertIn("deploy_observability_replica()", source)
         self.assertIn("rootlessObservabilityRuntime", source)
         self.assertIn("unit_source", source)
         self.assertIn("systemd/user", source)
@@ -150,9 +153,18 @@ class ProdObservabilityStackContractTest(unittest.TestCase):
         self.assertIn("systemctl --user is-active --quiet", source)
         self.assertIn("/api/v1/targets", source)
         self.assertIn("Prometheus targets are not up", source)
+        observability_call = (
+            'deploy_observability_replica "$account" "$remote_root" '
+            '"$secret_name" "$credentials_root" "$ssh_host" "$host_id" "$replica_id"'
+        )
+        self.assertIn(observability_call, source)
+        self.assertIn(
+            "[skip] observability remains bound to stable prod replicas during gray rollout",
+            source,
+        )
         self.assertLess(
-            source.index("deploy_observability_stack"),
-            source.index("update_stable_gray_router"),
+            source.index(observability_call),
+            source.index('update_stable_gray_router_replica "$account"'),
         )
 
 

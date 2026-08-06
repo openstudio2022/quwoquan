@@ -54,6 +54,7 @@ import (
 	deadletterpersistence "quwoquan_service/services/integration-service/internal/external_integration/external_interaction_dead_letter_fact/infrastructure/persistence"
 	locationhttp "quwoquan_service/services/integration-service/internal/external_integration/location/adapters/inbound/http"
 	locationapplication "quwoquan_service/services/integration-service/internal/external_integration/location/application"
+	locationports "quwoquan_service/services/integration-service/internal/external_integration/location/domain/ports"
 	locationprovider "quwoquan_service/services/integration-service/internal/external_integration/location/infrastructure/provider"
 	locationproviderbinding "quwoquan_service/services/integration-service/internal/external_integration/location/infrastructure/providerbinding"
 )
@@ -132,9 +133,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("device ticket verifier invalid: %w", err)
 	}
+	runtimeConfigProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	locationBinding, locationBindingErr := locationproviderbinding.ResolveLocationLookup(
 		cfg.Environment,
-		runtimeconfig.EnvRuntimeConfigProvider{},
+		runtimeConfigProvider,
 	)
 	locationCapabilityBlocked := errors.Is(
 		locationBindingErr,
@@ -142,6 +144,52 @@ func run() error {
 	)
 	if locationBindingErr != nil && !locationCapabilityBlocked {
 		return fmt.Errorf("location provider binding invalid: %w", locationBindingErr)
+	}
+	poiPolicy := cfg.Integration.PublicProvider.POI
+	poiBinding, poiBindingErr :=
+		locationproviderbinding.ResolvePublicLocationCapability(
+			cfg.Environment,
+			locationproviderbinding.LocationPOISearchCapabilityID,
+			runtimeConfigProvider,
+			locationproviderbinding.PublicProviderRuntimePolicy{
+				ConfigRef:          "config:integration.public_provider.poi",
+				RatePolicyRef:      "config:integration.public_provider.poi",
+				ProbePassed:        poiPolicy.ProbePassed,
+				RateLimitPerSecond: poiPolicy.RateLimitPerSecond,
+			},
+		)
+	poiCapabilityUnavailable := errors.Is(
+		poiBindingErr,
+		locationproviderbinding.ErrPublicLocationCapabilityBlocked,
+	) || errors.Is(
+		poiBindingErr,
+		locationproviderbinding.ErrPublicLocationProbeNotPassed,
+	)
+	if poiBindingErr != nil && !poiCapabilityUnavailable {
+		return fmt.Errorf("POI provider binding invalid: %w", poiBindingErr)
+	}
+	routePolicy := cfg.Integration.PublicProvider.Route
+	routeBinding, routeBindingErr :=
+		locationproviderbinding.ResolvePublicLocationCapability(
+			cfg.Environment,
+			locationproviderbinding.LocationRouteReadCapabilityID,
+			runtimeConfigProvider,
+			locationproviderbinding.PublicProviderRuntimePolicy{
+				ConfigRef:          "config:integration.public_provider.route",
+				RatePolicyRef:      "config:integration.public_provider.route",
+				ProbePassed:        routePolicy.ProbePassed,
+				RateLimitPerSecond: routePolicy.RateLimitPerSecond,
+			},
+		)
+	routeCapabilityUnavailable := errors.Is(
+		routeBindingErr,
+		locationproviderbinding.ErrPublicLocationCapabilityBlocked,
+	) || errors.Is(
+		routeBindingErr,
+		locationproviderbinding.ErrPublicLocationProbeNotPassed,
+	)
+	if routeBindingErr != nil && !routeCapabilityUnavailable {
+		return fmt.Errorf("route provider binding invalid: %w", routeBindingErr)
 	}
 
 	ctx, cancelRuntime := context.WithCancel(context.Background())
@@ -201,29 +249,36 @@ func run() error {
 		return fmt.Errorf("exception logger init failed: %w", err)
 	}
 
-	var locationService *locationapplication.Service
-	locationAdapter := "blocked"
-	locationTimeout := int64(0)
-	if locationCapabilityBlocked {
-		locationService, err = locationapplication.NewService(
-			locationprovider.NewUnavailableLocationProvider(locationBindingErr.Error()),
-		)
-	} else {
+	newLocationHTTPClient := func(
+		timeout time.Duration,
+		sourceID string,
+		maxAttempts int,
+		retryBackoff time.Duration,
+		failureThreshold int,
+		resetTimeout time.Duration,
+	) *http.Client {
 		factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
-		factoryCfg.Timeout = locationBinding.Timeout
-		factoryCfg.MaxRetries = 0
-		factoryCfg.RetryBackoff = 0
-		factoryCfg.RetryOnCodes = map[int]struct{}{}
+		factoryCfg.Timeout = timeout
+		if maxAttempts > 1 {
+			factoryCfg.MaxRetries = maxAttempts - 1
+		}
+		factoryCfg.RetryBackoff = retryBackoff
+		factoryCfg.RetryOnCodes = map[int]struct{}{
+			http.StatusTooManyRequests:    {},
+			http.StatusBadGateway:         {},
+			http.StatusServiceUnavailable: {},
+			http.StatusGatewayTimeout:     {},
+		}
 		logCfg := rthttp.HTTPClientMiddlewareConfig{
 			Service:           "integration-service",
 			Origin:            "cloud",
 			Direction:         "outbound",
-			SourceID:          "integration-service.map-provider",
+			SourceID:          sourceID,
 			Src:               "integration-service",
 			ServiceName:       "integration-service",
 			ServiceInstanceID: "local",
 		}
-		mapObservedClient := rthttp.NewObservedHTTPClient(
+		observedClient := rthttp.NewObservedHTTPClient(
 			nil,
 			factoryCfg,
 			logCfg,
@@ -231,16 +286,90 @@ func run() error {
 			processLogger,
 			exceptionLogger,
 		)
-		mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
-		cbClient := rtgov.WrapClientWithCB(mapObservedClient, mapCB)
-		locationProvider, providerErr := locationprovider.NewLocationProvider(locationBinding, cbClient)
+		cb := rtgov.NewCircuitBreaker(
+			failureThreshold,
+			resetTimeout,
+			slog.Default(),
+		)
+		return rtgov.WrapClientWithCB(observedClient, cb)
+	}
+
+	var nearbyProvider locationports.NearbyLocationProvider
+	locationAdapter := "blocked"
+	locationTimeout := int64(0)
+	if locationCapabilityBlocked {
+		nearbyProvider = locationprovider.NewUnavailableLocationProvider(
+			locationBindingErr.Error(),
+		)
+	} else {
+		nearbyClient := newLocationHTTPClient(
+			locationBinding.Timeout,
+			"integration-service.map-provider",
+			1,
+			0,
+			5,
+			15*time.Second,
+		)
+		locationProvider, providerErr := locationprovider.NewLocationProvider(
+			locationBinding,
+			nearbyClient,
+		)
 		if providerErr != nil {
 			return fmt.Errorf("location provider initialization failed: %w", providerErr)
 		}
-		locationService, err = locationapplication.NewService(locationProvider)
+		nearbyProvider = locationProvider
 		locationAdapter = locationBinding.AdapterID
 		locationTimeout = locationBinding.Timeout.Milliseconds()
 	}
+	var searchProvider locationports.POISearchProvider
+	if poiCapabilityUnavailable {
+		searchProvider = locationprovider.NewUnavailableLocationProvider(
+			poiBindingErr.Error(),
+		)
+	} else {
+		poiClient := newLocationHTTPClient(
+			poiBinding.Timeout,
+			"integration-service.poi-provider",
+			poiPolicy.RetryMaxAttempts,
+			time.Duration(poiPolicy.RetryBackoffMs)*time.Millisecond,
+			poiPolicy.CircuitFailureThreshold,
+			time.Duration(poiPolicy.CircuitResetTimeoutMs)*time.Millisecond,
+		)
+		searchProvider, err = locationprovider.NewPOISearchProvider(
+			poiBinding,
+			poiClient,
+		)
+		if err != nil {
+			return fmt.Errorf("POI provider initialization failed: %w", err)
+		}
+	}
+	var routeProvider locationports.RouteReadProvider
+	if routeCapabilityUnavailable {
+		routeProvider = locationprovider.NewUnavailableLocationProvider(
+			routeBindingErr.Error(),
+		)
+	} else {
+		routeClient := newLocationHTTPClient(
+			routeBinding.Timeout,
+			"integration-service.route-provider",
+			routePolicy.RetryMaxAttempts,
+			time.Duration(routePolicy.RetryBackoffMs)*time.Millisecond,
+			routePolicy.CircuitFailureThreshold,
+			time.Duration(routePolicy.CircuitResetTimeoutMs)*time.Millisecond,
+		)
+		routeProvider, err = locationprovider.NewRouteReadProvider(
+			routeBinding,
+			routeClient,
+		)
+		if err != nil {
+			return fmt.Errorf("route provider initialization failed: %w", err)
+		}
+	}
+	locationService, err := locationapplication.NewServiceWithProviders(
+		nearbyProvider,
+		searchProvider,
+		routeProvider,
+	)
 	if err != nil {
 		return fmt.Errorf("location application service initialization failed: %w", err)
 	}
@@ -370,7 +499,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("provider attempt account closure init failed: %w", err)
 	}
-	closureProjection, err := interactionpersistence.NewMongoUserAccountClosedProjection(
+	closureStore, err := interactionpersistence.NewMongoUserAccountClosedProjection(
 		mongoClient.Database(cfg.MongoDB.Database),
 		attemptClosure,
 	)
@@ -382,15 +511,19 @@ func run() error {
 		cancelClosureIndexes()
 		return fmt.Errorf("provider attempt account closure indexes failed: %w", err)
 	}
-	if err := closureProjection.EnsureIndexes(closureIndexCtx); err != nil {
+	if err := closureStore.EnsureIndexes(closureIndexCtx); err != nil {
 		cancelClosureIndexes()
 		return fmt.Errorf("integration account closure indexes failed: %w", err)
 	}
 	cancelClosureIndexes()
+	closureProjection, err := application.NewUserAccountClosedProjection(closureStore)
+	if err != nil {
+		return fmt.Errorf("integration account closure application facet init failed: %w", err)
+	}
 	accountClosureConsumer, err := streamadapter.NewUserAccountClosedConsumer(
 		messageTransport,
 		closureProjection,
-		closureProjection,
+		closureStore,
 		fmt.Sprintf("integration-service-%d", os.Getpid()),
 		slog.Default(),
 		streamadapter.DefaultUserAccountClosedConsumerConfig(),
@@ -545,6 +678,9 @@ func run() error {
 	}
 	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
 
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		operationsecurity.ForDomain("integration"),
+	)
 	server := &http.Server{
 		Addr: cfg.Service.HTTP.Addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
@@ -553,9 +689,9 @@ func run() error {
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObs),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf(
 		"integration-service listening on %s location_adapter=%s timeout_ms=%d",

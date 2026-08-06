@@ -9,10 +9,6 @@ access:
   cross_context: public_contract_only
   queries: named_reader
 relationships: []
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 taggable: false
 vector_enabled: false
 business_rules:
@@ -28,3 +24,13 @@ lifecycle:
   states: [staged, active, retired]
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - recommendation.recommendation_model_release.RecommendationModelReleaseStaged
+  - recommendation.recommendation_model_release.RecommendationModelReleaseActivated
+  - recommendation.recommendation_model_release.RecommendationModelReleaseRetired
+  event_consumers:
+  - name: ApplyModelReleaseToScoringRuntime
+    kind: event_handler
+    facet: RecommendationModelRuntimeCoordinator
+    method: applyReleaseEvent
+    idempotency: event_id

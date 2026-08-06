@@ -45,11 +45,6 @@ relationships:
   reference_fields:
   - decidedByPersonaId
   target_object: user.Persona
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
-- event_consumer
 business_rules:
 - identity 固定为 groupId + personaId，同一身份只有一个可重入生命周期
 - persona 必须先具有同一 Circle 的 active membership
@@ -68,3 +63,11 @@ lifecycle:
   - removed
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - circle.circle_group.CircleGroupCreated
+  event_consumers:
+  - name: ActivateOwnerFromCircleGroupCreated
+    kind: event_handler
+    facet: CircleGroupOwnerProjector
+    method: publish
+    idempotency: event_id

@@ -42,6 +42,9 @@ from content.source.professional_image_receipt_validation import (
 from content.source.professional_image_transport import fetch_public_image
 from content.source.research.image_provider_compliance import classify_image_provider
 from content.source.research.text_match import _normalized_title
+from content.execution.pre_acquisition_handoff import (
+    guard_acquisition_source_identity,
+)
 
 ACQUISITION_ROOT = SOURCE_ACQUISITION_ROOT
 _MAX_IMAGE_BYTES = 64 * 1024 * 1024
@@ -241,6 +244,8 @@ def _provider_counts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def acquire_professional_images(
     manifest_path: Path,
     *,
+    handoff_ref: Path,
+    repo_root: Path | None = None,
     manual_root: Path | None = None,
     output_root: Path = ACQUISITION_ROOT,
 ) -> tuple[dict[str, Any], Path]:
@@ -253,6 +258,11 @@ def acquire_professional_images(
         "source",
         "professional_image_acquisition_manifest",
         label="professional image acquisition manifest",
+    )
+    guard_acquisition_source_identity(
+        manifest,
+        handoff_ref=handoff_ref,
+        repo_root=repo_root,
     )
     asset_ids = [str(item["assetId"]) for item in manifest["items"]]
     if len(asset_ids) != len(set(asset_ids)):

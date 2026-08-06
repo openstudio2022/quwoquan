@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
-import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
-import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
-import 'package:quwoquan_app/core/di/app_cloud_operation_telemetry_sink.dart';
-import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/runtime/di/app_cloud_client_context_provider.dart';
+import 'package:quwoquan_app/runtime/di/app_cloud_operation_telemetry_sink.dart';
+import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final cloudClientContextProvider = Provider<CloudClientContextProvider>((ref) {

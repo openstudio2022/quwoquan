@@ -21,10 +21,6 @@ relationships:
 local_identity_reasons:
   deviceId: device-platform fingerprint key scoped to account session or registration lookup, not the
     DeviceRegistration aggregate identity
-capabilities:
-- commandable
-- queryable
-- idempotent_commands
 business_rules:
 - access/refresh token 明文不得持久化，只保存 refreshTokenHash 与 rotation lineage
 - refresh 必须单次轮换，重放旧 token 立即吊销整条 lineage

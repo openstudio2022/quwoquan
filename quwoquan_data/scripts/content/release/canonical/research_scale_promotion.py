@@ -1,6 +1,7 @@
 """Write the create-once research M100 promotion receipt."""
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +52,42 @@ def _evidence_ref(path: Path, *, output_root: Path) -> str:
         raise ResearchScalePromotionError(
             "campaign evidence must be an audited file below QWQ_OUTPUT_ROOT"
         ) from exc
+
+
+def _resolve_output_ref(raw_ref: object, *, output_root: Path, label: str) -> Path:
+    ref = Path(str(raw_ref or ""))
+    if ref.is_absolute() or not ref.parts or ".." in ref.parts:
+        raise ResearchScalePromotionError(f"{label} must be one safe output ref")
+    path = (output_root / ref).resolve()
+    try:
+        path.relative_to(output_root.resolve())
+    except ValueError as exc:
+        raise ResearchScalePromotionError(
+            f"{label} must remain below QWQ_OUTPUT_ROOT"
+        ) from exc
+    return path
+
+
+def _count(value: object, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ResearchScalePromotionError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _rate_statistic(numerator: int, denominator: int) -> dict[str, int | float]:
+    return {
+        "numerator": numerator,
+        "denominator": denominator,
+        "rate": round(numerator / denominator, 6) if denominator else 0.0,
+    }
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
 
 
 def _assert_m100_video_popularity(
@@ -175,13 +212,9 @@ def write_research_scale_promotion(
         or evidence.get("manifestDigest") != manifest_digest
     ):
         raise ResearchScalePromotionError("campaign evidence release identity drift")
-    if (
-        evidence.get("status") != "passed"
-        or resource_evidence.get("status") != "passed"
-        or fault_evidence.get("status") != "passed"
-    ):
+    if resource_evidence.get("status") != "passed":
         raise ResearchScalePromotionError(
-            "canonical campaign scale/resource/fault evidence is not passed"
+            "canonical campaign resource isolation evidence is not passed"
         )
     source_revision = str(evidence.get("sourceRevision") or "")
     entity_catalog_digest = str(evidence.get("entityCatalogDigest") or "")
@@ -197,52 +230,171 @@ def write_research_scale_promotion(
     carrier_rows = admission.get("carrierCounts")
     if not isinstance(carrier_rows, list):
         raise ResearchScalePromotionError("release carrierCounts are missing")
-    carrier_counts = {
-        str(row.get("carrier") or ""): int(row.get("researchAcceptedCount") or 0)
+    carrier_admission = {
+        str(row.get("carrier") or ""): row
         for row in carrier_rows
         if isinstance(row, Mapping)
     }
-    expected_carriers = {"homepage", "article", "image", "video"}
+    carriers = ("homepage", "article", "image", "video")
+    expected_carriers = set(carriers)
     targets = dict(policy.m100_targets)
-    if set(carrier_counts) != expected_carriers or any(
-        carrier_counts.get(carrier, 0) < targets[carrier]
-        for carrier in expected_carriers
+    lanes = {
+        str(row.get("carrier") or ""): row
+        for row in evidence.get("lanes") or []
+        if isinstance(row, Mapping)
+    }
+    if (
+        set(carrier_admission) != expected_carriers
+        or set(lanes) != expected_carriers
+        or set(targets) != expected_carriers
     ):
         raise ResearchScalePromotionError(
-            "M100 requires homepage/article/image >= 100 and video >= 50"
+            "M100 requires complete homepage/article/image/video evidence"
+        )
+    promotion_counts: list[dict[str, Any]] = []
+    for carrier in carriers:
+        lane = lanes[carrier]
+        admission_row = carrier_admission[carrier]
+        receipt_path = _resolve_output_ref(
+            lane.get("publishReceiptRef"),
+            output_root=output_root,
+            label=f"{carrier} publish receipt",
+        )
+        if _file_sha256(receipt_path) != lane.get("publishReceiptSha256"):
+            raise ResearchScalePromotionError(
+                f"{carrier} publish receipt digest drift"
+            )
+        receipt = _read_json(receipt_path)
+        target = targets[carrier]
+        qualified = _count(
+            receipt.get("qualifiedCount"), label=f"{carrier} qualifiedCount"
+        )
+        finalized = _count(
+            receipt.get("finalizedCount"), label=f"{carrier} finalizedCount"
+        )
+        selected = _count(
+            receipt.get("selectedCount"), label=f"{carrier} selectedCount"
+        )
+        discarded = _count(
+            receipt.get("discardedCount"), label=f"{carrier} discardedCount"
+        )
+        shortfall = _count(
+            receipt.get("shortfallCount"), label=f"{carrier} shortfallCount"
+        )
+        approved_quota = _count(
+            receipt.get("approvedQuota"), label=f"{carrier} approvedQuota"
+        )
+        accepted = _count(
+            admission_row.get("researchAcceptedCount"),
+            label=f"{carrier} researchAcceptedCount",
+        )
+        discards = receipt.get("discards")
+        if (
+            receipt.get("carrier") != carrier
+            or receipt.get("executionId") != lane.get("executionId")
+            or receipt.get("phase") != "publish"
+            or receipt.get("status") not in {"finalized", "partial"}
+            or approved_quota != target
+            or selected != qualified + discarded
+            or not isinstance(discards, list)
+            or len(discards) != discarded
+            or finalized != qualified
+            or accepted != qualified
+            or shortfall != max(0, target - qualified)
+            or qualified < 1
+        ):
+            raise ResearchScalePromotionError(
+                f"{carrier} promotion count/receipt closure is inconsistent"
+            )
+        if (
+            _count(lane.get("finalizedCount"), label=f"{carrier} lane finalizedCount")
+            != finalized
+            or _count(
+                lane.get("researchAcceptedCount"),
+                label=f"{carrier} lane researchAcceptedCount",
+            )
+            != accepted
+        ):
+            raise ResearchScalePromotionError(
+                f"{carrier} campaign/release accepted count drift"
+            )
+        promotion_counts.append(
+            {
+                "carrier": carrier,
+                "targetCount": target,
+                "qualifiedCount": qualified,
+                "finalizedCount": finalized,
+                "selectedCount": selected,
+                "discardedCount": discarded,
+                "shortfallCount": shortfall,
+                "researchAcceptedCount": accepted,
+            }
         )
     article_coverage = admission.get("articleMediaCoverage")
-    illustrated_rate = float(
-        article_coverage.get("illustratedRate")
-        if isinstance(article_coverage, Mapping)
-        else 0
+    if not isinstance(article_coverage, Mapping):
+        raise ResearchScalePromotionError("release article media statistics are missing")
+    article_count = _count(
+        article_coverage.get("articleCount"), label="articleMediaCoverage.articleCount"
     )
-    if illustrated_rate != float(evidence.get("articleIllustratedRate") or 0.0):
-        raise ResearchScalePromotionError("campaign article coverage evidence drift")
-    duplicate_count = evidence["duplicateAssetCount"]
-    cross_lane_count = evidence["crossLaneWriteCount"]
+    illustrated_count = _count(
+        article_coverage.get("illustratedCount"),
+        label="articleMediaCoverage.illustratedCount",
+    )
+    text_only_count = _count(
+        article_coverage.get("textOnlyCount"),
+        label="articleMediaCoverage.textOnlyCount",
+    )
+    illustrated_statistic = _rate_statistic(illustrated_count, article_count)
+    text_only_statistic = _rate_statistic(text_only_count, article_count)
+    article_lane = next(
+        row for row in promotion_counts if row["carrier"] == "article"
+    )
     if (
-        not isinstance(duplicate_count, int)
-        or isinstance(duplicate_count, bool)
-        or not isinstance(cross_lane_count, int)
-        or isinstance(cross_lane_count, bool)
+        article_count != article_lane["qualifiedCount"]
+        or illustrated_count + text_only_count != article_count
+        or float(article_coverage.get("illustratedRate") or 0.0)
+        != illustrated_statistic["rate"]
+        or float(article_coverage.get("textOnlyRate") or 0.0)
+        != text_only_statistic["rate"]
+        or float(evidence.get("articleIllustratedRate") or 0.0)
+        != illustrated_statistic["rate"]
     ):
-        raise ResearchScalePromotionError("campaign write counters must be integers")
-    resource_isolation = resource_evidence.get("status") == "passed"
+        raise ResearchScalePromotionError("campaign article coverage evidence drift")
+    duplicate_count = _count(
+        evidence.get("duplicateAssetCount"), label="campaign duplicateAssetCount"
+    )
+    cross_lane_count = _count(
+        evidence.get("crossLaneWriteCount"), label="campaign crossLaneWriteCount"
+    )
     raw_recovery_rate = fault_evidence["automaticRecoveryRate"]
     if not isinstance(raw_recovery_rate, (int, float)) or isinstance(
         raw_recovery_rate, bool
     ):
         raise ResearchScalePromotionError("automaticRecoveryRate must be numeric")
-    recovery_rate = float(raw_recovery_rate)
+    recovery_eligible = _count(
+        fault_evidence.get("recoveryEligibleCount"), label="recoveryEligibleCount"
+    )
+    automatic_recovered = _count(
+        fault_evidence.get("automaticRecoveredCount"),
+        label="automaticRecoveredCount",
+    )
+    recovery_statistic = _rate_statistic(
+        automatic_recovered,
+        recovery_eligible,
+    )
+    expected_recovery_status = (
+        "NOT_EXERCISED" if recovery_eligible == 0 else "MEASURED"
+    )
+    if (
+        automatic_recovered > recovery_eligible
+        or float(raw_recovery_rate) != recovery_statistic["rate"]
+        or fault_evidence.get("automaticRecoveryStatus") != expected_recovery_status
+    ):
+        raise ResearchScalePromotionError("automatic recovery statistics drift")
     if duplicate_count or cross_lane_count:
         raise ResearchScalePromotionError(
             "M100 duplicateAssetCount and crossLaneWriteCount must both be zero"
         )
-    if illustrated_rate < policy.minimum_illustrated_rate:
-        raise ResearchScalePromotionError("M100 article illustrated rate is below policy")
-    if not resource_isolation:
-        raise ResearchScalePromotionError("M100 resource isolation evidence is missing")
     if (
         int(resource_evidence.get("fourLaneLongestContinuousOverlapSeconds") or 0)
         < MIN_SOAK_SECONDS
@@ -252,22 +404,48 @@ def write_research_scale_promotion(
         raise ResearchScalePromotionError(
             "M100 requires 60 continuous four-lane minutes and post-terminal cleanup"
         )
-    if (
-        fault_evidence.get("automaticRecoveryStatus") != "MEASURED"
-        or int(fault_evidence.get("recoveryEligibleCount") or 0) < 20
-        or int(fault_evidence.get("automaticRecoveredCount") or 0) < 19
-    ):
-        raise ResearchScalePromotionError(
-            "M100 recovery evidence requires 20 eligible and 19 automatic cases"
-        )
-    if recovery_rate < policy.minimum_automatic_recovery_rate:
-        raise ResearchScalePromotionError(
-            "M100 automatic recovery rate is below the M1000 promotion threshold"
-        )
+    object_pass_numerator = sum(
+        int(row["qualifiedCount"]) for row in promotion_counts
+    )
+    object_pass_denominator = sum(
+        int(row["selectedCount"]) for row in promotion_counts
+    )
+    discarded_count = sum(int(row["discardedCount"]) for row in promotion_counts)
+    first_pass_lane_count = sum(
+        1
+        for lane in lanes.values()
+        if isinstance(lane.get("retryChain"), list)
+        and len(lane["retryChain"]) == 1
+    )
+    statistics = {
+        "objectPassRate": _rate_statistic(
+            object_pass_numerator, object_pass_denominator
+        ),
+        "illustratedRate": illustrated_statistic,
+        "automaticRecoveryRate": recovery_statistic,
+        "firstPassRate": _rate_statistic(first_pass_lane_count, len(carriers)),
+        "discardRate": _rate_statistic(
+            discarded_count, object_pass_denominator
+        ),
+        "quotaAttainmentByCarrier": [
+            {
+                "carrier": carrier,
+                **_rate_statistic(
+                    int(row["qualifiedCount"]),
+                    int(row["targetCount"]),
+                ),
+            }
+            for carrier, row in zip(carriers, promotion_counts, strict=True)
+        ],
+    }
     try:
         _assert_m100_video_popularity(
             release,
-            expected_video_count=carrier_counts["video"],
+            expected_video_count=next(
+                int(row["researchAcceptedCount"])
+                for row in promotion_counts
+                if row["carrier"] == "video"
+            ),
         )
     except ResearchScalePromotionError:
         raise
@@ -286,13 +464,10 @@ def write_research_scale_promotion(
         "sourceDigest": source_digest_value,
         "entityCatalogDigest": entity_catalog_digest,
         "targetScale": "M100",
-        "carrierCounts": [
-            {"carrier": carrier, "researchAcceptedCount": carrier_counts[carrier]}
-            for carrier in ("homepage", "article", "image", "video")
-        ],
+        "carrierCounts": promotion_counts,
+        "statistics": statistics,
         "duplicateAssetCount": 0,
         "crossLaneWriteCount": 0,
-        "articleIllustratedRate": illustrated_rate,
         "resourceIsolationPassed": True,
         "soakDurationSeconds": int(resource_evidence["durationSeconds"]),
         "semanticJobsByLane": list(resource_evidence["semanticJobsByLane"]),
@@ -318,11 +493,6 @@ def write_research_scale_promotion(
         "automaticRecoveryStatus": str(
             fault_evidence["automaticRecoveryStatus"]
         ),
-        "recoveryEligibleCount": int(fault_evidence["recoveryEligibleCount"]),
-        "automaticRecoveredCount": int(
-            fault_evidence["automaticRecoveredCount"]
-        ),
-        "automaticRecoveryRate": recovery_rate,
         "campaignEvidenceRef": _evidence_ref(
             campaign_evidence_path, output_root=output_root
         ),

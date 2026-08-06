@@ -7,7 +7,11 @@ import 'skill_subscription.g.dart';
 
 class AssistantDeviceActionExecutionReceipt {
   const AssistantDeviceActionExecutionReceipt({
-    required this.actionKind,
+    required this.installationId,
+    required this.deviceId,
+    required this.capability,
+    required this.inputDigest,
+    required this.permit,
     required this.idempotencyKey,
     required this.outcome,
     required this.executedAt,
@@ -15,7 +19,11 @@ class AssistantDeviceActionExecutionReceipt {
     this.failureCode,
   });
 
-  final String actionKind;
+  final String installationId;
+  final String deviceId;
+  final String capability;
+  final String inputDigest;
+  final String permit;
   final String idempotencyKey;
   final String outcome;
   final String executedAt;
@@ -24,7 +32,11 @@ class AssistantDeviceActionExecutionReceipt {
 
   factory AssistantDeviceActionExecutionReceipt.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
-      'actionKind',
+      'installationId',
+      'deviceId',
+      'capability',
+      'inputDigest',
+      'permit',
       'idempotencyKey',
       'outcome',
       'executedAt',
@@ -37,8 +49,20 @@ class AssistantDeviceActionExecutionReceipt {
     if (unknownFields.isNotEmpty) {
       throw FormatException('AssistantDeviceActionExecutionReceipt response contains unknown fields: ${unknownFields.join(', ')}');
     }
-    if (!json.containsKey('actionKind') || json['actionKind'] == null || (json['actionKind'] is! String)) {
-      throw const FormatException('AssistantDeviceActionExecutionReceipt field actionKind has an invalid wire value');
+    if (!json.containsKey('installationId') || json['installationId'] == null || (json['installationId'] is! String)) {
+      throw const FormatException('AssistantDeviceActionExecutionReceipt field installationId has an invalid wire value');
+    }
+    if (!json.containsKey('deviceId') || json['deviceId'] == null || (json['deviceId'] is! String)) {
+      throw const FormatException('AssistantDeviceActionExecutionReceipt field deviceId has an invalid wire value');
+    }
+    if (!json.containsKey('capability') || json['capability'] == null || (json['capability'] is! String)) {
+      throw const FormatException('AssistantDeviceActionExecutionReceipt field capability has an invalid wire value');
+    }
+    if (!json.containsKey('inputDigest') || json['inputDigest'] == null || (json['inputDigest'] is! String)) {
+      throw const FormatException('AssistantDeviceActionExecutionReceipt field inputDigest has an invalid wire value');
+    }
+    if (!json.containsKey('permit') || json['permit'] == null || (json['permit'] is! String)) {
+      throw const FormatException('AssistantDeviceActionExecutionReceipt field permit has an invalid wire value');
     }
     if (!json.containsKey('idempotencyKey') || json['idempotencyKey'] == null || (json['idempotencyKey'] is! String)) {
       throw const FormatException('AssistantDeviceActionExecutionReceipt field idempotencyKey has an invalid wire value');
@@ -56,7 +80,11 @@ class AssistantDeviceActionExecutionReceipt {
       throw const FormatException('AssistantDeviceActionExecutionReceipt field failureCode has an invalid wire value');
     }
     return AssistantDeviceActionExecutionReceipt(
-      actionKind: (json['actionKind'] ?? '').toString(),
+      installationId: (json['installationId'] ?? '').toString(),
+      deviceId: (json['deviceId'] ?? '').toString(),
+      capability: (json['capability'] ?? '').toString(),
+      inputDigest: (json['inputDigest'] ?? '').toString(),
+      permit: (json['permit'] ?? '').toString(),
       idempotencyKey: (json['idempotencyKey'] ?? '').toString(),
       outcome: (json['outcome'] ?? '').toString(),
       executedAt: (json['executedAt'] as String),
@@ -66,12 +94,118 @@ class AssistantDeviceActionExecutionReceipt {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'actionKind': actionKind,
+        'installationId': installationId,
+        'deviceId': deviceId,
+        'capability': capability,
+        'inputDigest': inputDigest,
+        'permit': permit,
         'idempotencyKey': idempotencyKey,
         'outcome': outcome,
         'executedAt': executedAt,
         'deviceObjectId': deviceObjectId,
         'failureCode': failureCode,
+      };
+}
+
+class AssistantDeviceActionPermit {
+  const AssistantDeviceActionPermit({
+    required this.runId,
+    required this.toolInvocationId,
+    required this.installationId,
+    required this.deviceId,
+    required this.capability,
+    required this.inputDigest,
+    required this.idempotencyKey,
+    required this.approvalRef,
+    required this.expiresAt,
+    required this.permit,
+  });
+
+  final String runId;
+  final String toolInvocationId;
+  final String installationId;
+  final String deviceId;
+  final String capability;
+  final String inputDigest;
+  final String idempotencyKey;
+  final String approvalRef;
+  final String expiresAt;
+  final String permit;
+
+  factory AssistantDeviceActionPermit.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'runId',
+      'toolInvocationId',
+      'installationId',
+      'deviceId',
+      'capability',
+      'inputDigest',
+      'idempotencyKey',
+      'approvalRef',
+      'expiresAt',
+      'permit',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantDeviceActionPermit response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('runId') || json['runId'] == null || (json['runId'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field runId has an invalid wire value');
+    }
+    if (!json.containsKey('toolInvocationId') || json['toolInvocationId'] == null || (json['toolInvocationId'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field toolInvocationId has an invalid wire value');
+    }
+    if (!json.containsKey('installationId') || json['installationId'] == null || (json['installationId'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field installationId has an invalid wire value');
+    }
+    if (!json.containsKey('deviceId') || json['deviceId'] == null || (json['deviceId'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field deviceId has an invalid wire value');
+    }
+    if (!json.containsKey('capability') || json['capability'] == null || (json['capability'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field capability has an invalid wire value');
+    }
+    if (!json.containsKey('inputDigest') || json['inputDigest'] == null || (json['inputDigest'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field inputDigest has an invalid wire value');
+    }
+    if (!json.containsKey('idempotencyKey') || json['idempotencyKey'] == null || (json['idempotencyKey'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field idempotencyKey has an invalid wire value');
+    }
+    if (!json.containsKey('approvalRef') || json['approvalRef'] == null || (json['approvalRef'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field approvalRef has an invalid wire value');
+    }
+    if (!json.containsKey('expiresAt') || json['expiresAt'] == null || (json['expiresAt'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field expiresAt has an invalid wire value');
+    }
+    if (!json.containsKey('permit') || json['permit'] == null || (json['permit'] is! String)) {
+      throw const FormatException('AssistantDeviceActionPermit field permit has an invalid wire value');
+    }
+    return AssistantDeviceActionPermit(
+      runId: (json['runId'] ?? '').toString(),
+      toolInvocationId: (json['toolInvocationId'] ?? '').toString(),
+      installationId: (json['installationId'] ?? '').toString(),
+      deviceId: (json['deviceId'] ?? '').toString(),
+      capability: (json['capability'] ?? '').toString(),
+      inputDigest: (json['inputDigest'] ?? '').toString(),
+      idempotencyKey: (json['idempotencyKey'] ?? '').toString(),
+      approvalRef: (json['approvalRef'] ?? '').toString(),
+      expiresAt: (json['expiresAt'] as String),
+      permit: (json['permit'] ?? '').toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'runId': runId,
+        'toolInvocationId': toolInvocationId,
+        'installationId': installationId,
+        'deviceId': deviceId,
+        'capability': capability,
+        'inputDigest': inputDigest,
+        'idempotencyKey': idempotencyKey,
+        'approvalRef': approvalRef,
+        'expiresAt': expiresAt,
+        'permit': permit,
       };
 }
 
@@ -2087,6 +2221,54 @@ class AssistantTaskSlice {
       };
 }
 
+class AssistantToolApprovalResult {
+  const AssistantToolApprovalResult({
+    required this.runId,
+    required this.state,
+    this.deviceActionPermit,
+  });
+
+  final String runId;
+  final String state;
+  final AssistantDeviceActionPermit? deviceActionPermit;
+
+  factory AssistantToolApprovalResult.fromJson(Map<String, dynamic> json) {
+    const allowedFields = <String>{
+      'runId',
+      'state',
+      'deviceActionPermit',
+    };
+    final unknownFields = json.keys
+        .where((key) => !allowedFields.contains(key))
+        .toList(growable: false);
+    if (unknownFields.isNotEmpty) {
+      throw FormatException('AssistantToolApprovalResult response contains unknown fields: ${unknownFields.join(', ')}');
+    }
+    if (!json.containsKey('runId') || json['runId'] == null || (json['runId'] is! String)) {
+      throw const FormatException('AssistantToolApprovalResult field runId has an invalid wire value');
+    }
+    if (!json.containsKey('state') || json['state'] == null || (json['state'] is! String)) {
+      throw const FormatException('AssistantToolApprovalResult field state has an invalid wire value');
+    }
+    if (json.containsKey('deviceActionPermit') && json['deviceActionPermit'] != null && (json['deviceActionPermit'] is! Map)) {
+      throw const FormatException('AssistantToolApprovalResult field deviceActionPermit has an invalid wire value');
+    }
+    return AssistantToolApprovalResult(
+      runId: (json['runId'] ?? '').toString(),
+      state: (json['state'] ?? '').toString(),
+      deviceActionPermit: (json['deviceActionPermit'] as Map?) == null
+          ? null
+          : AssistantDeviceActionPermit.fromJson((json['deviceActionPermit'] as Map).cast<String, dynamic>()),
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'runId': runId,
+        'state': state,
+        'deviceActionPermit': deviceActionPermit?.toJson(),
+      };
+}
+
 class AssistantTurnSummaryView {
   const AssistantTurnSummaryView({
     required this.turnId,
@@ -3933,6 +4115,13 @@ AssistantTaskSlice decodeAssistantTaskSlice(Object? response) {
     throw const FormatException('AssistantTaskSlice response must be an object');
   }
   return AssistantTaskSlice.fromJson(response.cast<String, dynamic>());
+}
+
+AssistantToolApprovalResult decodeAssistantToolApprovalResult(Object? response) {
+  if (response is! Map) {
+    throw const FormatException('AssistantToolApprovalResult response must be an object');
+  }
+  return AssistantToolApprovalResult.fromJson(response.cast<String, dynamic>());
 }
 
 AssistantTurnListView decodeAssistantTurnListView(Object? response) {

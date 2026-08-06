@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-002
+// readiness_case: list-group-candidates-api
+// readiness_case: list-selectable-group-conversations-api
+// readiness_case: list-selectable-group-contact-members-api
 package api_integration
 
 import (

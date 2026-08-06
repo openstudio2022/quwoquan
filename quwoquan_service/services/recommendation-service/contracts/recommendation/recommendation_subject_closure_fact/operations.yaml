@@ -4,8 +4,23 @@ runtime_entrypoints:
 - name: AppendRecommendationSubjectClosure
   kind: subscription
   phase: event_ingest
-  source_events: [user.UserAccountClosed]
-  idempotency: event_id
-  application: {kind: command, facet: RecommendationSubjectClosureFactAppender, method: append, object_owner: RecommendationSubjectClosureFact}
+  application: {kind: command, facet: UserAccountClosedConsumer, method: processOnce, object_owner: RecommendationSubjectClosureFact}
 consumers:
 - {name: user-account-closed-stream, channel: events.user.account, source_event: UserAccountClosed, capabilities: [record_subject_closure, block_subject_revival]}
+readiness_cases:
+- case_id: append-subject-closure-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: recommendation.recommendation_subject_closure_fact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_subject_closure_fact/test_user_account_closed_consumer__durability__local_contract_test.py
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: append-subject-closure-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: recommendation.recommendation_subject_closure_fact}
+  runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_subject_closure_fact/test_mongo_subject_closure__api_integration_test.py
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

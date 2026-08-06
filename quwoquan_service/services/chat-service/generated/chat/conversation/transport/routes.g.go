@@ -31,6 +31,7 @@ var RouteTable = []RouteEntry{
 	{"GET", "/chat/selectable-group-conversations/{conversationId}/contact-members", "ListSelectableGroupContactMembers"},
 	{"POST", "/internal/chat/account-closure/dead-letters:recover", "RecoverChatAccountClosureDeadLetter"},
 	{"PUT", "/internal/chat/gathering-conversations/{gatheringId}", "ProjectGatheringConversation"},
+	{"GET", "/chat/gathering-conversations/{conversationId}/board", "GetGatheringChatBoard"},
 }
 
 func ResolveOperation(method, path string) (string, bool) {

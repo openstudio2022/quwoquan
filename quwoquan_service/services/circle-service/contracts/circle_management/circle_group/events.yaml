@@ -1,12 +1,6 @@
 events:
 - name: CircleGroupCreated
-  producer: circle-service
-  consumers:
-  - circle-group-membership-projector
-  - circle-group-stream
-  - chat-circle-group-conversation-provisioner
-  - circle-group-search-index-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroup
   payload_fields:
   - groupId
@@ -18,11 +12,7 @@ events:
   - status
   - createdAt
 - name: CircleGroupUpdated
-  producer: circle-service
-  consumers:
-  - circle-group-stream
-  - circle-group-search-index-projector
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroup
   payload_fields:
   - _id
@@ -30,13 +20,7 @@ events:
   - circleId
   - status
 - name: CircleGroupArchived
-  producer: circle-service
-  consumers:
-  - circle-group-membership-projector
-  - circle-group-stream
-  - chat-circle-group-conversation-provisioner
-  - circle-group-search-index-projector
-  channel: transactional_outbox
+  delivery_semantics: transactional_outbox
   payload_entity: CircleGroup
   payload_fields:
   - groupId

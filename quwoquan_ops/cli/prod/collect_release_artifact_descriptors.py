@@ -28,6 +28,9 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     validate_manifest,
     validate_manifest_files,
 )
+from quwoquan_ops.ci.render_provider_conformance_source import (
+    expected_required_cell_count_from_readiness,
+)
 
 EVIDENCE_SOURCE_SCHEMAS = {
     "publicWeb": "qwq.public-web.release",
@@ -224,10 +227,16 @@ def _validate_provider_evidence(
         raise ValueError("providerEvidence status must be passed")
     if not isinstance(payload.get("generatedAt"), str) or not payload["generatedAt"]:
         raise ValueError("providerEvidence generatedAt is missing")
-    if payload.get("evidenceCount") != 140:
-        raise ValueError("providerEvidence evidenceCount must be exactly 140")
     if payload.get("issues") != [] or payload.get("sourceCoverageIssues") != []:
         raise ValueError("providerEvidence readiness issues must be empty")
+    expected_evidence_count = expected_required_cell_count_from_readiness(
+        payload.get("readiness")
+    )
+    if payload.get("evidenceCount") != expected_evidence_count:
+        raise ValueError(
+            "providerEvidence evidenceCount must equal the readiness-derived "
+            f"required cell count {expected_evidence_count}"
+        )
     source = payload.get("source")
     manifest_source = manifest["source"]
     expected_source = {
@@ -250,7 +259,6 @@ def _validate_provider_evidence(
         + str(source_evidence.get("digest") or "")
         or not isinstance(source_evidence.get("files"), dict)
         or len(source_evidence["files"]) != payload["evidenceCount"]
-        or len(source_evidence["files"]) != 140
     ):
         raise ValueError("providerEvidence sourceEvidence is not canonical")
     raw_root = provider_raw_dir.expanduser().resolve()
@@ -282,32 +290,6 @@ def _validate_provider_evidence(
         "contractGraphDigest": contract_graph_digest,
     }:
         raise ValueError("providerEvidence candidate material binding mismatch")
-    readiness = payload.get("readiness")
-    if (
-        not isinstance(readiness, dict)
-        or set(readiness) != {"alpha", "beta", "gamma", "prod"}
-    ):
-        raise ValueError("providerEvidence four-environment readiness is missing")
-    capability_sets: list[frozenset[str]] = []
-    for environment, capabilities in sorted(readiness.items()):
-        if not isinstance(capabilities, dict):
-            raise ValueError(f"providerEvidence readiness.{environment} is malformed")
-        capability_sets.append(frozenset(capabilities))
-        if len(capabilities) != 14 or any(
-            not isinstance(capability, str)
-            or not capability
-            or not isinstance(item, dict)
-            or item.get("required") is not True
-            or item.get("capability_ready") is not True
-            for capability, item in capabilities.items()
-        ):
-            raise ValueError(
-                f"providerEvidence readiness.{environment} is not 14 required ready capabilities"
-            )
-    if len(set(capability_sets)) != 1:
-        raise ValueError("providerEvidence capability set differs across environments")
-
-
 def _validate_user_acceptance_candidate_material(
     *,
     test_evidence: dict[str, Any],

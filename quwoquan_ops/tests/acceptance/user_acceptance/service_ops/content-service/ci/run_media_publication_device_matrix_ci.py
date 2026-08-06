@@ -27,7 +27,7 @@ TARGETS = {
     "prod-sim": ("prod-sim", "local-prod-sim"),
 }
 PATROL_TARGET = (
-    "test/user_acceptance/patrol/content/"
+    "test/user_acceptance/service/content_service/media/media_upload_session/"
     "media_publication_remote__user_acceptance_test.dart"
 )
 

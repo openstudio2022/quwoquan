@@ -1,0 +1,916 @@
+// ignore_for_file: unnecessary_non_null_assertion
+part of 'home_multi_form_feed.dart';
+
+const double _feedCardVerticalPadding = AppSpacing.fourteen;
+const double _feedCardSectionGap =
+    DiscoveryFeedSpacing.homeFeedCardSectionGapCompact;
+
+class _HomeRelationPostCard extends ConsumerStatefulWidget {
+  const _HomeRelationPostCard({
+    required this.cardContainerKey,
+    required this.moreButtonKey,
+    required this.wideLayout,
+    required this.item,
+    required this.isDark,
+    required this.inlineImageCarousel,
+    required this.videoScrollSignal,
+    required this.isFocused,
+    required this.onUserTap,
+    required this.onImageTap,
+    required this.onCommentTap,
+    required this.onShareTap,
+    required this.onLikeTap,
+    required this.onMoreTap,
+  });
+
+  final Key cardContainerKey;
+  final Key moreButtonKey;
+  final bool wideLayout;
+  final ContentPostViewData item;
+  final bool isDark;
+  final bool inlineImageCarousel;
+  final ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal;
+  final bool isFocused;
+  final void Function(String) onUserTap;
+  final void Function(int imageIndex) onImageTap;
+  final VoidCallback onCommentTap;
+  final VoidCallback onShareTap;
+  final VoidCallback onLikeTap;
+  final void Function(double cardWidth) onMoreTap;
+
+  @override
+  ConsumerState<_HomeRelationPostCard> createState() =>
+      _HomeRelationPostCardState();
+}
+
+class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
+    with SingleTickerProviderStateMixin {
+  static const int _maxLines = 5;
+
+  bool _isExpanded = false;
+  late AnimationController _likeCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _likeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
+  void dispose() {
+    _likeCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final profileSubjectId = item.personaId.trim().isNotEmpty
+        ? item.personaId
+        : item.authorId;
+    final postInteraction = ref.watch(
+      postInteractionStateProvider.select(
+        (state) => (
+          hasLikeState: state.hasLikeStateFor(item.id),
+          isLiked: state.isLiked(item.id),
+          likeCount: state.likeCounts[item.id],
+          shareCount: state.confirmedShareCounts[item.id],
+          commentCount: state.commentCountFor(
+            item.id,
+            fallback: item.commentCount,
+          ),
+        ),
+      ),
+    );
+    final discoveryInteraction = ref.watch(
+      discoveryStateProvider.select(
+        (state) => (
+          isLiked: state.likedPosts.contains(item.id),
+          likeCount: state.getPostLikesCount(item.id),
+          shareCount: state.getPostSharesCount(item.id),
+        ),
+      ),
+    );
+    final isFollowing = ref.watch(
+      userRelationshipStateProvider.select(
+        (state) => state.isFollowing(profileSubjectId),
+      ),
+    );
+    final isLiked = postInteraction.hasLikeState
+        ? postInteraction.isLiked
+        : discoveryInteraction.isLiked;
+    final likeCount =
+        postInteraction.likeCount ??
+        (discoveryInteraction.likeCount > 0
+            ? discoveryInteraction.likeCount
+            : item.likeCount);
+    final shareCount =
+        postInteraction.shareCount ??
+        (discoveryInteraction.shareCount > 0
+            ? discoveryInteraction.shareCount
+            : item.shareCount);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDark = widget.isDark;
+        final cardWidth =
+            constraints.hasBoundedWidth && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final fg = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundPrimary,
+        );
+        final muted = AppColorsFunctional.getColor(
+          isDark,
+          ColorType.foregroundSecondary,
+        );
+        final cardBg = SettingsSemanticConstants.conversationSheetCardSurface(
+          isDark,
+        );
+        final cardBorder = widget.wideLayout
+            ? SettingsSemanticConstants.conversationSheetCardBorderColor(isDark)
+            : AppColors.transparent;
+        final borderRadius = widget.wideLayout
+            ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
+            : BorderRadius.zero;
+        final primaryReason =
+            widget.item.intersectionReasons?.isNotEmpty == true
+            ? widget.item.intersectionReasons!.first
+            : null;
+        final feedHostTarget = IntersectionTarget(
+          objectType: 'post',
+          objectId: item.id,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        );
+        final hasPlayableVideo = resolveContentVideoUrlCandidates(
+          item.mediaVideoUrl,
+          endpointConfig: ref.watch(mediaEndpointConfigProvider),
+        ).isNotEmpty;
+
+        return DecoratedBox(
+          key: widget.cardContainerKey,
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: borderRadius,
+            border: Border.all(color: cardBorder, width: AppSpacing.hairline),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              _feedCardVerticalPadding,
+              AppSpacing.containerMd,
+              _feedCardVerticalPadding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  key: const ValueKey('home-relation-card-header'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () => widget.onUserTap(profileSubjectId),
+                      child: RoundedSquareAvatar(
+                        size: AppSpacing.avatarUserSm,
+                        imageUrl: item.avatarUrl,
+                        name: item.displayName,
+                        borderRadius: AppSpacing.avatarUserSm / 2,
+                        backgroundColor: AppColors.iosSecondaryFill(context),
+                        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupMd),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.feedAuthorNameResponsive(
+                                context,
+                              ),
+                              fontWeight: AppTypography.medium,
+                              color: fg,
+                              letterSpacing: -0.08,
+                              height: AppSpacing.textLineHeightDense,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.two),
+                          _AuthorMetaLine(
+                            item: item,
+                            fallbackText: _buildMetaLine(context),
+                            color: muted,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.intraGroupMd),
+                    _FollowPillButton(
+                      isFollowing: isFollowing,
+                      onPressed: () {
+                        runWhenLoggedIn(
+                          ref,
+                          context,
+                          AuthGateReason.follow,
+                          () {
+                            final wasFollowing = effectiveProfileFollowing(
+                              ref,
+                              profileSubjectId,
+                            );
+                            final nextFollowing = !wasFollowing;
+                            syncProfileFollowIntent(
+                              ref,
+                              personaId: profileSubjectId,
+                              previousFollowing: wasFollowing,
+                              isFollowing: nextFollowing,
+                              sourceSurfaceId: AppUiSurfaces.homeFeed.id,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: _feedCardSectionGap),
+                _HomeConnectionBadgesRow(
+                  primaryReason: primaryReason,
+                  contextObjectTarget: feedHostTarget,
+                ),
+                if (_HomeConnectionBadgesRow.hasAnyBadge(
+                  primaryReason: primaryReason,
+                  contextObjectTarget: feedHostTarget,
+                ))
+                  const SizedBox(height: AppSpacing.intraGroupSm),
+                if (item.isArticleLike)
+                  _HomeArticlePostCard(
+                    item: item,
+                    isDark: isDark,
+                    reason: primaryReason,
+                    onTap: () => widget.onImageTap(0),
+                    onFallbackTap: primaryReason == null
+                        ? null
+                        : () =>
+                              _openFallbackIntersection(context, primaryReason),
+                    onSpanTap: primaryReason == null
+                        ? null
+                        : (span) => _openSpanIntersection(
+                            context,
+                            primaryReason,
+                            span,
+                          ),
+                  )
+                else if (item.isVideoLike && hasPlayableVideo)
+                  _HomeFeedVideoAutoPlayGate(
+                    videoId: item.id,
+                    scrollSignal: widget.videoScrollSignal,
+                    hasPlayableSource: hasPlayableVideo,
+                    onFastScrollSuppressed: (attributes) => ref
+                        .read(cacheTelemetrySinkProvider)
+                        .record(
+                          'video.init.suppressed_fast_scroll',
+                          attributes,
+                        ),
+                    builder: (playback) => _HomeVideoPostCard(
+                      item: item,
+                      isDark: isDark,
+                      reason: primaryReason,
+                      initialize: playback.initialize,
+                      autoPlay: playback.autoPlay,
+                      onTap: () => widget.onImageTap(0),
+                      onFallbackTap: primaryReason == null
+                          ? null
+                          : () => _openFallbackIntersection(
+                              context,
+                              primaryReason,
+                            ),
+                      onSpanTap: primaryReason == null
+                          ? null
+                          : (span) => _openSpanIntersection(
+                              context,
+                              primaryReason,
+                              span,
+                            ),
+                    ),
+                  )
+                else
+                  _HomeImagePostCard(
+                    item: item,
+                    isDark: isDark,
+                    reason: primaryReason,
+                    expanded: _isExpanded,
+                    onToggleExpanded: () =>
+                        setState(() => _isExpanded = !_isExpanded),
+                    onTap: widget.onImageTap,
+                    onFallbackTap: primaryReason == null
+                        ? null
+                        : () =>
+                              _openFallbackIntersection(context, primaryReason),
+                    onSpanTap: primaryReason == null
+                        ? null
+                        : (span) => _openSpanIntersection(
+                            context,
+                            primaryReason,
+                            span,
+                          ),
+                  ),
+
+                const SizedBox(height: _feedCardSectionGap),
+                _ActionRow(
+                  key: const ValueKey('home-relation-card-actions'),
+                  moreButtonKey: widget.moreButtonKey,
+                  item: item,
+                  isDark: isDark,
+                  isLiked: isLiked,
+                  likeCount: likeCount,
+                  shareCount: shareCount,
+                  commentCount: postInteraction.commentCount,
+                  likeCtrl: _likeCtrl,
+                  onLike: () {
+                    HapticFeedback.lightImpact();
+                    // 任务 A · 动效尊重「减少动态效果」无障碍设置：仅在未禁用动画时播放点赞缩放。
+                    if (!MediaQuery.disableAnimationsOf(context)) {
+                      _likeCtrl.forward(from: 0);
+                    }
+                    widget.onLikeTap();
+                  },
+                  onComment: widget.onCommentTap,
+                  onShare: widget.onShareTap,
+                  onMore: () => widget.onMoreTap(cardWidth),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _buildMetaLine(BuildContext context) {
+    return _timeAgo(context, widget.item.createdAt);
+  }
+
+  void _openSpanIntersection(
+    BuildContext context,
+    IntersectionReason reason,
+    IntersectionTextSpan span,
+  ) {
+    final navigator = IntersectionTargetNavigator(
+      onTrack: (target, attribution) {
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackTagClick(
+              target.objectId,
+              referralSource: ReferralSource.organicFeed,
+              tags: attribution.tagRefs,
+              intersectionId: attribution.intersectionId,
+              intersectionDimension: attribution.dimension,
+              intersectionSourceRef: attribution.sourceRef,
+              intersectionTagRefs: attribution.tagRefs,
+              intersectionClass: attribution.intersectionClass,
+              intersectionEvidenceId: attribution.evidenceId,
+            );
+      },
+    );
+    final sourceRef = _sourceRefForReason(reason);
+    navigator.open(
+      context,
+      span.target,
+      sourceRef: sourceRef,
+      attribution: IntersectionNavAttribution(
+        intersectionId: reason.intersectionId,
+        dimension: reason.dimension,
+        intersectionClass: reason.intersectionClass,
+        sourceRef: sourceRef,
+        tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
+      ),
+    );
+  }
+
+  void _openFallbackIntersection(
+    BuildContext context,
+    IntersectionReason reason,
+  ) {
+    IntersectionTarget? firstVisualTarget;
+    for (final visual in reason.sampleVisuals) {
+      if (visual.target != null) {
+        firstVisualTarget = visual.target;
+        break;
+      }
+    }
+    final navigator = IntersectionTargetNavigator(
+      onTrack: (target, attribution) {
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackTagClick(
+              target.objectId,
+              referralSource: ReferralSource.organicFeed,
+              tags: attribution.tagRefs,
+              intersectionId: attribution.intersectionId,
+              intersectionDimension: attribution.dimension,
+              intersectionSourceRef: attribution.sourceRef,
+              intersectionTagRefs: attribution.tagRefs,
+              intersectionClass: attribution.intersectionClass,
+              intersectionEvidenceId: attribution.evidenceId,
+            );
+      },
+    );
+    final sourceRef = _sourceRefForReason(reason);
+    final opened = navigator.open(
+      context,
+      firstVisualTarget,
+      sourceRef: sourceRef,
+      attribution: IntersectionNavAttribution(
+        intersectionId: reason.intersectionId,
+        dimension: reason.dimension,
+        intersectionClass: reason.intersectionClass,
+        sourceRef: sourceRef,
+        tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
+      ),
+    );
+    if (opened) return;
+    final dimension = reason.dimension.trim();
+    if (dimension.isEmpty) return;
+    navigator.open(
+      context,
+      IntersectionTarget(
+        objectType: 'dimension',
+        objectId: dimension,
+        objectKind: 'tag',
+        routeId: 'myIntersections',
+      ),
+      sourceRef: sourceRef,
+      attribution: IntersectionNavAttribution(
+        intersectionId: reason.intersectionId,
+        dimension: reason.dimension,
+        intersectionClass: reason.intersectionClass,
+        sourceRef: sourceRef,
+        tagRefs: reason.tagRefs,
+        evidenceId: reason.pointSummarySnapshotId,
+      ),
+    );
+  }
+
+  String _sourceRefForReason(IntersectionReason reason) {
+    for (final point in reason.intersectionPoints) {
+      final sourceRef = point.sourceRef.trim();
+      if (sourceRef.isNotEmpty) return sourceRef;
+    }
+    return reason.source.trim();
+  }
+
+  static String _timeAgo(BuildContext context, DateTime t) {
+    final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
+    final delta = DateTime.now().difference(t).inHours;
+    if (delta < 1) return l10n?.justNow ?? '刚刚';
+    if (delta < 24) return l10n?.hoursAgoTemplate(delta) ?? '$delta 小时前';
+    return l10n?.monthDayTemplate(t.month, t.day) ?? '${t.month}/${t.day}';
+  }
+}
+
+class _FollowingArticleCard extends StatelessWidget {
+  const _FollowingArticleCard({
+    required this.item,
+    required this.isDark,
+    required this.summaryLineLimit,
+    required this.onTap,
+    required this.onMoreTap,
+  });
+
+  final ContentPostViewData item;
+  final bool isDark;
+  final int summaryLineLimit;
+  final VoidCallback onTap;
+  final VoidCallback onMoreTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final eyebrowSegments = <String>['文章', _articleTemplateLabel];
+
+    return PostPreviewListTile(
+      key: ValueKey<String>('following-article-card-${item.id}'),
+      isDark: isDark,
+      eyebrowText: eyebrowSegments.join(' · '),
+      eyebrowColor: AppColors.primaryColor,
+      title: _headlineText,
+      supportingText: _supportingText,
+      supportingTextMaxLines: summaryLineLimit,
+      coverUrl: item.mediaCoverUrl,
+      hideThumbnailWhenNoCover: true,
+      thumbnailKey: item.mediaCoverUrl.isNotEmpty
+          ? ValueKey<String>('following-article-thumbnail-${item.id}')
+          : null,
+      onTap: onTap,
+      footer: Row(
+        children: [
+          Expanded(
+            child: Text(
+              item.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.intraGroupXs),
+          Text(
+            _HomeRelationPostCardState._timeAgo(context, item.createdAt),
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
+      ),
+      trailing: _HomeFeedMoreButton(
+        isDark: isDark,
+        color: fgSecondary,
+        onPressed: onMoreTap,
+      ),
+    );
+  }
+
+  String get _articleTemplateLabel {
+    final templateId = item.type == 'article' ? item.articleTemplate : '';
+    return articleTemplatePresetFromString(templateId).label;
+  }
+
+  String get _headlineText {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    if (title.isNotEmpty) return title;
+    if (body.isNotEmpty) return body;
+    return '文章';
+  }
+
+  String get _supportingText {
+    final title = item.normalizedTitle;
+    final body = item.normalizedBody;
+    if (title.isEmpty || body.isEmpty || title == body) {
+      return '';
+    }
+    return body;
+  }
+}
+
+class _HomeConnectionBadgesRow extends StatelessWidget {
+  const _HomeConnectionBadgesRow({
+    required this.primaryReason,
+    required this.contextObjectTarget,
+  });
+
+  final IntersectionReason? primaryReason;
+  final IntersectionTarget? contextObjectTarget;
+
+  static bool hasAnyBadge({
+    required IntersectionReason? primaryReason,
+    IntersectionTarget? contextObjectTarget,
+  }) {
+    final hasInlineIntersection = _shouldShowIntersection(
+      primaryReason,
+      contextObjectTarget: contextObjectTarget,
+    );
+    return (!hasInlineIntersection && _entityLabel(primaryReason) != null) ||
+        _showCompanionBadge(primaryReason);
+  }
+
+  static String? _entityLabel(IntersectionReason? reason) {
+    if (reason == null) {
+      return null;
+    }
+    final visualLabel = reason.objectVisual?.displayName.trim() ?? '';
+    if (visualLabel.isNotEmpty) {
+      return visualLabel;
+    }
+    for (final span in reason.primarySpans) {
+      final kind = span.target?.objectKind.trim() ?? '';
+      if (kind == 'homepage' || kind == 'place') {
+        final text = span.text.trim();
+        if (text.isNotEmpty) {
+          return text;
+        }
+      }
+    }
+    return null;
+  }
+
+  static bool _showCompanionBadge(IntersectionReason? reason) {
+    // 「有人同行」徽标只由云侧下发的约伴同行类 actionHint 驱动，判定真相源为 codegen
+    // actionKeyMeta.dispatch==gathering（start_gathering / join_gathering / meet_nearby，M0.7）；
+    // 话题房 / 语音房 / 心动（dispatch==connect）与私信（dispatch==message）不再误标为同行。
+    // 端只读 actionKey → dispatch，绝不按标题/正文地名字符串猜测约伴意图
+    // （守元数据驱动 R06 + §24.10 诚实红线，不伪造行动信号）。
+    if (reason == null) {
+      return false;
+    }
+    for (final hint in reason.actionHints) {
+      if (HomeFeedCrossObjectComposition.isGatheringAction(hint.actionKey)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasAnyBadge(
+      primaryReason: primaryReason,
+      contextObjectTarget: contextObjectTarget,
+    )) {
+      return const SizedBox.shrink();
+    }
+
+    final accent = AppColors.iosAccent(context);
+    final chips = <Widget>[];
+
+    final entity =
+        _shouldShowIntersection(
+          primaryReason,
+          contextObjectTarget: contextObjectTarget,
+        )
+        ? null
+        : _entityLabel(primaryReason);
+    if (entity != null) {
+      chips.add(
+        _badgeChip(
+          context,
+          label: entity,
+          prefix: AppConceptConstants.feedBadgeEntity,
+          accent: accent,
+        ),
+      );
+    }
+
+    if (_showCompanionBadge(primaryReason)) {
+      chips.add(
+        _badgeChip(
+          context,
+          label: AppConceptConstants.feedBadgeCompanion,
+          accent: accent,
+        ),
+      );
+    }
+
+    return Wrap(
+      key: const ValueKey<String>('home-connection-badges-row'),
+      spacing: AppSpacing.intraGroupSm,
+      runSpacing: AppSpacing.intraGroupXs,
+      children: chips,
+    );
+  }
+
+  Widget _badgeChip(
+    BuildContext context, {
+    required String label,
+    String? prefix,
+    required Color accent,
+  }) {
+    final text = prefix == null || prefix.isEmpty ? label : '$prefix · $label';
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupSm,
+        vertical: AppSpacing.intraGroupXs,
+      ),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: AppTypography.iosCaption2,
+          fontWeight: AppTypography.medium,
+          color: accent,
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthorMetaLine extends StatelessWidget {
+  const _AuthorMetaLine({
+    required this.item,
+    required this.fallbackText,
+    required this.color,
+  });
+
+  final ContentPostViewData item;
+  final String fallbackText;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final segments = <String>[
+      if (item.authorRoleLabel.trim().isNotEmpty) item.authorRoleLabel.trim(),
+      ...item.authorIdentityTags
+          .map((tag) => tag.trim())
+          .where((tag) => tag.isNotEmpty)
+          .take(2),
+      if (item.authorRoleLabel.trim().isEmpty &&
+          item.authorIdentityTags.isEmpty)
+        fallbackText,
+    ];
+    return Row(
+      children: [
+        if (item.authorVerified) ...[
+          Icon(
+            CupertinoIcons.checkmark_seal_fill,
+            size: AppSpacing.iconXSmall,
+            color: AppColors.iosAccent(context),
+          ),
+          const SizedBox(width: AppSpacing.intraGroupXs),
+        ],
+        Expanded(
+          child: Text(
+            segments.join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: color,
+              letterSpacing: -0.04,
+              height: AppSpacing.one,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FollowPillButton extends StatelessWidget {
+  const _FollowPillButton({required this.isFollowing, required this.onPressed});
+
+  final bool isFollowing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.iosAccent(context);
+    final bg = isFollowing
+        ? AppColors.iosSecondaryFill(context)
+        : accent.withValues(alpha: 0.12);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onPressed,
+      child: Container(
+        key: const ValueKey<String>('home-post-author-follow-button'),
+        width: AppSpacing.followButtonWidthCompact,
+        height: AppSpacing.buttonHeightXs,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        ),
+        child: Text(
+          isFollowing ? FoundationText.following : FoundationText.follow,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+          style: TextStyle(
+            fontSize: AppTypography.xs,
+            fontWeight: AppTypography.semiBold,
+            color: isFollowing ? AppColors.iosSecondaryLabel(context) : accent,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostIntersectionLine extends StatelessWidget {
+  const _PostIntersectionLine({
+    required this.reason,
+    required this.contextObjectName,
+    required this.contextObjectTarget,
+    this.onSpanTap,
+    this.onFallbackTap,
+  });
+
+  final IntersectionReason reason;
+  final String contextObjectName;
+  final IntersectionTarget? contextObjectTarget;
+  final void Function(IntersectionTextSpan span)? onSpanTap;
+  final VoidCallback? onFallbackTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayReason =
+        HomeFeedCrossObjectComposition.displayReadyIntersection(
+          reason,
+          contextObjectTarget: contextObjectTarget,
+        );
+    if (displayReason == null) {
+      return const SizedBox.shrink();
+    }
+    final accent = AppColors.iosAccent(context);
+    // 任务 B · 分层强度：事实型交集（共同关注/到访/收藏）视觉强于推测型，
+    // 推测型背景/描边更弱、导语颜色向次级文本混合，但仍保留可点击 affordance。
+    final bool isFact = _isFactIntersection(reason);
+    final double backgroundOpacity = isFact
+        ? DiscoveryFeedSpacing.homeFeedIntersectionBackgroundOpacity
+        : DiscoveryFeedSpacing.homeFeedIntersectionBackgroundOpacitySoft;
+    final double borderOpacity = isFact
+        ? DiscoveryFeedSpacing.homeFeedIntersectionBorderOpacity
+        : DiscoveryFeedSpacing.homeFeedIntersectionBorderOpacitySoft;
+    return DecoratedBox(
+      key: const ValueKey('home-relation-card-reason'),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: backgroundOpacity),
+        borderRadius: BorderRadius.circular(
+          DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
+        ),
+        border: Border.all(
+          color: accent.withValues(alpha: borderOpacity),
+          width: AppSpacing.hairline,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: DiscoveryFeedSpacing.homeFeedIntersectionPadding,
+          vertical: DiscoveryFeedSpacing.homeFeedIntersectionPadding,
+        ),
+        child: HomeFeedCrossObjectComposition.interactiveIntersectionText(
+          spans: displayReason.primarySpans,
+          fallbackText: displayReason.primaryText,
+          maxLines: 1,
+          onSpanTap: onSpanTap,
+          onFallbackTap: onFallbackTap,
+          // 任务 B · 分层强度：首页交集证据行把可点击片段（姓名/数字）做成
+          // 比正文更重的字重，强化「可点击行动召唤」的视觉识别，而组件默认
+          // 字重仍保持常规（见 interactive_intersection_text_test）。
+          accentFontWeight: AppTypography.medium,
+          baseStyle: TextStyle(
+            fontSize: AppTypography.feedBodyResponsive(context),
+            height: AppSpacing.textLineHeightBody,
+            color: AppColors.iosLabel(context),
+            letterSpacing: 0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 任务 B · 分层强度：事实型交集（共同关注/到访/收藏等硬证据）。
+/// 云侧 `intersectionClass` 是唯一真相源，端侧只读不自造；默认按事实型从重显示。
+bool _isFactIntersection(IntersectionReason reason) {
+  final normalized = reason.intersectionClass.trim().toLowerCase();
+  // 仅显式标记为推测型时弱化，其余（含空值/fact）按事实型从重。
+  return normalized != 'recommended' &&
+      normalized != 'inferred' &&
+      normalized != 'affinity';
+}
+
+Widget? _buildPostIntersectionRow({
+  required IntersectionReason? reason,
+  required String contextObjectName,
+  required IntersectionTarget? contextObjectTarget,
+  required void Function(IntersectionTextSpan span)? onSpanTap,
+  required VoidCallback? onFallbackTap,
+  Key key = const ValueKey('home-post-inline-intersection'),
+}) {
+  if (reason == null) {
+    return null;
+  }
+  final displayReason = HomeFeedCrossObjectComposition.displayReadyIntersection(
+    reason,
+    contextObjectTarget: contextObjectTarget,
+  );
+  if (displayReason == null) {
+    return null;
+  }
+  return KeyedSubtree(
+    key: key,
+    child: _PostIntersectionLine(
+      reason: displayReason,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
+      onSpanTap: onSpanTap,
+      onFallbackTap: onFallbackTap,
+    ),
+  );
+}
+
+/// 任务 A · 加载态：首页推荐占位骨架屏。脉冲渐显在「减少动态效果」下退化为静态占位。

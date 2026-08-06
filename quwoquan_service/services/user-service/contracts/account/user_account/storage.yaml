@@ -1,8 +1,10 @@
 backend: postgres
 tables:
   user_profiles:
+    publication_role: not_published
     entity: UserAccount
-    pk: user_id
+    pk:
+    - user_id
     columns:
     - name: user_id
       type: VARCHAR(96)
@@ -139,11 +141,14 @@ tables:
       - bio
       type: GIN_TRGM
   anonymous_device_bindings:
+    publication_role: not_published
     entity: AnonymousDeviceBinding
-    pk: id
-    fk:
-      column: owner_id
-      references: user_profiles.user_id
+    pk:
+    - id
+    foreign_keys:
+    - columns:
+      - owner_id
+      references: user_profiles(user_id)
       on_delete: CASCADE
     columns:
     - name: id
@@ -196,11 +201,14 @@ tables:
       - device_fingerprint_hash
     cache_excluded: true
   profile_qr_tokens:
+    publication_role: not_published
     entity: ProfileQrToken
-    pk: token_id
-    fk:
-      column: owner_user_id
-      references: user_profiles.user_id
+    pk:
+    - token_id
+    foreign_keys:
+    - columns:
+      - owner_user_id
+      references: user_profiles(user_id)
       on_delete: CASCADE
     columns:
     - name: token_id
@@ -260,11 +268,14 @@ tables:
       - token_hash
     cache_excluded: true
   user_auth:
+    publication_role: not_published
     entity: UserAuth
-    pk: user_id
-    fk:
-      column: user_id
-      references: user_profiles.user_id
+    pk:
+    - user_id
+    foreign_keys:
+    - columns:
+      - user_id
+      references: user_profiles(user_id)
       on_delete: CASCADE
     description: 仅承载登录失败计数与锁定状态；refresh 会话归 account_sessions（只存哈希）。
     columns:
@@ -301,11 +312,14 @@ tables:
       default: NOW()
     cache_excluded: true
   consent_records:
+    publication_role: not_published
     entity: ConsentRecord
-    pk: id
-    fk:
-      column: owner_id
-      references: user_profiles.user_id
+    pk:
+    - id
+    foreign_keys:
+    - columns:
+      - owner_id
+      references: user_profiles(user_id)
       on_delete: CASCADE
     columns:
     - name: id
@@ -345,6 +359,7 @@ tables:
       columns:
       - source_operation
   user_account_outbox:
+    publication_role: transactional_outbox
     entity: UserAccount
     infrastructure_only: true
     description: UserAccountClosed、UserSuspended、UserRestored 与 UserProfileTagsChanged 同源状态事务提交的 durable outbox；租约 relay 仅在 durable stream 成功后确认 published，并按账号顺序重放。
@@ -413,6 +428,7 @@ tables:
       - occurred_at
       - event_id
   user_account_outbox_dead_letters:
+    publication_role: publication_accessory
     entity: UserAccount
     infrastructure_only: true
     description: UserAccount lifecycle relay 的 payload-free terminal DLQ；仅保存 opaque event_id、事件类别、重试次数和错误 code/digest，relay 每小时清理超过 30 天的诊断记录，原 outbox 仍保持 terminal 以防乱序。
@@ -459,9 +475,10 @@ tables:
       - failed_at
       - event_id
   user_profile_search_outbox:
+    publication_role: transactional_outbox
     entity: UserAccount
     infrastructure_only: true
-    description: UserProfileUpdated、UserAvatarUpdated 与 UserRegistered 的 search projection durable outbox；资料事实与投影坐标在同一事务提交，租约 relay 只在 Elasticsearch/OpenSearch 幂等 upsert 或 delete 成功后确认 checkpoint，失败保留为可重放记录。
+    description: UserProfileUpdated 与 UserAvatarUpdated 的 search projection durable outbox；资料事实与投影坐标在同一事务提交，租约 relay 只在 Elasticsearch/OpenSearch 幂等 upsert 或 delete 成功后确认 checkpoint，失败保留为可重放记录。
     columns:
     - name: event_id
       type: VARCHAR(64)
@@ -521,6 +538,7 @@ tables:
       - occurred_at
       - event_id
   service_schema_migrations:
+    publication_role: not_published
     entity: UserAccount
     infrastructure_only: true
     description: user-service 迁移 runner 的幂等 ledger；只记录迁移文件 identity 与 digest，不承载业务状态。
@@ -548,10 +566,12 @@ tables:
       - service_name
       - filename
   user_account_enforcement_receipts:
+    publication_role: not_published
     entity: UserAccount
     infrastructure_only: true
     description: 已批准账号 suspend/restore decision 的原子幂等回执；与 UserAccount 状态、auth epoch 和 outbox 同事务提交。
-    pk: decision_id
+    pk:
+    - decision_id
     columns:
     - name: decision_id
       type: VARCHAR(128)
@@ -601,9 +621,8 @@ tables:
       - occurred_at
 collections:
   rm_user_profile_view:
-    backend: mongodb
+    publication_role: not_published
     entity: UserAccount
-    projection: UserProfileView
     role: projection
     description: UserAccount 的可重建兴趣、分群与统计视图；只消费 typed domain events，Mongo 记录不得成为账号或推荐特征的第二权威来源。
     indexes:
@@ -622,6 +641,7 @@ collections:
         segments: 1
 streams:
   events.user.account:
+    publication_role: publication_accessory
     entity: UserAccount
     role: append_only
     idempotency_key: eventId

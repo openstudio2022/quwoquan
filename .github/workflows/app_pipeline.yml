@@ -212,7 +212,7 @@ jobs:
             fi
             flutter build appbundle --release -t "$ENTRYPOINT" "${DART_DEFINES[@]}"
             jarsigner -verify -strict -certs build/app/outputs/bundle/release/app-release.aab
-            python3 scripts/runtime/verify_production_release_artifact.py \
+            python3 scripts/runtime/architecture/verify_production_release_artifact.py \
               --platform android \
               --artifact build/app/outputs/flutter-apk/app-release.apk \
               --launcher-handoff "$HANDOFF" \
@@ -405,7 +405,7 @@ jobs:
               --source-tree-digest "$SOURCE_TREE_DIGEST" \
               --output "$BUNDLE_ROOT/application-packages/${env_name}--ios.json"
             if [ "$env_name" = prod ]; then
-              python3 scripts/runtime/verify_production_release_artifact.py \
+              python3 scripts/runtime/architecture/verify_production_release_artifact.py \
                 --platform ios \
                 --artifact "$IPA_PATH" \
                 --launcher-handoff "$HANDOFF" \
@@ -600,7 +600,7 @@ jobs:
             APP_PATHS=(build/macos/Build/Products/Release/*.app)
             test "${#APP_PATHS[@]}" -eq 1
             if [ "$env_name" = prod ]; then
-              python3 scripts/runtime/verify_production_release_artifact.py \
+              python3 scripts/runtime/architecture/verify_production_release_artifact.py \
                 --platform macos \
                 --artifact "${APP_PATHS[0]}" \
                 --report build/release-attestation/prod-macos.json

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	mediaerrors "quwoquan_service/services/content-service/generated/media/media_asset"
-	"quwoquan_service/runtime/commandmeta"
 	mediamodel "quwoquan_service/services/content-service/internal/media/media_asset/domain/model"
 	mediaports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 )
@@ -233,11 +233,7 @@ func unavailable(err error) error {
 	if errors.As(err, &appError) {
 		return appError
 	}
-	return rterr.NewUnavailable(
-		rterr.ModuleContent,
-		"媒体服务暂时不可用",
-		err.Error(),
-	)
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error())
 }
 
 func newMediaIdentifier(prefix string) (string, error) {
@@ -251,20 +247,6 @@ func newMediaIdentifier(prefix string) (string, error) {
 type mediaAssetProcessingUpdatedPayload struct {
 	AssetID    string                      `json:"assetId"`
 	Processing mediamodel.ProcessingStatus `json:"processingStatus"`
-}
-
-type mediaAssetImageDescriptorActivatedPayload struct {
-	AssetID           string `json:"assetId"`
-	RunID             string `json:"runId"`
-	PreviousRevision  int    `json:"previousRevision"`
-	ActivatedRevision int    `json:"activatedRevision"`
-}
-
-type mediaAssetImageDescriptorRolledBackPayload struct {
-	AssetID           string `json:"assetId"`
-	RunID             string `json:"runId"`
-	PreviousRevision  int    `json:"previousRevision"`
-	ActivatedRevision int    `json:"activatedRevision"`
 }
 
 type mediaAssetAccessPolicyUpdatedPayload struct {

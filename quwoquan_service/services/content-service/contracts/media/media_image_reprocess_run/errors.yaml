@@ -1,66 +1,64 @@
-entity: MediaImageReprocessRun
-domain: CONTENT
 errors:
 - code: CONTENT.USER.media_image_reprocess_invalid_argument
-  kind: USER
   reason: media_image_reprocess_invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [StartMediaImageReprocessRun]
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrMediaImageReprocessInvalidArgument
   dart_const: mediaImageReprocessInvalidArgument
   user_message:
     zh: 图片重处理请求无效
     en: The image reprocessing request is invalid.
 - code: CONTENT.USER.media_image_reprocess_run_not_found
-  kind: USER
   reason: media_image_reprocess_run_not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun, GetMediaImageReprocessRun]
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrMediaImageReprocessRunNotFound
   dart_const: mediaImageReprocessRunNotFound
   user_message:
     zh: 图片重处理任务不存在
     en: The image reprocessing run was not found.
 - code: CONTENT.USER.media_image_reprocess_invalid_transition
-  kind: USER
   reason: media_image_reprocess_invalid_transition
   http_status: 409
   emitted_by:
   - surface: http
     operations: [PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   go_const: ErrMediaImageReprocessInvalidTransition
   dart_const: mediaImageReprocessInvalidTransition
   user_message:
     zh: 图片重处理任务当前不能执行此操作
     en: The image reprocessing run cannot perform this operation now.
 - code: CONTENT.USER.media_image_reprocess_version_conflict
-  kind: USER
   reason: media_image_reprocess_version_conflict
   http_status: 409
   emitted_by:
   - surface: http
     operations: [StartMediaImageReprocessRun, PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun]
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   go_const: ErrMediaImageReprocessVersionConflict
   dart_const: mediaImageReprocessVersionConflict
   user_message:
     zh: 图片重处理任务状态已变化，请重试
     en: The image reprocessing run changed. Please retry.
 - code: CONTENT.SYSTEM.media_image_reprocess_storage_unavailable
-  kind: SYSTEM
   reason: media_image_reprocess_storage_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [StartMediaImageReprocessRun, PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun, GetMediaImageReprocessRun]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 3
   go_const: ErrMediaImageReprocessStorageUnavailable
   dart_const: mediaImageReprocessStorageUnavailable

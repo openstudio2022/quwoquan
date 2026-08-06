@@ -33,7 +33,7 @@
 <a id="req-002"></a>
 ### REQ-002 each approved article closes one execution and release lifecycle
 
-- 任何缺失对象、来源、rights 或环境 receipt 均阻断 release。
+- 任何已进入 qualified/finalized 闭包的文章缺对象、来源、rights 或环境 receipt 均阻断该对象与 release；未达 quota 的 shortfall 和带 typed issues 的 discard 不阻止其余合格文章发布。
 - `payload/release.json`、`payload/desired_state.json`、environment `run/result`、`applied_ref`、`rollback_ref` 与各 importer/API readback report 分别由对应 JSON Schema 唯一约束；`release_manifest` 不承担 canonical release 或环境激活真相源。
 - empty baseline 是 release-bound、零 execution、零对象/creator/tag 的 immutable snapshot；Tag taxonomy 允许激活该零节点 snapshot，并允许 retired snapshot rollback/replay，历史 snapshot 不物理删除。
 - Alpha/Beta/Gamma 必须分别以真实 importer receipt、`applied_ref` 和 post/homepage（或 baseline）API report 证明激活；Prod `prepared` / `dry-run` 只能证明准备或演练，不得生成或冒充激活证据。
@@ -42,7 +42,9 @@
 <a id="req-003"></a>
 ### REQ-003 capacity conclusions use only measured execution receipts
 
-- 容量评估可重算且不被当作生产完成。
+- M100/M1000 的 article workload target 分别为 100/1000；quota/count 只表达请求负载与里程碑目标，不是发布门。
+- receipt 分别记录 target、selected、qualified、finalized、discarded、shortfall，以及 object pass、illustrated、first-pass、discard 与 quota attainment 的分子、分母和 rate；任何目标缺口或比率值都不阻断已闭合对象。
+- 容量评估可重算且不被当作生产完成；对象级 review、source/rights/provenance、同源图片闭包、去重与 canonical 引用仍是硬门。
 
 <a id="req-004"></a>
 ### REQ-004 开放式旅行/摄影文章来源站点统一 onboarding 合同与 shared commercial pool
@@ -79,6 +81,7 @@
 - GIVEN request 已冻结 target set、provider 选择、模型与 source digest。
 - WHEN article 完成 source、compose、draft、review、canonical promotion 和 release aggregate。
 - THEN 文章、canonical entity identity、creator、资产、tag 和 source digest 可闭包追溯；关联主页不是文章 execution 的前置条件。
+- THEN 每个 qualified 对象均 finalize 并发布；quota shortfall 或带 typed issues 的 discard 只进入 receipt，不删除或阻断其它合格文章。
 - THEN Beta/Gamma integration 证明 full-sync、API、幂等、rollback 与 replay。
 - THEN rollback receipt 明确绑定 `rollbackFromReleaseId`；empty baseline 由 baseline API readback 证明隔离下线，历史内容由后续 replay 的 importer/API readback 证明恢复。
 - THEN 生命周期 gate 不读取测试专用 activation smoke，也不把 Prod prepared/dry-run 报告计为 activated。
@@ -88,8 +91,9 @@
 
 - GIVEN 至少一个完成闭包的文章 execution 已产生不可变 receipt。
 - WHEN 运营评估后续规模与预算。
-- THEN 吞吐、成本、first-pass rate、queue lag 与 source capacity 都来自 receipt。
-- THEN 缺失实时证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
+- THEN 吞吐、成本、object pass、illustrated、first-pass、discard、quota attainment、queue lag 与 source capacity 都来自 receipt，并为每个 rate 标明分子与分母。
+- THEN 未命中 workload target 或统计 rate 只形成 shortfall/趋势结论，不否决至少一个 hard-qualified 对象的发布与结构性 promotion。
+- THEN 缺失对象级硬门或 receipt 身份证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
 
 ## 6. 依赖
 
@@ -105,7 +109,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺真实 M100 article execution 对 source/rights closure 的完整 receipt；frontier 的本地合同与单站 probe 不能替代规模准出。
+- 影响或价值：尚缺真实 M100 article workload execution 对 source/rights closure 与 target/qualified/shortfall 统计的完整 receipt；frontier 的本地合同与单站 probe 不能替代规模证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
@@ -123,5 +127,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚无真实 M100 execution receipt；容量评估不得依据 frontier probe、fixture 或估算结论关闭。
+- 影响或价值：尚无真实 M100 execution receipt；容量评估不得依据 frontier probe、fixture 或估算结论关闭，也不得把 target/rate 未命中提升为对象发布门。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效

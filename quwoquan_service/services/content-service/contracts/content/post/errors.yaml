@@ -1,5 +1,3 @@
-aggregate: Post
-domain: CONTENT
 description: 'Post 对象与 content 域共享的结构化错误码声明。格式：MODULE.KIND.REASON。
 
   对象专属错误码位于各对象目录（comment、media_asset、media_original_access_fact、
@@ -13,59 +11,58 @@ description: 'Post 对象与 content 域共享的结构化错误码声明。格�
   '
 errors:
 - code: CONTENT.USER.content_deleted
-  kind: USER
   reason: content_deleted
   http_status: 410
   emitted_by:
   - surface: http
     operations: [GetPost]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: contentDeleted
   go_const: ErrContentDeleted
   user_message:
     zh: 内容已删除
     en: Content has been deleted
 - code: CONTENT.USER.post_not_found
-  kind: USER
   reason: not_found
   http_status: 404
   emitted_by:
   - surface: http
     operations: [GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetCounters, GetHelperRead, content.comment.CreateComment]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: postNotFound
   go_const: ErrPostNotFound
   user_message:
     zh: 内容不存在或已删除
     en: Post not found or deleted
 - code: CONTENT.USER.forbidden_edit
-  kind: USER
   reason: forbidden
   http_status: 403
   emitted_by:
   - surface: http
     operations: [SubmitPostPublication, UpdatePostSettings, PromotePostToWork]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: forbiddenEdit
   go_const: ErrForbiddenEdit
   user_message:
     zh: 无权编辑此内容
     en: Not allowed to edit this post
 - code: CONTENT.USER.forbidden_delete
-  kind: USER
   reason: forbidden
   http_status: 403
   emitted_by:
   - surface: http
     operations: [DeletePost]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: forbiddenDelete
   go_const: ErrForbiddenDelete
   user_message:
     zh: 无权删除此内容
     en: Not allowed to delete this post
 - code: CONTENT.USER.unauthorized
-  kind: USER
   reason: unauthorized
   http_status: 401
   emitted_by:
@@ -130,14 +127,17 @@ errors:
     - content.report.ListMyReports
     - content.report.ListReports
     - content.report.ResolveReport
+    - content.report.GrantGatheringSafetyTermination
+    - content.report.RevokeGatheringSafetyTermination
+    - content.report.AuthorizeGatheringSafetyTermination
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: unauthorized
   go_const: ErrUnauthorized
   user_message:
     zh: 请先登录
     en: Please sign in to continue
 - code: CONTENT.USER.invalid_argument
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
@@ -184,32 +184,33 @@ errors:
     - content.report.ListMyReports
     - content.report.ResolveReport
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
   user_message:
     zh: 请求参数有误，请检查后重试
     en: Invalid request, please check and retry
 - code: CONTENT.USER.invalid_content_type
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [SubmitPostPublication, PromotePostToWork]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: invalidContentType
   go_const: ErrInvalidContentType
   user_message:
     zh: 不支持的内容类型
     en: Unsupported content type
 - code: CONTENT.USER.rate_limited
-  kind: USER
   reason: rate_limited
   http_status: 429
   emitted_by:
   - surface: http
     operations: [SubmitPostPublication]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 60
   dart_const: rateLimited
   go_const: ErrRateLimited
@@ -217,7 +218,6 @@ errors:
     zh: 操作太频繁，请稍后重试
     en: Too many requests, please retry later
 - code: CONTENT.SYSTEM.feed_capacity_unavailable
-  kind: SYSTEM
   reason: feed_capacity_unavailable
   http_status: 503
   emitted_by:
@@ -225,40 +225,39 @@ errors:
     operations: [GetFeed]
   recovery_action: retry
   recovery_after_seconds: 1
-  recovery: {action: retry, disruptionLevel: snackbar, afterSeconds: 1}
+  disruption_level: snackbar
   dart_const: feedCapacityUnavailable
   go_const: ErrFeedCapacityUnavailable
   user_message:
     zh: 内容服务繁忙，请稍后重试
     en: Content service is busy, please retry shortly
 - code: CONTENT.USER.content_too_long
-  kind: USER
   reason: invalid_argument
   http_status: 400
   emitted_by:
   - surface: http
     operations: [SubmitPostPublication]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: contentTooLong
   go_const: ErrContentTooLong
   user_message:
     zh: 内容超出长度限制
     en: Content exceeds length limit
 - code: CONTENT.USER.publication_rejected
-  kind: USER
   reason: publication_rejected
   http_status: 422
   emitted_by:
   - surface: http
     operations: [SubmitPostPublication]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: publicationRejected
   go_const: ErrPublicationRejected
   user_message:
     zh: 内容未通过发布安全检查，请修改后重试
     en: Content did not pass publication safety checks
 - code: CONTENT.USER.version_conflict
-  kind: USER
   reason: version_conflict
   http_status: 409
   emitted_by:
@@ -291,14 +290,14 @@ errors:
     - content.report.BeginReportReview
     - content.report.DismissReport
     - content.report.ResolveReport
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: versionConflict
   go_const: ErrVersionConflict
   user_message:
     zh: 内容已更新，请刷新后重试
     en: Content changed, refresh and retry
 - code: CONTENT.USER.idempotency_conflict
-  kind: USER
   reason: idempotency_conflict
   http_status: 409
   emitted_by:
@@ -337,14 +336,14 @@ errors:
     - content.report.CreateReport
     - content.report.DismissReport
     - content.report.ResolveReport
-  recovery_action: refresh
+  recovery_action: retry
+  disruption_level: snackbar
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
   user_message:
     zh: 重复请求与原操作不一致，请刷新后重试
     en: The repeated request differs from the original operation
 - code: CONTENT.SYSTEM.storage_write_failed
-  kind: SYSTEM
   reason: storage_write_failed
   http_status: 500
   emitted_by:
@@ -385,6 +384,7 @@ errors:
     - content.report.DismissReport
     - content.report.ResolveReport
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: storageWriteFailed
   go_const: ErrStorageWriteFailed
@@ -392,7 +392,6 @@ errors:
     zh: 操作失败，请稍后重试
     en: Operation failed, please retry
 - code: CONTENT.SYSTEM.storage_read_failed
-  kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
   emitted_by:
@@ -428,6 +427,7 @@ errors:
     - content.report.ListMyReports
     - content.report.ListReports
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: storageReadFailed
   go_const: ErrStorageReadFailed
@@ -435,13 +435,13 @@ errors:
     zh: 读取内容失败，请稍后重试
     en: Unable to read content, please retry
 - code: CONTENT.SYSTEM.required_dependency_unavailable
-  kind: SYSTEM
   reason: required_dependency_unavailable
   http_status: 503
   emitted_by:
   - surface: http
     operations: [GetFeed, SubmitPostPublication, GetHelperRead, content.content_behavior_fact.ReportBehaviors]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 5
   dart_const: requiredDependencyUnavailable
   go_const: ErrRequiredDependencyUnavailable
@@ -449,26 +449,26 @@ errors:
     zh: 内容服务依赖暂时不可用，请稍后重试
     en: A required content dependency is unavailable
 - code: CONTENT.SYSTEM.internal_error
-  kind: SYSTEM
   reason: internal_error
   http_status: 500
   emitted_by:
   - surface: http
     operations: [GetFeed, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
   recovery_action: surface
+  disruption_level: inlineCard
   dart_const: internalError
   go_const: ErrInternalError
   user_message:
     zh: 服务异常，请稍后重试
     en: Service error, please try again later
 - code: CONTENT.MIDDLEWARE.upstream_timeout
-  kind: MIDDLEWARE
   reason: timeout
   http_status: 504
   emitted_by:
   - surface: http
     operations: [GetFeed, content.content_behavior_fact.ReportBehaviors]
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 10
   dart_const: upstreamTimeout
   go_const: ErrUpstreamTimeout

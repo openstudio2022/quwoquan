@@ -26,8 +26,10 @@ var (
 type TokenType string
 
 const (
-	TokenTypeAccess TokenType = "access"
-	TokenTypeDevice TokenType = "device"
+	TokenTypeAccess           TokenType = "access"
+	TokenTypeDevice           TokenType = "device"
+	TokenTypeDelegatedQuery   TokenType = "delegated_query"
+	TokenTypeDelegatedCommand TokenType = "delegated_command"
 )
 
 type TokenConfig struct {

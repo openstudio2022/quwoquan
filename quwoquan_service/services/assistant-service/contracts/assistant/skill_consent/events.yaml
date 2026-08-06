@@ -1,25 +1,21 @@
 events:
 - name: SkillConsentGranted
   description: Skill 授权
-  producer: assistant-service
-  consumers: []
-  no_consumer_reason: aggregate_audit_journal_only
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: SkillConsent
   payload_fields:
   - id
   - accountId
   - skillId
   - grantedScopes
+  no_consumer_reason: aggregate_audit_journal_only
 - name: SkillConsentRevoked
   description: Skill 授权撤销
-  producer: assistant-service
-  consumers: []
-  no_consumer_reason: aggregate_audit_journal_only
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: SkillConsent
   payload_fields:
   - id
   - accountId
   - skillId
   - revokedAt
+  no_consumer_reason: aggregate_audit_journal_only

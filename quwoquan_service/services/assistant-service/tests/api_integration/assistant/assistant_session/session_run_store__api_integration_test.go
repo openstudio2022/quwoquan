@@ -1,12 +1,18 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/spec.md#sit-001
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
 // spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
+// readiness_case: create-assistant-session-api
+// readiness_case: list-assistant-sessions-api
+// readiness_case: get-assistant-session-api
+// readiness_case: compact-assistant-session-api
 package api_integration
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,7 +31,6 @@ import (
 	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	runruntime "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	runmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	sessioncompaction "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/compaction"
 	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
@@ -39,6 +44,7 @@ import (
 	subscriptionhttp "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/adapters/inbound/http"
 	subscriptionapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application"
 	skillmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
 )
 
@@ -112,6 +118,117 @@ func TestMongoSessionCompactionCommitsSummaryAndReplayReceiptAtomically(t *testi
 	}
 }
 
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
+func TestTerminalRunRelayInvokesSessionCoordinatorBeforeMongoSourceAck(t *testing.T) {
+	resetIntegrationState(t)
+	ctx := t.Context()
+	handler := assistantHTTPHandlerWithTurnView(newIntegrationAssistantService())
+	create := assistantAPIRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/sessions",
+		"terminal-compaction-owner",
+		map[string]any{
+			"summary":         "terminal coordinator integration",
+			"clientRequestId": "terminal-coordinator-session",
+		},
+	)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create terminal session status=%d body=%s", create.Code, create.Body.String())
+	}
+	var session assistant.AssistantSession
+	if err := json.Unmarshal(create.Body.Bytes(), &session); err != nil {
+		t.Fatalf("decode terminal session: %v", err)
+	}
+	start := assistantAPIRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/sessions/"+session.SessionID+"/runs",
+		"terminal-compaction-owner",
+		map[string]any{
+			"intent": map[string]any{
+				"kind":   "answer",
+				"answer": map[string]any{"text": "规划杭州行程并确认酒店"},
+			},
+			"clientRequestId": "terminal-coordinator-run",
+		},
+	)
+	if start.Code != http.StatusCreated {
+		t.Fatalf("start terminal Run status=%d body=%s", start.Code, start.Body.String())
+	}
+	var run assistantRunEnvelope
+	if err := json.Unmarshal(start.Body.Bytes(), &run); err != nil {
+		t.Fatalf("decode terminal Run: %v", err)
+	}
+	worker := runruntime.NewDurableWorker(
+		integrationRunRepository,
+		integrationRunRepository,
+		recoveredRunExecutor{},
+		"terminal-coordinator-worker",
+	)
+	worked, err := worker.ProcessNext(ctx)
+	if err != nil || !worked {
+		t.Fatalf("complete terminal Run: worked=%t err=%v", worked, err)
+	}
+	hooks, err := runruntime.NewHookRegistry()
+	if err != nil {
+		t.Fatalf("create terminal hook registry: %v", err)
+	}
+	providerCalls := 0
+	coordinator := sessioncompaction.NewAssistantRunTerminalCoordinator(
+		integrationRunRepository,
+		sessioncompaction.NewService(
+			integrationSessionStore,
+			sessioncompaction.NarrativeGeneratorFunc(func(
+				context.Context,
+				sessioncompaction.NarrativeInput,
+			) (string, error) {
+				providerCalls++
+				return "已完成可回查回答，并保留下一步。", nil
+			}),
+		),
+		hooks,
+	)
+	relay := runruntime.NewTerminalRunRelay(
+		integrationRunRepository,
+		runruntime.TerminalEventPublisherFunc(func(
+			context.Context,
+			runruntime.TerminalEvent,
+		) error {
+			return nil
+		}),
+		[]runruntime.TerminalEventHandler{coordinator},
+		"terminal-session-coordinator",
+		time.Second,
+		16,
+	)
+	processed, err := relay.FlushOnce(ctx)
+	if err != nil || processed != 1 {
+		t.Fatalf("relay terminal compaction: processed=%d err=%v", processed, err)
+	}
+	persisted, found, err := integrationSessionStore.GetSession(ctx, session.SessionID)
+	if err != nil || !found || persisted.ContextSummary == nil ||
+		persisted.ContextSummary.ToTurnID != run.RunID || providerCalls != 1 {
+		t.Fatalf(
+			"terminal summary=%+v found=%t providerCalls=%d err=%v",
+			persisted,
+			found,
+			providerCalls,
+			err,
+		)
+	}
+	acknowledged, err := integrationMongoDB.Collection("assistant_run_terminal_outbox").
+		CountDocuments(ctx, bson.M{
+			"runId":       run.RunID,
+			"processedAt": bson.M{"$type": "date"},
+		})
+	if err != nil || acknowledged != 1 {
+		t.Fatalf("terminal source ACK count=%d err=%v", acknowledged, err)
+	}
+}
+
 func assistantHTTPHandlerWithTurnView(
 	service *sessionorchestration.AssistantService,
 ) http.Handler {
@@ -133,7 +250,7 @@ func assistantHTTPHandlerWithTurnView(
 			time.Now,
 		),
 	).RegisterRoutes(mux)
-	mux.Handle("/", assistanthttp.NewHandler(service).Routes())
+	mux.Handle("/", assistantingress.Routes(service))
 	return mux
 }
 
@@ -481,7 +598,7 @@ func TestAssistantSessionCreatePersistedAndIdempotent(t *testing.T) {
 	}
 
 	// 模拟重启：全新 service 实例（无进程内状态）仍能读到会话。
-	restarted := assistanthttp.NewHandler(newIntegrationAssistantService()).Routes()
+	restarted := assistantingress.Routes(newIntegrationAssistantService())
 	get := assistantAPIRequest(t, restarted, http.MethodGet,
 		"/assistant/sessions/"+created.SessionID, "user-conv-1", nil)
 	if get.Code != http.StatusOK {
@@ -725,7 +842,7 @@ func TestAssistantRunPersistsTrustedTransportContextWithoutEchoingIt(t *testing.
 // TestAssistantSessionOwnerIsolation 验证 owner 隔离与匿名拒绝。
 func TestAssistantSessionOwnerIsolation(t *testing.T) {
 	resetIntegrationState(t)
-	handler := assistanthttp.NewHandler(newIntegrationAssistantService()).Routes()
+	handler := assistantingress.Routes(newIntegrationAssistantService())
 
 	create := assistantAPIRequest(t, handler, http.MethodPost, "/assistant/sessions",
 		"owner-a", map[string]any{
@@ -752,7 +869,7 @@ func TestAssistantSessionOwnerIsolation(t *testing.T) {
 func TestAssistantRunStartPersistedAndIdempotent(t *testing.T) {
 	resetIntegrationState(t)
 	ctx := context.Background()
-	handler := assistanthttp.NewHandler(newIntegrationAssistantService()).Routes()
+	handler := assistantingress.Routes(newIntegrationAssistantService())
 
 	create := assistantAPIRequest(t, handler, http.MethodPost, "/assistant/sessions",
 		"user-run-1", map[string]any{
@@ -791,7 +908,7 @@ func TestAssistantRunStartPersistedAndIdempotent(t *testing.T) {
 		t.Fatalf("persisted run count=%d err=%v", count, err)
 	}
 
-	restarted := assistanthttp.NewHandler(newIntegrationAssistantService()).Routes()
+	restarted := assistantingress.Routes(newIntegrationAssistantService())
 	get := assistantAPIRequest(t, restarted, http.MethodGet, "/assistant/runs/"+run.RunID, "user-run-1", nil)
 	if get.Code != http.StatusOK {
 		t.Fatalf("run must survive restart: status=%d body=%s", get.Code, get.Body.String())
@@ -801,7 +918,7 @@ func TestAssistantRunStartPersistedAndIdempotent(t *testing.T) {
 // TestAssistantRunOwnerIsolation 验证 run 的 owner 隔离与匿名拒绝。
 func TestAssistantRunOwnerIsolation(t *testing.T) {
 	resetIntegrationState(t)
-	handler := assistanthttp.NewHandler(newIntegrationAssistantService()).Routes()
+	handler := assistantingress.Routes(newIntegrationAssistantService())
 
 	create := assistantAPIRequest(t, handler, http.MethodPost, "/assistant/sessions",
 		"owner-run", map[string]any{
@@ -1128,6 +1245,82 @@ func TestAssistantRunWritesScorecardOnCompletion(t *testing.T) {
 	if err != nil || outboxCount != 1 {
 		t.Fatalf("terminal outbox must commit with run: count=%d err=%v", outboxCount, err)
 	}
+	var terminalDocument bson.M
+	if err := integrationMongoDB.Collection("assistant_run_terminal_outbox").FindOne(
+		ctx, bson.M{"runId": run.RunID},
+	).Decode(&terminalDocument); err != nil {
+		t.Fatalf("load terminal outbox document: %v", err)
+	}
+	for _, field := range []string{
+		"runId", "userId", "personaId", "personaContextVersion", "outcome",
+		"toolsCalled", "llmModel", "llmTokensUsed", "latencyMs",
+		"satisfactionScore", "occurredAt",
+	} {
+		if _, exists := terminalDocument[field]; !exists {
+			t.Fatalf("terminal outbox omits contract fact %q: %v", field, terminalDocument)
+		}
+	}
+	if terminalDocument["llmTokensUsed"] != int64(120) ||
+		terminalDocument["latencyMs"] == nil ||
+		terminalDocument["personaContextVersion"] != nil ||
+		terminalDocument["llmModel"] != nil ||
+		terminalDocument["satisfactionScore"] != nil {
+		t.Fatalf("terminal facts must be real values or BSON null: %v", terminalDocument)
+	}
+	claimAt := time.Now().UTC().Add(time.Minute)
+	claimed, err := integrationRunRepository.ClaimPendingTerminalEvents(
+		ctx, "terminal-owner-a", claimAt, time.Minute, 1,
+	)
+	if err != nil || len(claimed) != 1 || claimed[0].AttemptCount != 1 {
+		t.Fatalf("claim terminal outbox=%+v err=%v", claimed, err)
+	}
+	retryAt := claimAt.Add(5 * time.Second)
+	if err := integrationRunRepository.ScheduleTerminalEventRetry(
+		ctx, claimed[0].EventID, "terminal-owner-a", claimAt,
+		retryAt, "transport_unavailable",
+	); err != nil {
+		t.Fatalf("schedule terminal retry: %v", err)
+	}
+	if beforeDue, err := integrationRunRepository.ClaimPendingTerminalEvents(
+		ctx, "terminal-owner-b", retryAt.Add(-time.Millisecond), time.Minute, 1,
+	); err != nil || len(beforeDue) != 0 {
+		t.Fatalf("claim terminal before nextAttemptAt=%+v err=%v", beforeDue, err)
+	}
+	retried, err := integrationRunRepository.ClaimPendingTerminalEvents(
+		ctx, "terminal-owner-b", retryAt, 10*time.Second, 1,
+	)
+	if err != nil || len(retried) != 1 || retried[0].AttemptCount != 2 {
+		t.Fatalf("claim due terminal retry=%+v err=%v", retried, err)
+	}
+	if err := integrationRunRepository.AcknowledgeTerminalEvent(
+		ctx, retried[0].EventID, "terminal-owner-a", retryAt,
+	); !errors.Is(err, runruntime.ErrTerminalEventClaimLost) {
+		t.Fatalf("wrong terminal owner checkpoint error=%v, want claim lost", err)
+	}
+	expiredAt := retryAt.Add(10 * time.Second)
+	if err := integrationRunRepository.ScheduleTerminalEventRetry(
+		ctx, retried[0].EventID, "terminal-owner-b", expiredAt,
+		expiredAt.Add(time.Second), "expired_owner",
+	); !errors.Is(err, runruntime.ErrTerminalEventClaimLost) {
+		t.Fatalf("expired terminal owner retry error=%v, want claim lost", err)
+	}
+	if err := integrationRunRepository.AcknowledgeTerminalEvent(
+		ctx, retried[0].EventID, "terminal-owner-b", expiredAt,
+	); !errors.Is(err, runruntime.ErrTerminalEventClaimLost) {
+		t.Fatalf("expired terminal owner checkpoint error=%v, want claim lost", err)
+	}
+	takeover, err := integrationRunRepository.ClaimPendingTerminalEvents(
+		ctx, "terminal-owner-c", expiredAt, time.Minute, 1,
+	)
+	if err != nil || len(takeover) != 1 || takeover[0].AttemptCount != 3 {
+		t.Fatalf("expired terminal lease takeover=%+v err=%v", takeover, err)
+	}
+	resumeAt := time.Now().UTC()
+	if err := integrationRunRepository.ScheduleTerminalEventRetry(
+		ctx, takeover[0].EventID, "terminal-owner-c", resumeAt, resumeAt, "test_resume",
+	); err != nil {
+		t.Fatalf("release terminal retry to production relay: %v", err)
+	}
 	preRelayFacts, err := integrationMongoDB.Collection("assistant_learning_facts").
 		CountDocuments(ctx, bson.M{"eventId": "turn:" + run.RunID + ":completion"})
 	if err != nil || preRelayFacts != 0 {
@@ -1281,7 +1474,8 @@ func TestSkillConsentRevokeImmediateEnforcement(t *testing.T) {
 	commands := consentapplication.NewCommandFacade(integrationConsentStore, nil)
 
 	if _, err := commands.Grant(
-		ctx, "enforce-grant", "enforce-user", "travel_companion", []string{"travel.trip.read"},
+		ctx, "enforce-grant", "enforce-user", "travel_companion",
+		[]string{"assistant.learning.feedback_context.read"},
 	); err != nil {
 		t.Fatalf("grant consent: %v", err)
 	}

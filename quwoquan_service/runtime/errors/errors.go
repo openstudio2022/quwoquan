@@ -620,7 +620,7 @@ func HTTPStatusFromError(err *AppError) int {
 			"interaction_cursor_invalid",
 			"qr_token_invalid":
 			return http.StatusBadRequest
-		case "unauthorized", "token_expired":
+		case "unauthorized", "token_expired", "mfa_required":
 			return http.StatusUnauthorized
 		case "forbidden", "original_access_denied",
 			"interaction_owner_forbidden",

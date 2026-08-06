@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.immutable_image_composition import (
+    first_party_service_names,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     ENVIRONMENTS,
@@ -31,14 +34,10 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
 from quwoquan_ops.cli.render_runtime_config import render_workload
 
 
+RELEASE_SERVICES = first_party_service_names(ROOT)
 DOMAIN_SERVICES = tuple(
-    sorted(
-        path.name
-        for path in (ROOT / "quwoquan_service/services").iterdir()
-        if path.is_dir() and (path / "config/schema.yaml").is_file()
-    )
+    service for service in RELEASE_SERVICES if service != "platform-ops-service"
 )
-RELEASE_SERVICES = DOMAIN_SERVICES + ("platform-ops-service",)
 DEPLOYED_SERVICES = RELEASE_SERVICES
 TRANSPORT_TAG_PATTERN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 

@@ -10,6 +10,10 @@ import (
 // SessionStore is the AssistantSession aggregate boundary. AssistantRun state,
 // journal and receipts belong exclusively to assistant_run.Repository.
 type SessionStore interface {
+	// InsertSession commits the aggregate and the AssistantSessionCreated
+	// domain event returned by AssistantSession.CreatedEvent() in one
+	// transaction. A replayed creation returns the stored aggregate and must
+	// not append a second event.
 	InsertSession(
 		context.Context,
 		assistant.AssistantSession,
@@ -45,6 +49,36 @@ type SessionSummaryCommitResult struct {
 	Applied  bool
 	Replayed bool
 	Conflict bool
+}
+
+// PendingSessionEvent is one claimed, not-yet-published AssistantSession
+// domain event owned by the transactional outbox.
+type PendingSessionEvent struct {
+	EventID    string
+	EventType  string
+	SessionID  string
+	OccurredAt time.Time
+	Payload    assistant.SessionEventPayload
+}
+
+// SessionOutboxStore is the relay-facing half of the AssistantSession
+// transactional outbox. Only the store that commits the aggregate may
+// implement it, so the event and the aggregate can never diverge.
+type SessionOutboxStore interface {
+	ClaimPendingSessionEvents(
+		context.Context,
+		string,
+		time.Duration,
+		int,
+	) ([]PendingSessionEvent, error)
+	MarkSessionEventPublished(
+		context.Context,
+		string,
+		string,
+		string,
+		time.Time,
+	) error
+	ReleaseSessionEventClaim(context.Context, string, string) error
 }
 
 type ChatGroundingMessage struct {

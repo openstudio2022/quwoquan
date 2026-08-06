@@ -81,6 +81,10 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_publish_closure import main as publish_closure_main
 
         raise SystemExit(publish_closure_main())
+    if cmd == "cli-first":
+        from verify.verify_cli_first import main as cli_first_main
+
+        raise SystemExit(cli_first_main())
     if cmd == "script-architecture":
         from verify.verify_script_architecture import main as script_architecture_main
 
@@ -471,6 +475,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("runtime-input-ownership", help="校验区域、数量和目标集只归运行工作包 0.plan")
     sub.add_parser("publish-purity", help="校验 publish 只含 approved 最终对象")
     sub.add_parser("publish-closure", help="校验 canonical publish 无孤立 creator/media 或悬空引用")
+    sub.add_parser("cli-first", help="校验业务能力只经 Data CLI 入口暴露")
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
     sub.add_parser("python-symbols", help="校验 Data Python 运行时符号均有明确所有者")
     sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")

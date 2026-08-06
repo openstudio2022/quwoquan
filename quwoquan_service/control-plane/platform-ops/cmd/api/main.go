@@ -21,6 +21,7 @@ import (
 	configreportpersistence "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_instance_report/infrastructure/persistence"
 	confighttp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/adapters/inbound/http/config_layer"
 	configapp "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer"
+	configrepository "quwoquan_service/control-plane/platform-ops/internal/platform_ops/config_snapshot/infrastructure/repository"
 	generatedcontrolplane "quwoquan_service/generated/control_plane"
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
 	"quwoquan_service/internal/platform/pgoutbox"
@@ -43,9 +44,75 @@ type platformService struct {
 	store                 controlplane.StateStore
 	configLayer           *configapp.Facade
 	configLayers          http.Handler
+	configTopology        http.Handler
 	configInstanceReports http.Handler
+	configInstanceRuntime http.Handler
 	releaseManifestDigest string
 	health                func(context.Context) error
+}
+
+func composeConfigSnapshotTopologyHandler(service *platformService) (http.Handler, error) {
+	if service == nil {
+		return nil, errors.New("config snapshot topology composition requires service")
+	}
+	source, err := configrepository.NewTopologySource(
+		service.repoRoot,
+		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
+	)
+	if err != nil {
+		return nil, err
+	}
+	facade, err := configapp.NewTopologyFacade(source)
+	if err != nil {
+		return nil, err
+	}
+	return confighttp.NewTopologyHandler(facade)
+}
+
+func composeConfigInstanceRuntimeHandler(
+	service *platformService,
+) (http.Handler, error) {
+	if service == nil || service.store == nil {
+		return nil, errors.New("config instance runtime composition requires state store")
+	}
+	topologyReader := configreportapp.RuntimeTopologyReaderFunc(func(
+		ctx context.Context,
+	) (configreportapp.RuntimeTopology, error) {
+		if err := ctx.Err(); err != nil {
+			return configreportapp.RuntimeTopology{}, err
+		}
+		current, err := service.readEnvironmentTopology()
+		if err != nil {
+			return configreportapp.RuntimeTopology{}, err
+		}
+		result := configreportapp.RuntimeTopology{
+			Environments: make(map[string]configreportapp.RuntimeTopologyEnvironment, len(current.Environments)),
+			Targets:      make(map[string]configreportapp.RuntimeTopologyTarget, len(current.Targets)),
+		}
+		for environment, value := range current.Environments {
+			workloads := make([]configreportapp.RuntimeTopologyWorkload, 0, len(value.Workloads))
+			for _, workload := range value.Workloads {
+				workloads = append(workloads, configreportapp.RuntimeTopologyWorkload{
+					ID: workload.ID, Plane: workload.Plane, DeploymentRef: workload.DeploymentRef,
+				})
+			}
+			result.Environments[environment] = configreportapp.RuntimeTopologyEnvironment{Workloads: workloads}
+		}
+		for targetID, value := range current.Targets {
+			result.Targets[targetID] = configreportapp.RuntimeTopologyTarget{Environment: value.Environment}
+		}
+		return result, nil
+	})
+	facade, err := configreportapp.NewRuntimeFacade(
+		service.store,
+		topologyReader,
+		service.releaseManifestDigest,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return configreporthttp.NewRuntimeHandler(facade)
 }
 
 func composeConfigInstanceReportHandler(
@@ -284,134 +351,23 @@ func main() {
 		strings.TrimSpace(configRoot),
 	)
 
+	timeouts := rtauth.ContractHTTPServerTimeouts(
+		generatedcontrolplane.PlatformOperationSecurityDescriptors,
+	)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:  accessVerifier,
 			OperatorOIDCVerifier: operatorOIDCVerifier,
 		})(corsHandler),
-		ReadHeaderTimeout: 5 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: timeouts.ReadHeader,
+		WriteTimeout:      timeouts.Write,
+		IdleTimeout:       timeouts.Idle,
 	}
 	log.Printf("platform-ops-service listening on %s", addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("platform-ops-service: %v", err)
 	}
-}
-
-func (s *platformService) handleListServiceCatalog(w http.ResponseWriter, r *http.Request) {
-	topology, err := s.readEnvironmentTopology()
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	type catalogEntry struct {
-		planes         map[string]struct{}
-		deploymentRefs map[string]struct{}
-	}
-	byWorkload := map[string]*catalogEntry{}
-	for _, environment := range topology.Environments {
-		for _, workload := range environment.Workloads {
-			entry := byWorkload[workload.ID]
-			if entry == nil {
-				entry = &catalogEntry{planes: map[string]struct{}{}, deploymentRefs: map[string]struct{}{}}
-				byWorkload[workload.ID] = entry
-			}
-			entry.planes[workload.Plane] = struct{}{}
-			entry.deploymentRefs[workload.DeploymentRef] = struct{}{}
-		}
-	}
-	out := make([]map[string]any, 0, len(byWorkload))
-	for workloadID, entry := range byWorkload {
-		planes := sortedSet(entry.planes)
-		deploymentRefs := sortedSet(entry.deploymentRefs)
-		out = append(out, map[string]any{
-			"id":      workloadID,
-			"service": workloadID,
-			"plane":   strings.Join(planes, " / "),
-			"owner":   "environment-topology",
-			"health":  "neutral",
-			"summary": strings.Join(deploymentRefs, " · "),
-		})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i]["service"].(string) < out[j]["service"].(string)
-	})
-	writeJSON(w, http.StatusOK, map[string]any{"items": out})
-}
-
-func (s *platformService) handleListPlaneBindings(w http.ResponseWriter, r *http.Request) {
-	topology, err := s.readEnvironmentTopology()
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	items := make([]map[string]any, 0)
-	for env, environment := range topology.Environments {
-		for _, workload := range environment.Workloads {
-			items = append(items, map[string]any{
-				"id":            env + ":" + workload.ID,
-				"env":           env,
-				"workload":      workload.ID,
-				"plane":         workload.Plane,
-				"deploymentRef": workload.DeploymentRef,
-			})
-		}
-	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i]["id"].(string) < items[j]["id"].(string)
-	})
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
-func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter, r *http.Request) {
-	topology, err := s.readEnvironmentTopology()
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	items := make([]map[string]any, 0)
-	for env, environment := range topology.Environments {
-		for _, workload := range environment.Workloads {
-			items = append(items, map[string]any{
-				"id":            env + ":" + workload.ID,
-				"env":           env,
-				"workload":      workload.ID,
-				"plane":         workload.Plane,
-				"deploymentRef": workload.DeploymentRef,
-			})
-		}
-	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i]["id"].(string) < items[j]["id"].(string)
-	})
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
-func (s *platformService) appendAudit(objectType, objectID, action string, before, after map[string]any, r *http.Request) error {
-	return s.store.AppendAudit(controlplane.AuditEvent{
-		AuditID:     action,
-		ObjectType:  objectType,
-		ObjectID:    objectID,
-		Action:      action,
-		DangerLevel: "high",
-		Actor:       actorFromRequest(r),
-		Environment: environmentFromRequest(r),
-		RequestID:   requestIDFromRequest(r),
-		TraceID:     traceIDFromRequest(r),
-		Before:      before,
-		After:       after,
-	})
-}
-
-func (s *platformService) handleProjectionSummary(w http.ResponseWriter, r *http.Request) {
-	summary, err := s.buildProjectionSummary()
-	if err != nil {
-		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, summary)
 }
 
 func (s *platformService) readYAMLInto(path string, target any) error {
@@ -531,15 +487,6 @@ func repositoryRelativePath(repositoryRoot, target string) string {
 		return filepath.ToSlash(target)
 	}
 	return filepath.ToSlash(relativePath)
-}
-
-func sortedSet(values map[string]struct{}) []string {
-	out := make([]string, 0, len(values))
-	for value := range values {
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func resolveRepoRoot() string {

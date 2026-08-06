@@ -1,19 +1,54 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md#gwt-001
+// readiness_case: stage-tag-taxonomy-release-api
+// readiness_case: activate-tag-taxonomy-release-api
 package api_integration
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	nodemodel "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
+	releasehttp "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
 	releasemodel "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/infrastructure/taxonomyreleasestore"
 )
+
+func TestTaxonomyReleaseHTTPStageAndActivateUseRealMongo(t *testing.T) {
+	cleanReleases(t)
+	mux := http.NewServeMux()
+	releasehttp.NewTaxonomyReleaseHandler(newReleaseFacade(t)).Register(mux)
+
+	stage := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/tag/taxonomy-releases",
+		strings.NewReader(`{"releaseId":"release-http","sourceOwner":"quwoquan_data","canonicalDigest":"sha256:147820eae7ea9ec513a8c59a80a935d4d47aad522aad5584ad654b37d0f65a0c","releaseKind":"content","nodeCount":1}`),
+	)
+	stageResponse := httptest.NewRecorder()
+	mux.ServeHTTP(stageResponse, stage)
+	if stageResponse.Code != http.StatusOK {
+		t.Fatalf("stage status=%d body=%s", stageResponse.Code, stageResponse.Body.String())
+	}
+	seedSnapshot(t, "release-http", 1)
+	activate := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/tag/taxonomy-releases/release-http:activate",
+		nil,
+	)
+	activateResponse := httptest.NewRecorder()
+	mux.ServeHTTP(activateResponse, activate)
+	if activateResponse.Code != http.StatusOK {
+		t.Fatalf("activate status=%d body=%s", activateResponse.Code, activateResponse.Body.String())
+	}
+}
 
 func newReleaseFacade(t *testing.T) *taxonomyrelease.Facade {
 	t.Helper()

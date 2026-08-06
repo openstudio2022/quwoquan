@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/core/links/trusted_endpoint_policy.dart';
+import 'package:quwoquan_app/runtime/shell/recovery/recovery_runtime_binding.dart';
+import 'package:quwoquan_app/runtime/transport/links/trusted_endpoint_policy.dart';
 
 class AppRecoveryNativeContext {
   const AppRecoveryNativeContext({
@@ -8,7 +9,7 @@ class AppRecoveryNativeContext {
     required this.buildNumber,
     required this.osVersion,
     required this.deviceModel,
-    required this.recoveryBaseUrl,
+    required this.runtimeBinding,
     required this.publicWebUrl,
     required this.appDownloadBaseUrl,
   });
@@ -18,9 +19,11 @@ class AppRecoveryNativeContext {
   final int buildNumber;
   final String osVersion;
   final String deviceModel;
-  final String recoveryBaseUrl;
+  final RecoveryRuntimeBinding runtimeBinding;
   final String publicWebUrl;
   final String appDownloadBaseUrl;
+
+  String get recoveryBaseUrl => runtimeBinding.recoveryOrigin.toString();
 }
 
 /// 启动恢复的最小原生能力；不依赖登录、业务 Router 或普通插件注册。
@@ -41,7 +44,12 @@ final class AppRecoveryNativeBridge {
       final buildNumber = int.tryParse(raw?['buildNumber']?.toString() ?? '');
       final osVersion = raw?['osVersion']?.toString().trim() ?? '';
       final deviceModel = raw?['deviceModel']?.toString().trim() ?? '';
+      final environment = raw?['environment']?.toString().trim() ?? '';
       final recoveryBaseUrl = raw?['recoveryBaseUrl']?.toString().trim() ?? '';
+      final runtimeConfigDigest =
+          raw?['runtimeConfigDigest']?.toString().trim() ?? '';
+      final effectiveLaunchManifestDigest =
+          raw?['effectiveLaunchManifestDigest']?.toString().trim() ?? '';
       final publicWebUrl = raw?['publicWebUrl']?.toString().trim() ?? '';
       final appDownloadBaseUrl =
           raw?['appDownloadBaseUrl']?.toString().trim() ?? '';
@@ -51,11 +59,16 @@ final class AppRecoveryNativeBridge {
           buildNumber <= 0 ||
           osVersion.isEmpty ||
           deviceModel.isEmpty ||
-          !_isTrustedHttps(recoveryBaseUrl) ||
           !_isTrustedHttps(publicWebUrl) ||
           !_isTrustedHttps(appDownloadBaseUrl)) {
         return null;
       }
+      final runtimeBinding = RecoveryRuntimeBinding.fromLaunchManifest(
+        environment: environment,
+        recoveryBaseUrl: recoveryBaseUrl,
+        runtimeConfigDigest: runtimeConfigDigest,
+        effectiveLaunchManifestDigest: effectiveLaunchManifestDigest,
+      );
       _trustedBaseUrls
         ..clear()
         ..addAll(<String>[recoveryBaseUrl, publicWebUrl, appDownloadBaseUrl]);
@@ -65,10 +78,12 @@ final class AppRecoveryNativeBridge {
         buildNumber: buildNumber,
         osVersion: osVersion,
         deviceModel: deviceModel,
-        recoveryBaseUrl: recoveryBaseUrl,
+        runtimeBinding: runtimeBinding,
         publicWebUrl: publicWebUrl,
         appDownloadBaseUrl: appDownloadBaseUrl,
       );
+    } on FormatException {
+      return null;
     } on PlatformException {
       return null;
     } on MissingPluginException {
@@ -183,9 +198,11 @@ final class AppRecoveryNativeBridge {
     if (uri == null ||
         uri.scheme.toLowerCase() != 'https' ||
         uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty) {
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
       return false;
     }
-    return uri.fragment.isEmpty;
+    return true;
   }
 }

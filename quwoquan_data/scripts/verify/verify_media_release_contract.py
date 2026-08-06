@@ -165,11 +165,13 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
         ROOT
         / "quwoquan_app"
         / "lib"
-        / "content"
+        / "service"
+        / "content_service"
         / "media"
         / "media_asset"
-        / "adapters"
-        / "asset_url_resolver.dart": (
+        / "application"
+        / "public"
+        / "media_asset_manifest_resolver.dart": (
             "resolveManifestUrls",
             "publicSliceKey",
         ),

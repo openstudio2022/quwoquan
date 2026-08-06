@@ -14,9 +14,9 @@ import (
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
-	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	sessionmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
+	"quwoquan_service/services/assistant-service/tests/support/assistantingress"
 	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	"quwoquan_service/services/assistant-service/tests/support/skillfixture"
@@ -48,9 +48,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 			MaxToolCalls: 2,
 		},
 	}}}
-	handler := assistanthttp.NewHandler(
-		newIntegrationAssistantService(),
-	).Routes()
+	handler := assistantingress.Routes(newIntegrationAssistantService())
 	create := assistantAPIRequest(
 		t,
 		handler,
@@ -151,9 +149,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 	); err != nil {
 		t.Fatalf("expire failed run journal: %v", err)
 	}
-	restarted := assistanthttp.NewHandler(
-		newIntegrationAssistantService(),
-	).Routes()
+	restarted := assistantingress.Routes(newIntegrationAssistantService())
 	replayedFailure := assistantAPIRequest(
 		t,
 		restarted,

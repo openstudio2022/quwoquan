@@ -69,6 +69,21 @@
 - persona 上下文未确认时，关键动作必须阻断或要求重试，不允许在弱网场景静默回退到 owner。
 - follower/following 分页重试不得跨 persona 串页或把旧 persona 的缓存结果回放到新 persona 上下文。
 
+<a id="req-003"></a>
+### REQ-003 关注主体写闭集与读并集分列，投影事件源只认真实 producer
+
+- SubjectFollow 的写入闭集由对象内枚举 `SubjectFollowTargetKind` 拥有，取值为 homepage、circle 与 location，persona 之间的关注只归 PersonaRelationship。
+- 关注频道读模型的并集值域由共享 `FollowSubjectKind` 拥有，取值为 persona、homepage、circle 与 location；读并集宽于写入闭集成立，收窄到写入闭集则会让端侧无法解析合法投影值。
+- following_subject 投影的 `lifecycle.source_events` 只认真实 producer 发布的 `PersonaFollowStateChanged`、`SubjectFollowStateChanged`、`CircleMembershipJoined`、`CircleMembershipLeft`、`FollowedSubjectVisited` 与 `UserAccountClosed`。
+- 主页关注复用 `SubjectFollowStateChanged`，不得再引入独立的主页关注事件名，也不得声明全仓没有 producer 的事件名。
+
+<a id="req-004"></a>
+### REQ-004 关注访问水位的投影投递只有 relay 一条主线
+
+- 访问水位命令写入自身聚合后，对下游投影的推进只由 relay 主线承担，命令路径不再在同一次调用里尽力 apply 投影。
+- 该投递是异步且至少一次的，投影消费方必须按幂等键收敛重复投递，不得假设恰好一次或与命令同步可见。
+- 关注频道读模型允许在命令成功后短暂落后于水位事实，端侧不得把读模型尚未更新解释成命令失败或重发命令。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`user-identity-profile-relationship`](../spec.md) 声明的领域入口。
@@ -88,6 +103,7 @@
 - THEN 对同一 viewer-target 的关系、打招呼会话与拉黑事实，所有公开 surface 返回由同一 PersonaRelationship 策略推导的 16 字段动作矩阵；自己、拉黑或被拉黑时所有关系动作 fail closed。
 - THEN SubjectFollow 是主页/圈子/地点关注唯一真相源（entity.FollowHomepage 已退役），事件驱动 following_subjects 投影与 homepage follower 投影。
 - THEN FollowedSubjectVisitState 水位单调推进且 clientRequestId 重放安全；关注频道红点点击后跨会话不复现。
+- THEN 水位推进只经 relay 主线异步至少一次地到达投影，重复投递被幂等收敛，命令成功后读模型的短暂滞后不表现为失败。
 - THEN 拉黑与打招呼用户旅程可逆：拉黑列表可查看/解除，收到的打招呼可回复/忽略，发出的 pending 请求可撤回；动作失败均有结构化反馈。
 
 ## 8. 开放事项

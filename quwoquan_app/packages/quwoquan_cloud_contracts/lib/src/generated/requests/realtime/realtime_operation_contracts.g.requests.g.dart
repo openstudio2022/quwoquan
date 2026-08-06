@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 93359367b8614f01bb5e1c51e37af383332b01f117cc1c6cf39e4fdf838e49d2
+// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
 
 part of '../../../realtime/realtime_operation_contracts.g.dart';
 
@@ -56,6 +56,29 @@ final class LongPollRequest {
   };
 }
 
+final class WebSocketUpgradeRequest {
+  WebSocketUpgradeRequest({
+    required String ticket,
+  }) : ticket = ticket {
+    if (this.ticket.isEmpty) {
+      throw ArgumentError.value(this.ticket, "ticket", 'must not be blank');
+    }
+  }
+
+  final String ticket;
+
+  factory WebSocketUpgradeRequest.fromWire(Map<String, Object?> map, [String path = "WebSocketUpgradeRequest"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"ticket"}, path);
+    return WebSocketUpgradeRequest(
+      ticket: _generatedRequestString(map["ticket"], '$path.ticket'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "ticket": this.ticket,
+  };
+}
+
 CloudOperationRequestPayload encodeRealtimeConnectionIssueConnectionTicketGeneratedRequest(IssueConnectionTicketRequest request) {
   return CloudOperationRequestPayload(
   );
@@ -66,6 +89,14 @@ CloudOperationRequestPayload encodeRealtimeConnectionLongPollGeneratedRequest(Lo
     queryParameters: <String, String>{
       if (request.timeout != null) "timeout": (request.timeout!).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeRealtimeConnectionWebSocketUpgradeGeneratedRequest(WebSocketUpgradeRequest request) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      "ticket": request.ticket,
     },
   );
 }

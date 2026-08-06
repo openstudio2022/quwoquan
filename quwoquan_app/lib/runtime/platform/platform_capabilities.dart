@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 
 /// Capability contract: the ONLY thing business / UI code is allowed to ask
 /// about the runtime environment.
@@ -16,7 +16,7 @@ class PlatformCapabilities {
     required this.mediaLibrary,
     required this.camera,
     required this.contacts,
-    required this.calendarWrite,
+    required this.deviceCalendar,
     required this.realtimeCommunication,
     required this.incomingCallUi,
     required this.webPushIncomingCall,
@@ -54,9 +54,18 @@ class PlatformCapabilities {
   /// "phone contacts" entry and degrades gracefully when this is false.
   final bool contacts;
 
-  /// Create an event/reminder in the user's system calendar after explicit
-  /// confirmation. Initial web/OHOS/desktop profiles fail closed.
-  final bool calendarWrite;
+  /// Probe and mutate the user's system calendar through DeviceCalendarBridge.
+  ///
+  /// A true value only means the native platform surface is present. Permit
+  /// verification remains mandatory and fails closed independently.
+  final bool deviceCalendar;
+
+  /// Transitional source compatibility for the pre-M3 assistant consumer.
+  ///
+  /// There is no second capability state; both names resolve to
+  /// [deviceCalendar].
+  @Deprecated('Use deviceCalendar')
+  bool get calendarWrite => deviceCalendar;
 
   /// Real-time audio/video (WebRTC / LiveKit) availability.
   final bool realtimeCommunication;
@@ -143,6 +152,7 @@ class PlatformCapabilities {
     bool? mediaLibrary,
     bool? camera,
     bool? contacts,
+    bool? deviceCalendar,
     bool? calendarWrite,
     bool? realtimeCommunication,
     bool? incomingCallUi,
@@ -169,7 +179,7 @@ class PlatformCapabilities {
       mediaLibrary: mediaLibrary ?? this.mediaLibrary,
       camera: camera ?? this.camera,
       contacts: contacts ?? this.contacts,
-      calendarWrite: calendarWrite ?? this.calendarWrite,
+      deviceCalendar: deviceCalendar ?? calendarWrite ?? this.deviceCalendar,
       realtimeCommunication:
           realtimeCommunication ?? this.realtimeCommunication,
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
@@ -212,7 +222,7 @@ class CapabilityProfile {
     mediaLibrary: true,
     camera: true,
     contacts: true,
-    calendarWrite: true,
+    deviceCalendar: true,
     realtimeCommunication: true,
     incomingCallUi: true,
     webPushIncomingCall: false,
@@ -239,7 +249,7 @@ class CapabilityProfile {
     mediaLibrary: true,
     camera: true,
     contacts: false,
-    calendarWrite: false,
+    deviceCalendar: false,
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,
@@ -268,7 +278,7 @@ class CapabilityProfile {
     mediaLibrary: true,
     camera: true,
     contacts: false,
-    calendarWrite: false,
+    deviceCalendar: false,
     realtimeCommunication: false,
     incomingCallUi: false,
     webPushIncomingCall: false,
@@ -295,7 +305,7 @@ class CapabilityProfile {
     mediaLibrary: false,
     camera: false,
     contacts: false,
-    calendarWrite: false,
+    deviceCalendar: false,
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,

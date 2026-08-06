@@ -41,7 +41,7 @@ from quwoquan_ops.cli.lib.environment_topology import (
 REPO_ROOT = _find_repo_root()
 APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "beta" / "runs" / "chat-avatar-device-matrix" / "report.json"
-PATROL_TARGET = "test/user_acceptance/patrol/chat/group_avatar_sync_e2e__user_acceptance_test.dart"
+PATROL_TARGET = "test/user_acceptance/journeys/group_avatar_sync/group_avatar_sync_e2e__user_acceptance_test.dart"
 
 
 def utc_now() -> str:
@@ -357,7 +357,7 @@ def run_patrol(
         PATROL_TARGET,
         "-d",
         device["id"],
-        "--dart-define=RUN_T4_PATROL=true",
+        "--dart-define=RUN_PATROL_ACCEPTANCE=true",
         f"--dart-define=APP_RUNTIME_ENV={env_name}",
         f"--dart-define=API_CONTRACT_ENV={env_name}",
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={base_url}",

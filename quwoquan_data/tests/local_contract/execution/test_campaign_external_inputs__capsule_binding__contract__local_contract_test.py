@@ -65,6 +65,38 @@ SOURCE_REVISION = content_source_revision(
 )
 
 
+@pytest.fixture(autouse=True)
+def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "content.source.professional_image_acquisition.guard_acquisition_source_identity",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        "content.execution.pre_acquisition_handoff.bind_pre_acquisition_handoff",
+        lambda *_args, **_kwargs: (
+            {
+                "carrierRequirements": {
+                    "image": {
+                        "requiredExternalInputKinds": [
+                            "professional_image_acquisition"
+                        ]
+                    }
+                }
+            },
+            {
+                "handoffId": "test-handoff",
+                "handoffRevision": 1,
+                "handoffRef": (
+                    "data/local/workspace/content-pre-acquisition-handoffs/"
+                    "test-handoff/revision-001.json"
+                ),
+                "handoffDigest": "sha256:" + "9" * 64,
+                "handoffFileDigest": "sha256:" + "8" * 64,
+            },
+        ),
+    )
+
+
 class _FrozenSourceDigest:
     def __init__(self, document: dict[str, object]) -> None:
         self._document = document
@@ -199,6 +231,7 @@ def _acquisition(tmp_path: Path) -> tuple[Path, list[dict[str, object]]]:
     write_json(manifest_path, manifest)
     _, receipt_path = acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual_root,
         output_root=acquisition_root,
     )
@@ -327,6 +360,7 @@ def _frozen_documents(
     stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
+        "executionMode": "central",
         "gitBranch": "dev1.0",
         "gitCommitSha": "c" * 40,
         "sourceRevision": SOURCE_REVISION,
@@ -570,8 +604,10 @@ def test_frozen_professional_images_drive_homepage_and_image_plans_exactly(
         professional_image_specs=image_specs,
         acquisition_receipt_refs=receipt_refs,
     )
-    image_payload = read_json(image_plan_dir / "image_source_plan.json")["payload"]
-    assert image_payload["acquisitionReceiptRefs"] == receipt_refs
+    image_plan = read_json(image_plan_dir / "image_source_plan.json")
+    image_payload = image_plan["payload"]
+    assert image_plan["acquisitionReceiptRefs"] == receipt_refs
+    assert "acquisitionReceiptRefs" not in image_payload
     image_collection = image_payload["collections"][0]
     assert image_collection["platform"] == "Pinterest"
     assert image_collection["authorizationProof"].startswith("https://")
@@ -644,10 +680,10 @@ def test_frozen_professional_images_drive_homepage_and_image_plans_exactly(
             acquisition_receipt_refs=tuple(homepage_receipt_refs),
         )
     )
-    homepage_payload = read_json(homepage_plan_dir / "homepage_source_plan.json")[
-        "payload"
-    ]
-    assert homepage_payload["acquisitionReceiptRefs"] == homepage_receipt_refs
+    homepage_plan = read_json(homepage_plan_dir / "homepage_source_plan.json")
+    homepage_payload = homepage_plan["payload"]
+    assert homepage_plan["acquisitionReceiptRefs"] == homepage_receipt_refs
+    assert "acquisitionReceiptRefs" not in homepage_payload
     homepage_collection = homepage_payload["homepageMediaCollections"][0]
     assert homepage_collection["platform"] == "Pinterest"
     assert homepage_collection["authorizationProof"].startswith("https://")

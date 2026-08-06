@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from service_image_build_input import service_image_build_inputs
+
 
 ROOT = Path(__file__).resolve().parents[3]
 SERVICE_ROOT = ROOT / "quwoquan_service" / "services"
@@ -253,6 +255,12 @@ def main() -> int:
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     provenance = report.setdefault("provenance", {})
+    image_inputs = [
+        path.relative_to(ROOT).as_posix()
+        for path in service_image_build_inputs(
+            ROOT, f"quwoquan_service/services/{args.service}"
+        )
+    ]
     provenance["source"] = {
         "serviceRoot": str(service_dir.relative_to(ROOT)),
         "buildContext": "quwoquan_service",
@@ -260,6 +268,7 @@ def main() -> int:
         "dockerfileSha256": _sha256_file(dockerfile),
         "sourceTreeSha256": source_digest,
         "sourceFileCount": len(files),
+        "imageBuildInputs": image_inputs,
         "gitDirty": bool(dirty_paths),
         "dirtyPaths": dirty_paths,
     }

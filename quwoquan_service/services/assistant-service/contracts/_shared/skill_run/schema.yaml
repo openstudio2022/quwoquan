@@ -1,7 +1,7 @@
 # SkillRun：与 AssistantTurnOutput.skillRuns 项对齐；代码由 codegen_app_metadata 生成。
 dart_class: SkillRun
-library_path: assistant/contracts/skill_run.dart
-output_path: assistant/generated/contracts/skill_run.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/skill_run.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/skill_run.g.dart
 fields:
   - name: runId
     source: runId

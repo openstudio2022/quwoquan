@@ -55,10 +55,6 @@ relationships:
 local_identity_reasons:
   domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
-capabilities:
-- queryable
-- searchable
-- aggregatable
 taggable: true
 vector_enabled: false
 business_rules:
@@ -79,6 +75,33 @@ lifecycle:
   - deleted
   optimistic_concurrency: version
   idempotency: command_receipt
+  source_events:
+  - circle.circle_membership.CircleMembershipRequested
+  - circle.circle_membership.CircleMembershipJoined
+  - circle.circle_membership.CircleMembershipApproved
+  - circle.circle_membership.CircleMembershipLeft
+  - circle.circle_membership.CircleMembershipRoleChanged
+  - circle.circle_membership.CircleMembershipRejected
+  - circle.circle_post_placement.CirclePostPlaced
+  - circle.circle_post_placement.CirclePostPlacementRemoved
+  - circle.circle_post_placement.CirclePostPlacementPresentationChanged
+  - circle.circle_behavior_fact.CircleBehaviorFactAppended
+  event_consumers:
+  - name: ProjectCircleMemberCount
+    kind: event_handler
+    facet: CircleMemberCountProjectionHandler
+    method: apply
+    idempotency: event_id
+  - name: ProjectCirclePostCount
+    kind: event_handler
+    facet: CirclePostCountProjectionHandler
+    method: apply
+    idempotency: event_id
+  - name: ProjectCircleWeeklyActiveCount
+    kind: event_handler
+    facet: CircleWeeklyActiveProjectionHandler
+    method: apply
+    idempotency: event_id
 members:
   CircleSectionConfig:
     kind: owned_entity

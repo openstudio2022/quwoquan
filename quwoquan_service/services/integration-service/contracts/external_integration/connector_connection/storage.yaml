@@ -2,6 +2,7 @@ backend: mongodb
 role: authoritative
 collections:
   connector_connections:
+    publication_role: not_published
     entity: ConnectorConnection
     role: authoritative
     indexes:
@@ -9,12 +10,14 @@ collections:
     - {name: idx_connector_connections_account_status, keys: {accountId: 1, status: 1, updatedAt: -1}}
     - {name: idx_connector_connections_expiry, keys: {status: 1, expiresAt: 1}}
   connector_connection_command_receipts:
+    publication_role: not_published
     entity: ConnectorConnection
     role: authoritative
-    description: 与连接聚合和 outbox 同一 Mongo transaction 提交的账号级幂等回执。
+    description: 与连接聚合和事务性审计事件表同一 Mongo transaction 提交的账号级幂等回执。
     indexes:
     - {name: uq_connector_connection_receipt_owner_key, keys: {accountId: 1, idempotencyKey: 1}, unique: true}
   connector_connection_outbox:
+    publication_role: transactional_event_log
     entity: ConnectorConnection
     role: append_only
-    description: 与连接聚合、credential lifecycle 和命令回执原子提交的脱敏状态事件。
+    description: 与连接聚合、credential lifecycle 和命令回执原子提交的脱敏安全审计事件；可靠追加即完成义务，不向无消费者 stream 搬运。

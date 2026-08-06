@@ -441,6 +441,7 @@ def test_retry_target_names_use_completed_review_failure_campaign_submissions(
     stable_plan = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
+        "executionMode": "central",
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": submissions["homepage"]["sourceRevision"],

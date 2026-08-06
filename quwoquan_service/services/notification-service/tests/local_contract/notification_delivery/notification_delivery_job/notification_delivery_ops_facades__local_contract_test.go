@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/chat-offline-push-delivery/spec.md#gwt-002
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-003
+// readiness_case: get-notification-delivery-job-metrics-local
+// readiness_case: get-incoming-call-delivery-timeline-local
+// readiness_case: list-notification-delivery-job-dead-letters-local
+// readiness_case: recover-notification-delivery-job-local
 package local_contract
 
 import (
@@ -15,10 +21,18 @@ import (
 
 type deliveryOpsStoreStub struct {
 	metrics       notification.NotificationDeliveryJobMetricsSnapshot
+	timeline      notification.IncomingCallDeliveryTimeline
 	deadLetters   []reliabletask.DeadNotificationRecord
 	recoveryError error
 	recoveredID   string
 	recoveredKey  string
+}
+
+func (s *deliveryOpsStoreStub) ReadIncomingCallDeliveryTimeline(
+	context.Context,
+	string,
+) (notification.IncomingCallDeliveryTimeline, error) {
+	return s.timeline, nil
 }
 
 func (s *deliveryOpsStoreStub) ReadDeliveryJobMetrics(
@@ -72,6 +86,10 @@ func TestNotificationDeliveryOpsFacadesExposeTypedSlicesAndStableRecoveryFailure
 			DeadJobs:     1,
 			UpdatedAt:    now,
 		},
+		timeline: notification.IncomingCallDeliveryTimeline{
+			CallDigest: "sha256:255bc327edf456572cddd7dea860e7298497b3f96b7d13c075ce7e61a220e4c0",
+			UpdatedAt:  now,
+		},
 		deadLetters: []reliabletask.DeadNotificationRecord{{
 			NotificationID:        "ndj_dead_1",
 			SubjectNotificationID: "msg_1",
@@ -86,7 +104,7 @@ func TestNotificationDeliveryOpsFacadesExposeTypedSlicesAndStableRecoveryFailure
 			UpdatedAt: now,
 		}},
 	}
-	queries, err := application.NewNotificationDeliveryJobQueryFacade(store, store)
+	queries, err := application.NewNotificationDeliveryJobQueryFacade(store, store, store)
 	if err != nil {
 		t.Fatalf("construct query facade: %v", err)
 	}
@@ -101,6 +119,10 @@ func TestNotificationDeliveryOpsFacadesExposeTypedSlicesAndStableRecoveryFailure
 	}
 	if metrics.DeadJobs != 1 || metrics.JobsByStatus["dead"] != 1 {
 		t.Fatalf("unexpected typed metrics: %+v", metrics)
+	}
+	timeline, err := queries.GetIncomingCallTimeline(context.Background(), "call_1")
+	if err != nil || timeline.CallDigest != "sha256:255bc327edf456572cddd7dea860e7298497b3f96b7d13c075ce7e61a220e4c0" || !timeline.UpdatedAt.Equal(now) {
+		t.Fatalf("unexpected typed incoming-call timeline: %+v err=%v", timeline, err)
 	}
 	store.metrics.JobsByStatus["dead"] = 9
 	if metrics.JobsByStatus["dead"] != 1 {

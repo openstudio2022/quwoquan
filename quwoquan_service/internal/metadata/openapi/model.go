@@ -66,6 +66,7 @@ type openAPIApplicationBinding struct {
 	Method         string `yaml:"method,omitempty"`
 	AggregateOwner string `yaml:"aggregateOwner,omitempty"`
 	AppendSink     string `yaml:"appendSink,omitempty"`
+	LifecycleOwner string `yaml:"lifecycleOwner,omitempty"`
 	SessionOwner   string `yaml:"sessionOwner,omitempty"`
 	Reader         string `yaml:"reader,omitempty"`
 	Slice          string `yaml:"slice,omitempty"`

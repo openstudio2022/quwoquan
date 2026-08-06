@@ -1,6 +1,6 @@
 dart_class: ContextFillTaskDto
-library_path: assistant/contracts/context_fill_contract.dart
-output_path: assistant/generated/contracts/context_fill_task.g.dart
+library_path: service/assistant_service/assistant/assistant_run/domain/context_fill_contract.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/context_fill_task.g.dart
 contract: context_fill_task
 kind: runtime_protocol_contract
 fields:

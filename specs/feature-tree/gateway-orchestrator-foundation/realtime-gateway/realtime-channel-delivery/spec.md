@@ -51,6 +51,17 @@
 - consumer 重试、DLQ、日志和指标不得保留 `accountId`、persona、payload、ticket 或
   原始错误；DLQ 只保存不可逆摘要、受控类别和 source stream 坐标，恢复从原 PEL 重放。
 
+### REQ-003 WebSocket 单源流式预算
+
+- `realtime.connection.WebSocketUpgrade` 必须只从 generated operation descriptor 消费
+  `stream_budget`：握手 `5000ms`、业务帧空闲 `90000ms`、单连接最长
+  `1800000ms`；不得同时声明或在 runtime 另写 `timeout_ms`、读写 deadline 或第二套配置。
+- 预算必须在消费一次性 ticket 之前开始；ticket 验证成功后，将其可信 account、persona、
+  device 与 auth epoch 注入 principal，再通过统一 runtime operation contract guard，禁止
+  WebSocket 因浏览器不能携带 Bearer 而绕过 operation 授权。
+- `auth_ack` 成功写入才结束握手阶段；业务事件成功写入才刷新 idle 预算。ping/pong 等
+  keepalive 不得作为业务进展刷新 idle。任一预算触发只关闭当前连接，不伪造领域终态事件。
+
 ## 4. 契约引用
 
 - connection：`quwoquan_service/services/realtime-gateway/contracts/realtime/connection/operations.yaml`
@@ -75,6 +86,14 @@
 - WHEN 随后收到更高 epoch 的 `UserRestored`。
 - THEN 旧连接和 ticket 仍不可用，只有携带新 epoch 且被 authority 判定 active 的
   新连接可以建立。
+
+<a id="gwt-003"></a>
+### GWT-003 WebSocket 按生成契约有界运行
+
+- GIVEN WebSocket operation descriptor 声明唯一三段式 stream budget，且请求携带一次性 ticket。
+- WHEN 建连、发送 `auth_ack`、业务事件与 keepalive，或连接达到 handshake、idle、最长时限。
+- THEN ticket 消费从 handshake 预算内开始，验证后的 principal 通过统一 operation guard；
+  `auth_ack` 与业务事件分别推进正确预算，keepalive 不推进 idle，触发时限后仅关闭该连接。
 
 ## 6. 依赖
 

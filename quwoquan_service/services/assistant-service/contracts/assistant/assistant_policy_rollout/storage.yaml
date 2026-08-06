@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   assistant_policy_rollouts:
+    publication_role: not_published
     entity: AssistantPolicyRollout
     description: 每个 policyId 唯一 current/previous cohort mapping。
     indexes:
@@ -14,6 +15,7 @@ collections:
         revision: -1
       unique: true
   assistant_policy_rollout_receipts:
+    publication_role: not_published
     entity: AssistantPolicyRollout
     description: Activate/Rollback command receipt，与 rollout CAS 在同一事务提交。
     indexes:
@@ -22,11 +24,14 @@ collections:
         policyId: 1
         revision: -1
   assistant_policy_rollout_outbox:
+    publication_role: transactional_outbox
     entity: AssistantPolicyRollout
     description: 激活与回滚审计 outbox；payload 仅含 bounded policy/revision/release attribution。
     indexes:
     - name: idx_assistant_policy_rollout_outbox_pending
       keys:
         publishedAt: 1
+        nextAttemptAt: 1
+        claimUntil: 1
         occurredAt: 1
 role: authoritative

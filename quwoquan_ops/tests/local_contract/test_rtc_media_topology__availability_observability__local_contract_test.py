@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -11,13 +12,18 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 from quwoquan_ops.cli.lib.common import load_json_yaml
+from quwoquan_ops.cli.lib.external_provider_governance import load_and_compile
 from quwoquan_ops.cli.lib.environment_topology import (
     URL_GOVERNANCE_FIELDS,
     URL_FIELDS,
     URL_SHAPE_FIELDS,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 from quwoquan_ops.cli.print_local_port_profile import ENV_EXPORTS
+from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.stackctl import (
     _expected_local_roles,
     _service_health_checks_for_target,
@@ -134,25 +140,50 @@ class RtcMediaTopologyContractTest(unittest.TestCase):
         )
 
     def test_gamma_health_includes_nonprod_livekit_provider(self) -> None:
-        roles = set(_expected_local_roles("gamma-local"))
-        self.assertTrue(
-            {
-                "realtime-gateway",
-                "rtc-service",
-            }.issubset(roles)
+        compiled, issues = load_and_compile()
+        self.assertEqual(issues, [])
+        composition = compile_provider_runtime_composition(
+            environment="gamma",
+            target="gamma-local",
+            compiled=compiled,
         )
-        self.assertTrue(
-            {
-                "livekit-http",
-                "livekit-rtc-tcp",
-                "livekit-metrics",
-                "coturn",
-            }.issubset(roles)
-        )
-        checks = {
-            check["name"]: check["url"]
-            for check in _service_health_checks_for_target("gamma-local")
-        }
+        with (
+            mock.patch.object(
+                stackctl,
+                "_active_provider_runtime",
+                return_value={"composition": composition},
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value={
+                    "status": "running",
+                    "workload": "full",
+                    "providerRuntimeDigest": composition[
+                        "runtimeCompositionDigest"
+                    ],
+                },
+            ),
+        ):
+            roles = set(_expected_local_roles("gamma-local"))
+            self.assertTrue(
+                {
+                    "realtime-gateway",
+                    "rtc-service",
+                }.issubset(roles)
+            )
+            self.assertTrue(
+                {
+                    "livekit-http",
+                    "livekit-rtc-tcp",
+                    "livekit-metrics",
+                    "coturn",
+                }.issubset(roles)
+            )
+            checks = {
+                check["name"]: check["url"]
+                for check in _service_health_checks_for_target("gamma-local")
+            }
         self.assertTrue(checks["realtime-gateway"].endswith(":19340/healthz"))
         self.assertTrue(checks["rtc-service"].endswith(":19350/healthz"))
         self.assertTrue(checks["livekit-http"].endswith(":19140/"))

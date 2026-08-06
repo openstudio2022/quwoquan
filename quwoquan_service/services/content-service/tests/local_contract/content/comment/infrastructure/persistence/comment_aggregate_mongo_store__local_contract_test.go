@@ -72,9 +72,15 @@ func TestCommentMongoIndexesMatchDedicatedStorageContract(t *testing.T) {
 		storage.Collections["comment_outbox"].Indexes,
 		CommentOutboxMongoIndexes(),
 	)
+	assertMongoIndexNames(
+		t,
+		"comment_event_log",
+		storage.Collections["comment_event_log"].Indexes,
+		CommentEventLogMongoIndexes(),
+	)
 }
 
-func TestCommentMongoIndexesEnforceCASReceiptExpiryAndOutboxVersion(t *testing.T) {
+func TestCommentMongoIndexesEnforceCASReceiptExpiryAndEventVersions(t *testing.T) {
 	version := mongoIndexOptionsByName(t, CommentMongoIndexes(), "idx_comments_version")
 	if version.Unique == nil || !*version.Unique {
 		t.Fatal("Comment version CAS index must be unique")
@@ -104,6 +110,14 @@ func TestCommentMongoIndexesEnforceCASReceiptExpiryAndOutboxVersion(t *testing.T
 	)
 	if outboxVersion.Unique == nil || !*outboxVersion.Unique {
 		t.Fatal("Comment outbox must accept one fact per aggregate version")
+	}
+	eventLogVersion := mongoIndexOptionsByName(
+		t,
+		CommentEventLogMongoIndexes(),
+		"idx_comment_event_log_aggregate_version",
+	)
+	if eventLogVersion.Unique == nil || !*eventLogVersion.Unique {
+		t.Fatal("Comment event log must accept one audit fact per aggregate version")
 	}
 }
 
@@ -165,11 +179,12 @@ func TestCommentMongoCommitRequiresFactAtCommittedVersion(t *testing.T) {
 		IdempotencyKey:  "mongo-validation-key",
 		CommandName:     "CreateComment",
 		CommandDigest:   "mongo-validation-digest",
-		Events: []commentports.OutboxEvent{{
+		OutboxEvents: []commentports.OutboxEvent{{
 			EventID:          "mongo-validation-event",
 			EventType:        "CommentCreated",
 			AggregateID:      aggregate.ID(),
 			AggregateVersion: aggregate.Version(),
+			Payload:          []byte(`{"commentId":"comment-mongo-validation"}`),
 			OccurredAt:       now,
 		}},
 	}
@@ -177,19 +192,45 @@ func TestCommentMongoCommitRequiresFactAtCommittedVersion(t *testing.T) {
 		t.Fatalf("valid aggregate and outbox fact must commit together: %v", err)
 	}
 
-	commit.Events = nil
-	if err := ValidateCommentCommit(commit); err == nil {
-		t.Fatal("aggregate commit without an outbox fact must be rejected")
+	commit.OutboxEvents = nil
+	commit.EventLogRecords = []commentports.EventLogRecord{{
+		EventID:          "mongo-validation-audit-event",
+		EventType:        "CommentAttachmentsBound",
+		AggregateID:      aggregate.ID(),
+		AggregateVersion: aggregate.Version(),
+		Payload:          []byte(`{"commentId":"comment-mongo-validation"}`),
+		OccurredAt:       now,
+	}}
+	if err := ValidateCommentCommit(commit); err != nil {
+		t.Fatalf("valid aggregate and event-log fact must commit together: %v", err)
 	}
-	commit.Events = []commentports.OutboxEvent{{
+
+	commit.EventLogRecords = nil
+	if err := ValidateCommentCommit(commit); err == nil {
+		t.Fatal("aggregate commit without an outbox or event-log fact must be rejected")
+	}
+	commit.OutboxEvents = []commentports.OutboxEvent{{
 		EventID:          "mongo-validation-event",
 		EventType:        "CommentCreated",
 		AggregateID:      aggregate.ID(),
 		AggregateVersion: aggregate.Version() - 1,
+		Payload:          []byte(`{"commentId":"comment-mongo-validation"}`),
 		OccurredAt:       now,
 	}}
 	if err := ValidateCommentCommit(commit); err == nil {
 		t.Fatal("outbox fact with another aggregate version must be rejected")
+	}
+	commit.OutboxEvents[0].AggregateVersion = aggregate.Version()
+	commit.EventLogRecords = []commentports.EventLogRecord{{
+		EventID:          "mongo-validation-audit-event",
+		EventType:        "CommentAttachmentsBound",
+		AggregateID:      aggregate.ID(),
+		AggregateVersion: aggregate.Version(),
+		Payload:          []byte(`{"commentId":"comment-mongo-validation"}`),
+		OccurredAt:       now,
+	}}
+	if err := ValidateCommentCommit(commit); err == nil {
+		t.Fatal("one commit must not target outbox and event log simultaneously")
 	}
 }
 

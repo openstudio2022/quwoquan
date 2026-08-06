@@ -1,12 +1,29 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-003
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+// readiness_case: start-assistant-run-local
+// readiness_case: get-assistant-run-local
+// readiness_case: cancel-assistant-run-local
+// readiness_case: pause-assistant-run-local
+// readiness_case: resume-assistant-run-local
+// readiness_case: steer-assistant-run-local
+// readiness_case: approve-assistant-tool-use-local
+// readiness_case: submit-device-action-receipt-local
 package assistant_run_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
@@ -471,6 +488,10 @@ func TestAssistantRunCommandServiceClosesCommandsWithCAS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start run: %v", err)
 	}
+	loaded, err := service.Get(context.Background(), "user-1", run.RunID)
+	if err != nil || loaded.RunID != run.RunID || loaded.State != run.State {
+		t.Fatalf("get run: loaded=%+v err=%v", loaded, err)
+	}
 	run, err = service.Pause(
 		context.Background(),
 		"user-1",
@@ -538,6 +559,162 @@ func TestAssistantRunCommandServiceClosesCommandsWithCAS(t *testing.T) {
 			t.Fatalf("journal sequence gap at %d: got %d want %d", index, event.Sequence, want)
 		}
 	}
+}
+
+func TestAssistantRunApprovalAndDeviceReceiptRemainSeparateTypedCommands(t *testing.T) {
+	t.Parallel()
+
+	repository := newMemoryRunRepository()
+	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
+	service := runruntime.NewCommandService(
+		repository,
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
+		testSkillPackageIdentityResolver(),
+		runruntime.AllowAllStartAccessPolicy{},
+		func() time.Time {
+			now = now.Add(time.Second)
+			return now
+		},
+		nil,
+		runruntime.WithPolicyResolver(testPolicyResolver()),
+	)
+	run, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:          "user-device-action",
+		SessionID:       "session-device-action",
+		ClientRequestID: "request-device-action",
+		InputText:       "创建明早九点的提醒",
+	})
+	if err != nil {
+		t.Fatalf("start device action run: %v", err)
+	}
+	expectedRevision := run.Revision
+	for _, state := range []generated.AssistantRunState{
+		generated.AssistantRunStateOrienting,
+		generated.AssistantRunStatePlanning,
+		generated.AssistantRunStateExecuting,
+		generated.AssistantRunStateWaitingApproval,
+	} {
+		now = now.Add(time.Second)
+		if err := run.Transition(state, "", now); err != nil {
+			t.Fatalf("transition to %s: %v", state, err)
+		}
+	}
+	const toolUseID = "tool-use-calendar-1"
+	continuationToken := testAssistantRunContinuationToken(run.RunID, toolUseID)
+	run.Checkpoint = &runruntime.Checkpoint{
+		CheckpointID:       "checkpoint-device-action",
+		Revision:           run.Revision,
+		PendingApprovalRef: toolUseID,
+		CreatedAt:          now,
+	}
+	run.PresentationDocument = map[string]any{
+		"revision": int64(1),
+		"nodes": []map[string]any{{
+			"nodeId": "device-action-confirmation",
+			"kind":   "confirmation_card",
+			"action": map[string]any{
+				"kind": "ApproveTool",
+				"approveTool": map[string]any{
+					"runId":            run.RunID,
+					"toolInvocationId": toolUseID,
+					"decision":         "approved",
+					"capability":       "calendar_create_reminder",
+					"inputDigest":      "sha256:" + strings.Repeat("a", 64),
+					"approvalPermit":   continuationToken,
+				},
+				"requestDigest": testActionIntentDigest(map[string]any{
+					"runId":            run.RunID,
+					"toolInvocationId": toolUseID,
+					"decision":         "approved",
+					"capability":       "calendar_create_reminder",
+					"inputDigest":      "sha256:" + strings.Repeat("a", 64),
+					"approvalPermit":   continuationToken,
+				}),
+				"expiresAt": now.Add(time.Minute).Format(time.RFC3339Nano),
+			},
+		}},
+	}
+	run.JournalSequence++
+	if err := repository.Commit(
+		t.Context(),
+		expectedRevision,
+		run,
+		[]runruntime.JournalEvent{{
+			EventID:   run.RunID + ":waiting-approval",
+			RunID:     run.RunID,
+			Sequence:  run.JournalSequence,
+			Revision:  run.Revision,
+			Kind:      "tool_use_waiting_approval",
+			CreatedAt: now,
+		}},
+		nil,
+	); err != nil {
+		t.Fatalf("persist waiting device action: %v", err)
+	}
+
+	approved, permit, err := service.ApproveToolUse(
+		t.Context(),
+		runruntime.ApproveToolUseCommand{
+			UserID:           "user-device-action",
+			RunID:            run.RunID,
+			ToolInvocationID: toolUseID,
+			CommandID:        "approve-device-action",
+			Decision:         "approved",
+			ApprovalPermit:   continuationToken,
+			InstallationID:   "installation-1",
+			DeviceID:         "device-1",
+		},
+	)
+	if err != nil {
+		t.Fatalf("approve device action: %v", err)
+	}
+	if approved.State != generated.AssistantRunStateWaitingExternal ||
+		permit == nil {
+		t.Fatalf("approval did not issue device permit: run=%+v permit=%+v", approved, permit)
+	}
+	continued, err := service.SubmitDeviceActionReceipt(
+		t.Context(),
+		runruntime.SubmitDeviceActionReceiptCommand{
+			UserID:           "user-device-action",
+			RunID:            run.RunID,
+			ToolInvocationID: toolUseID,
+			CommandID:        toolUseID,
+			Receipt: runruntime.DeviceActionExecutionReceipt{
+				InstallationID: permit.InstallationID,
+				DeviceID:       permit.DeviceID,
+				Capability:     permit.Capability,
+				InputDigest:    permit.InputDigest,
+				Permit:         permit.Permit,
+				IdempotencyKey: permit.IdempotencyKey,
+				Outcome:        "completed",
+				ExecutedAt:     now.Add(time.Second),
+				DeviceObjectID: "calendar-event-1",
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("submit device action receipt: %v", err)
+	}
+	if continued.State != generated.AssistantRunStateExecuting ||
+		continued.Checkpoint == nil ||
+		continued.Checkpoint.PendingApprovalRef != "" ||
+		continued.Checkpoint.PendingDeviceAction != nil ||
+		len(continued.Checkpoint.DeviceActionReceipts) != 1 ||
+		continued.Checkpoint.DeviceActionReceipts[0].DeviceObjectID != "calendar-event-1" {
+		t.Fatalf("typed device receipt did not resume the run: %+v", continued)
+	}
+}
+
+func testActionIntentDigest(value map[string]any) string {
+	encoded, _ := json.Marshal(value)
+	digest := sha256.Sum256(encoded)
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 type memoryRunRepository struct {

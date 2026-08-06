@@ -14,6 +14,15 @@ from core.io import write_json
 from PIL import Image
 
 
+@pytest.fixture(autouse=True)
+def _governed_handoff_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        acquisition,
+        "guard_acquisition_source_identity",
+        lambda *_args, **_kwargs: {},
+    )
+
+
 def _image_bytes(seed: int) -> bytes:
     body = bytes((index * 31 + seed) % 256 for index in range(800 * 640 * 3))
     image = Image.frombytes("RGB", (800, 640), body)
@@ -147,6 +156,7 @@ def test_manual_pinterest_tuchong_files_are_acquired_without_faking_rights(
     acquisition_root = tmp_path / "acquisition"
     receipt, path = acquisition.acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual,
         output_root=acquisition_root,
     )
@@ -183,6 +193,7 @@ def test_manual_pinterest_tuchong_files_are_acquired_without_faking_rights(
 
     repeated, repeated_path = acquisition.acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual,
         output_root=acquisition_root,
     )
@@ -251,6 +262,7 @@ def test_public_and_supported_api_paths_use_anonymous_asset_transport(
 
     receipt, _ = acquisition.acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         output_root=tmp_path / "acquisition",
     )
 
@@ -316,6 +328,7 @@ def test_safety_entity_and_access_failures_block_before_download(
 
     receipt, _ = acquisition.acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         output_root=tmp_path / "acquisition",
     )
 
@@ -365,6 +378,7 @@ def test_manual_file_cannot_escape_operator_root(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="escapes"):
         acquisition.acquire_professional_images(
             manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
             manual_root=manual,
             output_root=tmp_path / "acquisition",
         )
@@ -385,6 +399,7 @@ def test_downloaded_thumbnail_is_retained_but_not_accepted(tmp_path: Path) -> No
     root = tmp_path / "acquisition"
     receipt, path = acquisition.acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual,
         output_root=root,
     )
@@ -434,6 +449,7 @@ def test_acquisition_rejects_discovery_candidate_drift_before_download(
     with pytest.raises(ValueError, match="discovery URL mismatch"):
         acquisition.acquire_professional_images(
             manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
             output_root=tmp_path / "acquisition",
         )
     assert called is False
@@ -454,6 +470,7 @@ def _single_manual_receipt(tmp_path: Path) -> tuple[Path, dict, Path]:
     root = tmp_path / "acquisition"
     receipt, path = acquisition.acquire_professional_images(
         manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
         manual_root=manual,
         output_root=root,
     )

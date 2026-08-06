@@ -6,7 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from quwoquan_ops.cli.lib import external_provider_governance
+from quwoquan_ops.ci.render_provider_conformance_source import (
+    expected_required_cell_count_from_readiness,
+)
 from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
@@ -135,9 +137,29 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 "projections": [],
             },
         )
-        compiled, governance_issues = external_provider_governance.load_and_compile()
-        self.assertEqual(governance_issues, [])
-        cells = sorted(provider_conformance.expected_required_cell_keys(compiled))
+        provider_readiness = {
+            environment: {
+                capability_id: {
+                    "required": True,
+                    "capability_ready": True,
+                }
+                for capability_id in ("search", "fixture-message-transport")
+            }
+            for environment in provider_conformance.READINESS_ENVIRONMENTS
+        }
+        cells = sorted(
+            provider_conformance.expected_required_cell_keys(
+                {
+                    "providerConformanceCapabilityIds": sorted(
+                        provider_readiness["prod"]
+                    )
+                }
+            )
+        )
+        provider_evidence_count = expected_required_cell_count_from_readiness(
+            provider_readiness
+        )
+        self.assertEqual(len(cells), provider_evidence_count)
         provider_files: dict[str, str] = {}
         for index, (capability_id, environment, layer) in enumerate(cells):
             payload = {
@@ -163,9 +185,6 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             provider_files[
                 "evidence/raw/provider/" + relative.as_posix()
             ] = finalizer.sha256_file(provider_raw)
-        capability_ids = sorted(
-            provider_conformance.provider_conformance_capability_ids(compiled)
-        )
         release_closure_files: dict[str, dict[str, str]] = {}
         for index, (label, relative) in enumerate(
             sorted(collector.RELEASE_CLOSURE_PATHS.items())
@@ -249,18 +268,9 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                         "digest": DIGEST,
                         "files": provider_files,
                     },
-                    "evidenceCount": 140,
+                    "evidenceCount": provider_evidence_count,
                     "sourceCoverageIssues": [],
-                    "readiness": {
-                        environment: {
-                            capability_id: {
-                                "required": True,
-                                "capability_ready": True,
-                            }
-                            for capability_id in capability_ids
-                        }
-                        for environment in ("alpha", "beta", "gamma", "prod")
-                    },
+                    "readiness": provider_readiness,
                     "issues": [],
                 },
             ),

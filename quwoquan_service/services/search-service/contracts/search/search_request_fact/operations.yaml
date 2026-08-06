@@ -68,20 +68,65 @@ api_routes:
       visibility: public
     request_entity: ListHotQueriesQuery
     request_body_kind: none
+  - method: POST
+    path: /internal/search/account-closure/dead-letters:recover
+    operation: RecoverSearchAccountClosureDeadLetter
+    actor: none
+    application:
+      kind: command
+      facet: SearchRequestAccountClosureRecoveryCommandFacet
+      method: recoverDeadLetter
+      lifecycle_owner: SearchRequestFact
+      mutation_target: SearchRequestFact
+      invariant_target: SearchRequestFact
+    authorization:
+      principal: operator
+      scopes:
+        - ops.account_closure.write
+      permissions:
+        - search.account_closure.recover
+      ownership_policy: service_owned_projection_delivery
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.invalid_argument
+      - SEARCH.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: search_account_closure_dead_letter_recover
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_entity: SearchAccountClosureDeadLetterRecoveryRequest
+    request_body_kind: object
+    response_entity: SearchAccountClosureDeadLetterRecoveryAccepted
+    response_body_kind: object
+    success_status: 202
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    description: operator 只释放 SearchRequestFact 消费链的 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
 consumers:
   - name: app
     capabilities:
       - hot_queries
 contract_test:
-  mock_strategy:
-    app_side:
-      mock_target: search-service API
-      scenarios:
-        - name: list_hot_queries
-          route: GET /search/hot-queries
-          assertions:
-            - status_200
-            - items_match_schema
+  test_strategy:
     service_side:
       description: 使用 Mongo 真实读模型验证 term-heat 查询与有界返回。
       real_engines:
@@ -92,3 +137,53 @@ contract_test:
           assertions:
             - relevance_order_is_stable
             - limit_is_bounded
+
+readiness_cases:
+- case_id: list-hot-queries-local
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListHotQueries}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/search_request_fact/hot_queries__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: list-hot-queries-api
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListHotQueries}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_request_fact/hot_queries__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: apply-search-request-account-closure-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: object, id: search.search_request_fact}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/search_request_fact/user_account_closed_consumer__reliability__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: apply-search-request-account-closure-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: object, id: search.search_request_fact}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_request_fact/user_account_closed_projection__privacy__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: recover-search-account-closure-dead-letter-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: RecoverSearchAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/search-service/tests/local_contract/search/search_request_fact/user_account_closed_consumer__reliability__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: recover-search-account-closure-dead-letter-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RecoverSearchAccountClosureDeadLetter}
+  runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_request_fact/user_account_closed_projection__privacy__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

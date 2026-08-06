@@ -1,10 +1,12 @@
-import 'package:quwoquan_app/circle/circle_management/circle_behavior_fact/adapters/behavior_fact_remote.dart';
-import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_lifecycle_remote.dart';
-import 'package:quwoquan_app/circle/circle_management/circle/adapters/circle_query_remote.dart';
-import 'package:quwoquan_app/circle/circle_management/circle_file/adapters/file_remote.dart';
-import 'package:quwoquan_app/circle/circle_management/circle_group/adapters/group_remote.dart';
-import 'package:quwoquan_app/circle/circle_management/circle_membership/adapters/membership_remote.dart';
-import 'package:quwoquan_app/circle/circle_management/circle_post_placement/adapters/post_placement_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_behavior_fact/adapters/behavior_fact_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/circle_lifecycle_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/circle_query_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/adapters/file_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_group/adapters/group_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_group_membership/adapters/group_membership_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/adapters/membership_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_post_placement/adapters/post_placement_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// circle domain 的 production Remote adapter 种类。
@@ -13,7 +15,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 enum CircleProductionAdapter {
   behaviorFact,
   file,
+  gathering,
+  gatheringBoardCircle,
   group,
+  groupMembership,
   lifecycle,
   membership,
   postPlacement,
@@ -39,10 +44,23 @@ final class CircleProductionComposition {
         client: client,
         invocationContext: context,
       ),
+      CircleProductionAdapter.gathering => RemoteGatheringFacet(
+        client: client,
+        invocationContext: context,
+      ),
+      CircleProductionAdapter.gatheringBoardCircle => RemoteGatheringFacet(
+        client: client,
+        invocationContext: context,
+      ),
       CircleProductionAdapter.group => RemoteCircleGroupFacet(
         client: client,
         invocationContext: context,
       ),
+      CircleProductionAdapter.groupMembership =>
+        RemoteCircleGroupMembershipFacet(
+          client: client,
+          invocationContext: context,
+        ),
       CircleProductionAdapter.lifecycle => RemoteCircleLifecycleFacet(
         client: client,
         invocationContext: context,

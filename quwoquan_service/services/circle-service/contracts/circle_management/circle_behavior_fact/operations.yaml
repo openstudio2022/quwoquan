@@ -52,3 +52,20 @@ api_routes:
       latency_p95_ms: 300
       availability_percent: 99.9
     request_body_kind: object
+readiness_cases:
+  - case_id: report-circle-behavior-local
+    spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: ReportCircleBehavior}
+    runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle_behavior_fact/writer__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: report-circle-behavior-api
+    spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: ReportCircleBehavior}
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_behavior_fact/append_http_mongo__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

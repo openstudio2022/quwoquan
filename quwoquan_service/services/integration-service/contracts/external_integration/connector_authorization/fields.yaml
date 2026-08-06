@@ -11,6 +11,7 @@ fields:
 - {name: proofDigest, source: proofDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: grantReceiptDigest, source: grantReceiptDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: credentialRef, source: credentialRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: providerAccountSubjectDigest, source: verifiedProviderAccountSubjectDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: verifiedAt, source: verifiedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: consumedAt, source: consumedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
@@ -40,7 +41,7 @@ types:
     - {name: createdAt, source: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
     - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: none}
   ConnectorAuthorizationIntent:
-    description: App 启动 native 或 OAuth handoff 所需的短期不透明 continuation；不包含任意 URL 或 Provider 参数。
+    description: App 启动 native 或 OAuth handoff 所需的短期不透明 continuation；其受保护 envelope 绑定 state、nonce、PKCE verifier/challenge、requested capabilities 与发起账号，不包含任意 URL 或 Provider 参数。
     fields:
     - {name: authorization, source: authorization, type: ConnectorAuthorizationView, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
     - {name: continuationRef, source: continuationRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: read, ops_exposure: none}
@@ -51,6 +52,7 @@ types:
     - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: nativeGrantProofRef, source: nativeGrantProofRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
   CompleteOAuthConnectorAuthorizationRequest:
+    description: OAuth callback 只提交 opaque callback ref；state/nonce/PKCE、token account subject 与 capability probe 由受信 adapter 验证，禁止 body accountId 赋权。
     fields:
     - {name: authorizationId, source: path.authorizationId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}

@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   notification_delivery_jobs:
+    publication_role: not_published
     entity: NotificationDeliveryJob
     role: authoritative
     indexes:
@@ -82,18 +83,22 @@ collections:
 
       '
   notification_delivery_job_recipients:
+    publication_role: not_published
     entity: NotificationDeliveryJob
     role: owned_entity
     description: Job 聚合拥有的 recipient delivery state；不作为跨上下文 ledger 暴露。
   notification_delivery_jobs_command_receipts:
+    publication_role: not_published
     entity: NotificationDeliveryJob
     role: authoritative
     description: 与 aggregate state 和 outbox 在同一 mongodb transaction 提交的幂等回执。
   notification_delivery_jobs_outbox:
+    publication_role: transactional_outbox
     entity: NotificationDeliveryJob
     role: append_only
     description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
   notification_external_interaction_result_inbox:
+    publication_role: not_published
     entity: ExternalInteractionResultInboxReceipt
     role: append_only
     indexes:
@@ -104,6 +109,6 @@ collections:
     - name: idx_notification_external_result_inbox_ttl
       keys:
         createdAt: 1
-      expireAfterSeconds: 2592000
+      expire_after_seconds: 2592000
     description: 以 attemptId 为主键的 provider result receipt；只保存不可逆 providerRequestDigest，供幂等消费与 ring/cancel 完整时间线回读。
 role: authoritative

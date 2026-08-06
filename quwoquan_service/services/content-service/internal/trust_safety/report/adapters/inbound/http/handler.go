@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	httpcodec "quwoquan_service/runtime/httpcodec"
 	"quwoquan_service/runtime/operation"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	reporterrors "quwoquan_service/services/content-service/generated/trust_safety/report"
 	reportapp "quwoquan_service/services/content-service/internal/trust_safety/report/application"
 	reportmodel "quwoquan_service/services/content-service/internal/trust_safety/report/domain/model"
 )
@@ -236,6 +238,125 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, payload)
 }
 
+func (h *Handler) GrantGatheringSafetyTermination(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if _, ok := verifiedOperatorAccountID(w, r); !ok {
+		return
+	}
+	var body struct {
+		ExpectedReportVersion int64     `json:"expectedReportVersion"`
+		ActorPersonaID        string    `json:"actorPersonaId"`
+		ExpiresAt             time.Time `json:"expiresAt"`
+	}
+	if err := decodeStrictJSON(r, &body); err != nil {
+		writeHTTPError(w, r, reporterrors.AppErrorFromGatheringSafetyAuthorizationInvalid(
+			"GrantGatheringSafetyTermination request body is invalid",
+		))
+		return
+	}
+	current, ok := operation.FromContext(r.Context())
+	reportID := strings.TrimSpace(r.PathValue("reportId"))
+	if !ok || reportID == "" || strings.TrimSpace(current.IdempotencyKey) == "" {
+		writeHTTPError(w, r, reporterrors.AppErrorFromGatheringSafetyAuthorizationInvalid(
+			"GrantGatheringSafetyTermination context is invalid",
+		))
+		return
+	}
+	payload, err := h.service.GrantGatheringSafetyTermination(
+		r.Context(),
+		reportapp.GrantGatheringSafetyTerminationCommand{
+			ReportID:              reportID,
+			ExpectedReportVersion: body.ExpectedReportVersion,
+			ActorPersonaID:        body.ActorPersonaID,
+			ExpiresAt:             body.ExpiresAt,
+			IdempotencyKey:        current.IdempotencyKey,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (h *Handler) RevokeGatheringSafetyTermination(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if _, ok := verifiedOperatorAccountID(w, r); !ok {
+		return
+	}
+	var body struct {
+		DecisionRef string `json:"decisionRef"`
+	}
+	if err := decodeStrictJSON(r, &body); err != nil {
+		writeHTTPError(w, r, reporterrors.AppErrorFromGatheringSafetyAuthorizationInvalid(
+			"RevokeGatheringSafetyTermination request body is invalid",
+		))
+		return
+	}
+	current, ok := operation.FromContext(r.Context())
+	reportID := strings.TrimSpace(r.PathValue("reportId"))
+	if !ok || reportID == "" || strings.TrimSpace(current.IdempotencyKey) == "" {
+		writeHTTPError(w, r, reporterrors.AppErrorFromGatheringSafetyAuthorizationInvalid(
+			"RevokeGatheringSafetyTermination context is invalid",
+		))
+		return
+	}
+	payload, err := h.service.RevokeGatheringSafetyTermination(
+		r.Context(),
+		reportapp.RevokeGatheringSafetyTerminationCommand{
+			ReportID:       reportID,
+			DecisionRef:    body.DecisionRef,
+			IdempotencyKey: current.IdempotencyKey,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (h *Handler) AuthorizeGatheringSafetyTermination(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if !verifiedServicePrincipal(w, r) {
+		return
+	}
+	var body struct {
+		ActorPersonaID string `json:"actorPersonaId"`
+		GatheringID    string `json:"gatheringId"`
+		Action         string `json:"action"`
+		EvidenceRef    string `json:"evidenceRef"`
+		DecisionRef    string `json:"decisionRef"`
+	}
+	if err := decodeStrictJSON(r, &body); err != nil {
+		writeHTTPError(w, r, reporterrors.AppErrorFromGatheringSafetyAuthorizationInvalid(
+			"AuthorizeGatheringSafetyTermination request body is invalid",
+		))
+		return
+	}
+	payload, err := h.service.AuthorizeGatheringSafetyTermination(
+		r.Context(),
+		reportapp.AuthorizeGatheringSafetyTerminationQuery{
+			ActorPersonaID: body.ActorPersonaID,
+			GatheringID:    body.GatheringID,
+			Action:         body.Action,
+			EvidenceRef:    body.EvidenceRef,
+			DecisionRef:    body.DecisionRef,
+		},
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
 func parseLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
 	limit := 20
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
@@ -263,6 +384,22 @@ func verifiedOperatorAccountID(w http.ResponseWriter, r *http.Request) (string, 
 		"verified ready operator operation principal is required for report operations",
 	))
 	return "", false
+}
+
+func verifiedServicePrincipal(w http.ResponseWriter, r *http.Request) bool {
+	principal, principalOK := rtauth.PrincipalFromContext(r.Context())
+	descriptor, descriptorOK := rtauth.OperationDescriptorFromContext(r.Context())
+	accountID := strings.TrimSpace(principal.Actor.AccountID)
+	if principalOK && descriptorOK &&
+		strings.HasPrefix(accountID, "service:") &&
+		descriptor.Principal == "service" &&
+		descriptor.CommercialStatus == "ready" {
+		return true
+	}
+	writeHTTPError(w, r, contentgenerated.AppErrorFromUnauthorized(
+		"verified service principal is required for Gathering safety authorization",
+	))
+	return false
 }
 
 func decodeEmptyRequest(r *http.Request) error {

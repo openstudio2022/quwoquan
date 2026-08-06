@@ -2,6 +2,7 @@ package commenttestsupport
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ type Store struct {
 	comments    map[string]commentmodel.Snapshot
 	receipts    map[string]receipt
 	outbox      []commentports.OutboxEvent
+	eventLog    []commentports.EventLogRecord
 	posts       map[string]commentmodel.PostOwnership
 	checkpoints map[string]string
 }
@@ -223,11 +225,12 @@ func (s *Store) Commit(
 		snapshot:      cloneSnapshot(snapshot),
 		expiresAt:     expiresAt,
 	}
-	events := cloneOutboxEvents(commit.Events)
+	events := cloneOutboxEvents(commit.OutboxEvents)
 	for index := range events {
 		events[index].Checkpoint = events[index].EventID
 	}
 	s.outbox = append(s.outbox, events...)
+	s.eventLog = append(s.eventLog, cloneEventLogRecords(commit.EventLogRecords)...)
 	aggregate, err := commentmodel.Restore(snapshot)
 	if err != nil {
 		return commentports.CommitResult{}, err
@@ -542,6 +545,12 @@ func (s *Store) OutboxEvents() []commentports.OutboxEvent {
 	return cloneOutboxEvents(s.outbox)
 }
 
+func (s *Store) EventLogRecords() []commentports.EventLogRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return cloneEventLogRecords(s.eventLog)
+}
+
 func (s *Store) LoadCheckpoint(_ context.Context, consumer string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -572,22 +581,59 @@ func validateCommit(commit commentports.Commit) error {
 	if commit.Aggregate.Version() != commit.ExpectedVersion+1 {
 		return contentgenerated.AppErrorFromVersionConflict("test comment version is not monotonic")
 	}
-	if len(commit.Events) == 0 {
-		return contentgenerated.AppErrorFromVersionConflict("test comment commit requires an outbox fact")
+	if (len(commit.OutboxEvents) == 0) == (len(commit.EventLogRecords) == 0) {
+		return contentgenerated.AppErrorFromVersionConflict(
+			"test comment commit requires exactly one publication destination",
+		)
 	}
-	eventIDs := make(map[string]struct{}, len(commit.Events))
-	for _, event := range commit.Events {
-		if strings.TrimSpace(event.EventID) == "" ||
-			strings.TrimSpace(event.EventType) == "" ||
-			event.AggregateID != commit.Aggregate.ID() ||
-			event.AggregateVersion != commit.Aggregate.Version() ||
-			event.OccurredAt.IsZero() {
-			return contentgenerated.AppErrorFromVersionConflict("test comment outbox fact does not match aggregate")
+	eventIDs := make(map[string]struct{}, len(commit.OutboxEvents)+len(commit.EventLogRecords))
+	validateEvent := func(
+		eventID string,
+		eventType string,
+		aggregateID string,
+		aggregateVersion int64,
+		payload []byte,
+		occurredAt time.Time,
+	) error {
+		if strings.TrimSpace(eventID) == "" ||
+			strings.TrimSpace(eventType) == "" ||
+			aggregateID != commit.Aggregate.ID() ||
+			aggregateVersion != commit.Aggregate.Version() ||
+			!json.Valid(payload) ||
+			occurredAt.IsZero() {
+			return contentgenerated.AppErrorFromVersionConflict(
+				"test comment stored fact does not match aggregate",
+			)
 		}
-		if _, found := eventIDs[event.EventID]; found {
-			return contentgenerated.AppErrorFromVersionConflict("test comment outbox fact id is duplicated")
+		if _, found := eventIDs[eventID]; found {
+			return contentgenerated.AppErrorFromVersionConflict("test comment fact id is duplicated")
 		}
-		eventIDs[event.EventID] = struct{}{}
+		eventIDs[eventID] = struct{}{}
+		return nil
+	}
+	for _, event := range commit.OutboxEvents {
+		if err := validateEvent(
+			event.EventID,
+			event.EventType,
+			event.AggregateID,
+			event.AggregateVersion,
+			event.Payload,
+			event.OccurredAt,
+		); err != nil {
+			return err
+		}
+	}
+	for _, event := range commit.EventLogRecords {
+		if err := validateEvent(
+			event.EventID,
+			event.EventType,
+			event.AggregateID,
+			event.AggregateVersion,
+			event.Payload,
+			event.OccurredAt,
+		); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -714,6 +760,15 @@ func cloneSnapshot(snapshot commentmodel.Snapshot) commentmodel.Snapshot {
 
 func cloneOutboxEvents(events []commentports.OutboxEvent) []commentports.OutboxEvent {
 	cloned := make([]commentports.OutboxEvent, len(events))
+	for index, event := range events {
+		cloned[index] = event
+		cloned[index].Payload = append([]byte(nil), event.Payload...)
+	}
+	return cloned
+}
+
+func cloneEventLogRecords(events []commentports.EventLogRecord) []commentports.EventLogRecord {
+	cloned := make([]commentports.EventLogRecord, len(events))
 	for index, event := range events {
 		cloned[index] = event
 		cloned[index].Payload = append([]byte(nil), event.Payload...)

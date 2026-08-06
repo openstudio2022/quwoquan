@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 
 /// 首页推荐 feed 媒体 / 交集证据行 / 骨架屏 / 九宫格 / 文章变体的间距与几何 token。
 ///

@@ -41,10 +41,6 @@ local_identity_reasons:
     reference
   sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate
     reference
-capabilities:
-- append_only
-- idempotent_append
-- outbox
 business_rules:
 - actor 必须是可信 persona 或服务端派生 device actor，业务请求体不得携带 actor 标识
 - sessionId、requestId 与 occurredAt 必须由 OperationInvocationContext 注入

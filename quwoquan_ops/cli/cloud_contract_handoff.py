@@ -24,6 +24,7 @@ DEFAULT_REPORT = (
     ROOT / "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json"
 )
 GENERATOR = "app-cloud-handoff"
+SHA256_HEX_LENGTH = 64
 
 
 def canonical_bytes(value: object) -> bytes:
@@ -40,12 +41,34 @@ def read_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
-        raise ValueError(f"缺少交接输入: {path.relative_to(ROOT)}") from exc
+        raise ValueError(f"缺少交接输入: {relative(path)}") from exc
     except json.JSONDecodeError as exc:
-        raise ValueError(f"JSON 无法解析: {path.relative_to(ROOT)}: {exc}") from exc
+        raise ValueError(f"JSON 无法解析: {relative(path)}: {exc}") from exc
     if not isinstance(value, dict):
-        raise ValueError(f"JSON 根必须是对象: {path.relative_to(ROOT)}")
+        raise ValueError(f"JSON 根必须是对象: {relative(path)}")
     return value
+
+
+def require_sha256(value: str, *, label: str) -> str:
+    normalized = value.strip()
+    if len(normalized) != SHA256_HEX_LENGTH or any(
+        character not in "0123456789abcdef" for character in normalized
+    ):
+        raise ValueError(f"{label} 必须是 64 位小写 SHA256")
+    return normalized
+
+
+def require_review_path(path: Path) -> Path:
+    resolved = path.resolve()
+    review_root = (ROOT / ".qwq_output/env/repo/runs").resolve()
+    try:
+        resolved.relative_to(review_root)
+    except ValueError:
+        raise ValueError(
+            "breaking preview/review 必须位于当前仓库 "
+            ".qwq_output/env/repo/runs/**"
+        ) from None
+    return resolved
 
 
 def atomic_write_json(path: Path, value: object) -> None:
@@ -320,6 +343,7 @@ def operation_snapshots(
                 "responseBodyKind": str(
                     operation.get("responseBodyKind", "")
                 ),
+                "successStatus": operation.get("successStatus"),
                 "sourcePath": str(operation.get("sourcePath", "")),
             }
         )
@@ -378,6 +402,7 @@ def compare_operations(
         "responseEntity",
         "responseBody",
         "responseBodyKind",
+        "successStatus",
     )
     for operation_id in sorted(previous_by_id.keys() & current_by_id.keys()):
         before = previous_by_id[operation_id]
@@ -498,6 +523,137 @@ def build_lock(
     }
 
 
+def validate_previous_lock(previous: dict[str, Any]) -> dict[str, Any]:
+    for retired_field in ("version", "schema", "registryRevision"):
+        if retired_field in previous:
+            raise ValueError(
+                f"previous lock 含退休字段 {retired_field}；禁止作为 breaking baseline"
+            )
+    if previous.get("generator") != GENERATOR:
+        raise ValueError("previous lock 不是唯一当前 handoff 产物")
+    previous_operations = previous.get("appExposedOperations")
+    if not isinstance(previous_operations, list):
+        raise ValueError("previous lock 缺少 appExposedOperations")
+    return previous
+
+
+def load_previous_lock(args: argparse.Namespace) -> dict[str, Any]:
+    previous_path = args.previous_lock
+    if previous_path is None:
+        raise ValueError(
+            "缺少可信 previous lock；禁止从 canonical lock 或空文件隐式建立 "
+            "baseline，请显式传入独立 --previous-lock"
+        )
+
+    previous_path = previous_path.resolve()
+    if previous_path == args.lock.resolve():
+        raise ValueError(
+            "--previous-lock 必须是独立可信快照，不能指向 canonical lock"
+        )
+    if not previous_path.is_file():
+        raise ValueError(f"缺少交接输入: {relative(previous_path)}")
+    expected_sha = require_sha256(
+        args.previous_lock_sha256 or "",
+        label="--previous-lock-sha256",
+    )
+    actual_sha = sha256_bytes(previous_path.read_bytes())
+    if actual_sha != expected_sha:
+        raise ValueError(
+            "previous lock SHA256 漂移；"
+            f"expected={expected_sha}, actual={actual_sha}"
+        )
+    return validate_previous_lock(read_json(previous_path))
+
+
+def proposed_report(
+    *,
+    previous: dict[str, Any],
+    graph_sha: str,
+    changes: list[dict[str, Any]],
+    breaking: list[dict[str, Any]],
+) -> dict[str, Any]:
+    previous_graph = previous.get("contractGraph")
+    previous_graph_sha = (
+        previous_graph.get("sha256")
+        if isinstance(previous_graph, dict)
+        else None
+    )
+    return {
+        "generator": GENERATOR,
+        "previousGraphSha256": previous_graph_sha,
+        "graphSha256": graph_sha,
+        "baselineEstablished": False,
+        "changes": changes,
+        "breakingChanges": breaking,
+        "decision": "blocked" if breaking else "approved",
+    }
+
+
+def approved_report(
+    proposal: dict[str, Any],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    breaking = proposal["breakingChanges"]
+    if args.approve_breaking:
+        raise ValueError(
+            "--approve-breaking 已退役；必须先输出并人工审阅 breaking report，"
+            "再用 --approve-breaking-report 与 --approve-breaking-report-sha256 批准"
+        )
+    if not breaking:
+        if (
+            args.approve_breaking_report is not None
+            or args.approve_breaking_report_sha256 is not None
+        ):
+            raise ValueError("当前无 breaking change，禁止附加 breaking approval")
+        return proposal
+    if args.approve_breaking_report is None:
+        raise ValueError(
+            f"发现 {len(breaking)} 个 breaking change；"
+            "先用 --preview-report 写入完整阻断报告，人工审阅后再显式批准"
+        )
+    reviewed_path = require_review_path(args.approve_breaking_report)
+    expected_sha = require_sha256(
+        args.approve_breaking_report_sha256 or "",
+        label="--approve-breaking-report-sha256",
+    )
+    if not reviewed_path.is_file():
+        raise ValueError(f"reviewed breaking report 不存在: {relative(reviewed_path)}")
+    actual_sha = sha256_bytes(reviewed_path.read_bytes())
+    if actual_sha != expected_sha:
+        raise ValueError(
+            "reviewed breaking report SHA256 漂移；"
+            f"expected={expected_sha}, actual={actual_sha}"
+        )
+    reviewed = read_json(reviewed_path)
+    if reviewed != proposal:
+        raise ValueError(
+            "reviewed breaking report 与当前 Graph/previous lock 派生结果不一致"
+        )
+    result = dict(proposal)
+    result["decision"] = "approved"
+    result["reviewedBreakingReport"] = {
+        "path": relative(reviewed_path),
+        "sha256": actual_sha,
+    }
+    return result
+
+
+def verify_current_lock_compare_and_swap(args: argparse.Namespace) -> str:
+    expected = require_sha256(
+        args.expected_current_lock_sha256 or "",
+        label="--expected-current-lock-sha256",
+    )
+    if not args.lock.is_file():
+        raise ValueError("canonical lock 不存在，禁止隐式建立 baseline")
+    actual = sha256_bytes(args.lock.read_bytes())
+    if actual != expected:
+        raise ValueError(
+            "canonical lock 在审阅/批准期间发生漂移；"
+            f"expected={expected}, actual={actual}"
+        )
+    return actual
+
+
 def accept(args: argparse.Namespace) -> int:
     graph_path = args.graph.resolve()
     lock_path = args.lock.resolve()
@@ -514,38 +670,41 @@ def accept(args: argparse.Namespace) -> int:
         raise ValueError(f"App exposure 绑定不完整，禁止推断: {detail}")
     operations = operation_snapshots(graph, exposures)
 
-    previous = read_json(lock_path) if lock_path.exists() else {}
-    if previous:
-        for retired_field in ("version", "schema", "registryRevision"):
-            if retired_field in previous:
-                raise ValueError(
-                    f"现有 App handoff lock 含退休字段 {retired_field}；"
-                    "单轨切换必须先删除旧 lock，不允许作为 breaking baseline"
-                )
-        if previous.get("generator") != GENERATOR:
-            raise ValueError("现有 App handoff lock 不是唯一当前 handoff 产物")
-    previous_operations = previous.get("appExposedOperations", [])
-    if not isinstance(previous_operations, list):
-        previous_operations = []
-    changes, breaking = compare_operations(previous_operations, operations)
     graph_sha = sha256_bytes(graph_path.read_bytes())
-    report = {
-        "generator": GENERATOR,
-        "previousGraphSha256": (
-            previous.get("contractGraph", {}).get("sha256")
-            if isinstance(previous.get("contractGraph"), dict)
-            else None
-        ),
-        "graphSha256": graph_sha,
-        "baselineEstablished": not bool(previous),
-        "changes": changes,
-        "breakingChanges": breaking,
-        "decision": "approved" if not breaking or args.approve_breaking else "blocked",
-    }
-    if breaking and not args.approve_breaking:
+    previous = load_previous_lock(args)
+    previous_operations = previous.get("appExposedOperations", [])
+    changes, breaking = compare_operations(previous_operations, operations)
+    proposal = proposed_report(
+        previous=previous,
+        graph_sha=graph_sha,
+        changes=changes,
+        breaking=breaking,
+    )
+    if args.preview_report is not None:
+        if (
+            args.approve_breaking
+            or args.approve_breaking_report is not None
+            or args.approve_breaking_report_sha256 is not None
+        ):
+            raise ValueError("--preview-report 不能与 breaking approval 参数同时使用")
+        preview_path = require_review_path(args.preview_report)
+        atomic_write_json(preview_path, proposal)
+        print(
+            "PREVIEW: ContractGraph handoff report "
+            f"{relative(preview_path)} sha256={sha256_bytes(preview_path.read_bytes())}"
+        )
+        if breaking:
+            raise ValueError(
+                f"发现 {len(breaking)} 个 breaking change；"
+                "preview 已写入且 canonical lock/report 未修改"
+            )
+        return 0
+
+    report = approved_report(proposal, args)
+    verify_current_lock_compare_and_swap(args)
+    if breaking and report.get("decision") != "approved":
         raise ValueError(
-            f"发现 {len(breaking)} 个 breaking change；"
-            "需上游提供已审批报告后显式 --approve-breaking"
+            "breaking report 未绑定人工审阅批准"
         )
 
     policy = read_json(args.policy.resolve())
@@ -556,6 +715,7 @@ def accept(args: argparse.Namespace) -> int:
         ttl_minutes=args.lease_ttl_minutes,
     )
     try:
+        verify_current_lock_compare_and_swap(args)
         atomic_write_json(report_path, report)
         report_sha = sha256_bytes(report_path.read_bytes())
         lock = build_lock(
@@ -623,7 +783,32 @@ def parser() -> argparse.ArgumentParser:
     accept_parser = subparsers.choices["accept"]
     accept_parser.add_argument("--owner", default="app-cloud-governance")
     accept_parser.add_argument("--lease-ttl-minutes", type=int, default=10)
-    accept_parser.add_argument("--approve-breaking", action="store_true")
+    accept_parser.add_argument(
+        "--previous-lock",
+        type=Path,
+        help="independent trusted previous lock used only as breaking baseline",
+    )
+    accept_parser.add_argument(
+        "--previous-lock-sha256",
+        help="reviewed SHA256 of the independent trusted previous lock",
+    )
+    accept_parser.add_argument(
+        "--preview-report",
+        type=Path,
+        help="write a non-canonical review report below .qwq_output/env/repo/runs",
+    )
+    accept_parser.add_argument(
+        "--approve-breaking-report",
+        type=Path,
+        help="exact reviewed blocked report previously emitted by --preview-report",
+    )
+    accept_parser.add_argument("--approve-breaking-report-sha256")
+    accept_parser.add_argument("--expected-current-lock-sha256")
+    accept_parser.add_argument(
+        "--approve-breaking",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     lease_acquire = subparsers.add_parser("lease-acquire")
     lease_acquire.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     lease_acquire.add_argument("--resource", required=True)

@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+// readiness_case: list-recent-searches-local
+// readiness_case: upsert-recent-search-local
+// readiness_case: delete-recent-search-local
+// readiness_case: clear-recent-searches-local
 package local_contract
 
 import (
@@ -205,6 +209,27 @@ func TestRecentSearchReceiptReplayAndDigestConflict(t *testing.T) {
 		PersonaID: "persona-2", Scope: "all", Query: "no key",
 	}); err == nil {
 		t.Fatal("missing Idempotency-Key must be rejected")
+	}
+}
+
+func TestRecentSearchReceiptCarriesApplicationOwnedReplayWindow(t *testing.T) {
+	t.Parallel()
+	facade, store := newFacade(t)
+	if _, err := facade.Upsert(context.Background(), recentsearch.UpsertCommand{
+		PersonaID:      "persona-receipt-window",
+		Scope:          "all",
+		Query:          "receipt window",
+		IdempotencyKey: "receipt-window-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.receipts) != 1 {
+		t.Fatalf("expected one receipt, got %d", len(store.receipts))
+	}
+	for _, receipt := range store.receipts {
+		if got, want := receipt.ExpiresAt.Sub(receipt.CreatedAt), time.Duration(recentsearch.ReceiptTTLSeconds)*time.Second; got != want || want != 24*time.Hour {
+			t.Fatalf("receipt replay window drift: got=%s want=%s", got, want)
+		}
 	}
 }
 

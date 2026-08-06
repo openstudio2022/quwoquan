@@ -56,7 +56,20 @@ def test_travel_rights_policy_is_fail_closed_for_commercial_publish(
     assert rights_proof_required("travel") is True
 
 
-def test_travel_rights_policy_keeps_unverified_assets_auditable_in_research():
+def test_travel_rights_policy_keeps_unverified_assets_auditable_in_research(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    research_policy = distribution.load_content_distribution_policy()
+    research_only = replace(
+        research_policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
+        release_class=distribution.ReleaseClass.RESEARCH,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: research_only,
+    )
     assert rights_proof_required("travel") is False
 
 

@@ -210,15 +210,15 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/ui/discovery`、`quwoquan_app/lib/ui/content`、`quwoquan_app/lib/cloud/services/content`
+- App：`quwoquan_app/lib/service/content_service`
 - Contracts：`quwoquan_service/services/content-service/contracts`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service/contracts`
 - Service：`quwoquan_data`、`quwoquan_service/services/content-service`
 - Service（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service`
 - 测试：
-  - `local_contract`：`quwoquan_service/services/content-service/tests`
+  - `local_contract`：`quwoquan_service/services/content-service/tests`、`quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync`
   - `api_integration`：`quwoquan_service/services/content-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/home_recommendation`、`quwoquan_app/test/user_acceptance/journeys/home_video_playback`
 
 ## 8. 开放事项
 

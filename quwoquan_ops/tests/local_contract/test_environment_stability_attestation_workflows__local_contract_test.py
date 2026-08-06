@@ -210,6 +210,43 @@ def test_workflows_have_no_local_or_secret_attestation_fallback() -> None:
         assert forbidden not in combined
 
 
+def test_prod_sim_consumes_clean_deployable_release_closure() -> None:
+    workflow = _workflow(PROD_SIM_WORKFLOW_PATH)
+    producer = workflow["jobs"]["prod_sim_admission"]
+    checkout = next(
+        step
+        for step in producer["steps"]
+        if str(step.get("uses") or "").startswith("actions/checkout@")
+    )
+    assert checkout["with"]["ref"] == "${{ inputs.source_sha }}"
+    assert checkout["with"]["persist-credentials"] == "false"
+
+    source_gate = next(
+        step
+        for step in producer["steps"]
+        if step.get("name") == "Require exact reviewed main source"
+    )["run"]
+    assert "git merge-base --is-ancestor" in source_gate
+    assert "git status --porcelain --untracked-files=all" in source_gate
+
+    candidate = next(
+        step
+        for step in producer["steps"]
+        if step.get("name") == "Verify deployable manifest, OIDC and artifact closure"
+    )["run"]
+    assert "consume_released_release_evidence.py" in candidate
+    assert "--require-status deployable" in candidate
+    assert '--expected-source-sha "${{ inputs.source_sha }}"' in candidate
+    assert '--github-output "$GITHUB_OUTPUT"' in candidate
+
+    diagnostics = next(
+        step
+        for step in producer["steps"]
+        if str(step.get("uses") or "").startswith("actions/upload-artifact@")
+    )
+    assert diagnostics["if"] == "${{ failure() && !cancelled() }}"
+
+
 def test_receipt_validator_rejects_local_authority_and_noncanonical_fields() -> None:
     payload = {
         "schema": "quwoquan.test.case-result",

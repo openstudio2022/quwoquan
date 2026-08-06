@@ -2,9 +2,11 @@ package ports
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
+	contract "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/model"
 	model "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/model"
 )
 
@@ -17,12 +19,13 @@ var (
 type Mutation func(*model.Gathering) (model.Gathering, error)
 
 type CommitRequest struct {
-	GatheringID      string
-	ReceiptKey       string
-	CommandDigest    string
-	ReceiptExpiresAt time.Time
-	EventType        string
-	Mutate           Mutation
+	GatheringID          string
+	ReceiptKey           string
+	CommandDigest        string
+	ReceiptExpiresAt     time.Time
+	EventType            string
+	AdditionalEventTypes []string
+	Mutate               Mutation
 }
 
 type CommitReceipt struct {
@@ -42,30 +45,59 @@ type ReconciliationStore interface {
 	SaveReconciliationCheckpoint(context.Context, string, int64, time.Time) error
 }
 
+type OutboxEvent struct {
+	EventID          string
+	EventType        string
+	AggregateID      string
+	AggregateVersion int64
+	Payload          json.RawMessage
+	OccurredAt       time.Time
+	Sequence         int64
+}
+
+// PublicationOutbox owns Gathering's durable event delivery progress. It is
+// intentionally distinct from ReconciliationStore: Chat convergence is a
+// downstream projection and cannot acknowledge publication.
+type PublicationOutbox interface {
+	ReadPublicationOutboxAfter(context.Context, int64, int) ([]OutboxEvent, error)
+	LoadPublicationCheckpoint(context.Context, string) (int64, error)
+	SavePublicationCheckpoint(context.Context, string, int64, time.Time) error
+}
+
 // TargetReader proves the referenced object currently exists and is
 // navigable. Client-supplied labels and routes never substitute this check.
 type TargetReader interface {
-	RequireNavigable(context.Context, model.TargetRef) error
+	RequireNavigable(context.Context, contract.GatheringSourceRef) error
 }
 
-// ConversationPort is the only cross-domain write seam. All methods must be
-// idempotent for the supplied operation key.
+type EnsureGatheringConversationCommand struct {
+	GatheringID    string
+	SourceEventID  string
+	SourceVersion  int64
+	OwnerPersonaID string
+	Title          string
+	AccessMode     string
+	PostingPolicy  string
+}
+
+type ProjectGatheringMembershipCommand struct {
+	GatheringID   string
+	PersonaID     string
+	SourceEventID string
+	SourceVersion int64
+	SourceType    string
+	State         string
+}
+
+// ConversationPort is the only cross-domain write seam. Chat consumes
+// versioned Gathering source facts and owns room/access projection.
 type ConversationPort interface {
-	EnsureGroupConversation(
+	EnsureGatheringConversation(
 		ctx context.Context,
-		gatheringID string,
-		title string,
-		ownerPersonaID string,
-		maxGroupSize int64,
-		operationKey string,
+		command EnsureGatheringConversationCommand,
 	) (conversationID string, err error)
-	ProjectParticipant(
+	ProjectGatheringMembership(
 		ctx context.Context,
-		gatheringID string,
-		ownerPersonaID string,
-		personaID string,
-		state string,
-		sourceVersion int64,
-		operationKey string,
+		command ProjectGatheringMembershipCommand,
 	) error
 }

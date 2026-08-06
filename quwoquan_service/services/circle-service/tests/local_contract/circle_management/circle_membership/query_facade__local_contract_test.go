@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/spec.md#sit-002
+// readiness_case: list-persona-circles-local
 package local_contract
 
 import (

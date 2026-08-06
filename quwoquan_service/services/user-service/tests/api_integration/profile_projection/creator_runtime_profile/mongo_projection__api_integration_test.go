@@ -1,3 +1,5 @@
+// readiness_case: project-creator-runtime-profile-account-closure-api
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
 package api_integration
 
 import (
@@ -38,6 +40,27 @@ func TestCreatorRuntimeProfileMongoProjectionAndTombstone(t *testing.T) {
 		}
 		if _, found, err := store.FindActiveByPublicIdentity(ctx, profile.CreatorID); err != nil || found {
 			t.Fatalf("tombstoned creator remained public: found=%v err=%v", found, err)
+		}
+
+		closedProfile := profile
+		closedProfile.CreatorID = "creator-account-closed"
+		closedProfile.SourceVersion = 1
+		closedProfile.UpdatedAt = profile.UpdatedAt.Add(time.Minute)
+		if applied, err := handler.Apply(ctx, creatorevent.CreatorProfileChanged{
+			EventType: "CreatorReleaseActivated", Profile: closedProfile,
+		}); err != nil || !applied {
+			t.Fatalf("project account-closure fixture: applied=%v err=%v", applied, err)
+		}
+		accountClosure := creatorapp.NewAccountClosureProjector(store)
+		if err := accountClosure.Apply(ctx, creatorapp.AccountClosedEvent{
+			AccountID:  "account-creator-closed",
+			PersonaIDs: []string{closedProfile.CreatorID},
+			ClosedAt:   closedProfile.UpdatedAt.Add(time.Minute),
+		}); err != nil {
+			t.Fatalf("apply CreatorRuntimeProfile account closure: %v", err)
+		}
+		if _, found, err := store.FindActiveByPublicIdentity(ctx, closedProfile.CreatorID); err != nil || found {
+			t.Fatalf("closed creator profile remained public: found=%v err=%v", found, err)
 		}
 	})
 }

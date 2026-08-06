@@ -22,10 +22,6 @@ relationships:
   target_object: user.Persona
 local_identity_reasons:
   inviterOwnerAccountId: immutable audit snapshot used for authorization evidence; never used as Invitation store identity
-capabilities:
-- queryable
-- idempotent_commands
-- auditable
 taggable: false
 vector_enabled: false
 business_rules:

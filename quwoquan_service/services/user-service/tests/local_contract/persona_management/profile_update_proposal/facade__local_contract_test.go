@@ -2,6 +2,13 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
 // spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
 // spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/spec.md#sit-001
+// readiness_case: create-profile-update-proposal-local
+// readiness_case: confirm-profile-update-proposal-local
+// readiness_case: apply-profile-update-proposal-local
+// readiness_case: reject-profile-update-proposal-local
+// readiness_case: rollback-profile-update-proposal-local
+// readiness_case: get-profile-update-proposal-local
+// readiness_case: list-profile-update-proposals-local
 package local_contract
 
 import (
@@ -356,6 +363,16 @@ func TestFacadeOwnerAndIdempotentApply(t *testing.T) {
 	}
 	if _, err := store.LoadAudit(context.Background(), "proposal-1", model.AuditActionRollback); err != nil {
 		t.Fatalf("load rollback audit: %v", err)
+	}
+	owned, err := facade.Get(context.Background(), "proposal-1", "persona-1")
+	if err != nil || owned.Status != model.StatusRolledBack {
+		t.Fatalf("owned GetProfileUpdateProposal: value=%+v err=%v", owned, err)
+	}
+	ownedSlice, err := facade.ListByPersona(
+		context.Background(), "persona-1", "persona-1", nil, 20,
+	)
+	if err != nil || len(ownedSlice.Items) != 1 || ownedSlice.Items[0].ID != "proposal-1" {
+		t.Fatalf("owned ListProfileUpdateProposals: value=%+v err=%v", ownedSlice, err)
 	}
 	if _, err := facade.Get(context.Background(), "proposal-1", "persona-2"); !errors.Is(err, model.ErrForbidden) {
 		t.Fatalf("foreign reader was not denied: %v", err)

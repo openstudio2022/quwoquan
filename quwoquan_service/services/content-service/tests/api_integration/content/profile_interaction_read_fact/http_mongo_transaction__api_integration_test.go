@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
+// readiness_case: update-profile-interaction-state-api
 package profile_interaction_read_fact_test
 
 import (
@@ -12,8 +14,8 @@ import (
 
 	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/commandmeta"
+	"quwoquan_service/runtime/operation"
 	activitymodel "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/domain/model"
 	activitypersistence "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/infrastructure/persistence"
 	readfacthttp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/adapters/inbound/http"

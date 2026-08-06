@@ -52,7 +52,13 @@ func writeEntityCircleUIConfigs(metadataDir string, appDir string) {
 	}
 	if homepageUIDef != nil {
 		out := renderHomepageUIConfigDart(homepageUIDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "entity", "homepage_ui_config.g.dart"), out)
+		writeFile(
+			entityHomepagePresentationOutputPath(
+				appDir,
+				"homepage_ui_config.g.dart",
+			),
+			out,
+		)
 	}
 	circleUIDir := filepath.Join(metadataDir, "circle", "circle_management", "circle")
 	circleUIDef, circleUIErr := readUIConfig(
@@ -64,7 +70,13 @@ func writeEntityCircleUIConfigs(metadataDir string, appDir string) {
 	}
 	if circleUIDef != nil {
 		out := renderCircleUIConfigDart(circleUIDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "circle", "circle_ui_config.g.dart"), out)
+		writeFile(
+			circlePresentationOutputPath(
+				appDir,
+				"circle_ui_config.g.dart",
+			),
+			out,
+		)
 	}
 }
 

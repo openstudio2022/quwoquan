@@ -52,6 +52,7 @@ func (handler *Handler) generate(w http.ResponseWriter, r *http.Request) {
 		inviterPersonaID,
 		channel,
 		inviteePhone,
+		idempotencyKey(r),
 	)
 	if err != nil {
 		writeError(w, r, err)
@@ -110,7 +111,9 @@ func (handler *Handler) accept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, usergenerated.AppErrorFromUnauthorized("authenticated account required"))
 		return
 	}
-	record, err := handler.facade.Accept(r.Context(), actorAccountID, r.PathValue("linkCode"))
+	record, err := handler.facade.Accept(
+		r.Context(), actorAccountID, r.PathValue("linkCode"), idempotencyKey(r),
+	)
 	if err != nil {
 		writeError(w, r, err)
 		return
@@ -148,6 +151,14 @@ func actorAccountID(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimSpace(current.Actor.AccountID)
+}
+
+func idempotencyKey(r *http.Request) string {
+	current, ok := operation.FromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(current.IdempotencyKey)
 }
 
 func queryInt(r *http.Request, key string, fallback int) (int, error) {

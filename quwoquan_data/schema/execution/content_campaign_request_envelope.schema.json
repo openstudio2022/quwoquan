@@ -24,6 +24,7 @@
     "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
+    "preAcquisitionHandoff",
     "externalInputRefs",
     "externalInputsDigest",
     "allowedStage",
@@ -95,6 +96,30 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
+    "preAcquisitionHandoff": {
+      "type": "object",
+      "required": [
+        "handoffId",
+        "handoffRevision",
+        "handoffRef",
+        "handoffDigest",
+        "handoffFileDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "handoffId": { "type": "string", "minLength": 1 },
+        "handoffRevision": { "type": "integer", "minimum": 1 },
+        "handoffRef": { "type": "string", "minLength": 1 },
+        "handoffDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "handoffFileDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
     "externalInputRefs": {
       "type": "array",
       "items": { "$ref": "campaign_external_input_ref.schema.json" }
@@ -142,8 +167,7 @@
         "required": ["semanticSelectionId"]
       },
       "then": {
-        "required": ["semanticPreflightReceipt"],
-        "properties": { "retryOf": { "type": "string", "minLength": 1 } }
+        "required": ["semanticPreflightReceipt"]
       }
     },
     {

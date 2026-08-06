@@ -18,32 +18,51 @@ type CommentHotScoreWriter interface {
 	SetCommentHotScore(ctx context.Context, commentID string, score int64) (bool, error)
 }
 
-// CommentHotScoreProjector 消费 Comment 与 ContentReaction 事实，
+// CommentHotScoreProjectionHandler 消费 Comment 与 ContentReaction 事实，
 // 以「事件触发 + 权威数据全量重算」的幂等模式维护 hotScore 投影分：
 // hotScore = (likeCount - dislikeCount) + 2 * replyCount（commentmodel.HotScoreFor）。
 // 不做 $inc 增量（重放会漂移）、不引入 Redis 排行（R-CMT01 教训）。
-type CommentHotScoreProjector struct {
+type CommentHotScoreProjectionHandler struct {
 	replySummaries commentports.ReplySummaryReader
 	reactions      CommentReactionProjectionReader
 	writer         CommentHotScoreWriter
 }
 
-func NewCommentHotScoreProjector(
+func NewCommentHotScoreProjectionHandler(
 	replySummaries commentports.ReplySummaryReader,
 	reactions CommentReactionProjectionReader,
 	writer CommentHotScoreWriter,
-) *CommentHotScoreProjector {
-	return &CommentHotScoreProjector{
+) *CommentHotScoreProjectionHandler {
+	return &CommentHotScoreProjectionHandler{
 		replySummaries: replySummaries,
 		reactions:      reactions,
 		writer:         writer,
 	}
 }
 
+// CommentHotScoreProjection identifies the canonical Comment whose score must
+// converge from authoritative reaction and reply state. Producer-specific
+// outbox decoding stays in the relay methods below; Apply owns the projection.
+type CommentHotScoreProjection struct {
+	CommentID string
+}
+
+// Apply deterministically recomputes one Comment hot-score projection.
+func (p *CommentHotScoreProjectionHandler) Apply(
+	ctx context.Context,
+	projection CommentHotScoreProjection,
+) error {
+	commentID := strings.TrimSpace(projection.CommentID)
+	if commentID == "" {
+		return fmt.Errorf("Comment hot score projection has no commentId")
+	}
+	return p.recompute(ctx, commentID)
+}
+
 // Publish 实现 Comment outbox relay 的 publisher：
 // 回复创建、删除、隐藏或恢复会改变父评论的 active replyCount，
 // 因而必须触发父评论 hotScore 重算。
-func (p *CommentHotScoreProjector) Publish(ctx context.Context, event commentports.OutboxEvent) error {
+func (p *CommentHotScoreProjectionHandler) Publish(ctx context.Context, event commentports.OutboxEvent) error {
 	if p == nil || p.writer == nil {
 		return fmt.Errorf("Comment hot score projector is not configured")
 	}
@@ -63,12 +82,12 @@ func (p *CommentHotScoreProjector) Publish(ctx context.Context, event commentpor
 		// 一级评论创建/删除不改变任何已有评论的 hotScore 输入。
 		return nil
 	}
-	return p.recompute(ctx, parentCommentID)
+	return p.Apply(ctx, CommentHotScoreProjection{CommentID: parentCommentID})
 }
 
 // PublishReactionFact 实现 ContentReaction outbox relay 的 publisher：
 // 评论赞踩变化触发目标评论 hotScore 重算。
-func (p *CommentHotScoreProjector) PublishReactionFact(
+func (p *CommentHotScoreProjectionHandler) PublishReactionFact(
 	ctx context.Context,
 	fact reactionports.OutboxFact,
 ) error {
@@ -89,12 +108,12 @@ func (p *CommentHotScoreProjector) PublishReactionFact(
 	if targetID == "" {
 		return fmt.Errorf("ContentReaction comment fact has no targetId")
 	}
-	return p.recompute(ctx, targetID)
+	return p.Apply(ctx, CommentHotScoreProjection{CommentID: targetID})
 }
 
 // recompute 从权威数据（reaction counts + reply count）重算单条评论 hotScore；
 // 幂等，可安全重放。目标评论已不存在时静默收敛（写端返回 false）。
-func (p *CommentHotScoreProjector) recompute(ctx context.Context, commentID string) error {
+func (p *CommentHotScoreProjectionHandler) recompute(ctx context.Context, commentID string) error {
 	counts, err := p.reactions.ReadCommentReactionCounts(ctx, []string{commentID})
 	if err != nil {
 		return fmt.Errorf("read reaction counts for hot score: %w", err)
@@ -120,18 +139,18 @@ func (p *CommentHotScoreProjector) recompute(ctx context.Context, commentID stri
 	return nil
 }
 
-var _ commentports.OutboxPublisher = (*CommentHotScoreProjector)(nil)
+var _ commentports.OutboxPublisher = (*CommentHotScoreProjectionHandler)(nil)
 
 // reactionFactPublisher 把 projector 适配为 ContentReaction relay 的 publisher。
 type reactionFactPublisher struct {
-	projector *CommentHotScoreProjector
+	handler *CommentHotScoreProjectionHandler
 }
 
 // NewReactionHotScorePublisher 返回消费 ContentReaction 事实的 hotScore publisher。
-func NewReactionHotScorePublisher(projector *CommentHotScoreProjector) reactionports.OutboxPublisher {
-	return reactionFactPublisher{projector: projector}
+func NewReactionHotScorePublisher(handler *CommentHotScoreProjectionHandler) reactionports.OutboxPublisher {
+	return reactionFactPublisher{handler: handler}
 }
 
 func (p reactionFactPublisher) Publish(ctx context.Context, fact reactionports.OutboxFact) error {
-	return p.projector.PublishReactionFact(ctx, fact)
+	return p.handler.PublishReactionFact(ctx, fact)
 }

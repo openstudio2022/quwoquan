@@ -128,3 +128,37 @@ contract_test:
     gap_id: OPS_EXPERIMENT_RUNTIME_BINDING_FROZEN
     reason: assignment fact 尚未由推荐/搜索线上 runtime 分桶结果写入；当前统计不得冒充线上真相源。 控制面保持冻结，只有 durable runtime binding、实际流量回写与
       gamma 对账证据同时闭合后才能翻 ready。
+
+readiness_cases:
+- case_id: get-experiment-assignment-local
+  spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetExperimentAssignment}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/experiment_assignment_fact/assignment_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-experiment-assignment-api
+  spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetExperimentAssignment}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/experiment_assignment_fact/immutable_postgres_fact__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: get-experiment-stats-local
+  spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetExperimentStats}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/experiment_assignment_fact/assignment_http_boundary__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-experiment-stats-api
+  spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetExperimentStats}
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/experiment_assignment_fact/immutable_postgres_fact__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

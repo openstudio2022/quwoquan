@@ -1,13 +1,14 @@
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
-import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/storage/media_cache_file_storage_gateway.dart';
 
 /// `dart:io`-backed implementation for mobile / desktop / HarmonyOS.
 ///
 /// This file is allowlisted for direct `dart:io` usage because it IS the
 /// anti-corruption boundary (see verify_lib_dart_io_budget.py).
-class IoFileStorageGateway implements FileStorageGateway {
+class IoFileStorageGateway implements MediaCacheFileStorageGateway {
   const IoFileStorageGateway();
 
   @override
@@ -26,7 +27,31 @@ class IoFileStorageGateway implements FileStorageGateway {
   }
 
   @override
+  Future<String> systemTemporaryPath() async => Directory.systemTemp.path;
+
+  @override
+  String joinPath(String parent, String child) =>
+      '$parent${Platform.pathSeparator}$child';
+
+  @override
+  String basename(String path) {
+    final segments = File(path).uri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    return segments.isEmpty ? '' : segments.last;
+  }
+
+  @override
   Future<bool> exists(String path) => File(path).exists();
+
+  @override
+  Future<bool> directoryExists(String path) => Directory(path).exists();
+
+  @override
+  bool fileExistsSync(String path) => File(path).existsSync();
+
+  @override
+  int fileLengthSync(String path) => File(path).lengthSync();
 
   @override
   Future<String> readAsString(String path) => File(path).readAsString();
@@ -34,6 +59,11 @@ class IoFileStorageGateway implements FileStorageGateway {
   @override
   Future<void> writeAsString(String path, String contents) async {
     await File(path).writeAsString(contents);
+  }
+
+  @override
+  Future<void> appendAsString(String path, String contents) async {
+    await File(path).writeAsString(contents, mode: FileMode.append);
   }
 
   @override
@@ -50,6 +80,14 @@ class IoFileStorageGateway implements FileStorageGateway {
     if (await file.exists()) {
       await file.delete();
     }
+  }
+
+  @override
+  void deleteFileSync(String path) => File(path).deleteSync();
+
+  @override
+  Future<void> deleteDirectory(String path, {required bool recursive}) async {
+    await Directory(path).delete(recursive: recursive);
   }
 
   @override

@@ -21,35 +21,35 @@ var (
 // AppErrorFromGreetingTargetBlockedSender returns *AppError for USER.GREETING.target_blocked_sender (user_message from errors.yaml).
 func AppErrorFromGreetingTargetBlockedSender(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingTargetBlockedSender.Error()))
-	return rerrors.NewAppError(code, "发送失败，对方不接收你的打招呼", debugMessage).WithMetadata("target_blocked_sender", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "发送失败，对方不接收你的打招呼", debugMessage).WithMetadata("target_blocked_sender", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGreetingDuplicatePending returns *AppError for USER.GREETING.duplicate_pending (user_message from errors.yaml).
 func AppErrorFromGreetingDuplicatePending(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingDuplicatePending.Error()))
-	return rerrors.NewAppError(code, "已发送过打招呼，请等待对方回复", debugMessage).WithMetadata("duplicate_pending", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "已发送过打招呼，请等待对方回复", debugMessage).WithMetadata("duplicate_pending", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGreetingRateLimited returns *AppError for USER.GREETING.rate_limited (user_message from errors.yaml).
 func AppErrorFromGreetingRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingRateLimited.Error()))
-	return rerrors.NewAppError(code, "打招呼发送频率超限，请稍后再试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 86400)
+	return rerrors.NewAppError(code, "打招呼发送频率超限，请稍后再试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "snackbar", 86400)
 }
 
 // AppErrorFromGreetingAlreadyContact returns *AppError for USER.GREETING.already_contact (user_message from errors.yaml).
 func AppErrorFromGreetingAlreadyContact(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingAlreadyContact.Error()))
-	return rerrors.NewAppError(code, "已互相关注，可直接进入正式私信", debugMessage).WithMetadata("already_contact", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "已互相关注，可直接进入正式私信", debugMessage).WithMetadata("already_contact", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGreetingNotFound returns *AppError for USER.GREETING.not_found (user_message from errors.yaml).
 func AppErrorFromGreetingNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingNotFound.Error()))
-	return rerrors.NewAppError(code, "打招呼请求不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "打招呼请求不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGreetingInvalidStatusTransition returns *AppError for USER.GREETING.invalid_status_transition (user_message from errors.yaml).
 func AppErrorFromGreetingInvalidStatusTransition(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingInvalidStatusTransition.Error()))
-	return rerrors.NewAppError(code, "操作不可用，请求状态已变更", debugMessage).WithMetadata("invalid_status_transition", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "操作不可用，请求状态已变更", debugMessage).WithMetadata("invalid_status_transition", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }

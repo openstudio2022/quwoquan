@@ -122,7 +122,7 @@ class PatrolCliResolutionTest(unittest.TestCase):
             test_refresh_token="refresh-token",
             current_owner_id="owner-1",
             current_persona_id="persona-1",
-            target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
+            target="test/user_acceptance/journeys/app_startup/basic_viability__user_acceptance_test.dart",
             env_name="prod-sim",
         )
 

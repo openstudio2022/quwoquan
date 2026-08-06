@@ -27,6 +27,7 @@ _INPUT_ROOTS = (
     "quwoquan_data/verticals/travel",
     "quwoquan_data/reference",
     "quwoquan_data/requirements.txt",
+    "quwoquan_data/requirements-cursor.txt",
     "quwoquan_service/services/content-service/contracts/media/media_asset",
 )
 # Data execution identity is deliberately environment-neutral. Environment

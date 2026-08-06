@@ -20,23 +20,23 @@ var (
 // AppErrorFromInteractionCursorInvalid returns *AppError for CONTENT.USER.interaction_cursor_invalid (user_message from errors.yaml).
 func AppErrorFromInteractionCursorInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.interaction_cursor_invalid")
-	return rterr.NewAppError(code, "列表状态已更新，请刷新后重试", debugMessage).WithMetadata("interaction_cursor_invalid", 400).WithRecovery("refresh", 0)
+	return rterr.NewAppError(code, "列表状态已更新，请刷新后重试", debugMessage).WithMetadata("interaction_cursor_invalid", 400).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromInteractionOwnerForbidden returns *AppError for CONTENT.USER.interaction_owner_forbidden (user_message from errors.yaml).
 func AppErrorFromInteractionOwnerForbidden(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.interaction_owner_forbidden")
-	return rterr.NewAppError(code, "无权查看该互动记录", debugMessage).WithMetadata("interaction_owner_forbidden", 403).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "无权查看该互动记录", debugMessage).WithMetadata("interaction_owner_forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInteractionReadModelUnavailable returns *AppError for CONTENT.SYSTEM.interaction_read_model_unavailable (user_message from errors.yaml).
 func AppErrorFromInteractionReadModelUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.interaction_read_model_unavailable")
-	return rterr.NewAppError(code, "互动记录暂时不可用，请稍后重试", debugMessage).WithMetadata("interaction_read_model_unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "互动记录暂时不可用，请稍后重试", debugMessage).WithMetadata("interaction_read_model_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromInteractionTypeInvalid returns *AppError for CONTENT.USER.interaction_type_invalid (user_message from errors.yaml).
 func AppErrorFromInteractionTypeInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.interaction_type_invalid")
-	return rterr.NewAppError(code, "不支持的互动类型", debugMessage).WithMetadata("interaction_type_invalid", 400).WithRecovery("surface", 0)
+	return rterr.NewAppError(code, "不支持的互动类型", debugMessage).WithMetadata("interaction_type_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }

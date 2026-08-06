@@ -19,7 +19,15 @@ import (
 const (
 	defaultGroupSizeLimit = 1000
 	maxGroupSizeLimit     = 1000
+
+	ConversationAccessModeActive   = "active"
+	ConversationAccessModeReadOnly = "read_only"
+
+	ConversationPostingPolicyMemberChat        = "member_chat"
+	ConversationPostingPolicyAnnouncementsOnly = "announcements_only"
 )
+
+var errGatheringProjectionConcurrentUpdate = errors.New("Gathering conversation projection changed concurrently")
 
 type ConversationService struct {
 	transactions                      TransactionRunner
@@ -27,6 +35,7 @@ type ConversationService struct {
 	circleGroupConversations          CircleGroupConversationReader
 	gatheringConversations            GatheringConversationReader
 	circleGroupChatBindingProjections CircleGroupChatBindingProjectionStore
+	messages                          MessageStore
 	members                           MemberStore
 	userStates                        UserStateStore
 	conversationCommands              AggregateCommandStore
@@ -65,6 +74,7 @@ func NewConversationService(
 		circleGroupConversations:          storage.CircleGroupConversations,
 		gatheringConversations:            storage.GatheringConversations,
 		circleGroupChatBindingProjections: storage.CircleGroupChatBindingProjections,
+		messages:                          storage.Messages,
 		members:                           storage.Members,
 		userStates:                        storage.UserStates,
 		conversationCommands:              storage.ConversationCommands,
@@ -91,6 +101,9 @@ type CreateConversationRequest struct {
 	OriginIntersectionSnapshot *model.GreetingIntersectionSnapshot
 	CircleGroupSourceEventID   string
 	GatheringSourceEventID     string
+	GatheringSourceVersion     int64
+	AccessMode                 string
+	PostingPolicy              string
 	MaxGroupSize               int
 	CreatorId                  string
 	InitialMemberIds           []string
@@ -147,10 +160,12 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 
 type GatheringConversationProvisioningRequest struct {
 	SourceEventID  string
+	SourceVersion  int64
 	GatheringID    string
 	OwnerPersonaID string
 	Title          string
-	MaxGroupSize   int
+	AccessMode     string
+	PostingPolicy  string
 }
 
 // ProvisionGatheringConversation creates the sole Chat Conversation bound to
@@ -164,28 +179,23 @@ func (s *ConversationService) ProvisionGatheringConversation(
 	req.GatheringID = strings.TrimSpace(req.GatheringID)
 	req.OwnerPersonaID = strings.TrimSpace(req.OwnerPersonaID)
 	req.Title = strings.TrimSpace(req.Title)
+	req.AccessMode = strings.TrimSpace(req.AccessMode)
+	req.PostingPolicy = strings.TrimSpace(req.PostingPolicy)
 	if req.SourceEventID == "" || req.GatheringID == "" || req.OwnerPersonaID == "" ||
-		req.Title == "" || req.MaxGroupSize < 2 || req.MaxGroupSize > maxGroupSizeLimit {
+		req.Title == "" || req.SourceVersion <= 0 ||
+		!isConversationAccessMode(req.AccessMode) ||
+		!isConversationPostingPolicy(req.PostingPolicy) {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
 			"相聚会话事实不完整",
-			"Gathering conversation projection requires event, gathering, owner, title and valid capacity",
+			"Gathering conversation projection requires versioned room and policy facts",
 		)
 	}
 	if s.gatheringConversations == nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleChat,
-			"相聚会话投影不可用",
-			"Gathering conversation reader is not configured",
-		)
+		return nil, generated.AppErrorFromConversationProjectionUnavailable("Gathering conversation reader is not configured")
 	}
 	if existing, err := s.gatheringConversations.FindConversationByGatheringID(ctx, req.GatheringID); err == nil {
-		if existing.CreatorId != req.OwnerPersonaID || existing.MaxGroupSize != req.MaxGroupSize {
-			return nil, generated.AppErrorFromGatheringBindingConflict(
-				"existing Gathering conversation binding does not match source fact",
-			)
-		}
-		return existing, nil
+		return s.projectExistingGatheringConversation(ctx, existing, req)
 	} else if !isConversationNotFound(err) {
 		return nil, err
 	}
@@ -194,7 +204,9 @@ func (s *ConversationService) ProvisionGatheringConversation(
 	internalCreate := CreateConversationRequest{
 		Type: conversationTypeGroup, Title: req.Title, GatheringId: req.GatheringID,
 		OriginType: "gathering", GatheringSourceEventID: req.SourceEventID,
-		MaxGroupSize: req.MaxGroupSize, CreatorId: req.OwnerPersonaID,
+		GatheringSourceVersion: req.SourceVersion,
+		AccessMode:             req.AccessMode, PostingPolicy: req.PostingPolicy,
+		MaxGroupSize: defaultGroupSizeLimit, CreatorId: req.OwnerPersonaID,
 	}
 	digest, err := chatCommandDigest("ProvisionGatheringConversation", internalCreate)
 	if err != nil {
@@ -211,6 +223,149 @@ func (s *ConversationService) ProvisionGatheringConversation(
 	return s.createDirectConversation(ctx, internalCreate, true, &commandReceiptSpec{
 		ScopedKey: receiptKey, CommandName: "ProvisionGatheringConversation", CommandDigest: digest,
 	})
+}
+
+func (s *ConversationService) projectExistingGatheringConversation(
+	ctx context.Context,
+	existing *model.Conversation,
+	req GatheringConversationProvisioningRequest,
+) (*model.Conversation, error) {
+	if existing.CreatorId != req.OwnerPersonaID || existing.Type != conversationTypeGroup ||
+		existing.OriginType != "gathering" {
+		return nil, generated.AppErrorFromGatheringBindingConflict(
+			"existing Gathering conversation binding does not match source fact",
+		)
+	}
+	if existing.GatheringSourceVersion > req.SourceVersion {
+		return existing, nil
+	}
+	if existing.GatheringSourceVersion == req.SourceVersion {
+		if gatheringConversationProjectionMatches(existing, req) {
+			return existing, nil
+		}
+		return nil, generated.AppErrorFromGatheringBindingConflict(
+			"Gathering source version was reused by another room or policy fact",
+		)
+	}
+
+	for attempt := 0; attempt < 3; attempt++ {
+		var projected *model.Conversation
+		err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+			current, err := s.gatheringConversations.FindConversationByGatheringID(txCtx, req.GatheringID)
+			if err != nil {
+				return err
+			}
+			if current.CreatorId != req.OwnerPersonaID || current.Type != conversationTypeGroup ||
+				current.OriginType != "gathering" {
+				return generated.AppErrorFromGatheringBindingConflict(
+					"existing Gathering conversation binding does not match source fact",
+				)
+			}
+			if current.GatheringSourceVersion > req.SourceVersion {
+				projected = current
+				return nil
+			}
+			if current.GatheringSourceVersion == req.SourceVersion {
+				if !gatheringConversationProjectionMatches(current, req) {
+					return generated.AppErrorFromGatheringBindingConflict(
+						"Gathering source version was reused by another room or policy fact",
+					)
+				}
+				projected = current
+				return nil
+			}
+
+			next := *current
+			policyChanged := effectiveConversationAccessMode(current) != req.AccessMode ||
+				effectiveConversationPostingPolicy(current) != req.PostingPolicy
+			next.Title = req.Title
+			next.GatheringSourceVersion = req.SourceVersion
+			next.GatheringSourceEventID = req.SourceEventID
+			next.AccessMode = req.AccessMode
+			next.PostingPolicy = req.PostingPolicy
+			applied, err := s.gatheringConversations.ApplyGatheringConversationProjection(
+				txCtx, req.GatheringID, current.GatheringSourceVersion, &next,
+			)
+			if err != nil {
+				return err
+			}
+			if !applied {
+				return errGatheringProjectionConcurrentUpdate
+			}
+			if policyChanged {
+				if err := s.conversationCommands.AppendAggregateOutboxEvents(
+					txCtx,
+					[]AggregateOutboxEvent{{
+						EventID:        chatAggregateEventID(req.SourceEventID, "GatheringConversationPolicyChanged"),
+						EventType:      "GatheringConversationPolicyChanged",
+						AggregateID:    next.ID,
+						ConversationID: next.ID,
+						ActorID:        "gathering_projector",
+						Payload: map[string]any{
+							"conversationId": next.ID, "gatheringId": req.GatheringID,
+							"accessMode":    req.AccessMode,
+							"postingPolicy": req.PostingPolicy, "sourceVersion": req.SourceVersion,
+							"updatedAt": next.UpdatedAt,
+						},
+					}},
+				); err != nil {
+					return err
+				}
+			}
+			projected = &next
+			return nil
+		})
+		if errors.Is(err, errGatheringProjectionConcurrentUpdate) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return projected, nil
+	}
+	return nil, generated.AppErrorFromGatheringBindingConflict(
+		"Gathering conversation projection did not converge after concurrent updates",
+	)
+}
+
+func gatheringConversationProjectionMatches(
+	conversation *model.Conversation,
+	req GatheringConversationProvisioningRequest,
+) bool {
+	return conversation.Title == req.Title &&
+		effectiveConversationAccessMode(conversation) == req.AccessMode &&
+		effectiveConversationPostingPolicy(conversation) == req.PostingPolicy
+}
+
+func isConversationAccessMode(value string) bool {
+	return value == ConversationAccessModeActive || value == ConversationAccessModeReadOnly
+}
+
+func isConversationPostingPolicy(value string) bool {
+	return value == ConversationPostingPolicyMemberChat ||
+		value == ConversationPostingPolicyAnnouncementsOnly
+}
+
+func effectiveConversationAccessMode(conversation *model.Conversation) string {
+	if conversation != nil && conversation.AccessMode == ConversationAccessModeReadOnly {
+		return ConversationAccessModeReadOnly
+	}
+	return ConversationAccessModeActive
+}
+
+func EffectiveConversationAccessMode(conversation model.Conversation) string {
+	return effectiveConversationAccessMode(&conversation)
+}
+
+func effectiveConversationPostingPolicy(conversation *model.Conversation) string {
+	if conversation != nil && conversation.PostingPolicy == ConversationPostingPolicyAnnouncementsOnly {
+		return ConversationPostingPolicyAnnouncementsOnly
+	}
+	return ConversationPostingPolicyMemberChat
+}
+
+func EffectiveConversationPostingPolicy(conversation model.Conversation) string {
+	return effectiveConversationPostingPolicy(&conversation)
 }
 
 // replayCreateConversation reads the command receipt with the operation's
@@ -269,11 +424,7 @@ func (s *ConversationService) ProvisionCircleGroupConversation(
 		)
 	}
 	if s.circleGroupConversations == nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleChat,
-			"圈群会话投影不可用",
-			"circle group conversation reader is not configured",
-		)
+		return nil, generated.AppErrorFromConversationProjectionUnavailable("circle group conversation reader is not configured")
 	}
 	if existing, err := s.circleGroupConversations.FindConversationByCircleGroupID(
 		ctx, req.CircleGroupID,
@@ -403,6 +554,10 @@ func (s *ConversationService) createDirectConversation(
 		CircleId:                   req.CircleId,
 		CircleGroupId:              req.CircleGroupId,
 		GatheringId:                req.GatheringId,
+		GatheringSourceVersion:     req.GatheringSourceVersion,
+		GatheringSourceEventID:     req.GatheringSourceEventID,
+		AccessMode:                 defaultString(req.AccessMode, ConversationAccessModeActive),
+		PostingPolicy:              defaultString(req.PostingPolicy, ConversationPostingPolicyMemberChat),
 		EntityId:                   req.EntityId,
 		OriginType:                 originType,
 		OriginGreetingRequestID:    strings.TrimSpace(req.OriginGreetingRequestID),
@@ -491,16 +646,21 @@ func (s *ConversationService) createDirectConversation(
 			ConversationID: conv.ID,
 			ActorID:        req.CreatorId,
 			Payload: map[string]any{
-				"type":           conv.Type,
-				"creatorId":      req.CreatorId,
-				"circleId":       conv.CircleId,
-				"circleGroupId":  conv.CircleGroupId,
-				"gatheringId":    conv.GatheringId,
-				"entityId":       conv.EntityId,
-				"originType":     conv.OriginType,
-				"maxGroupSize":   conv.MaxGroupSize,
-				"receiptEnabled": conv.ReceiptEnabled,
-				"createdAt":      conv.CreatedAt,
+				"conversationId":         conv.ID,
+				"type":                   conv.Type,
+				"creatorId":              req.CreatorId,
+				"circleId":               conv.CircleId,
+				"circleGroupId":          conv.CircleGroupId,
+				"gatheringId":            conv.GatheringId,
+				"gatheringSourceVersion": conv.GatheringSourceVersion,
+				"gatheringSourceEventId": conv.GatheringSourceEventID,
+				"accessMode":             conv.AccessMode,
+				"postingPolicy":          conv.PostingPolicy,
+				"entityId":               conv.EntityId,
+				"originType":             conv.OriginType,
+				"maxGroupSize":           conv.MaxGroupSize,
+				"receiptEnabled":         conv.ReceiptEnabled,
+				"createdAt":              conv.CreatedAt,
 			},
 		},
 		{
@@ -530,18 +690,6 @@ func (s *ConversationService) createDirectConversation(
 				"creatorId":           conv.CreatorId,
 				"sourceCircleEventId": req.CircleGroupSourceEventID,
 				"createdAt":           conv.CreatedAt.UTC(),
-			},
-		})
-	}
-	if conv.GatheringId != "" {
-		outboxEvents = append(outboxEvents, AggregateOutboxEvent{
-			EventID:   chatAggregateEventID(eventSeed, string(conversationevent.GatheringConversationProvisioned)),
-			EventType: string(conversationevent.GatheringConversationProvisioned), AggregateID: conv.ID,
-			ConversationID: conv.ID, ActorID: req.CreatorId,
-			Payload: map[string]any{
-				"conversationId": conv.ID, "gatheringId": conv.GatheringId,
-				"creatorId": conv.CreatorId, "sourceEventId": req.GatheringSourceEventID,
-				"createdAt": conv.CreatedAt.UTC(),
 			},
 		})
 	}
@@ -625,12 +773,11 @@ func (s *ConversationService) createDirectConversation(
 			strings.TrimSpace(conv.GatheringId) != "" && s.gatheringConversations != nil {
 			existing, findErr := s.gatheringConversations.FindConversationByGatheringID(ctx, conv.GatheringId)
 			if findErr == nil {
-				if existing.CreatorId != conv.CreatorId || existing.MaxGroupSize != conv.MaxGroupSize {
-					return nil, generated.AppErrorFromGatheringBindingConflict(
-						"concurrent Gathering conversation binding differs from source fact",
-					)
-				}
-				return existing, nil
+				return s.projectExistingGatheringConversation(ctx, existing, GatheringConversationProvisioningRequest{
+					SourceEventID: conv.GatheringSourceEventID, SourceVersion: conv.GatheringSourceVersion,
+					GatheringID: conv.GatheringId, OwnerPersonaID: conv.CreatorId, Title: conv.Title,
+					AccessMode: conv.AccessMode, PostingPolicy: conv.PostingPolicy,
+				})
 			}
 			if !isConversationNotFound(findErr) {
 				return nil, findErr
@@ -808,6 +955,100 @@ func inferGroupConversationOrigin(
 
 func (s *ConversationService) GetConversation(ctx context.Context, conversationId string) (*model.Conversation, error) {
 	return s.conversations.FindConversationByID(ctx, conversationId)
+}
+
+type GatheringChatAccessSummary struct {
+	GatheringID    string `json:"gatheringId"`
+	ConversationID string `json:"conversationId"`
+	AccessMode     string `json:"accessMode"`
+	PostingPolicy  string `json:"postingPolicy"`
+	ViewerRole     string `json:"viewerRole"`
+	CanPost        bool   `json:"canPost"`
+}
+
+type GatheringPinnedAnnouncement struct {
+	Content   string    `json:"content"`
+	UpdatedBy string    `json:"updatedBy"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type GatheringAssetIndexItem struct {
+	MessageID    string    `json:"messageId"`
+	Seq          int64     `json:"seq"`
+	MediaAssetID string    `json:"mediaAssetId"`
+	MessageType  string    `json:"messageType"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type GatheringChatBoardSlice struct {
+	Access             GatheringChatAccessSummary   `json:"access"`
+	PinnedAnnouncement *GatheringPinnedAnnouncement `json:"pinnedAnnouncement"`
+	Assets             []GatheringAssetIndexItem    `json:"assets"`
+}
+
+func (s *ConversationService) GetGatheringChatBoard(
+	ctx context.Context,
+	conversationID string,
+	viewerPersonaID string,
+) (GatheringChatBoardSlice, error) {
+	conversationID = strings.TrimSpace(conversationID)
+	viewerPersonaID = strings.TrimSpace(viewerPersonaID)
+	if conversationID == "" || viewerPersonaID == "" {
+		return GatheringChatBoardSlice{}, generated.AppErrorFromUnauthorized(
+			"Gathering Chat board requires conversation and trusted viewer persona",
+		)
+	}
+	conversation, err := s.conversations.FindConversationByID(ctx, conversationID)
+	if err != nil {
+		return GatheringChatBoardSlice{}, err
+	}
+	if conversation.Type != conversationTypeGroup || conversation.OriginType != "gathering" ||
+		strings.TrimSpace(conversation.GatheringId) == "" {
+		return GatheringChatBoardSlice{}, generated.AppErrorFromConversationNotFound(
+			"Gathering Chat board is not available for this conversation",
+		)
+	}
+	member, err := s.members.FindMember(ctx, conversationID, viewerPersonaID)
+	if err != nil {
+		if errors.Is(err, model.ErrMemberNotFound) {
+			return GatheringChatBoardSlice{}, generated.AppErrorFromBlocked(
+				"Gathering Chat board requires active membership",
+			)
+		}
+		return GatheringChatBoardSlice{}, err
+	}
+	accessMode := effectiveConversationAccessMode(conversation)
+	postingPolicy := effectiveConversationPostingPolicy(conversation)
+	board := GatheringChatBoardSlice{
+		Access: GatheringChatAccessSummary{
+			GatheringID: conversation.GatheringId, ConversationID: conversation.ID,
+			AccessMode: accessMode, PostingPolicy: postingPolicy, ViewerRole: member.Role,
+			CanPost: conversation.Status == model.ConversationStatusActive &&
+				accessMode == ConversationAccessModeActive &&
+				postingPolicy == ConversationPostingPolicyMemberChat,
+		},
+		Assets: []GatheringAssetIndexItem{},
+	}
+	if strings.TrimSpace(conversation.Announcement) != "" && conversation.AnnouncementUpdatedAt != nil {
+		board.PinnedAnnouncement = &GatheringPinnedAnnouncement{
+			Content: conversation.Announcement, UpdatedBy: conversation.AnnouncementUpdatedBy,
+			UpdatedAt: conversation.AnnouncementUpdatedAt.UTC(),
+		}
+	}
+	messages, err := s.messages.ListMessages(ctx, conversationID, 200, 0, 0)
+	if err != nil {
+		return GatheringChatBoardSlice{}, err
+	}
+	for _, message := range messages {
+		if strings.TrimSpace(message.MediaAssetID) == "" || message.Status == "recalled" {
+			continue
+		}
+		board.Assets = append(board.Assets, GatheringAssetIndexItem{
+			MessageID: message.ID, Seq: message.Seq, MediaAssetID: message.MediaAssetID,
+			MessageType: message.Type, CreatedAt: message.Timestamp.UTC(),
+		})
+	}
+	return board, nil
 }
 
 type UpdateConversationTitleRequest struct {

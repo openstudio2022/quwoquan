@@ -1,8 +1,5 @@
-domain: USER
-entity: GreetingRequest
 errors:
 - code: USER.GREETING.target_blocked_sender
-  kind: GREETING
   reason: target_blocked_sender
   emitted_by:
   - surface: http
@@ -10,15 +7,14 @@ errors:
     - SendGreetingRequest
   http_status: 403
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrGreetingTargetBlockedSender
   dart_const: greetingTargetBlockedSender
-  l10n_key: error_greeting_target_blocked_sender
   user_message:
     zh: 发送失败，对方不接收你的打招呼
     en: Failed to send, the recipient does not accept greetings
-  debug_hint: target has blocked sender or has allowStrangerGreeting=false
+  description: target has blocked sender or has allowStrangerGreeting=false
 - code: USER.GREETING.duplicate_pending
-  kind: GREETING
   reason: duplicate_pending
   emitted_by:
   - surface: http
@@ -26,15 +22,14 @@ errors:
     - SendGreetingRequest
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrGreetingDuplicatePending
   dart_const: greetingDuplicatePending
-  l10n_key: error_greeting_duplicate_pending
   user_message:
     zh: 已发送过打招呼，请等待对方回复
     en: You have already sent a greeting request, please wait for a reply
-  debug_hint: pending greeting already exists between same pair
+  description: pending greeting already exists between same pair
 - code: USER.GREETING.rate_limited
-  kind: GREETING
   reason: rate_limited
   emitted_by:
   - surface: http
@@ -42,16 +37,15 @@ errors:
     - SendGreetingRequest
   http_status: 429
   recovery_action: retry
+  disruption_level: snackbar
   recovery_after_seconds: 86400
   go_const: ErrGreetingRateLimited
   dart_const: greetingRateLimited
-  l10n_key: error_greeting_rate_limited
   user_message:
     zh: 打招呼发送频率超限，请稍后再试
     en: Greeting rate limit exceeded, please try again later
-  debug_hint: sender exceeded daily greeting quota
+  description: sender exceeded daily greeting quota
 - code: USER.GREETING.already_contact
-  kind: GREETING
   reason: already_contact
   emitted_by:
   - surface: http
@@ -59,15 +53,14 @@ errors:
     - SendGreetingRequest
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrGreetingAlreadyContact
   dart_const: greetingAlreadyContact
-  l10n_key: error_greeting_already_contact
   user_message:
     zh: 已互相关注，可直接进入正式私信
     en: Already mutual followers, you can enter the formal direct conversation
-  debug_hint: requester and target are already mutual followers
+  description: requester and target are already mutual followers
 - code: USER.GREETING.not_found
-  kind: GREETING
   reason: not_found
   emitted_by:
   - surface: http
@@ -77,15 +70,14 @@ errors:
     - ReplyGreetingRequest
   http_status: 404
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrGreetingNotFound
   dart_const: greetingNotFound
-  l10n_key: error_greeting_not_found
   user_message:
     zh: 打招呼请求不存在
     en: Greeting request not found
-  debug_hint: greeting request id not found or access denied
+  description: greeting request id not found or access denied
 - code: USER.GREETING.invalid_status_transition
-  kind: GREETING
   reason: invalid_status_transition
   emitted_by:
   - surface: http
@@ -95,10 +87,10 @@ errors:
     - ReplyGreetingRequest
   http_status: 409
   recovery_action: surface
+  disruption_level: inlineCard
   go_const: ErrGreetingInvalidStatusTransition
   dart_const: greetingInvalidStatusTransition
-  l10n_key: error_greeting_invalid_status
   user_message:
     zh: 操作不可用，请求状态已变更
     en: Operation not available, request status has changed
-  debug_hint: attempted status transition is not allowed
+  description: attempted status transition is not allowed

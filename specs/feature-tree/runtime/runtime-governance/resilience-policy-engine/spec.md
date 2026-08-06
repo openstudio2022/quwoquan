@@ -9,7 +9,7 @@
 ## 1. 用户价值
 
 作为维护服务可靠性的工程角色，
-我希望按声明策略统一执行 timeout、retry、circuit break 和 bulkhead，并限制重试预算，
+我希望统一执行出站熔断与 owner 侧并发背压，并按 operation 准入放行或摘除负载，
 从而在依赖失败时获得可解释且不会放大故障的恢复结果。
 
 ## 2. 范围与非目标
@@ -34,6 +34,14 @@
 
 - 与上层 runtime 契约一致，禁止服务内重复实现。
 
+<a id="req-003"></a>
+### REQ-003 本 Story 不拥有入站超时真相源，已删除的策略骨架不得回归
+
+- 入站单 operation 超时预算的唯一真相源是 operation 契约的 `reliability.timeout_ms`，经生成的入口安全描述符在 guard 层以 `context.WithTimeout` 强制；本 Story 既不持有该数值，也不复制或覆盖它。
+- 韧性策略结构体、策略提供者接口、静态策略提供者与重试策略，连同编排层下游超时配置键，已作为零生产调用方的骨架删除。本 Story 因此**不提供任何重试能力**；实现、门禁与规格均不得重新引入它们，也不得把它们当作超时或重试的真相源。
+- 熔断器、客户端熔断包装、并发背压限流器、operation 准入中间件与 feature flag 判定是本 Story 当前真实在用的治理装置，不随上述骨架一并退役。
+- 本 Story 不提供速率限流器：业务到达速率配额由 api-edge 共享状态在 owner 之前独占执行。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
@@ -49,10 +57,10 @@
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 <a id="gwt-002"></a>
-### GWT-002 熔断、限流与并发状态可观察
+### GWT-002 熔断与并发背压状态可观察
 
-- GIVEN 服务调用命中 timeout、retry、熔断、限流或并发策略。
-- WHEN 策略引擎作出允许、拒绝或降级决定。
+- GIVEN 服务调用命中出站熔断、owner 侧并发背压或 operation 准入。
+- WHEN 治理装置作出允许、拒绝或负载摘除决定。
 - THEN 调用结果不放大故障，且治理状态与剩余恢复条件可观察。
 
 ## 6. 依赖
@@ -69,14 +77,14 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：为服务调用执行超时、熔断、并发和 feature flag 策略，并暴露可观测治理状态。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：为服务调用执行出站熔断、owner 侧并发背压与 feature flag 判定，并暴露可观测治理状态。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-002"></a>
-### OPEN-002 熔断、限流与并发状态可观察尚未形成直接测试证据
+### OPEN-002 熔断与并发背压状态可观察尚未形成完整测试证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：为服务调用执行超时、熔断、并发和 feature flag 策略，并暴露可观测治理状态。
+- 影响或价值：仍缺出站熔断状态迁移与剩余恢复条件的直接 `spec_ref`；目标：出站熔断、owner 侧并发背压与 operation 准入的允许、拒绝和负载摘除决定可观察。operation 准入的 `inflight_full` 拒绝已由 `quwoquan_service/tests/local_contract/runtime/governance/operation_admission__local_contract_test.go` 覆盖。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。

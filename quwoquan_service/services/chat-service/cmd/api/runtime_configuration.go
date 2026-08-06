@@ -15,6 +15,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
+	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
 )
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -202,19 +203,13 @@ func newDerivedMediaFileServer(localRoot string) http.Handler {
 }
 
 func writeDerivedMediaError(w http.ResponseWriter, r *http.Request, status int, debugMessage string) {
-	kind := rterr.KindUser
-	reason := "invalid_argument"
-	userMessage := "媒体资源不可用"
+	appError := generated.AppErrorFromMessageMediaInvalid(debugMessage)
 	if status == http.StatusNotFound {
-		reason = "not_found"
+		appError = generated.AppErrorFromMessageMediaUnavailable(debugMessage)
 	}
 	rterr.WriteHTTPError(
 		w,
-		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleChat, kind, reason),
-			userMessage,
-			debugMessage,
-		).WithLocation(rterr.RuntimeErrorLocation{
+		appError.WithLocation(rterr.RuntimeErrorLocation{
 			BusinessObject: "chat_media",
 			FunctionModule: "derived_media_file_server",
 		}),

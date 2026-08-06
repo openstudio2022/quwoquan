@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
+import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
 
 /// 商用策略：成功摘要、失败全量，并支持按 session/run 动态提级。
 class AppLogPolicy {

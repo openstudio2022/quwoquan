@@ -32,8 +32,6 @@ relationships:
   reference_fields:
   - assetId
   target_object: content.MediaAsset
-capabilities:
-- queryable
 taggable: false
 vector_enabled: false
 business_rules:

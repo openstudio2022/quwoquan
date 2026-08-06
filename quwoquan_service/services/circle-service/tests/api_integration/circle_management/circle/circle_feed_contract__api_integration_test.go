@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+// readiness_case: list-circle-discovery-feed-api
+// readiness_case: get-circle-feed-api
 package api_integration
 
 import (

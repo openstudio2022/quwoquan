@@ -29,16 +29,14 @@ type MongoStore struct {
 	receipts    *mongo.Collection
 	outbox      *mongo.Collection
 	checkpoints *mongo.Collection
-	supportsTxn bool
 }
 
-func NewMongoStore(db *mongo.Database, supportsTransactions bool) *MongoStore {
+func NewMongoStore(db *mongo.Database) *MongoStore {
 	return &MongoStore{
 		claims:      db.Collection(claimCollection),
 		receipts:    db.Collection(receiptCollection),
 		outbox:      db.Collection(outboxCollection),
 		checkpoints: db.Collection(checkpointCollection),
-		supportsTxn: supportsTransactions,
 	}
 }
 
@@ -425,9 +423,6 @@ func (s *MongoStore) Commit(
 	if err := validateCommit(commit); err != nil {
 		return claimports.CommitResult{}, err
 	}
-	if !s.supportsTxn {
-		return s.commitBody(ctx, commit)
-	}
 	session, err := s.claims.Database().Client().StartSession()
 	if err != nil {
 		return claimports.CommitResult{}, err
@@ -435,11 +430,71 @@ func (s *MongoStore) Commit(
 	defer session.EndSession(ctx)
 	var result claimports.CommitResult
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		committed, txErr := s.commitBody(txCtx, commit)
-		if txErr == nil {
-			result = committed
+		replayed, found, replayErr := s.resolveReplay(txCtx, commit)
+		if replayErr != nil {
+			return nil, replayErr
 		}
-		return nil, txErr
+		if found {
+			result = replayed
+			return nil, nil
+		}
+		record := documentFromSnapshot(commit.Aggregate.Snapshot())
+		if commit.ExpectedVersion == 0 {
+			if _, insertErr := s.claims.InsertOne(txCtx, record); insertErr != nil {
+				if mongo.IsDuplicateKeyError(insertErr) {
+					return nil, claimgenerated.AppErrorFromDuplicatePendingClaim(
+						"a pending claim request already exists for this persona and homepage",
+					)
+				}
+				return nil, insertErr
+			}
+		} else {
+			replaceResult, replaceErr := s.claims.ReplaceOne(
+				txCtx,
+				bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
+				record,
+			)
+			if replaceErr != nil {
+				return nil, replaceErr
+			}
+			if replaceResult.MatchedCount != 1 {
+				return nil, generated.AppErrorFromVersionConflict(
+					"homepage claim request version changed before commit",
+				)
+			}
+		}
+		// 事件行与聚合状态共用同一个事务句柄：提交成功即事件已可投递，任一步失败
+		// 则状态与事件一起回滚，不存在「状态已改、事件丢失」的中间态。
+		for _, event := range commit.Events {
+			if _, insertErr := s.outbox.InsertOne(txCtx, outboxDocument{
+				ID:               event.EventID,
+				EventType:        event.EventType,
+				AggregateID:      event.AggregateID,
+				AggregateVersion: event.AggregateVersion,
+				Payload:          append([]byte(nil), event.Payload...),
+				OccurredAt:       event.OccurredAt.UTC(),
+			}); insertErr != nil {
+				return nil, insertErr
+			}
+		}
+		if _, insertErr := s.receipts.InsertOne(txCtx, receiptDocument{
+			ID:               commit.IdempotencyKey,
+			AggregateID:      record.ID,
+			AggregateVersion: record.Version,
+			CommandName:      commit.CommandName,
+			CommandDigest:    commit.CommandDigest,
+			Result:           record,
+			CreatedAt:        time.Now().UTC(),
+			ExpiresAt:        receiptExpiry(commit.ReceiptExpiresAt),
+		}); insertErr != nil {
+			return nil, insertErr
+		}
+		aggregate, aggregateErr := record.aggregate()
+		if aggregateErr != nil {
+			return nil, aggregateErr
+		}
+		result = claimports.CommitResult{Aggregate: aggregate}
+		return nil, nil
 	})
 	if err == nil {
 		return result, nil
@@ -456,78 +511,32 @@ func (s *MongoStore) Commit(
 	return claimports.CommitResult{}, err
 }
 
-// commitBody 也供 alpha 单节点 Mongo 使用；CAS 仍原子，生产环境启用事务。
-func (s *MongoStore) commitBody(
+// resolveReplay 在提交事务内判定本次命令是否已被同一 idempotency key 提交过。
+// 过期 receipt 就地清理，让同 key 的新命令可以重新提交。
+func (s *MongoStore) resolveReplay(
 	ctx context.Context,
 	commit claimports.Commit,
-) (claimports.CommitResult, error) {
-	if receipt, found, err := s.findReceipt(ctx, commit.IdempotencyKey); err != nil {
-		return claimports.CommitResult{}, err
-	} else if found && receipt.ExpiresAt.After(time.Now().UTC()) {
-		if receipt.CommandName != commit.CommandName || receipt.CommandDigest != commit.CommandDigest {
-			return claimports.CommitResult{}, generated.AppErrorFromIdempotencyConflict(
-				"idempotency key was reused with a different homepage claim command",
-			)
-		}
-		aggregate, err := receipt.Result.aggregate()
-		return claimports.CommitResult{Aggregate: aggregate, Replayed: true}, err
-	} else if found {
+) (claimports.CommitResult, bool, error) {
+	receipt, found, err := s.findReceipt(ctx, commit.IdempotencyKey)
+	if err != nil || !found {
+		return claimports.CommitResult{}, false, err
+	}
+	if !receipt.ExpiresAt.After(time.Now().UTC()) {
 		if _, err := s.receipts.DeleteOne(ctx, bson.M{"_id": receipt.ID}); err != nil {
-			return claimports.CommitResult{}, err
+			return claimports.CommitResult{}, false, err
 		}
+		return claimports.CommitResult{}, false, nil
 	}
-
-	record := documentFromSnapshot(commit.Aggregate.Snapshot())
-	if commit.ExpectedVersion == 0 {
-		if _, err := s.claims.InsertOne(ctx, record); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return claimports.CommitResult{}, claimgenerated.AppErrorFromDuplicatePendingClaim(
-					"a pending claim request already exists for this persona and homepage",
-				)
-			}
-			return claimports.CommitResult{}, err
-		}
-	} else {
-		result, err := s.claims.ReplaceOne(
-			ctx,
-			bson.M{"_id": record.ID, "version": commit.ExpectedVersion},
-			record,
+	if receipt.CommandName != commit.CommandName || receipt.CommandDigest != commit.CommandDigest {
+		return claimports.CommitResult{}, false, generated.AppErrorFromIdempotencyConflict(
+			"idempotency key was reused with a different homepage claim command",
 		)
-		if err != nil {
-			return claimports.CommitResult{}, err
-		}
-		if result.MatchedCount != 1 {
-			return claimports.CommitResult{}, generated.AppErrorFromVersionConflict(
-				"homepage claim request version changed before commit",
-			)
-		}
 	}
-	for _, event := range commit.Events {
-		if _, err := s.outbox.InsertOne(ctx, outboxDocument{
-			ID:               event.EventID,
-			EventType:        event.EventType,
-			AggregateID:      event.AggregateID,
-			AggregateVersion: event.AggregateVersion,
-			Payload:          append([]byte(nil), event.Payload...),
-			OccurredAt:       event.OccurredAt.UTC(),
-		}); err != nil {
-			return claimports.CommitResult{}, err
-		}
+	aggregate, err := receipt.Result.aggregate()
+	if err != nil {
+		return claimports.CommitResult{}, false, err
 	}
-	if _, err := s.receipts.InsertOne(ctx, receiptDocument{
-		ID:               commit.IdempotencyKey,
-		AggregateID:      record.ID,
-		AggregateVersion: record.Version,
-		CommandName:      commit.CommandName,
-		CommandDigest:    commit.CommandDigest,
-		Result:           record,
-		CreatedAt:        time.Now().UTC(),
-		ExpiresAt:        receiptExpiry(commit.ReceiptExpiresAt),
-	}); err != nil {
-		return claimports.CommitResult{}, err
-	}
-	aggregate, err := record.aggregate()
-	return claimports.CommitResult{Aggregate: aggregate}, err
+	return claimports.CommitResult{Aggregate: aggregate, Replayed: true}, true, nil
 }
 
 func validateCommit(commit claimports.Commit) error {

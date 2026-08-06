@@ -100,12 +100,12 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 		ctx,
 		greetingapp.GreetingStreamEvent{
 			EventID:                      "greeting-event-1",
-			EventName:                    "GreetingRequested",
+			EventName:                    "GreetingRequestSent",
 			GreetingID:                   "greeting-1",
 			RequesterPersonaID:           "persona-1",
 			TargetPersonaID:              "persona-2",
 			Source:                       "profile",
-			PromotedConversationID:       "conversation-1",
+			ExpireAt:                     "2026-08-20T12:30:00Z",
 			TargetAllowsStrangerGreeting: true,
 			OccurredAt:                   now,
 		},
@@ -173,14 +173,14 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 	})
 	assertDurableFields(t, transport.durable[2], mq.GreetingEventStream, map[string]string{
 		"eventId":                      "greeting-event-1",
-		"eventName":                    "GreetingRequested",
+		"eventName":                    "GreetingRequestSent",
 		"id":                           "greeting-1",
 		"requesterPersonaId":           "persona-1",
 		"targetPersonaId":              "persona-2",
 		"targetAllowsStrangerGreeting": "true",
 		"occurredAt":                   now.Format(time.RFC3339Nano),
 		"source":                       "profile",
-		"promotedConversationId":       "conversation-1",
+		"expireAt":                     "2026-08-20T12:30:00Z",
 	})
 	assertDurableFields(t, transport.durable[3], mq.SubjectFollowEventStream, map[string]string{
 		"eventId":     "subject-follow-event-1",
@@ -192,6 +192,119 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 		"state":       "following",
 		"version":     "4",
 		"occurredAt":  now.Format(time.RFC3339Nano),
+	})
+}
+
+func TestGreetingPublisherMapsEveryCanonicalContractPayload(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 12, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name  string
+		event greetingapp.GreetingStreamEvent
+		want  map[string]string
+	}{
+		{
+			name:  "sent",
+			event: greetingapp.GreetingStreamEvent{EventName: "GreetingRequestSent", Source: "profile", ExpireAt: "2026-08-20T12:30:00Z", TargetAllowsStrangerGreeting: true},
+			want:  map[string]string{"source": "profile", "expireAt": "2026-08-20T12:30:00Z", "targetAllowsStrangerGreeting": "true"},
+		},
+		{
+			name:  "replied",
+			event: greetingapp.GreetingStreamEvent{EventName: "GreetingRequestReplied", PromotedConversationID: "conversation-1"},
+			want:  map[string]string{"promotedConversationId": "conversation-1"},
+		},
+		{
+			name:  "ignored",
+			event: greetingapp.GreetingStreamEvent{EventName: "GreetingRequestIgnored", DecisionAt: "2026-07-21T12:30:00Z"},
+			want:  map[string]string{"decisionAt": "2026-07-21T12:30:00Z"},
+		},
+		{name: "cancelled", event: greetingapp.GreetingStreamEvent{EventName: "GreetingRequestCancelled"}, want: map[string]string{}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transport := &recordedMessageTransport{}
+			publisher := mq.NewEventPublisher(transport)
+			test.event.EventID = "event-1"
+			test.event.GreetingID = "greeting-1"
+			test.event.RequesterPersonaID = "persona-1"
+			test.event.TargetPersonaID = "persona-2"
+			test.event.OccurredAt = now
+			if err := publisher.PublishGreetingEvent(context.Background(), test.event); err != nil {
+				t.Fatalf("PublishGreetingEvent() error = %v", err)
+			}
+			want := map[string]string{
+				"eventId": "event-1", "eventName": test.event.EventName, "id": "greeting-1",
+				"requesterPersonaId": "persona-1", "targetPersonaId": "persona-2",
+				"occurredAt": now.Format(time.RFC3339Nano),
+			}
+			for name, value := range test.want {
+				want[name] = value
+			}
+			assertDurableFields(t, transport.durable[0], mq.GreetingEventStream, want)
+		})
+	}
+}
+
+func TestUserAccountPublisherMapsLifecyclePayloadsExactly(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 12, 30, 0, 0, time.UTC)
+	for _, eventType := range []string{"UserSuspended", "UserRestored"} {
+		t.Run(eventType, func(t *testing.T) {
+			transport := &recordedMessageTransport{}
+			publisher := mq.NewEventPublisher(transport)
+			payload := map[string]any{
+				"userId": "account-1", "personaIds": []string{"persona-1"},
+				"accountState": "suspended", "authEpoch": int64(9),
+				"decisionRef": "decision-1", "occurredAt": now.Format(time.RFC3339Nano),
+				"notContracted": "must be filtered",
+			}
+			if eventType == "UserRestored" {
+				payload["accountState"] = "active"
+			}
+			if err := publisher.AppendUserAccountEvent(context.Background(), accountports.UserAccountOutboxEvent{
+				EventID: "event-1", AccountID: "account-1", AccountVersion: 3,
+				EventType: eventType, OccurredAt: now,
+			}, payload); err != nil {
+				t.Fatalf("AppendUserAccountEvent() error = %v", err)
+			}
+			state := payload["accountState"].(string)
+			assertDurableFields(t, transport.durable[0], mq.UserAccountEventStream, map[string]string{
+				"eventId": "event-1", "eventName": eventType, "accountId": "account-1",
+				"accountVersion": "3", "occurredAt": now.Format(time.RFC3339Nano),
+				"payload": `{"accountState":"` + state + `","authEpoch":9,"decisionRef":"decision-1","occurredAt":"2026-07-21T12:30:00Z","personaIds":["persona-1"],"userId":"account-1"}`,
+			})
+		})
+	}
+}
+
+func TestUserAccountPublisherRejectsIncompleteLifecyclePayload(t *testing.T) {
+	transport := &recordedMessageTransport{}
+	publisher := mq.NewEventPublisher(transport)
+	err := publisher.AppendUserAccountEvent(context.Background(), accountports.UserAccountOutboxEvent{
+		EventID: "event-1", AccountID: "account-1", AccountVersion: 3,
+		EventType: "UserSuspended", OccurredAt: time.Now().UTC(),
+	}, map[string]any{"userId": "account-1"})
+	if err == nil || len(transport.durable) != 0 {
+		t.Fatalf("incomplete AppendUserAccountEvent() = %v, durable=%d", err, len(transport.durable))
+	}
+}
+
+func TestUserAccountPublisherMapsProfileTagsPayloadExactly(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 12, 30, 0, 0, time.UTC)
+	transport := &recordedMessageTransport{}
+	publisher := mq.NewEventPublisher(transport)
+	if err := publisher.AppendUserAccountEvent(context.Background(), accountports.UserAccountOutboxEvent{
+		EventID: "event-tags-1", AccountID: "account-1", AccountVersion: 4,
+		EventType: "UserProfileTagsChanged", OccurredAt: now,
+	}, map[string]any{
+		"userId": "account-1", "tagRefs": []string{"tag-1"},
+		"taxonomyReleaseId": "release-1", "profileVersion": int64(4),
+		"occurredAt": now.Format(time.RFC3339Nano), "notContracted": true,
+	}); err != nil {
+		t.Fatalf("AppendUserAccountEvent() error = %v", err)
+	}
+	assertDurableFields(t, transport.durable[0], mq.UserAccountEventStream, map[string]string{
+		"eventId": "event-tags-1", "eventName": "UserProfileTagsChanged", "accountId": "account-1",
+		"accountVersion": "4", "occurredAt": now.Format(time.RFC3339Nano),
+		"payload": `{"occurredAt":"2026-07-21T12:30:00Z","profileVersion":4,"tagRefs":["tag-1"],"taxonomyReleaseId":"release-1","userId":"account-1"}`,
 	})
 }
 

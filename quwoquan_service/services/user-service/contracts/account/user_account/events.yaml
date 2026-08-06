@@ -1,36 +1,29 @@
 events:
 - name: UserSyncHinted
-  client_ws_type: sync_hint
   description: durable UserSyncPatch 已提交后发给当前账号的轻量提示；端侧必须通过 PullUserSync 获取 typed patch。
-  producer: runtime-sync
-  consumers:
-  - realtime-gateway
-  channel: realtime_ephemeral
+  delivery_semantics: best_effort_ephemeral
+  topic: rt:user:{userId}
   payload_entity: UserSyncHintEventPayload
   payload_fields:
   - userId
   - latestSyncSeq
-  realtime_channel: rt:user:{userId}
+  client_ws_type: sync_hint
+  no_consumer_reason: 当前没有 canonical object.yaml.lifecycle.source_events 反向边；若 delivery_semantics 要求投递，commercial closure 保持
+    GATE_BLOCK。
 - name: UserProfileUpdated
-  description: 用户资料已更新
-  producer: user-service
-  consumers:
-  - recommendation-engine
-  - notification-service
-  - search-service
-  channel: event_store
+  description: 用户资料提交后的尽力而为失效提示；权威搜索投影由 PersonaProfileProjector 同事务写入 user_profile_search_outbox 并独立重放，瞬时通知丢失不得回滚资料事实。
+  delivery_semantics: best_effort_ephemeral
+  topic: event:user-profile
   payload_entity: UserAccount
   payload_fields:
   - userId
   - nickname
   - profileVersion
   - updatedAt
+  no_consumer_reason: 该瞬时提示没有 durable consumer 义务；搜索索引消费独立的事务性 profile projection coordinate，不消费此 channel。
 - name: UserProfileTagsChanged
   description: 用户职业/兴趣标签与资料状态原子提交后的 durable 投影事件；tag-service 独占 object_tag_index 写入
-  producer: user-service
-  consumers:
-  - tag-service
-  channel: durable_stream
+  delivery_semantics: transactional_outbox
   payload_entity: UserProfileTagProjectionEvent
   payload_fields:
   - userId
@@ -40,11 +33,7 @@ events:
   - occurredAt
 - name: UserAvatarUpdated
   description: 用户头像已更新
-  producer: user-service
-  consumers:
-  - content-service
-  - search-service
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: UserAccount
   payload_fields:
   - userId
@@ -52,37 +41,10 @@ events:
   - avatarVersion
   - profileVersion
   - updatedAt
-- name: UserRegistered
-  description: 用户注册完成
-  producer: user-service
-  consumers:
-  - recommendation-engine
-  - notification-service
-  - assistant-service
-  channel: event_store
-  payload_entity: UserAccount
-  payload_fields:
-  - userId
-  - nickname
-  - gender
-  - region
-  - createdAt
-  recommend_impact: cold_start_profile
 - name: UserSuspended
-  description: '受信运营 Suspend decision 已原子生效。下游必须落可逆 restriction projection， 隐藏可见性/拒绝写入/抑制投递；不得调用 UserAccountClosed
-    的删除或匿名化路径。
-
-    '
-  producer: user-service
-  consumers:
-  - content-service
-  - chat-service
-  - circle-service
-  - notification-service
-  - search-service
-  - realtime-gateway
-  - rtc-service
-  channel: events.user.account
+  description: 受信运营 Suspend decision 已原子生效。下游必须落可逆 restriction projection， 隐藏可见性/拒绝写入/抑制投递；不得调用 UserAccountClosed 的删除或匿名化路径。
+  delivery_semantics: transactional_outbox
+  topic: events.user.account
   payload_entity: UserAccountEnforcementPayload
   payload_fields:
   - userId
@@ -92,19 +54,9 @@ events:
   - decisionRef
   - occurredAt
 - name: UserRestored
-  description: '受信 Restore decision 已原子生效。下游只能恢复可逆 restriction projection； 不得恢复 closed 账号、旧 session/token、已删除数据或已过期通知。
-
-    '
-  producer: user-service
-  consumers:
-  - content-service
-  - chat-service
-  - circle-service
-  - notification-service
-  - search-service
-  - realtime-gateway
-  - rtc-service
-  channel: events.user.account
+  description: 受信 Restore decision 已原子生效。下游只能恢复可逆 restriction projection； 不得恢复 closed 账号、旧 session/token、已删除数据或已过期通知。
+  delivery_semantics: transactional_outbox
+  topic: events.user.account
   payload_entity: UserAccountEnforcementPayload
   payload_fields:
   - userId
@@ -114,21 +66,10 @@ events:
   - decisionRef
   - occurredAt
 - name: UserAccountClosed
-  description: '账号已注销（closed 终态）；下游必须删除或匿名化该账号关联的可见数据与索引。 recommendation-service
-    独立形成 RecommendationSubjectClosureFact 并据此阻止推荐窗口、曝光、反馈与特征复活，不得再由 content-service 代管推荐隐私状态。
-
-    '
-  producer: user-service
-  consumers:
-  - content-service
-  - chat-service
-  - circle-service
-  - notification-service
-  - search-service
-  - recommendation-service
-  - realtime-gateway
-  - rtc-service
-  channel: events.user.account
+  description: 账号已注销（closed 终态）；下游必须删除或匿名化该账号关联的可见数据与索引。 recommendation-service 独立形成 RecommendationSubjectClosureFact 并据此阻止推荐窗口、曝光、反馈与特征复活，不得再由
+    content-service 代管推荐隐私状态。
+  delivery_semantics: transactional_outbox
+  topic: events.user.account
   payload_entity: UserAccountClosedPayload
   payload_fields:
   - userId

@@ -9,7 +9,7 @@ import (
 	"quwoquan_service/internal/testsupport/contractsview"
 )
 
-func TestRealtimeConnectionAppSurfaceGeneratesTicketAndLongPollTypedOwners(t *testing.T) {
+func TestRealtimeConnectionAppSurfaceGeneratesUpgradeTicketAndLongPollTypedOwners(t *testing.T) {
 	metadataDir := contractsview.Build(t)
 	if err := initializeMetadataSourceForServiceOutput(metadataDir); err != nil {
 		t.Fatal(err)
@@ -25,6 +25,7 @@ func TestRealtimeConnectionAppSurfaceGeneratesTicketAndLongPollTypedOwners(t *te
 	}
 	wanted := map[string]struct{}{
 		"realtime.connection.IssueConnectionTicket": {},
+		"realtime.connection.WebSocketUpgrade":      {},
 		"realtime.connection.LongPoll":              {},
 	}
 	lock := appContractLock{}
@@ -67,8 +68,10 @@ func TestRealtimeConnectionAppSurfaceGeneratesTicketAndLongPollTypedOwners(t *te
 		"final class LongPollResponse",
 		"final class IssueConnectionTicketRequest",
 		"const IssueConnectionTicketRequest();",
+		"final class WebSocketUpgradeRequest",
 		"final class LongPollRequest",
 		"encodeRealtimeConnectionIssueConnectionTicketGeneratedRequest",
+		"encodeRealtimeConnectionWebSocketUpgradeGeneratedRequest",
 		"encodeRealtimeConnectionLongPollGeneratedRequest",
 	} {
 		if !strings.Contains(owner, expected) && !strings.Contains(requests, expected) {
@@ -83,5 +86,13 @@ func TestRealtimeConnectionAppSurfaceGeneratesTicketAndLongPollTypedOwners(t *te
 		strings.Contains(requests, "final String personaId") ||
 		strings.Contains(requests, "final String deviceId") {
 		t.Fatal("IssueConnectionTicket request exposed trusted injected identity")
+	}
+	for _, expected := range []string{
+		"final String ticket;",
+		`"ticket": request.ticket`,
+	} {
+		if !strings.Contains(requests, expected) {
+			t.Fatalf("WebSocket upgrade request ABI is missing %q", expected)
+		}
 	}
 }

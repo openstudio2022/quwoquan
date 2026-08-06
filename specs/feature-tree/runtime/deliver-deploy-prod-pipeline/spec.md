@@ -71,7 +71,14 @@
 ### REQ-003 统一验证 profile：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`
 
 - **统一验证 profile**：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
+- `nightly_full` 只对 `gamma-local` 的同一 released nonprod candidate 执行 Simulator/Emulator 诊断；不得轮转 Alpha/Beta/Gamma 或把 nightly 诊断提升为正式三环境 Green/Prod 回执。
 - **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`；发布输入为 GHCR OCI `ReleaseEvidenceManifest` 的 candidate digest，Actions Artifact 只保留短期失败诊断且不得作为阶段传递。
+- **定时与 Provider 单引用消费**：Nightly schedule 与 Provider producer 只能接收或经
+  `RELEASED_RELEASE_EVIDENCE_REF` 发现一个 exact immutable `ReleaseEvidenceManifest`
+  OCI digest ref；消费端必须验证 status、完整文件闭包、BuildKit SBOM/provenance 和
+  GitHub OIDC signer，再从 manifest 导出 candidate、artifact、source/producer、
+  pilot/rollback、lifecycle/Green Matrix。禁止 `NIGHTLY_*` / `PROVIDER_*` 字段回填、
+  mutable tag 与调用方重复声明派生身份。
 - 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `gray-initial` rollout stage 承接。
 - `03/04/05` 名称与 required-check 语义必须保持稳定。
 - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。

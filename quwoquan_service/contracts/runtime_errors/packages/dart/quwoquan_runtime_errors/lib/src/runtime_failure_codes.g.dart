@@ -40,4 +40,7 @@ abstract final class RuntimeFailureCodes {
   static const String opsContractInvalidResponse =
       'OPS.CONTRACT.invalid_response';
   static const String opsSystemUnknownError = 'OPS.SYSTEM.unknown_error';
+  static const String opsSystemInternalError = 'OPS.SYSTEM.internal_error';
+  static const String unknownSystemInternalError =
+      'UNKNOWN.SYSTEM.internal_error';
 }

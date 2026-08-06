@@ -165,17 +165,18 @@ class RankedRecommendationWindow:
         cards: tuple[RecommendationObjectCard, ...],
     ) -> tuple[RecommendationObjectCard, ...]:
         normalized: list[RecommendationObjectCard] = []
-        seen: set[str] = set()
+        seen: set[tuple[str, str]] = set()
         for card in cards:
             object_kind = card.object_kind.strip()
             object_id = card.object_id.strip()
             title = card.title.strip()
             reason_key = card.reason_key.strip()
             recall_path = card.recall_path.strip()
+            identity = (object_kind, object_id)
             if (
-                object_kind != "entity_homepage"
+                object_kind not in {"entity_homepage", "gathering"}
                 or not object_id
-                or object_id in seen
+                or identity in seen
                 or not title
                 or not reason_key
                 or not recall_path
@@ -183,7 +184,7 @@ class RankedRecommendationWindow:
                 or len(set(card.tag_refs)) != len(card.tag_refs)
             ):
                 raise ValueError("ranked window object card snapshot is invalid")
-            seen.add(object_id)
+            seen.add(identity)
             normalized.append(
                 RecommendationObjectCard(
                     object_kind=object_kind,

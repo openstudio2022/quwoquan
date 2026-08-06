@@ -97,7 +97,7 @@ python3 quwoquan_ops/cli/stackctl.py health --target gamma-local --scope full
 make -C quwoquan_service verify-metadata
 make -C quwoquan_service verify-production-wiring-purity
 cd quwoquan_service && go test ./services/content-service/internal/content/comment/application ./services/content-service/internal/content/post/infrastructure/iplocation ./services/content-service/tests/local_contract/content/post ./services/notification-service/tests/local_contract/notification_delivery/notification
-cd quwoquan_app && flutter test --concurrency=1 test/local_contract/ui/components/comment_system test/local_contract/cloud/content/contract/content_comment_contract__local_contract_test.dart test/local_contract/cloud/services/content/content_comment_remote__local_contract_test.dart
+cd quwoquan_app && flutter test --concurrency=1 test/local_contract/service/content_service/content/comment
 python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile release
 ```
 

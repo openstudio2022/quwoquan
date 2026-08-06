@@ -3,6 +3,8 @@ package reliabletask
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,21 @@ type RedisReadyIndexConfig struct {
 	Stream string
 	Group  string
 	Queue  string
+}
+
+// ReadyIndexObservationEntry is the non-secret, read-only projection of one
+// execution-scoped Redis stream entry. It intentionally omits outbox and
+// idempotency values; the Mongo task is the authoritative job identity.
+type ReadyIndexObservationEntry struct {
+	TaskID     string
+	EnqueuedAt time.Time
+}
+
+// ReadyIndexObservation is a bounded snapshot. Observe never creates a stream
+// or consumer group and never claims, acknowledges, trims, or deletes data.
+type ReadyIndexObservation struct {
+	Entries      []ReadyIndexObservationEntry
+	PendingCount int64
 }
 
 type redisPendingClaimer interface {
@@ -49,6 +66,83 @@ func NewRedisReadyIndex(cfg RedisReadyIndexConfig) (*RedisReadyIndex, error) {
 
 func (r *RedisReadyIndex) Ensure(ctx context.Context) error {
 	return r.client.XGroupCreateMkStream(ctx, r.stream, r.group, "0")
+}
+
+// Observe reads one already-provisioned execution stream without mutation.
+// The caller must construct RedisReadyIndex from the exact executionId-derived
+// stream and group. A bounded limit prevents evidence collection from becoming
+// an unbounded production queue scan.
+func (r *RedisReadyIndex) Observe(
+	ctx context.Context,
+	limit int64,
+) (ReadyIndexObservation, error) {
+	if limit <= 0 || limit > 1_000_000 {
+		return ReadyIndexObservation{}, fmt.Errorf(
+			"reliabletask: ready index observation limit must be between 1 and 1000000",
+		)
+	}
+	messages, err := r.client.XRead(
+		ctx,
+		map[string]string{r.stream: "0-0"},
+		limit+1,
+		0,
+	)
+	if err != nil {
+		return ReadyIndexObservation{}, fmt.Errorf(
+			"reliabletask: read ready index observation: %w",
+			err,
+		)
+	}
+	if int64(len(messages)) > limit {
+		return ReadyIndexObservation{}, fmt.Errorf(
+			"reliabletask: ready index observation exceeds bounded limit %d",
+			limit,
+		)
+	}
+	entries := make([]ReadyIndexObservationEntry, 0, len(messages))
+	for _, message := range messages {
+		if strings.TrimSpace(message.Stream) != r.stream {
+			return ReadyIndexObservation{}, fmt.Errorf(
+				"reliabletask: ready index observation crossed execution stream",
+			)
+		}
+		taskID := strings.TrimSpace(message.Values["taskId"])
+		if taskID == "" {
+			return ReadyIndexObservation{}, fmt.Errorf(
+				"reliabletask: ready index observation contains empty taskId",
+			)
+		}
+		milliseconds, _, ok := strings.Cut(strings.TrimSpace(message.ID), "-")
+		if !ok {
+			return ReadyIndexObservation{}, fmt.Errorf(
+				"reliabletask: ready index observation contains invalid stream id",
+			)
+		}
+		epoch, parseErr := strconv.ParseInt(milliseconds, 10, 64)
+		if parseErr != nil || epoch < 1 {
+			return ReadyIndexObservation{}, fmt.Errorf(
+				"reliabletask: ready index observation contains invalid stream time",
+			)
+		}
+		entries = append(entries, ReadyIndexObservationEntry{
+			TaskID:     taskID,
+			EnqueuedAt: time.UnixMilli(epoch).UTC(),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].EnqueuedAt.Equal(entries[j].EnqueuedAt) {
+			return entries[i].TaskID < entries[j].TaskID
+		}
+		return entries[i].EnqueuedAt.Before(entries[j].EnqueuedAt)
+	})
+	pending, err := r.client.XPendingCount(ctx, r.stream, r.group)
+	if err != nil {
+		return ReadyIndexObservation{}, fmt.Errorf(
+			"reliabletask: read ready index pending count: %w",
+			err,
+		)
+	}
+	return ReadyIndexObservation{Entries: entries, PendingCount: pending}, nil
 }
 
 func (r *RedisReadyIndex) EnqueueReadyOrMerge(ctx context.Context, task ReliableAsyncTask) error {

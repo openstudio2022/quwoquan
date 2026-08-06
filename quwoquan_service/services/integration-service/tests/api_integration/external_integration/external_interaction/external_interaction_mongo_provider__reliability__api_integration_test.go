@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+// readiness_case: submit-external-interaction-api
 package api_integration
 
 import (
@@ -22,22 +24,13 @@ import (
 	integrationsupport "quwoquan_service/services/integration-service/tests/support"
 )
 
-type callbackRecorder struct{}
-
-func (callbackRecorder) SendExternalInteractionResult(
-	context.Context,
-	reliabletask.ExternalInteractionResult,
-) error {
-	return nil
-}
-
-type providerSpy struct {
+type providerRequestRecorder struct {
 	mu            sync.Mutex
 	requests      []map[string]any
 	authorization []string
 }
 
-func (s *providerSpy) handler(w http.ResponseWriter, r *http.Request) {
+func (s *providerRequestRecorder) handler(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -55,7 +48,7 @@ func (s *providerSpy) handler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *providerSpy) snapshot() ([]map[string]any, []string) {
+func (s *providerRequestRecorder) snapshot() ([]map[string]any, []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	requests := append([]map[string]any(nil), s.requests...)
@@ -65,8 +58,8 @@ func (s *providerSpy) snapshot() ([]map[string]any, []string) {
 
 func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *testing.T) {
 	resetReliableTaskCollections(t)
-	spy := &providerSpy{}
-	upstream := httptest.NewTLSServer(http.HandlerFunc(spy.handler))
+	providerRequests := &providerRequestRecorder{}
+	upstream := httptest.NewTLSServer(http.HandlerFunc(providerRequests.handler))
 	t.Cleanup(upstream.Close)
 	expiresAt := time.Now().UTC().Add(5 * time.Minute)
 	sealer, err := otpseal.NewFromBase64("test-k1", map[string]string{
@@ -197,7 +190,7 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 		t.Fatal("expected persisted external request to be processed")
 	}
 
-	requests, authorization := spy.snapshot()
+	requests, authorization := providerRequests.snapshot()
 	if len(requests) != 1 {
 		t.Fatalf("provider must be called exactly once, got %d", len(requests))
 	}

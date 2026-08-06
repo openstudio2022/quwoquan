@@ -5,12 +5,32 @@ groups:
     rules:
       - record: quwoquan_assistant_contract_operation_requests_total
         expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/tool-invocations/[^/]+/approval$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_run.ApproveAssistantToolUse"
+          contract_metric: "assistant_tool_approval"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/tool-invocations/[^/]+/approval$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_run.ApproveAssistantToolUse"
+          contract_metric: "assistant_tool_approval"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
           sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/cancel$"})
         labels:
           service: "assistant-service"
           operation: "assistant.assistant_run.CancelAssistantRun"
           contract_metric: "assistant_run_command"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "300"
           slo_availability_percent: "99.9"
       - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
@@ -20,28 +40,8 @@ groups:
           service: "assistant-service"
           operation: "assistant.assistant_run.CancelAssistantRun"
           contract_metric: "assistant_run_command"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "300"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_assistant_contract_operation_requests_total
-        expr: |
-          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/tool-uses/[^/]+/continue$"})
-        labels:
-          service: "assistant-service"
-          operation: "assistant.assistant_run.ContinueAssistantToolUse"
-          contract_metric: "assistant_tool_continuation"
-          commercial_status: "blocked"
-          slo_latency_p95_ms: "500"
-          slo_availability_percent: "99.9"
-      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
-        expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/tool-uses/[^/]+/continue$"})
-        labels:
-          service: "assistant-service"
-          operation: "assistant.assistant_run.ContinueAssistantToolUse"
-          contract_metric: "assistant_tool_continuation"
-          commercial_status: "blocked"
-          slo_latency_p95_ms: "500"
           slo_availability_percent: "99.9"
       - record: quwoquan_assistant_contract_operation_requests_total
         expr: |
@@ -50,7 +50,7 @@ groups:
           service: "assistant-service"
           operation: "assistant.assistant_run.GetAssistantRun"
           contract_metric: "assistant_run_query"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "300"
           slo_availability_percent: "99.9"
       - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
@@ -60,7 +60,7 @@ groups:
           service: "assistant-service"
           operation: "assistant.assistant_run.GetAssistantRun"
           contract_metric: "assistant_run_query"
-          commercial_status: "blocked"
+          commercial_status: "ready"
           slo_latency_p95_ms: "300"
           slo_availability_percent: "99.9"
       - record: quwoquan_assistant_contract_operation_requests_total
@@ -163,3 +163,23 @@ groups:
           commercial_status: "blocked"
           slo_latency_p95_ms: "2000"
           slo_availability_percent: "99.5"
+      - record: quwoquan_assistant_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/tool-invocations/[^/]+/device-action-receipt$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_run.SubmitDeviceActionReceipt"
+          contract_metric: "assistant_device_action_receipt"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_assistant_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="assistant-service",method="POST",route=~"^/assistant/runs/[^/]+/tool-invocations/[^/]+/device-action-receipt$"})
+        labels:
+          service: "assistant-service"
+          operation: "assistant.assistant_run.SubmitDeviceActionReceipt"
+          contract_metric: "assistant_device_action_receipt"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"

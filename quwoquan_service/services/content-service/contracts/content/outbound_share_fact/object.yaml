@@ -37,10 +37,6 @@ relationships:
 local_identity_reasons:
   referralId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
-capabilities:
-- append_only
-- idempotent_append
-- outbox
 taggable: false
 vector_enabled: false
 business_rules:

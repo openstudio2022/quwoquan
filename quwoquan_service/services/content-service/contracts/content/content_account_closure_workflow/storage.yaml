@@ -19,7 +19,7 @@ collections:
     - name: idx_user_account_closed_failure_expire
       keys:
         expireAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   user_account_closed_search_work:
     entity: UserAccountClosedSearchWork
     role: projection
@@ -33,7 +33,7 @@ collections:
     - name: idx_user_account_closed_search_work_expire
       keys:
         expireAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   user_account_closed_media_artifact_work:
     entity: UserAccountClosedMediaArtifactWork
     role: projection
@@ -48,7 +48,7 @@ collections:
     - name: idx_user_account_closed_media_artifact_work_expire
       keys:
         expireAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   closed_account_subjects:
     entity: ClosedAccountAudit
     role: append_only

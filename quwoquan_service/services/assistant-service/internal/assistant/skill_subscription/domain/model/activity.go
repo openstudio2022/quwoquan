@@ -2,6 +2,12 @@ package model
 
 import "time"
 
+const (
+	EventCreated       = "SkillSubscriptionCreated"
+	EventStatusChanged = "SkillSubscriptionStatusChanged"
+	EventTriggered     = "SkillSubscriptionTriggered"
+)
+
 // ActivityEvent is the redacted event envelope exposed to SkillActivityView.
 // Trigger criteria, destination details, delivery identifiers, and error
 // payloads remain private to the SkillSubscription owner.

@@ -60,3 +60,41 @@ type VisitResult struct {
 	HasUnreadChanges bool      `json:"hasUnreadChanges"`
 	Replayed         bool      `json:"-"`
 }
+
+const EventFollowedSubjectVisited = "FollowedSubjectVisited"
+
+// OutboxEvent 是与水位状态同事务追加的 FollowedSubjectVisited 事实。
+// following-subject-projector 与 behavior-service 只从这里取事件，命令路径
+// 不再在提交后尽力投递。
+type OutboxEvent struct {
+	EventID     string
+	AggregateID string
+	EventName   string
+	Payload     EventPayload
+	OccurredAt  time.Time
+}
+
+// EventPayload 的字段集与 contracts events.yaml 的 payload_fields 一一对应。
+type EventPayload struct {
+	PersonaID     string    `json:"personaId"`
+	SubjectType   string    `json:"subjectType"`
+	SubjectID     string    `json:"subjectId"`
+	LastVisitedAt time.Time `json:"lastVisitedAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+// VisitAggregateID 是 viewer × subject 水位的稳定标识，同时用于 outbox 的
+// aggregateId 与消费侧幂等键前缀。
+func VisitAggregateID(personaID, subjectType, subjectID string) string {
+	return personaID + ":" + subjectType + ":" + subjectID
+}
+
+// VisitEventID 由命令的 clientRequestId 派生，保证同一命令重放不会追加第二
+// 条事件，消费侧也能以 eventId 去重。
+func VisitEventID(command MarkVisitedCommand) string {
+	return VisitAggregateID(
+		command.PersonaID,
+		command.SubjectType,
+		command.SubjectID,
+	) + ":" + command.ClientRequestID
+}

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-assistant/assistant-mentioned-consumer/spec.md#gwt-001
+// readiness_case: handle-assistant-mentioned-local
 package local_contract
 
 import (
@@ -12,9 +14,9 @@ import (
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
+	sessionstream "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/stream"
 	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 	skillconsenttest "quwoquan_service/services/assistant-service/tests/support/skillconsent"
@@ -121,7 +123,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if err != nil {
 		t.Fatalf("NewRedisMessageTransportForRoot() error = %v", err)
 	}
-	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
+	consumer := sessionstream.NewAssistantMentionedConsumerWithTransport(
 		transport,
 		service,
 		"e2e-worker",
@@ -130,7 +132,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		t.Fatalf("EnsureGroup: %v", err)
 	}
-	if _, err := redis.XAdd(ctx, messaging.AssistantMentionedStream, map[string]string{
+	if _, err := redis.XAdd(ctx, sessionstream.AssistantMentionedStream, map[string]string{
 		"conversationId":    "conv-e2e",
 		"messageId":         "msg-12",
 		"seq":               "12",
@@ -162,7 +164,7 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if len(clientMsgID) < len("assistant-") || clientMsgID[:len("assistant-")] != "assistant-" {
 		t.Fatalf("clientMsgId=%q, want assistant-*", clientMsgID)
 	}
-	pending, err := redis.XReadGroup(ctx, messaging.AssistantMentionedConsumerGroup, "e2e-worker", map[string]string{messaging.AssistantMentionedStream: "0"}, 10, 0)
+	pending, err := redis.XReadGroup(ctx, sessionstream.AssistantMentionedConsumerGroup, "e2e-worker", map[string]string{sessionstream.AssistantMentionedStream: "0"}, 10, 0)
 	if err != nil {
 		t.Fatalf("read pending: %v", err)
 	}

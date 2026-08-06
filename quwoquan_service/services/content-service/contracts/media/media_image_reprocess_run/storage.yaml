@@ -1,6 +1,7 @@
 backend: mongodb
 collections:
   media_image_reprocess_runs:
+    publication_role: not_published
     entity: MediaImageReprocessRun
     description: 显式图片重处理 run、处理 cursor 与 activation audit；不存储独立 variant 资产。
     indexes:
@@ -18,6 +19,7 @@ collections:
         version: 1
       unique: true
   media_image_reprocess_run_receipts:
+    publication_role: not_published
     entity: MediaImageReprocessRun
     description: Start/Pause/Resume/Rollback 及 worker cursor 命令回执；与 run 状态同一 Mongo transaction 提交。
     indexes:
@@ -32,8 +34,9 @@ collections:
     - name: idx_media_image_reprocess_run_receipts_expire
       keys:
         expiresAt: 1
-      expireAfterSeconds: 0
+      expire_after_seconds: 0
   media_image_reprocess_run_leases:
+    publication_role: not_published
     entity: MediaImageReprocessRun
     description: 每个 run 的 worker cursor lease；副本接管仅在 owner 过期或显式释放后发生。
     indexes:

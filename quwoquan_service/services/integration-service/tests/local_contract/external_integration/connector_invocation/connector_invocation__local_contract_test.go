@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// readiness_case: list-connector-invocations-local
+// readiness_case: get-connector-invocation-local
+// readiness_case: invoke-connector-capability-local
+// readiness_case: continue-connector-invocation-local
 package connector_invocation_test
 
 import (
@@ -88,11 +92,32 @@ func TestInvocationWaitsForConfirmationAndRechecksRevocation(t *testing.T) {
 	if accepted.Invocation.Status != invocationmodel.StatusAwaitingConfirmation {
 		t.Fatalf("write capability executed before confirmation: %#v", accepted.Invocation)
 	}
+	queries := invocationapp.NewQueryFacade(store)
+	readback, err := queries.Get(context.Background(), "account-1", "invocation-1")
+	if err != nil || readback.InvocationID != accepted.Invocation.InvocationID {
+		t.Fatalf("invocation readback failed: invocation=%+v err=%v", readback, err)
+	}
+	listed, err := queries.List(context.Background(), "account-1", "connection-1", 10)
+	if err != nil || len(listed) != 1 || listed[0].InvocationID != accepted.Invocation.InvocationID {
+		t.Fatalf("invocation list failed: invocations=%+v err=%v", listed, err)
+	}
+	continued, err := facade.Continue(context.Background(), invocationmodel.ContinueInput{
+		InvocationID:     "invocation-1",
+		AccountID:        "account-1",
+		ConfirmationRef:  "confirmation-1",
+		ContinuationRef:  "continuation-1",
+		ExpectedRevision: 1,
+		IdempotencyKey:   "command-2",
+	})
+	if err != nil || continued.Invocation.Status != invocationmodel.StatusAccepted ||
+		continued.Invocation.Revision != 2 {
+		t.Fatalf("invocation continuation failed: result=%+v err=%v", continued, err)
+	}
 	connections.connection.Status = connectionmodel.StatusRevoked
 	_, err = facade.Continue(context.Background(), invocationmodel.ContinueInput{
 		InvocationID: "invocation-1", AccountID: "account-1",
-		ConfirmationRef: "confirmation-1", ExpectedRevision: 1,
-		IdempotencyKey: "command-2",
+		ConfirmationRef: "confirmation-2", ContinuationRef: "continuation-1", ExpectedRevision: 2,
+		IdempotencyKey: "command-3",
 	})
 	if !errors.Is(err, invocationmodel.ErrConnectionInactive) {
 		t.Fatalf("revoked connection must fail closed, got %v", err)

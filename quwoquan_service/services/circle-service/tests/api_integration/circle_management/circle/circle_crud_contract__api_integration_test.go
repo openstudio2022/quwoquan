@@ -1,3 +1,10 @@
+// spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
+// readiness_case: list-circles-api
+// readiness_case: create-circle-api
+// readiness_case: get-circle-api
+// readiness_case: update-circle-api
+// readiness_case: archive-circle-api
 package api_integration
 
 import (

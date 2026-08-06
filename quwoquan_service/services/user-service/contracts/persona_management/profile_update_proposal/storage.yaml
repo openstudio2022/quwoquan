@@ -1,10 +1,12 @@
 backend: postgres
 tables:
   profile_update_proposals:
+    publication_role: not_published
     entity: ProfileUpdateProposal
     role: authoritative
     infrastructure_only: true
-    pk: id
+    pk:
+    - id
     columns:
     - name: id
       type: VARCHAR(64)
@@ -98,11 +100,13 @@ tables:
       - status
       - created_at
   profile_update_proposal_audits:
+    publication_role: not_published
     entity: ProfileUpdateProposal
     role: append_only
     infrastructure_only: true
     description: apply/rollback 的 immutable pre/post Persona snapshot、可信 actor/request/trace 与版本证据。
-    pk: audit_id
+    pk:
+    - audit_id
     columns:
     - name: audit_id
       type: VARCHAR(96)
@@ -166,11 +170,13 @@ tables:
       - proposal_id
       - occurred_at
   profile_update_proposals_command_receipts:
+    publication_role: not_published
     entity: ProfileUpdateProposal
     role: authoritative
     infrastructure_only: true
     description: 与 aggregate state 和 outbox 在同一 postgres transaction 提交的幂等回执。
-    pk: receipt_id
+    pk:
+    - receipt_id
     columns:
     - name: receipt_id
       type: VARCHAR(64)
@@ -179,6 +185,10 @@ tables:
       - NOT_NULL
     - name: proposal_id
       type: VARCHAR(64)
+      constraints:
+      - NOT_NULL
+    - name: actor_persona_id
+      type: VARCHAR(96)
       constraints:
       - NOT_NULL
     - name: idempotency_key
@@ -208,11 +218,13 @@ tables:
       - actor_persona_id
       - idempotency_key
   profile_update_proposals_outbox:
+    publication_role: transactional_outbox
     entity: ProfileUpdateProposal
     role: append_only
     infrastructure_only: true
     description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
-    pk: event_id
+    pk:
+    - event_id
     columns:
     - name: event_id
       type: VARCHAR(96)

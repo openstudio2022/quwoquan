@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+// readiness_case: get-assistant-entry-local
 package assistant_entry_view_test
 
 import (
@@ -63,5 +64,13 @@ func TestEntryMissingProjectionUsesSameNonPersonalizedContract(t *testing.T) {
 	}
 	if view.Personalized || view.WelcomeMessage == "" || len(view.Chips) != 3 || view.Actions == nil {
 		t.Fatalf("entry=%+v", view)
+	}
+}
+
+func TestEntryProjectionDependencyFailsClosed(t *testing.T) {
+	_, err := entryapplication.NewQueryFacade(nil, nil).
+		GetEntry(t.Context(), "account-1", "", "")
+	if !errors.Is(err, entryapplication.ErrProjectionUnavailable) {
+		t.Fatalf("unavailable projection dependency returned %v", err)
 	}
 }

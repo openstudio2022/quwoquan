@@ -1,5 +1,5 @@
 kind: external_reference
-description: '百度、阿里等外部位置查询能力引用。Location 不拥有业务生命周期；
+description: 'Nominatim/OSRM 兼容服务及受管地图 Provider 的外部位置查询能力引用。Location 不拥有业务生命周期；
 
   LocationPoi 是 nearby/search 返回的标准化 value/read model。
 
@@ -13,15 +13,15 @@ access:
   cross_context: public_contract_only
   queries: external_port
 relationships: []
-capabilities:
-- queryable
-- searchable
 taggable: false
 vector_enabled: false
 business_rules:
 - provider 响应必须先映射到 canonical LocationPoi，业务域不得消费第三方原始字段。
 - locationRef 由 provider authority 与稳定外部标识派生，展示名或坐标变化不得改变引用身份。
 - provider 不可用时返回 canonical dependency failure，不使用静态或第二 provider 数据冒充成功。
+- POI 搜索只向 Provider 发送用户显式 query 与约 1km 精度的粗粒度中心；日志、trace、metric label 不得包含 query、精确中心或完整出站 URL。
+- route read 的输入输出固定使用 canonical WGS84 lat/lng、encoded polyline、durationSeconds 与 distanceMeters。
+- timeout、429、5xx、invalid payload 与 partial payload 必须映射为可区分的 canonical failure；禁止丢弃坏项后返回静默部分成功。
 lifecycle:
   refresh_semantics: provider_read_through_without_local_authoritative_state
   tombstone: detach_reference_when_external_authority_confirms_deletion

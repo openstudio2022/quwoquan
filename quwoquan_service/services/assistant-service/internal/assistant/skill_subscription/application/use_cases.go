@@ -12,9 +12,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	rterr "quwoquan_service/runtime/errors"
 	rtid "quwoquan_service/runtime/id"
 	rtobs "quwoquan_service/runtime/observability"
+	skillgenerated "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
 	subscriptionerrors "quwoquan_service/services/assistant-service/generated/assistant/skill_subscription"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/model"
 	"quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
@@ -444,10 +444,8 @@ func mapStoreError(err error) error {
 }
 
 func storageUnavailable(operation string, err error) error {
-	return rterr.NewUnavailable(
-		rterr.ModuleAssistant,
-		"订阅存储暂不可用",
-		strings.TrimSpace(operation)+": "+err.Error(),
+	return skillgenerated.AppErrorFromSubscriptionStorageUnavailable(
+		strings.TrimSpace(operation) + ": " + err.Error(),
 	)
 }
 

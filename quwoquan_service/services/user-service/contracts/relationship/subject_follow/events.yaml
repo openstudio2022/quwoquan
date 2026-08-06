@@ -1,11 +1,6 @@
 events:
 - name: SubjectFollowStateChanged
-  producer: user-service
-  consumers:
-  - recommendation-engine
-  - entity-service
-  - circle-service
-  channel: event_store
+  delivery_semantics: transactional_outbox
   payload_entity: SubjectFollow
   payload_fields:
   - id

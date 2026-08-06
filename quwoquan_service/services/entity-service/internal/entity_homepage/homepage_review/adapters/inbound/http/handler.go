@@ -33,7 +33,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request, homepageID string
 	query := r.URL.Query()
 	page, err := h.facade.ListByHomepage(r.Context(), reviewapp.ListQuery{
 		HomepageID: strings.TrimSpace(homepageID),
-		Cursor: strings.TrimSpace(query.Get("cursor")), Limit: positiveLimit(query.Get("limit")),
+		Cursor:     strings.TrimSpace(query.Get("cursor")), Limit: positiveLimit(query.Get("limit")),
 	})
 	if err != nil {
 		writeError(w, r, err)
@@ -59,7 +59,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request, homepageID stri
 		HomepageID: strings.TrimSpace(homepageID), ActorPersonaID: actor,
 		Rating: body.Rating, Body: body.Body, TagRefs: body.TagRefs,
 		AuthorDisplayNameSnapshot: body.AuthorDisplayNameSnapshot,
-		AuthorAvatarURLSnapshot: body.AuthorAvatarURLSnapshot,
+		AuthorAvatarURLSnapshot:   body.AuthorAvatarURLSnapshot,
 	})
 	if err != nil {
 		writeError(w, r, err)
@@ -101,7 +101,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request, reviewID string
 		ReviewID: strings.TrimSpace(reviewID), ActorPersonaID: actor,
 		Rating: body.Rating, Body: body.Body, TagRefs: body.TagRefs,
 		AuthorDisplayNameSnapshot: body.AuthorDisplayNameSnapshot,
-		AuthorAvatarURLSnapshot: body.AuthorAvatarURLSnapshot,
+		AuthorAvatarURLSnapshot:   body.AuthorAvatarURLSnapshot,
 	})
 	if err != nil {
 		writeError(w, r, err)

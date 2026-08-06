@@ -76,17 +76,17 @@ func newFederatedLoginBindings(
 			wechat: application.NewFederatedLoginFacade(
 				auth,
 				wechatVerifier,
-				nil,
+				wechatVerifier,
 			),
 			alipay: application.NewFederatedLoginFacade(
 				auth,
 				alipayVerifier,
-				nil,
+				alipayVerifier,
 			),
 			qq: application.NewFederatedLoginFacade(
 				auth,
 				qqVerifier,
-				nil,
+				qqVerifier,
 			),
 		}, nil
 	}

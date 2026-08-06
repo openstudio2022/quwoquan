@@ -1,3 +1,10 @@
+// readiness_case: update-post-settings-api
+// readiness_case: delete-post-api
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
+// readiness_case: get-post-api
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// readiness_case: submit-post-publication-api
 // L2 契约测试：Post 业务对象 — 正常 CRUD 操作
 //
 // 守护：创建/读取接口的正常路径，field 正确持久化和响应。

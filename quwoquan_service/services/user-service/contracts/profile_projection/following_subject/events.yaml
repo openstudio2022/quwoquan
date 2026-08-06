@@ -1,7 +1,2 @@
+description: 未迁入 canonical object.yaml.lifecycle.source_events 的订阅拓扑（GATE_BLOCK）：["PersonaFollowStateChanged","CircleMembershipJoined","CircleMembershipLeft","SubjectFollowStateChanged","FollowedSubjectVisited","UserAccountClosed"]
 events: []
-subscriptions:
-- PersonaFollowStateChanged
-- CircleMembershipJoined
-- CircleMembershipLeft
-- SubjectFollowStateChanged
-- FollowedSubjectVisited

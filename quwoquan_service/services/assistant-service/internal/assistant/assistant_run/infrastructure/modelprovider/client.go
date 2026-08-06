@@ -90,8 +90,9 @@ type streamOption struct {
 }
 
 type completionWireResponse struct {
+	Model   string       `json:"model"`
 	Choices []choiceWire `json:"choices"`
-	Usage   usageWire    `json:"usage"`
+	Usage   *usageWire   `json:"usage"`
 }
 
 type choiceWire struct {
@@ -209,7 +210,8 @@ func (c *Client) Complete(
 		}
 	}
 	var decoded completionWireResponse
-	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Choices) == 0 {
+	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Choices) == 0 ||
+		!validProviderReceipt(decoded.Model, decoded.Usage) {
 		return ports.ModelCompletionResult{}, ports.ProviderFailure{
 			Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
 		}
@@ -217,9 +219,9 @@ func (c *Client) Complete(
 	return ports.ModelCompletionResult{
 		Content:      strings.TrimSpace(decoded.Choices[0].Message.Content),
 		FinishReason: strings.TrimSpace(decoded.Choices[0].FinishReason),
-		Usage:        c.toUsage(decoded.Usage, time.Since(started)),
+		Usage:        c.toUsage(*decoded.Usage, time.Since(started)),
 		ToolCalls:    toApplicationToolCalls(decoded.Choices[0].Message.ToolCalls),
-		ModelID:      c.modelFor(request.Tier),
+		ModelID:      strings.TrimSpace(decoded.Model),
 		TierServed:   servedTier(request.Tier),
 	}, nil
 }
@@ -248,7 +250,8 @@ func (c *Client) Stream(
 		}
 	}
 	var answer strings.Builder
-	var usage usageWire
+	var usage *usageWire
+	modelID := ""
 	finishReason := ""
 	toolCalls := newToolCallAccumulator()
 	scanner := bufio.NewScanner(response.Body)
@@ -268,8 +271,18 @@ func (c *Client) Stream(
 				Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
 			}
 		}
-		if chunk.Usage != (usageWire{}) {
-			usage = chunk.Usage
+		chunkModelID := strings.TrimSpace(chunk.Model)
+		if chunkModelID != "" {
+			if modelID != "" && modelID != chunkModelID {
+				return ports.ModelCompletionResult{}, ports.ProviderFailure{
+					Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
+				}
+			}
+			modelID = chunkModelID
+		}
+		if chunk.Usage != nil {
+			copied := *chunk.Usage
+			usage = &copied
 		}
 		for _, choice := range chunk.Choices {
 			if choice.FinishReason != "" {
@@ -292,7 +305,8 @@ func (c *Client) Stream(
 	}
 	content := strings.TrimSpace(answer.String())
 	collected := toolCalls.collect()
-	if content == "" && len(collected) == 0 {
+	if (content == "" && len(collected) == 0) ||
+		!validProviderReceipt(modelID, usage) {
 		return ports.ModelCompletionResult{}, ports.ProviderFailure{
 			Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
 		}
@@ -300,9 +314,9 @@ func (c *Client) Stream(
 	return ports.ModelCompletionResult{
 		Content:      content,
 		FinishReason: finishReason,
-		Usage:        c.toUsage(usage, time.Since(started)),
+		Usage:        c.toUsage(*usage, time.Since(started)),
 		ToolCalls:    collected,
-		ModelID:      c.modelFor(request.Tier),
+		ModelID:      modelID,
 		TierServed:   servedTier(request.Tier),
 	}, nil
 }
@@ -421,6 +435,16 @@ func (c *Client) toUsage(raw usageWire, latency time.Duration) ports.ModelUsage 
 		TotalTokens:      raw.TotalTokens,
 		Latency:          latency,
 	}
+}
+
+func validProviderReceipt(modelID string, usage *usageWire) bool {
+	if strings.TrimSpace(modelID) == "" || usage == nil {
+		return false
+	}
+	if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens <= 0 {
+		return false
+	}
+	return usage.TotalTokens >= usage.PromptTokens+usage.CompletionTokens
 }
 
 func (c *Client) post(

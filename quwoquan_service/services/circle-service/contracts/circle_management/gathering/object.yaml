@@ -1,5 +1,5 @@
 kind: aggregate_root
-description: 有目标、有时间、可加入并绑定群会话的结伴与线下相聚聚合。
+description: Circle 单轨拥有的 Gathering 聚合，统一承载 Host、准入、参与、修订、会话绑定、生命周期与 Outcome。
 identity:
   fields: [_id]
   version_source: store_commit
@@ -7,14 +7,44 @@ access:
   commands: aggregate_facade
   cross_context: public_contract_only
   queries: named_reader
+members:
+  HostBinding:
+    kind: value_object
+    cardinality: one
+    ownership: aggregate
+  OrganizerAssignment:
+    kind: value_object
+    cardinality: many
+    ownership: aggregate
+  GatheringParticipation:
+    kind: owned_entity
+    identity: [gatheringId, personaId]
+    cardinality: many
+    ownership: aggregate
+    write_access: aggregate_facade_only
+  GatheringRevision:
+    kind: value_object
+    cardinality: many
+    ownership: aggregate
+    append_only: true
+  GatheringAvailabilityWatch:
+    kind: owned_entity
+    identity: [gatheringId, personaId]
+    cardinality: many
+    ownership: aggregate
+    write_access: aggregate_facade_only
+  GatheringOutcome:
+    kind: value_object
+    cardinality: zero_or_one
+    ownership: aggregate
 relationships:
-- name: creator_persona
+- name: created_by_persona
   kind: reference
   cardinality: N:1
   consistency: eventual
   access: named_reader
   on_delete: tombstone
-  reference_fields: [creatorPersonaId]
+  reference_fields: [createdByPersonaId]
   target_object: user.Persona
 - name: conversation
   kind: reference
@@ -24,16 +54,24 @@ relationships:
   on_delete: detach
   reference_fields: [conversationId]
   target_object: chat.Conversation
-capabilities: [commandable, queryable, idempotent_commands]
+local_identity_reasons:
+  currentGatheringRevisionId: Gathering 聚合内 append-only GatheringRevision 的当前指针，只能经 root facade 推进，不是跨服务或独立 Store 对象身份。
 business_rules:
-- targetRef、startAt、creatorPersonaId 创建后不可变
-- 会话未绑定时保持 draft，不接受加入
-- joined 参与者数量不得超过 capacity，数量只由 participants 派生
-- 同一 persona 在 participants 中至多一条当前记录，left/rejected 可重新申请并复用该记录
-- cancelled 与 completed 是不可逆终态
-- Gathering 只持有 conversationId，不拥有消息、会话成员或通话事实
+- createdByPersonaId 是不可变执行主体；HostBinding 与 OrganizerAssignment 只能由 owner authority evidence 创建、转移或撤销
+- OrganizerAssignment 只授予管理权且不占席；实际参加的 organizer 必须另有一条 active GatheringParticipation
+- 每个 gatheringId 与 personaId 组合只有一条当前 GatheringParticipation，所有参与变化只能由 Gathering aggregate facade 写入
+- occupiedSeats 等于 active Participation 数加未过期 invited_pending 数；application_pending 与 organizer authority 均不占席
+- full、temporalPhase 与 admissionState 仅由 named Slice 派生，不得写入 lifecycleStatus
+- 开场后普通准入、邀请、扩缩容、Host 转移与普通取消关闭，且退出或移除不再触发补招
+- GatheringRevision 是 append-only owned value；revisionNumber 与 digest 独立于聚合 version，root 只推进 current revision pointer
+- 有 active Participation 后的重大承诺变更必须创建新 GatheringRevision，并由每条受影响 Participation 绑定该 revision 单独确认
+- Publish 只在 Host authority、核心承诺、风险义务与 roomBindingStatus=ready 时成功
+- Cancel 只允许开场前；Complete 只允许 temporalPhase=ended，Outcome 由 Circle 根据独立参与证据计算
+- EndEarly 与 SafetyTerminate 写入不同 Outcome；endAt 到达或单方声明不得自动形成 occurred
+- Gathering 只保存 conversationId 与 room binding state，不拥有 Conversation、Membership、Message、Announcement 或文件事实
+- GatheringParticipation、ConversationMembership、CircleMembership、Follow 与 mutual 相互独立
 lifecycle:
-  state_field: status
-  states: [draft, open, full, cancelled, completed]
+  state_field: lifecycleStatus
+  states: [draft, published, cancelled, completed]
   optimistic_concurrency: version
   idempotency: command_receipt

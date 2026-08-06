@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
+// readiness_case: get-skill-surface-placement-local
+// readiness_case: put-skill-surface-placement-local
 package local_contract
 
 import (
@@ -128,6 +130,17 @@ func TestPlacementAdminCASDisablesOnlySharedSkillRouting(t *testing.T) {
 		t.Fatalf("Put() result=%+v error=%v", result, err)
 	}
 	queries := application.NewQueryFacade(store, surfaceAuthority{member: true})
+	loaded, err := queries.Get(
+		context.Background(),
+		"account-admin",
+		"persona-admin",
+		model.SurfaceConversation,
+		"conversation-a",
+	)
+	if err != nil || loaded.ID != result.Placement.ID ||
+		loaded.Revision != result.Placement.Revision {
+		t.Fatalf("Get() placement=%+v error=%v", loaded, err)
+	}
 	allowed, err := queries.AllowsSkill(
 		context.Background(),
 		model.SurfaceConversation,

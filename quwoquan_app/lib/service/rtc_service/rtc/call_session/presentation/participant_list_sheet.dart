@@ -1,0 +1,203 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participants_provider.dart';
+
+/// Bottom sheet displaying participant list with management controls.
+class ParticipantListSheet extends ConsumerWidget {
+  const ParticipantListSheet({
+    super.key,
+    required this.maxParticipants,
+    this.onInviteMore,
+  });
+
+  final int maxParticipants;
+  final VoidCallback? onInviteMore;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final participantsState = ref.watch(callParticipantsProvider);
+    final participants = participantsState.participants;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final outer =
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding;
+    return AppBottomModalSurface(
+      onDismiss: () => Navigator.of(context).pop(),
+      backgroundColor:
+          SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
+      maxHeightRatio: 0.6,
+      contentPadding: EdgeInsets.fromLTRB(outer, 0, outer, outer),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader(participants.length),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              itemCount: participants.length,
+              itemBuilder: (context, index) {
+                return _ParticipantRow(participant: participants[index]);
+              },
+            ),
+          ),
+          _buildInviteButton(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(int count) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Text(
+            CallText.callParticipants,
+            style: TextStyle(
+              fontSize: AppTypography.lg,
+              fontWeight: AppTypography.semiBold,
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Text(
+            '$count / $maxParticipants',
+            style: TextStyle(
+              fontSize: AppTypography.sm,
+              color: AppColors.overlayMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInviteButton(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: AppSpacing.minInteractiveSize,
+        child: CupertinoButton(
+          color: AppColors.primaryColor,
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          onPressed: onInviteMore,
+          child: Text(
+            CallText.callInviteMore,
+            style: TextStyle(
+              fontSize: AppTypography.md,
+              fontWeight: AppTypography.medium,
+              color: AppColors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ParticipantRow extends StatelessWidget {
+  const _ParticipantRow({required this.participant});
+
+  final CallParticipantViewData participant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Row(
+        children: [
+          AppCircularAvatar(
+            imageUrl: participant.avatarUrl,
+            size: AppSpacing.twenty * 2,
+            backgroundColor: AppColors.primaryColor.withValues(alpha: 0.2),
+            fallback: Text(
+              participant.displayName.isNotEmpty
+                  ? participant.displayName[0].toUpperCase()
+                  : '?',
+              style: TextStyle(
+                fontSize: AppTypography.md,
+                fontWeight: AppTypography.semiBold,
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        participant.displayName,
+                        style: TextStyle(
+                          fontSize: AppTypography.md,
+                          fontWeight: AppTypography.medium,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (participant.isInitiator) ...[
+                      SizedBox(width: AppSpacing.xs),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs * 2,
+                          vertical: AppSpacing.one,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppSpacing.xs),
+                        ),
+                        child: Text(
+                          CallText.callInitiator,
+                          style: TextStyle(
+                            fontSize: AppTypography.xs,
+                            color: AppColors.primaryColor,
+                            fontWeight: AppTypography.medium,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (participant.isMuted)
+                Icon(
+                  CupertinoIcons.mic_off,
+                  color: AppColors.error,
+                  size: AppSpacing.iconSmall,
+                ),
+              SizedBox(width: AppSpacing.xs),
+              if (!participant.isCameraOn)
+                Icon(
+                  CupertinoIcons.video_camera_solid,
+                  color: AppColors.overlayLight,
+                  size: AppSpacing.iconSmall,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

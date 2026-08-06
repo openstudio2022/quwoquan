@@ -1,25 +1,19 @@
 events:
 - name: SkillSubscriptionCreated
-  producer: assistant-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: SkillSubscription
   payload_fields:
   - subscriptionId
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 subscription activity journal；SkillActivityView 通过 owner named reader 联邦读取。
 - name: SkillSubscriptionStatusChanged
-  producer: assistant-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: SkillSubscription
   payload_fields:
   - subscriptionId
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 subscription activity journal；SkillActivityView 通过 owner named reader 联邦读取。
 - name: SkillSubscriptionTriggered
-  producer: assistant-service
-  consumers:
-  - projection-workers
-  channel: event_store
+  delivery_semantics: transactional_event_log
   payload_entity: SkillSubscription
   payload_fields:
   - subscriptionId
+  no_consumer_reason: 事件经事务 outbox 追加到耐久 subscription activity journal；SkillActivityView 通过 owner named reader 联邦读取。

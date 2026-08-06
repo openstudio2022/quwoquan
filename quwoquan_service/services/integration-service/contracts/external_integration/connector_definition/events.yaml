@@ -1,9 +1,16 @@
 events:
 - name: ConnectorDefinitionPublished
   description: 官方 Connector immutable release 激活后发布目录变更摘要。
-  producer: integration-service
-  consumers: [assistant-service]
-  channel: integration.connector_definition
+  delivery_semantics: transactional_event_log
+  topic: integration.connector_definition
   payload_entity: ConnectorDefinition
-  payload_fields: [connectorId, capabilities, authorizationMode, confirmationPolicy, dataClassification, status, releaseDigest, publishedAt]
-
+  payload_fields:
+  - connectorId
+  - capabilities
+  - authorizationMode
+  - confirmationPolicy
+  - dataClassification
+  - status
+  - releaseDigest
+  - publishedAt
+  no_consumer_reason: 发布定义与 immutable release 审计记录在同一 Mongo transaction 内提交；目录查询直接读取 ConnectorDefinition，没有异步目录投影消费者。

@@ -1,8 +1,8 @@
-import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_lifecycle_remote.dart';
-import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_media_control_remote.dart';
-import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_participant_remote.dart';
-import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_query_remote.dart';
-import 'package:quwoquan_app/rtc/rtc/call_session/adapters/call_screen_share_remote.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/adapters/call_lifecycle_remote.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/adapters/call_media_control_remote.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/adapters/call_participant_remote.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/adapters/call_query_remote.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/adapters/call_screen_share_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// rtc domain 的 production Remote adapter 种类。

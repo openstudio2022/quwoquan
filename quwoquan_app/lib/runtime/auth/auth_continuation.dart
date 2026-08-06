@@ -225,8 +225,16 @@ class JoinCircleContinuation extends AuthContinuation {
   final String circleId;
 }
 
-/// 续接「打开某个动作面板/流程」（添加联系人、发起群聊、建圈子等非路由动作）。
-enum AuthContinuationSheet { addContact, startGroupChat, createCircle }
+/// 续接「打开某个动作面板/流程」。
+///
+/// [startGathering] 只保存稳定动作身份；Circle route codegen 完成后由组合根注入
+/// typed navigation binding，禁止在 continuation 内保存 path 或 BuildContext。
+enum AuthContinuationSheet {
+  addContact,
+  startGathering,
+  startGroupChat,
+  createCircle,
+}
 
 class OpenSheetContinuation extends AuthContinuation {
   const OpenSheetContinuation(this.sheet);

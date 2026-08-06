@@ -1,9 +1,0 @@
-domain: TRAVEL
-aggregate: TripShareSnapshot
-description: TripShareSnapshot 对象专属错误码。
-errors:
-- {code: TRAVEL.USER.trip_share_snapshot_invalid_argument, kind: USER, reason: trip_share_snapshot_invalid_argument, emitted_by: [{surface: http, operations: [CreateTripShareSnapshot]}], http_status: 400, recovery_action: surface, go_const: ErrTripShareSnapshotInvalidArgument, user_message: {zh: 行程分享范围无效, en: Trip share snapshot request is invalid}}
-- {code: TRAVEL.USER.trip_share_snapshot_not_found, kind: USER, reason: trip_share_snapshot_not_found, emitted_by: [{surface: http, operations: [GetTripShareSnapshot]}], http_status: 404, recovery_action: refresh, go_const: ErrTripShareSnapshotNotFound, user_message: {zh: 这份行程分享不存在, en: Trip share snapshot not found}}
-- {code: TRAVEL.USER.trip_share_snapshot_source_conflict, kind: USER, reason: trip_share_snapshot_source_conflict, emitted_by: [{surface: http, operations: [CreateTripShareSnapshot]}], http_status: 409, recovery_action: refresh, go_const: ErrTripShareSnapshotSourceConflict, user_message: {zh: 行程已变化，请按最新版本重新分享, en: Trip source changed; create a new snapshot}}
-- {code: TRAVEL.USER.trip_share_snapshot_idempotency_conflict, kind: USER, reason: trip_share_snapshot_idempotency_conflict, emitted_by: [{surface: http, operations: [CreateTripShareSnapshot]}], http_status: 409, recovery_action: refresh, go_const: ErrTripShareSnapshotIdempotencyConflict, user_message: {zh: 重复分享请求不一致, en: Trip share snapshot idempotency conflict}}
-- {code: TRAVEL.SYSTEM.trip_share_snapshot_storage_failed, kind: SYSTEM, reason: trip_share_snapshot_storage_failed, emitted_by: [{surface: http, operations: [CreateTripShareSnapshot, GetTripShareSnapshot]}], http_status: 500, recovery_action: retry, recovery_after_seconds: 5, go_const: ErrTripShareSnapshotStorageFailed, user_message: {zh: 行程分享生成失败，请重试, en: Trip share snapshot operation failed}}

@@ -45,6 +45,7 @@ func (transport *captureEventTransport) SetDurableRetention(
 	return nil
 }
 
+// spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/product-control-plane-contract/spec.md#gwt-002
 func TestPremiumPoolEventUsesOneDurableTypedStream(t *testing.T) {
 	transport := &captureEventTransport{}
 	publisher := eventmessaging.NewRedisEventPublisherWithTransport(
