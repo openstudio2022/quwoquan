@@ -248,6 +248,54 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             3,
         )
 
+    def test_live_evidence_rejects_cross_target_baseline_drift(self) -> None:
+        from quwoquan_ops.cli.lib.local_env_gate_matrix import (
+            _live_matrix_evidence_errors,
+        )
+
+        baseline_id = f"sha256:{'a' * 64}"
+        drifted_baseline_id = f"sha256:{'d' * 64}"
+        environments = {
+            target: {
+                "target": target,
+                "environment": environment,
+                "package": {
+                    "baselineId": (
+                        drifted_baseline_id
+                        if target == "beta-local"
+                        else baseline_id
+                    ),
+                    "packageDigest": f"sha256:{'b' * 64}",
+                    "imageDigest": f"sha256:{'c' * 64}",
+                    "observabilityLogSink": {
+                        "adapterId": "ext.obs.elasticsearch",
+                        "deploymentMode": "package-bound-local",
+                    },
+                    "providerRuntime": {
+                        "composition": {
+                            "runtimeCompositionDigest": f"sha256:{'e' * 64}",
+                            "workloads": [],
+                        }
+                    },
+                },
+            }
+            for target, environment in {
+                "alpha-local": "alpha",
+                "beta-local": "beta",
+                "gamma-local": "gamma",
+            }.items()
+        }
+
+        errors = _live_matrix_evidence_errors(
+            environments,
+            baseline_id=baseline_id,
+        )
+
+        self.assertIn(
+            "beta-local: package baselineId is missing or drifted",
+            errors,
+        )
+
     def test_timing_budget_gate_exists(self) -> None:
         budgets = json.loads(
             (

@@ -884,6 +884,27 @@ def _pilot_identity(
         return None
     if not _schema(evaluation, rollback, "quwoquan_data.release_attestation"):
         return None
+    release_id_raw = str(release.payload.get("releaseId") or "").strip()
+    rollback_id_raw = str(rollback.payload.get("releaseId") or "").strip()
+    release_digest_raw = str(release.payload.get("payloadSha256") or "").strip()
+    rollback_digest_raw = str(rollback.payload.get("payloadSha256") or "").strip()
+    identical_identity = False
+    if release_id_raw and release_id_raw == rollback_id_raw:
+        identical_identity = True
+        evaluation.block(
+            "IDENTITY_MISMATCH",
+            "pilot",
+            "candidate and rollback content releases must use distinct releaseId values",
+        )
+    if release_digest_raw and release_digest_raw == rollback_digest_raw:
+        identical_identity = True
+        evaluation.block(
+            "DIGEST_MISMATCH",
+            "pilot",
+            "candidate and rollback content releases must use distinct release digests",
+        )
+    if identical_identity:
+        return None
     try:
         bindings = validate_release_attestations(str(release.path), str(rollback.path))
     except ValueError as exc:

@@ -183,9 +183,22 @@ class AppContentPreflightTest(unittest.TestCase):
                     return_value={
                         "exitCode": 0,
                         "packageBaseline": "sha256:" + "2" * 64,
+                        "sourceRevision": "a" * 40,
                         "releaseId": "release-a",
                         "manifestDigest": "sha256:" + "3" * 64,
+                        "readinessReceiptRef": "receipt:readiness:release-a",
                         "readinessReceiptDigest": "sha256:" + "4" * 64,
+                        "lifecycleExitRef": "receipt:lifecycle:release-a",
+                        "appUatEnvelope": {
+                            "schema": "quwoquan_data.app_uat_envelope",
+                            "releaseId": "release-a",
+                        },
+                        "contentReadback": {
+                            "homepagePostIds": ["post-a"],
+                        },
+                        "contentReadinessReportRef": (
+                            "receipt:content-readiness:release-a"
+                        ),
                     },
                 ),
             ):
@@ -211,6 +224,28 @@ class AppContentPreflightTest(unittest.TestCase):
             self.assertEqual(
                 passed["provider"]["adapterId"],
                 "ext.sms.local_capture",
+            )
+            self.assertEqual(passed["packageBaseline"], "sha256:" + "2" * 64)
+            self.assertEqual(passed["sourceRevision"], "a" * 40)
+            self.assertEqual(
+                passed["readinessReceiptRef"],
+                "receipt:readiness:release-a",
+            )
+            self.assertEqual(
+                passed["lifecycleExitRef"],
+                "receipt:lifecycle:release-a",
+            )
+            self.assertEqual(
+                passed["appUatEnvelope"]["releaseId"],
+                "release-a",
+            )
+            self.assertEqual(
+                passed["contentReadback"]["homepagePostIds"],
+                ["post-a"],
+            )
+            self.assertEqual(
+                passed["contentReadinessReportRef"],
+                "receipt:content-readiness:release-a",
             )
             self.assertEqual(mismatched["exitCode"], 2)
             self.assertIn("mismatch", " ".join(mismatched["details"]))
@@ -247,6 +282,44 @@ class AppContentPreflightTest(unittest.TestCase):
                 )
             self.assertEqual(stopped["exitCode"], 2)
             self.assertIn("not running", " ".join(stopped["details"]))
+
+            with patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value={
+                    "status": "running",
+                    "env": "alpha",
+                    "target": "alpha-local",
+                    "workload": "full",
+                    "configurationDigest": "sha256:" + "1" * 64,
+                    "providerRuntimeDigest": provider_runtime_digest,
+                },
+            ), patch.object(
+                stackctl,
+                "_active_provider_runtime",
+                side_effect=ValueError(
+                    "alpha-local has no active immutable candidate"
+                ),
+            ), patch.object(
+                stackctl,
+                "verify_certificate",
+                return_value={"profile": "local-managed", "status": "ready"},
+            ), patch.object(stackctl, "fetch_url", side_effect=fetch), patch.object(
+                stackctl,
+                "command_app_content_preflight",
+                return_value={"exitCode": 0},
+            ):
+                missing_candidate = stackctl.command_app_debug_preflight(
+                    stackctl.argparse.Namespace(
+                        target="alpha-local",
+                        report_dir=str(report_dir / "missing-candidate"),
+                    )
+                )
+            self.assertEqual(missing_candidate["exitCode"], 2)
+            self.assertIn(
+                "no active immutable candidate",
+                " ".join(missing_candidate["details"]),
+            )
 
     def test_active_candidate_resolves_only_commercial_release_and_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory, patch.dict(

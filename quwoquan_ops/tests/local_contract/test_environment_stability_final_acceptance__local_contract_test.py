@@ -1090,6 +1090,22 @@ def test_emulator_only_green_matrix_cannot_close_final_acceptance() -> None:
     assert "STATUS_NOT_PASSED" in _codes(payload)
 
 
+def test_identical_candidate_and_rollback_identity_is_gate_block() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        fixture = FinalAcceptanceFixture(Path(temporary))
+
+        def duplicate_candidate_identity(value: dict[str, Any]) -> None:
+            value["releaseId"] = RELEASE_ID
+            value["payloadSha256"] = RELEASE_DIGEST
+
+        fixture.rewrite("pilot_rollback", duplicate_candidate_identity)
+        payload = _evaluate(fixture)
+
+    assert payload["verdict"] == "GATE_BLOCK"
+    assert "IDENTITY_MISMATCH" in _codes(payload)
+    assert "DIGEST_MISMATCH" in _codes(payload)
+
+
 @pytest.mark.parametrize(
     ("label", "argument"),
     (
