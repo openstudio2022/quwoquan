@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -34,10 +35,10 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/h
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
-import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
 import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 /// 主 App 壳
 ///
@@ -283,6 +284,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                               currentLocation: _currentLocation,
                               backgroundColor: shellBackground,
                               onPrimarySelected: _handleWebPrimaryTap,
+                              onGuestAuthGateOpened:
+                                  _resetWebPrimaryToHomeSafeState,
                             ),
                           ],
                         )
@@ -427,6 +430,21 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     _selectMainTab(nextTab);
   }
 
+  /// Web 壳的一级入口是内部 tab，不由路由表达：账号态动作弹出登录门后，必须把
+  /// 壳先归位到首页安全态，否则关闭登录时的 `go(home)` 因 location 未变而不会
+  /// 触发 `didUpdateWidget`，用户会原地回到触发面板（登录入口无死循环宪法）。
+  /// 这里只改内部 tab，不做导航，避免把已压栈的登录页顶掉。
+  void _resetWebPrimaryToHomeSafeState() {
+    if (!mounted || _currentDestination == MainTabDestination.home) {
+      return;
+    }
+    setState(() {
+      _currentDestination = MainTabDestination.home;
+      _initializedTabDestinations.add(_currentDestination);
+    });
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
+  }
+
   void _selectWebCreateTab() {
     setState(() {
       _currentDestination = MainTabDestination.create;
@@ -516,7 +534,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     int? toIndex,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
+    await ref.read(appEventLogPortProvider).writeEvent(
       logType: AppLogType.pageAccess,
       level: AppLogLevel.debug,
       context: AppLogContext(

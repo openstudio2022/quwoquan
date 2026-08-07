@@ -4,8 +4,9 @@ import fcntl
 from pathlib import Path
 
 import pytest
-from content.execution import discard, workspace
-from content.execution.reviewed_closure_adoption_contract import (
+from content.execution import workspace
+from content.execution.controller.execute import discard
+from content.execution.closure.adoption_contract import (
     canonical_digest,
     file_digest,
 )
@@ -208,7 +209,7 @@ def test_discard_purges_service_owned_fleet_before_local_workspace(
     monkeypatch.setattr(discard, "active_controller_issue", lambda _execution_id: None)
     monkeypatch.setattr(discard, "_active_execution_processes", lambda _execution_id: ())
     monkeypatch.setattr(discard, "archive_frozen_target_set", lambda _execution_id: None)
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(
         reliabletask_fleet,

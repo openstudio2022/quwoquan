@@ -61,8 +61,12 @@ class ContentDistributionPolicy:
     m100_targets: tuple[tuple[str, int], ...]
     m1000_targets: tuple[tuple[str, int], ...]
     automatic_recovery_rate_target: float
+    automatic_recovery_statistical: bool
+    automatic_recovery_non_blocking: bool
     image_provider_priority: tuple[str, ...]
     video_popularity_signals: tuple[str, ...]
+    video_popularity_statistical: bool
+    video_popularity_non_blocking: bool
 
     def __post_init__(self) -> None:
         if self.release_class.value != self.product_lifecycle_state.value:
@@ -107,6 +111,8 @@ def load_content_distribution_policy(
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
     scale_milestones = raw["scaleMilestones"]
+    automatic_recovery = scale_milestones["automaticRecovery"]
+    video_popularity = research_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
         product_lifecycle_state=lifecycle,
@@ -123,11 +129,13 @@ def load_content_distribution_policy(
             (carrier, int(scale_milestones["m1000Targets"][carrier]))
             for carrier in ("homepage", "article", "image", "video")
         ),
-        automatic_recovery_rate_target=float(
-            scale_milestones["automaticRecoveryRateTarget"]
-        ),
+        automatic_recovery_rate_target=float(automatic_recovery["targetRate"]),
+        automatic_recovery_statistical=bool(automatic_recovery["statistical"]),
+        automatic_recovery_non_blocking=bool(automatic_recovery["nonBlocking"]),
         image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
-        video_popularity_signals=tuple(research_discovery["videoPopularitySignals"]),
+        video_popularity_signals=tuple(video_popularity["signals"]),
+        video_popularity_statistical=bool(video_popularity["statistical"]),
+        video_popularity_non_blocking=bool(video_popularity["nonBlocking"]),
     )
 
 

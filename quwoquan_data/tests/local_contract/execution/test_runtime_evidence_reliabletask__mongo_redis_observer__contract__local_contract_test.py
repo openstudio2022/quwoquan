@@ -7,10 +7,10 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
-from content.execution import runtime_evidence_reliabletask as observer
-from content.execution import runtime_evidence_reliabletask_process as process_port
-from content.execution.reliabletask_transport import ReliableTaskFleetTransport
-from content.execution.runtime_evidence_contract import CARRIERS, canonical_digest
+from content.execution.queue.reliabletask.transport import ReliableTaskFleetTransport
+from content.execution.runtime_evidence import reliabletask as observer
+from content.execution.runtime_evidence import reliabletask_process as process_port
+from content.execution.runtime_evidence.contract import CARRIERS, canonical_digest
 
 
 def _binary_binding(
@@ -51,6 +51,13 @@ def _envelopes(
                 "inputs": [f"input-{carrier}"],
             },
             "targetSetDigest": f"{index + 1:x}" * 64,
+            "rootExecutionId": "execution-homepage",
+            "campaignRunId": "campaign-run-001",
+            "campaignGeneration": 3,
+            "campaignFencingToken": "sha256:" + "b" * 64,
+            "campaignPlanDigest": "sha256:" + "c" * 64,
+            "campaignSourceRevision": "sha256:" + "d" * 64,
+            "campaignEntityCatalogDigest": "sha256:" + "e" * 64,
             **binary.as_document(),
         }
         for index, carrier in enumerate(CARRIERS, start=1)
@@ -104,10 +111,14 @@ def _observation_document(
     ]
     document: dict[str, object] = {
         "schema": "quwoquan.reliabletask_execution_observation",
-        "version": 1,
+        "version": 2,
         "executionId": f"execution-{carrier}",
         "carrier": carrier,
         "requestBindingDigest": provider.binding.configuration_digest,
+        "executionEnvelopeDigest": provider._targets[
+            carrier
+        ].execution_envelope_digest,
+        "campaignBinding": dict(provider._targets[carrier].campaign_binding),
         "observedAt": "2026-08-06T08:00:02Z",
         "tasks": [task],
         "pendingJobTimestamps": ["2026-08-06T08:00:01Z"],
@@ -155,6 +166,16 @@ def test_reliabletask_observer_samples_exact_four_frozen_executions_in_parallel(
         carrier = command[command.index("--observe-carrier") + 1]
         assert "--observe-execution" in command
         assert "--observe-binding-digest" in command
+        envelope_index = command.index(
+            "--observe-execution-envelope-digest"
+        ) + 1
+        assert command[envelope_index] == provider._targets[
+            carrier
+        ].execution_envelope_digest
+        binding_index = command.index("--observe-campaign-binding") + 1
+        assert json.loads(command[binding_index]) == provider._targets[
+            carrier
+        ].campaign_binding
         assert environment["QWQ_DATA_FLEET_MONGO_URI"] == transport.mongo_uri
         assert environment["QWQ_DATA_FLEET_REDIS_ADDR"] == transport.redis_addr
         assert timeout_seconds > 0
@@ -206,6 +227,22 @@ def test_reliabletask_observer_rejects_source_job_set_and_digest_drift(
             request_binding_digest=provider.binding.configuration_digest,
         )
     assert captured.value.code.endswith("DIGEST_DRIFT")
+
+    campaign_drift = _observation_document(provider, "image")
+    campaign_binding = campaign_drift["campaignBinding"]
+    assert isinstance(campaign_binding, dict)
+    campaign_binding["campaignGeneration"] = 4
+    campaign_drift["observationDigest"] = canonical_digest(
+        campaign_drift,
+        excluded="observationDigest",
+    )
+    with pytest.raises(observer.ReliableTaskObserverError) as captured:
+        observer._parse_observation(
+            json.dumps(campaign_drift),
+            target=provider._targets["image"],
+            request_binding_digest=provider.binding.configuration_digest,
+        )
+    assert captured.value.code.endswith("CAMPAIGN_IDENTITY_DRIFT")
 
 
 def test_observer_process_has_hard_deadline_and_does_not_echo_stderr(
@@ -329,11 +366,11 @@ def test_observer_environment_cannot_select_backend_binary_or_credentials(
     }
 
 
-def test_fleet_command_prefers_frozen_worker_over_inherited_binary(
+def test_below_m100_initial_checkpoint_and_resume_use_worker_binding_only(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     binary = tmp_path / "data-content-worker"
     binary.write_bytes(b"frozen-worker")
@@ -349,8 +386,22 @@ def test_fleet_command_prefers_frozen_worker_over_inherited_binary(
     monkeypatch.setenv("QWQ_DATA_FLEET_BINARY", "/tmp/untrusted-worker")
     monkeypatch.setattr(
         reliabletask_fleet,
+        "load_execution_queue_backend",
+        lambda _execution_id: {
+            "scaleClass": "BELOW_M100",
+            "envelopeDigest": "sha256:" + "c" * 64,
+        },
+    )
+    worker_loads: list[str] = []
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "load_frozen_campaign_worker_binary_binding",
+        lambda: worker_loads.append("worker") or binding,
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
         "load_frozen_observer_binary_binding",
-        lambda: binding,
+        lambda: pytest.fail("BELOW_M100 must not load campaign observer context"),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -358,10 +409,59 @@ def test_fleet_command_prefers_frozen_worker_over_inherited_binary(
         lambda candidate: binary if candidate == binding else pytest.fail("binding drift"),
     )
 
-    command, cwd = reliabletask_fleet._fleet_command()
+    initial = reliabletask_fleet._fleet_command(
+        "20260807--travel-article-m1--china--scale-001"
+    )
+    resumed = reliabletask_fleet._fleet_command(
+        "20260807--travel-article-m1--china--scale-001"
+    )
 
-    assert command == [str(binary)]
-    assert cwd == reliabletask_fleet.REPO_ROOT
+    assert initial == ([str(binary)], reliabletask_fleet.REPO_ROOT)
+    assert resumed == initial
+    assert worker_loads == ["worker", "worker"]
+
+
+def test_m100_plus_fleet_still_blocks_without_campaign_fence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    monkeypatch.setenv(process_port.OBSERVER_BINARY_REF_ENV, "binary")
+    monkeypatch.setenv(
+        process_port.OBSERVER_BINARY_SHA256_ENV,
+        "sha256:" + "b" * 64,
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "load_execution_queue_backend",
+        lambda _execution_id: {
+            "scaleClass": "M100_PLUS",
+            "envelopeDigest": "sha256:" + "c" * 64,
+        },
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "load_frozen_campaign_worker_binary_binding",
+        lambda: pytest.fail("M100_PLUS must not downgrade to worker-only binding"),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "load_frozen_observer_binary_binding",
+        lambda: (_ for _ in ()).throw(
+            process_port.observer_error(
+                "BINARY_BINDING_INVALID",
+                "controller observer binary campaign fence is unavailable",
+            )
+        ),
+    )
+
+    with pytest.raises(
+        process_port.ReliableTaskObserverError,
+        match="campaign fence is unavailable",
+    ):
+        reliabletask_fleet._fleet_command(
+            "20260807--travel-article-m100--china--scale-001"
+        )
 
 
 def test_observer_command_never_uses_go_path_or_cold_build_cache(
@@ -453,8 +553,8 @@ def test_observer_binary_prepare_accepts_controller_prebound_binding(
     monkeypatch.setenv(process_port.OBSERVER_BINARY_SHA256_ENV, binding.sha256)
     monkeypatch.setattr(
         process_port,
-        "_validate_prebound_campaign_context",
-        lambda: None,
+        "load_frozen_campaign_observer_context",
+        lambda: object(),
     )
     monkeypatch.setattr(
         process_port,

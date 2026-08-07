@@ -29,7 +29,6 @@
     "fourLaneLongestContinuousOverlapSeconds",
     "allSemanticJobsTerminalAt",
     "terminalResidualSampleAt",
-    "automaticRecoveryStatus",
     "campaignEvidenceRef",
     "campaignEvidenceDigest",
     "resourceSoakEvidenceRef",
@@ -116,7 +115,6 @@
     "fourLaneLongestContinuousOverlapSeconds": {"type": "integer", "minimum": 3600},
     "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"},
     "terminalResidualSampleAt": {"type": "string", "format": "date-time"},
-    "automaticRecoveryStatus": {"enum": ["MEASURED", "NOT_EXERCISED"]},
     "campaignEvidenceRef": {"type": "string", "minLength": 1},
     "campaignEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "resourceSoakEvidenceRef": {"type": "string", "minLength": 1},
@@ -185,15 +183,188 @@
         "rate": {"type": "number", "minimum": 0, "maximum": 1}
       }
     },
-    "recoveryRateStatistic": {
+    "signalAvailability": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["numerator", "denominator", "rate"],
+      "required": ["signal", "numerator", "denominator", "rate"],
       "properties": {
+        "signal": {"enum": ["play", "like", "comment", "share", "favorite"]},
         "numerator": {"type": "integer", "minimum": 0},
-        "denominator": {"type": "integer", "minimum": 0},
+        "denominator": {"type": "integer", "minimum": 1},
         "rate": {"type": "number", "minimum": 0, "maximum": 1}
       }
+    },
+    "playAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "play"}}}
+      ]
+    },
+    "likeAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "like"}}}
+      ]
+    },
+    "commentAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "comment"}}}
+      ]
+    },
+    "shareAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "share"}}}
+      ]
+    },
+    "favoriteAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "favorite"}}}
+      ]
+    },
+    "nullableCount": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "nullableNumber": {
+      "type": ["number", "null"]
+    },
+    "popularityComparisonBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "topic", "timeBucket", "candidateCount"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "topic": {"type": "string", "minLength": 1},
+        "timeBucket": {"type": "string", "minLength": 1},
+        "candidateCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "videoPopularityObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectRef", "assetId", "playCount", "likeCount", "commentCount",
+        "shareCount", "favoriteCount", "observedAt", "comparisonBucket",
+        "popularityScore", "popularityPercentile", "rankingEligible",
+        "ineligibleReason"
+      ],
+      "properties": {
+        "objectRef": {"type": "string", "pattern": "^posts/video/"},
+        "assetId": {"type": "string", "minLength": 1},
+        "playCount": {"$ref": "#/$defs/nullableCount"},
+        "likeCount": {"$ref": "#/$defs/nullableCount"},
+        "commentCount": {"$ref": "#/$defs/nullableCount"},
+        "shareCount": {"$ref": "#/$defs/nullableCount"},
+        "favoriteCount": {"$ref": "#/$defs/nullableCount"},
+        "observedAt": {"type": "string", "minLength": 1},
+        "comparisonBucket": {"$ref": "#/$defs/popularityComparisonBucket"},
+        "popularityScore": {"$ref": "#/$defs/nullableNumber"},
+        "popularityPercentile": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rankingEligible": {"type": "boolean"},
+        "ineligibleReason": {"type": "string"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"rankingEligible": {"const": true}},
+            "required": ["rankingEligible"]
+          },
+          "then": {
+            "properties": {
+              "ineligibleReason": {"const": ""},
+              "popularityPercentile": {"type": "number"}
+            }
+          },
+          "else": {
+            "properties": {
+              "ineligibleReason": {"minLength": 1},
+              "popularityPercentile": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "videoPopularityStatistic": {
+      "type": "object",
+      "description": "Truthful five-signal availability and comparable-bucket ranking coverage; never gates promotion.",
+      "additionalProperties": false,
+      "required": [
+        "statistical", "nonBlocking", "signalAvailability",
+        "rankingCoverage", "observations"
+      ],
+      "properties": {
+        "statistical": {"const": true},
+        "nonBlocking": {"const": true},
+        "signalAvailability": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            {"$ref": "#/$defs/playAvailability"},
+            {"$ref": "#/$defs/likeAvailability"},
+            {"$ref": "#/$defs/commentAvailability"},
+            {"$ref": "#/$defs/shareAvailability"},
+            {"$ref": "#/$defs/favoriteAvailability"}
+          ],
+          "items": false
+        },
+        "rankingCoverage": {"$ref": "#/$defs/rateStatistic"},
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/videoPopularityObservation"}
+        }
+      }
+    },
+    "automaticRecoveryStatistic": {
+      "type": "object",
+      "description": "Observed automatic recovery only; sample count and target attainment never gate promotion.",
+      "additionalProperties": false,
+      "required": [
+        "statistical", "nonBlocking", "status", "eligibleCount",
+        "automaticCount", "targetRate", "rate"
+      ],
+      "properties": {
+        "statistical": {"const": true},
+        "nonBlocking": {"const": true},
+        "status": {"enum": ["MEASURED", "NOT_EXERCISED"]},
+        "eligibleCount": {"type": "integer", "minimum": 0},
+        "automaticCount": {"type": "integer", "minimum": 0},
+        "targetRate": {"const": 0.95},
+        "rate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"eligibleCount": {"const": 0}},
+            "required": ["eligibleCount"]
+          },
+          "then": {
+            "properties": {
+              "status": {"const": "NOT_EXERCISED"},
+              "automaticCount": {"const": 0},
+              "rate": {"type": "null"}
+            }
+          },
+          "else": {
+            "properties": {
+              "status": {"const": "MEASURED"},
+              "rate": {"type": "number"}
+            }
+          }
+        }
+      ]
     },
     "quotaAttainment": {
       "type": "object",
@@ -237,6 +408,7 @@
       "required": [
         "objectPassRate",
         "illustratedRate",
+        "videoPopularity",
         "automaticRecoveryRate",
         "firstPassRate",
         "discardRate",
@@ -251,9 +423,11 @@
           "description": "Illustrated article count / article count in the promoted release.",
           "$ref": "#/$defs/rateStatistic"
         },
+        "videoPopularity": {
+          "$ref": "#/$defs/videoPopularityStatistic"
+        },
         "automaticRecoveryRate": {
-          "description": "Automatically recovered fault count / recovery-eligible fault count; 0/0 is NOT_EXERCISED.",
-          "$ref": "#/$defs/recoveryRateStatistic"
+          "$ref": "#/$defs/automaticRecoveryStatistic"
         },
         "firstPassRate": {
           "description": "Lanes whose retryChain contains only the current execution / four promoted lanes.",

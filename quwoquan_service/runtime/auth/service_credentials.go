@@ -17,7 +17,6 @@ var delegatedPersonaCompatibilityScopes = map[string]struct{}{
 	"circle.members.self":               {},
 	"content.my_intersections.read":     {},
 	"content.object_intersections.read": {},
-	"travel.trip.read":                  {},
 	"user.relationship.read":            {},
 }
 

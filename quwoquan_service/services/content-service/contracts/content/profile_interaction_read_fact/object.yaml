@@ -27,6 +27,20 @@ relationships:
 local_identity_reasons:
   activityId: immutable projection target identity scoped by ownerPersonaId; it never grants aggregate
     access
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - state 只允许 seen/read
 - ownerPersonaId+activityId+state 唯一，重复追加返回首次事实
@@ -34,3 +48,10 @@ business_rules:
 - read 投影同时保证 seenAt 非空，seen 不得回退已存在 readAt
 lifecycle:
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - AppendProfileInteractionReadFact
+    rationale: 主页互动已读事实追加；已读推进为单调追加语义，冲突由 Idempotency-Key 与语义键去重解决，无需事务保护的可变状态。
+    evaluated_at: '2026-08-07'

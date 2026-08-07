@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 5cebacbad8dfe3503f8dcf2d0f34dd34328ea5a6f0b3b297cbd11df0a9eb2d44
+// ContractGraph SHA256: b5683d7d096bfb9d5d550bb42fc6069321cdd8d781d57b85d8517db39af2390e
 
 library;
 
@@ -51,20 +51,6 @@ final class GreetingIntersectionSnapshot {
   };
 }
 
-Map<String, Object?> _requiredObject(Object? value, String path) {
-  if (value is! Map<Object?, Object?>) {
-    throw FormatException('$path must be an object');
-  }
-  final result = <String, Object?>{};
-  for (final entry in value.entries) {
-    final key = entry.key;
-    if (key is! String) {
-      throw FormatException('$path contains a non-string field name');
-    }
-    result[key] = entry.value;
-  }
-  return result;
-}
 
 void _rejectUnknownFields(
   Map<String, Object?> value,

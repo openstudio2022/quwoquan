@@ -34,7 +34,7 @@ type createOutboundShareRequest struct {
 	ClientConfirmedAt time.Time                  `json:"clientConfirmedAt"`
 }
 
-func (handler *Handler) CreateOutboundShare(w http.ResponseWriter, r *http.Request) {
+func (handler *Handler) AppendOutboundShareFact(w http.ResponseWriter, r *http.Request) {
 	actorDimension, actorID, err := resolveOutboundShareActor(r)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -42,7 +42,7 @@ func (handler *Handler) CreateOutboundShare(w http.ResponseWriter, r *http.Reque
 	}
 	var body createOutboundShareRequest
 	if err := httpcodec.DecodeStrictJSON(r, &body); err != nil {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromInvalidArgument("CreateOutboundShare request body is invalid"))
+		writeHTTPError(w, r, contentgenerated.AppErrorFromInvalidArgument("AppendOutboundShareFact request body is invalid"))
 		return
 	}
 	result, err := handler.facades.AppendOutboundShare(r.Context(), outboundshareapp.AppendOutboundShareCommand{
@@ -82,7 +82,7 @@ func writeHTTPError(writer http.ResponseWriter, request *http.Request, err error
 func resolveOutboundShareActor(r *http.Request) (sharemodel.ActorDimension, string, error) {
 	principal, ok := rtauth.PrincipalFromContext(r.Context())
 	if !ok {
-		return "", "", contentgenerated.AppErrorFromUnauthorized("CreateOutboundShare requires a verified persona or device principal")
+		return "", "", contentgenerated.AppErrorFromUnauthorized("AppendOutboundShareFact requires a verified persona or device principal")
 	}
 	if personaID := strings.TrimSpace(principal.Actor.PersonaID); personaID != "" {
 		return sharemodel.ActorDimensionPersona, personaID, nil
@@ -90,5 +90,5 @@ func resolveOutboundShareActor(r *http.Request) (sharemodel.ActorDimension, stri
 	if deviceActorID := strings.TrimSpace(principal.Actor.DeviceActorID); deviceActorID != "" {
 		return sharemodel.ActorDimensionDevice, deviceActorID, nil
 	}
-	return "", "", contentgenerated.AppErrorFromUnauthorized("CreateOutboundShare principal has no business actor")
+	return "", "", contentgenerated.AppErrorFromUnauthorized("AppendOutboundShareFact principal has no business actor")
 }

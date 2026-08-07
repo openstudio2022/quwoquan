@@ -11,8 +11,8 @@ abstract interface class AssistantSessionRunFacade
         AssistantSessionCommandWriter,
         AssistantSessionQuery,
         AssistantTurnQuery,
-        AssistantAnswerRunCommandWriter,
-        AssistantRunQuery,
+        AssistantAnswerRunProcessCommandWriter,
+        AssistantRunProcessQuery,
         AssistantRunEventStream {}
 
 /// runtime/di 内一次构造、向 Provider 投影窄 port 的显式 composition。
@@ -20,4 +20,4 @@ abstract interface class AssistantSessionRunComposition
     implements
         AssistantSessionRunFacade,
         AssistantRunControlFacet,
-        AssistantCreationRunCommandWriter {}
+        AssistantCreationRunProcessCommandWriter {}

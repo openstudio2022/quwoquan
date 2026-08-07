@@ -5,13 +5,13 @@ import io
 from pathlib import Path
 
 import pytest
-from content.execution import campaign_request_envelope, campaign_submission
-from content.execution.campaign_external_input_runtime import (
+from content.execution.campaign import request_envelope as campaign_request_envelope, submission as campaign_submission
+from content.execution.campaign.external_input_runtime import (
     ExternalInputRuntimeContext,
     freeze_execution_external_input_envelope,
     resolve_runtime_external_input_context,
 )
-from content.execution.campaign_external_inputs import (
+from content.execution.campaign.external_inputs import (
     CampaignExternalInputError,
     bind_external_input_refs,
     content_source_revision,
@@ -20,8 +20,8 @@ from content.execution.campaign_external_inputs import (
     payload_digest,
     verify_external_input_refs,
 )
-from content.execution.campaign_submission import write_submission
-from content.execution.campaign_workspace import (
+from content.execution.campaign.submission import write_submission
+from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
     CampaignRuntimePaths,
     SourceCapsule,
@@ -72,7 +72,7 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *_args, **_kwargs: {},
     )
     monkeypatch.setattr(
-        "content.execution.pre_acquisition_handoff.bind_pre_acquisition_handoff",
+        "content.execution.controller.execute.pre_acquisition_handoff.bind_pre_acquisition_handoff",
         lambda *_args, **_kwargs: (
             {
                 "carrierRequirements": {

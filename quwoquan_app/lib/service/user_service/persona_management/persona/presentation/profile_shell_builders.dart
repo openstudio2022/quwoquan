@@ -42,7 +42,7 @@ extension _ProfileShellTabBuilders on _ProfileShellState {
     required AuthorImpactRequest impactRequest,
   }) {
     final content = switch (_activeTabId) {
-      'interaction' => ProfileInteractionTab(
+      'interaction' => ProfileInteractionTabComposition(
         mode: widget.mode,
         userId: widget.userId,
         isDark: isDark,

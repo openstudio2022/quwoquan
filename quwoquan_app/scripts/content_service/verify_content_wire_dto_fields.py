@@ -22,7 +22,7 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
+from _common.paths import REPO_ROOT
 
 import re
 
@@ -33,36 +33,29 @@ ROOT = REPO_ROOT
 FIELDS_REPORT = (
     ROOT
     / "quwoquan_service"
+    / "services"
+    / "content-service"
     / "contracts"
-    / "metadata"
-    / "content"
+    / "trust_safety"
     / "report"
     / "fields.yaml"
 )
 FIELDS_COMMENT = (
     ROOT
     / "quwoquan_service"
+    / "services"
+    / "content-service"
     / "contracts"
-    / "metadata"
     / "content"
     / "comment"
     / "fields.yaml"
 )
-COMMENT_PAGE_PROJECTION = (
-    ROOT
-    / "quwoquan_service"
-    / "contracts"
-    / "metadata"
-    / "content"
-    / "comment"
-    / "projections"
-    / "comment_page_slice.yaml"
-)
 POST_DETAIL_PROJECTION = (
     ROOT
     / "quwoquan_service"
+    / "services"
+    / "content-service"
     / "contracts"
-    / "metadata"
     / "content"
     / "post"
     / "projections"
@@ -76,7 +69,7 @@ COMMENT_DART = (
     / "lib"
     / "src"
     / "content"
-    / "comment_contracts.dart"
+    / "content_operation_contracts.g.dart"
 )
 POST_READER_DART = (
     ROOT
@@ -86,17 +79,19 @@ POST_READER_DART = (
     / "lib"
     / "src"
     / "content"
-    / "post_reader_queries.dart"
+    / "content_operation_contracts.g.dart"
 )
 REPORT_DART = (
     ROOT
     / "quwoquan_app"
+    / "packages"
+    / "quwoquan_cloud_contracts"
     / "lib"
-    / "cloud"
-    / "runtime"
+    / "src"
     / "generated"
+    / "requests"
     / "content"
-    / "report_create_request_wire.g.dart"
+    / "content_operation_contracts.g.requests.g.dart"
 )
 
 
@@ -145,6 +140,14 @@ def _projection_field_names(data: dict) -> set[str]:
     return names
 
 
+def _typed_field_names(data: dict, type_name: str) -> set[str]:
+    types = data.get("types") or {}
+    definition = types.get(type_name) if isinstance(types, dict) else None
+    if not isinstance(definition, dict):
+        return set()
+    return _projection_field_names(definition)
+
+
 def _report_create_body_keys(report_yaml: dict) -> set[str]:
     names = {str(f["name"]) for f in (report_yaml.get("fields") or []) if f.get("name")}
     # CreateReport API body is subset (no server-only fields required in client wire).
@@ -153,25 +156,19 @@ def _report_create_body_keys(report_yaml: dict) -> set[str]:
 
 def main() -> int:
     comment = yaml.safe_load(FIELDS_COMMENT.read_text(encoding="utf-8"))
-    comment_projection = yaml.safe_load(
-        COMMENT_PAGE_PROJECTION.read_text(encoding="utf-8")
-    )
     post_detail_projection = yaml.safe_load(
         POST_DETAIL_PROJECTION.read_text(encoding="utf-8")
     )
-    comment_fields = {
-        str(field["name"])
-        for field in (comment.get("fields") or [])
-        if isinstance(field, dict) and field.get("name")
-    }
-    comment_fields.update(
-        str(field)
-        for field in (comment_projection.get("fields") or [])
-        if str(field).strip()
-    )
+    comment_fields = _typed_field_names(comment, "CommentListItem")
+    if not comment_fields:
+        print(
+            "verify_content_wire_dto_fields: CommentListItem metadata must declare fields",
+            file=sys.stderr,
+        )
+        return 1
     comment_block = _extract_function_block(
         COMMENT_DART.read_text(encoding="utf-8"),
-        "_decodeCommentListItem(",
+        "factory CommentListItem.fromWire(",
     )
     comment_keys = _map_keys_in_block(comment_block)
 
@@ -205,11 +202,9 @@ def main() -> int:
         return 1
     post_reader = POST_READER_DART.read_text(encoding="utf-8")
     post_detail_keys = _map_keys_in_block(
-        _extract_function_block(post_reader, "decodeContentPostDetailSlice(")
-    )
-    post_detail_keys.update(
-        _map_keys_in_block(
-            _extract_function_block(post_reader, "_decodeContentPostProjection(")
+        _extract_function_block(
+            post_reader,
+            "factory ContentPostDetailSlice.fromWire(",
         )
     )
     unknown_post_detail = post_detail_keys - post_detail_fields
@@ -225,20 +220,23 @@ def main() -> int:
     report = yaml.safe_load(FIELDS_REPORT.read_text(encoding="utf-8"))
     report_body = _report_create_body_keys(report)
     report_dart = REPORT_DART.read_text(encoding="utf-8")
-    report_match = re.search(
-        r"(?:CloudJsonMap|Map<String,\s*dynamic>)\s+toMap\(\)\s*=>\s*<String,\s*dynamic>\{([\s\S]*?)\};",
-        report_dart,
-    )
-    if not report_match:
+    try:
+        report_encoder = _extract_function_block(
+            report_dart,
+            "encodeContentReportCreateReportGeneratedRequest(",
+        )
+    except SystemExit:
         print(
-            "verify_content_wire_dto_fields: CreateReportRequestWire.toMap signature not found",
+            "verify_content_wire_dto_fields: generated CreateReport encoder not found",
             file=sys.stderr,
         )
         return 1
-    tomap_keys = set(re.findall(r"'([a-zA-Z0-9_]+)'\s*:", report_match.group(1)))
+    tomap_keys = set(
+        re.findall(r'["\']([a-zA-Z0-9_]+)["\']\s*:', report_encoder)
+    )
     if not report_body <= tomap_keys:
         print(
-            "verify_content_wire_dto_fields: CreateReportRequestWire.toMap missing keys:\n  "
+            "verify_content_wire_dto_fields: generated CreateReport encoder missing keys:\n  "
             + "\n  ".join(sorted(report_body - tomap_keys)),
             file=sys.stderr,
         )

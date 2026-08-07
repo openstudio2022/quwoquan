@@ -8,20 +8,23 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
 	DataContentExecutionObservationSchema  = "quwoquan.reliabletask_execution_observation"
-	dataContentExecutionObservationVersion = 1
+	dataContentExecutionObservationVersion = 2
 	dataContentObserverTaskLimit           = int64(100_000)
 )
 
 type DataContentExecutionObservationRequest struct {
-	ExecutionID          string
-	Carrier              string
-	RequestBindingDigest string
+	ExecutionID             string
+	Carrier                 string
+	RequestBindingDigest    string
+	ExecutionEnvelopeDigest string
+	Campaign                DataContentCampaignBinding
 }
 
 type DataContentExecutionObservationTask struct {
@@ -45,6 +48,8 @@ type DataContentExecutionObservation struct {
 	ExecutionID              string                                `json:"executionId"`
 	Carrier                  string                                `json:"carrier"`
 	RequestBindingDigest     string                                `json:"requestBindingDigest"`
+	ExecutionEnvelopeDigest  string                                `json:"executionEnvelopeDigest"`
+	CampaignBinding          DataContentCampaignBinding            `json:"campaignBinding"`
 	ObservedAt               string                                `json:"observedAt"`
 	Tasks                    []DataContentExecutionObservationTask `json:"tasks"`
 	PendingJobTimestamps     []string                              `json:"pendingJobTimestamps"`
@@ -84,6 +89,7 @@ func (r DataContentExecutionObservationRequest) validate() error {
 	r.ExecutionID = strings.TrimSpace(r.ExecutionID)
 	r.Carrier = strings.TrimSpace(r.Carrier)
 	r.RequestBindingDigest = strings.TrimSpace(r.RequestBindingDigest)
+	r.ExecutionEnvelopeDigest = strings.TrimSpace(r.ExecutionEnvelopeDigest)
 	if r.ExecutionID == "" || r.RequestBindingDigest == "" {
 		return errors.New("reliabletask observer requires executionId and request binding digest")
 	}
@@ -93,6 +99,12 @@ func (r DataContentExecutionObservationRequest) validate() error {
 	}
 	if !validSHA256Digest(r.RequestBindingDigest) {
 		return errors.New("reliabletask observer request binding must be sha256")
+	}
+	if !validSHA256Digest(r.ExecutionEnvelopeDigest) {
+		return errors.New("reliabletask observer execution envelope digest must be sha256")
+	}
+	if err := r.Campaign.Validate(); err != nil {
+		return fmt.Errorf("reliabletask observer campaign binding is invalid: %w", err)
 	}
 	return nil
 }
@@ -262,6 +274,8 @@ func buildDataContentExecutionObservation(
 		ExecutionID:              strings.TrimSpace(request.ExecutionID),
 		Carrier:                  strings.TrimSpace(request.Carrier),
 		RequestBindingDigest:     strings.TrimSpace(request.RequestBindingDigest),
+		ExecutionEnvelopeDigest:  strings.TrimSpace(request.ExecutionEnvelopeDigest),
+		CampaignBinding:          request.Campaign,
 		ObservedAt:               timestamp(now),
 		Tasks:                    rows,
 		PendingJobTimestamps:     pendingTimestamps,
@@ -297,6 +311,32 @@ func observeDataContentTask(
 		strings.TrimSpace(task.Payload["carrier"]) != strings.TrimSpace(request.Carrier) {
 		return DataContentExecutionObservationTask{}, false, false, errors.New(
 			"reliabletask observer Mongo task identity drift",
+		)
+	}
+	if strings.TrimSpace(task.Payload["executionEnvelopeDigest"]) !=
+		strings.TrimSpace(request.ExecutionEnvelopeDigest) {
+		return DataContentExecutionObservationTask{}, false, false, errors.New(
+			"reliabletask observer Mongo task execution envelope identity drift",
+		)
+	}
+	generation, generationErr := strconv.Atoi(
+		strings.TrimSpace(task.Payload["campaignGeneration"]),
+	)
+	taskCampaign := DataContentCampaignBinding{
+		RootExecutionID:     task.Payload["campaignRootExecutionId"],
+		RunID:               task.Payload["campaignRunId"],
+		Generation:          generation,
+		FencingToken:        task.Payload["campaignFencingToken"],
+		PlanDigest:          task.Payload["campaignPlanDigest"],
+		SourceRevision:      task.Payload["campaignSourceRevision"],
+		SourceDigest:        task.Payload["campaignSourceDigest"],
+		EntityCatalogDigest: task.Payload["campaignEntityCatalogDigest"],
+	}
+	if generationErr != nil ||
+		taskCampaign != request.Campaign ||
+		taskCampaign.Validate() != nil {
+		return DataContentExecutionObservationTask{}, false, false, errors.New(
+			"reliabletask observer Mongo task campaign generation/source identity drift",
 		)
 	}
 	job := DataContentJob{
@@ -372,6 +412,10 @@ func validSHA256Digest(value string) bool {
 	}
 	_, err := hex.DecodeString(raw)
 	return err == nil
+}
+
+func ValidSHA256Digest(value string) bool {
+	return validSHA256Digest(value)
 }
 
 func timestamp(value time.Time) string {

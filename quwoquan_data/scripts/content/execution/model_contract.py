@@ -205,7 +205,7 @@ def semantic_execution_binding_for_execution(
     execution_id: str,
 ) -> SemanticExecutionBinding:
     """Resolve provider/model/runtime only from one frozen execution manifest."""
-    from content.execution.recipe import load_recipe
+    from content.execution.planning.recipe.model import load_recipe
     from content.execution.workspace import (
         execution_manifest_recipe_ref,
         load_execution_manifest,

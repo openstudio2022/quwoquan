@@ -42,12 +42,17 @@ class WebMainAppShell extends ConsumerStatefulWidget {
     required this.currentLocation,
     required this.backgroundColor,
     required this.onPrimarySelected,
+    required this.onGuestAuthGateOpened,
   });
 
   final MainTabDestination currentDestination;
   final String currentLocation;
   final Color backgroundColor;
   final ValueChanged<MainTabDestination> onPrimarySelected;
+
+  /// 游客在宽屏内部 tab 上触发账号态动作、登录门已压栈后回调：由宿主把壳归位到
+  /// 首页安全态，保证关闭登录不会停留在触发面板。
+  final VoidCallback onGuestAuthGateOpened;
 
   @override
   ConsumerState<WebMainAppShell> createState() => _WebMainAppShellState();
@@ -700,7 +705,12 @@ class _WebContentFeed extends ConsumerWidget {
 }
 
 class _WebCreateWorkspace extends ConsumerStatefulWidget {
-  const _WebCreateWorkspace({required this.activeTabId});
+  const _WebCreateWorkspace({
+    required this.activeTabId,
+    required this.onGuestAuthGateOpened,
+  });
+
+  final VoidCallback onGuestAuthGateOpened;
 
   final String activeTabId;
 
@@ -711,6 +721,17 @@ class _WebCreateWorkspace extends ConsumerStatefulWidget {
 
 class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
   bool _showsContentActions = false;
+
+  /// 账号态动作（发起活动 / 发起群聊）在游客态会压入登录门。登录门压栈后立刻请求
+  /// 宿主把宽屏壳归位首页安全态：create 工作台是内部 tab，关闭登录只会 `go(home)`，
+  /// 不归位就会原地回到触发面板。
+  Future<void> _runAccountGatedAction(Future<void> Function() action) async {
+    final wasGuest = !AuthGate.isAuthenticated(ref);
+    await action();
+    if (wasGuest && mounted) {
+      widget.onGuestAuthGateOpened();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -751,7 +772,9 @@ class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
         title: CommunityText.createActionStartGathering,
         subtitle: CommunityText.authGateSubtitleStartGathering,
         action: () => unawaited(
-          GlobalQuickActionSheet.openGatedStartGathering(context, ref),
+          _runAccountGatedAction(
+            () => GlobalQuickActionSheet.openGatedStartGathering(context, ref),
+          ),
         ),
       ),
       _CreateCardSpec(
@@ -760,7 +783,9 @@ class _WebCreateWorkspaceState extends ConsumerState<_WebCreateWorkspace> {
         title: ChatText.createActionCreateGroupShort,
         subtitle: ChatText.webPcCreateGroupChatSubtitle,
         action: () => unawaited(
-          GlobalQuickActionSheet.openGatedStartGroupChat(context, ref),
+          _runAccountGatedAction(
+            () => GlobalQuickActionSheet.openGatedStartGroupChat(context, ref),
+          ),
         ),
       ),
     ];

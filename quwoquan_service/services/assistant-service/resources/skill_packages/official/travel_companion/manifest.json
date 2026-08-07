@@ -4,7 +4,7 @@
   "description": "把吃、玩、住、行、同行协作、现场变化和随拍整理为持续生长的共同旅行时间线。",
   "domainId": "travel",
   "problemClass": "complex_reasoning",
-  "tagRefs": ["travel", "trip_plan", "trip_timeline", "shared_trip"],
+  "tagRefs": ["travel", "gathering", "gathering_plan", "shared_commitment"],
   "executionTarget": "hybrid",
   "routingHints": ["旅行", "旅游", "行程", "安排 行程", "规划 行程", "攻略", "酒店", "住宿", "美食", "餐厅", "路线", "交通", "地铁", "公交", "航班", "火车", "导航", "搭子", "同行", "领队", "导游", "集合", "随拍", "游记", "行程变化"],
   "catalogProfileRef": "catalog.travel_companion",

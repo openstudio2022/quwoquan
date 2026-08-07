@@ -6,7 +6,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test('generated report method encodes only typed business command', () async {
-    final executor = _RecordingExecutor();
+    final executor = _RecordingExecutor(
+      response: <String, Object?>{
+        'id': 'report-1',
+        'version': 1,
+        'status': 'pending',
+        'replayed': false,
+      },
+    );
     final client = GeneratedCloudOperationClient(executor);
 
     await client.contentReportCreateReport(
@@ -457,27 +464,28 @@ void main() {
       );
       final client = GeneratedCloudOperationClient(executor);
 
-      final result = await client.contentOutboundShareFactCreateOutboundShare(
-        CreateContentOutboundShareCommand(
-          postId: 'post-1',
-          channel: OutboundShareChannel.systemShare,
-          destinationKind: OutboundShareDestinationKind.externalApp,
-          destination: 'wechat',
-          referralId: 'referral-1',
-          providerReceiptId: 'provider-receipt-1',
-          clientConfirmedAt: DateTime.utc(2026, 7, 14, 10),
-        ),
-        context: const CloudOperationInvocationContext(
-          surfaceId: 'homeFeed',
-          clientPageId: 'content.create.outbound.share',
-          actor: CloudOperationActorContext(personaId: 'persona-1'),
-          idempotencyKey: 'outbound-share-referral-1',
-        ),
-      );
+      final result = await client
+          .contentOutboundShareFactAppendOutboundShareFact(
+            CreateContentOutboundShareCommand(
+              postId: 'post-1',
+              channel: OutboundShareChannel.systemShare,
+              destinationKind: OutboundShareDestinationKind.externalApp,
+              destination: 'wechat',
+              referralId: 'referral-1',
+              providerReceiptId: 'provider-receipt-1',
+              clientConfirmedAt: DateTime.utc(2026, 7, 14, 10),
+            ),
+            context: const CloudOperationInvocationContext(
+              surfaceId: 'homeFeed',
+              clientPageId: 'content.create.outbound.share',
+              actor: CloudOperationActorContext(personaId: 'persona-1'),
+              idempotencyKey: 'outbound-share-referral-1',
+            ),
+          );
 
       expect(
         executor.operation?.canonicalOperationId,
-        AppCloudOperationIds.contentOutboundShareFactCreateOutboundShare,
+        AppCloudOperationIds.contentOutboundShareFactAppendOutboundShareFact,
       );
       expect(executor.pathParameters, <String, String>{'postId': 'post-1'});
       expect(executor.body, <String, Object?>{
@@ -539,11 +547,7 @@ void main() {
     final client = GeneratedCloudOperationClient(executor);
 
     final result = await client.notificationNotificationListAppMessages(
-      ListAppMessagesQuery(
-        messageType: 'assistant',
-        read: false,
-        limit: 10,
-      ),
+      ListAppMessagesQuery(messageType: 'assistant', read: false, limit: 10),
       context: const CloudOperationInvocationContext(
         surfaceId: 'personalAssistantDialog',
         clientPageId: 'notification.list.app.messages',

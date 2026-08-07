@@ -24,8 +24,23 @@ local_identity_reasons:
   skillId: >-
     active SkillPackageRelease 内的稳定 Skill key；通过 typed catalog reader 校验，
     不作为本聚合 Store 身份或授权事实
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "偏好与设置只在所属用户的 Reader 内生效，不具备跨用户检索语义。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.skill_user_setting.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.assistant.skill_user_setting.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.assistant.skill_user_setting.write
 business_rules:
 - 同一 accountId + skillId 最多一个设置；不存在记录表示采用 active package 缺省，不持久化隐式 enabled 行
 - status 只控制个人响应式 Skill 是否可路由，不修改 SkillConsent 或 SkillSubscription

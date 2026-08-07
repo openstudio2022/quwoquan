@@ -43,7 +43,7 @@ func (s *Service) AppendOutboundShare(ctx context.Context, command AppendOutboun
 	}
 	idempotencyKey := strings.TrimSpace(commandmeta.IdempotencyKey(ctx))
 	if idempotencyKey == "" {
-		return AppendOutboundShareResult{}, contentgenerated.AppErrorFromIdempotencyConflict("CreateOutboundShare requires Idempotency-Key")
+		return AppendOutboundShareResult{}, contentgenerated.AppErrorFromIdempotencyConflict("AppendOutboundShareFact requires Idempotency-Key")
 	}
 	eventID, err := s.newEventID()
 	if err != nil {

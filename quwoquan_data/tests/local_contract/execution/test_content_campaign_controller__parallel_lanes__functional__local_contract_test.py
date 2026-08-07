@@ -9,21 +9,20 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-from content.execution import (
-    campaign_controller,
-    campaign_distributed,
-    campaign_orchestrator,
-    campaign_process,
-    campaign_submission,
-)
-from content.execution.campaign_external_input_runtime import (
+from content.execution.campaign import controller as campaign_controller
+from content.execution.campaign import distributed as campaign_distributed
+from content.execution.campaign import orchestrator as campaign_orchestrator
+from content.execution.campaign import process as campaign_process
+from content.execution.campaign import submission as campaign_submission
+from content.execution.campaign.external_input_runtime import (
     execution_external_input_envelope_path,
     load_execution_external_input_envelope,
 )
-from content.execution.campaign_lane_claim import read_lane_claim
-from content.execution.campaign_runtime import (
+from content.execution.campaign.lane_claim import read_lane_claim
+from content.execution.campaign.runtime import (
     CampaignFenceError,
     CampaignLeaseTakeoverError,
     assert_campaign_fence,
@@ -33,16 +32,16 @@ from content.execution.campaign_runtime import (
     runtime_events_path,
     runtime_snapshot_path,
 )
-from content.execution.campaign_runtime_process import (
+from content.execution.campaign.runtime_process import (
     begin_stale_controller_termination,
 )
-from content.execution.campaign_workspace import CampaignRuntimePaths
-from content.execution.reliabletask_transport import (
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.queue.reliabletask.transport import (
     FrozenReliableTaskFleetBinding,
     ReliableTaskFleetTransport,
 )
 from content.execution.request import RuntimeExecutionRequest
-from content.execution.runtime_evidence_reliabletask_process import (
+from content.execution.runtime_evidence.reliabletask_process import (
     ReliableTaskObserverBinaryBinding,
 )
 from core.control_types import TargetSelector
@@ -52,6 +51,348 @@ from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260728--travel-homepage-scale--china--scale-001"
 CARRIERS = ("homepage", "article", "image", "video")
+
+
+def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "_shared/execution_state.json"
+    state.parent.mkdir(parents=True)
+    write_json(
+        state,
+        {
+            "status": "waiting_agent",
+            "waitingCheckpoint": "post_author",
+            "controllerYield": None,
+        },
+    )
+    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is True
+    write_json(
+        state,
+        {
+            "status": "repairing",
+            "waitingCheckpoint": "post_review",
+            "controllerYield": {
+                "stage": "download_plan",
+                "reason": "mismatched stage",
+            },
+        },
+    )
+    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is False
+
+    write_json(
+        state,
+        {"status": "manual_required", "waitingCheckpoint": None},
+    )
+    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is False
+
+    write_json(
+        state,
+        {
+            "status": "repairing",
+            "waitingCheckpoint": "download_plan",
+            "controllerYield": {
+                "stage": "download_plan",
+                "reason": "managed slice completed",
+            },
+        },
+    )
+    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is True
+
+
+def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    return_codes = iter((10, 0))
+    spawned: list[int] = []
+
+    class FakeProcess:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.pid = 8000 + len(spawned)
+            self.return_code = next(return_codes)
+            spawned.append(self.pid)
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.return_code
+
+    checkpoints: list[dict[str, object]] = []
+    session = SimpleNamespace(
+        process_termination_timeout_seconds=1,
+        lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
+    )
+    workspace = SimpleNamespace(
+        carrier="article",
+        ref="data/local/cache/capsule/article",
+        execution_root=tmp_path / "execution",
+    )
+    workspace.execution_root.mkdir()
+    state = workspace.execution_root / "_shared/execution_state.json"
+    state.parent.mkdir()
+    write_json(
+        state,
+        {
+            "status": "waiting_agent",
+            "waitingCheckpoint": "post_author",
+            "controllerYield": None,
+        },
+    )
+    monkeypatch.setattr(campaign_process.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(campaign_process.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        campaign_process,
+        "_process_group_rss_bytes",
+        lambda _pgid: 64 * 1024**2,
+    )
+    monkeypatch.setattr(
+        campaign_process,
+        "_execution_heartbeat_at",
+        lambda _root: "2026-08-07T08:00:00+00:00",
+    )
+
+    code = campaign_process._default_lane_runner(
+        ["python", "cli.py"],
+        tmp_path,
+        {},
+        tmp_path / "lane.log",
+        30,
+        run_session=session,
+        workspace=workspace,
+        execution_id="20260807--travel-article-m100--china--scale-001",
+        stage="review-only",
+    )
+
+    assert code == 0
+    assert len(spawned) == 2
+    yield_checkpoint = next(
+        checkpoint
+        for checkpoint in checkpoints
+        if checkpoint.get("return_code") == campaign_process._LANE_SLICE_YIELD_CODE
+    )
+    assert yield_checkpoint["process_evidence"]["terminationOwner"] == "controller_yield"
+    evidence = checkpoints[-1]["process_evidence"]
+    assert evidence["sliceCount"] == 2
+    assert evidence["resumeCount"] == 1
+    assert evidence["maxRssBytes"] == 64 * 1024**2
+    assert evidence["terminationOwner"] == "lane_process"
+    assert "resuming create-once lane checkpoint" in (
+        tmp_path / "lane.log"
+    ).read_text(encoding="utf-8")
+
+
+def test_lane_runner_does_not_resume_non_yield_from_stale_waiting_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    return_codes = iter((1, 0))
+    spawned: list[int] = []
+
+    class FakeProcess:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.pid = 9000 + len(spawned)
+            self.return_code = next(return_codes)
+            spawned.append(self.pid)
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.return_code
+
+    checkpoints: list[dict[str, object]] = []
+    session = SimpleNamespace(
+        process_termination_timeout_seconds=1,
+        lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
+    )
+    workspace = SimpleNamespace(
+        carrier="video",
+        ref="data/local/cache/capsule/video",
+        execution_root=tmp_path / "execution",
+    )
+    state = workspace.execution_root / "_shared/execution_state.json"
+    state.parent.mkdir(parents=True)
+    write_json(
+        state,
+        {
+            "status": "waiting_agent",
+            "waitingCheckpoint": "post_review",
+            "controllerYield": None,
+        },
+    )
+    monkeypatch.setattr(campaign_process.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(campaign_process.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        campaign_process,
+        "_process_group_rss_bytes",
+        lambda _pgid: 32 * 1024**2,
+    )
+    monkeypatch.setattr(
+        campaign_process,
+        "_execution_heartbeat_at",
+        lambda _root: "2026-08-07T08:00:00+00:00",
+    )
+
+    log_path = tmp_path / "lane.log"
+    code = campaign_process._default_lane_runner(
+        ["python", "cli.py"],
+        tmp_path,
+        {},
+        log_path,
+        30,
+        run_session=session,
+        workspace=workspace,
+        execution_id="20260807--travel-video-m100--china--scale-001",
+        stage="review-only",
+    )
+
+    assert code == 1
+    assert len(spawned) == 1
+    assert "resuming create-once lane checkpoint" not in log_path.read_text(
+        encoding="utf-8"
+    )
+    assert checkpoints[-1]["return_code"] == 1
+    evidence = checkpoints[-1]["process_evidence"]
+    assert evidence["sliceCount"] == 1
+    assert evidence["resumeCount"] == 0
+    assert evidence["terminationOwner"] == "lane_process"
+
+
+def test_sigkill_termination_evidence_does_not_falsely_claim_oom() -> None:
+    owner, signal_name = campaign_process._termination_owner(-signal.SIGKILL)
+
+    assert owner == "external_or_kernel"
+    assert signal_name == "SIGKILL"
+
+
+@pytest.mark.parametrize("terminal_source", ("execution_state", "command_packet"))
+def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    terminal_source: str,
+) -> None:
+    execution_id = "20260807--travel-video-m1--china--scale-001"
+    execution_root = tmp_path / "output" / "data" / "tasks" / execution_id
+    shared = execution_root / "_shared"
+    shared.mkdir(parents=True)
+    capsule = tmp_path / "capsule"
+    capsule.mkdir()
+    workspace = SimpleNamespace(
+        carrier="video",
+        path=capsule,
+        ref="data/local/cache/content-campaign-workspaces/capsule",
+        execution_root=execution_root,
+    )
+    runtime = CampaignRuntimePaths(
+        repo_root=tmp_path,
+        output_root=tmp_path / "output",
+        publish_root=tmp_path / "publish",
+        campaigns_root=tmp_path / "campaigns",
+        workspaces_root=tmp_path / "workspaces",
+    )
+    checkpoints: list[dict[str, object]] = []
+    session = SimpleNamespace(
+        run_id="campaign-run",
+        generation=1,
+        fencing_token="sha256:" + ("1" * 64),
+        plan_digest="sha256:" + ("2" * 64),
+        lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
+    )
+    missing_contract = (
+        capsule
+        / "quwoquan_service/services/recommendation-service/contracts/"
+        "recommendation/recommendation_feature_profile_view/projections/"
+        "intersection_reason.yaml"
+    )
+    issue_record = {
+        "code": "DATA.INTERNAL.UNEXPECTED",
+        "stage": "post_review",
+        "ref": "",
+        "lane": "all",
+        "recovery": "stop",
+        "message": "execution stage raised an unexpected exception",
+        "attrs": {
+            "errorType": "FileNotFoundError",
+            "errorMessage": f"IntersectionReason metadata is required: {missing_contract}",
+            "errorLocation": "intersection_signal.py:49:contract_field_names",
+        },
+    }
+
+    def failed_lane_runner(_command, _cwd, _env, log_path, _timeout):
+        if terminal_source == "execution_state":
+            write_json(
+                shared / "execution_state.json",
+                {
+                    "executionId": execution_id,
+                    "status": "manual_required",
+                    "lastFailedStage": "post_review",
+                    "nextAction": "post_review raised FileNotFoundError",
+                    "failedIssueRecords": [issue_record],
+                },
+            )
+        else:
+            write_json(
+                shared / "command_packets" / "post_review.json",
+                {
+                    "executionId": execution_id,
+                    "stage": "post_review",
+                    "outputs": {
+                        "status": "failed",
+                        "message": "post_review raised FileNotFoundError",
+                        "issueRecords": [issue_record],
+                    },
+                },
+            )
+        lines = [
+            (
+                "[task execute] FAILED at 'post_review': "
+                "post_review raised FileNotFoundError"
+            ),
+            *[f"[post] Materialized tail line {index}" for index in range(15)],
+        ]
+        log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        assert lines[0] not in lines[-12:]
+        return 1
+
+    monkeypatch.setattr(
+        campaign_process,
+        "_verify_workspace_external_inputs",
+        lambda _workspace: None,
+    )
+    code, error = campaign_process._run_lane(
+        workspace,
+        {
+            "executionId": execution_id,
+            "gitBranch": "dev1.0",
+            "gitCommitSha": "a" * 40,
+            "sourceDigest": {"digest": "sha256:" + ("3" * 64)},
+            "sourceRevision": "sha256:" + ("4" * 64),
+            "entityCatalogDigest": "sha256:" + ("5" * 64),
+            "semanticSelectionId": "cursor_auto",
+            "rootExecutionId": ROOT_ID,
+            "familyRef": "content/travel/video/video",
+            "regionRef": "china",
+            "selector": "source-ready-priority",
+            "quota": 1,
+            "count": 1,
+        },
+        stage="review-only",
+        runtime=runtime,
+        root_execution_id=ROOT_ID,
+        timeout_seconds=30,
+        lane_runner=failed_lane_runner,
+        run_session=session,
+        observer_binary_binding=None,
+        fleet_transport_binding=None,
+    )
+
+    assert code == 1
+    assert error is not None
+    assert error.startswith("post_review raised FileNotFoundError")
+    assert "DATA.INTERNAL.UNEXPECTED" in error
+    assert str(missing_contract) in error
+    assert "Materialized tail line" not in error
+    assert checkpoints[-1]["error"] == error
+
+
 FAKE_CLI = r"""#!/usr/bin/env python3
 import fcntl
 import hashlib
@@ -721,6 +1062,32 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
     _assert_capsule_reused_and_lane_roots_isolated(runtime, report)
 
 
+def test_repeated_freeze_reuses_existing_plan_without_fencing_lanes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+
+    first_report = campaign_distributed.freeze_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        runtime_paths=runtime,
+    )
+    first_snapshot = read_runtime_snapshot(runtime, ROOT_ID)
+
+    second_report = campaign_distributed.freeze_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        runtime_paths=runtime,
+    )
+
+    assert second_report == first_report
+    assert read_runtime_snapshot(runtime, ROOT_ID) == first_snapshot
+    assert first_snapshot["status"] == "frozen"
+
+
 def test_four_copied_sessions_claim_independent_lanes_and_finalize(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -825,8 +1192,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from content.execution.campaign_runtime import campaign_run_session
-from content.execution.campaign_workspace import CampaignRuntimePaths
+from content.execution.campaign.runtime import campaign_run_session
+from content.execution.campaign.workspace import CampaignRuntimePaths
 
 runtime = CampaignRuntimePaths(
     repo_root=Path({json.dumps(str(runtime.repo_root))}),
@@ -943,8 +1310,8 @@ def _spawn_live_stall_controller(
 import json
 import time
 from pathlib import Path
-from content.execution.campaign_runtime import campaign_run_session
-from content.execution.campaign_workspace import CampaignRuntimePaths
+from content.execution.campaign.runtime import campaign_run_session
+from content.execution.campaign.workspace import CampaignRuntimePaths
 
 runtime = CampaignRuntimePaths(
     repo_root=Path({json.dumps(str(runtime.repo_root))}),
@@ -1171,8 +1538,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from content.execution.campaign_runtime import campaign_run_session
-from content.execution.campaign_workspace import CampaignRuntimePaths
+from content.execution.campaign.runtime import campaign_run_session
+from content.execution.campaign.workspace import CampaignRuntimePaths
 
 runtime = CampaignRuntimePaths(
     repo_root=Path({json.dumps(str(runtime.repo_root))}),

@@ -41,6 +41,20 @@ local_identity_reasons:
     reference
   sessionId: runtime session correlation key injected by OperationInvocationContext, not an aggregate
     reference
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - actor 必须是可信 persona 或服务端派生 device actor，业务请求体不得携带 actor 标识
 - sessionId、requestId 与 occurredAt 必须由 OperationInvocationContext 注入
@@ -50,3 +64,10 @@ lifecycle:
   states:
   - recorded
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - ReportCircleBehavior
+    rationale: 圈子行为埋点批量追加；约束仅为 idempotencyKey 与语义键去重，聚合计数由下游投影异步派生，写入侧不持有实例级可变状态。
+    evaluated_at: '2026-08-07'

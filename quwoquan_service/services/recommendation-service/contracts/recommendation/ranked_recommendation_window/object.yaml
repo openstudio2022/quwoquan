@@ -11,6 +11,20 @@ relationships:
 - {name: modelRelease, target_object: recommendation.RecommendationModelRelease, reference_fields: [modelReleaseId], kind: reference, cardinality: 'N:1', consistency: runtime, access: named_reader, on_delete: retain}
 local_identity_reasons:
   subjectId: 推荐运行时 actor key；可为 persona、设备或匿名主体，不等价于单一 canonical Persona 引用。
+search_policy:
+  exposed: none
+  not_exposed_reason: "易失运行时状态，过期即消失，没有可供检索的稳定对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "易失运行时传输状态对小趣没有可用语义，读取只会产生不可复现的上下文。"
 business_rules:
 - 创建时一次性固化有界候选、ordinal、对象卡候选、模型分桶、模型发布、用户特征与逐项候选特征；每项 featureSnapshotDigest 必须绑定实际评分输入，后续读取不得重新排序或回查漂移特征。
 - Idempotency-Key 在窗口 TTL 内唯一派生 windowId；同键同载荷返回原窗口，同键异载荷必须冲突且不得重排。

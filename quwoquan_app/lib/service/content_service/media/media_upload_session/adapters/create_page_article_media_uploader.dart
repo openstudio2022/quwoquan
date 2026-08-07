@@ -55,9 +55,7 @@ Future<PreparedPostPublicationPayload> uploadArticleMediaForPublication({
     tagRefs: tagRefs,
     entityRefs: entityRefs,
     visibility: draft.isPublic ? 'public' : 'private',
-    assistantUsePolicy: draft.assistantUsePolicy.trim().isEmpty
-        ? 'inherit'
-        : draft.assistantUsePolicy.trim(),
+    assistantUsePolicy: draft.assistantUsePolicy,
     markdownDialect: draft.markdownDialect,
     encodeMarkdown: encodeMarkdown,
   );

@@ -1,5 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
-// readiness_case: update-profile-interaction-state-local
+// readiness_case: append-profile-interaction-read-fact-local
 package application_test
 
 import (

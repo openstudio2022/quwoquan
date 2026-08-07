@@ -40,6 +40,17 @@ def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
     assert policy.illustrated_rate_target == 0.9
     assert policy.text_only_rate_target == 0.1
     assert policy.automatic_recovery_rate_target == 0.95
+    assert policy.automatic_recovery_statistical is True
+    assert policy.automatic_recovery_non_blocking is True
+    assert policy.video_popularity_signals == (
+        "play",
+        "like",
+        "comment",
+        "share",
+        "favorite",
+    )
+    assert policy.video_popularity_statistical is True
+    assert policy.video_popularity_non_blocking is True
     assert dict(policy.m100_targets) == {
         "homepage": 100,
         "article": 100,

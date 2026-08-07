@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_download_cache.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/media_upload_manager.dart';
@@ -22,7 +23,7 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/publi
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/message_home_cache.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message_receipt_fact/application/public/message_receipt_fact_query.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/runtime/di/realtime_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/chat_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
@@ -603,6 +604,7 @@ final mediaDownloadCacheProvider = Provider<MediaDownloadCache>((ref) {
     ref.watch(fileStorageGatewayProvider),
   );
   return MediaDownloadCache(
+    client: ref.watch(mediaDataPlaneHttpClientProvider),
     maxCacheSizeMb: profile.maxMediaDownloadCacheSizeMb,
     maxConcurrentDownloads: profile.maxConcurrentMediaDownloads,
     fileStorageGateway: fileStorageGateway,

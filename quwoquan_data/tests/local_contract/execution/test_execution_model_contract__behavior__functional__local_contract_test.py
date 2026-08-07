@@ -11,7 +11,7 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.execution import runner
+from content.execution.controller.execute import runner
 from content.execution.model_contract import (
     execution_model_pair,
     semantic_execution_binding,

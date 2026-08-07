@@ -5,6 +5,8 @@
   "required": [
     "schema",
     "executionId",
+    "scaleClass",
+    "executionEnvelopeDigest",
     "requireCommercial",
     "recoverDeadTasks",
     "objectTimeoutMilliseconds",
@@ -20,6 +22,13 @@
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
+    "scaleClass": {
+      "enum": ["BELOW_M100", "M100_PLUS"]
+    },
+    "executionEnvelopeDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "requireCommercial": {
       "type": "boolean"
     },
@@ -33,6 +42,9 @@
     "requiredQuota": {
       "type": "integer",
       "minimum": 1
+    },
+    "campaignBinding": {
+      "$ref": "#/$defs/campaignBinding"
     },
     "jobs": {
       "type": "array",
@@ -95,6 +107,47 @@
             "type": "string",
             "minLength": 1
           }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "campaignBinding": {
+      "type": "object",
+      "required": [
+        "rootExecutionId",
+        "campaignRunId",
+        "campaignGeneration",
+        "campaignFencingToken",
+        "campaignPlanDigest",
+        "campaignSourceRevision",
+        "campaignSourceDigest",
+        "campaignEntityCatalogDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rootExecutionId": {"type": "string", "minLength": 1},
+        "campaignRunId": {"type": "string", "minLength": 1},
+        "campaignGeneration": {"type": "integer", "minimum": 1},
+        "campaignFencingToken": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignPlanDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignSourceRevision": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignSourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignEntityCatalogDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
         }
       }
     }

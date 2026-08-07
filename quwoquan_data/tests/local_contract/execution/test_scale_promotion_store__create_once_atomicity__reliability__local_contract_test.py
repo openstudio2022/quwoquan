@@ -4,8 +4,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from content.execution.scale_promotion_policy import m100_promotion_thresholds
-from content.execution.scale_promotion_store import write_scale_promotion_create_once
+from content.execution.scale.promotion_policy import m100_promotion_thresholds
+from content.execution.scale.promotion_store import write_scale_promotion_create_once
 
 
 def test_lane_scale_promotion_is_atomic_for_concurrent_identical_writers(

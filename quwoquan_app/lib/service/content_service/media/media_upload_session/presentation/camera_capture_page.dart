@@ -75,21 +75,6 @@ class CameraPhotoEditorRequest {
   final CameraPhotoEntrySource entrySource;
 }
 
-@immutable
-class CameraCaptureResult {
-  const CameraCaptureResult({
-    required this.path,
-    required this.type,
-    this.filterPresetId = 'original',
-    this.entrySource = CameraPhotoEntrySource.photoPicker,
-  });
-
-  final String path;
-  final CreateMediaType type;
-  final String filterPresetId;
-  final CameraPhotoEntrySource entrySource;
-}
-
 enum _MicrophoneDecision { audio, muted, abort }
 
 enum _MicrophoneChoice { openSettings, continueMuted }

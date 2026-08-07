@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Immutable release first-consumer lookup index manifest",
+  "type": "object",
+  "required": [
+    "schema",
+    "releaseId",
+    "entities",
+    "posts",
+    "tagLinkTargets",
+    "coverageRows",
+    "coverageEntities",
+    "indexHash",
+    "coverage"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.release_lookup_index"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "entities": {"type": "integer", "minimum": 0},
+    "posts": {"type": "integer", "minimum": 0},
+    "tagLinkTargets": {"type": "integer", "minimum": 0},
+    "coverageRows": {"type": "integer", "minimum": 0},
+    "coverageEntities": {"type": "integer", "minimum": 0},
+    "indexHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["rows", "entities", "entitiesWithHomepage"],
+      "additionalProperties": false,
+      "properties": {
+        "rows": {"type": "integer", "minimum": 0},
+        "entities": {"type": "integer", "minimum": 0},
+        "entitiesWithHomepage": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

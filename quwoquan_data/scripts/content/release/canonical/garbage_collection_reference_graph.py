@@ -10,13 +10,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign_external_inputs import (
+from content.execution.campaign.external_inputs import (
     PROFESSIONAL_IMAGE_ACQUISITION_KIND,
     PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     payload_digest,
     verify_external_input_refs,
 )
-from content.execution.campaign_external_inputs import (
+from content.execution.campaign.external_inputs import (
     file_digest as external_file_digest,
 )
 from content.release.canonical.garbage_collection_contract import (
@@ -35,6 +35,7 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
     _safe_rel,
 )
+from core.paths import RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF
 from core.schema import assert_valid
 
 _EXECUTION_ID_KEYS = frozenset(
@@ -333,7 +334,7 @@ def _evidence_reason(source: str) -> str:
         return "canonical_publish_reference"
     if source.startswith("data/releases/"):
         return "immutable_release_reference"
-    if source.startswith("data/release-promotions/"):
+    if source.startswith(f"{RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF}/"):
         return "promotion_evidence"
     if source.startswith("env/"):
         return "activation_readiness_evidence"
@@ -539,7 +540,7 @@ def build_reference_graph(
     _scan_tree(graph, publish_root, kind="canonical_publish_evidence")
     _scan_tree(graph, release_root, kind="immutable_release_evidence")
     for relative, kind in (
-        ("data/release-promotions", "promotion_evidence"),
+        (RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF, "promotion_evidence"),
         ("env", "activation_readiness_evidence"),
         (
             "data/local/workspace/content-campaign-submissions",

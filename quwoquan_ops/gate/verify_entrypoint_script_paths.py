@@ -32,6 +32,8 @@ RETIRED_PREFIXES = (
     "quwoquan_service/scripts/persona/",
     "quwoquan_service/scripts/media/",
     "quwoquan_service/scripts/search/",
+    "quwoquan_service/scripts/tools/search/",
+    "quwoquan_service/scripts/tools/product_ops/",
 )
 RETIRED_WORKFLOW_TOKENS = (
     "cloud-gamma",
@@ -40,6 +42,9 @@ RETIRED_WORKFLOW_TOKENS = (
     "GAMMA_REC_MODEL_URL",
     "/v1/model/reload",
     "use_ecs_deploy",
+)
+STACKCTL_INTERNAL_PREFIXES = (
+    "quwoquan_ops/cli/prod_sim/",
 )
 RETIRED_APP_HELP_PATTERNS = (
     re.compile(r"python3 scripts/"),
@@ -87,6 +92,17 @@ def _managed_script_sources(root: Path) -> list[Path]:
     return sorted(
         path for path in sources if "__pycache__" not in path.parts
     )
+
+
+def _reference_evidence_sources(root: Path) -> list[Path]:
+    candidates: set[Path] = {
+        root / "quwoquan_app/scripts/README.md",
+        root / "quwoquan_service/scripts/README.md",
+    }
+    app_test_root = root / "quwoquan_app/test"
+    if app_test_root.is_dir():
+        candidates.update(app_test_root.rglob("*.dart"))
+    return sorted(path for path in candidates if path.is_file())
 
 
 def _makefile_scripts_prefix(root: Path, source: Path) -> str | None:
@@ -156,6 +172,15 @@ def entrypoint_script_path_issues(root: Path = ROOT) -> list[str]:
             if script_path.startswith(RETIRED_PREFIXES):
                 issues.append(f"{location}: retired script path {script_path}")
                 continue
+            if (
+                script_path.startswith(STACKCTL_INTERNAL_PREFIXES)
+                and entrypoint != root / "quwoquan_ops/cli/stackctl.py"
+            ):
+                issues.append(
+                    f"{location}: internal environment runner must be "
+                    f"entered through stackctl {script_path}"
+                )
+                continue
             if not (root / script_path).is_file():
                 issues.append(f"{location}: script does not exist {script_path}")
     script_sources = _managed_script_sources(root)
@@ -183,6 +208,16 @@ def entrypoint_script_path_issues(root: Path = ROOT) -> list[str]:
             issues.append(
                 f"{source.relative_to(root)}:{line_number}: "
                 f"script does not exist {script_path}"
+            )
+    for source in _reference_evidence_sources(root):
+        text = source.read_text(encoding="utf-8")
+        for start, script_path in _iter_script_path_matches(root, source, text):
+            if (root / script_path).is_file():
+                continue
+            line_number = text.count("\n", 0, start) + 1
+            issues.append(
+                f"{source.relative_to(root)}:{line_number}: "
+                f"documented/test script does not exist {script_path}"
             )
     return sorted(set(issues))
 

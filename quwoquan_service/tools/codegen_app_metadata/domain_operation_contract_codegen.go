@@ -119,6 +119,8 @@ const sharedDomainOperationTypesImport = "../generated/shared_operation_types.g.
 
 const sharedRealtimeEventCatalogImport = "../generated/realtime/realtime_event_catalog.g.dart"
 
+const packageInternalIntersectionContractVocabularyImport = "../generated/recommendation/intersection_contract_vocabulary.g.dart"
+
 func loadCanonicalSharedValueModels() (map[string]requestModelSpec, error) {
 	if activeMetadataSource == nil {
 		return nil, fmt.Errorf("ContractGraph is not initialized")
@@ -577,8 +579,8 @@ func finalizeDomainOperationContractSpec(
 					err,
 				)
 			}
-			spec.ExternalImports[intersectionContractVocabularyImport] = struct{}{}
-			spec.ExternalExports[intersectionContractVocabularyImport] = struct{}{}
+			spec.ExternalImports[packageInternalIntersectionContractVocabularyImport] = struct{}{}
+			spec.ExternalExports[packageInternalIntersectionContractVocabularyImport] = struct{}{}
 			delete(spec.EnumMembers, enumRef)
 			continue
 		}
@@ -1130,7 +1132,7 @@ func renderDomainOperationContract(
 		output.WriteString("  }\n")
 		output.WriteString("}\n\n")
 	}
-	renderDomainDecoderHelpers(&output, spec.Models)
+	renderDomainDecoderHelpers(&output, spec.Models, len(responseNames) > 0)
 	return output.String(), nil
 }
 
@@ -1545,6 +1547,7 @@ func responseFieldEncodeExpression(field fieldDef, access string) (string, error
 func renderDomainDecoderHelpers(
 	output *strings.Builder,
 	models map[string]requestModelSpec,
+	topLevelObjectDecoder bool,
 ) {
 	used := map[string]bool{}
 	var record func(field fieldDef)
@@ -1602,7 +1605,8 @@ func renderDomainDecoderHelpers(
 			record(field)
 		}
 	}
-	output.WriteString(`Map<String, Object?> _requiredObject(Object? value, String path) {
+	if used["object"] || topLevelObjectDecoder {
+		output.WriteString(`Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
     throw FormatException('$path must be an object');
   }
@@ -1616,7 +1620,10 @@ func renderDomainDecoderHelpers(
   }
   return result;
 }
+`)
+	}
 
+	output.WriteString(`
 void _rejectUnknownFields(
   Map<String, Object?> value,
   Set<String> allowed,

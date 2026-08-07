@@ -1,5 +1,5 @@
 // spec_ref: specs/feature-tree/product-ops-growth/outbound-share-distribution/share-attribution-and-token/spec.md#gwt-001
-// readiness_case: create-outbound-share-local
+// readiness_case: append-outbound-share-fact-local
 package domain_test
 
 import (

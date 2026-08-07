@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from content.execution.runtime_evidence_contract import (
+from content.execution.runtime_evidence.contract import (
     RuntimeEvidenceIdentity,
     canonical_digest,
     file_digest,
 )
-from content.execution.runtime_evidence_fault_adapters import (
+from content.execution.runtime_evidence.fault_adapters import (
     PROTECTED_OPERATION_FAULTS,
     PROVIDER_TEST_HOOK_FAULTS,
     FaultAdapterBlocker,
@@ -24,7 +24,7 @@ from content.execution.runtime_evidence_fault_adapters import (
     provider_test_hook_fault_adapter,
     unavailable_fault_adapter,
 )
-from content.execution.runtime_evidence_faults import FaultActionTarget
+from content.execution.runtime_evidence.faults import FaultActionTarget
 
 _DIGEST = "sha256:" + "a" * 64
 _IDENTITY = RuntimeEvidenceIdentity(
@@ -258,7 +258,7 @@ def test_callback_invocation_requires_outer_request_identity() -> None:
 def test_adapter_has_no_shell_endpoint_or_environment_selector_surface() -> None:
     source_path = (
         Path(__file__).parents[3]
-        / "scripts/content/execution/runtime_evidence_fault_adapters.py"
+        / "scripts/content/execution/runtime_evidence/fault_adapters.py"
     )
     tree = ast.parse(source_path.read_text(encoding="utf-8"))
     imported = {

@@ -47,6 +47,7 @@ void main() {
         client: _client((request) {
           captured = request;
           return <String, Object?>{
+            ..._detailCounters(),
             'postId': 'post-1',
             'contentType': 'article',
             'authorDisplayName': '内容作者',
@@ -54,12 +55,11 @@ void main() {
             'title': '正文标题',
             'body': '正文',
             'articleMarkdown': '# 正文标题',
-            'contentVertical': 'retired-travel-bucket',
+            'contentVertical': 'photography',
             'articleRenderProfile': <String, Object?>{
               'paperTexture': 'inkGreen',
-              'contentVertical': 'retired-travel-bucket',
+              'contentVertical': 'photography',
             },
-            'status': 'published',
           };
         }),
         invocationContext: _contextFor(AppUiSurfaces.workBrowser),
@@ -93,6 +93,7 @@ void main() {
       final adapter = RemoteContentPostReaderAdapter(
         client: _client((_) {
           return <String, Object?>{
+            ..._detailCounters(),
             'postId': 'fixture_video_001',
             'contentType': 'video',
             'contentIdentity': 'work',
@@ -100,7 +101,7 @@ void main() {
             'authorDisplayName': '契约旅行家',
             'authorAvatarUrl':
                 'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
-            'imageUrls': <String>[
+            'mediaUrls': <String>[
               'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
             ],
             'coverUrl':
@@ -112,7 +113,6 @@ void main() {
             'width': 1280,
             'height': 720,
             'durationMs': 45000,
-            'status': 'published',
             'mediaItems': <Object?>[
               <String, Object?>{
                 'kind': 'video',
@@ -217,9 +217,13 @@ void main() {
                 'contentType': 'image',
                 'authorId': 'author-1',
                 'mediaUrls': <String>['https://example.test/p.jpg'],
+                'likeCount': 0,
+                'commentCount': 0,
+                'shareCount': 0,
               },
             ],
             'nextCursor': 'cursor-2',
+            'hasMore': true,
           };
         }),
         invocationContext: _contextFor(AppUiSurfaces.userProfile),
@@ -260,6 +264,19 @@ void main() {
     });
   });
 }
+
+/// ContentPostDetailSlice 的 canonical 必填计数与生命周期字段：decoder
+/// fail-closed，缺一即 invalid_json，这里统一给最小合法值。
+Map<String, Object?> _detailCounters() => <String, Object?>{
+  'status': 'published',
+  'visibility': 'public',
+  'likeCount': 0,
+  'commentCount': 0,
+  'shareCount': 0,
+  'viewCount': 0,
+  'createdAt': '2026-08-01T00:00:00Z',
+  'updatedAt': '2026-08-01T00:00:00Z',
+};
 
 GeneratedCloudOperationClient _client(
   Map<String, Object?> Function(http.Request request) responseFor,

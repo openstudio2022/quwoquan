@@ -17,9 +17,9 @@ if str(DATA_ROOT / "scripts") not in sys.path:
 from content.execution.controller.metrics import (  # noqa: E402
     _reliabletask_accepted_throughput,
 )
-from content.execution import reliabletask_fleet  # noqa: E402
-from content.execution.reliabletask_fleet import (  # noqa: E402
-    ReliableTaskFleetReport,
+from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+from content.execution.queue.reliabletask.report import ReliableTaskFleetReport  # noqa: E402
+from content.execution.queue.reliabletask.transport import (  # noqa: E402
     ReliableTaskFleetTransport,
 )
 from core.control_types import QueueJobStage  # noqa: E402
@@ -254,7 +254,7 @@ def test_failed_publish_fleet_report_remains_projectable(
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda: (["fleet"], tmp_path),
+        lambda _execution_id: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -334,7 +334,7 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda: (["fleet"], tmp_path),
+        lambda _execution_id: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -422,7 +422,7 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda: (["fleet"], tmp_path),
+        lambda _execution_id: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -503,7 +503,11 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
         },
     )
     monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
-    monkeypatch.setattr(reliabletask_fleet, "_fleet_command", lambda: (["fleet"], tmp_path))
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_command",
+        lambda _execution_id: (["fleet"], tmp_path),
+    )
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_agent_python",

@@ -5,6 +5,12 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/content_media_object_uploader.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+
+/// 媒体数据面 client 的测试装配：与 `mediaDataPlaneHttpClientProvider` 同形，
+/// 只把最内层传输替换成 object 级 typed double。
+CloudHttpClient _dataPlaneClient(http.Client inner) =>
+    CloudHttpClient(client: inner);
 
 void main() {
   const digest =
@@ -16,7 +22,7 @@ void main() {
     () async {
       final client = _RecordingStreamClient();
       final uploader = RemoteContentMediaObjectUploader(
-        client: client,
+        client: _dataPlaneClient(client),
         uploadBaseUrl: 'https://upload.example.test',
       );
 
@@ -41,7 +47,7 @@ void main() {
     () async {
       final client = _RecordingStreamClient(statusCode: 503);
       final uploader = RemoteContentMediaObjectUploader(
-        client: client,
+        client: _dataPlaneClient(client),
         uploadBaseUrl: 'https://upload.example.test',
       );
 
@@ -76,7 +82,7 @@ void main() {
     '403 remains a storage failure instead of an assumed expired grant',
     () async {
       final uploader = RemoteContentMediaObjectUploader(
-        client: _RecordingStreamClient(statusCode: 403),
+        client: _dataPlaneClient(_RecordingStreamClient(statusCode: 403)),
         uploadBaseUrl: 'https://upload.example.test',
       );
 
@@ -109,7 +115,7 @@ void main() {
 
   test('transport exceptions use the same canonical storage failure', () async {
     final uploader = RemoteContentMediaObjectUploader(
-      client: _FailingStreamClient(),
+      client: _dataPlaneClient(_FailingStreamClient()),
       uploadBaseUrl: 'https://upload.example.test',
     );
 
@@ -138,7 +144,7 @@ void main() {
     () async {
       final client = _RecordingStreamClient();
       final uploader = RemoteContentMediaObjectUploader(
-        client: client,
+        client: _dataPlaneClient(client),
         uploadBaseUrl: 'https://upload.example.test',
       );
 

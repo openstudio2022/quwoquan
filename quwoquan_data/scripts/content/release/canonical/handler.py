@@ -8,6 +8,9 @@ from pathlib import Path
 
 from content.release.canonical.acceptance_lease import handle_acceptance_lease
 from content.release.canonical.baseline_release import build_empty_baseline_release
+from content.release.canonical.build_lookup_indexes import (
+    build_publish_lookup_indexes,
+)
 from content.release.canonical.campaign_release import (
     CampaignReleaseError,
     CampaignReleaseRoots,
@@ -31,6 +34,9 @@ from content.release.canonical.object_transaction_contract import ObjectTransact
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
 from content.release.canonical.release_identity_incident import (
     record_release_identity_incident,
+)
+from content.release.canonical.release_identity_incident_legacy_migration import (
+    migrate_legacy_release_identity_incident,
 )
 from content.release.canonical.release_identity_recovery import (
     write_deterministic_identity_attestation_recovery,
@@ -103,6 +109,32 @@ def handle_release_identity_incident(args: argparse.Namespace) -> None:
     )
 
 
+def handle_release_identity_incident_legacy_migration(
+    args: argparse.Namespace,
+) -> None:
+    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
+    try:
+        document, path = migrate_legacy_release_identity_incident(
+            source_incident_path=Path(args.incident).expanduser(),
+            source_incident_file_sha256=str(args.incident_sha256),
+            output_root=output_root,
+        )
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise SystemExit(
+            f"[release identity-incident-migrate-legacy] GATE_BLOCK {exc}"
+        ) from exc
+    print(
+        json.dumps(
+            {
+                **document,
+                "migrationReceiptRef": path.relative_to(output_root).as_posix(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 def _labeled_evidence(values: list[str]) -> tuple[tuple[str, Path], ...]:
     rows: list[tuple[str, Path]] = []
     for raw in values:
@@ -169,6 +201,39 @@ def handle_baseline_release(args: argparse.Namespace) -> None:
         ValueError,
     ) as exc:
         raise SystemExit(f"[release baseline] GATE_BLOCK {exc}") from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_build_lookup_indexes(args: argparse.Namespace) -> None:
+    release_id = str(args.release_id)
+    publish_root = Path(args.publish_root or PUBLISH_ROOT)
+    release_root = Path(args.release_root or (OUTPUT_ROOT / "data/releases"))
+    try:
+        with (
+            release_operation_guard(
+                lock_root=release_operation_lock_root(release_root),
+                release_ids=(release_id,),
+                exclusive_releases=True,
+            ),
+            canonical_publish_lock(publish_root),
+        ):
+            report = build_publish_lookup_indexes(
+                release_id=release_id,
+                canonical_root=publish_root,
+                release_root=release_root,
+                taxonomy_root=(
+                    Path(args.taxonomy_root) if args.taxonomy_root else None
+                ),
+            )
+    except (
+        FileExistsError,
+        FileNotFoundError,
+        OSError,
+        ReleaseOperationConflict,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release build-lookups] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -364,6 +429,21 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     identity_incident.add_argument("--output-root")
     identity_incident.set_defaults(handler=handle_release_identity_incident)
 
+    legacy_incident_migration = commands.add_parser(
+        "identity-incident-migrate-legacy",
+        help="将前 provenance 合同的原始 incident 投影为 source-bound 当前契约",
+    )
+    legacy_incident_migration.add_argument("--incident", required=True)
+    legacy_incident_migration.add_argument(
+        "--incident-sha256",
+        required=True,
+        help="迁移前人工核对的原始 incident 精确文件摘要",
+    )
+    legacy_incident_migration.add_argument("--output-root")
+    legacy_incident_migration.set_defaults(
+        handler=handle_release_identity_incident_legacy_migration
+    )
+
     identity_recovery = commands.add_parser(
         "identity-recovery",
         help="按冻结 JSON 序列化合同写确定性 attestation 恢复物与 provenance",
@@ -402,6 +482,16 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     baseline.add_argument("--publish-root")
     baseline.add_argument("--release-root")
     baseline.set_defaults(handler=handle_baseline_release)
+
+    build_lookups = commands.add_parser(
+        "build-lookups",
+        help="为 immutable release 生成 create-once first-consumer lookup indexes",
+    )
+    build_lookups.add_argument("--release-id", required=True)
+    build_lookups.add_argument("--publish-root")
+    build_lookups.add_argument("--release-root")
+    build_lookups.add_argument("--taxonomy-root")
+    build_lookups.set_defaults(handler=handle_build_lookup_indexes)
 
     discard = commands.add_parser(
         "discard", help="删除无活跃写入的可重跑 release 输出及其环境证据"

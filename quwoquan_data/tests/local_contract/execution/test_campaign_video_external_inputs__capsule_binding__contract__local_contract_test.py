@@ -6,10 +6,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from content.execution.campaign_external_input_runtime import (
+from content.execution.campaign.external_input_runtime import (
     ExternalInputRuntimeContext,
 )
-from content.execution.campaign_external_inputs import (
+from content.execution.campaign.external_inputs import (
     PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     CampaignExternalInputError,
     bind_external_input_refs,

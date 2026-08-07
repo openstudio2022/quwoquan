@@ -7,9 +7,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from content.execution import runtime_evidence_cli as cli
-from content.execution.campaign_workspace import CampaignRuntimePaths
-from content.execution.runtime_evidence_contract import (
+from content.execution.runtime_evidence import cli as cli
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.runtime_evidence.contract import (
     RuntimeEvidenceError,
     RuntimeEvidenceIdentity,
 )

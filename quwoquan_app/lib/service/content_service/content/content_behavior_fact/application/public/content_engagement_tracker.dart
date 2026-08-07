@@ -120,7 +120,11 @@ class ContentEngagementTracker {
     );
   }
 
-  /// Called to update progress (page flip, image swipe, video progress).
+  /// Advances the pre-append measurement session's monotonic high-water marks
+  /// (page flip, image swipe, video progress).
+  ///
+  /// This never rewrites an already-appended fact: the session is local, ends
+  /// with a single append, and only moves each mark forward.
   void trackContentProgress(
     String contentId, {
     int? currentPage,

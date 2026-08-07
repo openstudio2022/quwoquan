@@ -142,7 +142,7 @@ def test_source_failure_is_absorbed_when_oversample_still_covers_quota(
         return []
 
     monkeypatch.setattr(
-        "content.execution.reliabletask_jobs.prepare_reliable_author_jobs",
+        "content.execution.queue.reliabletask.jobs.prepare_reliable_author_jobs",
         _prepare,
     )
     result = checkpoints._checkpoint_build_homepage(ctx)

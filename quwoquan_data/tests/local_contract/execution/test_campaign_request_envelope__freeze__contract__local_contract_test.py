@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-import content.execution.campaign_request_envelope as envelopes
+import content.execution.campaign.request_envelope as envelopes
 import pytest
-from content.execution import scale_promotion
-from content.execution.campaign_scale import CampaignScaleError, resolve_campaign_scale
-from core.io import write_json
+from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.scale import promotion as scale_promotion
+from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
@@ -305,9 +306,53 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     "denominator": 100,
                     "rate": 0.9,
                 },
+                "videoPopularity": {
+                    "statistical": True,
+                    "nonBlocking": True,
+                    "signalAvailability": [
+                        {
+                            "signal": signal,
+                            "numerator": 10,
+                            "denominator": 10,
+                            "rate": 1.0,
+                        }
+                        for signal in ("play", "like", "comment", "share", "favorite")
+                    ],
+                    "rankingCoverage": {
+                        "numerator": 10,
+                        "denominator": 10,
+                        "rate": 1.0,
+                    },
+                    "observations": [
+                        {
+                            "objectRef": "posts/video/example",
+                            "assetId": "video-asset-1",
+                            "playCount": 100,
+                            "likeCount": 10,
+                            "commentCount": 2,
+                            "shareCount": 1,
+                            "favoriteCount": 3,
+                            "observedAt": "2026-08-05T00:00:00Z",
+                            "comparisonBucket": {
+                                "provider": "fixture",
+                                "topic": "travel",
+                                "timeBucket": "2026-W32",
+                                "candidateCount": 10,
+                            },
+                            "popularityScore": 451,
+                            "popularityPercentile": 1.0,
+                            "rankingEligible": True,
+                            "ineligibleReason": "",
+                        }
+                    ],
+                },
                 "automaticRecoveryRate": {
-                    "numerator": 19,
-                    "denominator": 20,
+                    "statistical": True,
+                    "nonBlocking": True,
+                    "status": "MEASURED",
+                    "eligibleCount": 20,
+                    "automaticCount": 19,
+                    "targetRate": 0.95,
                     "rate": 0.95,
                 },
                 "firstPassRate": {
@@ -341,7 +386,6 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "fourLaneLongestContinuousOverlapSeconds": 3600,
             "allSemanticJobsTerminalAt": "2026-08-05T01:00:00Z",
             "terminalResidualSampleAt": "2026-08-05T01:01:00Z",
-            "automaticRecoveryStatus": "MEASURED",
             "campaignEvidenceRef": "data/local/campaign/evidence.json",
             "campaignEvidenceDigest": "sha256:" + "1" * 64,
             "resourceSoakEvidenceRef": "data/local/campaign/resource-soak.json",
@@ -461,6 +505,23 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
             region_ref="china",
             repo_root=repo,
             day="20260731",
+        )
+
+
+def test_campaign_envelope_rejects_partial_explicit_target_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = Path(__file__).resolve().parents[4]
+    _patch_envelope_deps(monkeypatch)
+
+    with pytest.raises(ValueError, match="at least the governed quota"):
+        envelopes.build_envelope(
+            scale="M2",
+            carrier="homepage",
+            region_ref="china",
+            target_names=("杭州西湖",),
+            repo_root=repo,
+            day="20260807",
         )
 
 
@@ -590,6 +651,37 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
             predecessor_execution_id=(
                 "20260805--travel-video-m3--china--scale-001"
             ),
+        )
+
+
+def test_campaign_envelope_freeze_rejects_receipt_outside_frozen_at(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = Path(__file__).resolve().parents[4]
+    _patch_envelope_deps(monkeypatch)
+    preflight_root = tmp_path / "semantic-output"
+    preflight_path, _binding = ready_semantic_preflight(
+        "cursor_auto",
+        output_root=preflight_root,
+    )
+    receipt = read_json(preflight_path)
+    outside = (
+        datetime.fromisoformat(str(receipt["validUntil"]).replace("Z", "+00:00"))
+        + timedelta(seconds=1)
+    ).isoformat()
+    monkeypatch.setattr(envelopes, "_utc_now", lambda: outside)
+
+    with pytest.raises(ValueError, match="admission timestamp.*validity window"):
+        envelopes.build_envelope(
+            scale="M3",
+            carrier="image",
+            region_ref="china",
+            repo_root=repo,
+            day="20260805",
+            semantic_selection_id="cursor_auto",
+            semantic_preflight_receipt=preflight_path,
+            semantic_preflight_output_root=preflight_root,
         )
 
 

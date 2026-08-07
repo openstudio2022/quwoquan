@@ -8,15 +8,23 @@ import json
 import sys
 from pathlib import Path
 
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+from _common.paths import APP_ROOT, REPO_ROOT
+
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from quwoquan_ops.cli.lib.dev_up import build_device_report, discover_flutter_devices
 
 
-DEFAULT_APP_DIR = REPO_ROOT / "quwoquan_app"
+DEFAULT_APP_DIR = APP_ROOT
 
 
 def parse_args() -> argparse.Namespace:

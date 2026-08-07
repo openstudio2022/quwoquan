@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -43,6 +42,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_share_sheet.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
   const HomepageDetailPage({
@@ -287,7 +287,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           }
           // 介绍是详情页的可降级附属模块；失败不得遮蔽主页主档、壳层与对象 Bundle。
           unawaited(
-            AppExceptionTelemetryService.instance.recordHandledException(
+            ref.read(exceptionTelemetryPortProvider).recordHandledException(
               source: 'entity.homepage_detail.load_introduction',
               error: error,
               stackTrace: stackTrace,
@@ -369,7 +369,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       return state.wishlisted;
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'entity.homepage_detail.load_wishlist_state',
           error: error,
           stackTrace: stackTrace,
@@ -412,7 +412,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     } catch (error, stackTrace) {
       // best-effort：仅影响维护入口的 owner 判定，不阻断公开详情。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'entity.homepage_detail.load_active_persona_context',
           error: error,
           stackTrace: stackTrace,

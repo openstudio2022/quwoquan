@@ -2,7 +2,11 @@
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "quwoquan_app").is_dir() and (parent / "quwoquan_service").is_dir()
+)
 CONTRACT_ROOT = (
     ROOT / "quwoquan_service/services/content-service/contracts"
 )
@@ -13,7 +17,7 @@ media_asset_fields = (
 ).read_text()
 post_service = (CONTRACT_ROOT / "content/post/operations.yaml").read_text()
 original_access_service = (
-    CONTRACT_ROOT / "media/media_original_access_fact/operations.yaml"
+    CONTRACT_ROOT / "media/original_access_quota/operations.yaml"
 ).read_text()
 
 required_post_fields = (
@@ -41,8 +45,8 @@ missing.extend(
 )
 if "SubmitPostPublication" not in post_service:
     missing.append("SubmitPostPublication")
-if "RequestOriginalImageAccess" not in original_access_service:
-    missing.append("RequestOriginalImageAccess")
+if "ReserveOriginalImageAccessGrant" not in original_access_service:
+    missing.append("ReserveOriginalImageAccessGrant")
 if missing:
     print("[media-delivery-registry] FAIL missing: " + ", ".join(missing))
     sys.exit(2)

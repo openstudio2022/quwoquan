@@ -4,9 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from content.execution import campaign_external_inputs
-from content.execution import campaign_request_envelope as envelopes
-from content.execution import pre_acquisition_handoff as handoffs
+from content.execution.campaign import external_inputs as campaign_external_inputs
+from content.execution.campaign import request_envelope as envelopes
+from content.execution.controller.execute import pre_acquisition_handoff as handoffs
 from content.source import professional_image_acquisition as image_acquisition
 from content.source import professional_video_acquisition as video_acquisition
 from core.io import write_json

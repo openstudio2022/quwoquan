@@ -23,17 +23,19 @@ from content.execution.context import ExecutionContext  # noqa: E402
 from content.execution.queue.core import _read_job, _write_job  # noqa: E402
 from content.execution.queue.jobs import enqueue_ref_job  # noqa: E402
 from content.execution.queue.model import QueueLease  # noqa: E402
-from content.execution.reliabletask_fleet import (  # noqa: E402
-    ReliableTaskFleetOutcome,
-    ReliableTaskFleetReport,
+from content.execution.queue.reliabletask.fleet import (  # noqa: E402
     _has_audited_remote_recovery,
     fleet_batch_timeout_seconds,
 )
-from content.execution.reliabletask_worker import (  # noqa: E402
+from content.execution.queue.reliabletask.report import (  # noqa: E402
+    ReliableTaskFleetOutcome,
+    ReliableTaskFleetReport,
+)
+from content.execution.queue.reliabletask.worker import (  # noqa: E402
     _recover_completed_author_outcome,
 )
 from content.execution.workspace import execution_root  # noqa: E402
-from content.execution.recipe import _runtime_preflight_argv  # noqa: E402
+from content.execution.planning.recipe.model import _runtime_preflight_argv  # noqa: E402
 from content.templates.registry import TemplateRegistry  # noqa: E402
 from core.control_types import (  # noqa: E402
     AgentFailureKind,
@@ -148,7 +150,7 @@ def test_local_controller_delegates_declared_job_to_service_fleet(monkeypatch) -
             ),
         )
 
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
 
@@ -249,7 +251,7 @@ def test_reliabletask_resume_accepts_receipt_for_only_remaining_jobs__reliabilit
             ),
         )
 
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
@@ -314,7 +316,7 @@ def test_reliabletask_fleet__waits_for_nonterminal_remote_jobs__reliability__loc
             ),
         )
 
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
@@ -372,7 +374,7 @@ def test_reliabletask_fleet__projects_terminal_worker_failure__reliability__loca
             ),
         )
 
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
@@ -387,6 +389,82 @@ def test_reliabletask_fleet__projects_terminal_worker_failure__reliability__loca
     assert stored.attempt == job.max_attempts
     assert stored.last_issue is not None
     assert "failureCode=RELIABLETASK.WORKER.handler_failed" in stored.last_issue.message
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_reliabletask_late_remote_dead_preserves_verified_local_success(
+    monkeypatch,
+) -> None:
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(EXECUTION_ID)
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=EXECUTION_ID,
+        entity_ids=("测试实体甲",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    job = enqueue_ref_job(
+        EXECUTION_ID,
+        OBJECT_REF,
+        "author",
+        mutex_key=OBJECT_REF,
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.HOMEPAGE.value,
+            "carrier": ContentType.HOMEPAGE.value,
+            "entityRef": OBJECT_REF,
+            "sourceRevision": "sha256:" + ("e" * 64),
+            "contentObjectDir": "entities/地点/景区/测试实体甲",
+        },
+    )
+
+    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+        assert workers == ctx.max_workers
+        assert completion_grace_seconds > 0
+        stored = _read_job(EXECUTION_ID, job.job_id)
+        _write_job(
+            stored.with_timing(
+                QueueTimelineEvent.SUCCEEDED,
+                at="2026-08-07T11:28:18Z",
+                state=QueueJobState.SUCCEEDED,
+                lease=QueueLease(),
+            )
+        )
+        return ReliableTaskFleetReport(
+            total=1,
+            succeeded=0,
+            outcomes=(
+                ReliableTaskFleetOutcome(
+                    job_id=job.job_id,
+                    status="dead",
+                    attempts=job.max_attempts,
+                    failure_code="RELIABLETASK.WORKER.handler_failed",
+                ),
+            ),
+        )
+
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.POST_AUTHOR,
+    )
+
+    stored = _read_job(EXECUTION_ID, job.job_id)
+    reconciliation = stored.timings[-1].to_document()
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert stored.state is QueueJobState.SUCCEEDED
+    assert stored.last_issue is None
+    assert reconciliation["event"] == QueueTimelineEvent.RECONCILED.value
+    assert reconciliation["reason"] == "stale_remote_terminal_after_local_success"
+    assert reconciliation["remoteStatus"] == "dead"
+    assert reconciliation["remoteFailureCode"] == (
+        "RELIABLETASK.WORKER.handler_failed"
+    )
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
@@ -446,7 +524,7 @@ def test_failed_publish_receipt_is_a_batch_gate_not_environment_unavailability(
             ),
         )
 
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(

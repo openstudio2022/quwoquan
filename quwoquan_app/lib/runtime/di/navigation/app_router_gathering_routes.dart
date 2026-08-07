@@ -40,6 +40,10 @@ final gatheringCreateInitialValueProvider =
         semanticReason: 'gathering_host_authority_adapter_unavailable',
         port: 'GatheringHostAuthorityComposer',
       ),
+      // 装配缺口是 permanent/unavailable 的组合边界失败，不是瞬时故障。
+      // Riverpod 默认会对非 Error 抛出重试 10 次（指数退避到 6.4s），这里必须关掉，
+      // 否则路由每次进入都会空转重建并留下计时器。
+      retry: (_, _) => null,
     );
 
 const GatheringCreatePageCopy _gatheringCreateProductionCopy =

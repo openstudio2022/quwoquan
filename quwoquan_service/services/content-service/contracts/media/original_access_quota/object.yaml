@@ -1,0 +1,60 @@
+kind: aggregate_root
+description: 'viewer/asset/purpose 固定窗口内的原图访问额度聚合。
+
+  额度计数与 grant 绝对到期时间是它唯一的实例级不变式；MediaOriginalAccessFact 只保留决策审计，不再持有可变状态。
+
+  '
+identity:
+  fields:
+  - quotaId
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: none
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: mediaAsset
+  on_delete: retain
+  reference_fields:
+  - assetId
+  target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: viewer
+  on_delete: retain
+  reference_fields:
+  - viewerId
+  target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.content.original_access_quota.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+business_rules:
+- quotaId 只能由 viewerId、assetId、purpose 与窗口起点派生，客户端不得指定或猜测
+- 同一窗口内 grantCount 不得超过 maxGrants；超出即拒绝，且不得签发任何原图 URL
+- grant 的绝对到期时间在预留成功那一刻确定，重放同一 idempotencyKey 只返回原到期时间，禁止续期或刷新
+- 额度只能由本聚合的 Facade 在单次原子提交中变更；MediaOriginalAccessFact、HTTP adapter 与任何兄弟对象不得直写额度存储
+- 窗口过期由存储 TTL 自动清理；禁止通过重置计数、缩短窗口或重算窗口起点变相扩大额度
+lifecycle:
+  state_model: row_presence
+  active_condition: viewer/asset/purpose 的当前窗口存在额度行且 grantCount 小于 maxGrants
+  terminal_outcome: windowExpiresAt 到期后由存储 TTL 删除额度行，下一个窗口重新计数
+  optimistic_concurrency: store_commit
+  idempotency: command_key
+  ttl_field: windowExpiresAt

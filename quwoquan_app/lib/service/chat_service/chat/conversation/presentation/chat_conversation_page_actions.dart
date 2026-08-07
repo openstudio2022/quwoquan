@@ -7,8 +7,11 @@ abstract class _ChatConversationPageActionsState
   final ScrollController _scrollController = ScrollController();
   final FocusNode _inputFocusNode = FocusNode();
   final ImagePicker _imagePicker = ImagePicker();
-  final VoiceRecorder _voiceRecorder = VoiceRecorder(
+  // `late final` 让 recorder 在首次录音时才构造，此时 ConsumerState 的 ref
+  // 已可用，异常遥测端口由 ProviderScope 决定（测试可 override）。
+  late final VoiceRecorder _voiceRecorder = VoiceRecorder(
     maxDurationMs: kMaxRecordDurationMs + 1000,
+    telemetry: ref.read(exceptionTelemetryPortProvider),
   );
 
   void _updateSelection(VoidCallback action) => setState(action);
@@ -86,7 +89,7 @@ abstract class _ChatConversationPageActionsState
     } catch (error, stackTrace) {
       // best-effort：回退到 conversationId 作为标题，不阻断聊天；仍上报观测。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'chat.page.load_conversation_title',
           error: error,
           stackTrace: stackTrace,
@@ -110,7 +113,7 @@ abstract class _ChatConversationPageActionsState
     } catch (error, stackTrace) {
       // best-effort：仅影响关系能力展示，不阻断聊天主流程；仍上报观测。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'chat.page.load_other_participant',
           error: error,
           stackTrace: stackTrace,
@@ -129,7 +132,7 @@ abstract class _ChatConversationPageActionsState
     } catch (error, stackTrace) {
       // best-effort：维持空能力态，相关入口按默认隐藏处理；仍上报观测。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'chat.page.load_relationship_capability',
           error: error,
           stackTrace: stackTrace,
@@ -211,7 +214,7 @@ abstract class _ChatConversationPageActionsState
       }
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'chat.mention.resolve_role',
           error: error,
           stackTrace: stackTrace,

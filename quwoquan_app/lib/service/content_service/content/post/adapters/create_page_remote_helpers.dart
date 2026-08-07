@@ -71,9 +71,7 @@ String buildArticleMarkdownForPayload(CreateEditorState state) {
     tagRefs: tagRefs,
     entityRefs: entityRefs,
     visibility: state.settings.isPublic ? 'public' : 'private',
-    assistantUsePolicy: state.settings.assistantUsePolicy.trim().isNotEmpty
-        ? state.settings.assistantUsePolicy.trim()
-        : 'inherit',
+    assistantUsePolicy: state.settings.assistantUsePolicy,
     coverAssetId: cover.trim().isNotEmpty ? 'cover' : '',
     coverImageUrl: cover,
   );
@@ -607,7 +605,10 @@ _buildPostPublicationPayloadWithRemoteVideoMedia({
           ),
   );
 
-  basePayload['coverStrategy'] = selectedCover.coverStrategy;
+  // payload 是发布命令的 untyped 中转 map，最终经 `_optionalPayloadText` 变成
+  // canonical wire 字符串：这里必须写 wireName，否则会把 Dart 枚举的 toString
+  // （`MediaCoverStrategy.manual`）当成 coverStrategy 发给云侧。
+  basePayload['coverStrategy'] = selectedCover.coverStrategy.wireName;
   basePayload['coverFrameTimeMs'] = state.videoCoverTimeMs;
   if (state.videoDurationMs > 0) {
     basePayload['durationMs'] = state.videoDurationMs;
@@ -996,12 +997,9 @@ Visibility? _optionalPostVisibility(Object? raw) =>
 AssistantUsePolicy? _optionalAssistantUsePolicy(Object? raw) =>
     switch (_optionalPayloadText(raw)) {
       null => null,
-      'inherit' => AssistantUsePolicy.inherit,
-      'exclude' => AssistantUsePolicy.exclude,
-      final value => throw ArgumentError.value(
+      final value => AssistantUsePolicy.fromWire(
         value,
-        'assistantUsePolicy',
-        'unsupported',
+        'SubmitContentPostPublicationCommand.assistantUsePolicy',
       ),
     };
 

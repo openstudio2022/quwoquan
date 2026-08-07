@@ -43,10 +43,10 @@
 
 - 节点 spec 只登记稳定 UAT/DOM/SIT/GWT；测试或可执行治理门以 `spec_ref` 直接引用验收锚点。
 - 已关闭验收至少有一个真实、职责匹配且可运行的 `spec_ref`；未闭合验收由同节点 OPEN 明确完成判定。
-- App 三层测试按 `test/<layer>/<domain>/<context>/<object>` 与 production 对象同构；服务 local_contract/api_integration 按 `tests/<layer>/<context>/<object>` 同构。
+- App 三层测试按 `test/<layer>/service/<service>/<context>/<object>` 与 production 对象同构；服务 local_contract/api_integration 按 `tests/<layer>/<context>/<object>` 同构。
 - App 跨对象 Journey 只有两种 canonical 边界：`test/local_contract/journeys/<journey>/` 只容纳使用测试树 typed double、Provider 或 Widget 的本地跨对象 Journey 契约，测试文件使用 `__local_contract_test.*` 后缀；`test/user_acceptance/journeys/<journey>/` 只容纳使用 production Remote composition 的真实 Journey，测试文件使用 `__user_acceptance_test.*` 后缀。禁止创建 `api_integration/journeys`。
 - Journey 目录名必须为 `snake_case`，测试文件必须是 journey 目录的直接子文件，复用 helper 只能进入 `test/support`；路径存在只证明结构入口，不代表 Remote composition 已执行或通过。
-- `support` 只承载共享 harness、fixture factory 与 typed double 定义，不承载测试用例、业务断言或环境 App 可达的生产实现；对象 support 必须位于 `test/support/<domain>/<context>/<object>/`，真正横切的运行器、平台与边界 harness 只能位于 `test/support/runtime/`。
+- `support` 只承载共享 harness、fixture factory 与 typed double 定义，不承载测试用例、业务断言或环境 App 可达的生产实现；对象 support 必须位于 `test/support/service/<service>/<context>/<object>/`，真正横切的运行器、平台与边界 harness 只能位于 `test/support/runtime/`。
 - support 禁止建立 `repository_mock_reexports`、按框架/类型聚合的 `fakes/fixtures/cloud_services` 等跨对象桶；消费者必须直接 import 唯一对象 owner。普通 fixture、typed double、adapter 与 golden 禁止用 `Alpha*`、`alpha_*` 等部署环境名伪装环境证据，真实 Alpha/Beta/Gamma/Prod 验收只能由相应结果层 runner 绑定候选、Provider 与可信回执。
 - App、Service、Data、Ops 的 canonical 三层目录是唯一测试入口；旧 `ui/cloud/core/pages/patrol/quality` 测试大桶和其他迁移 allowance 不能成为长期合法路径。
 - 运行报告从测试代码、执行结果、环境和制品摘要实时生成，不提交覆盖清单或证据索引。

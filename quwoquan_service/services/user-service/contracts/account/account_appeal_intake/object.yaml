@@ -22,6 +22,20 @@ relationships:
   target_object: user.UserAccount
 local_identity_reasons:
   claimedCaseId: immutable Product Ops claim tuple component; Product Ops case is referenced only through the public claim contract and is not a User aggregate identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "审核与举报对象受 trust and safety 约束，禁止进入任何检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "审核与举报数据只对 trust and safety 角色开放，助手读取会泄露处置过程。"
 business_rules:
 - credential 只能由仍在有效期内、purpose=account_appeal 的已完成 AuthenticationChallenge 签发，身份必须解析到 active phone CredentialBinding
 - 签发和提交时 UserAccount 必须为 suspended；credential 与 intake 均绑定签发时的 authEpoch，账号恢复或安全代次变化后立即失效

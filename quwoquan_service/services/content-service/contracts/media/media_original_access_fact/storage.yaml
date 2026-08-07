@@ -31,23 +31,12 @@ collections:
       keys:
         idempotencyKey: 1
       unique: true
-  media_original_access_rate_limits:
-    entity: MediaOriginalAccessFact
-    role: rate_limit_lock
-    description: viewer/media/purpose 窗口的 hash 化额度保留；与原图审计事实同一 Mongo transaction 写入，TTL 后自动清理。
-    indexes:
-    - name: idx_media_original_access_rate_limit_expire
-      keys:
-        expiresAt: 1
-      expire_after_seconds: 0
 transaction:
   scope:
   - media_original_access_facts
   - media_original_access_receipts
-  - media_original_access_rate_limits
   isolation: mongo_transaction
   guarantees:
   - idempotency_digest
-  - viewer_media_purpose_rate_window_serialization
-  - audit_and_rate_reservation_atomic_commit
+  - audit_and_receipt_atomic_commit
 role: append_only

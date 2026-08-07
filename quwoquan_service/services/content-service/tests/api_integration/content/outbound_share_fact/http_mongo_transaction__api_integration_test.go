@@ -1,5 +1,5 @@
 // spec_ref: specs/feature-tree/product-ops-growth/outbound-share-distribution/share-attribution-and-token/spec.md#gwt-001
-// readiness_case: create-outbound-share-api
+// readiness_case: append-outbound-share-fact-api
 package outbound_share_fact_test
 
 import (
@@ -33,7 +33,7 @@ func (publishedPostReader) FindShareablePost(
 	}, true, nil
 }
 
-func TestCreateOutboundShareHTTPCommitsFactReceiptAndOutboxInRealMongoTransaction(t *testing.T) {
+func TestAppendOutboundShareFactHTTPCommitsFactReceiptAndOutboxInRealMongoTransaction(t *testing.T) {
 	runtime, err := testinfra.StartRealMongo(context.Background(), "outbound_share_fact_http")
 	if err != nil {
 		t.Fatalf("start real MongoDB: %v", err)
@@ -61,7 +61,7 @@ func TestCreateOutboundShareHTTPCommitsFactReceiptAndOutboxInRealMongoTransactio
 		)
 		request.Header.Set("Content-Type", "application/json")
 		request = request.WithContext(operation.WithContext(request.Context(), operation.Context{
-			OperationID:    "content.outbound_share_fact.CreateOutboundShare",
+			OperationID:    "content.outbound_share_fact.AppendOutboundShareFact",
 			RequestID:      "request-outbound-share",
 			TraceID:        "trace-outbound-share",
 			IdempotencyKey: "outbound-share-once",
@@ -81,7 +81,7 @@ func TestCreateOutboundShareHTTPCommitsFactReceiptAndOutboxInRealMongoTransactio
 			"outbound-share-once",
 		))
 		recorder := httptest.NewRecorder()
-		handler.CreateOutboundShare(recorder, request)
+		handler.AppendOutboundShareFact(recorder, request)
 		var response map[string]any
 		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 			t.Fatalf("decode response status=%d body=%s: %v", recorder.Code, recorder.Body.String(), err)
@@ -91,11 +91,11 @@ func TestCreateOutboundShareHTTPCommitsFactReceiptAndOutboxInRealMongoTransactio
 
 	firstStatus, first := perform()
 	if firstStatus != http.StatusCreated {
-		t.Fatalf("CreateOutboundShare status=%d response=%#v", firstStatus, first)
+		t.Fatalf("AppendOutboundShareFact status=%d response=%#v", firstStatus, first)
 	}
 	replayStatus, replay := perform()
 	if replayStatus != http.StatusCreated {
-		t.Fatalf("CreateOutboundShare replay status=%d response=%#v", replayStatus, replay)
+		t.Fatalf("AppendOutboundShareFact replay status=%d response=%#v", replayStatus, replay)
 	}
 	if first["eventId"] == "" || replay["eventId"] != first["eventId"] || replay["replayed"] != true {
 		t.Fatalf("idempotent replay mismatch first=%#v replay=%#v", first, replay)

@@ -204,7 +204,7 @@ def main() -> int:
             failures,
             f"{SMOKE.relative_to(ROOT)}: must declare CORE_READBACK_TARGET",
         )
-    if '"local-gamma"' not in smoke or "gamma_local_anonymous_runtime" not in smoke:
+    if '"local-gamma"' not in smoke or "runtime_anonymous_session" not in smoke:
         fail(
             failures,
             f"{SMOKE.relative_to(ROOT)}: runtime anonymous session must support local-gamma",

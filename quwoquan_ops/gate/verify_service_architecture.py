@@ -30,6 +30,7 @@ LAYERS = {"domain", "application", "adapters", "infrastructure"}
 KINDS = {
     "aggregate_root",
     "append_only_fact",
+    "process_manager",
     "projection",
     "external_reference",
     "runtime_session",
@@ -127,6 +128,14 @@ OBJECT_ACCESS_BY_KIND = {
         "queries": {"named_reader", "none"},
         "cross_context": {"event_only", "public_contract_only"},
     },
+    # 长流程编排器（saga）的命令面是 process_facade，不复用 aggregate_facade：
+    # 调用方推进/取消/恢复的是流程，不是聚合状态。queries 的收紧条件见
+    # PROCESS_MANAGER_PUBLIC_QUERY_ACCESS。
+    "process_manager": {
+        "commands": "process_facade",
+        "queries": {"named_reader", "none"},
+        "cross_context": {"public_contract_only", "event_only"},
+    },
     "projection": {
         "commands": "none",
         "queries": "named_reader",
@@ -143,9 +152,15 @@ OBJECT_ACCESS_BY_KIND = {
         "cross_context": "public_contract_only",
     },
 }
+#: 经公开合同暴露的 process_manager 必须给出具名状态读取面：外部调用方需要能查
+#: 进度与终态。只经事件参与的内部 saga（cross_context=event_only）没有外部调用方，
+#: 可以没有 reader。与 Go 侧 validate.validateObjectAccess 的 process_manager 分支同源。
+PROCESS_MANAGER_PUBLIC_QUERY_ACCESS = "named_reader"
 OBJECT_VERSION_SOURCE_BY_KIND = {
     "aggregate_root": {"field", "store_commit"},
     "append_only_fact": {"immutable"},
+    # saga 的进度真相是 checkpoint，不是聚合版本。
+    "process_manager": {"checkpoint"},
     "projection": {"checkpoint"},
     "runtime_session": {"session"},
     "external_reference": {"external"},
@@ -153,6 +168,9 @@ OBJECT_VERSION_SOURCE_BY_KIND = {
 RUNTIME_ENTRYPOINT_KIND_BY_OBJECT_KIND = {
     "aggregate_root": set(),
     "append_only_fact": {"subscription", "internal_port"},
+    # 与 aggregate_root 同口径：事件消费入口经 object.yaml#lifecycle.event_consumers
+    # 声明，不再走 operations.yaml#runtime_entrypoints。
+    "process_manager": set(),
     "projection": {"projector"},
     "runtime_session": {"middleware"},
     "external_reference": {"external_port"},
@@ -347,6 +365,16 @@ def object_contract_semantic_issues(document: dict[str, Any]) -> list[str]:
                 f"kind={kind} requires access.{field} in {sorted(allowed)}, "
                 f"got {actual!r}"
             )
+    if (
+        kind == "process_manager"
+        and access.get("cross_context") != "event_only"
+        and access.get("queries") != PROCESS_MANAGER_PUBLIC_QUERY_ACCESS
+    ):
+        issues.append(
+            "kind=process_manager exposed through a public contract requires "
+            f"access.queries={PROCESS_MANAGER_PUBLIC_QUERY_ACCESS!r} so callers can "
+            f"read process state, got {access.get('queries')!r}"
+        )
 
     business_rules = document.get("business_rules")
     if not isinstance(business_rules, list) or not business_rules:
@@ -1332,6 +1360,9 @@ class Verification:
         required_layers = {
             "aggregate_root": {"domain", "application", "infrastructure"},
             "append_only_fact": {"domain", "application", "infrastructure"},
+            # saga 三层缺一不可：domain 放状态机与补偿规则，application 放编排，
+            # infrastructure 放 checkpoint 持久化。
+            "process_manager": {"domain", "application", "infrastructure"},
             "projection": {"application", "infrastructure"},
             "runtime_session": {"domain", "application", "infrastructure"},
         }
@@ -1909,7 +1940,7 @@ class Verification:
     def run_subgates(self) -> None:
         commands = [
             (
-                ["bash", "quwoquan_service/scripts/runtime/verify_service_config_layout.sh"],
+                ["bash", "quwoquan_service/scripts/runtime/packaging/verify_service_config_layout.sh"],
                 "service config ownership",
             ),
             (

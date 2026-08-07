@@ -11,9 +11,14 @@ import pytest
 DATA_ROOT = next(
     parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data"
 )
+REPO_ROOT = DATA_ROOT.parent
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from quwoquan_ops.gate import verify_output_layout as repo_output_gate  # noqa: E402
 
 from governance import output_layout_migration  # noqa: E402
 from governance import protected_quarantine_evidence as evidence  # noqa: E402
@@ -42,6 +47,9 @@ def _quarantine(
     policies = root / "package/services/content/resources/common/policies"
     policies.mkdir(parents=True)
     (policies / "admission.yaml").write_bytes(b"mode: historical\n")
+    config = root / "package/services/content/config"
+    config.mkdir(parents=True)
+    (config / "config.yaml").write_bytes(b"runtime: historical\n")
     version = root / "package/legal/2026-07"
     version.mkdir(parents=True)
     (version / "terms.txt").write_bytes(b"frozen evidence\n")
@@ -81,8 +89,8 @@ def test_receipt_binds_every_file_directory_and_internal_symlink(tmp_path: Path)
     assert payload["reusableSourceTruthAllowed"] is False
     assert payload["migrationSourceRef"] == "quarantine"
     assert payload["migrationDestinationRef"] == "local/workspace/quarantine"
-    assert payload["migrationEntryFileCount"] == 2
-    assert payload["fileCount"] == 2
+    assert payload["migrationEntryFileCount"] == 3
+    assert payload["fileCount"] == 3
     assert payload["symlinkCount"] == 1
     assert payload["files"] == sorted(payload["files"], key=lambda item: item["path"])
     assert all(str(item["sha256"]).startswith("sha256:") for item in payload["files"])
@@ -99,6 +107,7 @@ def test_receipt_binds_every_file_directory_and_internal_symlink(tmp_path: Path)
     assert validated == payload
     assert validated_root == quarantine.resolve()
     assert output_gate._output_source_truth_issues(output) == []
+    assert repo_output_gate.output_layout_issues(output.parent) == []
 
 
 def test_same_size_tree_mutation_cannot_be_reprotected(tmp_path: Path) -> None:
@@ -133,6 +142,13 @@ def test_same_size_tree_mutation_cannot_be_reprotected(tmp_path: Path) -> None:
     issues = output_gate._output_source_truth_issues(output)
     assert any("invalid protected quarantine evidence" in issue for issue in issues)
     assert any("reusable source truth is forbidden" in issue for issue in issues)
+    repo_issues = repo_output_gate.output_layout_issues(output.parent)
+    assert any("invalid protected quarantine evidence" in issue for issue in repo_issues)
+    assert any("reusable source truth is forbidden" in issue for issue in repo_issues)
+    assert any(
+        "deployment configuration, TLS or secret material" in issue
+        for issue in repo_issues
+    )
 
 
 def test_reason_change_cannot_issue_second_receipt_for_same_tree(tmp_path: Path) -> None:

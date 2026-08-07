@@ -118,7 +118,7 @@ def publishable_video_review_receipt(
             "popularityScore": 9.2,
             "popularityPercentile": 1.0,
             "rankingEligible": True,
-            "rankingIneligibleReason": "",
+            "ineligibleReason": "",
             "comparisonCandidateCount": 2,
         },
     }

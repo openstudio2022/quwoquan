@@ -12,6 +12,16 @@ import time
 from pathlib import Path
 from typing import Any
 
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+
+from _common.paths import APP_ROOT
+
 
 def run(*command: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -37,8 +47,14 @@ def main() -> int:
     parser.add_argument("--output-dir", required=True)
     args = parser.parse_args()
 
-    app = Path(args.app).expanduser().resolve()
-    output_dir = Path(args.output_dir).expanduser().resolve()
+    app = Path(args.app).expanduser()
+    if not app.is_absolute():
+        app = APP_ROOT / app
+    app = app.resolve()
+    output_dir = Path(args.output_dir).expanduser()
+    if not output_dir.is_absolute():
+        output_dir = APP_ROOT / output_dir
+    output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     issues: list[str] = []
     log_text = ""

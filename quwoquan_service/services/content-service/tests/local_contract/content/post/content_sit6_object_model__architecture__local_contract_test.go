@@ -73,11 +73,11 @@ func TestContentSIT6CommandsBindToTheirAggregateOwners(t *testing.T) {
 		"ReactToComment":             "ContentReaction",
 		"LikePost":                   "ContentReaction",
 		"UnlikePost":                 "ContentReaction",
-		"CreateOutboundShare":        "OutboundShareFact",
+		"AppendOutboundShareFact":        "OutboundShareFact",
 		"InitMediaUpload":            "MediaUploadSession",
 		"CompleteMediaUpload":        "MediaUploadSession",
 		"AbortMediaUpload":           "MediaUploadSession",
-		"RequestOriginalImageAccess": "MediaOriginalAccessFact",
+		"ReserveOriginalImageAccessGrant": "OriginalAccessQuota",
 		"SelectAutoVideoCover":       "MediaAsset",
 		"SelectManualVideoCover":     "MediaAsset",
 	}

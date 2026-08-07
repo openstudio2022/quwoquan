@@ -7,7 +7,6 @@ import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/state/appearance_settings_provider.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/shell/settings/appearance_settings_models.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/design_system/layout/web_page_max_width_frame.dart';
@@ -30,6 +29,7 @@ import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_appearance_labels.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AppCloudOperationIds, LogoutCommand;
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -464,7 +464,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } catch (error, stackTrace) {
       // mutation 保留在本地，下一次登录后继续提交；本次本地退出不能被远端故障卡死。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'settings.logout.remove_push_endpoint',
           error: error,
           stackTrace: stackTrace,
@@ -491,7 +491,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       } catch (error, stackTrace) {
         // 本地退出优先，远端吊销失败由下次 refresh 兜底；失败必须可观测。
         unawaited(
-          AppExceptionTelemetryService.instance.recordHandledException(
+          ref.read(exceptionTelemetryPortProvider).recordHandledException(
             source: 'settings.logout.remote_revoke',
             error: error,
             stackTrace: stackTrace,

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from content.execution.reviewed_closure_adoption_campaign_contract import (
+from content.execution.closure.adoption_campaign_contract import (
     adopted_object_refs,
     validate_adoption_target_identity,
     validate_campaign_adoption_binding,

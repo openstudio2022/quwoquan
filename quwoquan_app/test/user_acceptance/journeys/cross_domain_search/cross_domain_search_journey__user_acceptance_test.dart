@@ -15,7 +15,7 @@
 ///     --dart-define=APP_RUNTIME_ENV=gamma \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
 ///     --dart-define=RUN_PATROL_ACCEPTANCE=true \
-///     --dart-define=QWQ_PATROL_SESSION_MODE=gamma_local_anonymous_runtime \
+///     --dart-define=QWQ_PATROL_SESSION_MODE=runtime_anonymous_session \
 ///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://api.gamma.quwoquan.com:19000
 library;
 

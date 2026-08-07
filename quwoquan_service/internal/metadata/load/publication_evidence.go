@@ -984,7 +984,7 @@ func (scan *serviceScan) indexFunction(
 	collectTransactionHandles(function.Type, handles)
 	locals := map[string]string{}
 	// 字段绑定在**所有**函数里收集：投递侧常把句柄放进函数内的匿名结构体切片
-	// （`{name: "TripMembership", collection: db.Collection("trip_membership_outbox")}`），
+	// （`{name: "GatheringParticipation", collection: db.Collection("gathering_participation_outbox")}`），
 	// 只认构造函数会漏掉整类投递实现。形参位置绑定仍只对构造函数有效，因为只有构造调用
 	// 点会传入集合名。
 	paramIndex := map[string]int{}

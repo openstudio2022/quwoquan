@@ -206,7 +206,9 @@ void main() {
     expect(state.historyInitialized, isFalse);
     expect(state.historyLoading, isFalse);
     expect(state.retryAvailable, isTrue);
-    expect(state.errorMessage, SearchText.recoveryReloadLaterMessage);
+    // runStorageUnavailable 是服务端不可用（kind: unavailable），恢复组分类到
+    // serviceUnavailable，不再落到兜底的 reloadLater。
+    expect(state.errorMessage, SearchText.recoveryServiceUnavailableMessage);
     expect(state.transcript, isEmpty);
     expect(
       find.textContaining(_historyQuestion, findRichText: true),
@@ -324,7 +326,8 @@ void main() {
     // 云端历史恢复绑定 sessionId：续聊沿用已恢复会话，不新建云端会话
     // （R-ASSIST-001 收口后的会话生命周期语义）。
     expect(state.sessionId, 'restored_session_uat');
-    expect(state.runId, 'atn_uat_personal');
+    // 控制器状态承载 run id（`arn_`），不是单轮 turn id（`atn_`）。
+    expect(state.runId, 'arn_uat_personal');
     expect(
       state.events.map((event) => event.eventType),
       containsAll(<AssistantStreamEventType>[

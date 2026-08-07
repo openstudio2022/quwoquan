@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 5cebacbad8dfe3503f8dcf2d0f34dd34328ea5a6f0b3b297cbd11df0a9eb2d44
+// ContractGraph SHA256: b5683d7d096bfb9d5d550bb42fc6069321cdd8d781d57b85d8517db39af2390e
 
 library;
 
@@ -1049,7 +1049,7 @@ final class CircleFeedItemView {
   final String postId;
   final String contentType;
   final String? contentIdentity;
-  final String? assistantUsePolicy;
+  final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
@@ -1089,7 +1089,7 @@ final class CircleFeedItemView {
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
       contentIdentity: map["contentIdentity"] == null ? null : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
-      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : _requiredString(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
+      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : AssistantUsePolicy.fromWire(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
       authorId: map["authorId"] == null ? null : _requiredString(map["authorId"], '$path.authorId'),
       authorDisplayName: map["authorDisplayName"] == null ? null : _requiredString(map["authorDisplayName"], '$path.authorDisplayName'),
       authorAvatarUrl: map["authorAvatarUrl"] == null ? null : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
@@ -1129,7 +1129,7 @@ final class CircleFeedItemView {
     "postId": postId,
     "contentType": contentType,
     if (contentIdentity != null) "contentIdentity": contentIdentity!,
-    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!,
+    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
     if (authorDisplayName != null) "authorDisplayName": authorDisplayName!,
     if (authorAvatarUrl != null) "authorAvatarUrl": authorAvatarUrl!,

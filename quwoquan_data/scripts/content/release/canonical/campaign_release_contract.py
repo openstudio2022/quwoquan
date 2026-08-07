@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign_external_inputs import payload_digest
-from content.execution.campaign_submission import campaign_root
+from content.execution.campaign.external_inputs import payload_digest
+from content.execution.campaign.submission import campaign_root
 from content.release.canonical.object_transaction_contract import _safe_id
 from core import paths
 from core.io import read_json

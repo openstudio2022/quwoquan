@@ -93,15 +93,18 @@ Map<String, Object?> _catalogItem() => <String, Object?>{
   'catalogGroup': <String, Object?>{'id': 'travel', 'displayText': '旅行'},
   'requiresConsent': true,
   'requiredConsentScopes': <String>[
+    'assistant.learning.feedback_context.read',
     'assistant.memory.preferences.read',
-    'travel.trip.read',
   ],
   'consentScopeLabels': <Object?>[
     <String, Object?>{
       'id': 'assistant.memory.preferences.read',
       'displayText': '读取助手偏好',
     },
-    <String, Object?>{'id': 'travel.trip.read', 'displayText': '读取行程'},
+    <String, Object?>{
+      'id': 'assistant.learning.feedback_context.read',
+      'displayText': '使用脱敏的助手反馈摘要',
+    },
   ],
   'iconHint': 'airplane',
   'coverMediaRef': 'assistant.skill.travel.cover',

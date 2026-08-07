@@ -35,7 +35,8 @@ Future<void> showAssistantSkillLifecycleSheet({
   required String skillId,
   required String skillName,
   required AssistantSkillActivityQuery activityQuery,
-  required AssistantSkillDataControlFacet dataControlFacet,
+  required SkillDataControlProcessCommandWriter dataControlCommandWriter,
+  required SkillDataControlProcessQuery dataControlQuery,
   required void Function(AssistantSkillLifecycleUiAction action)
   onProductAction,
 }) {
@@ -46,7 +47,8 @@ Future<void> showAssistantSkillLifecycleSheet({
       skillId: skillId,
       skillName: skillName,
       activityQuery: activityQuery,
-      dataControlFacet: dataControlFacet,
+      dataControlCommandWriter: dataControlCommandWriter,
+      dataControlQuery: dataControlQuery,
       onProductAction: onProductAction,
     ),
   );
@@ -57,14 +59,16 @@ final class _AssistantSkillLifecycleSheet extends StatefulWidget {
     required this.skillId,
     required this.skillName,
     required this.activityQuery,
-    required this.dataControlFacet,
+    required this.dataControlCommandWriter,
+    required this.dataControlQuery,
     required this.onProductAction,
   });
 
   final String skillId;
   final String skillName;
   final AssistantSkillActivityQuery activityQuery;
-  final AssistantSkillDataControlFacet dataControlFacet;
+  final SkillDataControlProcessCommandWriter dataControlCommandWriter;
+  final SkillDataControlProcessQuery dataControlQuery;
   final void Function(AssistantSkillLifecycleUiAction action) onProductAction;
 
   @override
@@ -93,7 +97,8 @@ final class _AssistantSkillLifecycleSheetState
   void initState() {
     super.initState();
     _coordinator = SkillDataControlCoordinator(
-      facet: widget.dataControlFacet,
+      commandWriter: widget.dataControlCommandWriter,
+      query: widget.dataControlQuery,
       onStateChanged: (_) {
         if (mounted) setState(() {});
       },

@@ -9,7 +9,7 @@ from pathlib import Path
 from core.io import read_json
 from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT
 from content.execution.execution_terminal import load_terminal_execution_evidence
-from content.execution.recipe import RuntimeExecutionRequest
+from content.execution.planning.recipe.model import RuntimeExecutionRequest
 from content.execution.workspace import orphaned_transaction_workspaces
 
 

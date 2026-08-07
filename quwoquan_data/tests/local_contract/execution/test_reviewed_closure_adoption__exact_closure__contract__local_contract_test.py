@@ -9,15 +9,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution import (
-    campaign_workspace,
-    recipe_request,
-    reviewed_closure_adoption,
-)
-from content.execution.campaign_submission import load_submissions
-from content.execution.campaign_workspace import CampaignRuntimePaths
-from content.execution.reviewed_closure_adoption import adopt_reviewed_closure
-from content.execution.reviewed_closure_adoption_contract import (
+from content.execution.planning.recipe import request as recipe_request
+from content.execution.campaign import workspace as campaign_workspace
+from content.execution.closure import adoption as reviewed_closure_adoption
+from content.execution.campaign.submission import load_submissions
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.closure.adoption import adopt_reviewed_closure
+from content.execution.closure.adoption_contract import (
     ReviewedClosureAdoptionError,
     canonical_digest,
     file_digest,

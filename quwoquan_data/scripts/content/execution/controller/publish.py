@@ -147,7 +147,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.post_recovery import _purge_stale_author_queue
     from content.post import object_index as content_object
     if _is_homepage_only_execution(ctx):
-        from content.execution.qualification import finalize_execution_qualification
+        from content.execution.planning.qualification import finalize_execution_qualification
 
         try:
             qualification = finalize_execution_qualification(
@@ -185,7 +185,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
     homepage_only = _is_homepage_only_execution(ctx)
     qualified_post_refs: set[str] | None = None
     if not homepage_only:
-        from content.execution.post_review_closure import (
+        from content.execution.closure.post_review import (
             indexed_post_targets,
             load_post_review_closure,
         )
@@ -246,7 +246,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
         )
     from core.io import read_json
 
-    from content.execution.reliabletask_jobs import prepare_reliable_publish_jobs
+    from content.execution.queue.reliabletask.jobs import prepare_reliable_publish_jobs
     from content.execution.spec_contract import approved_quota
     from content.execution.workspace import execution_root as _execution_root
 

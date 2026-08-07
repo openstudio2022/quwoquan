@@ -15,7 +15,7 @@ final class ExifMediaCaptureMetadataExtractor
   const ExifMediaCaptureMetadataExtractor();
 
   @override
-  ExtractedMediaCaptureMetadata extract(Uint8List bytes) {
+  ExtractedMediaCaptureMetadata extractMediaCaptureMetadata(Uint8List bytes) {
     final tiff = _locateExifTiffBlock(bytes);
     if (tiff == null) {
       return ExtractedMediaCaptureMetadata.empty;

@@ -4,8 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
-import pytest
 import content.release.canonical.research_scale_promotion as promotion_module
+import pytest
 from content.release.canonical.commercial_transition import (
     CommercialTransitionError,
     write_commercial_transition,
@@ -90,6 +90,38 @@ def _semantic_calibration(carrier: str) -> dict[str, object]:
                 "runId": f"{carrier}-calibration-run",
                 "evidenceRef": f"data/tasks/{carrier}-execution/calibration.json",
                 "evidenceSha256": "sha256:" + "5" * 64,
+            }
+        ],
+    }
+
+
+def _video_popularity_statistics() -> dict[str, object]:
+    return {
+        "signalAvailability": [
+            {"signal": signal, "numerator": 1, "denominator": 1, "rate": 1.0}
+            for signal in ("play", "like", "comment", "share", "favorite")
+        ],
+        "rankingCoverage": {"numerator": 1, "denominator": 1, "rate": 1.0},
+        "observations": [
+            {
+                "objectRef": "posts/video/example",
+                "assetId": "video-asset-1",
+                "playCount": 100,
+                "likeCount": 10,
+                "commentCount": 2,
+                "shareCount": 1,
+                "favoriteCount": 3,
+                "observedAt": "2026-08-05T00:00:00Z",
+                "comparisonBucket": {
+                    "provider": "fixture",
+                    "topic": "travel",
+                    "timeBucket": "2026-W32",
+                    "candidateCount": 2,
+                },
+                "popularityScore": 451,
+                "popularityPercentile": 1.0,
+                "rankingEligible": True,
+                "ineligibleReason": "",
             }
         ],
     }
@@ -296,8 +328,8 @@ def test_research_m100_promotion_keeps_targets_and_rates_statistical(
     )
     monkeypatch.setattr(
         promotion_module,
-        "_assert_m100_video_popularity",
-        lambda *_args, **_kwargs: None,
+        "_collect_m100_video_popularity",
+        lambda *_args, **_kwargs: _video_popularity_statistics(),
     )
 
     promotion, _path = write_research_scale_promotion(
@@ -350,9 +382,18 @@ def test_research_m100_promotion_keeps_targets_and_rates_statistical(
         "rate": 0.0,
     }
     assert statistics["automaticRecoveryRate"] == {
-        "numerator": 1,
-        "denominator": 4,
+        "statistical": True,
+        "nonBlocking": True,
+        "status": "MEASURED",
+        "eligibleCount": 4,
+        "automaticCount": 1,
+        "targetRate": 0.95,
         "rate": 0.25,
+    }
+    assert statistics["videoPopularity"] == {
+        "statistical": True,
+        "nonBlocking": True,
+        **_video_popularity_statistics(),
     }
     assert statistics["firstPassRate"] == {
         "numerator": 3,

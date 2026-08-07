@@ -244,13 +244,26 @@ class PageLifecycleObservability {
           in failure?.context.attributes ?? const <RuntimeContextAttribute>[])
         attribute.key: attribute.value,
     };
+    // 页面持有的通常是已解析的 UiErrorSemantic，而不是原始 CloudException。
+    // 它自带 requestId/traceId，若这里不读，埋点就会丢掉与服务端日志对齐的
+    // 唯一线索——用户报障时无法从错误态回溯到那一次请求。
+    final semanticRequestId = error is UiErrorSemantic
+        ? (error.requestId ?? '').trim()
+        : '';
+    final semanticTraceId = error is UiErrorSemantic
+        ? (error.traceId ?? '').trim()
+        : '';
     return (
-      requestId: error is CloudException
-          ? (error.requestId ?? '').trim()
-          : (attributes['requestId'] ?? '').trim(),
-      traceId: error is CloudException
-          ? (error.traceId ?? '').trim()
-          : (attributes['traceId'] ?? '').trim(),
+      requestId: switch (error) {
+        CloudException() => (error.requestId ?? '').trim(),
+        _ when semanticRequestId.isNotEmpty => semanticRequestId,
+        _ => (attributes['requestId'] ?? '').trim(),
+      },
+      traceId: switch (error) {
+        CloudException() => (error.traceId ?? '').trim(),
+        _ when semanticTraceId.isNotEmpty => semanticTraceId,
+        _ => (attributes['traceId'] ?? '').trim(),
+      },
     );
   }
 }

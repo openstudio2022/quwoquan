@@ -13,7 +13,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.execution.identity import parse_execution_id
-from content.execution.post_review_closure import load_post_review_closure
+from content.execution.closure.post_review import load_post_review_closure
 from content.execution.runtime_contract import file_sha256
 from content.execution.workspace import load_execution_manifest
 from core.article_package import compute_document_sha256

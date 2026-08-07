@@ -3,98 +3,44 @@ commercial_defaults:
   block_reason: canonical operation awaits object-centered commercial migration
   gap_id: CONTENT_MEDIA_ORIGINAL_ACCESS_FACT_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
-description: MediaOriginalAccessFact 的对象中心不可变授权事实追加入口。
-api_routes:
-  - method: POST
-    path: /content/media/{mediaId}/original:access
-    operation: RequestOriginalImageAccess
-    actor: persona
-    application:
-      kind: command
-      facet: MediaOriginalAccessAppendFacet
-      method: requestOriginalImageAccess
-      append_sink: MediaOriginalAccessFact
-      mutation_target: MediaOriginalAccessFact
-      invariant_target: MediaOriginalAccessFact
-    authorization:
-      principal: persona
-      ownership_policy: post_visibility_and_media_policy
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 5000
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: required
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.media_not_found
-      - CONTENT.USER.original_access_denied
-      - CONTENT.USER.original_access_rate_limited
-      - CONTENT.USER.idempotency_conflict
-      - CONTENT.SYSTEM.storage_read_failed
-    privacy:
-      request_classification: PII
-      response_classification: SENSITIVE
-      log_policy: redacted
-    telemetry:
-      metric: content_media_original_access_request
-      trace: true
-      attributes:
-        - purpose
-        - outcome
-        - access_policy
-    slo:
-      latency_p95_ms: 800
-      availability_percent: 99.9
-    request_entity: RequestContentMediaOriginalAccessCommand
-    request_bindings:
-      path:
-        - name: mediaId
-          field: mediaId
-    response_fields:
-      - mediaId
-      - status
-      - originalUrl
-      - format
-      - sizeBytes
-      - expiresAt
-      - ttlSeconds
-      - auditId
-    response_entity: MediaOriginalAccessGrant
-    response_body: MediaOriginalAccessGrant
-    response_body_kind: object
-    security:
-      auth_mode: required
-      principal: persona
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    description: 按 MediaAsset named Reader、引用 Post named visibility reader、资产策略与 viewer/media/purpose 限流校验签发短时原图访问授权。
-    request_body_kind: object
+description: 'MediaOriginalAccessFact 无独立 transport；审计事实只在 OriginalAccessQuota
+
+  的额度预留事务内追加，禁止暴露第二条原图访问写 API。
+
+  '
+api_routes: []
+runtime_entrypoints:
+- name: AppendOriginalAccessAudit
+  kind: internal_port
+  phase: transactional_append
+  source_objects: [content.OriginalAccessQuota]
+  idempotency: identity_payload_digest
+  application: {kind: command, facet: MediaOriginalAccessAuditPort, method: appendAudit, object_owner: MediaOriginalAccessFact}
+  telemetry:
+    metric: content_media_original_access_audit_append
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    failure_ratio_percent: 0.5
+consumers:
+- name: content-service
+  capabilities:
+  - audit_original_access_decision
 readiness_cases:
-  - case_id: request-original-image-access-local
+  - case_id: append-original-access-audit-local
     spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
     producer: service
     layer: local_contract
-    target: {kind: operation, id: RequestOriginalImageAccess}
+    target: {kind: operation, id: AppendOriginalAccessAudit}
     runner_source_path: quwoquan_service/services/content-service/tests/local_contract/media/media_original_access_fact/application/service__local_contract_test.go
     executions:
       - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
-  - case_id: request-original-image-access-api
+  - case_id: append-original-access-audit-api
     spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
     producer: service
     layer: api_integration
-    target: {kind: operation, id: RequestOriginalImageAccess}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/media/media_original_access_fact/http_mongo_append__api_integration_test.go
+    target: {kind: operation, id: AppendOriginalAccessAudit}
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/media/media_original_access_fact/mongo_append__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
-  - case_id: media_original_access_fact_request_original_image_access_app_local
-    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
-    producer: app
-    layer: local_contract
-    target: {kind: operation, id: RequestOriginalImageAccess}
-    runner_source_path: quwoquan_app/test/local_contract/service/content_service/media/media_original_access_fact/media_original_access_fact_remote__contract__local_contract_test.dart
-    executions:
-      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

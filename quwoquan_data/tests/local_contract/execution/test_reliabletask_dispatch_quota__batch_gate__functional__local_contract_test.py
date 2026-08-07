@@ -25,7 +25,7 @@ from content.execution.context import ExecutionContext  # noqa: E402
 from content.execution.queue.core import _read_job, _write_job  # noqa: E402
 from content.execution.queue.jobs import enqueue_ref_job  # noqa: E402
 from content.execution.queue.model import QueueLease  # noqa: E402
-from content.execution.reliabletask_fleet import (  # noqa: E402
+from content.execution.queue.reliabletask.report import (  # noqa: E402
     ReliableTaskFleetOutcome,
     ReliableTaskFleetReport,
 )
@@ -152,7 +152,7 @@ def test_quota_met_with_discards__batch_advances__functional__local_contract(
 ) -> None:
     """4 个候选中 3 个达标、1 个被丢弃，配额 3 → 批次必须继续推进。"""
     ctx, jobs = _build(quota=3)
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     delivered = _deliver(monkeypatch, quota=3)
     monkeypatch.setattr(
@@ -179,7 +179,7 @@ def test_quota_met__resume_does_not_redispatch_discards__functional__local_contr
 ) -> None:
     """恢复时不得因残留丢弃对象重新派发，否则批次会反复撞上同一批不达标对象。"""
     ctx, jobs = _build(quota=3)
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     delivered = _deliver(monkeypatch, quota=3)
     monkeypatch.setattr(
@@ -205,12 +205,12 @@ def test_quota_met__resume_does_not_redispatch_discards__functional__local_contr
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
-def test_quota_short__candidate_pool_exhausted__blocks__functional__local_contract(
+def test_quota_short__candidate_pool_exhausted__publishes_partial__functional__local_contract(
     monkeypatch,
 ) -> None:
-    """候选池全部终态但达标数不足配额时必须阻断，并说明是供给/过采不足。"""
+    """候选池耗尽但已有合格对象时必须 partial 准出，不能用配额误杀整 lane。"""
     ctx, jobs = _build(quota=3)
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     delivered = _deliver(monkeypatch, quota=3)
     monkeypatch.setattr(
@@ -223,10 +223,45 @@ def test_quota_short__candidate_pool_exhausted__blocks__functional__local_contra
     )
 
     assert result is not None
-    assert result.status is ReliableTaskDispatchStatus.BLOCKED
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
     assert result.completed_count == 2
     assert len(result.discarded) == 2
-    assert any("候选池耗尽" in str(issue) for issue in result.issues)
+    assert result.issues == ()
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("partial closure resume must not redispatch terminal jobs")
+
+    monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", fail_if_called)
+    assert (
+        reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+            ctx, ExecutionStage.BUILD_HOMEPAGE
+        )
+        is None
+    )
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_candidate_pool_exhausted__zero_qualified__blocks__functional__local_contract(
+    monkeypatch,
+) -> None:
+    ctx, jobs = _build(quota=3)
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    delivered = _deliver(monkeypatch, quota=3)
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        _settle(jobs, succeeded=0, delivered=delivered, finalized=0),
+    )
+
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx, ExecutionStage.BUILD_HOMEPAGE
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.BLOCKED
+    assert result.completed_count == 0
+    assert any("无合格对象" in str(issue) for issue in result.issues)
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
@@ -240,7 +275,7 @@ def test_acceptance_gate_outranks_queue_ledger__functional__local_contract(
     供给不足而停在 manual_required——这正是 pilot-013 的真实停摆原因。
     """
     ctx, jobs = _build(quota=3)
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     # 账本只认 1 个成功，磁盘上却有 4 个达标对象。
     delivered = _deliver(monkeypatch, quota=3)
@@ -346,7 +381,7 @@ def test_publish_finalized_quota_outranks_dead_jobs__functional__local_contract(
 ) -> None:
     """Publish 幂等重放：作业全死但 finalizedObjectCount≥配额且 fleet.passed 时必须收工。"""
     ctx, jobs = _build_publish(quota=3)
-    from content.execution import reliabletask_fleet
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(
         reliabletask_fleet,

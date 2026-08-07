@@ -14,7 +14,7 @@ ContentPostViewData contentCachePostFixture(
       postId: id,
       contentType: 'micro',
       contentIdentity: 'moment',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '用户一',
       authorAvatarUrl: avatarUrl,

@@ -57,7 +57,7 @@ ResolvedArticleMediaPayload projectResolvedArticleMediaPayload({
   required List<String> tagRefs,
   required List<String> entityRefs,
   required String visibility,
-  required String assistantUsePolicy,
+  required AssistantUsePolicy assistantUsePolicy,
   required String markdownDialect,
   required ContentMediaArticleMarkdownEncoder encodeMarkdown,
 }) {

@@ -4,9 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from content.execution import campaign_external_input_runtime
-from content.execution.materialization import _video_source_qualifier
-from content.execution.source_selection import TargetSourceCandidate
+from content.execution.campaign import external_input_runtime as campaign_external_input_runtime
+from content.execution.controller.execute.materialization import _video_source_qualifier
+from content.execution.planning.source_selection import TargetSourceCandidate
 from content.source import professional_video_receipt
 from content.source.research import auto_plan_video
 

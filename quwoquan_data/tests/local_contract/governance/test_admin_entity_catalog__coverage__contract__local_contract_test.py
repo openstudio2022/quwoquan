@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from content.execution.selection import select_targets
+from content.execution.planning.selection import select_targets
 from core.control_types import TargetSelector
 from core.schema import assert_valid
 from governance.coverage.admin_entity_catalog import (

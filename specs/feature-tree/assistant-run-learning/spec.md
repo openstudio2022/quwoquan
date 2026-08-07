@@ -18,7 +18,7 @@
 
 - 不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
 - 不拥有 `ProfileUpdateProposal`、`Persona` 或其应用审计事实；这些事实由用户身份画像领域和 user-service 的公开聚合契约拥有，本领域只能提交来源证据或调用其公开 command。
-- 不拥有 Trip、Conversation、Circle、Post、Entity 或 Connector credential/connection/invocation 事实；只通过所属领域的 typed Reader、command、event 或 capability gateway 使用。
+- 不拥有 Gathering、GatheringPlan、Conversation、Circle、Post、Entity 或 Connector credential/connection/invocation 事实；只通过所属领域的 typed Reader、command、event 或 capability gateway 使用。
 - 不复制 metadata 中的字段、path、错误码和 wire 语义。
 
 ### 上下游协作
@@ -62,23 +62,23 @@
   - 交付给下游的结果：用户设置、Consent、Subscription 或 Placement 事实，以及冻结 active package digest 的 AssistantRun。
   - 不负责：不保存 Connector 凭证，不修改 Chat/Circle 成员或其他领域事实。
 - [`JNY-013 / SCN-030`](../spec.md#scn-030)
-  - 本领域负责：由 `travel_companion` 渐进读取群聊、内容、Trip 与公网证据，生成结构化计划提案并通过 Travel command 确认。
-  - 进入条件：目标共享场景、参与主体和可见范围有效；目标 Trip 不明确时先完成消歧。
-  - 交付给下游的结果：带 package digest、证据和 ActionProposal 的 AssistantRun；确认后只持有 Travel receipt 引用。
-  - 不负责：不拥有 Trip 或发布内容。
+  - 本领域负责：由 `travel_companion` 渐进读取群聊、内容、Gathering/GatheringPlan 与公网证据，生成结构化计划提案并通过 Circle owner command 确认。
+  - 进入条件：目标共享场景、参与主体和可见范围有效；目标 Gathering 不明确时先完成消歧。
+  - 交付给下游的结果：带 package digest、证据和 ActionProposal 的 AssistantRun；确认后只持有 Circle owner receipt 引用。
+  - 不负责：不拥有 Gathering、GatheringPlan 或发布内容。
 - [`JNY-013 / SCN-031`](../spec.md#scn-031)
-  - 本领域负责：把 Trip Revision、天气交通风险和临近事项 Trigger 转成标准 Run，完成差异说明、导游讲解和相关成员投递。
+  - 本领域负责：把 GatheringPlan Revision、天气交通风险和临近事项 Trigger 转成标准 Run，完成差异说明、讲解和相关参与者投递。
   - 进入条件：Trigger、Subscription/Placement、Consent 与领域可见性均有效。
   - 交付给下游的结果：去重的共享提醒、带引用讲解或私密个人 ActionProposal。
-  - 不负责：不决定 Trip Revision，不泄露个人 Connector 或记忆。
+  - 不负责：不决定 GatheringPlan Revision，不泄露个人 Connector 或记忆。
 - [`JNY-013 / SCN-032`](../spec.md#scn-032)
-  - 本领域负责：建议 Moment 的 Day/Item 归属并以安全语义 Presentation 展示时间线和地图。
-  - 进入条件：Moment、Trip 与候选 Item 对当前主体可见。
-  - 交付给下游的结果：归属建议或经确认的 Travel command receipt；不复制 MediaAsset/Post。
+  - 本领域负责：建议 Experience reference 的 Day/Item 归属并以安全语义 Presentation 展示时间线和地图。
+  - 进入条件：Experience reference、GatheringPlan 与候选 Item 对当前主体可见。
+  - 交付给下游的结果：归属建议或经确认的 Circle owner command receipt；不复制 MediaAsset/Post。
   - 不负责：不持有媒体或内容事实。
 - [`JNY-013 / SCN-033`](../spec.md#scn-033)
-  - 本领域负责：按实际 Trip 时间线生成可编辑 LocalPostDraft 提案和分段分享 Presentation，并在用户确认后续接所属领域 command。
-  - 进入条件：Trip 已结束或用户显式选择生成范围，且隐私裁剪策略通过。
+  - 本领域负责：按实际 Gathering/Plan Experience 时间线生成可编辑 LocalPostDraft 提案和分段分享 Presentation，并在用户确认后续接所属 owner command。
+  - 进入条件：Gathering 已结束或用户显式选择生成范围，且隐私裁剪策略通过。
   - 交付给下游的结果：草稿/分享提案、引用与续接 receipt。
   - 不负责：不自动发布、不维护关系状态。
 

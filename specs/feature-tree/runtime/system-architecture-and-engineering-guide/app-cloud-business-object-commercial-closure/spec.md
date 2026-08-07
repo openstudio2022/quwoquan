@@ -113,7 +113,7 @@
 <a id="req-012"></a>
 ### REQ-012 App 对象源码、页面与测试由同一 canonical 身份闭环
 
-- App 业务源码只位于 `lib/<domain>/<context>/<object>/{domain,application,adapters,presentation}`，对象测试按同一 domain/context/object 身份位于三层测试树；业务文件无 owner、同优先级多 owner、旧业务大桶或兼容路径任一存在时均不得通过架构准出。
+- App 业务源码只位于 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`，对象测试按同一 service/context/object 身份位于 `test/<layer>/service/<service>/<context>/<object>`；业务文件无 owner、同优先级多 owner、旧业务大桶或兼容路径任一存在时均不得通过架构准出。
 - 对象的 App 必需层由其 App-exposed operation、页面认领和端侧不变式决定，不能从云侧 kind 无条件生成，也不能以目录或占位文件存在反推能力已实现。
 - 页面必须有唯一 source owner 并保留全部 participant object；多对象页面由 source owner 的 presentation 经 participant 的公开 application 边界组合，禁止直接引用兄弟对象私有层。
 - production 依赖图只允许父级 DEC 声明的单向层关系，具体 adapter 只在唯一 `runtime/di` composition root 装配；barrel re-export、旧路径 shim、双轨 import 和 runtime fallback 数量为零。
@@ -134,7 +134,7 @@
 - canonical：`quwoquan_ops/environments`
 - canonical：本文件 `REQ-004`、`GWT-004` 与 `OPEN-004`
 - canonical：`quwoquan_app/packages/quwoquan_cloud_contracts`
-- canonical：`quwoquan_app/lib/<domain>/<context>/<object>`
+- canonical：`quwoquan_app/lib/service/<service>/<context>/<object>`
 - canonical：`quwoquan_app/lib/runtime/di`
 - canonical：[`AppRoot REQ-009`](../../../spec.md#req-009)
 - canonical：[`AppRoot REQ-010`](../../../spec.md#req-010)
@@ -364,12 +364,12 @@
 - 存量清单落在 `quwoquan_ops/policies/gates/emitted_error_code_declaration_baseline.yaml`，语义是只减不增，新增未声明码与新增解析盲点都直接 BLOCK。
 - 该基线的结构本身就是本条所指结构性盲区的解，除 `codes:` 外另有 `unresolved_sites:` 段，专门登记 reason 经变量传入因而字面量扫描跨不过去的发射位，每条带 `attested_scope` 写明手工枚举所依据的搜索范围与 `emits` 列出该处发射的码。
 - 盲点段内未声明的码只报告不阻断，理由是扫描器无法重新推导它们，把无法自动复核的手工事实做成阻断条件等于把门禁绑在会腐烂的台账上。
-- 第一层那 8 个码中 5 个已处置：4 个 `GATEWAY.*` 拒绝码在 `quwoquan_service/services/api-edge/contracts/edge_security/operation_admission_decision/errors.yaml` 取得声明位，`OPS.SYSTEM.internal_error` 落进 `runtime_failure_codes.yaml`；剩余 3 个 `OPS.USER.*` 仍只在盲点手工侧登记，因为 product-ops 的按状态码合成 writer 尚未改造。
+- 第一层那 8 个码中 5 个已处置：4 个 `GATEWAY.*` 拒绝码与 `OPS.SYSTEM.internal_error` 一并落进 `quwoquan_service/contracts/runtime_errors/errors/runtime_failure_codes.yaml`；剩余 3 个 `OPS.USER.*` 仍只在盲点手工侧登记，因为 product-ops 的按状态码合成 writer 尚未改造。
 - 3 仍不是上界，门禁自身声明当前只覆盖 `rterr.NewCode` 家族与 helper 构造器两种形态。
 - 未被覆盖的发射方式至少还有五类，分别是 `AppErrorFrom*` 生成构造器、完整错误码字面量、`go_const` 标识符、文件内局部构造器，以及领域 sentinel 加 handler 状态码映射，`quwoquan_app/**` 的端侧发射同样未扫。
 - 已定位的发射点有两处，严重度差异很大，必须分开处置。
 - 第一处是平台鉴权边界，`quwoquan_service/runtime/auth/operation_guard.go` 的 `writeOperationGuardError` 以 `rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, reason)` 构码，6 个调用点的 reason 恰好三个取值，未匹配路由得到 `route_not_found`，缺可信 principal 得到 `unauthorized`，拒绝全部调用方与未通过授权判定得到 `forbidden`。
-- 同一文件的兄弟函数 `writeOperationRequestError` 经 `rterr.NewInvalidArgument(rterr.ModuleGateway, ...)` 再产出第四个码 `GATEWAY.USER.invalid_argument`，它同样有 3 个调用点。这四个码现已有声明位，落在 `api-edge` 新增对象 `edge_security/operation_admission_decision`，该对象是 `external_reference` 形态，承载 runtime 逐请求准入判定这一无 HTTP operation 的边界。
+- 同一文件的兄弟函数 `writeOperationRequestError` 经 `rterr.NewInvalidArgument(rterr.ModuleGateway, ...)` 再产出第四个码 `GATEWAY.USER.invalid_argument`，它同样有 3 个调用点。这四个码的声明位在 `runtime_failure_codes.yaml`：产出它们的 guard 被全部 14 个服务链接、且在任何 owner handler 之前执行，因此这些码不归属任何单一服务对象。DEC-022 记录了归属裁定与随之引入的用户面字段集。
 - 该边界由 `RequireGeneratedOperationAuthorization` 承担，是全平台默认拒绝边界而不是某个服务的局部实现，因此这四个码是全系统返回频次最高的一组错误。
 - 契约侧 `GATEWAY.*` 只有 `quwoquan_service/services/api-edge/contracts/edge_security/rate_limit_bucket/errors.yaml` 声明的三个码，分别是 `GATEWAY.USER.rate_limited`、`GATEWAY.MIDDLEWARE.rate_limit_state_unavailable` 与 `GATEWAY.MIDDLEWARE.upstream_unavailable`，与上述四个拒绝码没有任何交集。
 - `GATEWAY.USER.route_not_found` 已经在 `quwoquan_service/contracts/metadata/_control_plane/product/control_plane.yaml` 的注释里被当作既存行为引用，用来解释 ops 路由为何必须登记进 product plane 才不会被该码拒绝，这正是它必须拥有声明位的理由。
@@ -466,4 +466,4 @@
 - 不得据本条新建以「声明的索引是否存在」为判据的维度，仓内已就此裁决过：`quwoquan_service/internal/metadata/load/publication_evidence.go` 的投递判据明确不看契约声明的索引，并由 `publication_write_index__contract__local_contract_test.go:96` 的 `TestDeliveryJudgementFollowsProvisionedBehaviourNotDeclaredIndexes` 钉死。按名字比对还会撞上另一个已知失效形态，实现侧真实建立的索引大量与声明同义而不同名，按名判会产出成片假缺口。
 - 若判定为撤销，形态与 `capabilities`（DEC-016）、`lifecycle.transitions`（DEC-020）一致，都是无消费者、无值域约束、取值已开始漂移的惰性声明。
 - 若判定为派生，则必须是实现由声明生成或实现被断言为声明的语义等价物，判据只能是索引键集的语义等价而不是名字相等，且必须同时覆盖 Go 的 `SetName`、SQL 的 `CREATE INDEX` 与 Python 的 `create_index` 三种建立形态。
-- 完成判定：出 DEC 明确撤销或派生二选一；若为派生，`indexes` 声明与实现之间建立由门禁保证的派生或等价断言关系。
+- 完成判定：裁决为撤销并从 canonical schema 与全部 `storage.yaml` 删除 `indexes`，或裁决为派生并由声明生成、校验三种实现形态的语义等价索引，且对应门禁与真实测试通过。

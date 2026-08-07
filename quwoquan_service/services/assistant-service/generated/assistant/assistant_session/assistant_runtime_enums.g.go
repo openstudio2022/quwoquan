@@ -10,15 +10,15 @@ import (
 type AssistantPageContextType string
 
 const (
-	AssistantPageContextTypeUnknown   AssistantPageContextType = ""
-	AssistantPageContextTypeHome      AssistantPageContextType = "home"
+	AssistantPageContextTypeUnknown AssistantPageContextType = ""
+	AssistantPageContextTypeHome AssistantPageContextType = "home"
 	AssistantPageContextTypeDiscovery AssistantPageContextType = "discovery"
-	AssistantPageContextTypeCircles   AssistantPageContextType = "circles"
-	AssistantPageContextTypeArticle   AssistantPageContextType = "article"
-	AssistantPageContextTypeProfile   AssistantPageContextType = "profile"
-	AssistantPageContextTypeChat      AssistantPageContextType = "chat"
-	AssistantPageContextTypeCreate    AssistantPageContextType = "create"
-	AssistantPageContextTypeSearch    AssistantPageContextType = "search"
+	AssistantPageContextTypeCircles AssistantPageContextType = "circles"
+	AssistantPageContextTypeArticle AssistantPageContextType = "article"
+	AssistantPageContextTypeProfile AssistantPageContextType = "profile"
+	AssistantPageContextTypeChat AssistantPageContextType = "chat"
+	AssistantPageContextTypeCreate AssistantPageContextType = "create"
+	AssistantPageContextTypeSearch AssistantPageContextType = "search"
 )
 
 func ParseAssistantPageContextType(raw string) (AssistantPageContextType, error) {
@@ -51,7 +51,7 @@ func (value AssistantPageContextType) WireName() string { return string(value) }
 type CitationDestinationKind string
 
 const (
-	CitationDestinationKindUnknown  CitationDestinationKind = ""
+	CitationDestinationKindUnknown CitationDestinationKind = ""
 	CitationDestinationKindInternal CitationDestinationKind = "internal"
 	CitationDestinationKindExternal CitationDestinationKind = "external"
 )
@@ -74,23 +74,23 @@ func (value CitationDestinationKind) WireName() string { return string(value) }
 type AssistantStreamEventType string
 
 const (
-	AssistantStreamEventTypeUnknown              AssistantStreamEventType = ""
-	AssistantStreamEventTypeRunStarted           AssistantStreamEventType = "run_started"
-	AssistantStreamEventTypeProcessReplace       AssistantStreamEventType = "process_replace"
-	AssistantStreamEventTypeProcessAppend        AssistantStreamEventType = "process_append"
-	AssistantStreamEventTypeProcessCommit        AssistantStreamEventType = "process_commit"
-	AssistantStreamEventTypeAnswerDelta          AssistantStreamEventType = "answer_delta"
-	AssistantStreamEventTypeRunStateChanged      AssistantStreamEventType = "run_state_changed"
-	AssistantStreamEventTypeTaskGraphPatch       AssistantStreamEventType = "task_graph_patch"
-	AssistantStreamEventTypeCheckpointCommitted  AssistantStreamEventType = "checkpoint_committed"
+	AssistantStreamEventTypeUnknown AssistantStreamEventType = ""
+	AssistantStreamEventTypeRunStarted AssistantStreamEventType = "run_started"
+	AssistantStreamEventTypeProcessReplace AssistantStreamEventType = "process_replace"
+	AssistantStreamEventTypeProcessAppend AssistantStreamEventType = "process_append"
+	AssistantStreamEventTypeProcessCommit AssistantStreamEventType = "process_commit"
+	AssistantStreamEventTypeAnswerDelta AssistantStreamEventType = "answer_delta"
+	AssistantStreamEventTypeRunStateChanged AssistantStreamEventType = "run_state_changed"
+	AssistantStreamEventTypeTaskGraphPatch AssistantStreamEventType = "task_graph_patch"
+	AssistantStreamEventTypeCheckpointCommitted AssistantStreamEventType = "checkpoint_committed"
 	AssistantStreamEventTypePresentationSnapshot AssistantStreamEventType = "presentation_snapshot"
-	AssistantStreamEventTypePresentationPatch    AssistantStreamEventType = "presentation_patch"
-	AssistantStreamEventTypePresentationCommit   AssistantStreamEventType = "presentation_commit"
-	AssistantStreamEventTypeWaitingInput         AssistantStreamEventType = "waiting_input"
-	AssistantStreamEventTypeWaitingApproval      AssistantStreamEventType = "waiting_approval"
-	AssistantStreamEventTypeCompleted            AssistantStreamEventType = "completed"
-	AssistantStreamEventTypeFailed               AssistantStreamEventType = "failed"
-	AssistantStreamEventTypeCancelled            AssistantStreamEventType = "cancelled"
+	AssistantStreamEventTypePresentationPatch AssistantStreamEventType = "presentation_patch"
+	AssistantStreamEventTypePresentationCommit AssistantStreamEventType = "presentation_commit"
+	AssistantStreamEventTypeWaitingInput AssistantStreamEventType = "waiting_input"
+	AssistantStreamEventTypeWaitingApproval AssistantStreamEventType = "waiting_approval"
+	AssistantStreamEventTypeCompleted AssistantStreamEventType = "completed"
+	AssistantStreamEventTypeFailed AssistantStreamEventType = "failed"
+	AssistantStreamEventTypeCancelled AssistantStreamEventType = "cancelled"
 )
 
 func ParseAssistantStreamEventType(raw string) (AssistantStreamEventType, error) {
@@ -139,9 +139,9 @@ func (value AssistantStreamEventType) WireName() string { return string(value) }
 type AssistantWebTargetKind string
 
 const (
-	AssistantWebTargetKindUnknown      AssistantWebTargetKind = ""
-	AssistantWebTargetKindUrl          AssistantWebTargetKind = "url"
-	AssistantWebTargetKindSource       AssistantWebTargetKind = "source"
+	AssistantWebTargetKindUnknown AssistantWebTargetKind = ""
+	AssistantWebTargetKindUrl AssistantWebTargetKind = "url"
+	AssistantWebTargetKindSource AssistantWebTargetKind = "source"
 	AssistantWebTargetKindDocumentLink AssistantWebTargetKind = "document_link"
 )
 
@@ -165,10 +165,10 @@ func (value AssistantWebTargetKind) WireName() string { return string(value) }
 type AssistantContextAuthority string
 
 const (
-	AssistantContextAuthorityUnknown          AssistantContextAuthority = ""
-	AssistantContextAuthorityUserDeclared     AssistantContextAuthority = "user_declared"
-	AssistantContextAuthorityDomainCanonical  AssistantContextAuthority = "domain_canonical"
-	AssistantContextAuthorityDeviceObserved   AssistantContextAuthority = "device_observed"
+	AssistantContextAuthorityUnknown AssistantContextAuthority = ""
+	AssistantContextAuthorityUserDeclared AssistantContextAuthority = "user_declared"
+	AssistantContextAuthorityDomainCanonical AssistantContextAuthority = "domain_canonical"
+	AssistantContextAuthorityDeviceObserved AssistantContextAuthority = "device_observed"
 	AssistantContextAuthorityExternalEvidence AssistantContextAuthority = "external_evidence"
 )
 
@@ -194,9 +194,9 @@ func (value AssistantContextAuthority) WireName() string { return string(value) 
 type AssistantContextSensitivity string
 
 const (
-	AssistantContextSensitivityPublic     AssistantContextSensitivity = "public"
-	AssistantContextSensitivityInternal   AssistantContextSensitivity = "internal"
-	AssistantContextSensitivityPrivate    AssistantContextSensitivity = "private"
+	AssistantContextSensitivityPublic AssistantContextSensitivity = "public"
+	AssistantContextSensitivityInternal AssistantContextSensitivity = "internal"
+	AssistantContextSensitivityPrivate AssistantContextSensitivity = "private"
 	AssistantContextSensitivityRestricted AssistantContextSensitivity = "restricted"
 )
 
@@ -220,10 +220,10 @@ func (value AssistantContextSensitivity) WireName() string { return string(value
 type AssistantTriggerKind string
 
 const (
-	AssistantTriggerKindSchedule      AssistantTriggerKind = "schedule"
-	AssistantTriggerKindEvent         AssistantTriggerKind = "event"
+	AssistantTriggerKindSchedule AssistantTriggerKind = "schedule"
+	AssistantTriggerKindEvent AssistantTriggerKind = "event"
 	AssistantTriggerKindContextChange AssistantTriggerKind = "context_change"
-	AssistantTriggerKindFollowUp      AssistantTriggerKind = "follow_up"
+	AssistantTriggerKindFollowUp AssistantTriggerKind = "follow_up"
 )
 
 func ParseAssistantTriggerKind(raw string) (AssistantTriggerKind, error) {
@@ -246,32 +246,32 @@ func (value AssistantTriggerKind) WireName() string { return string(value) }
 type AssistantPresentationNodeKind string
 
 const (
-	AssistantPresentationNodeKindUnknown          AssistantPresentationNodeKind = ""
-	AssistantPresentationNodeKindCard             AssistantPresentationNodeKind = "card"
-	AssistantPresentationNodeKindColumn           AssistantPresentationNodeKind = "column"
-	AssistantPresentationNodeKindRow              AssistantPresentationNodeKind = "row"
-	AssistantPresentationNodeKindGrid             AssistantPresentationNodeKind = "grid"
-	AssistantPresentationNodeKindList             AssistantPresentationNodeKind = "list"
-	AssistantPresentationNodeKindCarousel         AssistantPresentationNodeKind = "carousel"
-	AssistantPresentationNodeKindMarkdown         AssistantPresentationNodeKind = "markdown"
-	AssistantPresentationNodeKindText             AssistantPresentationNodeKind = "text"
-	AssistantPresentationNodeKindIcon             AssistantPresentationNodeKind = "icon"
-	AssistantPresentationNodeKindMedia            AssistantPresentationNodeKind = "media"
-	AssistantPresentationNodeKindBadge            AssistantPresentationNodeKind = "badge"
-	AssistantPresentationNodeKindDivider          AssistantPresentationNodeKind = "divider"
-	AssistantPresentationNodeKindStat             AssistantPresentationNodeKind = "stat"
-	AssistantPresentationNodeKindKeyValue         AssistantPresentationNodeKind = "key_value"
-	AssistantPresentationNodeKindEntityReference  AssistantPresentationNodeKind = "entity_reference"
-	AssistantPresentationNodeKindSourceReference  AssistantPresentationNodeKind = "source_reference"
-	AssistantPresentationNodeKindTimeline         AssistantPresentationNodeKind = "timeline"
-	AssistantPresentationNodeKindRouteMap         AssistantPresentationNodeKind = "route_map"
-	AssistantPresentationNodeKindComparisonTable  AssistantPresentationNodeKind = "comparison_table"
-	AssistantPresentationNodeKindSourceList       AssistantPresentationNodeKind = "source_list"
-	AssistantPresentationNodeKindMediaGallery     AssistantPresentationNodeKind = "media_gallery"
-	AssistantPresentationNodeKindCallout          AssistantPresentationNodeKind = "callout"
-	AssistantPresentationNodeKindActionGroup      AssistantPresentationNodeKind = "action_group"
-	AssistantPresentationNodeKindChoiceChips      AssistantPresentationNodeKind = "choice_chips"
-	AssistantPresentationNodeKindDateTimeInput    AssistantPresentationNodeKind = "date_time_input"
+	AssistantPresentationNodeKindUnknown AssistantPresentationNodeKind = ""
+	AssistantPresentationNodeKindCard AssistantPresentationNodeKind = "card"
+	AssistantPresentationNodeKindColumn AssistantPresentationNodeKind = "column"
+	AssistantPresentationNodeKindRow AssistantPresentationNodeKind = "row"
+	AssistantPresentationNodeKindGrid AssistantPresentationNodeKind = "grid"
+	AssistantPresentationNodeKindList AssistantPresentationNodeKind = "list"
+	AssistantPresentationNodeKindCarousel AssistantPresentationNodeKind = "carousel"
+	AssistantPresentationNodeKindMarkdown AssistantPresentationNodeKind = "markdown"
+	AssistantPresentationNodeKindText AssistantPresentationNodeKind = "text"
+	AssistantPresentationNodeKindIcon AssistantPresentationNodeKind = "icon"
+	AssistantPresentationNodeKindMedia AssistantPresentationNodeKind = "media"
+	AssistantPresentationNodeKindBadge AssistantPresentationNodeKind = "badge"
+	AssistantPresentationNodeKindDivider AssistantPresentationNodeKind = "divider"
+	AssistantPresentationNodeKindStat AssistantPresentationNodeKind = "stat"
+	AssistantPresentationNodeKindKeyValue AssistantPresentationNodeKind = "key_value"
+	AssistantPresentationNodeKindEntityReference AssistantPresentationNodeKind = "entity_reference"
+	AssistantPresentationNodeKindSourceReference AssistantPresentationNodeKind = "source_reference"
+	AssistantPresentationNodeKindTimeline AssistantPresentationNodeKind = "timeline"
+	AssistantPresentationNodeKindRouteMap AssistantPresentationNodeKind = "route_map"
+	AssistantPresentationNodeKindComparisonTable AssistantPresentationNodeKind = "comparison_table"
+	AssistantPresentationNodeKindSourceList AssistantPresentationNodeKind = "source_list"
+	AssistantPresentationNodeKindMediaGallery AssistantPresentationNodeKind = "media_gallery"
+	AssistantPresentationNodeKindCallout AssistantPresentationNodeKind = "callout"
+	AssistantPresentationNodeKindActionGroup AssistantPresentationNodeKind = "action_group"
+	AssistantPresentationNodeKindChoiceChips AssistantPresentationNodeKind = "choice_chips"
+	AssistantPresentationNodeKindDateTimeInput AssistantPresentationNodeKind = "date_time_input"
 	AssistantPresentationNodeKindConfirmationCard AssistantPresentationNodeKind = "confirmation_card"
 )
 
@@ -341,11 +341,11 @@ func (value AssistantPresentationNodeKind) WireName() string { return string(val
 type AssistantPresentationTone string
 
 const (
-	AssistantPresentationToneNeutral     AssistantPresentationTone = "neutral"
+	AssistantPresentationToneNeutral AssistantPresentationTone = "neutral"
 	AssistantPresentationToneInformative AssistantPresentationTone = "informative"
-	AssistantPresentationTonePositive    AssistantPresentationTone = "positive"
-	AssistantPresentationToneCaution     AssistantPresentationTone = "caution"
-	AssistantPresentationToneCritical    AssistantPresentationTone = "critical"
+	AssistantPresentationTonePositive AssistantPresentationTone = "positive"
+	AssistantPresentationToneCaution AssistantPresentationTone = "caution"
+	AssistantPresentationToneCritical AssistantPresentationTone = "critical"
 )
 
 func ParseAssistantPresentationTone(raw string) (AssistantPresentationTone, error) {
@@ -370,8 +370,8 @@ func (value AssistantPresentationTone) WireName() string { return string(value) 
 type AssistantPresentationDensity string
 
 const (
-	AssistantPresentationDensityCompact   AssistantPresentationDensity = "compact"
-	AssistantPresentationDensityStandard  AssistantPresentationDensity = "standard"
+	AssistantPresentationDensityCompact AssistantPresentationDensity = "compact"
+	AssistantPresentationDensityStandard AssistantPresentationDensity = "standard"
 	AssistantPresentationDensityImmersive AssistantPresentationDensity = "immersive"
 )
 
@@ -393,22 +393,22 @@ func (value AssistantPresentationDensity) WireName() string { return string(valu
 type AssistantRunState string
 
 const (
-	AssistantRunStateAccepted        AssistantRunState = "accepted"
-	AssistantRunStateOrienting       AssistantRunState = "orienting"
-	AssistantRunStatePlanning        AssistantRunState = "planning"
-	AssistantRunStateExecuting       AssistantRunState = "executing"
-	AssistantRunStateObserving       AssistantRunState = "observing"
-	AssistantRunStateReflecting      AssistantRunState = "reflecting"
-	AssistantRunStateCheckpointing   AssistantRunState = "checkpointing"
-	AssistantRunStateWaitingUser     AssistantRunState = "waiting_user"
+	AssistantRunStateAccepted AssistantRunState = "accepted"
+	AssistantRunStateOrienting AssistantRunState = "orienting"
+	AssistantRunStatePlanning AssistantRunState = "planning"
+	AssistantRunStateExecuting AssistantRunState = "executing"
+	AssistantRunStateObserving AssistantRunState = "observing"
+	AssistantRunStateReflecting AssistantRunState = "reflecting"
+	AssistantRunStateCheckpointing AssistantRunState = "checkpointing"
+	AssistantRunStateWaitingUser AssistantRunState = "waiting_user"
 	AssistantRunStateWaitingApproval AssistantRunState = "waiting_approval"
 	AssistantRunStateWaitingExternal AssistantRunState = "waiting_external"
-	AssistantRunStatePaused          AssistantRunState = "paused"
-	AssistantRunStateSynthesizing    AssistantRunState = "synthesizing"
-	AssistantRunStateVerifying       AssistantRunState = "verifying"
-	AssistantRunStateCompleted       AssistantRunState = "completed"
-	AssistantRunStateFailed          AssistantRunState = "failed"
-	AssistantRunStateCancelled       AssistantRunState = "cancelled"
+	AssistantRunStatePaused AssistantRunState = "paused"
+	AssistantRunStateSynthesizing AssistantRunState = "synthesizing"
+	AssistantRunStateVerifying AssistantRunState = "verifying"
+	AssistantRunStateCompleted AssistantRunState = "completed"
+	AssistantRunStateFailed AssistantRunState = "failed"
+	AssistantRunStateCancelled AssistantRunState = "cancelled"
 )
 
 func ParseAssistantRunState(raw string) (AssistantRunState, error) {
@@ -455,18 +455,18 @@ func (value AssistantRunState) WireName() string { return string(value) }
 type AssistantRunItemKind string
 
 const (
-	AssistantRunItemKindUnknown         AssistantRunItemKind = ""
-	AssistantRunItemKindUserInput       AssistantRunItemKind = "user_input"
-	AssistantRunItemKindPlan            AssistantRunItemKind = "plan"
-	AssistantRunItemKindTask            AssistantRunItemKind = "task"
+	AssistantRunItemKindUnknown AssistantRunItemKind = ""
+	AssistantRunItemKindUserInput AssistantRunItemKind = "user_input"
+	AssistantRunItemKindPlan AssistantRunItemKind = "plan"
+	AssistantRunItemKindTask AssistantRunItemKind = "task"
 	AssistantRunItemKindDecisionSummary AssistantRunItemKind = "decision_summary"
-	AssistantRunItemKindToolUse         AssistantRunItemKind = "tool_use"
-	AssistantRunItemKindSubagent        AssistantRunItemKind = "subagent"
-	AssistantRunItemKindEvidence        AssistantRunItemKind = "evidence"
-	AssistantRunItemKindPresentation    AssistantRunItemKind = "presentation"
-	AssistantRunItemKindApproval        AssistantRunItemKind = "approval"
-	AssistantRunItemKindCheckpoint      AssistantRunItemKind = "checkpoint"
-	AssistantRunItemKindFinalAnswer     AssistantRunItemKind = "final_answer"
+	AssistantRunItemKindToolUse AssistantRunItemKind = "tool_use"
+	AssistantRunItemKindSubagent AssistantRunItemKind = "subagent"
+	AssistantRunItemKindEvidence AssistantRunItemKind = "evidence"
+	AssistantRunItemKindPresentation AssistantRunItemKind = "presentation"
+	AssistantRunItemKindApproval AssistantRunItemKind = "approval"
+	AssistantRunItemKindCheckpoint AssistantRunItemKind = "checkpoint"
+	AssistantRunItemKindFinalAnswer AssistantRunItemKind = "final_answer"
 )
 
 func ParseAssistantRunItemKind(raw string) (AssistantRunItemKind, error) {
@@ -505,9 +505,9 @@ func (value AssistantRunItemKind) WireName() string { return string(value) }
 type AssistantRunItemStatus string
 
 const (
-	AssistantRunItemStatusStarted   AssistantRunItemStatus = "started"
+	AssistantRunItemStatusStarted AssistantRunItemStatus = "started"
 	AssistantRunItemStatusCompleted AssistantRunItemStatus = "completed"
-	AssistantRunItemStatusFailed    AssistantRunItemStatus = "failed"
+	AssistantRunItemStatusFailed AssistantRunItemStatus = "failed"
 	AssistantRunItemStatusCancelled AssistantRunItemStatus = "cancelled"
 )
 
@@ -531,12 +531,12 @@ func (value AssistantRunItemStatus) WireName() string { return string(value) }
 type AssistantTaskStatus string
 
 const (
-	AssistantTaskStatusPending   AssistantTaskStatus = "pending"
-	AssistantTaskStatusReady     AssistantTaskStatus = "ready"
-	AssistantTaskStatusRunning   AssistantTaskStatus = "running"
-	AssistantTaskStatusWaiting   AssistantTaskStatus = "waiting"
+	AssistantTaskStatusPending AssistantTaskStatus = "pending"
+	AssistantTaskStatusReady AssistantTaskStatus = "ready"
+	AssistantTaskStatusRunning AssistantTaskStatus = "running"
+	AssistantTaskStatusWaiting AssistantTaskStatus = "waiting"
 	AssistantTaskStatusCompleted AssistantTaskStatus = "completed"
-	AssistantTaskStatusFailed    AssistantTaskStatus = "failed"
+	AssistantTaskStatusFailed AssistantTaskStatus = "failed"
 	AssistantTaskStatusCancelled AssistantTaskStatus = "cancelled"
 )
 
@@ -566,9 +566,9 @@ func (value AssistantTaskStatus) WireName() string { return string(value) }
 type AssistantReasoningProfile string
 
 const (
-	AssistantReasoningProfileFast           AssistantReasoningProfile = "fast"
-	AssistantReasoningProfileBalanced       AssistantReasoningProfile = "balanced"
-	AssistantReasoningProfileDeep           AssistantReasoningProfile = "deep"
+	AssistantReasoningProfileFast AssistantReasoningProfile = "fast"
+	AssistantReasoningProfileBalanced AssistantReasoningProfile = "balanced"
+	AssistantReasoningProfileDeep AssistantReasoningProfile = "deep"
 	AssistantReasoningProfileBackgroundLong AssistantReasoningProfile = "background_long"
 )
 
@@ -592,8 +592,8 @@ func (value AssistantReasoningProfile) WireName() string { return string(value) 
 type SkillSubscriptionStatus string
 
 const (
-	SkillSubscriptionStatusActive   SkillSubscriptionStatus = "active"
-	SkillSubscriptionStatusPaused   SkillSubscriptionStatus = "paused"
+	SkillSubscriptionStatusActive SkillSubscriptionStatus = "active"
+	SkillSubscriptionStatusPaused SkillSubscriptionStatus = "paused"
 	SkillSubscriptionStatusArchived SkillSubscriptionStatus = "archived"
 )
 
@@ -615,7 +615,7 @@ func (value SkillSubscriptionStatus) WireName() string { return string(value) }
 type SkillSubscriptionDestinationType string
 
 const (
-	SkillSubscriptionDestinationTypeUser             SkillSubscriptionDestinationType = "user"
+	SkillSubscriptionDestinationTypeUser SkillSubscriptionDestinationType = "user"
 	SkillSubscriptionDestinationTypeChatConversation SkillSubscriptionDestinationType = "chat_conversation"
 )
 
@@ -635,7 +635,7 @@ func (value SkillSubscriptionDestinationType) WireName() string { return string(
 type SkillUserSettingStatus string
 
 const (
-	SkillUserSettingStatusEnabled  SkillUserSettingStatus = "enabled"
+	SkillUserSettingStatusEnabled SkillUserSettingStatus = "enabled"
 	SkillUserSettingStatusDisabled SkillUserSettingStatus = "disabled"
 )
 
@@ -656,10 +656,10 @@ type SkillDataControlRequestStatus string
 
 const (
 	SkillDataControlRequestStatusPendingConfirmation SkillDataControlRequestStatus = "pending_confirmation"
-	SkillDataControlRequestStatusExecuting           SkillDataControlRequestStatus = "executing"
-	SkillDataControlRequestStatusCompleted           SkillDataControlRequestStatus = "completed"
-	SkillDataControlRequestStatusCancelled           SkillDataControlRequestStatus = "cancelled"
-	SkillDataControlRequestStatusFailed              SkillDataControlRequestStatus = "failed"
+	SkillDataControlRequestStatusExecuting SkillDataControlRequestStatus = "executing"
+	SkillDataControlRequestStatusCompleted SkillDataControlRequestStatus = "completed"
+	SkillDataControlRequestStatusCancelled SkillDataControlRequestStatus = "cancelled"
+	SkillDataControlRequestStatusFailed SkillDataControlRequestStatus = "failed"
 )
 
 func ParseSkillDataControlRequestStatus(raw string) (SkillDataControlRequestStatus, error) {
@@ -684,8 +684,8 @@ func (value SkillDataControlRequestStatus) WireName() string { return string(val
 type SkillDataControlAction string
 
 const (
-	SkillDataControlActionHideActivityHistory  SkillDataControlAction = "hide_activity_history"
-	SkillDataControlActionRevokeConsent        SkillDataControlAction = "revoke_consent"
+	SkillDataControlActionHideActivityHistory SkillDataControlAction = "hide_activity_history"
+	SkillDataControlActionRevokeConsent SkillDataControlAction = "revoke_consent"
 	SkillDataControlActionArchiveSubscriptions SkillDataControlAction = "archive_subscriptions"
 )
 
@@ -707,10 +707,10 @@ func (value SkillDataControlAction) WireName() string { return string(value) }
 type SkillActivityKind string
 
 const (
-	SkillActivityKindRun          SkillActivityKind = "run"
-	SkillActivityKindConsent      SkillActivityKind = "consent"
+	SkillActivityKindRun SkillActivityKind = "run"
+	SkillActivityKindConsent SkillActivityKind = "consent"
 	SkillActivityKindSubscription SkillActivityKind = "subscription"
-	SkillActivityKindDataControl  SkillActivityKind = "data_control"
+	SkillActivityKindDataControl SkillActivityKind = "data_control"
 )
 
 func ParseSkillActivityKind(raw string) (SkillActivityKind, error) {
@@ -733,15 +733,15 @@ func (value SkillActivityKind) WireName() string { return string(value) }
 type SkillActivityRecoveryAction string
 
 const (
-	SkillActivityRecoveryActionRetryRun           SkillActivityRecoveryAction = "retry_run"
-	SkillActivityRecoveryActionProvideInput       SkillActivityRecoveryAction = "provide_input"
-	SkillActivityRecoveryActionReviewApproval     SkillActivityRecoveryAction = "review_approval"
-	SkillActivityRecoveryActionResumeRun          SkillActivityRecoveryAction = "resume_run"
-	SkillActivityRecoveryActionReviewConsent      SkillActivityRecoveryAction = "review_consent"
-	SkillActivityRecoveryActionManageConsent      SkillActivityRecoveryAction = "manage_consent"
+	SkillActivityRecoveryActionRetryRun SkillActivityRecoveryAction = "retry_run"
+	SkillActivityRecoveryActionProvideInput SkillActivityRecoveryAction = "provide_input"
+	SkillActivityRecoveryActionReviewApproval SkillActivityRecoveryAction = "review_approval"
+	SkillActivityRecoveryActionResumeRun SkillActivityRecoveryAction = "resume_run"
+	SkillActivityRecoveryActionReviewConsent SkillActivityRecoveryAction = "review_consent"
+	SkillActivityRecoveryActionManageConsent SkillActivityRecoveryAction = "manage_consent"
 	SkillActivityRecoveryActionResumeSubscription SkillActivityRecoveryAction = "resume_subscription"
 	SkillActivityRecoveryActionManageSubscription SkillActivityRecoveryAction = "manage_subscription"
-	SkillActivityRecoveryActionRetryDataControl   SkillActivityRecoveryAction = "retry_data_control"
+	SkillActivityRecoveryActionRetryDataControl SkillActivityRecoveryAction = "retry_data_control"
 )
 
 func ParseSkillActivityRecoveryAction(raw string) (SkillActivityRecoveryAction, error) {
@@ -774,32 +774,32 @@ func (value SkillActivityRecoveryAction) WireName() string { return string(value
 type SkillActivityDisplayKey string
 
 const (
-	SkillActivityDisplayKeyRunAccepted                    SkillActivityDisplayKey = "assistant.skill_activity.run.accepted"
-	SkillActivityDisplayKeyRunOrienting                   SkillActivityDisplayKey = "assistant.skill_activity.run.orienting"
-	SkillActivityDisplayKeyRunPlanning                    SkillActivityDisplayKey = "assistant.skill_activity.run.planning"
-	SkillActivityDisplayKeyRunExecuting                   SkillActivityDisplayKey = "assistant.skill_activity.run.executing"
-	SkillActivityDisplayKeyRunObserving                   SkillActivityDisplayKey = "assistant.skill_activity.run.observing"
-	SkillActivityDisplayKeyRunReflecting                  SkillActivityDisplayKey = "assistant.skill_activity.run.reflecting"
-	SkillActivityDisplayKeyRunCheckpointing               SkillActivityDisplayKey = "assistant.skill_activity.run.checkpointing"
-	SkillActivityDisplayKeyRunWaitingUser                 SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_user"
-	SkillActivityDisplayKeyRunWaitingApproval             SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_approval"
-	SkillActivityDisplayKeyRunWaitingExternal             SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_external"
-	SkillActivityDisplayKeyRunPaused                      SkillActivityDisplayKey = "assistant.skill_activity.run.paused"
-	SkillActivityDisplayKeyRunSynthesizing                SkillActivityDisplayKey = "assistant.skill_activity.run.synthesizing"
-	SkillActivityDisplayKeyRunVerifying                   SkillActivityDisplayKey = "assistant.skill_activity.run.verifying"
-	SkillActivityDisplayKeyRunCompleted                   SkillActivityDisplayKey = "assistant.skill_activity.run.completed"
-	SkillActivityDisplayKeyRunFailed                      SkillActivityDisplayKey = "assistant.skill_activity.run.failed"
-	SkillActivityDisplayKeyRunCancelled                   SkillActivityDisplayKey = "assistant.skill_activity.run.cancelled"
-	SkillActivityDisplayKeyConsentGranted                 SkillActivityDisplayKey = "assistant.skill_activity.consent.granted"
-	SkillActivityDisplayKeyConsentRevoked                 SkillActivityDisplayKey = "assistant.skill_activity.consent.revoked"
-	SkillActivityDisplayKeySubscriptionActive             SkillActivityDisplayKey = "assistant.skill_activity.subscription.active"
-	SkillActivityDisplayKeySubscriptionPaused             SkillActivityDisplayKey = "assistant.skill_activity.subscription.paused"
-	SkillActivityDisplayKeySubscriptionArchived           SkillActivityDisplayKey = "assistant.skill_activity.subscription.archived"
+	SkillActivityDisplayKeyRunAccepted SkillActivityDisplayKey = "assistant.skill_activity.run.accepted"
+	SkillActivityDisplayKeyRunOrienting SkillActivityDisplayKey = "assistant.skill_activity.run.orienting"
+	SkillActivityDisplayKeyRunPlanning SkillActivityDisplayKey = "assistant.skill_activity.run.planning"
+	SkillActivityDisplayKeyRunExecuting SkillActivityDisplayKey = "assistant.skill_activity.run.executing"
+	SkillActivityDisplayKeyRunObserving SkillActivityDisplayKey = "assistant.skill_activity.run.observing"
+	SkillActivityDisplayKeyRunReflecting SkillActivityDisplayKey = "assistant.skill_activity.run.reflecting"
+	SkillActivityDisplayKeyRunCheckpointing SkillActivityDisplayKey = "assistant.skill_activity.run.checkpointing"
+	SkillActivityDisplayKeyRunWaitingUser SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_user"
+	SkillActivityDisplayKeyRunWaitingApproval SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_approval"
+	SkillActivityDisplayKeyRunWaitingExternal SkillActivityDisplayKey = "assistant.skill_activity.run.waiting_external"
+	SkillActivityDisplayKeyRunPaused SkillActivityDisplayKey = "assistant.skill_activity.run.paused"
+	SkillActivityDisplayKeyRunSynthesizing SkillActivityDisplayKey = "assistant.skill_activity.run.synthesizing"
+	SkillActivityDisplayKeyRunVerifying SkillActivityDisplayKey = "assistant.skill_activity.run.verifying"
+	SkillActivityDisplayKeyRunCompleted SkillActivityDisplayKey = "assistant.skill_activity.run.completed"
+	SkillActivityDisplayKeyRunFailed SkillActivityDisplayKey = "assistant.skill_activity.run.failed"
+	SkillActivityDisplayKeyRunCancelled SkillActivityDisplayKey = "assistant.skill_activity.run.cancelled"
+	SkillActivityDisplayKeyConsentGranted SkillActivityDisplayKey = "assistant.skill_activity.consent.granted"
+	SkillActivityDisplayKeyConsentRevoked SkillActivityDisplayKey = "assistant.skill_activity.consent.revoked"
+	SkillActivityDisplayKeySubscriptionActive SkillActivityDisplayKey = "assistant.skill_activity.subscription.active"
+	SkillActivityDisplayKeySubscriptionPaused SkillActivityDisplayKey = "assistant.skill_activity.subscription.paused"
+	SkillActivityDisplayKeySubscriptionArchived SkillActivityDisplayKey = "assistant.skill_activity.subscription.archived"
 	SkillActivityDisplayKeyDataControlPendingConfirmation SkillActivityDisplayKey = "assistant.skill_activity.data_control.pending_confirmation"
-	SkillActivityDisplayKeyDataControlExecuting           SkillActivityDisplayKey = "assistant.skill_activity.data_control.executing"
-	SkillActivityDisplayKeyDataControlCompleted           SkillActivityDisplayKey = "assistant.skill_activity.data_control.completed"
-	SkillActivityDisplayKeyDataControlCancelled           SkillActivityDisplayKey = "assistant.skill_activity.data_control.cancelled"
-	SkillActivityDisplayKeyDataControlFailed              SkillActivityDisplayKey = "assistant.skill_activity.data_control.failed"
+	SkillActivityDisplayKeyDataControlExecuting SkillActivityDisplayKey = "assistant.skill_activity.data_control.executing"
+	SkillActivityDisplayKeyDataControlCompleted SkillActivityDisplayKey = "assistant.skill_activity.data_control.completed"
+	SkillActivityDisplayKeyDataControlCancelled SkillActivityDisplayKey = "assistant.skill_activity.data_control.cancelled"
+	SkillActivityDisplayKeyDataControlFailed SkillActivityDisplayKey = "assistant.skill_activity.data_control.failed"
 )
 
 func ParseSkillActivityDisplayKey(raw string) (SkillActivityDisplayKey, error) {
@@ -866,9 +866,9 @@ func (value SkillActivityDisplayKey) WireName() string { return string(value) }
 type SkillMemoryPolicy string
 
 const (
-	SkillMemoryPolicyPackageDefault    SkillMemoryPolicy = "package_default"
+	SkillMemoryPolicyPackageDefault SkillMemoryPolicy = "package_default"
 	SkillMemoryPolicyConfirmBeforeSave SkillMemoryPolicy = "confirm_before_save"
-	SkillMemoryPolicyDisabled          SkillMemoryPolicy = "disabled"
+	SkillMemoryPolicyDisabled SkillMemoryPolicy = "disabled"
 )
 
 func ParseSkillMemoryPolicy(raw string) (SkillMemoryPolicy, error) {
@@ -890,7 +890,7 @@ type SkillSurfaceKind string
 
 const (
 	SkillSurfaceKindConversation SkillSurfaceKind = "conversation"
-	SkillSurfaceKindCircle       SkillSurfaceKind = "circle"
+	SkillSurfaceKindCircle SkillSurfaceKind = "circle"
 )
 
 func ParseSkillSurfaceKind(raw string) (SkillSurfaceKind, error) {
@@ -926,7 +926,7 @@ func (value SkillSurfacePlacementPolicy) WireName() string { return string(value
 type SkillSurfacePlacementStatus string
 
 const (
-	SkillSurfacePlacementStatusActive   SkillSurfacePlacementStatus = "active"
+	SkillSurfacePlacementStatusActive SkillSurfacePlacementStatus = "active"
 	SkillSurfacePlacementStatusArchived SkillSurfacePlacementStatus = "archived"
 )
 
@@ -946,10 +946,10 @@ func (value SkillSurfacePlacementStatus) WireName() string { return string(value
 type AssistantLearningFactType string
 
 const (
-	AssistantLearningFactTypeUnknown            AssistantLearningFactType = ""
-	AssistantLearningFactTypeUserFeedback       AssistantLearningFactType = "user_feedback"
+	AssistantLearningFactTypeUnknown AssistantLearningFactType = ""
+	AssistantLearningFactTypeUserFeedback AssistantLearningFactType = "user_feedback"
 	AssistantLearningFactTypeInteractionOutcome AssistantLearningFactType = "interaction_outcome"
-	AssistantLearningFactTypeServiceScorecard   AssistantLearningFactType = "service_scorecard"
+	AssistantLearningFactTypeServiceScorecard AssistantLearningFactType = "service_scorecard"
 )
 
 func ParseAssistantLearningFactType(raw string) (AssistantLearningFactType, error) {
@@ -972,17 +972,17 @@ func (value AssistantLearningFactType) WireName() string { return string(value) 
 type AssistantReferralSource string
 
 const (
-	AssistantReferralSourceUnknown          AssistantReferralSource = ""
-	AssistantReferralSourceHome             AssistantReferralSource = "home"
-	AssistantReferralSourceDiscovery        AssistantReferralSource = "discovery"
-	AssistantReferralSourceCircles          AssistantReferralSource = "circles"
-	AssistantReferralSourceArticle          AssistantReferralSource = "article"
-	AssistantReferralSourceProfile          AssistantReferralSource = "profile"
-	AssistantReferralSourceChat             AssistantReferralSource = "chat"
-	AssistantReferralSourceCreate           AssistantReferralSource = "create"
-	AssistantReferralSourceSearch           AssistantReferralSource = "search"
+	AssistantReferralSourceUnknown AssistantReferralSource = ""
+	AssistantReferralSourceHome AssistantReferralSource = "home"
+	AssistantReferralSourceDiscovery AssistantReferralSource = "discovery"
+	AssistantReferralSourceCircles AssistantReferralSource = "circles"
+	AssistantReferralSourceArticle AssistantReferralSource = "article"
+	AssistantReferralSourceProfile AssistantReferralSource = "profile"
+	AssistantReferralSourceChat AssistantReferralSource = "chat"
+	AssistantReferralSourceCreate AssistantReferralSource = "create"
+	AssistantReferralSourceSearch AssistantReferralSource = "search"
 	AssistantReferralSourceAssistantSession AssistantReferralSource = "assistant_session"
-	AssistantReferralSourceService          AssistantReferralSource = "service"
+	AssistantReferralSourceService AssistantReferralSource = "service"
 )
 
 func ParseAssistantReferralSource(raw string) (AssistantReferralSource, error) {
@@ -1019,14 +1019,14 @@ func (value AssistantReferralSource) WireName() string { return string(value) }
 type InteractionEventType string
 
 const (
-	InteractionEventTypeUnknown      InteractionEventType = ""
-	InteractionEventTypeQuery        InteractionEventType = "query"
-	InteractionEventTypeResponse     InteractionEventType = "response"
-	InteractionEventTypeFeedback     InteractionEventType = "feedback"
-	InteractionEventTypeActionClick  InteractionEventType = "action_click"
+	InteractionEventTypeUnknown InteractionEventType = ""
+	InteractionEventTypeQuery InteractionEventType = "query"
+	InteractionEventTypeResponse InteractionEventType = "response"
+	InteractionEventTypeFeedback InteractionEventType = "feedback"
+	InteractionEventTypeActionClick InteractionEventType = "action_click"
 	InteractionEventTypeSkillTrigger InteractionEventType = "skill_trigger"
-	InteractionEventTypeToolCall     InteractionEventType = "tool_call"
-	InteractionEventTypeError        InteractionEventType = "error"
+	InteractionEventTypeToolCall InteractionEventType = "tool_call"
+	InteractionEventTypeError InteractionEventType = "error"
 )
 
 func ParseInteractionEventType(raw string) (InteractionEventType, error) {
@@ -1057,15 +1057,15 @@ func (value InteractionEventType) WireName() string { return string(value) }
 type FeedbackType string
 
 const (
-	FeedbackTypeUnknown     FeedbackType = ""
-	FeedbackTypeThumbsUp    FeedbackType = "thumbs_up"
-	FeedbackTypeThumbsDown  FeedbackType = "thumbs_down"
-	FeedbackTypeRating      FeedbackType = "rating"
-	FeedbackTypeText        FeedbackType = "text"
-	FeedbackTypeUseful      FeedbackType = "useful"
-	FeedbackTypeIrrelevant  FeedbackType = "irrelevant"
+	FeedbackTypeUnknown FeedbackType = ""
+	FeedbackTypeThumbsUp FeedbackType = "thumbs_up"
+	FeedbackTypeThumbsDown FeedbackType = "thumbs_down"
+	FeedbackTypeRating FeedbackType = "rating"
+	FeedbackTypeText FeedbackType = "text"
+	FeedbackTypeUseful FeedbackType = "useful"
+	FeedbackTypeIrrelevant FeedbackType = "irrelevant"
 	FeedbackTypeTooFrequent FeedbackType = "too_frequent"
-	FeedbackTypeCopied      FeedbackType = "copied"
+	FeedbackTypeCopied FeedbackType = "copied"
 	FeedbackTypeRegenerated FeedbackType = "regenerated"
 )
 
@@ -1101,12 +1101,12 @@ func (value FeedbackType) WireName() string { return string(value) }
 type ProblemClass string
 
 const (
-	ProblemClassGeneral          ProblemClass = "general"
-	ProblemClassSimpleQa         ProblemClass = "simple_qa"
+	ProblemClassGeneral ProblemClass = "general"
+	ProblemClassSimpleQa ProblemClass = "simple_qa"
 	ProblemClassComplexReasoning ProblemClass = "complex_reasoning"
-	ProblemClassEvidenceLookup   ProblemClass = "evidence_lookup"
-	ProblemClassRealtimeInfo     ProblemClass = "realtime_info"
-	ProblemClassTaskExecution    ProblemClass = "task_execution"
+	ProblemClassEvidenceLookup ProblemClass = "evidence_lookup"
+	ProblemClassRealtimeInfo ProblemClass = "realtime_info"
+	ProblemClassTaskExecution ProblemClass = "task_execution"
 )
 
 func ParseProblemClass(raw string) (ProblemClass, error) {
@@ -1133,13 +1133,13 @@ func (value ProblemClass) WireName() string { return string(value) }
 type QueryIntent string
 
 const (
-	QueryIntentUnspecified        QueryIntent = ""
-	QueryIntentGeneralLookup      QueryIntent = "general_lookup"
-	QueryIntentTaskExecution      QueryIntent = "task_execution"
-	QueryIntentRealtimeLookup     QueryIntent = "realtime_lookup"
+	QueryIntentUnspecified QueryIntent = ""
+	QueryIntentGeneralLookup QueryIntent = "general_lookup"
+	QueryIntentTaskExecution QueryIntent = "task_execution"
+	QueryIntentRealtimeLookup QueryIntent = "realtime_lookup"
 	QueryIntentComparisonAnalysis QueryIntent = "comparison_analysis"
 	QueryIntentOptionsExploration QueryIntent = "options_exploration"
-	QueryIntentDecisionSupport    QueryIntent = "decision_support"
+	QueryIntentDecisionSupport QueryIntent = "decision_support"
 )
 
 func ParseQueryIntent(raw string) (QueryIntent, error) {
@@ -1168,8 +1168,8 @@ func (value QueryIntent) WireName() string { return string(value) }
 type SkillMode string
 
 const (
-	SkillModeQa     SkillMode = "qa"
-	SkillModeTask   SkillMode = "task"
+	SkillModeQa SkillMode = "qa"
+	SkillModeTask SkillMode = "task"
 	SkillModeHybrid SkillMode = "hybrid"
 )
 
@@ -1191,10 +1191,10 @@ func (value SkillMode) WireName() string { return string(value) }
 type ProviderPolicy string
 
 const (
-	ProviderPolicyInherit        ProviderPolicy = ""
-	ProviderPolicyModelChoice    ProviderPolicy = "model_choice"
+	ProviderPolicyInherit ProviderPolicy = ""
+	ProviderPolicyModelChoice ProviderPolicy = "model_choice"
 	ProviderPolicyAuthorityFirst ProviderPolicy = "authority_first"
-	ProviderPolicyPreferredOnly  ProviderPolicy = "preferred_only"
+	ProviderPolicyPreferredOnly ProviderPolicy = "preferred_only"
 )
 
 func ParseProviderPolicy(raw string) (ProviderPolicy, error) {
@@ -1217,9 +1217,9 @@ func (value ProviderPolicy) WireName() string { return string(value) }
 type SearchIntensity string
 
 const (
-	SearchIntensityLow    SearchIntensity = "low"
+	SearchIntensityLow SearchIntensity = "low"
 	SearchIntensityMedium SearchIntensity = "medium"
-	SearchIntensityHigh   SearchIntensity = "high"
+	SearchIntensityHigh SearchIntensity = "high"
 )
 
 func ParseSearchIntensity(raw string) (SearchIntensity, error) {
@@ -1240,8 +1240,8 @@ func (value SearchIntensity) WireName() string { return string(value) }
 type AssistantRunIntentKind string
 
 const (
-	AssistantRunIntentKindAnswer             AssistantRunIntentKind = "answer"
-	AssistantRunIntentKindSearch             AssistantRunIntentKind = "search"
+	AssistantRunIntentKindAnswer AssistantRunIntentKind = "answer"
+	AssistantRunIntentKindSearch AssistantRunIntentKind = "search"
 	AssistantRunIntentKindCreationAssistance AssistantRunIntentKind = "creation_assistance"
 )
 
@@ -1263,8 +1263,8 @@ func (value AssistantRunIntentKind) WireName() string { return string(value) }
 type StopPolicy string
 
 const (
-	StopPolicyBalanced   StopPolicy = "balanced"
-	StopPolicyFastExit   StopPolicy = "strict"
+	StopPolicyBalanced StopPolicy = "balanced"
+	StopPolicyFastExit StopPolicy = "strict"
 	StopPolicyExhaustive StopPolicy = "explore"
 )
 
@@ -1286,12 +1286,12 @@ func (value StopPolicy) WireName() string { return string(value) }
 type FinalAnswerMode string
 
 const (
-	FinalAnswerModeFull          FinalAnswerMode = "full"
+	FinalAnswerModeFull FinalAnswerMode = "full"
 	FinalAnswerModeBoundedAnswer FinalAnswerMode = "bounded_answer"
-	FinalAnswerModeClarify       FinalAnswerMode = "clarify"
-	FinalAnswerModeReplan        FinalAnswerMode = "replan"
-	FinalAnswerModeRetry         FinalAnswerMode = "retry"
-	FinalAnswerModeBlocked       FinalAnswerMode = "blocked"
+	FinalAnswerModeClarify FinalAnswerMode = "clarify"
+	FinalAnswerModeReplan FinalAnswerMode = "replan"
+	FinalAnswerModeRetry FinalAnswerMode = "retry"
+	FinalAnswerModeBlocked FinalAnswerMode = "blocked"
 )
 
 func ParseFinalAnswerMode(raw string) (FinalAnswerMode, error) {
@@ -1319,9 +1319,9 @@ type AnswerEligibility string
 
 const (
 	AnswerEligibilityEligible AnswerEligibility = "eligible"
-	AnswerEligibilityClarify  AnswerEligibility = "clarify"
-	AnswerEligibilityBlocked  AnswerEligibility = "blocked"
-	AnswerEligibilityUnknown  AnswerEligibility = "unknown"
+	AnswerEligibilityClarify AnswerEligibility = "clarify"
+	AnswerEligibilityBlocked AnswerEligibility = "blocked"
+	AnswerEligibilityUnknown AnswerEligibility = "unknown"
 )
 
 func ParseAnswerEligibility(raw string) (AnswerEligibility, error) {
@@ -1345,8 +1345,8 @@ type ProblemShape string
 
 const (
 	ProblemShapeSingleSkill ProblemShape = "single_skill"
-	ProblemShapeMultiSkill  ProblemShape = "multi_skill"
-	ProblemShapeUnknown     ProblemShape = ""
+	ProblemShapeMultiSkill ProblemShape = "multi_skill"
+	ProblemShapeUnknown ProblemShape = ""
 )
 
 func ParseProblemShape(raw string) (ProblemShape, error) {
@@ -1368,9 +1368,9 @@ type EvidenceSourceTier string
 
 const (
 	EvidenceSourceTierAuthority EvidenceSourceTier = "authority"
-	EvidenceSourceTierPage      EvidenceSourceTier = "page"
-	EvidenceSourceTierWeb       EvidenceSourceTier = "web"
-	EvidenceSourceTierUnknown   EvidenceSourceTier = ""
+	EvidenceSourceTierPage EvidenceSourceTier = "page"
+	EvidenceSourceTierWeb EvidenceSourceTier = "web"
+	EvidenceSourceTierUnknown EvidenceSourceTier = ""
 )
 
 func ParseEvidenceSourceTier(raw string) (EvidenceSourceTier, error) {
@@ -1394,12 +1394,12 @@ type AssistantNextAction string
 
 const (
 	AssistantNextActionToolCall AssistantNextAction = "tool_call"
-	AssistantNextActionAnswer   AssistantNextAction = "answer"
-	AssistantNextActionAskUser  AssistantNextAction = "ask_user"
-	AssistantNextActionReplan   AssistantNextAction = "replan"
-	AssistantNextActionRetry    AssistantNextAction = "retry"
-	AssistantNextActionAbort    AssistantNextAction = "abort"
-	AssistantNextActionUnknown  AssistantNextAction = ""
+	AssistantNextActionAnswer AssistantNextAction = "answer"
+	AssistantNextActionAskUser AssistantNextAction = "ask_user"
+	AssistantNextActionReplan AssistantNextAction = "replan"
+	AssistantNextActionRetry AssistantNextAction = "retry"
+	AssistantNextActionAbort AssistantNextAction = "abort"
+	AssistantNextActionUnknown AssistantNextAction = ""
 )
 
 func ParseAssistantNextAction(raw string) (AssistantNextAction, error) {
@@ -1429,11 +1429,11 @@ type AssistantMessageKind string
 
 const (
 	AssistantMessageKindProgress AssistantMessageKind = "progress"
-	AssistantMessageKindAnswer   AssistantMessageKind = "answer"
-	AssistantMessageKindAskUser  AssistantMessageKind = "ask_user"
-	AssistantMessageKindError    AssistantMessageKind = "error"
+	AssistantMessageKindAnswer AssistantMessageKind = "answer"
+	AssistantMessageKindAskUser AssistantMessageKind = "ask_user"
+	AssistantMessageKindError AssistantMessageKind = "error"
 	AssistantMessageKindFallback AssistantMessageKind = "fallback"
-	AssistantMessageKindUnknown  AssistantMessageKind = ""
+	AssistantMessageKindUnknown AssistantMessageKind = ""
 )
 
 func ParseAssistantMessageKind(raw string) (AssistantMessageKind, error) {
@@ -1462,9 +1462,9 @@ type JourneyStageId string
 const (
 	JourneyStageIdUnknown JourneyStageId = ""
 	JourneyStageIdAnalyze JourneyStageId = "analyze"
-	JourneyStageIdSearch  JourneyStageId = "search"
-	JourneyStageIdVerify  JourneyStageId = "verify"
-	JourneyStageIdAnswer  JourneyStageId = "answer"
+	JourneyStageIdSearch JourneyStageId = "search"
+	JourneyStageIdVerify JourneyStageId = "verify"
+	JourneyStageIdAnswer JourneyStageId = "answer"
 )
 
 func ParseJourneyStageId(raw string) (JourneyStageId, error) {
@@ -1489,12 +1489,12 @@ func (value JourneyStageId) WireName() string { return string(value) }
 type JourneyStageStatus string
 
 const (
-	JourneyStageStatusUnknown   JourneyStageStatus = ""
-	JourneyStageStatusPending   JourneyStageStatus = "pending"
-	JourneyStageStatusActive    JourneyStageStatus = "active"
+	JourneyStageStatusUnknown JourneyStageStatus = ""
+	JourneyStageStatusPending JourneyStageStatus = "pending"
+	JourneyStageStatusActive JourneyStageStatus = "active"
 	JourneyStageStatusCompleted JourneyStageStatus = "completed"
-	JourneyStageStatusBlocked   JourneyStageStatus = "blocked"
-	JourneyStageStatusSkipped   JourneyStageStatus = "skipped"
+	JourneyStageStatusBlocked JourneyStageStatus = "blocked"
+	JourneyStageStatusSkipped JourneyStageStatus = "skipped"
 )
 
 func ParseJourneyStageStatus(raw string) (JourneyStageStatus, error) {
@@ -1521,10 +1521,10 @@ func (value JourneyStageStatus) WireName() string { return string(value) }
 type JourneyEntryKind string
 
 const (
-	JourneyEntryKindUnknown         JourneyEntryKind = ""
-	JourneyEntryKindNarrative       JourneyEntryKind = "narrative"
+	JourneyEntryKindUnknown JourneyEntryKind = ""
+	JourneyEntryKindNarrative JourneyEntryKind = "narrative"
 	JourneyEntryKindReferenceBundle JourneyEntryKind = "reference_bundle"
-	JourneyEntryKindMilestone       JourneyEntryKind = "milestone"
+	JourneyEntryKindMilestone JourneyEntryKind = "milestone"
 )
 
 func ParseJourneyEntryKind(raw string) (JourneyEntryKind, error) {
@@ -1547,11 +1547,11 @@ func (value JourneyEntryKind) WireName() string { return string(value) }
 type ProcessStepId string
 
 const (
-	ProcessStepIdUnknown             ProcessStepId = ""
-	ProcessStepIdUnderstanding       ProcessStepId = "understanding"
-	ProcessStepIdRetrievalDesign     ProcessStepId = "retrieval_design"
+	ProcessStepIdUnknown ProcessStepId = ""
+	ProcessStepIdUnderstanding ProcessStepId = "understanding"
+	ProcessStepIdRetrievalDesign ProcessStepId = "retrieval_design"
 	ProcessStepIdRetrievalProcessing ProcessStepId = "retrieval_processing"
-	ProcessStepIdAnswerOrganization  ProcessStepId = "answer_organization"
+	ProcessStepIdAnswerOrganization ProcessStepId = "answer_organization"
 )
 
 func ParseProcessStepId(raw string) (ProcessStepId, error) {
@@ -1576,13 +1576,13 @@ func (value ProcessStepId) WireName() string { return string(value) }
 type DisplayBlockKind string
 
 const (
-	DisplayBlockKindUnknown       DisplayBlockKind = ""
-	DisplayBlockKindMarkdown      DisplayBlockKind = "markdown"
-	DisplayBlockKindParagraph     DisplayBlockKind = "paragraph"
-	DisplayBlockKindBulletList    DisplayBlockKind = "bullet_list"
-	DisplayBlockKindNumberedList  DisplayBlockKind = "numbered_list"
+	DisplayBlockKindUnknown DisplayBlockKind = ""
+	DisplayBlockKindMarkdown DisplayBlockKind = "markdown"
+	DisplayBlockKindParagraph DisplayBlockKind = "paragraph"
+	DisplayBlockKindBulletList DisplayBlockKind = "bullet_list"
+	DisplayBlockKindNumberedList DisplayBlockKind = "numbered_list"
 	DisplayBlockKindReferenceList DisplayBlockKind = "reference_list"
-	DisplayBlockKindCallout       DisplayBlockKind = "callout"
+	DisplayBlockKindCallout DisplayBlockKind = "callout"
 )
 
 func ParseDisplayBlockKind(raw string) (DisplayBlockKind, error) {
@@ -1611,9 +1611,9 @@ func (value DisplayBlockKind) WireName() string { return string(value) }
 type DisplayListStyle string
 
 const (
-	DisplayListStyleUnknown  DisplayListStyle = ""
-	DisplayListStylePlain    DisplayListStyle = "plain"
-	DisplayListStyleBullet   DisplayListStyle = "bullet"
+	DisplayListStyleUnknown DisplayListStyle = ""
+	DisplayListStylePlain DisplayListStyle = "plain"
+	DisplayListStyleBullet DisplayListStyle = "bullet"
 	DisplayListStyleNumbered DisplayListStyle = "numbered"
 )
 
@@ -1637,9 +1637,9 @@ func (value DisplayListStyle) WireName() string { return string(value) }
 type ProcessDisplayBlockKind string
 
 const (
-	ProcessDisplayBlockKindUnknown    ProcessDisplayBlockKind = ""
-	ProcessDisplayBlockKindSummary    ProcessDisplayBlockKind = "summary"
-	ProcessDisplayBlockKindPoints     ProcessDisplayBlockKind = "points"
+	ProcessDisplayBlockKindUnknown ProcessDisplayBlockKind = ""
+	ProcessDisplayBlockKindSummary ProcessDisplayBlockKind = "summary"
+	ProcessDisplayBlockKindPoints ProcessDisplayBlockKind = "points"
 	ProcessDisplayBlockKindReferences ProcessDisplayBlockKind = "references"
 )
 
@@ -1663,19 +1663,19 @@ func (value ProcessDisplayBlockKind) WireName() string { return string(value) }
 type SearchPlanDimension string
 
 const (
-	SearchPlanDimensionUnknown            SearchPlanDimension = ""
-	SearchPlanDimensionCurrentState       SearchPlanDimension = "current_state"
-	SearchPlanDimensionDecisionImpact     SearchPlanDimension = "decision_impact"
-	SearchPlanDimensionCandidateSpace     SearchPlanDimension = "candidate_space"
-	SearchPlanDimensionTradeoffs          SearchPlanDimension = "tradeoffs"
-	SearchPlanDimensionFitConstraints     SearchPlanDimension = "fit_constraints"
-	SearchPlanDimensionFitScenarios       SearchPlanDimension = "fit_scenarios"
-	SearchPlanDimensionRiskBoundaries     SearchPlanDimension = "risk_boundaries"
-	SearchPlanDimensionKeyFacts           SearchPlanDimension = "key_facts"
-	SearchPlanDimensionDecisionThreshold  SearchPlanDimension = "decision_threshold"
-	SearchPlanDimensionCoreObject         SearchPlanDimension = "core_object"
+	SearchPlanDimensionUnknown SearchPlanDimension = ""
+	SearchPlanDimensionCurrentState SearchPlanDimension = "current_state"
+	SearchPlanDimensionDecisionImpact SearchPlanDimension = "decision_impact"
+	SearchPlanDimensionCandidateSpace SearchPlanDimension = "candidate_space"
+	SearchPlanDimensionTradeoffs SearchPlanDimension = "tradeoffs"
+	SearchPlanDimensionFitConstraints SearchPlanDimension = "fit_constraints"
+	SearchPlanDimensionFitScenarios SearchPlanDimension = "fit_scenarios"
+	SearchPlanDimensionRiskBoundaries SearchPlanDimension = "risk_boundaries"
+	SearchPlanDimensionKeyFacts SearchPlanDimension = "key_facts"
+	SearchPlanDimensionDecisionThreshold SearchPlanDimension = "decision_threshold"
+	SearchPlanDimensionCoreObject SearchPlanDimension = "core_object"
 	SearchPlanDimensionSupportingEvidence SearchPlanDimension = "supporting_evidence"
-	SearchPlanDimensionLatestSignal       SearchPlanDimension = "latest_signal"
+	SearchPlanDimensionLatestSignal SearchPlanDimension = "latest_signal"
 )
 
 func ParseSearchPlanDimension(raw string) (SearchPlanDimension, error) {
@@ -1717,8 +1717,8 @@ type TraceVisibility string
 
 const (
 	TraceVisibilityUserVisible TraceVisibility = "user_visible"
-	TraceVisibilitySystem      TraceVisibility = "system"
-	TraceVisibilityInternal    TraceVisibility = "internal"
+	TraceVisibilitySystem TraceVisibility = "system"
+	TraceVisibilityInternal TraceVisibility = "internal"
 )
 
 func ParseTraceVisibility(raw string) (TraceVisibility, error) {
@@ -1739,9 +1739,9 @@ func (value TraceVisibility) WireName() string { return string(value) }
 type ToolRecoveryAction string
 
 const (
-	ToolRecoveryActionUnknown       ToolRecoveryAction = ""
-	ToolRecoveryActionFailTurn      ToolRecoveryAction = "fail_turn"
-	ToolRecoveryActionSkipTool      ToolRecoveryAction = "skip_tool"
+	ToolRecoveryActionUnknown ToolRecoveryAction = ""
+	ToolRecoveryActionFailTurn ToolRecoveryAction = "fail_turn"
+	ToolRecoveryActionSkipTool ToolRecoveryAction = "skip_tool"
 	ToolRecoveryActionDegradeAnswer ToolRecoveryAction = "degrade_answer"
 )
 
@@ -1766,9 +1766,9 @@ type ToolDisruptionLevel string
 
 const (
 	ToolDisruptionLevelUnknown ToolDisruptionLevel = ""
-	ToolDisruptionLevelNone    ToolDisruptionLevel = "none"
+	ToolDisruptionLevelNone ToolDisruptionLevel = "none"
 	ToolDisruptionLevelPartial ToolDisruptionLevel = "partial"
-	ToolDisruptionLevelFull    ToolDisruptionLevel = "full"
+	ToolDisruptionLevelFull ToolDisruptionLevel = "full"
 )
 
 func ParseToolDisruptionLevel(raw string) (ToolDisruptionLevel, error) {
@@ -1791,10 +1791,10 @@ func (value ToolDisruptionLevel) WireName() string { return string(value) }
 type SlotValueStatus string
 
 const (
-	SlotValueStatusMissing    SlotValueStatus = "missing"
-	SlotValueStatusInferred   SlotValueStatus = "inferred"
-	SlotValueStatusConfirmed  SlotValueStatus = "confirmed"
-	SlotValueStatusStale      SlotValueStatus = "stale"
+	SlotValueStatusMissing SlotValueStatus = "missing"
+	SlotValueStatusInferred SlotValueStatus = "inferred"
+	SlotValueStatusConfirmed SlotValueStatus = "confirmed"
+	SlotValueStatusStale SlotValueStatus = "stale"
 	SlotValueStatusConflicted SlotValueStatus = "conflicted"
 )
 
@@ -1820,12 +1820,12 @@ func (value SlotValueStatus) WireName() string { return string(value) }
 type SlotFillAction string
 
 const (
-	SlotFillActionAutoFilled     SlotFillAction = "auto_filled"
+	SlotFillActionAutoFilled SlotFillAction = "auto_filled"
 	SlotFillActionDefaultApplied SlotFillAction = "default_applied"
-	SlotFillActionAskUser        SlotFillAction = "ask_user"
-	SlotFillActionInferred       SlotFillAction = "inferred"
-	SlotFillActionCarriedOver    SlotFillAction = "carried_over"
-	SlotFillActionUnknown        SlotFillAction = ""
+	SlotFillActionAskUser SlotFillAction = "ask_user"
+	SlotFillActionInferred SlotFillAction = "inferred"
+	SlotFillActionCarriedOver SlotFillAction = "carried_over"
+	SlotFillActionUnknown SlotFillAction = ""
 )
 
 func ParseSlotFillAction(raw string) (SlotFillAction, error) {
@@ -1852,14 +1852,14 @@ func (value SlotFillAction) WireName() string { return string(value) }
 type SlotSource string
 
 const (
-	SlotSourceUserQueryLlm   SlotSource = "user_query_llm"
+	SlotSourceUserQueryLlm SlotSource = "user_query_llm"
 	SlotSourceUserQueryRegex SlotSource = "user_query_regex"
-	SlotSourceToolData       SlotSource = "tool_data"
-	SlotSourceToolMessage    SlotSource = "tool_message"
-	SlotSourceGps            SlotSource = "gps"
+	SlotSourceToolData SlotSource = "tool_data"
+	SlotSourceToolMessage SlotSource = "tool_message"
+	SlotSourceGps SlotSource = "gps"
 	SlotSourceSessionHistory SlotSource = "session_history"
-	SlotSourceDefaultValue   SlotSource = "default"
-	SlotSourceUnknown        SlotSource = ""
+	SlotSourceDefaultValue SlotSource = "default"
+	SlotSourceUnknown SlotSource = ""
 )
 
 func ParseSlotSource(raw string) (SlotSource, error) {
@@ -1891,20 +1891,20 @@ type PlannerPhaseId string
 
 const (
 	PlannerPhaseIdUnderstanding PlannerPhaseId = "understanding"
-	PlannerPhaseIdClassifying   PlannerPhaseId = "classifying"
-	PlannerPhaseIdPlanning      PlannerPhaseId = "planning"
-	PlannerPhaseIdExecuting     PlannerPhaseId = "executing"
-	PlannerPhaseIdSearching     PlannerPhaseId = "searching"
-	PlannerPhaseIdAssessing     PlannerPhaseId = "assessing"
-	PlannerPhaseIdAnalyzing     PlannerPhaseId = "analyzing"
-	PlannerPhaseIdAggregating   PlannerPhaseId = "aggregating"
-	PlannerPhaseIdAnswering     PlannerPhaseId = "answering"
-	PlannerPhaseIdClarifying    PlannerPhaseId = "clarifying"
-	PlannerPhaseIdExpanding     PlannerPhaseId = "expanding"
-	PlannerPhaseIdDispatching   PlannerPhaseId = "dispatching"
-	PlannerPhaseIdMerging       PlannerPhaseId = "merging"
-	PlannerPhaseIdCompleted     PlannerPhaseId = "completed"
-	PlannerPhaseIdUnknown       PlannerPhaseId = ""
+	PlannerPhaseIdClassifying PlannerPhaseId = "classifying"
+	PlannerPhaseIdPlanning PlannerPhaseId = "planning"
+	PlannerPhaseIdExecuting PlannerPhaseId = "executing"
+	PlannerPhaseIdSearching PlannerPhaseId = "searching"
+	PlannerPhaseIdAssessing PlannerPhaseId = "assessing"
+	PlannerPhaseIdAnalyzing PlannerPhaseId = "analyzing"
+	PlannerPhaseIdAggregating PlannerPhaseId = "aggregating"
+	PlannerPhaseIdAnswering PlannerPhaseId = "answering"
+	PlannerPhaseIdClarifying PlannerPhaseId = "clarifying"
+	PlannerPhaseIdExpanding PlannerPhaseId = "expanding"
+	PlannerPhaseIdDispatching PlannerPhaseId = "dispatching"
+	PlannerPhaseIdMerging PlannerPhaseId = "merging"
+	PlannerPhaseIdCompleted PlannerPhaseId = "completed"
+	PlannerPhaseIdUnknown PlannerPhaseId = ""
 )
 
 func ParsePlannerPhaseId(raw string) (PlannerPhaseId, error) {
@@ -1949,26 +1949,26 @@ func (value PlannerPhaseId) WireName() string { return string(value) }
 type PlannerActionCode string
 
 const (
-	PlannerActionCodeFrameProblem                 PlannerActionCode = "frame_problem"
-	PlannerActionCodeClassifyDomain               PlannerActionCode = "classify_domain"
-	PlannerActionCodeBuildPlan                    PlannerActionCode = "build_plan"
-	PlannerActionCodeExecuteSearch                PlannerActionCode = "execute_search"
-	PlannerActionCodeStartRetrieval               PlannerActionCode = "start_retrieval"
-	PlannerActionCodeReviewSources                PlannerActionCode = "review_sources"
-	PlannerActionCodeRecoverRetrieval             PlannerActionCode = "recover_retrieval"
-	PlannerActionCodeParallelProbe                PlannerActionCode = "parallel_probe"
-	PlannerActionCodeMergeParallelResult          PlannerActionCode = "merge_parallel_result"
+	PlannerActionCodeFrameProblem PlannerActionCode = "frame_problem"
+	PlannerActionCodeClassifyDomain PlannerActionCode = "classify_domain"
+	PlannerActionCodeBuildPlan PlannerActionCode = "build_plan"
+	PlannerActionCodeExecuteSearch PlannerActionCode = "execute_search"
+	PlannerActionCodeStartRetrieval PlannerActionCode = "start_retrieval"
+	PlannerActionCodeReviewSources PlannerActionCode = "review_sources"
+	PlannerActionCodeRecoverRetrieval PlannerActionCode = "recover_retrieval"
+	PlannerActionCodeParallelProbe PlannerActionCode = "parallel_probe"
+	PlannerActionCodeMergeParallelResult PlannerActionCode = "merge_parallel_result"
 	PlannerActionCodeFallbackWithExistingEvidence PlannerActionCode = "fallback_with_existing_evidence"
-	PlannerActionCodeAssessEvidence               PlannerActionCode = "assess_evidence"
-	PlannerActionCodeComposeAnswer                PlannerActionCode = "compose_answer"
-	PlannerActionCodeAskClarification             PlannerActionCode = "ask_clarification"
-	PlannerActionCodeExpandSearch                 PlannerActionCode = "expand_search"
-	PlannerActionCodeDispatchSubagents            PlannerActionCode = "dispatch_subagents"
-	PlannerActionCodeMergeResults                 PlannerActionCode = "merge_results"
-	PlannerActionCodeCompleteTurn                 PlannerActionCode = "complete_turn"
-	PlannerActionCodeStreamAnswer                 PlannerActionCode = "stream_answer"
-	PlannerActionCodeSetStage                     PlannerActionCode = "set_stage"
-	PlannerActionCodeUnknown                      PlannerActionCode = ""
+	PlannerActionCodeAssessEvidence PlannerActionCode = "assess_evidence"
+	PlannerActionCodeComposeAnswer PlannerActionCode = "compose_answer"
+	PlannerActionCodeAskClarification PlannerActionCode = "ask_clarification"
+	PlannerActionCodeExpandSearch PlannerActionCode = "expand_search"
+	PlannerActionCodeDispatchSubagents PlannerActionCode = "dispatch_subagents"
+	PlannerActionCodeMergeResults PlannerActionCode = "merge_results"
+	PlannerActionCodeCompleteTurn PlannerActionCode = "complete_turn"
+	PlannerActionCodeStreamAnswer PlannerActionCode = "stream_answer"
+	PlannerActionCodeSetStage PlannerActionCode = "set_stage"
+	PlannerActionCodeUnknown PlannerActionCode = ""
 )
 
 func ParsePlannerActionCode(raw string) (PlannerActionCode, error) {
@@ -2023,30 +2023,30 @@ func (value PlannerActionCode) WireName() string { return string(value) }
 type PlannerReasonCode string
 
 const (
-	PlannerReasonCodeAlignGoal            PlannerReasonCode = "align_goal"
+	PlannerReasonCodeAlignGoal PlannerReasonCode = "align_goal"
 	PlannerReasonCodeConfirmRealtimeScope PlannerReasonCode = "confirm_realtime_scope"
-	PlannerReasonCodeConfirmFocus         PlannerReasonCode = "confirm_focus"
-	PlannerReasonCodeCheckConsistency     PlannerReasonCode = "check_consistency"
-	PlannerReasonCodePrepareDelivery      PlannerReasonCode = "prepare_delivery"
-	PlannerReasonCodeEvidenceReady        PlannerReasonCode = "evidence_ready"
+	PlannerReasonCodeConfirmFocus PlannerReasonCode = "confirm_focus"
+	PlannerReasonCodeCheckConsistency PlannerReasonCode = "check_consistency"
+	PlannerReasonCodePrepareDelivery PlannerReasonCode = "prepare_delivery"
+	PlannerReasonCodeEvidenceReady PlannerReasonCode = "evidence_ready"
 	PlannerReasonCodeEvidenceInsufficient PlannerReasonCode = "evidence_insufficient"
-	PlannerReasonCodeNeedMoreSearch       PlannerReasonCode = "need_more_search"
-	PlannerReasonCodeNeedMoreEvidence     PlannerReasonCode = "need_more_evidence"
-	PlannerReasonCodeBudgetExhausted      PlannerReasonCode = "budget_exhausted"
-	PlannerReasonCodeBudgetBoundary       PlannerReasonCode = "budget_boundary"
-	PlannerReasonCodeMissingSlot          PlannerReasonCode = "missing_slot"
-	PlannerReasonCodeReadyToAnswer        PlannerReasonCode = "ready_to_answer"
-	PlannerReasonCodeDeliverIncrement     PlannerReasonCode = "deliver_increment"
-	PlannerReasonCodeToolFailed           PlannerReasonCode = "tool_failed"
-	PlannerReasonCodeTargetedProbe        PlannerReasonCode = "targeted_probe"
-	PlannerReasonCodeCrossCheckSources    PlannerReasonCode = "cross_check_sources"
-	PlannerReasonCodeValidateSource       PlannerReasonCode = "validate_source"
-	PlannerReasonCodeSourceUnstable       PlannerReasonCode = "source_unstable"
-	PlannerReasonCodeReduceWaitTime       PlannerReasonCode = "reduce_wait_time"
-	PlannerReasonCodeEvidenceBack         PlannerReasonCode = "evidence_back"
+	PlannerReasonCodeNeedMoreSearch PlannerReasonCode = "need_more_search"
+	PlannerReasonCodeNeedMoreEvidence PlannerReasonCode = "need_more_evidence"
+	PlannerReasonCodeBudgetExhausted PlannerReasonCode = "budget_exhausted"
+	PlannerReasonCodeBudgetBoundary PlannerReasonCode = "budget_boundary"
+	PlannerReasonCodeMissingSlot PlannerReasonCode = "missing_slot"
+	PlannerReasonCodeReadyToAnswer PlannerReasonCode = "ready_to_answer"
+	PlannerReasonCodeDeliverIncrement PlannerReasonCode = "deliver_increment"
+	PlannerReasonCodeToolFailed PlannerReasonCode = "tool_failed"
+	PlannerReasonCodeTargetedProbe PlannerReasonCode = "targeted_probe"
+	PlannerReasonCodeCrossCheckSources PlannerReasonCode = "cross_check_sources"
+	PlannerReasonCodeValidateSource PlannerReasonCode = "validate_source"
+	PlannerReasonCodeSourceUnstable PlannerReasonCode = "source_unstable"
+	PlannerReasonCodeReduceWaitTime PlannerReasonCode = "reduce_wait_time"
+	PlannerReasonCodeEvidenceBack PlannerReasonCode = "evidence_back"
 	PlannerReasonCodeParallelBranchFailed PlannerReasonCode = "parallel_branch_failed"
-	PlannerReasonCodeAssessmentUpdate     PlannerReasonCode = "assessment_update"
-	PlannerReasonCodeUnknownReason        PlannerReasonCode = ""
+	PlannerReasonCodeAssessmentUpdate PlannerReasonCode = "assessment_update"
+	PlannerReasonCodeUnknownReason PlannerReasonCode = ""
 )
 
 func ParsePlannerReasonCode(raw string) (PlannerReasonCode, error) {
@@ -2109,11 +2109,11 @@ func (value PlannerReasonCode) WireName() string { return string(value) }
 type AssessmentType string
 
 const (
-	AssessmentTypeSufficient      AssessmentType = "sufficient"
-	AssessmentTypeNeedMoreSearch  AssessmentType = "need_more_search"
+	AssessmentTypeSufficient AssessmentType = "sufficient"
+	AssessmentTypeNeedMoreSearch AssessmentType = "need_more_search"
 	AssessmentTypeBudgetExhausted AssessmentType = "budget_exhausted"
-	AssessmentTypeToolFailed      AssessmentType = "tool_failed"
-	AssessmentTypeUnknown         AssessmentType = ""
+	AssessmentTypeToolFailed AssessmentType = "tool_failed"
+	AssessmentTypeUnknown AssessmentType = ""
 )
 
 func ParseAssessmentType(raw string) (AssessmentType, error) {
@@ -2139,9 +2139,9 @@ type ContextFillType string
 
 const (
 	ContextFillTypeContextFill ContextFillType = "context_fill"
-	ContextFillTypeGapFill     ContextFillType = "gap_fill"
-	ContextFillTypeReplan      ContextFillType = "replan"
-	ContextFillTypeUnknown     ContextFillType = ""
+	ContextFillTypeGapFill ContextFillType = "gap_fill"
+	ContextFillTypeReplan ContextFillType = "replan"
+	ContextFillTypeUnknown ContextFillType = ""
 )
 
 func ParseContextFillType(raw string) (ContextFillType, error) {
@@ -2164,11 +2164,11 @@ func (value ContextFillType) WireName() string { return string(value) }
 type ContextTargetSlot string
 
 const (
-	ContextTargetSlotLongtermMemory    ContextTargetSlot = "longterm_memory"
-	ContextTargetSlotRealtimeEvidence  ContextTargetSlot = "realtime_evidence"
+	ContextTargetSlotLongtermMemory ContextTargetSlot = "longterm_memory"
+	ContextTargetSlotRealtimeEvidence ContextTargetSlot = "realtime_evidence"
 	ContextTargetSlotAnswerSufficiency ContextTargetSlot = "answer_sufficiency"
 	ContextTargetSlotGpsOrCityLocation ContextTargetSlot = "gps_or_city_location"
-	ContextTargetSlotUnknown           ContextTargetSlot = ""
+	ContextTargetSlotUnknown ContextTargetSlot = ""
 )
 
 func ParseContextTargetSlot(raw string) (ContextTargetSlot, error) {
@@ -2193,9 +2193,9 @@ func (value ContextTargetSlot) WireName() string { return string(value) }
 type ContextScopeExpansionPolicy string
 
 const (
-	ContextScopeExpansionPolicyNone                        ContextScopeExpansionPolicy = ""
-	ContextScopeExpansionPolicyExpandTimeWindow            ContextScopeExpansionPolicy = "expand_time_window"
-	ContextScopeExpansionPolicyExpandScopeAndRequery       ContextScopeExpansionPolicy = "expand_scope_and_requery"
+	ContextScopeExpansionPolicyNone ContextScopeExpansionPolicy = ""
+	ContextScopeExpansionPolicyExpandTimeWindow ContextScopeExpansionPolicy = "expand_time_window"
+	ContextScopeExpansionPolicyExpandScopeAndRequery ContextScopeExpansionPolicy = "expand_scope_and_requery"
 	ContextScopeExpansionPolicyExpandProviderAndTimeWindow ContextScopeExpansionPolicy = "expand_provider_and_time_window"
 )
 
@@ -2220,7 +2220,7 @@ type ContextRetryPolicy string
 
 const (
 	ContextRetryPolicySingleRetry ContextRetryPolicy = "single_retry"
-	ContextRetryPolicyUnknown     ContextRetryPolicy = ""
+	ContextRetryPolicyUnknown ContextRetryPolicy = ""
 )
 
 func ParseContextRetryPolicy(raw string) (ContextRetryPolicy, error) {
@@ -2240,9 +2240,9 @@ type ContextContinuityMode string
 
 const (
 	ContextContinuityModeExplicitFollowUp ContextContinuityMode = "explicit_follow_up"
-	ContextContinuityModeSameTopic        ContextContinuityMode = "same_topic"
-	ContextContinuityModeFreshTopic       ContextContinuityMode = "fresh_topic"
-	ContextContinuityModeUnknown          ContextContinuityMode = ""
+	ContextContinuityModeSameTopic ContextContinuityMode = "same_topic"
+	ContextContinuityModeFreshTopic ContextContinuityMode = "fresh_topic"
+	ContextContinuityModeUnknown ContextContinuityMode = ""
 )
 
 func ParseContextContinuityMode(raw string) (ContextContinuityMode, error) {
@@ -2265,9 +2265,9 @@ func (value ContextContinuityMode) WireName() string { return string(value) }
 type AssistantPreferenceScope string
 
 const (
-	AssistantPreferenceScopeSession  AssistantPreferenceScope = "session"
+	AssistantPreferenceScopeSession AssistantPreferenceScope = "session"
 	AssistantPreferenceScopeLongTerm AssistantPreferenceScope = "long_term"
-	AssistantPreferenceScopeUnknown  AssistantPreferenceScope = ""
+	AssistantPreferenceScopeUnknown AssistantPreferenceScope = ""
 )
 
 func ParseAssistantPreferenceScope(raw string) (AssistantPreferenceScope, error) {
@@ -2288,15 +2288,15 @@ func (value AssistantPreferenceScope) WireName() string { return string(value) }
 type AssistantPreferenceKind string
 
 const (
-	AssistantPreferenceKindResponseStyle       AssistantPreferenceKind = "response_style"
-	AssistantPreferenceKindReplyLength         AssistantPreferenceKind = "reply_length"
-	AssistantPreferenceKindTone                AssistantPreferenceKind = "tone"
-	AssistantPreferenceKindLanguage            AssistantPreferenceKind = "language"
-	AssistantPreferenceKindFrequentLocations   AssistantPreferenceKind = "frequent_locations"
-	AssistantPreferenceKindFamilyTerms         AssistantPreferenceKind = "family_terms"
+	AssistantPreferenceKindResponseStyle AssistantPreferenceKind = "response_style"
+	AssistantPreferenceKindReplyLength AssistantPreferenceKind = "reply_length"
+	AssistantPreferenceKindTone AssistantPreferenceKind = "tone"
+	AssistantPreferenceKindLanguage AssistantPreferenceKind = "language"
+	AssistantPreferenceKindFrequentLocations AssistantPreferenceKind = "frequent_locations"
+	AssistantPreferenceKindFamilyTerms AssistantPreferenceKind = "family_terms"
 	AssistantPreferenceKindDietaryRestrictions AssistantPreferenceKind = "dietary_restrictions"
-	AssistantPreferenceKindTravelPreferences   AssistantPreferenceKind = "travel_preferences"
-	AssistantPreferenceKindUnknown             AssistantPreferenceKind = ""
+	AssistantPreferenceKindTravelPreferences AssistantPreferenceKind = "travel_preferences"
+	AssistantPreferenceKindUnknown AssistantPreferenceKind = ""
 )
 
 func ParseAssistantPreferenceKind(raw string) (AssistantPreferenceKind, error) {
@@ -2329,10 +2329,10 @@ func (value AssistantPreferenceKind) WireName() string { return string(value) }
 type AssistantPreferenceSourceType string
 
 const (
-	AssistantPreferenceSourceTypeExplicitRewrite  AssistantPreferenceSourceType = "explicit_rewrite"
-	AssistantPreferenceSourceTypeManagement       AssistantPreferenceSourceType = "management"
+	AssistantPreferenceSourceTypeExplicitRewrite AssistantPreferenceSourceType = "explicit_rewrite"
+	AssistantPreferenceSourceTypeManagement AssistantPreferenceSourceType = "management"
 	AssistantPreferenceSourceTypeSessionConfirmed AssistantPreferenceSourceType = "session_confirmed"
-	AssistantPreferenceSourceTypeUnknown          AssistantPreferenceSourceType = ""
+	AssistantPreferenceSourceTypeUnknown AssistantPreferenceSourceType = ""
 )
 
 func ParseAssistantPreferenceSourceType(raw string) (AssistantPreferenceSourceType, error) {
@@ -2355,7 +2355,7 @@ func (value AssistantPreferenceSourceType) WireName() string { return string(val
 type AssistantPreferenceStatus string
 
 const (
-	AssistantPreferenceStatusActive  AssistantPreferenceStatus = "active"
+	AssistantPreferenceStatusActive AssistantPreferenceStatus = "active"
 	AssistantPreferenceStatusRevoked AssistantPreferenceStatus = "revoked"
 )
 
@@ -2375,11 +2375,11 @@ func (value AssistantPreferenceStatus) WireName() string { return string(value) 
 type AssistantResponseType string
 
 const (
-	AssistantResponseTypeText       AssistantResponseType = "text"
+	AssistantResponseTypeText AssistantResponseType = "text"
 	AssistantResponseTypeStructured AssistantResponseType = "structured"
 	AssistantResponseTypeActionCard AssistantResponseType = "action_card"
-	AssistantResponseTypeStream     AssistantResponseType = "stream"
-	AssistantResponseTypeUnknown    AssistantResponseType = ""
+	AssistantResponseTypeStream AssistantResponseType = "stream"
+	AssistantResponseTypeUnknown AssistantResponseType = ""
 )
 
 func ParseAssistantResponseType(raw string) (AssistantResponseType, error) {

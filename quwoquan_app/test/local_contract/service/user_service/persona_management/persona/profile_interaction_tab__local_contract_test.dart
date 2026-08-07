@@ -10,7 +10,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/runtime/shell/navigation/generated/link_templates.g.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
-import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/domain/profile_interaction_activity_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_activity_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
@@ -19,10 +19,10 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/comment_observability.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
-import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_tab.dart'
-    hide InteractionDirection;
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/runtime/di/profile_interaction_tab_composition.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart'
+    show InteractionSubTab;
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -184,7 +184,7 @@ Widget _interactionTabActionsApp(
       theme: ThemeData.light(),
       home: const SizedBox(
         height: 720,
-        child: ProfileInteractionTab(
+        child: ProfileInteractionTabComposition(
           mode: ProfileMode.mine,
           userId: 'profile_owner',
           isDark: false,
@@ -250,7 +250,7 @@ Widget _interactionTabApp(
       theme: ThemeData.light(),
       home: SizedBox(
         height: 720,
-        child: ProfileInteractionTab(
+        child: ProfileInteractionTabComposition(
           mode: mode,
           userId: 'profile_owner',
           isDark: false,
@@ -270,7 +270,7 @@ Widget _interactionTabRouterApp(
         path: '/',
         builder: (context, state) => const SizedBox(
           height: 720,
-          child: ProfileInteractionTab(
+          child: ProfileInteractionTabComposition(
             mode: ProfileMode.mine,
             userId: 'profile_owner',
             isDark: false,
@@ -509,7 +509,7 @@ Future<void> _showInteractionSubTab(
   WidgetTester tester,
   InteractionSubTab subTab,
 ) async {
-  final tab = find.byType(ProfileInteractionTab);
+  final tab = find.byType(ProfileInteractionTabComposition);
   final container = ProviderScope.containerOf(tester.element(tab));
   container
       .read(profileNotifierProvider('profile_owner').notifier)
@@ -540,7 +540,7 @@ void main() {
     await tapProfilePrimaryTab(tester, '互动');
     await _pumpFrames(tester);
 
-    expect(find.byType(ProfileInteractionTab), findsOneWidget);
+    expect(find.byType(ProfileInteractionTabComposition), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(

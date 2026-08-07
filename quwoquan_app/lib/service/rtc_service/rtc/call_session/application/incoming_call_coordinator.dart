@@ -8,7 +8,6 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_pages.g.dart
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification_delivery_job/application/public/incoming_call_presentation_acknowledger.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/incoming_call_terminal_account_purger.dart';
@@ -350,7 +349,7 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
   ) async {
     try {
       await ref
-          .read(incomingCallPresentationAcknowledgerProvider)
+          .read(notificationDeliveryJobProcessCommandWriterProvider)
           .acknowledge(
             IncomingCallPresentationReceipt(
               callId: envelope.callId,
@@ -449,7 +448,7 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
   }) {
     const surface = AppUiSurfaces.rtcIncoming;
     unawaited(
-      AppExceptionTelemetryService.instance.recordHandledException(
+      ref.read(exceptionTelemetryPortProvider).recordHandledException(
         source: 'rtc.incoming_call_coordinator',
         error: error,
         stackTrace: stackTrace,

@@ -85,7 +85,7 @@ def test_environment_writing_jobs_stay_on_controlled_runners() -> None:
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:
     script = (
-        ROOT / "quwoquan_service/scripts/verify/verify_contract_metadata.sh"
+        ROOT / "quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh"
     ).read_text(encoding="utf-8")
 
     mkdir_index = script.index('mkdir -p "$CONTRACT_VIEW_CACHE"')

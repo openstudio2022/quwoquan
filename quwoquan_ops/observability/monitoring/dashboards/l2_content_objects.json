@@ -45,12 +45,12 @@
         ]
       },
       {
-        "title": "Original access / Outbound share fail-closed",
+        "title": "Original access quota / Outbound share fail-closed",
         "type": "timeseries",
         "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
         "targets": [
           {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.(media_original_access_fact\\\\.RequestOriginalImageAccess|outbound_share_fact\\\\.CreateOutboundShare)\",contract_metric=~\"content_(media_original_access_request|outbound_share_append)\",commercial_status=~\"ready|blocked\"}[5m])) by (operation, contract_metric, commercial_status, status)",
+            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.(original_access_quota\\\\.ReserveOriginalImageAccessGrant|outbound_share_fact\\\\.AppendOutboundShareFact)\",contract_metric=~\"content_(media_original_access_request|outbound_share_append)\",commercial_status=~\"ready|blocked\"}[5m])) by (operation, contract_metric, commercial_status, status)",
             "legendFormat": "{{ operation }} / {{ commercial_status }} / HTTP {{ status }}"
           }
         ]
@@ -61,7 +61,7 @@
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"(content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesReceived|content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesSent|content\\\\.profile_interaction_read_fact\\\\.UpdateProfileInteractionState)\",contract_metric=~\"content_profile_interaction_.+\"}[5m])) by (le, operation, contract_metric))",
+            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"(content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesReceived|content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesSent|content\\\\.profile_interaction_read_fact\\\\.AppendProfileInteractionReadFact)\",contract_metric=~\"content_profile_interaction_.+\"}[5m])) by (le, operation, contract_metric))",
             "legendFormat": "{{ operation }} / {{ contract_metric }}"
           }
         ]

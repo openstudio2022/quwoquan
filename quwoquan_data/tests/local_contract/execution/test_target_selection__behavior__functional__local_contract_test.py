@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 import yaml
 from content.execution import store
-from content.execution.selection import (
+from content.execution.planning.selection import (
     build_execution_spec,
     select_targets,
     write_selected_task,
 )
-from content.execution.source_selection import (
+from content.execution.planning.source_selection import (
     TargetSourceCandidate,
     TargetSourceQualification,
 )
@@ -725,7 +725,7 @@ def test_execution_spec_freezes_branch_and_commit_evidence(monkeypatch):
         spec["executionPolicy"]["gitCommitSha"] = "a" * 40
         return "dev1.0"
 
-    monkeypatch.setattr("content.execution.selection.stamp_execution_branch", _stamp)
+    monkeypatch.setattr("content.execution.planning.selection.stamp_execution_branch", _stamp)
 
     policy = _spec()["executionPolicy"]
     assert policy["executionBranch"] == "dev1.0"

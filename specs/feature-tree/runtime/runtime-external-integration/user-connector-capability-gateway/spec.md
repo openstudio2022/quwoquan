@@ -79,3 +79,15 @@
 - 尚缺验收证据：四对象的本地/真实 Mongo transaction tests 与 Assistant capability gateway local_contract 已存在；仍缺 Alpha/Beta/Gamma binding/conformance、真实 Provider/native receipt、并发撤权竞态、Android/iPhone continuation、SLI/SLO、告警和回滚收据。
 - 完成判定：`GWT-001`、`GWT-002` 具有 Integration/Assistant/App local_contract、真实 adapter api_integration 与 Android/iPhone user_acceptance 直接 `spec_ref`；四环境 binding/conformance、撤权、审计和回滚收据成立。
 - 依赖：Integration contracts/persistence/provider adapter、Assistant Tool Fabric 和 App native bridge。
+
+<a id="open-002"></a>
+### OPEN-002 ConnectorInvocation 长流程缺取消与失败恢复入口
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺取消与失败恢复入口使 `integration.ConnectorInvocation` 无法履行长流程编排器（`process_manager`）语义。它当前只有发起（`InvokeConnectorCapability`）、确认续跑（`ContinueConnectorInvocation`）与状态读取（`GetConnectorInvocation`、`ListConnectorInvocations`）四个 operation，用户无法终止一次已发起的 Provider 调用，运营也无法在 Provider 瞬时故障后受控重放。
+- 尚缺实现：`object.yaml#lifecycle.states` 与 `domain/model.StatusCancelled` 均声明了 `cancelled` 终态，但全服务没有任何写入路径，该状态在契约面不可达。`StatusFailed` 由 worker 单向写入后即终态，`ContinueConnectorInvocation` 只接受 `awaiting_confirmation`，不覆盖失败重放。缺 `CancelConnectorInvocation` 与失败重放入口，以及对已提交 Provider 副作用的补偿约定。
+- 尚缺验收证据：缺「执行中取消到达 `cancelled` 并释放 lease、清理 protected payloadRef」与「Provider 瞬时故障后受控重放且不重复产生外部副作用」两条路径的 local_contract 与真实 adapter api_integration。
+- 完成判定：`cancelled` 由至少一个声明入口可达，`failed` 具备声明的恢复入口或显式不可恢复裁定，两条路径各有 `spec_ref` 直接绑定的 local_contract 与 api_integration 收据。
+- 依赖：正式 Provider adapter（本节点 `OPEN-001`），补偿语义取决于 Provider 是否提供可撤销的调用面。

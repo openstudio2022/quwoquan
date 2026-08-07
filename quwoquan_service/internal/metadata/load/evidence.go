@@ -100,6 +100,7 @@ var pageObjectContractPath = filepath.Join(
 var kindsWithDomainLayer = map[ast.ObjectKind]struct{}{
 	ast.ObjectKindAggregateRoot:  {},
 	ast.ObjectKindAppendOnlyFact: {},
+	ast.ObjectKindProcessManager: {},
 	ast.ObjectKindRuntimeSession: {},
 }
 

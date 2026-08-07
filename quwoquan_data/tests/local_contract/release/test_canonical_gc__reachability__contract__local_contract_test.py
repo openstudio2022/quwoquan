@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution.reviewed_closure_adoption_contract import (
+from content.execution.closure.adoption_contract import (
     canonical_digest,
     file_digest,
 )

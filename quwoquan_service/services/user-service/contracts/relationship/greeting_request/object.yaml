@@ -42,8 +42,23 @@ relationships:
   reference_fields:
   - targetPersonaId
   target_object: user.Persona
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.greeting_request.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.user.greeting_request.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.greeting_request.write
 business_rules:
 - sender persona、recipient persona 与首条消息创建后不可变
 - 同一 persona pair 只能存在一个 pending request

@@ -45,8 +45,20 @@ relationships:
     on_delete: detach
 local_identity_reasons:
   nodeId: 运行节点路由标识，不是业务对象引用
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "易失运行时状态，过期即消失，没有可供检索的稳定对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "易失运行时传输状态对小趣没有可用语义，读取只会产生不可复现的上下文。"
 business_rules:
 - connectionId 只在一次已验签 WebSocket 连接中有效，断开后不得复用或续期。
 - accountId、personaId 与 deviceId 必须来自同一可信 principal，客户端 payload 不得覆盖。

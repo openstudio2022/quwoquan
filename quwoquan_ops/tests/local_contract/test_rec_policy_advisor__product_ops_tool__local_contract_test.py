@@ -14,7 +14,7 @@ _ROOT = Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
     "rec_policy_advisor",
     _ROOT
-    / "quwoquan_service/scripts/tools/product_ops/rec_policy_advisor.py",
+    / "quwoquan_service/scripts/product-ops-service/tools/rec_policy_advisor.py",
 )
 advisor = importlib.util.module_from_spec(_SPEC)
 assert _SPEC.loader is not None

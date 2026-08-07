@@ -1,6 +1,8 @@
 """Post author evidence must bind one real output to the stable queue job."""
 from __future__ import annotations
 
+import io
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -21,18 +23,19 @@ from content.execution.context import ExecutionContext  # noqa: E402
 from content.execution.controller.post_author_evidence import (  # noqa: E402
     write_post_author_evidence,
 )
-from content.execution.handoff import build_author_job_packet  # noqa: E402
+from content.execution.controller.execute.handoff import build_author_job_packet  # noqa: E402
 from content.execution.production_contracts import (  # noqa: E402
     sha256_file,
     validate_agent_result_envelope,
 )
 from content.execution.queue.core import _read_job, stable_job_id  # noqa: E402
 from content.execution.queue.jobs import enqueue_ref_job  # noqa: E402
-from content.execution.reliabletask_worker import (  # noqa: E402
+from content.execution.queue.reliabletask import worker as worker_module  # noqa: E402
+from content.execution.queue.reliabletask.worker import (  # noqa: E402
     DataContentWorkItem,
     execute_work_item,
 )
-from content.execution.reliabletask_fleet import build_fleet_request  # noqa: E402
+from content.execution.queue.reliabletask.fleet import build_fleet_request  # noqa: E402
 from content.post import object_index as content_object  # noqa: E402
 from content.post.article.draft_io import (  # noqa: E402
     draft_article_path,
@@ -52,6 +55,57 @@ from core.control_types import (  # noqa: E402
 )
 from core.paths import OUTPUT_ROOT, execution_root  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+
+
+def test_process_worker_keeps_stdout_protocol_clean(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    execution_id = "20260728--travel-article-golden--test-region-a--pilot-099"
+    item = {
+        "runtimeTaskId": "runtime-task-001",
+        "jobId": "job-001",
+        "executionId": execution_id,
+        "ref": "posts/article/真实文章",
+        "stage": "author",
+        "partitionKey": "entity/真实地点",
+        "entityRef": "entity/真实地点",
+        "carrier": "article",
+        "sourceRevision": "sha256:" + "a" * 64,
+        "idempotencyKey": "entity/真实地点|article|source|author",
+    }
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(
+            json.dumps(
+                {
+                    "schema": "quwoquan.data_content_worker_request",
+                    "item": item,
+                }
+            )
+        ),
+    )
+
+    def execute(_item: DataContentWorkItem) -> dict[str, object]:
+        print("managed agent progress")
+        return {
+            "executionId": execution_id,
+            "jobId": "job-001",
+            "resultEnvelopeRef": "data/tasks/result.json",
+            "acceptanceClass": "stage_completed",
+            "completedAt": "2026-08-07T11:30:00Z",
+        }
+
+    monkeypatch.setattr(worker_module, "execute_work_item", execute)
+
+    worker_module.run_process_worker()
+
+    captured = capsys.readouterr()
+    response = json.loads(captured.out)
+    assert response["schema"] == "quwoquan.data_content_worker_response"
+    assert "managed agent progress" not in captured.out
+    assert "managed agent progress" in captured.err
 
 
 def test_fleet_request_rejects_carrier_different_from_execution_identity() -> None:

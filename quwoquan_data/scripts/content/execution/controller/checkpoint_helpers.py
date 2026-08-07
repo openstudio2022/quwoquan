@@ -85,7 +85,7 @@ def checkpoint_post_author(ctx: ExecutionContext) -> StageResult:
             StageStatus.DONE,
             "文章/主页正文已由 Agent 创作，图片作品采用结构化证据包",
         )
-    from content.execution.reliabletask_jobs import prepare_reliable_author_jobs
+    from content.execution.queue.reliabletask.jobs import prepare_reliable_author_jobs
 
     prepare_reliable_author_jobs(ctx, "post_author")
     hint = (

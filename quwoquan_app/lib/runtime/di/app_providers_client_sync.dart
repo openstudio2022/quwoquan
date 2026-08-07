@@ -238,11 +238,29 @@ final assistantSkillActivityQueryProvider =
           ),
     );
 
-final assistantSkillDataControlFacetProvider =
-    Provider<AssistantSkillDataControlFacet>(
+final skillDataControlProcessCommandWriterProvider =
+    Provider<SkillDataControlProcessCommandWriter>(
       (ref) =>
           AssistantProductionComposition.generatedAdapter<
-            AssistantSkillDataControlFacet
+            SkillDataControlProcessCommandWriter
+          >(
+            AssistantProductionAdapter.skillDataControl,
+            client: ref.watch(generatedCloudOperationClientProvider),
+            invocationContext:
+                (String clientPageId, {String? idempotencyKey}) =>
+                    _assistantSkillCenterInvocationContext(
+                      ref,
+                      clientPageId: clientPageId,
+                      idempotencyKey: idempotencyKey,
+                    ),
+          ),
+    );
+
+final skillDataControlProcessQueryProvider =
+    Provider<SkillDataControlProcessQuery>(
+      (ref) =>
+          AssistantProductionComposition.generatedAdapter<
+            SkillDataControlProcessQuery
           >(
             AssistantProductionAdapter.skillDataControl,
             client: ref.watch(generatedCloudOperationClientProvider),
@@ -360,7 +378,7 @@ final assistantSearchRunFacetProvider = Provider<AssistantSearchRunFacade>(
 );
 
 final assistantCreationRunFacetProvider =
-    Provider<AssistantCreationRunCommandWriter>(
+    Provider<AssistantCreationRunProcessCommandWriter>(
       (ref) => ref.watch(_assistantSessionRunFacadeProvider),
     );
 

@@ -35,6 +35,20 @@ local_identity_reasons:
     used for aggregate access
   targetRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
+search_policy:
+  exposed: none
+  not_exposed_reason: "成员与关系记录只在所属对象的授权 Reader 内可见，不作为独立检索对象。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.following_subject.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 关注状态只由 PersonaRelationship、SubjectFollow 与 CircleMembership 等 owner 的 typed event 投影。
 - viewerPersonaId、subjectType、subjectId 唯一确定一行，访问水位不得覆盖 owner 的关注事实。

@@ -1,7 +1,10 @@
+import 'package:quwoquan_app/service/content_service/content/post/application/public/assistant_use_policy_codec.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_capture_metadata.dart';
 import 'package:quwoquan_cloud_contracts/generated/integration_contracts.dart'
     show LocationPoi;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show AssistantUsePolicy;
 
 /// 通用发布设置状态模型（design B1），承载位置/公开/圈子选择，供创作、编辑等多页面复用。
 class PublishSettings {
@@ -19,7 +22,7 @@ class PublishSettings {
     this.tagLabels = const <String>[],
     this.entityRefs = const <String>[],
     this.entityNames = const <String>[],
-    this.assistantUsePolicy = 'inherit',
+    this.assistantUsePolicy = AssistantUsePolicy.inherit,
     this.captureDisclosure = kDefaultCaptureDisclosure,
     this.captureMetadata = ExtractedMediaCaptureMetadata.empty,
   });
@@ -52,7 +55,7 @@ class PublishSettings {
   final List<String> tagLabels;
   final List<String> entityRefs;
   final List<String> entityNames;
-  final String assistantUsePolicy;
+  final AssistantUsePolicy assistantUsePolicy;
 
   /// 创作者允许上报的拍摄元数据分组。默认四组全开。
   ///
@@ -113,8 +116,10 @@ class PublishSettings {
       entityNames: vis == 'public'
           ? List<String>.from(map['entityNames'] as List? ?? const <String>[])
           : const <String>[],
-      assistantUsePolicy: (map['assistantUsePolicy'] as String? ?? 'inherit')
-          .trim(),
+      assistantUsePolicy: assistantUsePolicyFromWire(
+        map['assistantUsePolicy'],
+        'PublishSettings.assistantUsePolicy',
+      ),
       captureDisclosure: _captureDisclosureFromMap(map['captureDisclosure']),
     );
   }
@@ -157,7 +162,7 @@ class PublishSettings {
     'tagLabels': tagLabels,
     'entityRefs': entityRefs,
     'entityNames': entityNames,
-    'assistantUsePolicy': assistantUsePolicy,
+    'assistantUsePolicy': assistantUsePolicy.wireName,
     'captureDisclosure': captureDisclosure
         .map((group) => group.wire)
         .toList(growable: false),
@@ -201,9 +206,7 @@ class PublishSettings {
     if (summary.trim().isNotEmpty) payload['summary'] = summary.trim();
     if (tagRefs.isNotEmpty) payload['tagRefs'] = tagRefs;
     if (entityRefs.isNotEmpty) payload['entityRefs'] = entityRefs;
-    if (assistantUsePolicy.trim().isNotEmpty) {
-      payload['assistantUsePolicy'] = assistantUsePolicy.trim();
-    }
+    payload['assistantUsePolicy'] = assistantUsePolicy.wireName;
     return payload;
   }
 
@@ -221,7 +224,7 @@ class PublishSettings {
     List<String>? tagLabels,
     List<String>? entityRefs,
     List<String>? entityNames,
-    String? assistantUsePolicy,
+    AssistantUsePolicy? assistantUsePolicy,
     Set<CaptureMetadataDisclosureGroup>? captureDisclosure,
     ExtractedMediaCaptureMetadata? captureMetadata,
     bool clearHomepage = false,

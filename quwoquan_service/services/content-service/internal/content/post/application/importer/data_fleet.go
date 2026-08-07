@@ -27,13 +27,16 @@ const (
 // It is part of the Post importer application boundary; the worker command only
 // supplies process and infrastructure composition.
 type FleetRequest struct {
-	Schema            string                        `json:"schema"`
-	ExecutionID       string                        `json:"executionId"`
-	RequireCommercial bool                          `json:"requireCommercial"`
-	RecoverDeadTasks  *bool                         `json:"recoverDeadTasks"`
-	ObjectTimeoutMS   int                           `json:"objectTimeoutMilliseconds"`
-	RequiredQuota     int                           `json:"requiredQuota"`
-	Jobs              []reliabletask.DataContentJob `json:"jobs"`
+	Schema                  string                                   `json:"schema"`
+	ExecutionID             string                                   `json:"executionId"`
+	ScaleClass              string                                   `json:"scaleClass"`
+	ExecutionEnvelopeDigest string                                   `json:"executionEnvelopeDigest"`
+	RequireCommercial       bool                                     `json:"requireCommercial"`
+	RecoverDeadTasks        *bool                                    `json:"recoverDeadTasks"`
+	ObjectTimeoutMS         int                                      `json:"objectTimeoutMilliseconds"`
+	RequiredQuota           int                                      `json:"requiredQuota"`
+	CampaignBinding         *reliabletask.DataContentCampaignBinding `json:"campaignBinding,omitempty"`
+	Jobs                    []reliabletask.DataContentJob            `json:"jobs"`
 }
 
 // FleetConfig holds the runtime configuration required to execute a frozen
@@ -89,10 +92,23 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 		return FleetRequest{}, fmt.Errorf("fleet request schema=%q", request.Schema)
 	}
 	request.ExecutionID = strings.TrimSpace(request.ExecutionID)
+	request.ScaleClass = strings.TrimSpace(request.ScaleClass)
+	request.ExecutionEnvelopeDigest = strings.TrimSpace(request.ExecutionEnvelopeDigest)
 	if request.ExecutionID == "" || request.RecoverDeadTasks == nil ||
 		request.ObjectTimeoutMS < 1 || len(request.Jobs) == 0 {
 		return FleetRequest{}, errors.New(
 			"fleet request requires executionId, recoverDeadTasks, objectTimeoutMilliseconds and at least one job",
+		)
+	}
+	if (request.ScaleClass != "BELOW_M100" && request.ScaleClass != "M100_PLUS") ||
+		!reliabletask.ValidSHA256Digest(request.ExecutionEnvelopeDigest) {
+		return FleetRequest{}, errors.New(
+			"fleet request requires scaleClass and executionEnvelopeDigest",
+		)
+	}
+	if request.ScaleClass == "M100_PLUS" && request.CampaignBinding == nil {
+		return FleetRequest{}, errors.New(
+			"M100_PLUS fleet request requires campaign binding",
 		)
 	}
 	if request.RequiredQuota < 1 || request.RequiredQuota > len(request.Jobs) {
@@ -102,9 +118,30 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 			len(request.Jobs),
 		)
 	}
+	if request.CampaignBinding != nil {
+		if err := request.CampaignBinding.Validate(); err != nil {
+			return FleetRequest{}, err
+		}
+	}
 	jobIDs := make(map[string]struct{}, len(request.Jobs))
 	for index := range request.Jobs {
 		job := &request.Jobs[index]
+		if !job.Campaign.IsEmpty() {
+			return FleetRequest{}, fmt.Errorf(
+				"fleet job %q cannot override campaign binding",
+				job.JobID,
+			)
+		}
+		if strings.TrimSpace(job.ExecutionEnvelopeDigest) != "" {
+			return FleetRequest{}, fmt.Errorf(
+				"fleet job %q cannot override execution envelope digest",
+				job.JobID,
+			)
+		}
+		job.ExecutionEnvelopeDigest = request.ExecutionEnvelopeDigest
+		if request.CampaignBinding != nil {
+			job.Campaign = *request.CampaignBinding
+		}
 		if strings.TrimSpace(job.ExecutionID) != request.ExecutionID {
 			return FleetRequest{}, fmt.Errorf(
 				"fleet job %q execution binding mismatch",

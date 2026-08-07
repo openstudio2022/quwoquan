@@ -35,6 +35,20 @@ relationships:
   reference_fields:
   - ownerAccountId
   target_object: user.UserAccount
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "通讯录匹配等高敏个人数据对小趣完全关闭，不存在最小可开放子集。"
 business_rules:
 - description: 匹配结果只返回 personaId，不含 ownerId/userId
   id: result_isolation

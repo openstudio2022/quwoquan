@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from content.execution.campaign_receipt import lane_receipt_path, load_lane_receipt
-from content.execution.reviewed_closure_adoption_campaign_contract import (
+from content.execution.campaign.receipt import lane_receipt_path, load_lane_receipt
+from content.execution.closure.adoption_campaign_contract import (
     CAMPAIGN_ADOPTION_FIELD,
     adopted_object_refs,
     validate_adoption_task_binding,

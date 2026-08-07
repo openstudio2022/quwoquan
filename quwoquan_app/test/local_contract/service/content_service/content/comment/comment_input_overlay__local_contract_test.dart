@@ -257,7 +257,7 @@ Future<void> testCommentSubmitThroughProvider() async {
   SharedPreferences.setMockInitialValues(const <String, Object>{});
   final repo = MockContentRepository();
   final comments = InMemoryContentCommentFacet();
-  const postId = 'alpha_photo_landscape_single';
+  const postId = 'home_showcase_photo_landscape_single';
   final container = ProviderContainer(
     overrides: [
       ...mockContentFacetOverrides(repo, commentFacet: comments),

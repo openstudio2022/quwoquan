@@ -61,6 +61,20 @@ local_identity_reasons:
   windowId: RankedRecommendationWindow 的短期归因坐标；窗口过期后仍作为不可变审计字段，不形成新的对象所有权。
   userId: recommendation actor key; persona is preferred but device/anonymous actors have no canonical
     Persona aggregate reference
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 只有 FeedPageDelivered 可形成曝光，候选生成、排序或被 Content 丢弃都不得记为曝光。
 - 同一 deliveryPageId、ordinal 与 contentId 至多追加一次，重放保持同一 exposure identity；windowId 与 rankingSnapshotDigest 必须绑定实际排序窗口。

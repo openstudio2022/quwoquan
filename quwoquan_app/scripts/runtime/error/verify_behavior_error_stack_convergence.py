@@ -30,7 +30,7 @@ import sys
 REPO_ROOT = str(REPO_ROOT)
 TARGET = (
     "quwoquan_app/lib/service/content_service/content/content_behavior_fact/"
-    "application/content_behavior_repository.dart"
+    "application/public/content_behavior_repository.dart"
 )
 FORBIDDEN = [
     "BehaviorReportException",

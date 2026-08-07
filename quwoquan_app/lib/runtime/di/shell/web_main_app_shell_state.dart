@@ -272,7 +272,10 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
       case MainTabDestination.featured:
         return _WebFeaturedWorkspace(filterId: _featuredFilterId);
       case MainTabDestination.create:
-        return _WebCreateWorkspace(activeTabId: _createTabId);
+        return _WebCreateWorkspace(
+          activeTabId: _createTabId,
+          onGuestAuthGateOpened: widget.onGuestAuthGateOpened,
+        );
       case MainTabDestination.chat:
         return const _WebDesktopFrame(child: ChatPage());
       case MainTabDestination.interestMatch:

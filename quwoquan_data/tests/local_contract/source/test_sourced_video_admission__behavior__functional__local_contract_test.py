@@ -434,7 +434,7 @@ def test_professional_video_source_unit_preserves_receipt_and_popularity(
         "popularityScore": 9.2,
         "popularityPercentile": 1.0,
         "rankingEligible": True,
-        "rankingIneligibleReason": "",
+        "ineligibleReason": "",
         "comparisonCandidateCount": 2,
     }
     evidence_path = write_admitted_sourced_video_unit(

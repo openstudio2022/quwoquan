@@ -73,7 +73,8 @@ import 'package:quwoquan_app/runtime/di/presentation/other_profile_intersection_
 import 'package:quwoquan_app/runtime/di/presentation/profile_completeness_card.dart';
 import 'package:quwoquan_app/runtime/di/presentation/profile_header.dart';
 import 'package:quwoquan_app/runtime/di/presentation/profile_stats_row.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/runtime/di/profile_interaction_tab_composition.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart';
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/runtime/di/presentation/profile_slogan_card.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_works_tab.dart';

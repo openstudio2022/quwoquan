@@ -5,7 +5,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 const int connectorConnectionListDefaultLimit = 64;
 
 abstract interface class ConnectorManagementFacet
-    implements ConnectorDefinitionReader, ConnectorInvocationReader {
+    implements ConnectorDefinitionReader, ConnectorInvocationProcessQuery {
   Future<List<ConnectorConnectionView>> listConnectorConnections({
     int limit = connectorConnectionListDefaultLimit,
   });

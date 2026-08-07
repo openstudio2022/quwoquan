@@ -59,12 +59,15 @@ import (
 	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
 	"quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/mediareferencefence"
 	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
-	originalaccesshttp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/http"
+	originalaccessaudit "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/audit"
 	originalaccessapp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application"
 	originalaccesspersistence "quwoquan_service/services/content-service/internal/media/media_original_access_fact/infrastructure/persistence"
 	uploadsessionhttp "quwoquan_service/services/content-service/internal/media/media_upload_session/adapters/inbound/http"
 	uploadsessionapp "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
+	originalaccessquotahttp "quwoquan_service/services/content-service/internal/media/original_access_quota/adapters/inbound/http"
+	originalaccessquotaapp "quwoquan_service/services/content-service/internal/media/original_access_quota/application"
+	originalaccessquotapersistence "quwoquan_service/services/content-service/internal/media/original_access_quota/infrastructure/persistence"
 	moderationhttp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/adapters/inbound/http"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
@@ -331,6 +334,10 @@ func TestMain(m *testing.M) {
 	if err := mediaOriginalAccessStore.EnsureIndexes(ctx); err != nil {
 		panic("failed to initialize MediaOriginalAccessFact indexes: " + err.Error())
 	}
+	originalAccessQuotaStore := originalaccessquotapersistence.NewMongoStore(mongoDB)
+	if err := originalAccessQuotaStore.EnsureIndexes(ctx); err != nil {
+		panic("failed to initialize OriginalAccessQuota indexes: " + err.Error())
+	}
 	mediaUploadSessionStore := uploadsessionpersistence.NewMongoStore(
 		mongoDB.Collection("media_upload_sessions"),
 		mediaStore,
@@ -347,8 +354,11 @@ func TestMain(m *testing.M) {
 		mediaapp.BindDataPorts(mediaStore),
 		mediaObjects,
 	)
-	mediaOriginalAccessService := originalaccessapp.NewService(
-		mediaOriginalAccessStore,
+	originalAccessQuotaService := originalaccessquotaapp.NewService(
+		originalAccessQuotaStore,
+		originalaccessaudit.NewAppender(
+			originalaccessapp.NewService(mediaOriginalAccessStore),
+		),
 		mediaStore,
 		postapp.NewMediaAssetVisibilityReader(mediaPostReader, personaBlockReader),
 		mediaObjects,
@@ -625,8 +635,8 @@ func TestMain(m *testing.M) {
 		contenhttp.WithMediaAssetHandler(
 			mediaassethttp.NewHandler(mediaapp.BindFacades(mediaService)),
 		),
-		contenhttp.WithMediaOriginalAccessHandler(
-			originalaccesshttp.NewHandler(mediaOriginalAccessService),
+		contenhttp.WithOriginalAccessQuotaHandler(
+			originalaccessquotahttp.NewHandler(originalAccessQuotaService),
 		),
 		contenhttp.WithMediaUploadSessionHandler(
 			uploadsessionhttp.NewHandler(mediaUploadSessionService),

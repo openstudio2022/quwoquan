@@ -2,6 +2,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test('App projection encodes one canonical generated post wire', () {
@@ -12,7 +13,7 @@ void main() {
       type: 'video',
       identity: 'work',
       displayFormat: 'video',
-      assistantUsePolicy: 'allow',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'persona-projection-codec',
       displayName: 'Canonical author',
       avatarUrl: 'media/image/s/avatar/projection-codec',

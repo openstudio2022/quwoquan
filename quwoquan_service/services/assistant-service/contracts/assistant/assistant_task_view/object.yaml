@@ -11,6 +11,20 @@ relationships:
 - {name: account, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: '1:1', consistency: eventual, access: named_reader, on_delete: tombstone}
 - {name: learningFacts, target_object: assistant.AssistantLearningFact, reference_fields: [lastLearningFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
 - {name: subscriptions, target_object: assistant.SkillSubscription, reference_fields: [lastSubscriptionId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.assistant_task_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 任务只由 typed 学习事实与订阅事实投影，不接受客户端直接写入视图。
 - 同一 taskId 只应用更高 source sequence，重复事件不得产生重复任务。

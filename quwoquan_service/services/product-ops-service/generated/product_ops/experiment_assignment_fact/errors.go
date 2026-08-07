@@ -20,29 +20,29 @@ var (
 // AppErrorFromExperimentAssignmentUnauthorized returns *AppError for OPS.USER.experiment_assignment_unauthorized (user_message from errors.yaml).
 func AppErrorFromExperimentAssignmentUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先使用可信角色或设备身份", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("reauth", 0)
+	return rerrors.NewAppError(code, "请先使用可信角色或设备身份", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromExperimentAssignmentInvalidArgument returns *AppError for OPS.USER.experiment_assignment_invalid_argument (user_message from errors.yaml).
 func AppErrorFromExperimentAssignmentInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "实验分配请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "实验分配请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromExperimentAssignmentExperimentNotFound returns *AppError for OPS.USER.experiment_assignment_experiment_not_found (user_message from errors.yaml).
 func AppErrorFromExperimentAssignmentExperimentNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentExperimentNotFound.Error()))
-	return rerrors.NewAppError(code, "待分配的实验不存在", debugMessage).WithMetadata("experiment_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "待分配的实验不存在", debugMessage).WithMetadata("experiment_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromExperimentAssignmentNotFound returns *AppError for OPS.USER.experiment_assignment_not_found (user_message from errors.yaml).
 func AppErrorFromExperimentAssignmentNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentNotFound.Error()))
-	return rerrors.NewAppError(code, "实验分配尚未生成", debugMessage).WithMetadata("assignment_not_found", 404).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "实验分配尚未生成", debugMessage).WithMetadata("assignment_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromExperimentAssignmentStorageReadFailed returns *AppError for OPS.SYSTEM.experiment_assignment_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromExperimentAssignmentStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentAssignmentStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "实验分配读取失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "实验分配读取失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }

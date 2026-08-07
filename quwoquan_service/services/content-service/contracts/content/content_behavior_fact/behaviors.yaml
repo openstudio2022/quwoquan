@@ -689,6 +689,25 @@ behavior_events:
     ConfirmedOnboardingInterestWriter，不生成尽力 tracker 入队入口。
 
     '
+non_content_signal_events:
+# BehaviorEventType 是跨对象共享枚举：content/content_behavior_fact 与
+# circle_management/circle_behavior_fact 同时用它作为 eventType 闭集。本段显式声明
+# 「属于共享枚举但不是内容推荐信号」的成员，使 SignalWeights 的覆盖面成为契约声明而
+# 不是隐含约定。被声明的成员必须同时满足：不出现在 behavior_events、不出现在
+# runtime/recommendation.SignalWeights、owner 对象确实以 enum_ref 消费本枚举。
+- type: leave_circle
+  owner_service: circle-service
+  owner_object: circle_management/circle_behavior_fact
+  rationale: '退出圈子是圈内推荐闭环的事实，投影为 CircleBehaviorFact 七日活跃主体数；
+
+    端侧只经 circle-service AppendCircleBehaviorFact 上报，内容行为批量端点没有对应
+    tracker 方法，该成员从不进入 POST /content/behaviors。
+
+    内容推荐侧的「退圈降权」已由 intersection_feedback 的 feedbackKind=leaveCircle
+    承载（signal_weight -5.0，写 rec:ineg 交集负反馈冷却集）；在此再登记一次内容权重
+    就是同一语义的第二条推荐轨。
+
+    '
 recommend_features:
   feature_group: content_features
   update_trigger: PostPublished

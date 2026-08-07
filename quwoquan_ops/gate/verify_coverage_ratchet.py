@@ -89,7 +89,7 @@
 
     # 只处理单个对象或云侧领域单元
     python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect \
-      --unit app:travel/travel/trip_plan
+      --unit app:circle/circle_management/gathering
 
     # 覆盖率提升后收紧基线（只重写本次求值到的单元分区）
     python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --write-baseline
@@ -1859,7 +1859,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "只处理该单元（可重复），例如 "
-            "app:travel/travel/trip_plan / cloud:tag"
+            "app:circle/circle_management/gathering / cloud:tag"
         ),
     )
     parser.add_argument(

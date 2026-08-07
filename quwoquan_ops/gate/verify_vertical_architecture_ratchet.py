@@ -6,11 +6,11 @@
 * 禁止新增按内容垂类拆分的 ``services/<vertical>-service``；
 * 禁止业务代码新增垂类 ``switch/case`` 或 ``contentVertical ==`` 分叉；
 * ``contentVertical`` 使用、``domain_taxonomy.yaml`` 运行时消费者只减不增；
-* 已退役 travel-service 目录与 App、Assistant、api-edge 依赖永久保持为零。
+* 已退役 travel-service 目录与 App、Assistant、api-edge、runtime auth、Ops 装配依赖永久保持为零。
 
 基线不是服务/字段/消费者注册表，只保存允许现存命中的路径、计数摘要与退役责任。
 删除命中会自动通过；新路径、计数增加或等量替换会阻断。travel-service 已完成日落，
-其目录和三类调用方依赖不再接受任何 allowance、正计数或迁移期开关。
+其目录和五类调用方依赖不再接受任何 allowance、正计数或迁移期开关。
 """
 
 from __future__ import annotations
@@ -41,6 +41,28 @@ DOMAIN_TAXONOMY = Path(
 CONTRACT_GRAPH = Path("quwoquan_service/generated/contract_graph.json")
 SERVICE_ROOT = Path("quwoquan_service/services")
 RETIRED_TRAVEL_SERVICE = Path("quwoquan_service/services/travel-service")
+OUTPUT_ROOT = Path(".qwq_output")
+APP_CONTRACT_LOCK = Path(
+    "quwoquan_app/tool/cloud_codegen/contract_graph.lock.json"
+)
+APP_GENERATED_MANIFEST = Path(
+    "quwoquan_app/tool/cloud_codegen/generated_manifest.json"
+)
+RETIRED_APP_ARTIFACTS = (
+    Path("quwoquan_app/lib/service/travel_service"),
+    Path("quwoquan_app/lib/runtime/di/travel_dependencies.dart"),
+    Path("quwoquan_app/lib/runtime/di/app_providers_travel.dart"),
+    Path("quwoquan_app/lib/runtime/di/navigation/app_router_travel_routes.dart"),
+    Path("quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/travel"),
+    Path(
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/"
+        "requests/travel"
+    ),
+    Path(
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/generated/"
+        "travel_contracts.dart"
+    ),
+)
 TRAVEL_DOMAIN = "travel"
 
 BASELINE_SCHEMA = "vertical-architecture-ratchet"
@@ -49,7 +71,7 @@ REQUIRED_BUCKETS = (
     "content_vertical_usage",
     "domain_taxonomy_runtime_consumers",
 )
-TRAVEL_DEPENDENCY_AREAS = ("app", "assistant", "api_edge")
+TRAVEL_DEPENDENCY_AREAS = ("app", "assistant", "api_edge", "runtime", "ops")
 
 CODE_SUFFIXES = {
     ".dart",
@@ -103,6 +125,7 @@ APP_TRAVEL_DEPENDENCY_RE = re.compile(
     r"|\btravel_service\b"
     r"|\bTravelService\b"
     r"|\bTRAVEL_SERVICE\b"
+    r"|\btravel_journey_manager\b"
 )
 SERVICE_TRAVEL_DEPENDENCY_RE = re.compile(
     r"\btravel-service\b"
@@ -111,9 +134,22 @@ SERVICE_TRAVEL_DEPENDENCY_RE = re.compile(
     r"|\bTRAVEL_SERVICE\b"
     r"|\btravel_client\b"
     r"|\bTravelClient\b"
+    r"|\btravel\.trip\.[a-z0-9_.-]+\b"
+    r"|\btravel_journey_manager\b"
 )
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 PATH_RE = re.compile(r"^[a-zA-Z0-9_.@+-]+(?:/[a-zA-Z0-9_.@+-]+)*$")
+RETIRED_OUTPUT_NAME_RE = re.compile(
+    r"(?:^|[-_])travel-service(?:-materialized)?(?:[._-]|$)"
+    r"|^session-c-travel-aside(?:[._-]|$)"
+)
+RETIRED_APP_OUTPUT_RE = re.compile(
+    r"(?:^|/)src/travel(?:/|$)"
+    r"|(?:^|/)generated/requests/travel(?:/|$)"
+    r"|(?:^|/)generated/travel_contracts\.dart$"
+    r"|(?:^|/)travel_operation_contracts\.g(?:\.requests)?\.dart$"
+    r"|(?:^|/)travel_(?:api_metadata|request_page_ids)\.g\.dart$"
+)
 
 VERTICAL_WORD_STOPLIST = {
     "and",
@@ -312,6 +348,182 @@ def _load_contract_graph_domains(root: Path) -> set[str]:
         for item in objects
         if isinstance(item, dict) and str(item.get("domain") or "").strip()
     }
+
+
+def _load_json_mapping(path: Path, *, label: str) -> dict:
+    try:
+        document = json.loads(_read_text(path))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} 无法读取或解析: {path}: {exc}") from exc
+    if not isinstance(document, dict):
+        raise ValueError(f"{label} 必须是 mapping: {path}")
+    return document
+
+
+def _is_retired_graph_identity(value: object) -> bool:
+    normalized = str(value or "").strip().lower()
+    return (
+        normalized == TRAVEL_DOMAIN
+        or normalized.startswith(f"{TRAVEL_DOMAIN}.")
+        or normalized == "travel-service"
+        or normalized.startswith("travel-service/")
+    )
+
+
+def _is_retired_graph_source_path(value: object) -> bool:
+    normalized = str(value or "").strip().replace("\\", "/").lstrip("./").lower()
+    return (
+        normalized == TRAVEL_DOMAIN
+        or normalized.startswith(f"{TRAVEL_DOMAIN}/")
+        or normalized == "travel-service"
+        or normalized.startswith("travel-service/")
+        or "/travel-service/" in f"/{normalized}/"
+    )
+
+
+def scan_contract_graph_travel_ghosts(root: Path) -> list[str]:
+    path = root / CONTRACT_GRAPH
+    if not path.is_file():
+        return []
+    document = _load_json_mapping(path, label="ContractGraph")
+    issues: list[str] = []
+    for section in ("objects", "operations"):
+        entries = document.get(section)
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            identity_fields = ("domain", "id", "objectId")
+            if any(_is_retired_graph_identity(entry.get(field)) for field in identity_fields):
+                issues.append(
+                    f"{CONTRACT_GRAPH.as_posix()}:{section}[{index}] "
+                    "仍包含已退役 travel domain identity"
+                )
+                continue
+            if _is_retired_graph_source_path(entry.get("sourcePath")):
+                issues.append(
+                    f"{CONTRACT_GRAPH.as_posix()}:{section}[{index}] "
+                    "仍引用已退役 travel sourcePath"
+                )
+    for section in ("sources", "documents"):
+        entries = document.get(section)
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            if _is_retired_graph_source_path(entry.get("path")):
+                issues.append(
+                    f"{CONTRACT_GRAPH.as_posix()}:{section}[{index}] "
+                    "仍包含已退役 travel contract document"
+                )
+    return issues
+
+
+def scan_app_travel_contract_ghosts(root: Path) -> list[str]:
+    issues: list[str] = []
+    lock_path = root / APP_CONTRACT_LOCK
+    if lock_path.is_file():
+        lock = _load_json_mapping(lock_path, label="App ContractGraph lock")
+        operations = lock.get("appExposedOperations")
+        if isinstance(operations, list):
+            for index, entry in enumerate(operations):
+                if not isinstance(entry, dict):
+                    continue
+                if any(
+                    _is_retired_graph_identity(entry.get(field))
+                    for field in (
+                        "domain",
+                        "canonicalOperationId",
+                        "objectId",
+                    )
+                ) or _is_retired_graph_source_path(entry.get("sourcePath")):
+                    issues.append(
+                        f"{APP_CONTRACT_LOCK.as_posix()}:appExposedOperations"
+                        f"[{index}] 仍包含已退役 travel operation"
+                    )
+    manifest_path = root / APP_GENERATED_MANIFEST
+    if manifest_path.is_file():
+        manifest = _load_json_mapping(
+            manifest_path,
+            label="App generated manifest",
+        )
+        outputs = manifest.get("outputs")
+        if isinstance(outputs, list):
+            for index, entry in enumerate(outputs):
+                if not isinstance(entry, dict):
+                    continue
+                output_path = str(entry.get("path") or "").replace("\\", "/")
+                if RETIRED_APP_OUTPUT_RE.search(output_path):
+                    issues.append(
+                        f"{APP_GENERATED_MANIFEST.as_posix()}:outputs[{index}] "
+                        f"仍登记已退役 travel 产物 {output_path}"
+                    )
+    for relative in RETIRED_APP_ARTIFACTS:
+        candidate = root / relative
+        if os.path.lexists(candidate):
+            issues.append(f"{relative.as_posix()}: 已退役 App travel 产物必须不存在")
+    return issues
+
+
+def scan_materialized_travel_owners(root: Path) -> list[str]:
+    output_root = root / OUTPUT_ROOT
+    if not output_root.is_dir():
+        return []
+
+    issues: list[str] = []
+    materialized_roots: list[Path] = []
+    containers = (
+        output_root,
+        output_root / "env" / "repo" / "local",
+    )
+    for container in containers:
+        if not container.is_dir():
+            continue
+        with os.scandir(container) as entries:
+            for entry in entries:
+                candidate = Path(entry.path)
+                name = entry.name
+                normalized_name = name.lower()
+                if RETIRED_OUTPUT_NAME_RE.search(normalized_name):
+                    issues.append(
+                        f"{_relative(root, candidate)}: "
+                        "可复活 travel-service 的 materialized/aside 目录必须不存在"
+                    )
+                if (
+                    entry.is_dir(follow_symlinks=False)
+                    and (
+                        "materialized" in normalized_name
+                        or normalized_name == "service-contract-view"
+                    )
+                ):
+                    materialized_roots.append(candidate)
+
+    for materialized_root in materialized_roots:
+        for directory, _, filenames in os.walk(
+            materialized_root,
+            followlinks=False,
+        ):
+            if "domain.yaml" not in filenames:
+                continue
+            domain_path = Path(directory) / "domain.yaml"
+            relative = domain_path.relative_to(root)
+            if "contracts" not in relative.parts:
+                continue
+            try:
+                document = _load_yaml_mapping(
+                    domain_path,
+                    label="materialized domain owner",
+                )
+            except ValueError as exc:
+                issues.append(str(exc))
+                continue
+            if str(document.get("domain") or "").strip().lower() == TRAVEL_DOMAIN:
+                issues.append(
+                    f"{relative.as_posix()}: .qwq_output 不得保存可编译的 travel domain owner"
+                )
+    return issues
 
 
 def _service_has_files(path: Path) -> bool:
@@ -514,7 +726,31 @@ def scan_travel_dependencies(root: Path) -> dict[str, dict[str, HitSummary]]:
         ),
         SERVICE_TRAVEL_DEPENDENCY_RE,
     )
-    return {"app": app, "assistant": assistant, "api_edge": api_edge}
+    runtime = _scan_identifier_hits(
+        root,
+        _iter_files(
+            root,
+            (Path("quwoquan_service/runtime"),),
+            suffixes=TEXT_SUFFIXES,
+        ),
+        SERVICE_TRAVEL_DEPENDENCY_RE,
+    )
+    ops = _scan_identifier_hits(
+        root,
+        _iter_files(
+            root,
+            (Path("quwoquan_ops/cli"),),
+            suffixes=TEXT_SUFFIXES,
+        ),
+        SERVICE_TRAVEL_DEPENDENCY_RE,
+    )
+    return {
+        "app": app,
+        "assistant": assistant,
+        "api_edge": api_edge,
+        "runtime": runtime,
+        "ops": ops,
+    }
 
 
 def build_snapshot(root: Path) -> tuple[Snapshot, list[str]]:
@@ -665,12 +901,35 @@ def evaluate(
     baseline, _document = load_baseline(baseline_path)
     failures = list(discovery_issues) if scope in {"all", "service"} else []
     reductions: list[str] = []
+    graph_ghosts = (
+        scan_contract_graph_travel_ghosts(root)
+        if scope in {"all", "service"}
+        else []
+    )
+    materialized_owners = (
+        scan_materialized_travel_owners(root)
+        if scope in {"all", "service"}
+        else []
+    )
+    app_contract_ghosts = (
+        scan_app_travel_contract_ghosts(root)
+        if scope in {"all", "app"}
+        else []
+    )
+    failures.extend(f"contract_graph_travel_ghost: {issue}" for issue in graph_ghosts)
+    failures.extend(
+        f"materialized_travel_owner: {issue}" for issue in materialized_owners
+    )
+    failures.extend(
+        f"app_travel_contract_ghost: {issue}" for issue in app_contract_ghosts
+    )
 
     retired_path = RETIRED_TRAVEL_SERVICE.as_posix()
-    if scope in {"all", "service"} and (root / RETIRED_TRAVEL_SERVICE).is_dir():
+    retired_service_path = root / RETIRED_TRAVEL_SERVICE
+    if scope in {"all", "service"} and os.path.lexists(retired_service_path):
         failures.append(
-            f"retired_travel_service: {retired_path} 目录已退役且必须永久不存在；"
-            "不得通过恢复旧 owner、源码或 digest 重新启用"
+            f"retired_travel_service: {retired_path} 路径已退役且必须永久不存在；"
+            "不得通过目录、文件、symlink、旧 owner、源码或 digest 重新启用"
         )
     for service_path, domain in sorted(snapshot.service_domains.items()):
         if not _matches_vertical_service(
@@ -727,7 +986,10 @@ def evaluate(
         "scope": scope,
         "vertical_term_count": len(snapshot.vertical_terms),
         "service_boundaries": len(snapshot.service_domains),
-        "retired_travel_service_present": (root / RETIRED_TRAVEL_SERVICE).is_dir(),
+        "retired_travel_service_present": os.path.lexists(retired_service_path),
+        "contract_graph_travel_ghosts": len(graph_ghosts),
+        "materialized_travel_owners": len(materialized_owners),
+        "app_travel_contract_ghosts": len(app_contract_ghosts),
         "debt": debt,
         "reductions": reductions,
     }
@@ -742,6 +1004,12 @@ def _print_report(report: Mapping[str, object]) -> None:
         f"vertical_terms_derived={report['vertical_term_count']} "
         "retired_travel_present="
         f"{str(report['retired_travel_service_present']).lower()}"
+    )
+    print(
+        "  retired artifacts: "
+        f"graph={report['contract_graph_travel_ghosts']} "
+        f"materialized={report['materialized_travel_owners']} "
+        f"app={report['app_travel_contract_ghosts']}"
     )
     debt = report["debt"]
     assert isinstance(debt, dict)

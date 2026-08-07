@@ -25,7 +25,7 @@
 
 - Gathering 的 title、schedule、Host、Participation、capacity、lifecycle、Outcome 与 conversation。
 - GatheringRevision 的重大活动承诺确认；Plan acknowledgement 不得冒充活动重大变更确认。
-- Assistant 自动创建 Plan、接受/拒绝或 commit Proposal；Map/Calendar/Experience 投影、App Board 写入与 travel-service 兼容读取。
+- Assistant 自动创建 Plan、接受/拒绝或 commit Proposal；Map/Calendar/Experience 投影、App Board 写入，以及任何已退役 Travel 协议、源快照或 crosswalk 的产品读取。
 
 ## 3. 行为要求
 

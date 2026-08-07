@@ -424,7 +424,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
   }) {
     unawaited(
       ref
-          .read(tagFeedbackCommandWriterProvider)
+          .read(tagFeedbackFactAppenderProvider)
           .reportTagFeedback(
             ReportTagFeedbackCommand(tagRef: tagRef, action: action),
           )

@@ -53,6 +53,25 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "campaignRunId": {"type": "string", "minLength": 1},
+    "campaignGeneration": {"type": "integer", "minimum": 1},
+    "campaignFencingToken": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignSourceRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignEntityCatalogDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "envelopeDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
@@ -81,7 +100,18 @@
         "properties": {"scaleClass": {"const": "M100_PLUS"}},
         "required": ["scaleClass"]
       },
-      "then": {"properties": {"queueBackend": {"const": "reliabletask"}}}
+      "then": {
+        "properties": {"queueBackend": {"const": "reliabletask"}},
+        "required": [
+          "rootExecutionId",
+          "campaignRunId",
+          "campaignGeneration",
+          "campaignFencingToken",
+          "campaignPlanDigest",
+          "campaignSourceRevision",
+          "campaignEntityCatalogDigest"
+        ]
+      }
     }
   ]
 }

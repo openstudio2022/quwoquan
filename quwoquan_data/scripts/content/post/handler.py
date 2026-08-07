@@ -25,7 +25,7 @@ from content.review.annotation.entity_annotation import (
     annotation_closure_issues,
     build_entity_dictionary,
 )
-from content.execution.writer_groups import writer_group_dir, partition_writer_groups, write_writer_group
+from content.execution.planning.writer_groups import writer_group_dir, partition_writer_groups, write_writer_group
 from content.execution.runtime_state import write_execution_runtime_state
 from content.post.object_index import content_type_from_brief, write_brief_object
 from core.io import write_json

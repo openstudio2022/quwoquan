@@ -8,7 +8,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from content.execution.campaign import plan as campaign_plan
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.planning import semantic_preflight_admission
 from content.execution.preflight import handler as preflight_handler
+from content.execution.preflight import receipt as preflight_receipt
 from content.execution.preflight import runtime as preflight_runtime
 from content.execution.preflight.handler import register_task_preflight_parser
 from content.execution.preflight.receipt import (
@@ -22,7 +26,9 @@ from content.execution.preflight.selection import (
     resolve_semantic_preflight_selection,
 )
 from core.control_types import AgentProvider
+from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
+from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
 def _cursor_required_concurrency() -> int:
@@ -238,6 +244,199 @@ def test_cursor_auto_preflight_and_soak_bind_exact_runtime_and_receipt(
             require_execution_admission=True,
             now=datetime.now(timezone.utc) + timedelta(hours=1),
         )
+
+
+def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    selection = resolve_semantic_preflight_selection("cursor_auto")
+    receipt_path = tmp_path / "data/local/cache/semantic-preflight/receipt.json"
+    receipt_path.parent.mkdir(parents=True)
+    receipt = {
+        "receiptId": "sha256:" + "1" * 64,
+        "selectionDigest": selection.selection_digest,
+        "executionAdmissionReady": True,
+    }
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    binding = {
+        "receiptRef": receipt_path.relative_to(tmp_path).as_posix(),
+        "receiptFileSha256": semantic_preflight_admission.file_sha256(receipt_path),
+        "receiptId": receipt["receiptId"],
+        "selectionDigest": receipt["selectionDigest"],
+    }
+    freshness_checks: list[bool] = []
+
+    def validate(
+        _receipt: object,
+        *,
+        expected_selection: object,
+        require_execution_admission: bool,
+    ) -> None:
+        assert expected_selection == selection
+        freshness_checks.append(require_execution_admission)
+        if require_execution_admission:
+            raise ValueError("semantic preflight receipt is outside its validity window")
+
+    monkeypatch.setattr(
+        semantic_preflight_admission,
+        "validate_semantic_preflight_receipt",
+        validate,
+    )
+
+    for _phase in ("run", "resume"):
+        resolved = semantic_preflight_admission.resolve_cli_preflight_binding(
+            existing_manifest={"semanticPreflightReceipt": binding},
+            requested_receipt_ref=binding["receiptRef"],
+            semantic_selection_id="cursor_auto",
+            output_root=tmp_path,
+        )
+        assert resolved == binding
+    assert freshness_checks == [False, False, False, False, False, False]
+
+
+def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    receipt_path, _binding = ready_semantic_preflight(
+        "cursor_auto",
+        output_root=output_root,
+    )
+    receipt = read_json(receipt_path)
+    receipt["recordedAt"] = "2020-01-01T00:00:00Z"
+    receipt["validUntil"] = "2020-01-01T00:10:00Z"
+    receipt["receiptId"] = preflight_receipt._digest(
+        {key: value for key, value in receipt.items() if key != "receiptId"}
+    )
+    write_json(receipt_path, receipt)
+    binding = semantic_preflight_admission.bind_semantic_preflight_receipt(
+        receipt_path,
+        semantic_selection_id="cursor_auto",
+        output_root=output_root,
+        require_fresh=False,
+    )
+    with pytest.raises(ValueError, match="outside its validity window"):
+        semantic_preflight_admission.bind_semantic_preflight_receipt(
+            receipt_path,
+            semantic_selection_id="cursor_auto",
+            output_root=output_root,
+        )
+
+    root_id = "20200101--travel-homepage-m1--china--scale-001"
+    execution_ids = {
+        carrier: root_id.replace("-homepage-", f"-{carrier}-")
+        for carrier in ("homepage", "article", "image", "video")
+    }
+    runtime = CampaignRuntimePaths(
+        repo_root=tmp_path,
+        output_root=output_root,
+        publish_root=tmp_path / "publish",
+        campaigns_root=tmp_path / "campaigns",
+        workspaces_root=tmp_path / "workspaces",
+    )
+    stable = {
+        "schema": "quwoquan_data.content_campaign_plan",
+        "rootExecutionId": root_id,
+        "executionMode": "central",
+        "gitBranch": "dev1.0",
+        "gitCommitSha": "a" * 40,
+        "sourceRevision": "sha256:" + "b" * 64,
+        "sourceDigest": "sha256:" + "c" * 64,
+        "entityCatalogDigest": "sha256:" + "d" * 64,
+        "semanticSelectionId": "cursor_auto",
+        "semanticPreflightReceipt": binding,
+        "laneExternalInputs": {
+            carrier: {
+                "executionId": execution_ids[carrier],
+                "externalInputRefs": [],
+                "externalInputsDigest": "sha256:" + "e" * 64,
+            }
+            for carrier in execution_ids
+        },
+        "externalInputsDigest": "sha256:" + "f" * 64,
+        "submissionDigests": {
+            carrier: "sha256:" + str(index) * 64
+            for index, carrier in enumerate(execution_ids, start=1)
+        },
+        "executionIds": execution_ids,
+        "frozenAt": "2020-01-01T00:05:00Z",
+    }
+    plan = {**stable, "planDigest": campaign_plan.sha256_payload(stable)}
+    path = campaign_plan.plan_path(runtime, root_id)
+    path.parent.mkdir(parents=True)
+    write_json(path, plan)
+
+    admitted = campaign_plan.require_frozen_campaign_preflight_admission(
+        runtime,
+        root_id,
+        execution_id=execution_ids["image"],
+        semantic_selection_id="cursor_auto",
+        requested_receipt_ref=binding["receiptRef"],
+        expected_plan_digest=plan["planDigest"],
+    )
+    assert admitted == binding
+    first_manifest_binding = (
+        semantic_preflight_admission.resolve_manifest_preflight_binding(
+            existing_manifest=None,
+            requested_binding=admitted,
+            semantic_selection_id="cursor_auto",
+            output_root=output_root,
+            require_requested_fresh=False,
+        )
+    )
+    assert first_manifest_binding == binding
+
+
+def test_failed_fleet_preflight_does_not_write_admission_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        preflight_handler,
+        "prepare_data_runtime_cache",
+        lambda **_kwargs: {"ready": True, "python": sys.executable, "missing": []},
+    )
+    monkeypatch.setattr(
+        preflight_runtime,
+        "python_has_modules",
+        lambda *_args: (True, []),
+    )
+
+    def failed_fleet(**kwargs: object) -> dict[str, object]:
+        report = _ready_preflight(**kwargs)
+        report["ready"] = False
+        report["reliableTaskFleet"] = {
+            "checked": True,
+            "ready": False,
+            "target": "beta-local",
+            "mongo": False,
+            "redis": False,
+            "owned": False,
+            "issues": ["beta-local has no active immutable candidate"],
+        }
+        report["issues"] = ["beta-local has no active immutable candidate"]
+        return report
+
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_environment_preflight",
+        failed_fleet,
+    )
+
+    with pytest.raises(SystemExit) as stopped:
+        preflight_handler.handle_ready(_args(tmp_path))
+
+    assert stopped.value.code == 1
+    output = json.loads(capsys.readouterr().out)
+    compact = json.loads((tmp_path / "compact.json").read_text(encoding="utf-8"))
+    assert output["ready"] is False
+    assert compact["reliableTaskFleet"]["ready"] is False
+    assert compact["reliableTaskFleet"]["issues"] == [
+        "beta-local has no active immutable candidate"
+    ]
+    assert not (tmp_path / "receipt.json").exists()
 
 
 def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(

@@ -2,7 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../../support/service/user_service/account/user_account/user_account_resolver_typed_double.dart';
+import '../../../../../support/runtime/fixtures/fixture_user_resolver.dart';
 
 void main() {
   test('shared user without persona refs falls back to its user id', () {
@@ -16,11 +16,11 @@ void main() {
   });
 
   test(
-    'alpha identity is available without a repository working directory',
+    'canonical identity is available without a repository working directory',
     () async {
       final originalDirectory = Directory.current;
       final isolatedDirectory = await Directory.systemTemp.createTemp(
-        'qwq_alpha_fixture_identity_',
+        'qwq_canonical_fixture_identity_',
       );
       addTearDown(() async {
         Directory.current = originalDirectory;

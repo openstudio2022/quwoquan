@@ -33,7 +33,7 @@
 ### REQ-002 同一 Repository 抽象接口 的 Mock* 与 Remote* 实现：对同一业务操作返回 同一 codegen 类型（或经同一 fromMap/工厂解析到该类型），禁止 Mock 返回「另一套 Map 键名」而 Remote 另一套
 
 - 同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。
-- `lib/ui/{domain}/pages/**` 中，领域实体行数据应以 codegen DTO 或基于 metadata 的 ViewModel 进入 `build`，禁止以裸 `Map` 作为列表模型类型；存量由门禁直接扫描。
+- `lib/service/<service>/<context>/<object>/presentation/**` 中，领域实体行数据应以 codegen DTO 或基于 metadata 的 ViewModel 进入 `build`，禁止以裸 `Map` 作为列表模型类型；存量由门禁直接扫描。
 - 若某域迁移失败，恢复代码但不得删除已经成立的 metadata 字段，也不得通过登记清单豁免回归。
 - 新增云接口或新页面数据模型：**须** 先改 metadata 再 codegen，**禁止** 仅端侧手写 DTO 作为长期方案。
 - alpha/beta/gamma/prod 统一使用 `lib/main.dart` 的 production Remote composition，代码图中不得保留 `AppDataSourceMode`、`appDataSourceModeProvider`、alpha runner、mock package 或同义运行时切换器；环境名和 runtime define 只能选择 endpoint/config，不得改变数据源。
@@ -90,3 +90,13 @@
 - 影响或价值：仍缺四环境 artifact 的 transitive dependency attestation，以及绑定同一 canonical release 的精确 API/UI 读回 CaseResult。仓内 Alpha runner、aggregate mock package 与 Patrol 业务 Provider 注入已退役，并由 `verify-production-data-source-single-path` fail-closed。
 - 完成判定：`GWT-001` 由四环境 Remote artifact、Mock/fixture 可达数为零、release-bound API/UI CaseResult 与 required non-skipped CI 直接证明。
 - 依赖：环境 topology、canonical release activation 与 App core readback。
+
+<a id="open-004"></a>
+### OPEN-004 端侧 generated decoder 缺少信封准入约束表达位
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 Dart generated decoder 只表达字段存在性、类型、枚举边界与未知字段拒绝，无法表达信封级准入约束。手写 decoder 退役后，`ContentDiscoveryFeedPageSlice` 上原有的分页上限、`objectCards` 数量有界、`cursor` 与 `paginationExpiresAt` 成对出现，以及 `policyDigest` 必须为 `sha256:<64 hex>` 字形这几条准入约束在端侧不再 fail-closed，异常信封只能在更下游被发现。
+- 完成判定：contracts metadata 能声明信封级准入约束并由 codegen 落到 Dart decoder，上述四条约束各自恢复 fail-closed 并有对应 local_contract 断言。
+- 依赖：contracts metadata 约束表达位与 Dart 客户端生成器。

@@ -1,10 +1,11 @@
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_status_reader.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/adapters/profile_interaction_activity_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_read_fact/adapters/profile_interaction_read_fact_remote.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/adapters/filter_catalog_remote.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_asset_remote.dart';
-import 'package:quwoquan_app/service/content_service/media/media_original_access_fact/adapters/media_original_access_fact_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/adapters/original_access_quota_remote.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/content_media_object_uploader.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/platform_media_picker_adapter.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/media_upload_session_remote.dart';
@@ -69,7 +70,7 @@ final class AppProductionContentFacets {
 
   final ContentDiscoveryFeedQuery feedQuery;
   final ContentPostDeleteCommandWriter postDeleteWriter;
-  final ContentBehaviorCommandWriter behaviorWriter;
+  final ContentBehaviorFactAppender behaviorWriter;
 }
 
 /// 共享同一 generated adapter 与其缓存层的只读 content facet。
@@ -168,7 +169,7 @@ final class ContentProductionComposition {
   const ContentProductionComposition._();
 
   static AppProductionBehaviorRepository behaviorRepository({
-    required ContentBehaviorCommandWriter writer,
+    required ContentBehaviorFactAppender writer,
     required ActorQueuePartition queuePartition,
     required ActorQueueStorage queueStorage,
     String Function()? feedSessionIdProvider,
@@ -249,9 +250,10 @@ final class ContentProductionComposition {
   }
 
   static ContentMediaStreamObjectUpload contentMediaObjectUpload({
+    required CloudHttpClient client,
     required void Function(void Function()) onDispose,
   }) {
-    final uploader = RemoteContentMediaObjectUploader();
+    final uploader = RemoteContentMediaObjectUploader(client: client);
     onDispose(uploader.dispose);
     return uploader.uploadStream;
   }
@@ -324,7 +326,7 @@ final class ContentProductionComposition {
           client: client,
           invocationContext: context,
         ),
-        originalAccess: RemoteContentMediaOriginalAccessFactWriter(
+        originalAccess: RemoteContentOriginalAccessQuotaWriter(
           client: client,
           invocationContext: context,
         ),

@@ -1559,7 +1559,7 @@ types:
         constraints:
           - NULLABLE
       - name: assistantUsePolicy
-        type: string
+        type: enum
         enum_ref: AssistantUsePolicy
         constraints:
           - NULLABLE
@@ -1626,7 +1626,7 @@ types:
         constraints:
           - NULLABLE
       - name: assistantUsePolicy
-        type: string
+        type: enum
         enum_ref: AssistantUsePolicy
         constraints:
           - NULLABLE

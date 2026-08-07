@@ -15,11 +15,11 @@ typedef AssistantRunInvocationContextFactory =
 /// AssistantRun generated-client adapter。
 final class AssistantRunGeneratedAdapter
     implements
-        AssistantAnswerRunCommandWriter,
-        AssistantRunIntentCommandWriter,
-        AssistantRunQuery,
+        AssistantAnswerRunProcessCommandWriter,
+        AssistantRunIntentProcessCommandWriter,
+        AssistantRunProcessQuery,
         AssistantRunEventStream,
-        AssistantCreationRunCommandWriter {
+        AssistantCreationRunProcessCommandWriter {
   const AssistantRunGeneratedAdapter({
     required this.client,
     required this.invocationContext,

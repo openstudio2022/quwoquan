@@ -39,6 +39,20 @@ relationships:
   on_delete: detach
 local_identity_reasons:
   nodeId: ephemeral realtime topology node key with no authoritative business-object lifecycle
+search_policy:
+  exposed: none
+  not_exposed_reason: "易失运行时状态，过期即消失，没有可供检索的稳定对象身份。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.realtime.presence_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 只消费已认证 Connection composition root 发出的 opened、heartbeat 与 closed typed callback，客户端 presence 消息不得直接写视图。
 - 同一 personaId 与 deviceId 仅保留最新 connection epoch，旧节点事件不得覆盖新连接。

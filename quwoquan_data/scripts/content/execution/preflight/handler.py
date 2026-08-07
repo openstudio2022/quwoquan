@@ -19,12 +19,12 @@ from content.execution.preflight.receipt import (
     build_semantic_preflight_receipt,
     write_semantic_preflight_receipt,
 )
-from content.execution.preflight.runtime import prepare_selected_runtime
 from content.execution.preflight.report_print import (
     _print_preflight,
     _print_semantic_agent_probe,
     _print_semantic_agent_workspace_smoke,
 )
+from content.execution.preflight.runtime import prepare_selected_runtime
 from content.execution.preflight.selection import (
     CALIBRATION_SEMANTIC_SELECTION_ID,
     DEFAULT_SEMANTIC_SELECTION_ID,
@@ -128,7 +128,7 @@ def _workspace_smoke_report(
     selection: SemanticPreflightSelection | None = None,
 ) -> dict:
     """Exercise four independent campaign-lane workspaces concurrently."""
-    from content.execution.campaign_process import CAMPAIGN_CARRIERS
+    from content.execution.campaign.process import CAMPAIGN_CARRIERS
 
     policy = active_runtime_policy()
     resolved = selection or resolve_semantic_preflight_selection(
@@ -180,7 +180,7 @@ def _startup_timeout_seconds(args: argparse.Namespace) -> float:
 
 
 def _reliabletask_fleet_report() -> dict:
-    from content.execution.reliabletask_fleet import reliabletask_fleet_preflight
+    from content.execution.queue.reliabletask.fleet import reliabletask_fleet_preflight
 
     try:
         report = reliabletask_fleet_preflight()
@@ -446,7 +446,7 @@ def handle_ready(args: argparse.Namespace) -> None:
             encoding="utf-8",
         )
     receipt_out = getattr(args, "receipt_out", None)
-    if receipt_out:
+    if receipt_out and bool(report.get("ready")):
         receipt_path = _report_output_path(receipt_out)
         receipt = build_semantic_preflight_receipt(
             selection=selection,

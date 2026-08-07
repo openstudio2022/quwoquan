@@ -12,7 +12,7 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/runtime/api_contract/local_gamma_anonymous_session.dart';
+import '../../../../../support/runtime/api_contract/api_contract_anonymous_session.dart';
 
 const _environment = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -24,7 +24,7 @@ const _productOpsBaseUrl = String.fromEnvironment(
 const _authBaseUrl = String.fromEnvironment('API_CONTRACT_AUTH_BASE_URL');
 
 late http.Client _httpClient;
-late LocalGammaAnonymousSession _session;
+late ApiContractAnonymousSession _session;
 bool _clientInitialized = false;
 
 void main() {
@@ -54,7 +54,7 @@ void main() {
     }
     _httpClient = http.Client();
     _clientInitialized = true;
-    _session = await LocalGammaAnonymousSession.login(
+    _session = await ApiContractAnonymousSession.login(
       client: _httpClient,
       baseUrl: _authBaseUrl,
       subject: 'visit-record-api-integration',

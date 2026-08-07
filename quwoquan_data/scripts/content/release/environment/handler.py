@@ -15,6 +15,9 @@ from content.release.environment.baseline_api_verification import (
     BaselineApiVerificationError,
     write_baseline_api_verification,
 )
+from content.release.environment.coverage_receipt import (
+    write_environment_coverage_receipt,
+)
 from content.release.environment._ship_operations import (
     ShipOperationDependencies,
     apply_release,
@@ -191,6 +194,9 @@ def _operation_dependencies() -> ShipOperationDependencies:
         run_creator_importer=_run_creator_importer,
         run_content_importer=_run_content_importer,
         run_homepage_importer=_run_homepage_importer,
+        write_environment_coverage_receipt=(
+            write_environment_coverage_receipt
+        ),
         write_release_evidence=_write_release_evidence,
         write_verification_result=_write_verification_result,
         write_tag_consumer_verification=_write_tag_consumer_verification,

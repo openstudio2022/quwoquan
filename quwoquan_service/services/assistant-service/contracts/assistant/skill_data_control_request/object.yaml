@@ -1,21 +1,36 @@
-kind: aggregate_root
+kind: process_manager
 description: >-
   用户对单个 Skill 的 Assistant-owned 活动可见性、Consent 与主动订阅执行隐藏、撤销或归档的确认型流程聚合。
   Connector、业务对象与法定 Run 审计仍由各 owner 管理，不由本对象复制或伪装删除。
 identity:
   fields: [requestId]
   version_field: revision
-  version_source: field
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   queries: named_reader
   cross_context: public_contract_only
 relationships:
 - {name: accountOwner, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: 'N:1', consistency: eventual, access: named_reader, on_delete: cascade}
 local_identity_reasons:
   skillId: stable active Skill package key scoped under the authenticated account and never used as aggregate identity
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "流程编排对象只表达内部推进状态与补偿进度，没有用户可检索语义。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.skill_data_control_request.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.assistant.skill_data_control_request.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.assistant.skill_data_control_request.write
 business_rules:
 - accountId 只来自可信主体；请求只允许 hide_activity_history、revoke_consent、archive_subscriptions 三种去重后稳定排序的 action。
 - Create 只建立 pending_confirmation；Confirm 必须提交 expectedRevision 与显式 confirmed，未确认不得执行任何 owner command。

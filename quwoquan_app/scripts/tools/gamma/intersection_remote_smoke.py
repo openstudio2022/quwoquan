@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """交集 gamma-local remote smoke 一键执行器（R-IX08 凭证收口）。
 
+Owner: tools/gamma（人工烟测工具，非领域 gate，非 App environments 副本）。
+跨环境正式验收 runner 归 Ops service_ops；本文件保持 tools 口袋，禁止迁入
+scripts/service/ 或 *_service/environments/。
+
 content-service 强制 verified principal（JWT），smoke 测试自身不签发凭证。
 本脚本从 canonical Data readiness/import receipt 选择 release-bound author，
 再经 candidate-bound 非生产身份池和公开 OTP/LoginWithPhone 恢复真实测试账号，
@@ -19,8 +23,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-APP_ROOT = REPO_ROOT / "quwoquan_app"
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+
+from _common.paths import APP_ROOT, REPO_ROOT
+
 SMOKE_TEST = (
     "test/api_integration/service/content_service/content/intersection_visit_state/"
     "intersection_remote_smoke__api_integration_test.dart"
@@ -44,7 +56,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    sys.path.insert(0, str(REPO_ROOT))
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
     from quwoquan_ops.cli.lib.local_environment_auth import (
         open_reference_acceptance_session,
     )

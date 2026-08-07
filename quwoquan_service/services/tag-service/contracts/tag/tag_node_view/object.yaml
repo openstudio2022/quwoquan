@@ -29,6 +29,22 @@ relationships:
   reference_fields:
   - releaseId
   target_object: tag.TagTaxonomyRelease
+search_policy:
+  exposed: filter_only
+  object_type_refs:
+  - tag
+  delegated_enforcement: "标签只作为分类与筛选维度参与检索，没有独立结果落地页；可见性由 taxonomy release 的发布状态强制，不经文档级权限过滤。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.tag.tag_node_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 节点只来自已验证且已激活的 TagTaxonomyRelease，不接受在线临时创建或编辑。
 - tagRef 等于 canonical 目录路径且在同一 release 内唯一，查询不得通过字符串前缀猜测跨轴关系。

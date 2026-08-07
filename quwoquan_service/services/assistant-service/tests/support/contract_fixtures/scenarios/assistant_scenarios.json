@@ -20,7 +20,7 @@
           "displayName": "股票哨兵"
         },
         {
-          "skillId": "travel_journey_manager",
+          "skillId": "travel_companion",
           "domainId": "travel",
           "displayName": "出行旅程管家"
         }
@@ -34,7 +34,7 @@
         },
         {
           "subscriptionId": "sub_travel_journey_fixture",
-          "skillId": "travel_journey_manager",
+          "skillId": "travel_companion",
           "domainId": "travel",
           "status": "active"
         }
@@ -64,7 +64,7 @@
           "displayName": "股票哨兵"
         },
         {
-          "skillId": "travel_journey_manager",
+          "skillId": "travel_companion",
           "domainId": "travel",
           "displayName": "出行旅程管家"
         }
@@ -196,7 +196,7 @@
       "id": "weather_trip_basic",
       "title": "出行前天气问答",
       "type": "assistant_turn",
-      "skillId": "travel_journey_manager",
+      "skillId": "travel_companion",
       "domainId": "travel",
       "question": "下午去西湖，天气和出行有什么要注意？",
       "seedRefs": [
@@ -255,7 +255,7 @@
       "id": "travel_journey_basic",
       "title": "出行旅程管家规划问答",
       "type": "assistant_turn",
-      "skillId": "travel_journey_manager",
+      "skillId": "travel_companion",
       "domainId": "travel",
       "question": "明天杭州一日游，帮我结合天气、路况和景点拥堵规划一下。",
       "seedRefs": [
@@ -326,7 +326,7 @@
             "daily_assistant",
             "news_briefing",
             "stock_sentinel",
-            "travel_journey_manager"
+            "travel_companion"
           ]
         },
         {

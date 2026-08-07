@@ -7,7 +7,7 @@ import 'package:quwoquan_app/service/product_ops_service/product_ops/recovery_fa
 import 'package:quwoquan_app/service/product_ops_service/product_ops/recovery_failure/application/recovery_failure_writer.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
+import 'package:quwoquan_app/runtime/di/app_cloud_operation_telemetry_sink.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/recovery_runtime_binding.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
@@ -89,7 +89,9 @@ GeneratedCloudOperationClient _generatedClient() {
   return buildGeneratedCloudOperationClient(
     httpClient: CloudHttpClient(client: _httpClient),
     clientContextProvider: const _RecoveryApiClientContext(),
-    telemetrySink: const _NoopTelemetrySink(),
+    telemetrySink: const AppCloudOperationTelemetrySink(
+      clientContextProvider: _RecoveryApiClientContext(),
+    ),
     environment: CloudRuntimeEnvironment(
       environment: _binding.environment,
       gatewayBaseUri: _binding.recoveryOrigin,
@@ -109,11 +111,4 @@ final class _RecoveryApiClientContext implements CloudClientContextProvider {
       locale: 'zh-CN',
     );
   }
-}
-
-final class _NoopTelemetrySink implements CloudOperationTelemetrySink {
-  const _NoopTelemetrySink();
-
-  @override
-  void record(CloudOperationTelemetryEvent event) {}
 }

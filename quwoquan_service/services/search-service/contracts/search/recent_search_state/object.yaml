@@ -19,8 +19,20 @@ relationships:
   reference_fields:
   - personaId
   target_object: user.Persona
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.search.recent_search_state.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 每个 persona 只有一个 RecentSearchState
 - entries 按 normalized query 去重并保持最近使用顺序

@@ -43,7 +43,7 @@ func contentDomainErrorsPaths() []string {
 		"content/media/filter_catalog_release/errors.yaml",
 		"content/media/media_asset/errors.yaml",
 		"content/media/media_image_reprocess_run/errors.yaml",
-		"content/media/media_original_access_fact/errors.yaml",
+		"content/media/original_access_quota/errors.yaml",
 		"content/media/media_upload_session/errors.yaml",
 		"content/content/outbound_share_fact/errors.yaml",
 		"content/trust_safety/post_moderation_case/errors.yaml",

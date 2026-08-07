@@ -5,7 +5,7 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/app
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/persona_management_view_data_mapper.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_view_data.dart';
-import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/domain/profile_interaction_activity_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/profile_interaction_activity_view_data_mapper.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/social_relation_search_item_view_mapper.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/adapters/recent_search_entry_mapper.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_query_contract.dart';
@@ -120,7 +120,7 @@ void main() {
 
   group('ProfileInteractionActivityViewData', () {
     test('comment identity is preserved for deep-link consumption', () {
-      final view = ProfileInteractionActivityViewData.fromWire(
+      final view = profileInteractionActivityViewDataFromWire(
         _activity(
           activityId: 'comment_reply_9',
           activityType: contracts.InteractionActivityType.comment,
@@ -135,7 +135,7 @@ void main() {
     });
 
     test('actor and display avatar versions remain source-derived', () {
-      final view = ProfileInteractionActivityViewData.fromWire(
+      final view = profileInteractionActivityViewDataFromWire(
         _activity(
           activityId: 'activity_1',
           activityType: contracts.InteractionActivityType.like,

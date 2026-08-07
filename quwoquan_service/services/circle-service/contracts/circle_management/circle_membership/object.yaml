@@ -27,6 +27,20 @@ relationships:
   reference_fields:
   - personaId
   target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "成员与关系记录只在所属对象的授权 Reader 内可见，不作为独立检索对象。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.circle.circle_membership.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - identity 固定为 circleId + personaId
 - 同一 persona 在同一 circle 只有一个 membership

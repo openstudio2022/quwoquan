@@ -9,7 +9,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.execution.asset_registry import execution_asset_registry_path
-from content.execution.object_scan import iter_execution_object_dirs
+from content.execution.planning.object_scan import iter_execution_object_dirs
 from content.execution.runtime_state import load_execution_runtime_state
 from core.asset_identity import parse_post_asset_id
 from core.io import read_json

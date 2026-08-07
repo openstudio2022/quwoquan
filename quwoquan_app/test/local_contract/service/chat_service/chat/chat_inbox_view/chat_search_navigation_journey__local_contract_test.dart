@@ -25,7 +25,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_ports.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart';

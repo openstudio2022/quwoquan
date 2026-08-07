@@ -28,4 +28,4 @@
 ## Codec 与 fixture
 
 - 单测夹具：`quwoquan_app/test/support/fixtures/assistant/transcript/`
-- 编解码：[`persisted_timeline_turn_codec.dart`](persisted_timeline/persisted_timeline_turn_codec.dart)
+- 编解码：[`persisted_timeline_turn_codec.dart`](persisted_timeline_turn_codec.dart)

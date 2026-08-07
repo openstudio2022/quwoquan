@@ -35,11 +35,33 @@ void main() {
     expect(inboxCache.readInbox().single.id, 'conversation-inbox');
     expect(inboxCache.readInboxEntry('conversation-inbox')?.unreadCount, 2);
 
-    inboxCache.patchInbox(
+    // 乐观清零只是展示提示：读取时叠加，但下一次 projection 读结果落地即作废。
+    inboxCache.applyOptimisticInboxHint(
       'conversation-inbox',
-      const ChatInboxCachePatch(unreadCount: 0, mentionUnreadCount: 0),
+      const ChatInboxOptimisticHint(unreadCount: 0, mentionUnreadCount: 0),
     );
     expect(inboxCache.readInbox().single.unreadCount, 0);
+
+    inboxCache.replaceInbox(<ChatInboxCacheEntry>[
+      ChatInboxCacheEntry(
+        id: 'conversation-inbox',
+        type: 'group',
+        title: 'Inbox title',
+        avatarUrl: '',
+        groupAvatarVersion: 0,
+        lastMessagePreview: 'Inbox preview',
+        lastMessageType: MessageType.text,
+        lastMessageTime: DateTime.utc(2026, 8, 6, 1),
+        lastSeq: 10,
+        unreadCount: 3,
+        mentionUnreadCount: 1,
+        muted: false,
+        pinned: false,
+        circleId: '',
+      ),
+    ]);
+    expect(inboxCache.readInbox().single.unreadCount, 3);
+    expect(inboxCache.readInbox().single.mentionUnreadCount, 1);
 
     messageHomeCache.putMessageHomeRows(<MessageHomeRow>[
       MessageHomeRow(
@@ -66,11 +88,11 @@ void main() {
       cachedRows.map((row) => row.conversationId),
       contains('conversation-message-home'),
     );
-    expect(notifications, 3);
+    expect(notifications, 4);
 
     inboxCache.removeInbox('conversation-inbox');
     expect(inboxCache.readInboxEntry('conversation-inbox'), isNull);
-    expect(notifications, 4);
+    expect(notifications, 5);
 
     inboxCache.removeInboxListener(listener);
     service.dispose();

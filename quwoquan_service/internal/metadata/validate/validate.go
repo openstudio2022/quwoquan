@@ -15,6 +15,26 @@ var (
 	runtimeFacadeMethodIdentifier = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 )
 
+// eventConsumerOwnerKinds 是「典型事件消费入口 → 允许的宿主对象 kind」的唯一闭集。
+// 它同时服务 runtime_entrypoints 与 object.yaml#lifecycle.event_consumers，两处不得
+// 各写一份。event_handler 允许 process_manager，因为 saga 的推进就是消费领域事件。
+var eventConsumerOwnerKinds = map[string][]ast.ObjectKind{
+	"middleware":    {ast.ObjectKindRuntimeSession},
+	"projector":     {ast.ObjectKindProjection},
+	"event_handler": {ast.ObjectKindAggregateRoot, ast.ObjectKindProcessManager},
+	"subscription":  {ast.ObjectKindAppendOnlyFact},
+	"internal_port": {ast.ObjectKindAppendOnlyFact},
+	"external_port": {ast.ObjectKindExternalReference},
+}
+
+// commandOwnerKinds 是 `application.aggregate_owner` 允许指向的宿主 kind。
+// process_manager 使用同一个 owner 字段（流程编排命令仍然只有一个状态所有者），
+// 差别在对象侧的 access.commands=process_facade，而不是再造一个 operation 字段。
+var commandOwnerKinds = []ast.ObjectKind{
+	ast.ObjectKindAggregateRoot,
+	ast.ObjectKindProcessManager,
+}
+
 type Profile string
 
 const (
@@ -318,22 +338,17 @@ func validateRuntimeEntrypoint(
 			entrypoint.Phase,
 		))
 	}
-	expectedObjectKind := map[string]ast.ObjectKind{
-		"middleware":    ast.ObjectKindRuntimeSession,
-		"projector":     ast.ObjectKindProjection,
-		"event_handler": ast.ObjectKindAggregateRoot,
-		"subscription":  ast.ObjectKindAppendOnlyFact,
-		"internal_port": ast.ObjectKindAppendOnlyFact,
-		"external_port": ast.ObjectKindExternalReference,
-	}[entrypoint.RuntimeKind]
-	if expectedObjectKind != "" && object.Kind != expectedObjectKind {
+	// event_handler 的宿主既可以是 aggregate_root，也可以是 process_manager：
+	// saga 正是靠消费领域事件推进自己的状态机的。
+	expectedObjectKinds := eventConsumerOwnerKinds[entrypoint.RuntimeKind]
+	if len(expectedObjectKinds) != 0 && !oneOf(object.Kind, expectedObjectKinds...) {
 		issues = append(issues, issue(
 			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_OWNER_KIND",
 			entrypoint.SourcePath,
-			"runtime entrypoint %q kind %q requires object kind %q, got %q",
+			"runtime entrypoint %q kind %q requires object kind in %v, got %q",
 			entrypoint.ID,
 			entrypoint.RuntimeKind,
-			expectedObjectKind,
+			expectedObjectKinds,
 			object.Kind,
 		))
 	}
@@ -563,19 +578,15 @@ func validateCommercialObject(object ast.Object) []Issue {
 	}
 	if object.Lifecycle != nil {
 		for _, consumer := range object.Lifecycle.EventConsumers {
-			expectedKind := map[string]ast.ObjectKind{
-				"projector":     ast.ObjectKindProjection,
-				"event_handler": ast.ObjectKindAggregateRoot,
-				"subscription":  ast.ObjectKindAppendOnlyFact,
-			}[consumer.Kind]
-			if expectedKind != "" && object.Kind != expectedKind {
+			expectedKinds := eventConsumerOwnerKinds[consumer.Kind]
+			if len(expectedKinds) != 0 && !oneOf(object.Kind, expectedKinds...) {
 				issues = append(issues, issue(
 					"CONTRACT.EVENT.LIFECYCLE_CONSUMER_INVALID_OWNER_KIND",
 					object.SourcePath,
-					"lifecycle consumer %q kind %q requires object kind %q, got %q",
+					"lifecycle consumer %q kind %q requires object kind in %v, got %q",
 					consumer.Name,
 					consumer.Kind,
-					expectedKind,
+					expectedKinds,
 					object.Kind,
 				))
 			}
@@ -748,14 +759,15 @@ func validateCommercialOperation(
 					"command %q references unknown aggregate owner %q", operation.ID, operation.AggregateOwner,
 				))
 			} else {
-				if owner.Kind != ast.ObjectKindAggregateRoot {
+				if !oneOf(owner.Kind, commandOwnerKinds...) {
 					issues = append(issues, issue(
 						"CONTRACT.OPERATION.INVALID_COMMAND_OWNER_KIND",
 						operation.SourcePath,
-						"command %q aggregate owner %q has kind %q, want aggregate_root",
+						"command %q aggregate owner %q has kind %q, want one of %v",
 						operation.ID,
 						owner.ID,
 						owner.Kind,
+						commandOwnerKinds,
 					))
 				}
 				if owner.ID != operation.ObjectID {

@@ -46,6 +46,20 @@ relationships:
   reference_fields:
   - circleId
   target_object: circle.Circle
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.chat.chat_inbox_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 每个 persona 与 conversation 至多一条 inbox 行，排序游标由最后已提交消息序列和时间共同决定。
 - 未读数只由 Message 与 ConversationUserState 事件推进，查询不得回扫 message 集合补算。

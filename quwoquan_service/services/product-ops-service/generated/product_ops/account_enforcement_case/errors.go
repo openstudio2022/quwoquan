@@ -23,47 +23,47 @@ var (
 // AppErrorFromAccountEnforcementCaseInvalidArgument returns *AppError for OPS.USER.account_enforcement_case_invalid_argument (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementCaseInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementCaseInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "账号治理请求无效", debugMessage).WithMetadata("account_enforcement_case_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "账号治理请求无效", debugMessage).WithMetadata("account_enforcement_case_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAccountEnforcementCaseNotFound returns *AppError for OPS.USER.account_enforcement_case_not_found (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementCaseNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementCaseNotFound.Error()))
-	return rerrors.NewAppError(code, "账号治理记录不存在", debugMessage).WithMetadata("account_enforcement_case_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "账号治理记录不存在", debugMessage).WithMetadata("account_enforcement_case_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromAccountEnforcementIdempotencyConflict returns *AppError for OPS.USER.account_enforcement_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复账号治理请求与原操作不一致", debugMessage).WithMetadata("account_enforcement_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复账号治理请求与原操作不一致", debugMessage).WithMetadata("account_enforcement_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromAccountEnforcementCaseClosed returns *AppError for OPS.USER.account_enforcement_case_closed (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementCaseClosed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementCaseClosed.Error()))
-	return rerrors.NewAppError(code, "账号治理记录已关闭", debugMessage).WithMetadata("account_enforcement_case_closed", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "账号治理记录已关闭", debugMessage).WithMetadata("account_enforcement_case_closed", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromAccountEnforcementReviewConflict returns *AppError for OPS.USER.account_enforcement_review_conflict (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementReviewConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementReviewConflict.Error()))
-	return rerrors.NewAppError(code, "审核人与既有决定冲突", debugMessage).WithMetadata("account_enforcement_review_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "审核人与既有决定冲突", debugMessage).WithMetadata("account_enforcement_review_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromAccountEnforcementSourceDecisionConflict returns *AppError for OPS.USER.account_enforcement_source_decision_conflict (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementSourceDecisionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementSourceDecisionConflict.Error()))
-	return rerrors.NewAppError(code, "账号治理决策前置状态不一致", debugMessage).WithMetadata("account_enforcement_source_decision_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "账号治理决策前置状态不一致", debugMessage).WithMetadata("account_enforcement_source_decision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromAccountEnforcementCaseStorageReadFailed returns *AppError for OPS.SYSTEM.account_enforcement_case_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementCaseStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementCaseStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "账号治理记录读取失败，请稍后重试", debugMessage).WithMetadata("account_enforcement_case_storage_read_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "账号治理记录读取失败，请稍后重试", debugMessage).WithMetadata("account_enforcement_case_storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }
 
 // AppErrorFromAccountEnforcementCaseStorageWriteFailed returns *AppError for OPS.SYSTEM.account_enforcement_case_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromAccountEnforcementCaseStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountEnforcementCaseStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "账号治理操作失败，请稍后重试", debugMessage).WithMetadata("account_enforcement_case_storage_write_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "账号治理操作失败，请稍后重试", debugMessage).WithMetadata("account_enforcement_case_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }

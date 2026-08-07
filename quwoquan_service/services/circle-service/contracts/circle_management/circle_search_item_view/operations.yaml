@@ -9,6 +9,14 @@ runtime_entrypoints:
     facet: CircleSearchItemViewProjector
     method: apply
     object_owner: CircleSearchItemView
+  telemetry:
+    metric: circle_search_item_projection
+    trace: true
+    attributes: [outcome]
+  slo:
+    freshness_p95_seconds: 60
+    backlog_max_events: 1000
+    failure_ratio_percent: 1
 readiness_cases:
   - case_id: project-circle-search-item-local
     spec_ref: specs/feature-tree/circle-community/spec.md#dom-001

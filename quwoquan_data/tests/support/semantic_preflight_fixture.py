@@ -11,7 +11,7 @@ from content.execution.preflight.receipt import (
 from content.execution.preflight.selection import (
     resolve_semantic_preflight_selection,
 )
-from content.execution.semantic_preflight_admission import (
+from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
 )
 from core.paths import OUTPUT_ROOT

@@ -58,13 +58,13 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/publi
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_mention_picker.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_bubble.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_voice_recorder.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_launch_contract.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         ChatGetMessageReceiptsQuery,
         ChatListConversationMembersQuery,
         ChatMessageReceipt;
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 part 'chat_conversation_page_actions.dart';
 part 'chat_conversation_page_selection_actions.dart';

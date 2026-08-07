@@ -2,18 +2,18 @@ import 'package:quwoquan_app/service/integration_service/external_integration/co
 import 'package:quwoquan_app/runtime/transport/generated/integration/integration_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-typedef ConnectorInvocationReaderContextFactory =
+typedef ConnectorInvocationProcessQueryContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);
 
 final class RemoteConnectorInvocationReader
-    implements ConnectorInvocationReader {
+    implements ConnectorInvocationProcessQuery {
   const RemoteConnectorInvocationReader({
     required this.client,
     required this.invocationContext,
   });
 
   final GeneratedCloudOperationClient client;
-  final ConnectorInvocationReaderContextFactory invocationContext;
+  final ConnectorInvocationProcessQueryContextFactory invocationContext;
 
   @override
   Future<List<ConnectorInvocationView>> listConnectorInvocations({

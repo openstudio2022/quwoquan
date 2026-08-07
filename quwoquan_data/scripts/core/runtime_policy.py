@@ -286,7 +286,7 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
     }
     if set(policy) != expected_top:
         raise ValueError("runtime policy contains unknown or missing policy sections")
-    return RuntimePolicy(
+    runtime_policy = RuntimePolicy(
         profile_id=profile_id,
         semantic_author=semantic_author,
         semantic_reviewer=semantic_reviewer,
@@ -561,6 +561,15 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             ),
         ),
     )
+    global_research_concurrency = runtime_policy.campaign_lane_workers * runtime_policy.research_workers
+    if global_research_concurrency > runtime_policy.semantic_capacity.burst_limit:
+        raise ValueError(
+            "runtime policy over-provisions global research concurrency: "
+            f"campaignLaneWorkers({runtime_policy.campaign_lane_workers}) * "
+            f"researchWorkers({runtime_policy.research_workers}) > "
+            f"semanticAgent.capacity.burstLimit({runtime_policy.semantic_capacity.burst_limit})"
+        )
+    return runtime_policy
 
 
 def active_runtime_policy() -> RuntimePolicy:

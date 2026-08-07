@@ -56,6 +56,24 @@ relationships:
   target_object: chat.Conversation
 local_identity_reasons:
   currentGatheringRevisionId: Gathering 聚合内 append-only GatheringRevision 的当前指针，只能经 root facade 推进，不是跨服务或独立 Store 对象身份。
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.circle.gathering.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.circle.gathering.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.circle.gathering.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.circle.gathering.write
 business_rules:
 - createdByPersonaId 是不可变执行主体；HostBinding 与 OrganizerAssignment 只能由 owner authority evidence 创建、转移或撤销
 - OrganizerAssignment 只授予管理权且不占席；实际参加的 organizer 必须另有一条 active GatheringParticipation

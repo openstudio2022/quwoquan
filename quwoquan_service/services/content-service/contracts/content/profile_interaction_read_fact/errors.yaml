@@ -5,7 +5,7 @@ errors:
   http_status: 403
   emitted_by:
   - surface: http
-    operations: [UpdateProfileInteractionState]
+    operations: [AppendProfileInteractionReadFact]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: profileInteractionReadFactOwnerForbidden
@@ -18,7 +18,7 @@ errors:
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [UpdateProfileInteractionState]
+    operations: [AppendProfileInteractionReadFact]
   recovery_action: retry
   disruption_level: snackbar
   recovery_after_seconds: 3

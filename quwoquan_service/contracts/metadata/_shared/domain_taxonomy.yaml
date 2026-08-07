@@ -22,8 +22,7 @@ description: '统一领域标签体系。圈子频道、个人助理领域路由
   '
 domains:
 - assistant_domain_ids:
-  - travel_planning
-  - travel_transport
+  - travel_companion
   circle_channel_enabled: true
   circle_channel_priority: 10
   description: 旅行攻略、景点推荐、行程规划、交通路线

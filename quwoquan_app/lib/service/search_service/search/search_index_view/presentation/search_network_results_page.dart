@@ -20,7 +20,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
-import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_route_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';

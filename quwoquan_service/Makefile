@@ -1,4 +1,4 @@
-.PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
+.PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop verify-operation-privacy-redaction codegen-operation-privacy
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
 .PHONY: verify-link-templates-go codegen-link-templates-go
 .PHONY: verify-api-edge-errors codegen-api-edge-errors
@@ -39,7 +39,7 @@ export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
-gate: verify-metadata verify-redis-routes verify-content-architecture verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track
+gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission
 	@PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/gate/verify_service_architecture.py
 	@set -e; for service in $(DOMAIN_SERVICES); do \
 		echo "[gate] $$service"; \
@@ -108,10 +108,19 @@ verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-co
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
 verify-actor-persona-vocabulary:
-	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/verify_actor_persona_vocabulary.py
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/consistency/verify_actor_persona_vocabulary.py
 
 verify-observability-catalog: service-contract-view
 	go run ./tools/codegen_observability_catalog --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --check
+
+OPERATION_PRIVACY_DART_OUTPUT = ../quwoquan_app/lib/runtime/observability/generated/operation_privacy_catalog.g.dart
+
+verify-operation-privacy-redaction: service-contract-view
+	go run ./tools/codegen_operation_privacy --metadata-dir "$(CONTRACT_VIEW)" --dart-output "$(OPERATION_PRIVACY_DART_OUTPUT)" --check
+	go test ./runtime/observability -run TestOperationPrivacy
+
+codegen-operation-privacy: service-contract-view
+	go run ./tools/codegen_operation_privacy --metadata-dir "$(CONTRACT_VIEW)" --dart-output "$(OPERATION_PRIVACY_DART_OUTPUT)"
 
 verify-api-edge-errors: service-contract-view
 	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain gateway --output-root services/api-edge/generated --check
@@ -172,32 +181,32 @@ verify-contract-graph-commercial: verify-openapi
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
 
 verify-contract-graph-single-track: service-contract-view
-	python3 scripts/verify/verify_contract_graph_single_track.py --metadata-dir "$(CONTRACT_VIEW)"
+	python3 scripts/verify/contract_graph/verify_contract_graph_single_track.py --metadata-dir "$(CONTRACT_VIEW)"
 	# Service gate: block legacy route inputs, client-owned binding overrides,
 	# empty-green scans and path/binding drift. Fix the owning operations.yaml
 	# request_bindings; request type/encoder generation remains a separate gate.
 	go test ./internal/metadata/graph -run TestRepositoryRequestBindingsUseCanonicalSingleTrack -count=1
 
 verify-codegen-contract-graph-source:
-	python3 scripts/verify/verify_codegen_contract_graph_source.py
+	python3 scripts/verify/contract_graph/verify_codegen_contract_graph_source.py
 
 verify-app-shell-navigation: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --shell-navigation-metadata-only --check-shell-navigation-metadata --shell-navigation-manifest ../quwoquan_app/tool/shell_navigation_codegen/generated_manifest.json
 
 verify-go-single-module:
-	python3 scripts/verify/verify_go_single_module.py
+	python3 scripts/verify/structure/verify_go_single_module.py
 
 verify-service-layering:
-	python3 scripts/verify/verify_service_layering.py
+	python3 scripts/verify/structure/verify_service_layering.py
 
 verify-production-wiring-purity:
-	python3 scripts/verify/verify_production_wiring_purity.py
+	python3 scripts/verify/structure/verify_production_wiring_purity.py
 
 verify-api-edge-rate-limit-single-track:
-	python3 scripts/verify/verify_api_edge_rate_limit_single_track.py
+	python3 scripts/verify/structure/verify_api_edge_rate_limit_single_track.py
 
-verify-content-architecture:
-	python3 scripts/verify/verify_content_application_boundaries.py
+verify-append-only-fact-command-admission:
+	python3 scripts/verify/structure/verify_append_only_fact_command_admission.py
 
 verify-redis-routes:
 	python3 scripts/codegen/gen_redis_router_config.py --check
@@ -359,7 +368,7 @@ verify-content-flywheel-tests:
 	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) ../quwoquan_ops/tests/local_contract/test_eval_content_flywheel_loop__product_ops_tool__local_contract_test.py -q
 
 verify-content-flywheel-loop:
-	$(ML_PYTHON) scripts/tools/product_ops/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)
+	$(ML_PYTHON) scripts/product-ops-service/tools/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)
 
 verify-ml-model-quality:
 	@test -n "$(strip $(ML_CANDIDATE_EVIDENCE))" || (echo "ML_CANDIDATE_EVIDENCE is required" >&2; exit 1)

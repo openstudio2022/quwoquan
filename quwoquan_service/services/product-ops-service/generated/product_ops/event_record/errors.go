@@ -29,83 +29,83 @@ var (
 // AppErrorFromEventBatchInvalid returns *AppError for OPS.USER.event_batch_invalid (user_message from errors.yaml).
 func AppErrorFromEventBatchInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrEventBatchInvalid.Error()))
-	return rerrors.NewAppError(code, "事件批次不符合目录契约", debugMessage).WithMetadata("event_batch_invalid", 422).WithRecovery("absorb", 0)
+	return rerrors.NewAppError(code, "事件批次不符合目录契约", debugMessage).WithMetadata("event_batch_invalid", 422).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromRuntimeLogBatchInvalid returns *AppError for OPS.USER.runtime_log_batch_invalid (user_message from errors.yaml).
 func AppErrorFromRuntimeLogBatchInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRuntimeLogBatchInvalid.Error()))
-	return rerrors.NewAppError(code, "诊断日志批次不符合统一日志目录", debugMessage).WithMetadata("runtime_log_batch_invalid", 422).WithRecovery("absorb", 0)
+	return rerrors.NewAppError(code, "诊断日志批次不符合统一日志目录", debugMessage).WithMetadata("runtime_log_batch_invalid", 422).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromIdempotencyKeyInvalid returns *AppError for OPS.USER.idempotency_key_invalid (user_message from errors.yaml).
 func AppErrorFromIdempotencyKeyInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyKeyInvalid.Error()))
-	return rerrors.NewAppError(code, "事件批次校验失败", debugMessage).WithMetadata("idempotency_key_invalid", 400).WithRecovery("absorb", 0)
+	return rerrors.NewAppError(code, "事件批次校验失败", debugMessage).WithMetadata("idempotency_key_invalid", 400).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromQueryWindowInvalid returns *AppError for OPS.USER.query_window_invalid (user_message from errors.yaml).
 func AppErrorFromQueryWindowInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrQueryWindowInvalid.Error()))
-	return rerrors.NewAppError(code, "日志查询时间范围无效", debugMessage).WithMetadata("query_window_invalid", 400).WithRecovery("absorb", 0)
+	return rerrors.NewAppError(code, "日志查询时间范围无效", debugMessage).WithMetadata("query_window_invalid", 400).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromEventDrilldownForbidden returns *AppError for OPS.USER.event_drilldown_forbidden (user_message from errors.yaml).
 func AppErrorFromEventDrilldownForbidden(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrEventDrilldownForbidden.Error()))
-	return rerrors.NewAppError(code, "没有日志明细查询权限", debugMessage).WithMetadata("event_drilldown_forbidden", 403).WithRecovery("request_permission", 0)
+	return rerrors.NewAppError(code, "没有日志明细查询权限", debugMessage).WithMetadata("event_drilldown_forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLogstoreUnavailable returns *AppError for OPS.SYSTEM.logstore_unavailable (user_message from errors.yaml).
 func AppErrorFromLogstoreUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrLogstoreUnavailable.Error()))
-	return rerrors.NewAppError(code, "日志服务暂时不可用", debugMessage).WithMetadata("logstore_unavailable", 503).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "日志服务暂时不可用", debugMessage).WithMetadata("logstore_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromEventProjectionUnavailable returns *AppError for OPS.SYSTEM.event_projection_unavailable (user_message from errors.yaml).
 func AppErrorFromEventProjectionUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrEventProjectionUnavailable.Error()))
-	return rerrors.NewAppError(code, "产品事件运营投影暂时不可用", debugMessage).WithMetadata("event_projection_unavailable", 503).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "产品事件运营投影暂时不可用", debugMessage).WithMetadata("event_projection_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 2)
 }
 
 // AppErrorFromRuntimeLogstoreUnavailable returns *AppError for OPS.SYSTEM.runtime_logstore_unavailable (user_message from errors.yaml).
 func AppErrorFromRuntimeLogstoreUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrRuntimeLogstoreUnavailable.Error()))
-	return rerrors.NewAppError(code, "诊断日志服务暂时不可用", debugMessage).WithMetadata("runtime_logstore_unavailable", 503).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "诊断日志服务暂时不可用", debugMessage).WithMetadata("runtime_logstore_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromStartupConfigurationInvalid returns *AppError for OPS.SYSTEM.startup_configuration_invalid (user_message from errors.yaml).
 func AppErrorFromStartupConfigurationInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupConfigurationInvalid.Error()))
-	return rerrors.NewAppError(code, "启动配置不可用，请检查网络后重试", debugMessage).WithMetadata("startup_configuration_invalid", 0).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "启动配置不可用，请检查网络后重试", debugMessage).WithMetadata("startup_configuration_invalid", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromStartupInitializationFailed returns *AppError for OPS.SYSTEM.startup_initialization_failed (user_message from errors.yaml).
 func AppErrorFromStartupInitializationFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupInitializationFailed.Error()))
-	return rerrors.NewAppError(code, "应用启动遇到问题，请重试", debugMessage).WithMetadata("startup_initialization_failed", 0).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "应用启动遇到问题，请重试", debugMessage).WithMetadata("startup_initialization_failed", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromStartupRouterUnavailable returns *AppError for OPS.SYSTEM.startup_router_unavailable (user_message from errors.yaml).
 func AppErrorFromStartupRouterUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupRouterUnavailable.Error()))
-	return rerrors.NewAppError(code, "页面暂时无法打开，请重试", debugMessage).WithMetadata("startup_router_unavailable", 0).WithRecovery("retry", 1)
+	return rerrors.NewAppError(code, "页面暂时无法打开，请重试", debugMessage).WithMetadata("startup_router_unavailable", 0).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromStartupNativeFirstFrameTimeout returns *AppError for OPS.SYSTEM.startup_native_first_frame_timeout (user_message from errors.yaml).
 func AppErrorFromStartupNativeFirstFrameTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupNativeFirstFrameTimeout.Error()))
-	return rerrors.NewAppError(code, "应用界面未能及时显示，请重试", debugMessage).WithMetadata("startup_native_first_frame_timeout", 0).WithRecovery("retry", 1)
+	return rerrors.NewAppError(code, "应用界面未能及时显示，请重试", debugMessage).WithMetadata("startup_native_first_frame_timeout", 0).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromStartupEventInvalid returns *AppError for OPS.USER.startup_event_invalid (user_message from errors.yaml).
 func AppErrorFromStartupEventInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupEventInvalid.Error()))
-	return rerrors.NewAppError(code, "启动诊断事件无效", debugMessage).WithMetadata("startup_event_invalid", 400).WithRecovery("absorb", 0)
+	return rerrors.NewAppError(code, "启动诊断事件无效", debugMessage).WithMetadata("startup_event_invalid", 400).WithRecoveryDirective("absorb", "silent", 0)
 }
 
 // AppErrorFromStartupTelemetryUnavailable returns *AppError for OPS.SYSTEM.startup_telemetry_unavailable (user_message from errors.yaml).
 func AppErrorFromStartupTelemetryUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupTelemetryUnavailable.Error()))
-	return rerrors.NewAppError(code, "启动诊断暂时不可用", debugMessage).WithMetadata("startup_telemetry_unavailable", 503).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "启动诊断暂时不可用", debugMessage).WithMetadata("startup_telemetry_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
 }

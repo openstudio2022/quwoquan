@@ -7,7 +7,7 @@ import 'package:hive/hive.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';

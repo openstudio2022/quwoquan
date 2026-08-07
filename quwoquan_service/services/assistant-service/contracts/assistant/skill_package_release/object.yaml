@@ -31,6 +31,20 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.SkillCapabilityGrant
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - packageId、packageVersion、releaseDigest、assets、runtimeCompatibility、provenance、signature 与 capabilityGrants 在 Stage 后不可改写
 - releaseDigest 必须等于 canonical package descriptor 的 SHA-256，所有 assetDigest 必须在暴露资产前逐项复算

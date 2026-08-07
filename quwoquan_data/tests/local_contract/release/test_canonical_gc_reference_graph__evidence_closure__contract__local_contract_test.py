@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from content.execution.campaign_external_inputs import payload_digest
+from content.execution.campaign.external_inputs import payload_digest
 from content.release.canonical.garbage_collection import plan_canonical_gc
 from content.release.canonical.garbage_collection_contract import (
     write_create_once_json,
@@ -17,6 +17,7 @@ from content.release.canonical.garbage_collection_reference_graph import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from core.paths import research_scale_promotions_root
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -159,7 +160,8 @@ def test_gc_reference_graph_protects_environment_promotion_recovery_and_reconcil
     execution_id = "20260805--travel-video-gc-graph--cn--pilot-002"
     task = _task(output, execution_id)
     _write_json(
-        output / "data/release-promotions/release-one/m100/research-m100.json",
+        research_scale_promotions_root(output_root=output)
+        / "release-one/m100/research-m100.json",
         {"executionIds": [execution_id]},
     )
     _write_json(

@@ -162,8 +162,10 @@ func TestValidProducerRunnerSourcePathUsesAppServiceTree(t *testing.T) {
 			t.Fatalf("canonical App service-tree runner rejected: %s", testCase.path)
 		}
 	}
+	// The retired shape omits the `service/<service>_service` segments and
+	// addresses the object directly under the layer directory.
 	if validProducerRunnerSourcePath(
-		"quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run__local_contract_test.dart",
+		"quwoquan_app/test/local_contract/assistant/assistant_run/assistant_run__local_contract_test.dart",
 		objectID, contractSource, ProducerApp, LayerLocalContract,
 	) {
 		t.Fatal("retired domain-shaped App runner path was accepted")

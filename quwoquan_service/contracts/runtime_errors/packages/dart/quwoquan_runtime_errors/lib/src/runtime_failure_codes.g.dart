@@ -43,4 +43,11 @@ abstract final class RuntimeFailureCodes {
   static const String opsSystemInternalError = 'OPS.SYSTEM.internal_error';
   static const String unknownSystemInternalError =
       'UNKNOWN.SYSTEM.internal_error';
+  static const String gatewayUserRouteNotFound = 'GATEWAY.USER.route_not_found';
+  static const String gatewayUserUnauthorized = 'GATEWAY.USER.unauthorized';
+  static const String gatewayUserForbidden = 'GATEWAY.USER.forbidden';
+  static const String gatewayUserInvalidArgument =
+      'GATEWAY.USER.invalid_argument';
+  static const String gatewayMiddlewareUnavailable =
+      'GATEWAY.MIDDLEWARE.unavailable';
 }

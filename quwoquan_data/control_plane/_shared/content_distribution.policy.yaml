@@ -24,13 +24,16 @@ researchDiscovery:
     - style
     - viewpoint
     - popularity
-  videoPopularitySignals:
-    - play
-    - like
-    - comment
-    - share
-    - favorite
-  popularityNormalization: same_platform_topic_time_bucket_percentile
+  videoPopularity:
+    signals:
+      - play
+      - like
+      - comment
+      - share
+      - favorite
+    normalization: same_platform_topic_time_bucket_percentile
+    statistical: true
+    nonBlocking: true
 researchDistribution:
   allowedRightsStatuses:
     - verified
@@ -57,4 +60,7 @@ scaleMilestones:
     image: 1000
     video: 100
   requireM100PromotionBeforeM1000: true
-  automaticRecoveryRateTarget: 0.95
+  automaticRecovery:
+    targetRate: 0.95
+    statistical: true
+    nonBlocking: true

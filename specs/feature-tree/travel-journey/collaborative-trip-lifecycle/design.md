@@ -21,7 +21,7 @@
 
 - App 责任：在 activity room/Board 编辑提案、显示 diff、确认动作、呈现 Experience/Map/Calendar/回顾和离线 freshness；只访问目标 owner production Remote，不决定 current Revision。
 - Metadata/contract：Circle/Chat/Content/Integration 各自 contracts 拥有 wire、operation、event、error 与 storage；本领域不建立 Travel contract。
-- Service/Data/Ops 责任：目标 owner 提供 Object Facade、store、durable publication、projection 与观测；Ops 只保留已完成迁移的签名 crosswalk/receipt，不提供源 runtime。
+- Service/Data/Ops 责任：目标 owner 提供 Object Facade、store、durable publication、projection 与观测；Ops 只保留 target-only crosswalk、迁移控制面与经真实环境执行后形成的签名 receipt，不提供源 runtime，也不把合成测试 receipt 视为环境完成证据。
 - 缓存或投影：Board、Timeline/Map 与回顾来源可删除重建，任何 projection miss 不得返回业务空成功。
 - 外部依赖：Place/Content/Media/User/Chat/Circle Reader、Assistant Trigger，以及地图/日历/Connector typed capability。
 

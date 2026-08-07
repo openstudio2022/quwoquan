@@ -109,8 +109,22 @@ local_identity_reasons:
     Gathering projection watermark; it is not Conversation identity or a business-object reference
   originRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
     a business-object reference
-taggable: true
-vector_enabled: false
+search_policy:
+  exposed: local_only
+  object_type_refs:
+  - chat.conversation
+  delegated_enforcement: "会话标题与成员只进入端侧本地索引；服务端不投影会话到统一索引，因此可检索集合由端侧本机数据库的所属账号边界强制。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.chat.conversation.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - type、creatorId 与 origin binding 创建后不可变
 - Conversation 只管理会话身份、标题、策略和生命周期

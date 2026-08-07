@@ -6,12 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from content.execution.campaign_source_snapshot import (
+from content.execution.campaign.source_snapshot import (
     materialize_source_snapshot,
     source_snapshot_roots,
 )
 from core.source_digest import current_source_digest
-
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -40,9 +39,12 @@ def test_campaign_source_capsule_imports_canonical_release_without_ops_tree(
             "-B",
             "-c",
             (
+                "from core.intersection_signal import contract_field_names; "
                 "from content.release.canonical.aggregate_release "
                 "import build_aggregate_release; "
-                "assert callable(build_aggregate_release)"
+                "assert callable(build_aggregate_release); "
+                "assert {'dimension', 'source', 'tagRefs', 'actionType', "
+                "'actionTargetId'} <= contract_field_names()"
             ),
         ],
         cwd=capsule,

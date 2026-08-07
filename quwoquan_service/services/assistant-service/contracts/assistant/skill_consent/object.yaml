@@ -27,8 +27,20 @@ relationships:
 local_identity_reasons:
   skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "认证、凭据与会话安全对象，任何检索暴露都会直接削弱账号安全。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.assistant.skill_consent.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - consent owner 固定为可信 accountId；每个授权事实由 id 唯一标识，同一 accountId + skillId 最多一个生效事实
 - grantedScopes 是用户一次明确授权的完整 scope 集合而非身份；grant 必须非空、去重、稳定排序并记录 actor 与审计时间

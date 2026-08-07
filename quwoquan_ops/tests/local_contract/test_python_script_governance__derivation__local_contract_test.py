@@ -64,6 +64,94 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
             self._issue_codes(report),
         )
 
+    def test_app_forbids_service_wrapper_and_cloud_layout_copies(
+        self,
+    ) -> None:
+        self._write(
+            "quwoquan_app/lib/service/content_service/content/post/presentation/page.dart"
+        )
+        self._write(
+            "quwoquan_app/scripts/service/content_service/content/post/"
+            "verify_post_contract.py"
+        )
+        self._write(
+            "quwoquan_app/scripts/content_service/config/schema.yaml",
+            "schema: forbidden\n",
+        )
+        self._write(
+            "quwoquan_app/scripts/content_service/environments/gamma/run_bad.py",
+            "def main() -> None:\n    pass\n",
+        )
+
+        report = derive_report(self.root, ("app",))
+        codes = self._issue_codes(report)
+        self.assertIn("APP.SERVICE_WRAPPER_FORBIDDEN", codes)
+        self.assertIn("APP.CLOUD_LAYOUT_COPY_FORBIDDEN", codes)
+
+    def test_service_verify_single_owner_emits_warning_not_issue(
+        self,
+    ) -> None:
+        self._write(
+            "quwoquan_service/services/content-service/internal/content/post/domain/post.go"
+        )
+        self._write(
+            "quwoquan_service/scripts/verify/verify_content_only_boundaries.py",
+            (
+                "from pathlib import Path\n"
+                "ROOT = Path(__file__).resolve().parents[2]\n"
+                'SCAN = ROOT / "services" / "content-service" / "internal"\n'
+            ),
+        )
+        self._write(
+            "quwoquan_service/scripts/verify/verify_multi_service_scan.py",
+            (
+                "from pathlib import Path\n"
+                "SERVICES_ROOT = Path('services')\n"
+                "for path in SERVICES_ROOT.iterdir():\n"
+                "    pass\n"
+            ),
+        )
+
+        report = derive_report(self.root, ("service",))
+        warning_codes = {
+            str(warning["code"])
+            for warning in report.get("warnings", [])  # type: ignore[union-attr]
+        }
+        self.assertIn("SERVICE.VERIFY_SINGLE_SERVICE_OWNER", warning_codes)
+        self.assertNotIn(
+            "SERVICE.VERIFY_SINGLE_SERVICE_OWNER",
+            self._issue_codes(report),
+        )
+
+    def test_service_runtime_requires_known_concern_directory(self) -> None:
+        self._write(
+            "quwoquan_service/scripts/runtime/verify_flat_runtime.py",
+            "def main() -> None:\n    pass\n",
+        )
+        self._write(
+            "quwoquan_service/scripts/runtime/unknown/verify_unknown.py",
+            "def main() -> None:\n    pass\n",
+        )
+        self._write(
+            "quwoquan_service/scripts/runtime/packaging/verify_ok.py",
+            "def main() -> None:\n    pass\n",
+        )
+
+        report = derive_report(self.root, ("service",))
+        codes = self._issue_codes(report)
+        self.assertIn("SERVICE.RUNTIME_FLAT_SCRIPT", codes)
+        self.assertIn("SERVICE.RUNTIME_CONCERN_UNKNOWN", codes)
+        self.assertFalse(
+            any(
+                issue["code"] in {
+                    "SERVICE.RUNTIME_FLAT_SCRIPT",
+                    "SERVICE.RUNTIME_CONCERN_UNKNOWN",
+                }
+                and "packaging/verify_ok.py" in issue["path"]
+                for issue in report["issues"]  # type: ignore[index]
+            )
+        )
+
     def test_service_paths_derive_kebab_service_owner_and_split_contract_verify(
         self,
     ) -> None:
@@ -132,6 +220,187 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self.assertEqual("lib", helper["role"])
         self.assertFalse(helper["orphanCandidate"])
 
+    def test_explicit_lib_path_is_library_without_managed_importer(self) -> None:
+        self._write(
+            "quwoquan_service/scripts/runtime/packaging/lib/image_inputs.py",
+            "VALUE = 1\n",
+        )
+
+        report = derive_report(self.root, ("service",))
+        records = {
+            record["path"]: record  # type: ignore[index]
+            for record in report["scripts"]  # type: ignore[index]
+        }
+        library = records[
+            "quwoquan_service/scripts/runtime/packaging/lib/image_inputs.py"
+        ]
+        self.assertEqual("lib", library["role"])
+        self.assertFalse(library["orphanCandidate"])
+
+    def test_repository_root_bootstrap_derives_library_role(self) -> None:
+        bootstrap = self._write(
+            "quwoquan_service/scripts/verify/repository_root.py",
+            "def repository_root() -> str:\n    return 'repo'\n",
+        )
+
+        report = derive_report(self.root, ("service",))
+        records = {
+            record["path"]: record  # type: ignore[index]
+            for record in report["scripts"]  # type: ignore[index]
+        }
+        record = records[str(bootstrap.relative_to(self.root))]
+
+        self.assertEqual("lib", record["role"])
+        self.assertFalse(record["orphanCandidate"])
+
+    def test_all_python_files_receive_one_derived_boundary(self) -> None:
+        self._write(
+            "quwoquan_app/scripts/runtime/auth/verify_auth.py",
+            "def main() -> None:\n    pass\n",
+        )
+        self._write(
+            "quwoquan_app/test/local_contract/runtime/auth_contract_test.py",
+            "def test_auth() -> None:\n    pass\n",
+        )
+        self._write(
+            "quwoquan_app/test/support/harness.py",
+            "VALUE = 1\n",
+        )
+        unknown = self._write(
+            "quwoquan_app/misc/detached.py",
+            "VALUE = 1\n",
+        )
+        self._write(
+            "quwoquan_service/services/content-service/internal/content/post/"
+            "application/projection.py",
+            "VALUE = 1\n",
+        )
+        self._write(
+            "quwoquan_service/services/content-service/generated/client.py",
+            "VALUE = 1\n",
+        )
+        self._write(
+            "quwoquan_service/services/content-service/tests/local_contract/"
+            "content/post/test_projection.py",
+            "def test_projection() -> None:\n    pass\n",
+        )
+
+        report = derive_report(self.root, ("app", "service"))
+        python_files = report["pythonFiles"]  # type: ignore[index]
+        boundaries = {
+            str(record["path"]): str(record["boundary"])
+            for record in python_files
+        }
+
+        self.assertEqual(7, report["summary"]["pythonFileCount"])  # type: ignore[index]
+        self.assertEqual(len(python_files), len(boundaries))
+        self.assertEqual(
+            "managed_script",
+            boundaries["quwoquan_app/scripts/runtime/auth/verify_auth.py"],
+        )
+        self.assertEqual(
+            "test_evidence",
+            boundaries[
+                "quwoquan_app/test/local_contract/runtime/auth_contract_test.py"
+            ],
+        )
+        self.assertEqual(
+            "test_support",
+            boundaries["quwoquan_app/test/support/harness.py"],
+        )
+        self.assertEqual(
+            "production_module",
+            boundaries[
+                "quwoquan_service/services/content-service/internal/content/post/"
+                "application/projection.py"
+            ],
+        )
+        self.assertEqual(
+            "generated",
+            boundaries[
+                "quwoquan_service/services/content-service/generated/client.py"
+            ],
+        )
+        self.assertEqual("unknown", boundaries[str(unknown.relative_to(self.root))])
+        self.assertIn("PYTHON.BOUNDARY_UNKNOWN", self._issue_codes(report))
+
+    def test_ignored_python_file_cannot_escape_governance_boundary(self) -> None:
+        self._write(".git/config", "[core]\nrepositoryformatversion = 0\n")
+        self._write(".gitignore", "quwoquan_app/misc/\n")
+        ignored = self._write(
+            "quwoquan_app/misc/ignored_detached.py",
+            "VALUE = 1\n",
+        )
+
+        report = derive_report(self.root, ("app",))
+        boundaries = {
+            str(record["path"]): str(record["boundary"])
+            for record in report["pythonFiles"]  # type: ignore[index]
+        }
+
+        self.assertEqual(
+            "unknown",
+            boundaries[str(ignored.relative_to(self.root))],
+        )
+        self.assertIn("PYTHON.BOUNDARY_UNKNOWN", self._issue_codes(report))
+
+    def test_source_cache_temp_names_and_unowned_tools_are_blocked(self) -> None:
+        tool = self._write(
+            "quwoquan_app/scripts/tools/device/orphan_probe.py",
+            "def inspect() -> None:\n    pass\n",
+        )
+        self._write(
+            "quwoquan_app/.ruff_cache/state.py",
+            "VALUE = 1\n",
+        )
+        self._write(
+            "quwoquan_app/scripts/tools/device/temp_probe.py",
+            "def main() -> None:\n    pass\n",
+        )
+
+        report = derive_report(self.root, ("app",))
+        codes = self._issue_codes(report)
+        self.assertIn("PYTHON.SOURCE_CACHE_FORBIDDEN", codes)
+        self.assertIn("PYTHON.TEMP_SCRIPT_NAME", codes)
+        self.assertIn("SCRIPT.TOOL_OWNER_MISSING", codes)
+
+        self._write(
+            "quwoquan_app/scripts/README.md",
+            f"- tools/device/{tool.name}: device owner evidence\n",
+        )
+        governed = derive_report(self.root, ("app",))
+        self.assertFalse(
+            any(
+                issue["code"] == "SCRIPT.TOOL_OWNER_MISSING"
+                and issue["path"] == str(tool.relative_to(self.root))
+                for issue in governed["issues"]  # type: ignore[index]
+            )
+        )
+
+    def test_embedded_python_import_in_shell_is_a_live_library_edge(self) -> None:
+        library = self._write(
+            "quwoquan_service/scripts/runtime/packaging/lib/image_inputs.py",
+            "VALUE = 1\n",
+        )
+        shell = self._write(
+            "quwoquan_service/scripts/runtime/packaging/build_package.sh",
+            "python3 - <<'PY'\n"
+            "from quwoquan_service.scripts.runtime.packaging.lib.image_inputs "
+            "import VALUE\n"
+            "print(VALUE)\n"
+            "PY\n",
+        )
+
+        report = derive_report(self.root, ("service",))
+        records = {
+            record["path"]: record  # type: ignore[index]
+            for record in report["scripts"]  # type: ignore[index]
+        }
+        self.assertIn(
+            str(shell.relative_to(self.root)),
+            records[str(library.relative_to(self.root))]["importedBy"],
+        )
+
     def test_service_makefile_relative_scripts_and_ops_cross_scope_refs(
         self,
     ) -> None:
@@ -140,7 +409,7 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
             "def main() -> None:\n    pass\n",
         )
         self._write(
-            "quwoquan_service/scripts/verify/verify_go_single_module.py",
+            "quwoquan_service/scripts/verify/structure/verify_go_single_module.py",
             "def main() -> None:\n    pass\n",
         )
         self._write(
@@ -157,7 +426,7 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
             "verify-redis-routes:\n"
             "\tpython3 scripts/codegen/gen_redis_router_config.py --check\n"
             "verify-go-single-module:\n"
-            "\tpython3 scripts/verify/verify_go_single_module.py\n",
+            "\tpython3 scripts/verify/structure/verify_go_single_module.py\n",
         )
         self._write(
             "quwoquan_ops/gate/gate_runtime_media.sh",
@@ -166,7 +435,7 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         )
         self._write(
             "quwoquan_ops/gate/gate_repo.sh",
-            "python3 quwoquan_service/scripts/verify/verify_go_single_module.py\n",
+            "python3 quwoquan_service/scripts/verify/structure/verify_go_single_module.py\n",
         )
 
         report = derive_report(self.root, ("service", "ops"))
@@ -186,7 +455,7 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self.assertFalse(redis["orphanCandidate"])
 
         go_single = records[
-            "quwoquan_service/scripts/verify/verify_go_single_module.py"
+            "quwoquan_service/scripts/verify/structure/verify_go_single_module.py"
         ]
         self.assertIn("quwoquan_service/Makefile", go_single["referencedBy"])
         self.assertIn(
@@ -257,7 +526,10 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         self._write("quwoquan_data/scripts/content/__init__.py")
         self._write("quwoquan_data/scripts/content/execution/__init__.py")
         self._write(
-            "quwoquan_data/scripts/content/execution/selection_inputs.py",
+            "quwoquan_data/scripts/content/execution/planning/__init__.py"
+        )
+        self._write(
+            "quwoquan_data/scripts/content/execution/planning/selection_inputs.py",
             "def select() -> tuple[object, ...]:\n    return ()\n",
         )
         self._write(
@@ -288,7 +560,7 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
         }
 
         library = records[
-            "quwoquan_data/scripts/content/execution/selection_inputs.py"
+            "quwoquan_data/scripts/content/execution/planning/selection_inputs.py"
         ]
         self.assertEqual("lib", library["role"])
         self.assertEqual((), library["importedBy"])
@@ -414,6 +686,24 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
                 "help_points_missing.py:" in issue and "also_missing.py" in issue
                 for issue in issues
             )
+        )
+
+    def test_entrypoint_scan_rejects_stale_app_test_script_paths(self) -> None:
+        self._write(
+            "quwoquan_app/test/local_contract/runtime/script_path_test.dart",
+            "final source = _readAppFile("
+            "'scripts/device/removed_startup_probe.py');\n",
+        )
+
+        issues = entrypoint_script_path_issues(self.root)
+
+        self.assertTrue(
+            any(
+                "script_path_test.dart:1" in issue
+                and "removed_startup_probe.py" in issue
+                for issue in issues
+            ),
+            issues,
         )
 
 

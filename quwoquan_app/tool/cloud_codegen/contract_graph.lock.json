@@ -10425,7 +10425,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_invitation_accept",
+        "metric": "circle_gathering_invitation_accept",
         "trace": true
       },
       "transport": "json"
@@ -10514,7 +10514,7 @@
           "outcome",
           "admission_state"
         ],
-        "metric": "gathering_apply",
+        "metric": "circle_gathering_apply",
         "trace": true
       },
       "transport": "json"
@@ -10600,7 +10600,7 @@
           "outcome",
           "temporal_phase"
         ],
-        "metric": "gathering_cancel",
+        "metric": "circle_gathering_cancel",
         "trace": true
       },
       "transport": "json"
@@ -10686,7 +10686,7 @@
           "outcome",
           "material_change"
         ],
-        "metric": "gathering_capacity_change",
+        "metric": "circle_gathering_capacity_change",
         "trace": true
       },
       "transport": "json"
@@ -10773,7 +10773,7 @@
           "outcome",
           "outcome_status"
         ],
-        "metric": "gathering_complete",
+        "metric": "circle_gathering_complete",
         "trace": true
       },
       "transport": "json"
@@ -10861,7 +10861,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_self_complete",
+        "metric": "circle_gathering_self_complete",
         "trace": true
       },
       "transport": "json"
@@ -10938,7 +10938,7 @@
           "outcome",
           "host_subject_kind"
         ],
-        "metric": "gathering_draft_create",
+        "metric": "circle_gathering_draft_create",
         "trace": true
       },
       "transport": "json"
@@ -11023,7 +11023,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_end_early",
+        "metric": "circle_gathering_end_early",
         "trace": true
       },
       "transport": "json"
@@ -11107,7 +11107,7 @@
           "outcome",
           "viewer_authority"
         ],
-        "metric": "gathering_get",
+        "metric": "circle_gathering_get",
         "trace": true
       },
       "transport": "json"
@@ -11189,7 +11189,7 @@
           "outcome",
           "lifecycle_status"
         ],
-        "metric": "gathering_public_get",
+        "metric": "circle_gathering_public_get",
         "trace": true
       },
       "transport": "json"
@@ -11278,7 +11278,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_invite",
+        "metric": "circle_gathering_invite",
         "trace": true
       },
       "transport": "json"
@@ -11367,7 +11367,7 @@
           "outcome",
           "admission_state"
         ],
-        "metric": "gathering_join_open",
+        "metric": "circle_gathering_join_open",
         "trace": true
       },
       "transport": "json"
@@ -11451,7 +11451,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_admission_pause",
+        "metric": "circle_gathering_admission_pause",
         "trace": true
       },
       "transport": "json"
@@ -11546,7 +11546,7 @@
           "outcome",
           "room_binding_status"
         ],
-        "metric": "gathering_publish",
+        "metric": "circle_gathering_publish",
         "trace": true
       },
       "transport": "json"
@@ -11632,7 +11632,7 @@
           "outcome",
           "temporal_phase"
         ],
-        "metric": "gathering_participant_remove",
+        "metric": "circle_gathering_participant_remove",
         "trace": true
       },
       "transport": "json"
@@ -11717,7 +11717,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_admission_resume",
+        "metric": "circle_gathering_admission_resume",
         "trace": true
       },
       "transport": "json"
@@ -11805,7 +11805,7 @@
           "outcome",
           "decision"
         ],
-        "metric": "gathering_application_review",
+        "metric": "circle_gathering_application_review",
         "trace": true
       },
       "transport": "json"
@@ -11894,7 +11894,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_safety_terminate",
+        "metric": "circle_gathering_safety_terminate",
         "trace": true
       },
       "transport": "json"
@@ -11982,7 +11982,7 @@
           "outcome",
           "material_change"
         ],
-        "metric": "gathering_update",
+        "metric": "circle_gathering_update",
         "trace": true
       },
       "transport": "json"
@@ -12065,7 +12065,7 @@
         "attributes": [
           "outcome"
         ],
-        "metric": "gathering_availability_watch",
+        "metric": "circle_gathering_availability_watch",
         "trace": true
       },
       "transport": "json"
@@ -14099,93 +14099,6 @@
     },
     {
       "actorRequirement": "persona",
-      "aggregateOwner": "",
-      "authMode": "required",
-      "canonicalOperationId": "content.media_original_access_fact.RequestOriginalImageAccess",
-      "clientContract": {
-        "dartImport": "../content/content_operation_contracts.g.dart",
-        "responseDecoder": "decodeMediaOriginalAccessGrant",
-        "responseType": "MediaOriginalAccessGrant"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "domain": "content",
-      "errorCodes": [
-        "CONTENT.USER.unauthorized",
-        "CONTENT.USER.media_not_found",
-        "CONTENT.USER.original_access_denied",
-        "CONTENT.USER.original_access_rate_limited",
-        "CONTENT.USER.idempotency_conflict",
-        "CONTENT.SYSTEM.storage_read_failed"
-      ],
-      "facadeMethod": "requestOriginalImageAccess",
-      "facet": "MediaOriginalAccessAppendFacet",
-      "invariantTarget": "MediaOriginalAccessFact",
-      "kind": "command",
-      "localOperationId": "RequestOriginalImageAccess",
-      "method": "POST",
-      "mutationTarget": "MediaOriginalAccessFact",
-      "objectId": "content.media_original_access_fact",
-      "ownershipPolicy": "post_visibility_and_media_policy",
-      "pagination": null,
-      "pathTemplate": "/content/media/{mediaId}/original:access",
-      "permissions": [],
-      "principal": "persona",
-      "privacy": {
-        "logPolicy": "redacted",
-        "requestClassification": "PII",
-        "responseClassification": "SENSITIVE"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "required",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 5000
-      },
-      "requestBindings": {
-        "path": [
-          {
-            "field": "mediaId",
-            "name": "mediaId"
-          }
-        ]
-      },
-      "requestBodyKind": "object",
-      "requestConstants": null,
-      "requestEntity": "RequestContentMediaOriginalAccessCommand",
-      "responseAdmission": null,
-      "responseBody": "MediaOriginalAccessGrant",
-      "responseBodyKind": "object",
-      "responseEntity": "MediaOriginalAccessGrant",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 800
-      },
-      "sourcePath": "content/media/media_original_access_fact/operations.yaml",
-      "streaming": null,
-      "successStatus": null,
-      "surfaceIds": [
-        "circleDetail",
-        "workBrowser"
-      ],
-      "telemetry": {
-        "attributes": [
-          "purpose",
-          "outcome",
-          "access_policy"
-        ],
-        "metric": "content_media_original_access_request",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
-      "actorRequirement": "persona",
       "aggregateOwner": "MediaUploadSession",
       "authMode": "required",
       "canonicalOperationId": "content.media_upload_session.AbortMediaUpload",
@@ -14529,10 +14442,97 @@
       "transport": "json"
     },
     {
+      "actorRequirement": "persona",
+      "aggregateOwner": "OriginalAccessQuota",
+      "authMode": "required",
+      "canonicalOperationId": "content.original_access_quota.ReserveOriginalImageAccessGrant",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeMediaOriginalAccessGrant",
+        "responseType": "MediaOriginalAccessGrant"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.media_not_found",
+        "CONTENT.USER.original_access_denied",
+        "CONTENT.USER.original_access_rate_limited",
+        "CONTENT.USER.idempotency_conflict",
+        "CONTENT.SYSTEM.storage_read_failed"
+      ],
+      "facadeMethod": "reserveOriginalImageAccessGrant",
+      "facet": "OriginalAccessQuotaFacade",
+      "invariantTarget": "OriginalAccessQuota",
+      "kind": "command",
+      "localOperationId": "ReserveOriginalImageAccessGrant",
+      "method": "POST",
+      "mutationTarget": "OriginalAccessQuota",
+      "objectId": "content.original_access_quota",
+      "ownershipPolicy": "post_visibility_and_media_policy",
+      "pagination": null,
+      "pathTemplate": "/content/media/{mediaId}/original:access",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "redacted",
+        "requestClassification": "PII",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 5000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "mediaId",
+            "name": "mediaId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "RequestContentMediaOriginalAccessCommand",
+      "responseAdmission": null,
+      "responseBody": "MediaOriginalAccessGrant",
+      "responseBodyKind": "object",
+      "responseEntity": "MediaOriginalAccessGrant",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "content/media/original_access_quota/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "circleDetail",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "purpose",
+          "outcome",
+          "access_policy"
+        ],
+        "metric": "content_media_original_access_request",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
       "actorRequirement": "persona_or_device",
       "aggregateOwner": "",
       "authMode": "optional",
-      "canonicalOperationId": "content.outbound_share_fact.CreateOutboundShare",
+      "canonicalOperationId": "content.outbound_share_fact.AppendOutboundShareFact",
       "clientContract": {
         "dartImport": "../content/content_operation_contracts.g.dart",
         "responseDecoder": "decodeOutboundShareFactResult",
@@ -14557,7 +14557,7 @@
       "facet": "OutboundShareAppendFacet",
       "invariantTarget": "OutboundShareFact",
       "kind": "command",
-      "localOperationId": "CreateOutboundShare",
+      "localOperationId": "AppendOutboundShareFact",
       "method": "POST",
       "mutationTarget": "OutboundShareFact",
       "objectId": "content.outbound_share_fact",
@@ -15809,7 +15809,7 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
-      "canonicalOperationId": "content.profile_interaction_read_fact.UpdateProfileInteractionState",
+      "canonicalOperationId": "content.profile_interaction_read_fact.AppendProfileInteractionReadFact",
       "clientContract": {
         "dartImport": "../content/content_operation_contracts.g.dart",
         "responseDecoder": "decodeProfileInteractionReadFactAck",
@@ -15836,7 +15836,7 @@
       "facet": "ProfileInteractionReadFactAppendFacet",
       "invariantTarget": "ProfileInteractionReadFact",
       "kind": "command",
-      "localOperationId": "UpdateProfileInteractionState",
+      "localOperationId": "AppendProfileInteractionReadFact",
       "method": "POST",
       "mutationTarget": "ProfileInteractionReadFact",
       "objectId": "content.profile_interaction_read_fact",
@@ -28343,13 +28343,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "925f15de840667d3e5476a75d80d7d2620f672e34ff5402fe99f5e8746740903"
+    "sha256": "c584f5b22dcba85c0db1bbdfa954b305cb3da18b8e1fd440f16e50bd2cb5c619"
   },
   "contractGraph": {
-    "compilerHash": "sha256:0064cb16573799c0ffd0556ba52625bc911bb34523fc4271a8a6a5cef98fcd60",
+    "compilerHash": "sha256:038a9ca69b8c778376c1fb33c67119a4a5bf4b6ce0b0f9a7d3c9b7ee81183b82",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "5cebacbad8dfe3503f8dcf2d0f34dd34328ea5a6f0b3b297cbd11df0a9eb2d44",
-    "sourceDigestSetSha256": "3112d7282657857dfc89cf0e03ce326a85fbd5f2bfdbcdab744bf71c810e1d29"
+    "sha256": "b5683d7d096bfb9d5d550bb42fc6069321cdd8d781d57b85d8517db39af2390e",
+    "sourceDigestSetSha256": "6232dcf8f3406994b772975f8df1ca451f08cdfc5ffd7064c532e4f17324d659"
   },
   "generator": "app-cloud-handoff"
 }

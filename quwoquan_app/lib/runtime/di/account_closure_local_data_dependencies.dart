@@ -14,7 +14,6 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/incoming_call_terminal_account_purger.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/account_closure_local_data_purger.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
@@ -204,13 +203,16 @@ Future<void> _recoverPendingTerminalAccountCleanup(Ref ref) async {
     final purger = ref.read(
       accountClosureLocalDataPurgerForActorProvider(actor),
     );
-    if (!await _purgeDetectedTerminalAccount(purger)) {
+    if (!await _purgeDetectedTerminalAccount(
+      purger,
+      ref.read(exceptionTelemetryPortProvider),
+    )) {
       return;
     }
     await receiptStore.clear();
     ref.invalidate(accountClosureLocalDataPurgerForActorProvider(actor));
   } catch (error, stackTrace) {
-    await AppExceptionTelemetryService.instance.recordHandledException(
+    await ref.read(exceptionTelemetryPortProvider).recordHandledException(
       source: 'account_closure_local_cleanup_recovery',
       error: error,
       stackTrace: stackTrace,
@@ -220,6 +222,7 @@ Future<void> _recoverPendingTerminalAccountCleanup(Ref ref) async {
 
 Future<bool> _purgeDetectedTerminalAccount(
   AccountClosureLocalDataPurger purger,
+  ExceptionTelemetryPort telemetry,
 ) async {
   Object? lastError;
   StackTrace? lastStackTrace;
@@ -237,7 +240,7 @@ Future<bool> _purgeDetectedTerminalAccount(
       }
     }
   }
-  await AppExceptionTelemetryService.instance.recordHandledException(
+  await telemetry.recordHandledException(
     source: 'account_closure_detected_local_privacy_cleanup',
     error: lastError!,
     stackTrace: lastStackTrace!,

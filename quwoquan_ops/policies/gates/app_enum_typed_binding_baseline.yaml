@@ -1,0 +1,74 @@
+# Ratchet baseline: contract enum fields still generated as bare String in the
+# App contract package. Owned by
+# quwoquan_app/scripts/runtime/codegen/verify_app_enum_typed_binding.py.
+#
+# Only-decrease. The gate BLOCKs when any field count or the total grows. When a
+# field is migrated to `type: enum` + `enum_ref` in its owning service contract
+# and regenerated, hand-edit the numbers below down; there is deliberately no
+# --write-baseline flag.
+#
+# measured_canonical_enums: 124
+# measured_enum_bound_fields: 96
+# measured_scanned_dart_files: 146
+# measured_scanned_declarations: 4678
+
+schema: app-enum-typed-binding-baseline
+governance:
+  owner: app-contract-codegen
+  reason: 生成契约中的裸 String 枚举位属于存量债务，只允许随所属服务 enum_ref 迁移减少
+  expires_when: untyped_site_total 归零时删除本文件并切换为零缺口门
+
+untyped_site_total: 211
+
+untyped_sites_by_field:
+  accountState: 2
+  action: 8
+  applyScope: 3
+  articleFontPreset: 2
+  articleTemplate: 2
+  callType: 1
+  captureDisclosure: 1
+  claimStatus: 1
+  claimTier: 1
+  contentIdentity: 3
+  contentType: 7
+  coverStrategy: 4
+  credentialType: 1
+  dimension: 8
+  direction: 1
+  displaySubjectType: 3
+  eventType: 3
+  field: 2
+  gender: 2
+  homepageType: 4
+  intersectionDimension: 4
+  isolationLevel: 4
+  joinPolicy: 2
+  kind: 16
+  lastProfileSyncSource: 1
+  linkedHomepageType: 3
+  mediaType: 2
+  memberType: 1
+  messageType: 2
+  operation: 1
+  originType: 2
+  outcome: 6
+  primaryHomepageType: 2
+  profileVisibility: 1
+  provider: 3
+  reason: 5
+  relationState: 2
+  role: 7
+  scope: 7
+  sensitivity: 1
+  sort: 5
+  source: 12
+  sourceType: 2
+  state: 6
+  status: 32
+  subjectType: 2
+  targetType: 2
+  transport: 2
+  trustRelation: 1
+  type: 11
+  visibility: 5

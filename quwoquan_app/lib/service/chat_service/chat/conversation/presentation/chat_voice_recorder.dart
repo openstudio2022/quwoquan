@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/local_file_stat.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_recording.dart';
@@ -18,14 +18,24 @@ const int kMaxRecordDurationMs = 120000;
 /// Encapsulates AAC recording with waveform amplitude collection.
 class VoiceRecorder {
   VoiceRecorder({
+    required ExceptionTelemetryPort telemetry,
     int maxDurationMs = kMaxRecordDurationMs,
     FileStorageGateway? fileStorageGateway,
-  }) : this._(maxDurationMs, fileStorageGateway ?? createFileStorageGateway());
+  }) : this._(
+         maxDurationMs,
+         fileStorageGateway ?? createFileStorageGateway(),
+         telemetry,
+       );
 
-  VoiceRecorder._(this._maxDurationMs, this._fileStorageGateway);
+  VoiceRecorder._(
+    this._maxDurationMs,
+    this._fileStorageGateway,
+    this._telemetry,
+  );
 
   final int _maxDurationMs;
   final FileStorageGateway _fileStorageGateway;
+  final ExceptionTelemetryPort _telemetry;
   final AudioRecorder _recorder = AudioRecorder();
 
   VoiceRecordState _state = VoiceRecordState.idle;
@@ -146,7 +156,7 @@ class VoiceRecorder {
       if (!_amplitudeFailureReported) {
         _amplitudeFailureReported = true;
         unawaited(
-          AppExceptionTelemetryService.instance.recordHandledException(
+          _telemetry.recordHandledException(
             source: 'chat.voice_recorder.collect_amplitude',
             error: error,
             stackTrace: stackTrace,
@@ -166,7 +176,7 @@ class VoiceRecorder {
         if (!_cleanupFailureReported) {
           _cleanupFailureReported = true;
           unawaited(
-            AppExceptionTelemetryService.instance.recordHandledException(
+            _telemetry.recordHandledException(
               source: 'chat.voice_recorder.cleanup_temp_file',
               error: error,
               stackTrace: stackTrace,

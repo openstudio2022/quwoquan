@@ -325,7 +325,7 @@ def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, na
                 "topicId": ref,
                 "qualityScore": 90,
                 "recommendation": "proceed",
-                "templateId": "travel.route.guide",
+                "templateId": "travel.entity.guide",
                 "title": title,
                 "sourceUrls": [f"https://example.com/{name}"],
                 "sourcePaths": [source_ref],

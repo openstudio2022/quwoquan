@@ -8,7 +8,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
-final class _RecordingBehaviorWriter implements ContentBehaviorCommandWriter {
+final class _RecordingBehaviorWriter implements ContentBehaviorFactAppender {
   final commands = <ReportContentBehaviorsCommand>[];
 
   @override

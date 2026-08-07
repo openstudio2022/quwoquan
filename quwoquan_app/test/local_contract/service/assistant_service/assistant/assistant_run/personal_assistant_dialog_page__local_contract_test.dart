@@ -215,7 +215,10 @@ void main() {
 
     final state = container.read(personalAssistantStreamControllerProvider);
     expect(state.sessionId, 'asn_uat_personal');
-    expect(state.runId, 'atn_uat_personal');
+    // AssistantRun 是 process_manager（saga）实例，控制器状态承载的是 run id
+    // （`arn_` 前缀，见 quwoquan_service/runtime/id/prefix_registry.go 与
+    // StartAssistantRun 的 id 生成），不是单轮 turn id（`atn_`）。
+    expect(state.runId, 'arn_uat_personal');
     expect(
       state.events.map((event) => event.eventType.wireName),
       containsAll(<String>['run_started', 'completed']),

@@ -118,46 +118,55 @@ func TestCircleGatheringBindingBlockedOperationsHaveZeroNetworkImpact(
 		),
 	)
 
+	searchRequest := tooling.GatheringSearchPublicRequest{
+		SourceObjectTypeRef: "circle.post",
+		SourceObjectID:      "post-1",
+		Limit:               20,
+	}
+	searchPacket, err := gatheringclient.EncodeListGatheringsBySource(
+		gatheringclient.GatheringListBySourceQuery{
+			SourceObjectTypeRef: searchRequest.SourceObjectTypeRef,
+			SourceObjectID:      searchRequest.SourceObjectID,
+			Limit:               int64(searchRequest.Limit),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	planRequest := gatheringPlanCommand()
+	planPacket, err := gatheringplanclient.EncodeProposeGatheringPlan(planRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, searchErr := binding.SearchPublic(
 		t.Context(),
-		tooling.VerifiedGatheringQueryCall{},
-		tooling.GatheringSearchPublicRequest{
-			SourceObjectTypeRef: "circle.post",
-			SourceObjectID:      "post-1",
-			Limit:               20,
-		},
-	)
-	_, publicErr := binding.ReadPublic(
-		t.Context(),
-		tooling.VerifiedGatheringQueryCall{},
-		tooling.GatheringIDQuery{GatheringID: "gathering-1"},
-	)
-	_, privateErr := binding.ReadPrivate(
-		t.Context(),
-		tooling.VerifiedGatheringQueryCall{},
-		tooling.GatheringIDQuery{GatheringID: "gathering-1"},
-	)
-	_, watchErr := binding.WatchAvailability(
-		t.Context(),
-		tooling.VerifiedGatheringCommandCall{},
-		tooling.GatheringAvailabilityWatchCommand{
-			GatheringID: "gathering-1",
-		},
-		"idempotency-1",
+		queryCall(
+			searchPacket,
+			runtimeauth.DelegatedResourceConstraint{
+				Type: "circle.gathering.source",
+				ID:   "circle.post:post-1",
+			},
+		),
+		searchRequest,
 	)
 	_, planErr := binding.ProposeGatheringPlan(
 		t.Context(),
-		tooling.VerifiedGatheringCommandCall{},
-		gatheringPlanCommand(),
+		planCommandCall(
+			planPacket,
+			runtimeauth.DelegatedResourceConstraint{
+				Type: "circle.gathering_plan",
+				ID:   planRequest.PlanID,
+			},
+			"idempotency-1",
+		),
+		planRequest,
 		"idempotency-1",
 	)
 
 	for name, err := range map[string]error{
-		"search":  searchErr,
-		"public":  publicErr,
-		"private": privateErr,
-		"watch":   watchErr,
-		"plan":    planErr,
+		"search": searchErr,
+		"plan":   planErr,
 	} {
 		if !errors.Is(
 			err,

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from content.execution.scale_semantic_promotion import (
+from content.execution.scale.semantic_promotion import (
     select_scale_calibration_refs,
     semantic_calibration_evidence_path,
 )
@@ -21,6 +21,7 @@ from content.release.canonical.research_scale_promotion import (
     ResearchScalePromotionError,
     write_research_scale_promotion,
 )
+from core.paths import campaign_scale_evidence_root, research_scale_promotions_root
 from core.runtime_policy import runtime_profile_digest
 from core.source_digest import SourceDigest
 from support.semantic_preflight_fixture import ready_semantic_preflight
@@ -137,7 +138,7 @@ def _write_ranked_release_videos(release: Path, *, count: int) -> None:
                         "popularityScore": 1_135 + 5 * index,
                         "popularityPercentile": round(index / max(count - 1, 1), 6),
                         "rankingEligible": True,
-                        "rankingIneligibleReason": "",
+                        "ineligibleReason": "",
                         "comparisonCandidateCount": count,
                     },
                 },
@@ -1020,6 +1021,10 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     fixture = _fixture(tmp_path)
     evidence, path = _write_evidence(fixture)
 
+    assert path == (
+        campaign_scale_evidence_root(output_root=fixture["output"])
+        / "research-release/scale-evidence-1/campaign-scale.json"
+    )
     assert evidence["status"] == "passed"
     calibration_binding = evidence["calibrationPreflightReceipt"]
     assert calibration_binding["receiptRef"] == (
@@ -1131,10 +1136,25 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
         "rate": 0.9,
     }
     assert promotion["statistics"]["automaticRecoveryRate"] == {
-        "numerator": 19,
-        "denominator": 20,
+        "statistical": True,
+        "nonBlocking": True,
+        "status": "MEASURED",
+        "eligibleCount": 20,
+        "automaticCount": 19,
+        "targetRate": 0.95,
         "rate": 0.95,
     }
+    assert promotion["statistics"]["videoPopularity"]["statistical"] is True
+    assert promotion["statistics"]["videoPopularity"]["nonBlocking"] is True
+    assert promotion["statistics"]["videoPopularity"]["rankingCoverage"] == {
+        "numerator": 100,
+        "denominator": 100,
+        "rate": 1.0,
+    }
+    assert promotion["statistics"]["videoPopularity"]["signalAvailability"] == [
+        {"signal": signal, "numerator": 100, "denominator": 100, "rate": 1.0}
+        for signal in ("play", "like", "comment", "share", "favorite")
+    ]
     assert promotion["statistics"]["firstPassRate"] == {
         "numerator": 3,
         "denominator": 4,
@@ -1153,6 +1173,10 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert promotion["terminalResidualSampleAt"] == resource[
         "terminalResidualSampleAt"
     ]
+    assert promotion_path == (
+        research_scale_promotions_root(output_root=fixture["output"])
+        / "research-release/promotion-1/research-m100.json"
+    )
     assert promotion_path.is_file()
 
     repeated, repeated_path = _write_evidence(fixture)
@@ -1160,7 +1184,7 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert repeated_path == path
 
 
-def test_m100_promotion_blocks_truthfully_unranked_video(
+def test_m100_promotion_records_truthfully_unranked_video_without_blocking(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
@@ -1178,23 +1202,49 @@ def test_m100_promotion_blocks_truthfully_unranked_video(
             "popularityScore": None,
             "popularityPercentile": None,
             "rankingEligible": False,
-            "rankingIneligibleReason": "incomplete_popularity_signals",
+            "ineligibleReason": "incomplete_popularity_signals",
         }
     )
     _write(receipt_path, receipt)
     _evidence, path = _write_evidence(fixture)
 
-    with pytest.raises(
-        ResearchScalePromotionError,
-        match="DATA.RELEASE.VIDEO_POPULARITY_INCOMPLETE",
-    ):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-unranked-video",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-unranked-video",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+
+    popularity = promotion["statistics"]["videoPopularity"]
+    assert promotion["m1000Eligible"] is True
+    assert popularity["statistical"] is True
+    assert popularity["nonBlocking"] is True
+    assert popularity["rankingCoverage"] == {
+        "numerator": 99,
+        "denominator": 100,
+        "rate": 0.99,
+    }
+    assert popularity["signalAvailability"][-1] == {
+        "signal": "favorite",
+        "numerator": 99,
+        "denominator": 100,
+        "rate": 0.99,
+    }
+    missing = next(
+        row
+        for row in popularity["observations"]
+        if row["favoriteCount"] is None
+    )
+    assert missing["rankingEligible"] is False
+    assert missing["ineligibleReason"] == "incomplete_popularity_signals"
+    assert missing["popularityPercentile"] is None
+    assert missing["comparisonBucket"] == {
+        "provider": "professional_video_fixture",
+        "topic": "travel",
+        "timeBucket": "2026-W32",
+        "candidateCount": 100,
+    }
 
 
 def test_campaign_scale_evidence_blocks_lane_receipt_identity_drift(
@@ -1431,9 +1481,10 @@ def test_zero_recovery_denominator_is_recorded_without_blocking_promotion(
 
     evidence, path = _write_evidence(fixture)
     fault = json.loads((path.parent / "fault-injection.json").read_text())
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
+    assert fault["status"] == "passed"
     assert fault["automaticRecoveryStatus"] == "NOT_EXERCISED"
-    assert fault["automaticRecoveryRate"] == 0
+    assert fault["automaticRecoveryRate"] is None
 
     promotion, _promotion_path = write_research_scale_promotion(
         release_id="research-release",
@@ -1443,12 +1494,56 @@ def test_zero_recovery_denominator_is_recorded_without_blocking_promotion(
         output_root=fixture["output"],
     )
     assert promotion["m1000Eligible"] is True
-    assert promotion["automaticRecoveryStatus"] == "NOT_EXERCISED"
     assert promotion["statistics"]["automaticRecoveryRate"] == {
-        "numerator": 0,
-        "denominator": 0,
-        "rate": 0.0,
+        "statistical": True,
+        "nonBlocking": True,
+        "status": "NOT_EXERCISED",
+        "eligibleCount": 0,
+        "automaticCount": 0,
+        "targetRate": 0.95,
+        "rate": None,
     }
+
+
+def test_low_automatic_recovery_rate_does_not_fail_campaign_or_promotion(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    for receipt_path in fixture["faultsRoot"].glob("*/receipt.json"):
+        if receipt_path.parent.name.endswith("-0"):
+            continue
+        payload = json.loads(receipt_path.read_text())
+        payload.update(
+            {
+                "actionStatus": "failed",
+                "actionResultCode": "DATA.RUNTIME_EVIDENCE.FIXTURE_FAILED",
+                "faultEventAt": None,
+                "eventRef": None,
+                "eventSha256": None,
+                "queueEventEvidenceDigest": None,
+            }
+        )
+        _write(receipt_path, payload)
+        _resign_receipt(receipt_path)
+
+    evidence, path = _write_evidence(fixture)
+    fault = json.loads((path.parent / "fault-injection.json").read_text())
+
+    assert evidence["status"] == "passed"
+    assert fault["status"] == "passed"
+    assert fault["recoveryEligibleCount"] == 4
+    assert fault["automaticRecoveredCount"] == 3
+    assert fault["automaticRecoveryRate"] == 0.75
+
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-low-statistical-recovery",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+    assert promotion["m1000Eligible"] is True
+    assert promotion["statistics"]["automaticRecoveryRate"]["rate"] == 0.75
 
 
 def test_resource_soak_requires_one_continuous_four_lane_hour(

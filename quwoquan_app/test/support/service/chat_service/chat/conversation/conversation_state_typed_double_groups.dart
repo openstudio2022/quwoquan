@@ -464,6 +464,13 @@ extension AlphaChatGroupState on InMemoryChatStateEngine {
       'groupAvatarVersion': _int(conversation['groupAvatarVersion']),
       'circleId': circleId,
       'circleGroupId': _text(conversation['circleGroupId']),
+      // 群主页 canonical 契约要求显式的活动来源与准入/发言策略；非活动群给空串与默认策略。
+      'gatheringId': _text(conversation['gatheringId']),
+      'accessMode': _firstText(<Object?>[conversation['accessMode'], 'active']),
+      'postingPolicy': _firstText(<Object?>[
+        conversation['postingPolicy'],
+        'member_chat',
+      ]),
       'entityId': '',
       'sourceEntityTitle': '',
       'sourceCircleTitle': circleId,

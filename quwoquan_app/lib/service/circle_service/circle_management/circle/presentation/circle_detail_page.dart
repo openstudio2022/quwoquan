@@ -9,17 +9,18 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_engagement_tracker.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
 import 'package:quwoquan_app/runtime/models/visit_models.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AppendCircleBehaviorFactCommand, BehaviorEventType;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 /// 圈子主页路由入口。
 ///
 /// 所有布局与状态管理委托给 [CircleShell] + [CircleStateNotifier]，
 /// 本页仅负责接收路由参数、访问记录与圈子对象级行为信号
 /// （impression/dwell 进入推荐 HotPath）。
-class CircleDetailPage extends StatefulWidget {
+class CircleDetailPage extends ConsumerStatefulWidget {
   final String circleId;
   final VoidCallback onBack;
   final VisitRecorderService visitRecorderService;
@@ -46,10 +47,10 @@ class CircleDetailPage extends StatefulWidget {
   }) : assert(!hasAuthenticatedOwner || behaviorFactAppender != null);
 
   @override
-  State<CircleDetailPage> createState() => _CircleDetailPageState();
+  ConsumerState<CircleDetailPage> createState() => _CircleDetailPageState();
 }
 
-class _CircleDetailPageState extends State<CircleDetailPage> {
+class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
   /// 首帧后冻结一次：dwell 与 impression 使用同一认证 actor/writer。
   CircleBehaviorFactAppender? _behaviorFactWriter;
 
@@ -96,7 +97,7 @@ class _CircleDetailPageState extends State<CircleDetailPage> {
           )
           .catchError((Object error, StackTrace stackTrace) {
             unawaited(
-              AppExceptionTelemetryService.instance.recordGlobalException(
+              ref.read(exceptionTelemetryPortProvider).recordGlobalException(
                 source: 'circle.behavior.${eventType.wireName}',
                 exceptionText: error.toString(),
                 stackText: stackTrace.toString(),

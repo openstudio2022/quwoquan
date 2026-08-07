@@ -2,8 +2,8 @@
 package generated
 
 const (
-	RouteCreateOutboundShareMethod = "POST"
-	RouteCreateOutboundSharePath   = "/content/posts/{postId}/outbound-shares"
+	RouteAppendOutboundShareFactMethod = "POST"
+	RouteAppendOutboundShareFactPath   = "/content/posts/{postId}/outbound-shares"
 )
 
 var AllowedContentTypes = map[string]struct{}{}

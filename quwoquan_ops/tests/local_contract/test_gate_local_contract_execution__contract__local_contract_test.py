@@ -135,12 +135,16 @@ class GateLocalContractExecutionContractTest(unittest.TestCase):
             [tests[2]],
         )
 
-    def test_baseline_declares_governance_keys_and_matches_reality(self) -> None:
-        """基线必须带 owner/reason/expires_when，且与当前实际缺口逐条一致。"""
+    def test_companion_gaps_are_zero_without_any_allowance_baseline(self) -> None:
+        """缺口容忍基线已删除：门禁转零容忍，缺口必须真的为 0 而不是等于基线。"""
         module = _load_verifier()
+        self.assertFalse(
+            module.BASELINE_PATH.exists(),
+            "缺口容忍基线不得重新引入；新增门禁请补 test-gate-companion-local-contract",
+        )
         baseline_keys, problems = module._load_baseline()
         self.assertEqual(problems, [])
-        self.assertTrue(baseline_keys)
+        self.assertEqual(baseline_keys, set())
         self.assertEqual(module.main([]), 0)
 
     def test_missing_governance_keys_are_blocking(self) -> None:

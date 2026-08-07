@@ -10,7 +10,9 @@ typedef AssistantSkillDataControlInvocationContextFactory =
 
 /// SkillDataControlRequest 的 production generated-client command/query adapter。
 final class RemoteAssistantSkillDataControlAdapter
-    implements AssistantSkillDataControlFacet {
+    implements
+        SkillDataControlProcessCommandWriter,
+        SkillDataControlProcessQuery {
   const RemoteAssistantSkillDataControlAdapter({
     required this.client,
     required this.invocationContext,

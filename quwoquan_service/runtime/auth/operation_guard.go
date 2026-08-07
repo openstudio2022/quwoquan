@@ -685,13 +685,14 @@ func containsAny(availableValues []string, expectedValues []string) bool {
 	return false
 }
 
-// operationGuardUserMessages mirrors the baseline user_message of the gateway
+// operationGuardUserMessages mirrors the baseline userMessage of the GATEWAY.*
 // admission errors declared in
-// services/api-edge/contracts/edge_security/operation_admission_decision/errors.yaml.
-// The guard runs in runtime and is mounted by every service, so it cannot
-// import one service's generated error package; the contract remains the
-// declaring authority and TestOperationGuardUserMessagesMatchContract fails the
-// build as soon as the two drift.
+// contracts/runtime_errors/errors/runtime_failure_codes.yaml. The guard is
+// mounted by every service and produces these before any owner handler, so the
+// codes belong to no single service object and the guard cannot import a
+// service's generated error package; the contract remains the declaring
+// authority and TestOperationGuardUserMessagesMatchContract fails the build as
+// soon as the two drift.
 //
 //nolint:gochecknoglobals
 var operationGuardUserMessages = map[string]string{

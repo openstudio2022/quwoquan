@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/desktop_picker_services.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/local_video_file_readiness.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/desktop_picker_ports.dart';
@@ -57,7 +58,7 @@ final class _ContentFacets {
 
   final ContentDiscoveryFeedQuery feedQuery;
   final ContentPostDeleteCommandWriter postDeleteWriter;
-  final ContentBehaviorCommandWriter behaviorWriter;
+  final ContentBehaviorFactAppender behaviorWriter;
 }
 
 final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
@@ -151,7 +152,7 @@ final contentPostDeleteCommandWriterProvider =
       (ref) => ref.watch(_contentFacetsProvider).postDeleteWriter,
     );
 final contentBehaviorCommandWriterProvider =
-    Provider<ContentBehaviorCommandWriter>(
+    Provider<ContentBehaviorFactAppender>(
       (ref) => ref.watch(_contentFacetsProvider).behaviorWriter,
     );
 
@@ -450,6 +451,7 @@ final assistantPresentationMediaResolverProvider =
 final contentMediaStreamObjectUploadProvider =
     Provider<ContentMediaStreamObjectUpload>((ref) {
       return ContentProductionComposition.contentMediaObjectUpload(
+        client: ref.watch(mediaDataPlaneHttpClientProvider),
         onDispose: ref.onDispose,
       );
     });

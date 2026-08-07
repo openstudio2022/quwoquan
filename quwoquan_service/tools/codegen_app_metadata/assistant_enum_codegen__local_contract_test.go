@@ -55,6 +55,23 @@ func TestValidateAssistantEnumDefaultsAcceptsDeclaredParserDefault(t *testing.T)
 	}
 }
 
+func TestAssistantRuntimeEnumGoOutputHasOneTrailingNewline(t *testing.T) {
+	t.Parallel()
+
+	rendered := renderAssistantRuntimeEnumsGo(&assistantEnumCatalog{
+		Enums: []assistantEnumDef{{
+			Name: "AssistantPreferenceScope",
+			Values: []assistantEnumValueDef{
+				{Name: "session", Wire: "session"},
+				{Name: "unknown", Wire: ""},
+			},
+		}},
+	})
+	if !strings.HasSuffix(rendered, "}\n") || strings.HasSuffix(rendered, "}\n\n") {
+		t.Fatalf("Go enum output must end with exactly one newline: %q", rendered)
+	}
+}
+
 // spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-002
 func TestGenerateAssistantRuntimeEnumsGoWritesAndChecksExplicitServiceOutput(
 	t *testing.T,

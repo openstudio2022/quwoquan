@@ -74,8 +74,11 @@ policy:
     authRetryLimit: 3
     authRetryDelaySeconds: 30
     noProgressRoundLimit: 6
-    researchWaveSize: 1
-    researchMaxWavesPerRun: 0
+    # 12 个对象共享一个 research writer 生命周期；每个 lane 进程最多处理
+    # 4 waves（48 对象）后以 create-once checkpoint 让同一 execution resume。
+    # 四 lane × 每 lane 1 research worker = ReliableTask/host burst capacity 4。
+    researchWaveSize: 12
+    researchMaxWavesPerRun: 4
     sourcePlanRecoveryPasses: 1
     sourcePlanRecoveryWorkers: 1
     coldStartMaxWorkers: 1

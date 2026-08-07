@@ -33,7 +33,7 @@ import (
 // pythonWorkerModule is an internal adapter, not a public qwq-data command.
 // The worker process imports its callable explicitly so the Python module has
 // no second executable entrypoint alongside scripts/cli.py.
-const pythonWorkerModule = "from content.execution.reliabletask_worker import run_process_worker; run_process_worker()"
+const pythonWorkerModule = "from content.execution.queue.reliabletask.worker import run_process_worker; run_process_worker()"
 
 func main() {
 	if err := run(); err != nil {
@@ -78,6 +78,16 @@ func run() error {
 		"",
 		"Data 冻结 execution-envelope 集合的 sha256 绑定",
 	)
+	observeCampaignBinding := flag.String(
+		"observe-campaign-binding",
+		"",
+		"Data 冻结 campaign generation/fence/source JSON 绑定",
+	)
+	observeExecutionEnvelopeDigest := flag.String(
+		"observe-execution-envelope-digest",
+		"",
+		"Data 冻结 execution queue backend envelope 的 sha256 绑定",
+	)
 	flag.Parse()
 	if strings.TrimSpace(*observeExecutionID) != "" {
 		if strings.TrimSpace(*requestPath) != "" ||
@@ -91,12 +101,16 @@ func run() error {
 			strings.TrimSpace(*observeExecutionID),
 			strings.TrimSpace(*observeCarrier),
 			strings.TrimSpace(*observeBindingDigest),
+			strings.TrimSpace(*observeExecutionEnvelopeDigest),
+			strings.TrimSpace(*observeCampaignBinding),
 		)
 	}
 	if strings.TrimSpace(*observeCarrier) != "" ||
-		strings.TrimSpace(*observeBindingDigest) != "" {
+		strings.TrimSpace(*observeBindingDigest) != "" ||
+		strings.TrimSpace(*observeExecutionEnvelopeDigest) != "" ||
+		strings.TrimSpace(*observeCampaignBinding) != "" {
 		return errors.New(
-			"--observe-carrier and --observe-binding-digest require --observe-execution",
+			"observer identity flags require --observe-execution",
 		)
 	}
 	if strings.TrimSpace(*discardExecutionID) != "" {

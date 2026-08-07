@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ ! -d "$ROOT/quwoquan_app" || ! -d "$ROOT/quwoquan_service" ]]; do
+  ROOT="$(dirname "$ROOT")"
+  if [[ "$ROOT" == "/" ]]; then
+    echo "GATE_BLOCK: cannot locate repository root from ${BASH_SOURCE[0]}" >&2
+    exit 2
+  fi
+done
 cd "$ROOT"
 
 echo "[verify] recommendation-service contract"
@@ -37,7 +44,7 @@ for kw in "VALID_APP_ENVS" "EXPECTED_SERVICE_NAME" "APP_ENV" "SERVICE_NAME" "CON
 done
 
 # 行为 metadata、Go HotPath 与 Dart wire enum 必须同轨。
-python3 "$ROOT/quwoquan_service/scripts/verify/verify_behavior_action_consistency.py"
+python3 "$ROOT/quwoquan_service/scripts/verify/consistency/verify_behavior_action_consistency.py"
 
 # 推荐/搜索只允许共享 runtime hash 分桶；未绑定线上流量的 Product Ops
 # ExperimentAssignmentFact 必须保持 default-deny 且不进入 Portal。

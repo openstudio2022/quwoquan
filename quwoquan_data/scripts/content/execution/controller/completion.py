@@ -69,7 +69,7 @@ def execution_completion_issues(
                 )
     if ctx.managed:
         try:
-            from content.execution.readiness_audit import audit_execution_readiness
+            from content.execution.planning.readiness_audit import audit_execution_readiness
 
             audit_state = state.freeze().open_transition()
             audit_state.status = ExecutionStateStatus.SUCCEEDED

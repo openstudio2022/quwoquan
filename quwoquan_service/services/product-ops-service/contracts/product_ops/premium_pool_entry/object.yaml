@@ -27,8 +27,20 @@ local_identity_reasons:
   sourceTaskId: >-
     可选的上游任务溯源 token，只用于关联一次准入来源；它不是业务对象身份，
     也不得作为跨对象查询或写入入口
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "运营与控制面对象，只由运营台按 operator scope 访问，不进入用户检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - contentId 创建后不可变；scope 只允许 global，qualityAdmission 只允许 approved
 - qualityScore 必须大于等于 0.75，expiresAt 必须晚于命令提交时间

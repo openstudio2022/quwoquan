@@ -158,7 +158,8 @@ void main() {
       contains(AssistantText.assistantFeedbackUsefulLabel),
     );
     expect(state.feedbackType, 'useful');
-    expect(state.runId, 'atn_uat_personal');
+    // 控制器状态承载 run id（`arn_`），不是单轮 turn id（`atn_`）。
+    expect(state.runId, 'arn_uat_personal');
 
     await _disposeTree(tester);
   });
@@ -234,7 +235,7 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
   final state = container.read(personalAssistantStreamControllerProvider);
   expect(state.running, isFalse);
   expect(state.errorMessage, isEmpty);
-  expect(state.runId, 'atn_uat_personal');
+  expect(state.runId, 'arn_uat_personal');
   return container;
 }
 

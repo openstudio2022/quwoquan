@@ -51,7 +51,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_create
+    metric: circle_gathering_plan_create
     trace: true
     attributes:
     - outcome
@@ -107,7 +107,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_propose
+    metric: circle_gathering_plan_propose
     trace: true
     attributes:
     - outcome
@@ -165,7 +165,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_commit
+    metric: circle_gathering_plan_commit
     trace: true
     attributes:
     - outcome
@@ -216,7 +216,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_get
+    metric: circle_gathering_plan_get
     trace: true
     attributes:
     - outcome
@@ -275,7 +275,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_revision_list
+    metric: circle_gathering_plan_revision_list
     trace: true
     attributes:
     - outcome

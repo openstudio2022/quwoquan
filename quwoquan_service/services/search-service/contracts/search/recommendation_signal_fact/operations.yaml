@@ -13,6 +13,13 @@ runtime_entrypoints:
     facet: RecommendationSignalFactAppender
     method: append
     object_owner: RecommendationSignalFact
+  telemetry:
+    metric: search_recommendation_signal_append
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    failure_ratio_percent: 0.5
 
 readiness_cases:
 - case_id: append-recommendation-signal-local

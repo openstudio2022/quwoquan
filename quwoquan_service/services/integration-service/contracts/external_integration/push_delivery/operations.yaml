@@ -48,6 +48,14 @@ runtime_entrypoints:
   source_objects: [integration.ExternalInteraction, user.DeviceRegistration]
   idempotency: transaction_identity
   application: {kind: command, facet: PushDeliveryPort, method: send, object_owner: PushDelivery}
+  telemetry:
+    metric: integration_push_delivery_provider_invoke
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 3000
+    failure_ratio_percent: 1
+    dead_letter_ratio_percent: 0.1
 consumers:
 - name: external-interaction
   capabilities:

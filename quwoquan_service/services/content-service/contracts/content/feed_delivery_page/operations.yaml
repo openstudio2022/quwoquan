@@ -12,6 +12,13 @@ runtime_entrypoints:
   source_objects: [content.Post]
   idempotency: identity_payload_digest
   application: {kind: command, facet: FeedDeliveryPagePort, method: append, object_owner: FeedDeliveryPage}
+  telemetry:
+    metric: content_feed_delivery_page_append
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    failure_ratio_percent: 0.5
 consumers:
 - name: content.Post.GetFeed
   capabilities:

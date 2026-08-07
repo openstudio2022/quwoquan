@@ -40,6 +40,20 @@ relationships:
   reference_fields:
   - userId
   target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - messageId + userId 在全局唯一；相同已读命令重放不得追加第二个事实
 - conversationId 必须与 Message.conversationId 一致，userId 必须是该 Conversation 的 active Persona 成员

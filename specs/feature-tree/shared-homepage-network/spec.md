@@ -62,7 +62,7 @@
   - 本领域负责：提供 Place/Entity 公开事实、状态和引用供计划与来源比较。
   - 进入条件：对象可见且 Reader authority 有效。
   - 交付给下游的结果：typed entity/place reference 与 freshness。
-  - 不负责：不拥有 Trip Item 或 Assistant Context。
+  - 不负责：不拥有 GatheringPlan Item 或 Assistant Context。
 - [`JNY-013 / SCN-032`](../spec.md#scn-032)
   - 本领域负责：解析 Moment/Post 所关联的地点实体并提供地图展示所需公开事实。
   - 进入条件：地点引用有效且符合可见范围。

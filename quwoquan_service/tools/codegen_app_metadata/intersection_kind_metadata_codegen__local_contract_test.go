@@ -480,10 +480,10 @@ func TestIntersectionDimensionHasOnePackageOwner(t *testing.T) {
 	if _, duplicate := spec.EnumMembers["IntersectionDimension"]; duplicate {
 		t.Fatal("content operation owner still declares IntersectionDimension")
 	}
-	if _, ok := spec.ExternalImports[intersectionContractVocabularyImport]; !ok {
+	if _, ok := spec.ExternalImports[packageInternalIntersectionContractVocabularyImport]; !ok {
 		t.Fatal("content operation owner does not import canonical vocabulary")
 	}
-	if _, ok := spec.ExternalExports[intersectionContractVocabularyImport]; !ok {
+	if _, ok := spec.ExternalExports[packageInternalIntersectionContractVocabularyImport]; !ok {
 		t.Fatal("content operation owner does not export canonical vocabulary")
 	}
 	rendered, err := renderDomainOperationContract(spec)
@@ -493,8 +493,11 @@ func TestIntersectionDimensionHasOnePackageOwner(t *testing.T) {
 	if strings.Contains(rendered, "enum IntersectionDimension") {
 		t.Fatal("content operation owner duplicates IntersectionDimension")
 	}
-	if strings.Count(rendered, intersectionContractVocabularyImport) != 2 {
+	if strings.Count(rendered, packageInternalIntersectionContractVocabularyImport) != 2 {
 		t.Fatalf("content owner must import and export canonical vocabulary:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart") {
+		t.Fatal("package-internal operation owner imports its own public barrel")
 	}
 
 	broken := spec
@@ -505,8 +508,8 @@ func TestIntersectionDimensionHasOnePackageOwner(t *testing.T) {
 		),
 	}
 	broken.EnumMembers["IntersectionDimension"][0].DartMember = "drifted"
-	delete(broken.ExternalImports, intersectionContractVocabularyImport)
-	delete(broken.ExternalExports, intersectionContractVocabularyImport)
+	delete(broken.ExternalImports, packageInternalIntersectionContractVocabularyImport)
+	delete(broken.ExternalExports, packageInternalIntersectionContractVocabularyImport)
 	if err := finalizeDomainOperationContractSpec(&broken); err == nil ||
 		!strings.Contains(err.Error(), "want") {
 		t.Fatalf("drifted operation enum mapping must fail closed, got %v", err)

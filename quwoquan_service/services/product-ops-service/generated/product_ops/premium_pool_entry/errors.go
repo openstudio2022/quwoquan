@@ -22,41 +22,41 @@ var (
 // AppErrorFromPremiumPoolEntryInvalidArgument returns *AppError for OPS.USER.premium_pool_entry_invalid_argument (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "精选池请求无效", debugMessage).WithMetadata("premium_pool_entry_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "精选池请求无效", debugMessage).WithMetadata("premium_pool_entry_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPremiumPoolEntryNotFound returns *AppError for OPS.USER.premium_pool_entry_not_found (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryNotFound.Error()))
-	return rerrors.NewAppError(code, "精选池条目不存在", debugMessage).WithMetadata("premium_pool_entry_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "精选池条目不存在", debugMessage).WithMetadata("premium_pool_entry_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPremiumPoolEntryIdempotencyConflict returns *AppError for OPS.USER.premium_pool_entry_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原精选池操作不一致", debugMessage).WithMetadata("premium_pool_entry_idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原精选池操作不一致", debugMessage).WithMetadata("premium_pool_entry_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPremiumPoolEntryRevisionConflict returns *AppError for OPS.USER.premium_pool_entry_revision_conflict (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryRevisionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryRevisionConflict.Error()))
-	return rerrors.NewAppError(code, "精选池条目已更新，请刷新后重试", debugMessage).WithMetadata("premium_pool_entry_revision_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "精选池条目已更新，请刷新后重试", debugMessage).WithMetadata("premium_pool_entry_revision_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPremiumPoolEntryDualApprovalRequired returns *AppError for OPS.USER.premium_pool_entry_dual_approval_required (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryDualApprovalRequired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryDualApprovalRequired.Error()))
-	return rerrors.NewAppError(code, "需要另一名运营人员复核", debugMessage).WithMetadata("premium_pool_entry_dual_approval_required", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "需要另一名运营人员复核", debugMessage).WithMetadata("premium_pool_entry_dual_approval_required", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromPremiumPoolEntryStorageReadFailed returns *AppError for OPS.SYSTEM.premium_pool_entry_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "精选池读取失败，请稍后重试", debugMessage).WithMetadata("premium_pool_entry_storage_read_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "精选池读取失败，请稍后重试", debugMessage).WithMetadata("premium_pool_entry_storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }
 
 // AppErrorFromPremiumPoolEntryStorageWriteFailed returns *AppError for OPS.SYSTEM.premium_pool_entry_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromPremiumPoolEntryStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPremiumPoolEntryStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "精选池操作失败，请稍后重试", debugMessage).WithMetadata("premium_pool_entry_storage_write_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "精选池操作失败，请稍后重试", debugMessage).WithMetadata("premium_pool_entry_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }

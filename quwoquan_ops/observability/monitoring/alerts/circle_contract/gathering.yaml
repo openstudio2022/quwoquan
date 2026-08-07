@@ -9,8 +9,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.AcceptGatheringInvitation"
-          contract_metric: "gathering_invitation_accept"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_invitation_accept"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -19,8 +19,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.AcceptGatheringInvitation"
-          contract_metric: "gathering_invitation_accept"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_invitation_accept"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -29,7 +29,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.AcknowledgeGatheringRevision"
-          contract_metric: "gathering_revision_acknowledge"
+          contract_metric: "circle_gathering_revision_acknowledge"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -39,7 +39,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.AcknowledgeGatheringRevision"
-          contract_metric: "gathering_revision_acknowledge"
+          contract_metric: "circle_gathering_revision_acknowledge"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -49,8 +49,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ApplyToGathering"
-          contract_metric: "gathering_apply"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_apply"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -59,8 +59,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ApplyToGathering"
-          contract_metric: "gathering_apply"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_apply"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -69,7 +69,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.AssignGatheringCoHost"
-          contract_metric: "gathering_cohost_assign"
+          contract_metric: "circle_gathering_cohost_assign"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -79,7 +79,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.AssignGatheringCoHost"
-          contract_metric: "gathering_cohost_assign"
+          contract_metric: "circle_gathering_cohost_assign"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -89,8 +89,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CancelGathering"
-          contract_metric: "gathering_cancel"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_cancel"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -99,8 +99,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CancelGathering"
-          contract_metric: "gathering_cancel"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_cancel"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -109,8 +109,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ChangeGatheringCapacity"
-          contract_metric: "gathering_capacity_change"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_capacity_change"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -119,8 +119,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ChangeGatheringCapacity"
-          contract_metric: "gathering_capacity_change"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_capacity_change"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -129,8 +129,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CompleteGathering"
-          contract_metric: "gathering_complete"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_complete"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -139,8 +139,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CompleteGathering"
-          contract_metric: "gathering_complete"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_complete"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -149,7 +149,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CompleteGatheringSelf"
-          contract_metric: "gathering_self_complete"
+          contract_metric: "circle_gathering_self_complete"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -159,7 +159,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CompleteGatheringSelf"
-          contract_metric: "gathering_self_complete"
+          contract_metric: "circle_gathering_self_complete"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -169,8 +169,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CreateGatheringDraft"
-          contract_metric: "gathering_draft_create"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_draft_create"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -179,8 +179,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.CreateGatheringDraft"
-          contract_metric: "gathering_draft_create"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_draft_create"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -189,7 +189,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.DeclareGatheringArrival"
-          contract_metric: "gathering_arrival_declare"
+          contract_metric: "circle_gathering_arrival_declare"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -199,7 +199,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.DeclareGatheringArrival"
-          contract_metric: "gathering_arrival_declare"
+          contract_metric: "circle_gathering_arrival_declare"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -209,7 +209,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.DeclareGatheringLeaveEarly"
-          contract_metric: "gathering_leave_early_declare"
+          contract_metric: "circle_gathering_leave_early_declare"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -219,7 +219,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.DeclareGatheringLeaveEarly"
-          contract_metric: "gathering_leave_early_declare"
+          contract_metric: "circle_gathering_leave_early_declare"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -229,7 +229,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.DeclineGatheringInvitation"
-          contract_metric: "gathering_invitation_decline"
+          contract_metric: "circle_gathering_invitation_decline"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -239,7 +239,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.DeclineGatheringInvitation"
-          contract_metric: "gathering_invitation_decline"
+          contract_metric: "circle_gathering_invitation_decline"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -249,8 +249,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.EndGatheringEarly"
-          contract_metric: "gathering_end_early"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_end_early"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -259,8 +259,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.EndGatheringEarly"
-          contract_metric: "gathering_end_early"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_end_early"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -269,8 +269,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.GetGathering"
-          contract_metric: "gathering_get"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_get"
+          commercial_status: "ready"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -279,8 +279,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.GetGathering"
-          contract_metric: "gathering_get"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_get"
+          commercial_status: "ready"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -289,8 +289,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.GetPublicGathering"
-          contract_metric: "gathering_public_get"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_public_get"
+          commercial_status: "ready"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -299,8 +299,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.GetPublicGathering"
-          contract_metric: "gathering_public_get"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_public_get"
+          commercial_status: "ready"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -309,8 +309,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.InviteToGathering"
-          contract_metric: "gathering_invite"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_invite"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -319,8 +319,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.InviteToGathering"
-          contract_metric: "gathering_invite"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_invite"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -329,8 +329,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.JoinOpenGathering"
-          contract_metric: "gathering_join_open"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_join_open"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -339,8 +339,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.JoinOpenGathering"
-          contract_metric: "gathering_join_open"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_join_open"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -349,7 +349,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.LeaveGathering"
-          contract_metric: "gathering_leave"
+          contract_metric: "circle_gathering_leave"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -359,7 +359,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.LeaveGathering"
-          contract_metric: "gathering_leave"
+          contract_metric: "circle_gathering_leave"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -369,7 +369,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringApplications"
-          contract_metric: "gathering_application_inbox_list"
+          contract_metric: "circle_gathering_application_inbox_list"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -379,7 +379,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringApplications"
-          contract_metric: "gathering_application_inbox_list"
+          contract_metric: "circle_gathering_application_inbox_list"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -389,7 +389,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringRoster"
-          contract_metric: "gathering_roster_list"
+          contract_metric: "circle_gathering_roster_list"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -399,7 +399,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringRoster"
-          contract_metric: "gathering_roster_list"
+          contract_metric: "circle_gathering_roster_list"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -409,7 +409,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringsByHost"
-          contract_metric: "gathering_list_by_host"
+          contract_metric: "circle_gathering_list_by_host"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -419,7 +419,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringsByHost"
-          contract_metric: "gathering_list_by_host"
+          contract_metric: "circle_gathering_list_by_host"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -429,7 +429,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringsBySource"
-          contract_metric: "gathering_list_by_source"
+          contract_metric: "circle_gathering_list_by_source"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -439,7 +439,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ListGatheringsBySource"
-          contract_metric: "gathering_list_by_source"
+          contract_metric: "circle_gathering_list_by_source"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -449,8 +449,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.PauseGatheringAdmission"
-          contract_metric: "gathering_admission_pause"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_admission_pause"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -459,8 +459,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.PauseGatheringAdmission"
-          contract_metric: "gathering_admission_pause"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_admission_pause"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -469,8 +469,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.PublishGathering"
-          contract_metric: "gathering_publish"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_publish"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -479,8 +479,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.PublishGathering"
-          contract_metric: "gathering_publish"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_publish"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -489,7 +489,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ReinstateGatheringParticipant"
-          contract_metric: "gathering_participant_reinstate"
+          contract_metric: "circle_gathering_participant_reinstate"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -499,7 +499,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ReinstateGatheringParticipant"
-          contract_metric: "gathering_participant_reinstate"
+          contract_metric: "circle_gathering_participant_reinstate"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -509,8 +509,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.RemoveGatheringParticipant"
-          contract_metric: "gathering_participant_remove"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_participant_remove"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -519,8 +519,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.RemoveGatheringParticipant"
-          contract_metric: "gathering_participant_remove"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_participant_remove"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -529,8 +529,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ResumeGatheringAdmission"
-          contract_metric: "gathering_admission_resume"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_admission_resume"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -539,8 +539,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ResumeGatheringAdmission"
-          contract_metric: "gathering_admission_resume"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_admission_resume"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -549,8 +549,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ReviewGatheringApplication"
-          contract_metric: "gathering_application_review"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_application_review"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -559,8 +559,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.ReviewGatheringApplication"
-          contract_metric: "gathering_application_review"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_application_review"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -569,7 +569,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.RevokeGatheringCoHost"
-          contract_metric: "gathering_cohost_revoke"
+          contract_metric: "circle_gathering_cohost_revoke"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -579,7 +579,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.RevokeGatheringCoHost"
-          contract_metric: "gathering_cohost_revoke"
+          contract_metric: "circle_gathering_cohost_revoke"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -589,7 +589,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.RevokeGatheringInvitation"
-          contract_metric: "gathering_invitation_revoke"
+          contract_metric: "circle_gathering_invitation_revoke"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -599,7 +599,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.RevokeGatheringInvitation"
-          contract_metric: "gathering_invitation_revoke"
+          contract_metric: "circle_gathering_invitation_revoke"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -609,8 +609,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.SafetyTerminateGathering"
-          contract_metric: "gathering_safety_terminate"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_safety_terminate"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -619,8 +619,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.SafetyTerminateGathering"
-          contract_metric: "gathering_safety_terminate"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_safety_terminate"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -629,7 +629,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.TransferGatheringOrganizer"
-          contract_metric: "gathering_organizer_transfer"
+          contract_metric: "circle_gathering_organizer_transfer"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -639,7 +639,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.TransferGatheringOrganizer"
-          contract_metric: "gathering_organizer_transfer"
+          contract_metric: "circle_gathering_organizer_transfer"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -649,7 +649,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.UnwatchGatheringAvailability"
-          contract_metric: "gathering_availability_unwatch"
+          contract_metric: "circle_gathering_availability_unwatch"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -659,7 +659,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.UnwatchGatheringAvailability"
-          contract_metric: "gathering_availability_unwatch"
+          contract_metric: "circle_gathering_availability_unwatch"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -669,8 +669,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.UpdateGathering"
-          contract_metric: "gathering_update"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_update"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -679,8 +679,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.UpdateGathering"
-          contract_metric: "gathering_update"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_update"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -689,8 +689,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.WatchGatheringAvailability"
-          contract_metric: "gathering_availability_watch"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_availability_watch"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_duration_seconds_bucket
@@ -699,8 +699,8 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.WatchGatheringAvailability"
-          contract_metric: "gathering_availability_watch"
-          commercial_status: "blocked"
+          contract_metric: "circle_gathering_availability_watch"
+          commercial_status: "ready"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
       - record: quwoquan_circle_contract_operation_requests_total
@@ -709,7 +709,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.WithdrawGatheringApplication"
-          contract_metric: "gathering_application_withdraw"
+          contract_metric: "circle_gathering_application_withdraw"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -719,7 +719,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering.WithdrawGatheringApplication"
-          contract_metric: "gathering_application_withdraw"
+          contract_metric: "circle_gathering_application_withdraw"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"

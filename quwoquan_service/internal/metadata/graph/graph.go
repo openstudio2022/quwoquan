@@ -808,7 +808,8 @@ func runtimeEntrypointMatchesObject(
 			entrypoint.ApplicationKind == ast.OperationKindCommand &&
 			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
 	case "event_handler":
-		return object.Kind == ast.ObjectKindAggregateRoot &&
+		return (object.Kind == ast.ObjectKindAggregateRoot ||
+			object.Kind == ast.ObjectKindProcessManager) &&
 			entrypoint.Phase == "event_command" &&
 			entrypoint.ApplicationKind == ast.OperationKindCommand &&
 			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
@@ -857,12 +858,21 @@ func lifecycleEventConsumersReady(object ast.Object) bool {
 				consumer.Kind != "subscription") {
 			return false
 		}
-		expectedKind := map[string]ast.ObjectKind{
-			"projector":     ast.ObjectKindProjection,
-			"event_handler": ast.ObjectKindAggregateRoot,
-			"subscription":  ast.ObjectKindAppendOnlyFact,
+		// event_handler 的宿主可以是 aggregate_root 或 process_manager；saga 靠消费
+		// 领域事件推进状态机，与 validate.eventConsumerOwnerKinds 保持同一闭集。
+		expectedKinds := map[string][]ast.ObjectKind{
+			"projector":     {ast.ObjectKindProjection},
+			"event_handler": {ast.ObjectKindAggregateRoot, ast.ObjectKindProcessManager},
+			"subscription":  {ast.ObjectKindAppendOnlyFact},
 		}[consumer.Kind]
-		if object.Kind != expectedKind {
+		matched := false
+		for _, expected := range expectedKinds {
+			if object.Kind == expected {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			return false
 		}
 		if _, duplicate := seenConsumers[consumer.Name]; duplicate {
@@ -933,7 +943,7 @@ func implementationEvidenceReady(
 		hasClient = hasClient || operation.ClientContract != nil
 	}
 	if object.Kind == ast.ObjectKindAggregateRoot || object.Kind == ast.ObjectKindRuntimeSession ||
-		object.Kind == ast.ObjectKindAppendOnlyFact {
+		object.Kind == ast.ObjectKindAppendOnlyFact || object.Kind == ast.ObjectKindProcessManager {
 		require("service.store", evidence.Service.Store)
 	}
 	// outbox 的必需性由对象自己声明的领域事件**投递保证**派生，既不由 kind 派生，也不由
@@ -950,7 +960,9 @@ func implementationEvidenceReady(
 	// CONTRACT.EVENT.UNKNOWN_PRODUCER 与 projector 的 source_events 解析都会拦住）。聚合
 	// 完全没有 events.yaml（既没声明也没否认）由
 	// `quwoquan_ops/gate/verify_object_evidence_closure.py` 在契约侧报独立缺口。
-	if hasCommand && object.Kind == ast.ObjectKindAggregateRoot && publishesDomainEvents {
+	if hasCommand && publishesDomainEvents &&
+		(object.Kind == ast.ObjectKindAggregateRoot ||
+			object.Kind == ast.ObjectKindProcessManager) {
 		if !requirePublicationSeam(evidence, missing) {
 			ready = false
 		}

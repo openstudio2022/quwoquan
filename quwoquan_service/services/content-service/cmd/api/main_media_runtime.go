@@ -24,11 +24,14 @@ import (
 	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocess "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/application"
 	mediareprocesspersistence "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/infrastructure/persistence"
+	originalaccessaudit "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/audit"
 	originalaccessapp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application"
 	originalaccesspersistence "quwoquan_service/services/content-service/internal/media/media_original_access_fact/infrastructure/persistence"
 	uploadsession "quwoquan_service/services/content-service/internal/media/media_upload_session/application"
 	uploadsessionstorage "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/objectstorage"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
+	originalaccessquotaapp "quwoquan_service/services/content-service/internal/media/original_access_quota/application"
+	originalaccessquotapersistence "quwoquan_service/services/content-service/internal/media/original_access_quota/infrastructure/persistence"
 
 	runtimeconfig "quwoquan_service/runtime/config"
 )
@@ -37,7 +40,7 @@ type mediaRuntimeComposition struct {
 	mediaService               *mediaapp.Facades
 	mediaUploadSessionService  *uploadsession.UseCases
 	mediaImageReprocessService *mediareprocess.Service
-	mediaOriginalAccessService *originalaccessapp.Service
+	originalAccessQuotaService *originalaccessquotaapp.Service
 	mediaObjectGateway         *mediainfra.ObjectGateway
 	commentServiceCore         *commentapp.CommentService
 }
@@ -52,6 +55,7 @@ func buildMediaRuntime(
 	healthChecker *rthealth.Checker,
 	mediaStore *mediaassetpersistence.MongoMediaStore,
 	mediaOriginalAccessStore *originalaccesspersistence.MongoStore,
+	originalAccessQuotaStore *originalaccessquotapersistence.MongoStore,
 	mediaImageReprocessStore *mediareprocesspersistence.MongoStore,
 	mediaUploadSessionStore *uploadsessionpersistence.MongoStore,
 	commentDataAdapter *commentpersistence.MongoCommentDataAdapter,
@@ -115,6 +119,9 @@ func buildMediaRuntime(
 	if mediaOriginalAccessStore == nil {
 		log.Fatal("content-service MediaOriginalAccessFact store is not configured")
 	}
+	if originalAccessQuotaStore == nil {
+		log.Fatal("content-service OriginalAccessQuota store is not configured")
+	}
 	if mediaImageReprocessStore == nil {
 		log.Fatal("content-service MediaImageReprocessRun store is not configured")
 	}
@@ -131,8 +138,11 @@ func buildMediaRuntime(
 		mediaapp.BindDataPorts(mediaStore),
 		mediaObjectGateway,
 	)
-	mediaOriginalAccessService := originalaccessapp.NewService(
-		mediaOriginalAccessStore,
+	originalAccessQuotaService := originalaccessquotaapp.NewService(
+		originalAccessQuotaStore,
+		originalaccessaudit.NewAppender(
+			originalaccessapp.NewService(mediaOriginalAccessStore),
+		),
 		mediaStore,
 		postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
 		mediaObjectGateway,
@@ -254,7 +264,7 @@ func buildMediaRuntime(
 		mediaService:               mediaService,
 		mediaUploadSessionService:  mediaUploadSessionService,
 		mediaImageReprocessService: mediaImageReprocessService,
-		mediaOriginalAccessService: mediaOriginalAccessService,
+		originalAccessQuotaService: originalAccessQuotaService,
 		mediaObjectGateway:         mediaObjectGateway,
 		commentServiceCore:         commentServiceCore,
 	}, closeIPLocationResolver

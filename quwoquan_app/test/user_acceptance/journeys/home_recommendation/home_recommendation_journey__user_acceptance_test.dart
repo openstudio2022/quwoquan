@@ -13,30 +13,9 @@
 ///   - 交集归因埋点                    <- intersection_attribution_test
 ///   - 关注主体横滑                    <- following_subject_strip_test
 ///
-/// gamma-local 数据现状（诚实标注，影响可在 App 内演示的范围）：
-///   1) 推荐频道已收口频道语义（B1）：feedQuery = {channel: recommend}，服务端
-///      GET /content/feed?channelId=recommend 进推荐引擎（FeedDiscovery + home
-///      surface + channelId 归因），identity/type 不再参与；seed 内容经引擎
-///      PostProjectionSource 兜底召回仍可返回。已按 env-seed-first 向 gamma
-///      quwoquan_content 注入 24 条多形态 moment
-///      （applier=quwoquan_service/services/content-service/cmd/jobs/seed-moment-channel/main.py，
-///      fixture=contracts/metadata/_shared/test_fixtures/
-///      content_recommendation_moment_channel.gamma_seed.json；全新非抑制作者 +
-///      全新 id t4hrec_moment_* + 既有 archived-* 媒体 object key，createdAt 递减唯一
-///      且由应用器运行时按当前 UTC 分钟置顶）。故「多形态卡片 + 连续下拉曝光不重复」现可在推荐频道 App 内真演示
-///      （用例 home_rec_multiform_feed_paginates_without_repeat）；page1/page2 无重叠的
-///      契约级证据见同目录 moment_feed_pagination_guest.json / _viewer.json。
-///      现网 alpha_moment_* 作者已被 gamma-local 真实 HTTP 验证链路的负反馈加入
-///      hidden_authors（预期生效非缺陷），
-///      故仅靠旧种子推荐频道只回 1 条 fixture_moment_001——本轮新种子用未抑制作者绕开。
-///   2) 个性化交集仅由 X-Client-User-Id 决定（auth-only=0 / 带 header=6/20）；
-///      gamma-local 无 JWT 校验网关（真实 HTTP smoke §1），App feed 读取按生产设计仅发送
-///      Authorization（由生产网关注入身份），不在端侧硬塞 X-Client-User-Id，故
-///      gamma-local 下交集行不渲染（环境/拓扑缺口）。新种子已在 tagRefs 写入含/不含
-///      交集兴趣标签（含交集混合数据就位），但交集行渲染本身仍受该 X-Client-User-Id
-///      环境缺口约束。本 Patrol user_acceptance 不改 lib 行为强制其渲染；交集渲染与
-///      span 跳转由上述 local_contract 守护、数据就绪由 gamma-local smoke 证明，本用例
-///      用「作者头像→用户主页」覆盖对象跳转链路。
+/// gamma-local 数据只接受当前 canonical immutable release activation；本用例不创建
+/// seed/fixture，也不向 App 注入身份或私有 URL。推荐分页、交集与作者跳转只消费环境
+/// 真实 Remote 结果；当前候选缺身份或内容前置时必须以可区分的验收失败终态退出。
 ///
 /// 执行方式：由 `run_environment_patrol_smoke.py` 消费 `gamma-local` topology
 /// 投影全部 canonical HTTPS/WSS endpoint，并在 Android 上安装 target 端口的

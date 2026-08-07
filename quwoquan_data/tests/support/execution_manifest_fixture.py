@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from content.execution.contracts import ExecutionState, ExecutionStateTransition
 from content.execution.identity import parse_execution_id
-from content.execution.queue_backend import freeze_execution_queue_backend
+from content.execution.queue.backend import freeze_execution_queue_backend
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import save_spec
 from content.execution.workspace import (

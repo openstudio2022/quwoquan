@@ -40,7 +40,7 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/c
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/user_service/persona_management/persona/profile_shell_scroll_utils.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
@@ -365,7 +365,7 @@ ContentPostViewData _profileBackgroundPost(String authorId) {
       postId: '${authorId}_cover_source',
       contentType: 'image',
       contentIdentity: 'work',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '封面来源用户',
       authorAvatarUrl:

@@ -1,7 +1,18 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// AssistantRun answer intent 写端口。
-abstract class AssistantAnswerRunCommandWriter {
+// AssistantRun 是 process_manager（saga）对象，端侧写面按
+// `APP_PROCESS_PORT_NAMING` 使用 `*ProcessCommandWriter`、读面使用
+// `*ProcessQuery`，与聚合的 `*CommandWriter` 在类型上不可混用。
+//
+// 三个 start 端口落在同一条 `StartAssistantRun` 流程启动操作上（都由
+// [AssistantRunIntentProcessCommandWriter.startAssistantRunIntent] 包成
+// [AssistantRunIntent] tagged union 提交），但它们授予调用方的能力不同：
+// 创作入口只应能发起 creationAssistance，不应顺带获得取消 Run 或发起任意
+// intent 的能力。这层能力隔离在 composition 中真实生效，因此保留三个窄端口，
+// 只统一为 process 命名。
+
+/// answer intent 的 process 写端口：以纯文本发起并可取消一次 Run。
+abstract class AssistantAnswerRunProcessCommandWriter {
   Future<AssistantRunEnvelopeWire> startAssistantRun({
     required String sessionId,
     required String text,
@@ -16,8 +27,8 @@ abstract class AssistantAnswerRunCommandWriter {
   });
 }
 
-/// AssistantRun generated tagged-union intent 的对象级写端口。
-abstract class AssistantRunIntentCommandWriter {
+/// generated tagged-union intent 的 process 写端口。
+abstract class AssistantRunIntentProcessCommandWriter {
   Future<AssistantRunEnvelopeWire> startAssistantRunIntent({
     required String sessionId,
     required String clientRequestId,
@@ -26,7 +37,7 @@ abstract class AssistantRunIntentCommandWriter {
   });
 }
 
-abstract class AssistantRunQuery {
+abstract class AssistantRunProcessQuery {
   Future<AssistantRunEnvelopeWire> getAssistantRun({required String runId});
 }
 
@@ -74,8 +85,9 @@ abstract class AssistantRunControlFacet {
   });
 }
 
-/// 创作辅助只创建 AssistantRun，不拥有独立执行路由。
-abstract class AssistantCreationRunCommandWriter {
+/// creationAssistance intent 的 process 写端口：创作辅助只创建 AssistantRun，
+/// 不拥有独立执行路由，也不获得取消能力。
+abstract class AssistantCreationRunProcessCommandWriter {
   Future<AssistantRunEnvelopeWire> startCreationRun({
     required String sessionId,
     required String clientRequestId,

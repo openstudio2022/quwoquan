@@ -10,13 +10,15 @@ from content.execution.support import DataIssue, DataIssueCode, ExecutionContext
 from content.execution.support import execution_root, read_json, write_json
 
 
-def persist_video_content_plan_absorb(
+def persist_content_plan_shortfall_absorb(
     execution_id: str,
     *,
     successful_names: list[str],
-    failed_names: list[str],
+    issues: list[DataIssue],
+    object_refs: Mapping[str, str],
+    carrier: str,
 ) -> None:
-    """Persist the ready/ineligible repartition after video oversample absorb."""
+    """Persist object-typed content-plan decisions for one partial closure."""
 
     from core.paths import now_iso
 
@@ -38,43 +40,54 @@ def persist_video_content_plan_absorb(
         for row in ineligible
         if str(row.get("entityId") or "").strip()
     }
-    for name in failed_names:
+    issues_by_ref: dict[str, list[DataIssue]] = defaultdict(list)
+    for issue in issues:
+        if issue.ref:
+            issues_by_ref[issue.ref].append(issue)
+    for name, target_issues in sorted(issues_by_ref.items()):
+        if name in successful:
+            continue
         if name in known_ineligible:
             continue
         ineligible.append(
             {
                 "entityId": name,
-                "lanes": ["video"],
-                "issues": [
-                    f"{name}: [DATA.MEDIA.PUBLISHABLE_SHORTFALL] content_plan "
-                    "oversample absorb; retained rights-cleared frames below minimum"
-                ],
-                "blockers": [
-                    {
-                        "code": "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
-                        "stage": "content_plan",
-                        "ref": name,
-                        "lane": "video",
-                        "recovery": "retry_source_discovery",
-                        "message": f"{name}: video oversample absorb after frame shortfall",
-                        "attrs": {"carrier": "video", "absorbed": "true"},
-                    }
-                ],
-                "recoveries": ["retry_source_discovery"],
+                "objectRef": object_refs.get(name) or name,
+                "lanes": [carrier],
+                "issues": [str(issue) for issue in target_issues],
+                "blockers": [issue.as_dict() for issue in target_issues],
+                "recoveries": sorted(
+                    {issue.recovery.value for issue in target_issues}
+                ),
             }
         )
+    typed_decisions = [
+        {
+            "objectRef": object_refs.get(issue.ref) or issue.ref,
+            "disposition": (
+                "qualified_partial"
+                if issue.ref in successful
+                else "discarded"
+            ),
+            "stage": issue.stage.value,
+            "issue": issue.code.value,
+            "recovery": issue.recovery.value,
+        }
+        for issue in issues
+    ]
     write_json(
         availability_path,
         {
             "schema": existing.get("schema")
             or "quwoquan_data.source_unavailable_targets",
             "executionId": execution_id,
-            "source": "content_plan_video_oversample_absorb",
+            "source": "content_plan_partial_closure",
             "updatedAt": now_iso(),
             "readyTargets": list(successful_names),
             "readyTargetCount": len(successful_names),
             "ineligibleTargets": ineligible,
             "ineligibleTargetCount": len(ineligible),
+            "contentPlanDecisions": typed_decisions,
         },
     )
 
@@ -185,18 +198,18 @@ def missing_source_diagnostic(
     }
 
 
-def absorb_video_content_plan_shortfalls(
+def absorb_content_plan_shortfalls(
     *,
     ctx: ExecutionContext,
     active_spec: Mapping[str, Any],
     items: list[dict[str, Any]],
     issues: list[DataIssue],
-    video_lane_enabled: bool,
+    carrier: str,
     persist_absorb: Callable[..., None],
 ) -> bool:
-    """Absorb only a rights-safe video oversample tail above approved quota."""
+    """Absorb object shortfalls whenever a non-empty real plan remains."""
 
-    if not video_lane_enabled or not issues:
+    if carrier not in {"article", "image", "video"} or not issues:
         return False
     from content.execution.spec_contract import approved_quota
 
@@ -206,7 +219,7 @@ def absorb_video_content_plan_shortfalls(
         DataIssueCode.SOURCE_MISSING,
         DataIssueCode.SOURCE_RETAINED_SHORTFALL,
     }
-    if len(items) < quota or any(issue.code not in absorbable_codes for issue in issues):
+    if not items or any(issue.code not in absorbable_codes for issue in issues):
         return False
     successful_names: list[str] = []
     seen: set[str] = set()
@@ -216,15 +229,18 @@ def absorb_video_content_plan_shortfalls(
         if name and name not in seen:
             seen.add(name)
             successful_names.append(name)
-    if len(successful_names) < quota:
+    if not successful_names:
         return False
-    failed_names = {
-        str(issue.ref or "").strip()
-        for issue in issues
-        if str(issue.ref or "").strip()
-    }
     scope = active_spec.setdefault("scope", {})
     coverage = list(scope.get("coverageTargets") or [])
+    object_refs: dict[str, str] = {}
+    for row in coverage:
+        if not isinstance(row, Mapping):
+            continue
+        name = str(row.get("name") or "").strip()
+        entity_type = str(row.get("entityType") or "").strip()
+        if name and entity_type:
+            object_refs[name] = f"/entity/{entity_type}/{name}"
     scope["coverageTargets"] = [
         row
         for row in coverage
@@ -233,11 +249,14 @@ def absorb_video_content_plan_shortfalls(
     persist_absorb(
         ctx.execution_id,
         successful_names=successful_names,
-        failed_names=sorted(failed_names),
+        issues=issues,
+        object_refs=object_refs,
+        carrier=carrier,
     )
     print(
-        "[content_plan] absorbed video oversample shortfall "
-        f"planned={len(successful_names)}/quota={quota} "
-        f"discarded={len(failed_names)}"
+        "[content_plan] absorbed object-level shortfall "
+        f"carrier={carrier} planned={len(items)} "
+        f"readyTargets={len(successful_names)}/quota={quota} "
+        f"shortfalls={len(issues)}"
     )
     return True

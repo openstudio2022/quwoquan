@@ -34,7 +34,7 @@ def _reconcile_completed_publish_state(ctx: ExecutionContext) -> bool:
         return True
     if _is_homepage_only_execution(ctx):
         from content.execution.controller.publish import _publishable_homepage_names
-        from content.execution.qualification import finalize_execution_qualification
+        from content.execution.planning.qualification import finalize_execution_qualification
 
         try:
             qualification = finalize_execution_qualification(

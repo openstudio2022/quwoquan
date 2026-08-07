@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/local_video_file_readiness.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/local_video_playability.dart';
@@ -23,13 +22,15 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/design_system/media/media_creation_bottom_button.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 part 'video_editor_page_state.dart';
 part 'video_editor_page_state_cover.dart';
 
 /// 本地视频剪辑；持久草稿在父链 `CreateEditorState`（`ContentPublishDraftComposite`）。
 /// 剪辑结果回写草稿后，发布确认页的帖子元数据预览与 `publish_draft_projection_bridge`
 ///（`postReadPreviewFromPublishConfirmSummary`）同源。
-class VideoEditorPage extends StatefulWidget {
+class VideoEditorPage extends ConsumerStatefulWidget {
   const VideoEditorPage({
     super.key,
     required this.sourceVideoPath,
@@ -56,7 +57,7 @@ class VideoEditorPage extends StatefulWidget {
   final LocalVideoFileReadyProbe? videoFileReadyProbe;
 
   @override
-  State<VideoEditorPage> createState() => _VideoEditorPageState();
+  ConsumerState<VideoEditorPage> createState() => _VideoEditorPageState();
 }
 
 class _EditorSection extends StatelessWidget {

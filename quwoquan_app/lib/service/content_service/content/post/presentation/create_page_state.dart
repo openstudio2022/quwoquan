@@ -135,7 +135,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       onFlushDirty: (reason) => _saveDraft(silent: true, flushReason: reason),
       onFlushFailure: (error, stackTrace, reason) {
         unawaited(
-          AppExceptionTelemetryService.instance.recordHandledException(
+          ref.read(exceptionTelemetryPortProvider).recordHandledException(
             source: 'content.create.draft_autosave.$reason',
             error: error,
             stackTrace: stackTrace,
@@ -625,7 +625,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       );
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'content.create.video_thumbnail',
           error: error,
           stackTrace: stackTrace,
@@ -650,7 +650,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
       );
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'content.create.video_metadata',
           error: error,
           stackTrace: stackTrace,
@@ -673,6 +673,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (state.imagePaths.isNotEmpty) {
       final firstImagePath = state.imagePaths.first.trim();
       if (firstImagePath.isNotEmpty &&
+          ref.read(platformCapabilitiesProvider).hasLocalFileSystem &&
           !firstImagePath.startsWith('http://') &&
           !firstImagePath.startsWith('https://') &&
           !firstImagePath.startsWith('media:')) {
@@ -684,17 +685,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
           );
           final captureMetadata = ref
               .read(mediaCaptureMetadataExtractorProvider)
-              .extract(bytes);
-          final available = captureMetadata.availableGroups;
-          settings = settings.copyWith(
-            captureMetadata: captureMetadata,
-            captureDisclosure: settings.captureDisclosure.intersection(
-              available,
-            ),
+              .extractMediaCaptureMetadata(bytes);
+          settings = writeSelectedMediaCaptureMetadata(
+            settings,
+            captureMetadata,
           );
         } catch (error, stackTrace) {
           unawaited(
-            AppExceptionTelemetryService.instance.recordHandledException(
+            ref.read(exceptionTelemetryPortProvider).recordHandledException(
               source: 'content.create.capture_metadata_extract',
               error: error,
               stackTrace: stackTrace,
@@ -710,7 +708,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
     } catch (error, stackTrace) {
       circleLoadUnavailable = true;
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'content.create.publish_circle_options',
           error: error,
           stackTrace: stackTrace,

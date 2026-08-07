@@ -210,7 +210,7 @@ def _content_plan_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
         # 防止历史 agent 误写的 packet/briefs 把 post 车道当文章推进。
         _clean_content_plan_outputs(ctx)
         return True, []
-    from content.execution.source_ready_scope import source_ready_runtime_spec
+    from content.execution.planning.source_ready_scope import source_ready_runtime_spec
 
     _prune_content_plan_extra_briefs(ctx)
     issues = validate_content_plan(

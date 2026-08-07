@@ -6,7 +6,7 @@ import json
 from core import paths
 from core.control_types import TargetSelector
 from content.execution import workspace
-from content.execution.recipe import RuntimeExecutionRequest
+from content.execution.planning.recipe.model import RuntimeExecutionRequest
 from verify import verify_runtime_input_ownership
 
 

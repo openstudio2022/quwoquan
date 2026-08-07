@@ -4,24 +4,28 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  const postPresentation =
+      'lib/service/content_service/content/post/presentation';
+  const commentPresentation =
+      'lib/service/content_service/content/comment/presentation';
   const componentFiles = <String, List<String>>{
     'article_editor': <String>[
-      'lib/ui/content/entry/widgets/article_editor.dart',
-      'lib/ui/content/entry/widgets/article_editor_content_builders.dart',
+      '$postPresentation/article_editor.dart',
+      '$postPresentation/article_editor_content_builders.dart',
     ],
     'article_editor_accessories': <String>[
-      'lib/ui/content/entry/widgets/article_editor_accessory_panels.dart',
-      'lib/ui/content/entry/widgets/article_editor_accessory_style_panels.dart',
-      'lib/ui/content/entry/widgets/article_editor_accessory_selection_panels.dart',
-      'lib/ui/content/entry/widgets/article_editor_accessory_controls.dart',
+      '$postPresentation/article_editor_accessory_panels.dart',
+      '$postPresentation/article_editor_accessory_style_panels.dart',
+      '$postPresentation/article_editor_accessory_selection_panels.dart',
+      '$postPresentation/article_editor_accessory_controls.dart',
     ],
     'comment_input_overlay': <String>[
-      'lib/ui/content/comments/widgets/comment_input_overlay.dart',
-      'lib/ui/content/comments/widgets/comment_input_overlay_components.dart',
+      '$commentPresentation/comment_input_overlay.dart',
+      '$commentPresentation/comment_input_overlay_components.dart',
     ],
     'content_share_sheet': <String>[
-      'lib/ui/content/share/content_share_sheet.dart',
-      'lib/ui/content/share/content_share_sheet_components.dart',
+      '$postPresentation/content_share_sheet.dart',
+      '$postPresentation/content_share_sheet_components.dart',
     ],
   };
 

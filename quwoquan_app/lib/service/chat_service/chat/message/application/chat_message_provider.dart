@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
@@ -400,7 +399,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       } catch (error, stackTrace) {
         // 产品遥测通道不可用不影响发送语义，但必须进入独立 runtime 错误面。
         unawaited(
-          AppExceptionTelemetryService.instance.recordHandledException(
+          ref.read(exceptionTelemetryPortProvider).recordHandledException(
             source: 'chat.send_message.operation_result',
             error: error,
             stackTrace: stackTrace,
@@ -437,7 +436,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'chat.message.retry_send',
           error: error,
           stackTrace: stackTrace,
@@ -563,7 +562,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
     } catch (error, stackTrace) {
       // best-effort：快照水合失败降级为原始消息，上报保留观测面。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'chat.message.hydrate_sender_snapshots',
           error: error,
           stackTrace: stackTrace,
@@ -661,7 +660,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
     if (messages.isEmpty) return;
     try {
       final resolvedScope = cacheScope ?? await _resolveTimelineScope();
-      if (resolvedScope == null) return;
+      if (resolvedScope == null || !ref.mounted) return;
       await ref
           .read(chatMessageTimelineCacheProvider)
           .writeMessages(scope: resolvedScope, messages: messages);
@@ -677,7 +676,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
   Future<void> _removePersistedMessage(String messageId) async {
     try {
       final cacheScope = await _resolveTimelineScope();
-      if (cacheScope == null) return;
+      if (cacheScope == null || !ref.mounted) return;
       await ref
           .read(chatMessageTimelineCacheProvider)
           .removeCachedMessage(scope: cacheScope, messageId: messageId);
@@ -695,8 +694,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
     required Object error,
     required StackTrace stackTrace,
   }) {
+    // 本地时间线读写失败是已处理失败：上报本身绝不能再抛。离开会话页后 notifier 已
+    // 释放，此时 `ref.read` 会抛 UnmountedRefException 并从 catch 块里逃逸出去，把
+    // 一次可降级的缓存失败升级成打断会话装载的未捕获异常。
+    if (!ref.mounted) {
+      return;
+    }
     unawaited(
-      AppExceptionTelemetryService.instance.recordHandledException(
+      ref.read(exceptionTelemetryPortProvider).recordHandledException(
         source: 'chat.message.local_timeline.$operation',
         error: error,
         stackTrace: stackTrace,

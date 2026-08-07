@@ -10,6 +10,8 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
 /// 圈子已从主页一级 Tab 收口到统计区入口。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -27,6 +29,10 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
+      ...sealedCloudBoundaryOverrides(),
+      behaviorRepositoryProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),

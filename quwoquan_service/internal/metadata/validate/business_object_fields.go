@@ -187,6 +187,7 @@ func requiresFieldSource(kind ast.ObjectKind) bool {
 		ast.ObjectKindOwnedEntity,
 		ast.ObjectKindValueObject,
 		ast.ObjectKindAppendOnlyFact,
+		ast.ObjectKindProcessManager,
 		ast.ObjectKindProjection:
 		return true
 	default:

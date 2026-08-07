@@ -48,12 +48,43 @@ DATA_EXECUTIONS_ROOT = DATA_OUTPUT_ROOT / "tasks"
 DATA_LOCAL_ROOT = DATA_OUTPUT_ROOT / "local"
 DATA_CACHE_ROOT = DATA_LOCAL_ROOT / "cache"
 DATA_WORKSPACE_ROOT = DATA_LOCAL_ROOT / "workspace"
+CONTENT_CAMPAIGN_WORKSPACES_ROOT = DATA_CACHE_ROOT / "content-campaign-workspaces"
+CONTENT_CAMPAIGN_CAPSULES_ROOT = (
+    CONTENT_CAMPAIGN_WORKSPACES_ROOT / "content-addressed-capsules"
+)
+RESEARCH_SCALE_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "research-scale"
+CAMPAIGN_SCALE_EVIDENCE_ROOT = (
+    RESEARCH_SCALE_WORKSPACE_ROOT / "campaign-evidence"
+)
+RESEARCH_SCALE_PROMOTIONS_ROOT = RESEARCH_SCALE_WORKSPACE_ROOT / "promotions"
 SOURCE_ACQUISITION_ROOT = DATA_WORKSPACE_ROOT / "source-acquisition"
 DATA_RUNTIME_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "runtime"
 RELEASE_IDENTITY_INCIDENTS_ROOT = DATA_WORKSPACE_ROOT / "release-identity-incidents"
+RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT = (
+    DATA_WORKSPACE_ROOT / "release-identity-incident-migrations"
+)
 DATA_GC_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "gc"
 DATA_QUARANTINE_ROOT = DATA_WORKSPACE_ROOT / "quarantine"
 RELEASE_ROOT = DATA_OUTPUT_ROOT / "releases"
+
+CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF = CAMPAIGN_SCALE_EVIDENCE_ROOT.relative_to(
+    OUTPUT_ROOT
+).as_posix()
+RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF = RESEARCH_SCALE_PROMOTIONS_ROOT.relative_to(
+    OUTPUT_ROOT
+).as_posix()
+
+
+def campaign_scale_evidence_root(*, output_root: Path = OUTPUT_ROOT) -> Path:
+    """Return the canonical disposable workspace for campaign scale evidence."""
+
+    return Path(output_root) / CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF
+
+
+def research_scale_promotions_root(*, output_root: Path = OUTPUT_ROOT) -> Path:
+    """Return the canonical disposable workspace for research promotions."""
+
+    return Path(output_root) / RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF
 
 # Internal implementation alias.  It deliberately resolves to the single
 # execution work-package root; callers must not create a separate runtime tree.

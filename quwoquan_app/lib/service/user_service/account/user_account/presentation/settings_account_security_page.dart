@@ -7,7 +7,6 @@ import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/di/account_closure_local_data_dependencies.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/design_system/layout/web_page_max_width_frame.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -26,6 +25,7 @@ import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 class SettingsAccountSecurityPage extends ConsumerStatefulWidget {
   const SettingsAccountSecurityPage({super.key});
@@ -232,7 +232,7 @@ class _SettingsAccountSecurityPageState
       cleanupReceiptPersisted = true;
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'account_closure_local_cleanup_receipt',
           error: error,
           stackTrace: stackTrace,
@@ -247,7 +247,7 @@ class _SettingsAccountSecurityPageState
     } catch (error, stackTrace) {
       sessionController.forceGuestAfterTerminalAccountClosure();
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'account_closure_local_session_cleanup',
           error: error,
           stackTrace: stackTrace,
@@ -262,7 +262,7 @@ class _SettingsAccountSecurityPageState
       }
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'account_closure_local_privacy_cleanup',
           error: error,
           stackTrace: stackTrace,

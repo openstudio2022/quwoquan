@@ -95,7 +95,7 @@
         "playCount", "likeCount", "commentCount", "shareCount",
         "favoriteCount", "observedAt", "provider", "topic", "timeBucket",
         "popularityScore", "popularityPercentile", "rankingEligible",
-        "rankingIneligibleReason", "comparisonCandidateCount"
+        "ineligibleReason", "comparisonCandidateCount"
       ],
       "additionalProperties": false,
       "properties": {
@@ -116,7 +116,7 @@
           ]
         },
         "rankingEligible": {"type": "boolean"},
-        "rankingIneligibleReason": {"type": "string"},
+        "ineligibleReason": {"type": "string"},
         "comparisonCandidateCount": {"type": "integer", "minimum": 0}
       }
     },

@@ -1,4 +1,3 @@
-"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.control_types import ExecutionStage, StageStatus
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
@@ -51,7 +50,7 @@ def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
 def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
     from content.execution.agent.auto_research import _run_download_auto_research
     from content.execution.recovery.download_gate import _download_retry_entity_ids, _stale_source_plan_entities
-    from content.execution.recovery.download_unresolved import _build_prepare_homepage_unresolved_entities, _download_plan_repair_exhausted_unresolved, _download_plan_unresolved_entities, _format_download_unresolved, _homepage_source_failure_entities, _write_download_availability, absorb_download_shortfall_if_quota_met
+    from content.execution.recovery.download_unresolved import _build_prepare_homepage_unresolved_entities, _download_plan_repair_exhausted_unresolved, _download_plan_unresolved_entities, _format_download_unresolved, _homepage_source_failure_entities, _write_download_availability, absorb_download_shortfall_if_any_ready
     from content.execution.recovery.stage_reset import _source_plan_filled, _source_plan_issue_records
     from content.execution.controller.checkpoint_binding import source_plan_binding_failure
 
@@ -105,7 +104,7 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
             pre_unresolved,
             source="download_plan",
         )
-        pre_absorbed = absorb_download_shortfall_if_quota_met(
+        pre_absorbed = absorb_download_shortfall_if_any_ready(
             ctx,
             pre_availability,
             stage=DataIssueStage.DOWNLOAD_PLAN,
@@ -261,7 +260,7 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
         missing = full_missing
     deterministic = _download_plan_repair_exhausted_unresolved(ctx, unresolved)
     if deterministic:
-        absorbed = absorb_download_shortfall_if_quota_met(
+        absorbed = absorb_download_shortfall_if_any_ready(
             ctx,
             availability,
             stage=DataIssueStage.DOWNLOAD_PLAN,
@@ -288,7 +287,7 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
         )
     # Oversample media lanes may keep retryable tails forever. Once the audited
     # ready pool already meets approvedQuota, absorb the remainder and advance.
-    absorbed = absorb_download_shortfall_if_quota_met(
+    absorbed = absorb_download_shortfall_if_any_ready(
         ctx,
         availability,
         stage=DataIssueStage.DOWNLOAD_PLAN,
@@ -359,7 +358,7 @@ def _checkpoint_content_plan(ctx: ExecutionContext) -> StageResult:
                 fallback_stage=ExecutionStage.DOWNLOAD_PLAN,
             )
         issues = issue_messages(auto_issues)
-    from content.execution.source_ready_scope import source_ready_runtime_spec
+    from content.execution.planning.source_ready_scope import source_ready_runtime_spec
 
     runtime_spec = source_ready_runtime_spec(ctx.execution_id, active_spec)
     quotas = (runtime_spec.get("content") or {}).get("quotas") or {}
@@ -427,18 +426,19 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
     from content.execution.controller.homepage_authoring import homepage_quota_verdict
 
     verdict = homepage_quota_verdict(ctx)
-    if verdict.passed:
+    if verdict.qualified_count > 0:
         for line in verdict.discard_summary():
             print(f"[build_homepage] {line}")
+        closure = "达成规模里程碑" if verdict.passed else "partial 准出"
         return StageResult(
             ExecutionStage.BUILD_HOMEPAGE,
             CHECKPOINT,
             StageStatus.DONE,
-            f"实体主页达标 {verdict.qualified_count}/{verdict.approved_quota}（配额门通过，"
+            f"实体主页达标 {verdict.qualified_count}/{verdict.approved_quota}（{closure}，"
             f"{len(verdict.discarded)} 个对象丢弃不重试）",
         )
-    # 配额未达成时才回退 source：底稿与实体不匹配的对象本身由过采吸收，
-    # 只有过采后仍补不齐配额，才说明区域来源供给不足、必须重找 source。
+    # 只有零合格对象才回退 source。配额未达成由 review/publish receipt 记 partial，
+    # 不能把已有合格对象连同 source/media shortfall 一起误杀。
     # 关键：个别 failure.json 不足以证明候选池耗尽——只要 runtime 活跃池里
     # 仍有足够「非 source-failure」待创作对象，就继续派发 author，而不是烧 ReAct。
     from content.execution.controller.homepage_authoring import _homepage_pending_entities
@@ -474,7 +474,7 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
             f"quota_gap={quota_gap}; continue author fleet"
         )
     issues = verdict.blocking_issues()
-    from content.execution.reliabletask_jobs import prepare_reliable_author_jobs
+    from content.execution.queue.reliabletask.jobs import prepare_reliable_author_jobs
 
     prepare_reliable_author_jobs(ctx, "build_homepage")
     combined_issues = list(finalize_issues or []) + list(issues)

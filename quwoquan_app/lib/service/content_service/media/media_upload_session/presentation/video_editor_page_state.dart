@@ -1,6 +1,6 @@
 part of 'video_editor_page.dart';
 
-class _VideoEditorPageState extends State<VideoEditorPage> {
+class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
   VideoPlayerController? _controller;
   late final IosVideoEditingService _editingService;
 
@@ -110,7 +110,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       await _seekToCurrentRangeStart();
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'content.video_editor.initialize',
           error: error,
           stackTrace: stackTrace,
@@ -157,7 +157,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       });
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        ref.read(exceptionTelemetryPortProvider).recordHandledException(
           source: 'content.video_editor.extract_frames',
           error: error,
           stackTrace: stackTrace,

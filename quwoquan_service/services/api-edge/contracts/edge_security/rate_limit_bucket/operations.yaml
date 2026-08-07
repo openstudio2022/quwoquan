@@ -12,6 +12,13 @@ runtime_entrypoints:
     facet: RateLimitAdmissionFacade
     method: admit
     object_owner: RateLimitBucket
+  telemetry:
+    metric: gateway_rate_limit_shared_admission
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 20
+    failure_ratio_percent: 0.1
 readiness_cases:
 - case_id: shared-admission-local
   spec_ref: specs/feature-tree/gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection/spec.md#gwt-001

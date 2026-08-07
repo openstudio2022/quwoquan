@@ -6,8 +6,8 @@ from argparse import Namespace
 from pathlib import Path
 
 import pytest
-from content.execution import prepare_campaign
-from content.execution.campaign_process import CAMPAIGN_CARRIERS
+from content.execution.campaign import prepare as prepare_campaign
+from content.execution.campaign.process import CAMPAIGN_CARRIERS
 from core.io import write_json
 
 

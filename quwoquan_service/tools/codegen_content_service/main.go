@@ -79,7 +79,7 @@ func main() {
 	if err := generateContentImageVariantPolicy(source, filepath.Join(outputRoot, "media", "media_asset")); err != nil {
 		exitErr(fmt.Errorf("generate content image variant policy: %w", err))
 	}
-	if err := generateContentMediaOriginalAccessPolicy(source, filepath.Join(outputRoot, "media", "media_original_access_fact")); err != nil {
+	if err := generateContentMediaOriginalAccessPolicy(source, filepath.Join(outputRoot, "media", "original_access_quota")); err != nil {
 		exitErr(fmt.Errorf("generate content media original access policy: %w", err))
 	}
 	if err := generateHTTPScaffold(routeGroups, outputRoot); err != nil {
@@ -572,8 +572,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleListProfileInteractionActivitiesReceived(w, r)
 		{{- else if eq . "ListProfileInteractionActivitiesSent" }}
 		h.handleListProfileInteractionActivitiesSent(w, r)
-		{{- else if eq . "UpdateProfileInteractionState" }}
-		h.handleUpdateProfileInteractionState(w, r)
+		{{- else if eq . "AppendProfileInteractionReadFact" }}
+		h.handleAppendProfileInteractionReadFact(w, r)
 		{{- else if eq . "InitMediaUpload" }}
 		h.handleInitMediaUpload(w, r)
 		{{- else if eq . "CompleteMediaUpload" }}
@@ -596,14 +596,14 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleRecordMediaProcessingResult(w, r)
 		{{- else if eq . "UpdateMediaAssetAccessPolicy" }}
 		h.handleUpdateMediaAssetAccessPolicy(w, r)
-		{{- else if eq . "RequestOriginalImageAccess" }}
-		h.handleRequestOriginalImageAccess(w, r)
+		{{- else if eq . "ReserveOriginalImageAccessGrant" }}
+		h.handleReserveOriginalImageAccessGrant(w, r)
 		{{- else if eq . "SelectAutoVideoCover" }}
 		h.handleSelectAutoVideoCover(w, r)
 		{{- else if eq . "SelectManualVideoCover" }}
 		h.handleSelectManualVideoCover(w, r)
-		{{- else if eq . "CreateOutboundShare" }}
-		h.handleCreateOutboundShare(w, r)
+		{{- else if eq . "AppendOutboundShareFact" }}
+		h.handleAppendOutboundShareFact(w, r)
 		{{- else if eq . "LikePost" }}
 		h.handleLikePost(w, r, strings.TrimSpace(r.PathValue("postId")))
 		{{- else if eq . "UnlikePost" }}

@@ -12,7 +12,12 @@ import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/transport/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 端侧耐久队列；唯一云端出口是 generated [ContentBehaviorCommandWriter]。
+/// 端侧「待追加事实队列」；唯一云端出口是 [ContentBehaviorFactAppender]。
+///
+/// 队列语义是 outbox 而非可变状态：条目是一次写入的不可变事实信封
+/// （`{actorPartitionKey, events}`，key 为写入时刻），只会被整条读出后成功即删、
+/// 不可重试即转 DLQ、超容量即转 DLQ；任何路径都不会读出条目改字段再写回。
+/// `occurredAt` 保留客户端事实发生时间，离线补传不得用服务端接收时间替换。
 const String kBehaviorPendingQueueBoxName = 'behavior_pending_queue';
 
 final class ActorScopedContentBehaviorOutboxPurger
@@ -42,7 +47,7 @@ final class DurableContentBehaviorRepository extends BehaviorRepository
     _bindLifecycle();
   }
 
-  final ContentBehaviorCommandWriter _writer;
+  final ContentBehaviorFactAppender _writer;
   final String Function()? _feedSessionIdProvider;
   final ActorQueuePartition _queuePartition;
   final ActorQueueStorage _queueStorage;

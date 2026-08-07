@@ -76,6 +76,8 @@ import '../../../../../support/runtime/platform/media/fake_video_player_platform
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import 'package:http/testing.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
 Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
   Map<String, Map<String, dynamic>> raw,
@@ -762,7 +764,7 @@ ContentPostViewData _photoPost({
       postId: id,
       contentType: 'image',
       contentIdentity: 'work',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-1',
       authorDisplayName: '摄影师',
       authorAvatarUrl: avatarUrl,
@@ -799,7 +801,7 @@ ContentPostViewData _videoPost({
       postId: 'video-1',
       contentType: 'video',
       contentIdentity: 'work',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-video',
       authorDisplayName: '视频作者',
       authorAvatarUrl: '',
@@ -833,7 +835,7 @@ ContentPostViewData _articlePost({
       postId: 'article-1',
       contentType: 'article',
       contentIdentity: 'work',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-3',
       authorDisplayName: '写作者',
       authorAvatarUrl: 'https://example.com/avatar-3.jpg',
@@ -970,7 +972,7 @@ ContentPostViewData _textMoment({
       postId: 'moment-1',
       contentType: 'micro',
       contentIdentity: 'moment',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-2',
       authorDisplayName: '圈友',
       authorAvatarUrl: 'https://example.com/avatar-2.jpg',
@@ -1033,8 +1035,17 @@ Widget _wrap(
   );
 }
 
+/// 该 double 覆写了全部网络入口，因此数据面 client 永不应被触达；
+/// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
+CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
+  client: MockClient(
+    (request) async =>
+        throw StateError('MediaDownloadCache double must not perform network IO'),
+  ),
+);
+
 final class _NoopMediaDownloadCache extends MediaDownloadCache {
-  _NoopMediaDownloadCache() : super();
+  _NoopMediaDownloadCache() : super(client: _unreachableDataPlaneClient());
 
   @override
   Future<String?> getCachedFilePath(String url) async => null;
@@ -5419,7 +5430,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is ColoredBox &&
-            widget.color == ArticlePaperPaletteColors.warmBlackPaper,
+            widget.color == ArticlePaperPaletteColors.darkPaperPaper,
       ),
       findsWidgets,
     );

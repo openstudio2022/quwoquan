@@ -41,8 +41,21 @@ relationships:
   reference_fields:
   - manualCoverAssetId
   target_object: content.MediaAsset
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.content.media_asset.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.content.media_asset.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - sourceSessionId 只能绑定一个完成且摘要一致的 MediaUploadSession
 - objectKey 与 sha256 创建后不可变，重复完成按摘要幂等返回同一资产

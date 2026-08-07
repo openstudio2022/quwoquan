@@ -576,7 +576,7 @@ def verify_app_single_egress(errors: list[str]) -> None:
     )
     require_source(
         "quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/"
-        "content_behavior_repository.dart",
+        "public/content_behavior_repository.dart",
         ["implements BehaviorReporter"],
         errors,
     )

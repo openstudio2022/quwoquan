@@ -1,6 +1,6 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.coverage import coverage_entity_type
+from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, Mapping, Path, _active_spec, _download_repair_lanes, data_issue, execution_root, issue_messages, load_execution_state, re, read_json, require_domain_etype, store, write_json
 from content.execution.target_integrity import frozen_target_names
 
@@ -200,7 +200,7 @@ def _download_artifact_issues(ctx: ExecutionContext) -> dict[str, tuple[DataIssu
     }
 
 
-def absorb_download_shortfall_if_quota_met(
+def absorb_download_shortfall_if_any_ready(
     ctx: ExecutionContext,
     availability: Mapping[str, Any] | None,
     *,
@@ -209,13 +209,18 @@ def absorb_download_shortfall_if_quota_met(
     auto_mode: Any,
     done_status: Any,
 ) -> Any | None:
-    """Absorb an ineligible oversample tail once the audited ready pool meets quota."""
+    """Advance an audited partial closure whenever at least one object is ready.
+
+    ``approvedQuota`` is a scale milestone, not a lane-wide publication veto.
+    The persisted availability partition remains the evidence for every
+    discarded candidate; only an empty ready set is a blocking shortfall.
+    """
     from content.execution.spec_contract import approved_quota
     from content.execution.support import StageResult
 
     ready_count = int((availability or {}).get("readyTargetCount") or 0)
     quota = approved_quota(ctx.execution_id)
-    if ready_count < quota:
+    if ready_count <= 0:
         return None
     ineligible_count = int((availability or {}).get("ineligibleTargetCount") or 0)
     return StageResult(
@@ -223,7 +228,7 @@ def absorb_download_shortfall_if_quota_met(
         auto_mode,
         done_status,
         (
-            f"{stage.value} 过采候选源缺口已吸收为丢弃池"
+            f"{stage.value} 候选源缺口已吸收为对象级丢弃池"
             f"（ready={ready_count}/quota={quota}, ineligible={ineligible_count}）"
         ),
     )
@@ -294,20 +299,50 @@ def _write_download_availability(
             if deterministic_lanes
             else DataRecoveryAction.RETRY_SOURCE_DISCOVERY
         )
-        blocker_code = DataIssueCode.SOURCE_PLAN_INVALID
-        blockers = [
-            data_issue(
-                blocker_code,
-                stage=DataIssueStage.DOWNLOAD_PLAN,
-                ref=entity_id,
-                lane=DataIssueLane(lane) if lane in {item.value for item in DataIssueLane} else DataIssueLane.ALL,
-                recovery=blocker_recovery,
-                message=str(issue),
-            ).as_dict()
-            for lane, lane_issues in lanes.items()
-            for issue in lane_issues
-            if str(issue).strip()
-        ]
+        from content.execution.recovery.download_gate import (
+            _download_research_lane_issues,
+        )
+
+        entity_type = (
+            coverage_entity_type_for_entity(ctx.spec, entity_id)
+            or coverage_entity_type(ctx.spec)
+        )
+        blockers: list[dict[str, Any]] = []
+        for lane, lane_issues in lanes.items():
+            typed_lane_issues = [
+                issue
+                for issue in _download_research_lane_issues(
+                    ctx,
+                    entity_id,
+                    entity_type,
+                    lane,
+                )
+                if isinstance(issue, DataIssue)
+            ]
+            if typed_lane_issues:
+                for issue in typed_lane_issues:
+                    payload = issue.as_dict()
+                    if payload not in blockers:
+                        blockers.append(payload)
+                continue
+            issue_lane = (
+                DataIssueLane(lane)
+                if lane in {item.value for item in DataIssueLane}
+                else DataIssueLane.ALL
+            )
+            for issue in lane_issues:
+                if not str(issue).strip():
+                    continue
+                payload = data_issue(
+                    DataIssueCode.SOURCE_PLAN_INVALID,
+                    stage=DataIssueStage.DOWNLOAD_PLAN,
+                    ref=entity_id,
+                    lane=issue_lane,
+                    recovery=blocker_recovery,
+                    message=str(issue),
+                ).as_dict()
+                if payload not in blockers:
+                    blockers.append(payload)
         for issue in entity_artifact_issues:
             payload = issue.as_dict()
             if payload not in blockers:
@@ -326,6 +361,7 @@ def _write_download_availability(
         ineligible.append(
             {
                 "entityId": entity_id,
+                "objectRef": f"/entity/{entity_type}/{entity_id}",
                 "lanes": sorted(all_lanes),
                 "issues": issues,
                 "blockers": blockers,

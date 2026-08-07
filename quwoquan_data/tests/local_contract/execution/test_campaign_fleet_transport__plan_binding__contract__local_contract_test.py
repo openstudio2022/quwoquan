@@ -4,9 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from content.execution import campaign_fleet_transport
-from content.execution.campaign_workspace import CampaignRuntimePaths
-from content.execution.reliabletask_transport import ReliableTaskFleetTransport
+from content.execution.campaign import fleet_transport as campaign_fleet_transport
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.queue.reliabletask.transport import ReliableTaskFleetTransport
 from core.io import read_json
 
 ROOT_ID = "20260805--travel-homepage-m3--china--scale-016"

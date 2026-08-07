@@ -6,7 +6,7 @@ commercial_defaults:
 api_routes:
   - method: POST
     path: /content/personas/{personaId}/interactions/{interactionId}/read-facts
-    operation: UpdateProfileInteractionState
+    operation: AppendProfileInteractionReadFact
     actor: persona
     application:
       kind: command
@@ -73,19 +73,19 @@ consumers:
     capabilities:
       - append_profile_interaction_read_fact
 readiness_cases:
-- case_id: update-profile-interaction-state-local
+- case_id: append-profile-interaction-read-fact-local
   spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
   producer: service
   layer: local_contract
-  target: {kind: operation, id: UpdateProfileInteractionState}
+  target: {kind: operation, id: AppendProfileInteractionReadFact}
   runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/profile_interaction_read_fact/application/read_fact__local_contract_test.go
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
-- case_id: update-profile-interaction-state-api
+- case_id: append-profile-interaction-read-fact-api
   spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
   producer: service
   layer: api_integration
-  target: {kind: operation, id: UpdateProfileInteractionState}
+  target: {kind: operation, id: AppendProfileInteractionReadFact}
   runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/profile_interaction_read_fact/http_mongo_transaction__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

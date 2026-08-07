@@ -5,8 +5,30 @@ import 'package:go_router/go_router.dart';
 
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
-import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
+import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/application/public/contact_discovery_repository.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/add_contact_page.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+
+/// 能力位差异边界只需要「通讯录发现读面存在且为空」。
+final class _EmptyContactDiscoveryRepository
+    implements ContactDiscoveryRepository {
+  const _EmptyContactDiscoveryRepository();
+
+  @override
+  Future<void> dismiss(String id) async {}
+
+  @override
+  Future<ContactDiscoveryResultView?> getLatest() async => null;
+
+  @override
+  Future<ContactDiscoveryResultView> initiate(List<String> hashedPhones) async {
+    return ContactDiscoveryResultView.empty;
+  }
+}
 
 Future<void> _pumpAddContactPage(
   WidgetTester tester,
@@ -14,7 +36,16 @@ Future<void> _pumpAddContactPage(
 ) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [platformCapabilitiesProvider.overrideWithValue(profile)],
+      overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        platformCapabilitiesProvider.overrideWithValue(profile),
+        profileEditQueryProvider(
+          AppUiSurfaces.addContact,
+        ).overrideWithValue(const MockUserProfileRepository()),
+        contactDiscoveryRepositoryProvider.overrideWithValue(
+          const _EmptyContactDiscoveryRepository(),
+        ),
+      ],
       child: MaterialApp.router(
         routerConfig: GoRouter(
           initialLocation: '/add-contact',

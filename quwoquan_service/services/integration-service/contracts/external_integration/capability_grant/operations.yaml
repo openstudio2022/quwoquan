@@ -14,6 +14,13 @@ runtime_entrypoints:
     facet: CapabilityGrantSessionFacade
     method: resolve
     object_owner: CapabilityGrant
+  telemetry:
+    metric: integration_capability_grant_resolve
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 50
+    failure_ratio_percent: 0.1
 readiness_cases:
 - case_id: resolve-capability-grant-local
   spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001

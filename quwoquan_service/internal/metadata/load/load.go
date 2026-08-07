@@ -19,8 +19,8 @@ import (
 )
 
 var objectTopLevelKeys = stringSet(
-	"kind", "description", "identity", "access", "relationships",
-	"taggable", "vector_enabled", "members",
+	"kind", "description", "identity", "access", "relationships", "members",
+	"search_policy", "assistant_access",
 	"counter_strategy", "relation_signal", "business_rules", "lifecycle",
 	"local_identity_reasons", "external_authority",
 )
@@ -234,6 +234,7 @@ func resolveObjectKind(top map[string]*yaml.Node) (ast.ObjectKind, bool, error) 
 func validObjectKind(kind ast.ObjectKind) bool {
 	switch kind {
 	case ast.ObjectKindAggregateRoot,
+		ast.ObjectKindProcessManager,
 		ast.ObjectKindProjection,
 		ast.ObjectKindExternalReference,
 		ast.ObjectKindAppendOnlyFact,
@@ -308,6 +309,18 @@ type runtimeEntrypointDocument struct {
 		Method      string `yaml:"method"`
 		ObjectOwner string `yaml:"object_owner"`
 	} `yaml:"application"`
+	Telemetry struct {
+		Metric     string   `yaml:"metric"`
+		Trace      bool     `yaml:"trace"`
+		Attributes []string `yaml:"attributes"`
+	} `yaml:"telemetry"`
+	SLO struct {
+		LatencyP95Milliseconds int     `yaml:"latency_p95_ms"`
+		FailureRatioPercent    float64 `yaml:"failure_ratio_percent"`
+		FreshnessP95Seconds    int     `yaml:"freshness_p95_seconds"`
+		BacklogMaxEvents       int     `yaml:"backlog_max_events"`
+		DeadLetterRatioPercent float64 `yaml:"dead_letter_ratio_percent"`
+	} `yaml:"slo"`
 }
 
 type routeDocument struct {
@@ -699,7 +712,19 @@ func loadService(
 			ObjectOwner:     strings.TrimSpace(entrypoint.Application.ObjectOwner),
 			SourceObjects:   trimStrings(entrypoint.SourceObjects),
 			Idempotency:     strings.TrimSpace(entrypoint.Idempotency),
-			SourcePath:      relativePath(metadataDir, path),
+			Telemetry: ast.TelemetryPolicy{
+				Metric:     strings.TrimSpace(entrypoint.Telemetry.Metric),
+				Trace:      entrypoint.Telemetry.Trace,
+				Attributes: trimStrings(entrypoint.Telemetry.Attributes),
+			},
+			SLO: ast.RuntimeEntrypointSLO{
+				LatencyP95Milliseconds: entrypoint.SLO.LatencyP95Milliseconds,
+				FailureRatioPercent:    entrypoint.SLO.FailureRatioPercent,
+				FreshnessP95Seconds:    entrypoint.SLO.FreshnessP95Seconds,
+				BacklogMaxEvents:       entrypoint.SLO.BacklogMaxEvents,
+				DeadLetterRatioPercent: entrypoint.SLO.DeadLetterRatioPercent,
+			},
+			SourcePath: relativePath(metadataDir, path),
 		})
 	}
 	return operations, runtimeEntrypoints, nil

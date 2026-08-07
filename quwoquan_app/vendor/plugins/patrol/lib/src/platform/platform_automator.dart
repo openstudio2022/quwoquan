@@ -3,6 +3,7 @@ import 'package:patrol/src/platform/android/android_automator.dart';
 import 'package:patrol/src/platform/android/android_automator_config.dart';
 import 'package:patrol/src/platform/android/android_automator_empty.dart'
     as empty_android_automator;
+import 'package:patrol/src/platform/android/android_automator_empty.dart'
     if (dart.library.io) 'package:patrol/src/platform/android/android_automator_native.dart'
     as native_android_automator;
 import 'package:patrol/src/platform/contracts/contracts.dart';
@@ -11,6 +12,7 @@ import 'package:patrol/src/platform/ios/ios_automator.dart';
 import 'package:patrol/src/platform/ios/ios_automator_config.dart';
 import 'package:patrol/src/platform/ios/ios_automator_empty.dart'
     as empty_ios_automator;
+import 'package:patrol/src/platform/ios/ios_automator_empty.dart'
     if (dart.library.io) 'package:patrol/src/platform/ios/ios_automator_native.dart'
     as native_ios_automator;
 import 'package:patrol/src/platform/selector.dart';
@@ -18,6 +20,7 @@ import 'package:patrol/src/platform/web/web_automator.dart';
 import 'package:patrol/src/platform/web/web_automator_config.dart';
 import 'package:patrol/src/platform/web/web_automator_empty.dart'
     as empty_web_automator;
+import 'package:patrol/src/platform/web/web_automator_empty.dart'
     if (dart.library.js_interop) 'package:patrol/src/platform/web/web_automator_native.dart'
     as native_web_automator;
 

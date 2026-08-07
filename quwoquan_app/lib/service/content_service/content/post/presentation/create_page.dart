@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_preparation_checkpoint.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_picker_port.dart';
@@ -70,6 +69,7 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/publish
 import 'package:quwoquan_app/service/content_service/content/post/application/content_publication_epoch.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_draft_store_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/publish_capture_metadata_writer.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_intent_queue_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/article_entity_mention_picker.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_draft_session_controller.dart';
@@ -80,6 +80,7 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/a
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_publish_result_sheet.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_publish_confirm_sheet.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 part 'create_page_state.dart';
 part 'create_page_state_helpers.dart';
 part 'create_page_state_chrome_helpers.dart';

@@ -8,11 +8,14 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/runtime/di/shell/main_app_shell.dart';
 import 'package:quwoquan_app/runtime/shell/web_app_install_banner.dart';
@@ -46,6 +49,44 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../support/service/content_service/content/post/mock_content_repository.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../support/service/notification_service/notification_delivery/notification/app_message_typed_double.dart';
+import '../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
+import '../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+
+/// 壳只需要「相交」读面存在且为空：这里给对象级最小 typed double，
+/// 不承载任何业务数据集合。
+final class _EmptyIntersectionRepository implements IntersectionRepository {
+  const _EmptyIntersectionRepository();
+
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async =>
+      const IntersectionInboxSummary(
+        totalCount: 0,
+        totalNewCount: 0,
+        dimensions: <IntersectionDimensionTally>[],
+        generatedAt: '2026-08-07T00:00:00Z',
+        totalStrengthenedCount: 0,
+        totalReactivatedCount: 0,
+      );
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = CloudApiQueryDefaults.intersectionListLimit,
+  }) async => const <IntersectionReason>[];
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
+  }) async => const <IntersectionReason>[];
+}
 
 List<Override> _shellTestOverrides({
   required bool authenticated,
@@ -59,6 +100,22 @@ List<Override> _shellTestOverrides({
       visitRecorderService ?? VisitRecorderService(),
     ),
     ...mockContentFacetOverrides(MockContentRepository()),
+    // 壳会把 /chat 与 /profile 页签一起挂进 IndexedStack：这两条对象级 typed port
+    // 必须显式给出，否则 provider 图会一路走到被封死的 generated client。
+    chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+    appMessageQueryProvider.overrideWithValue(
+      const EmptyAppMessageQueryDouble(),
+    ),
+    greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
+    authorImpactQueryProvider(
+      AppUiSurfaces.profileHome,
+    ).overrideWithValue(const MockUserProfileRepository()),
+    profileQueryProvider(
+      AppUiSurfaces.profileHome,
+    ).overrideWithValue(const MockUserProfileRepository()),
+    intersectionRepositoryProvider.overrideWithValue(
+      const _EmptyIntersectionRepository(),
+    ),
     if (store != null) authSessionStoreProvider.overrideWithValue(store),
     authSessionControllerProvider.overrideWith(
       flippable
@@ -1565,9 +1622,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text(DiscoveryText.webPcCreateTabGallery), findsOneWidget);
-      expect(find.text(DiscoveryText.webPcCreateTabText), findsOneWidget);
-      expect(find.text(DiscoveryText.webPcCreateTabDrafts), findsOneWidget);
+      // 添加入口是动作工作台：顶部不再挂上下文 tab，首层固定三个动作卡片。
+      expect(find.byKey(TestKeys.webCreateActionPublishContent), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsOneWidget);
+      expect(find.text(DiscoveryText.webPcCreateTabGallery), findsNothing);
       expect(find.text(DiscoveryText.webPcSearchHintCreate), findsOneWidget);
     });
 
@@ -1632,9 +1691,10 @@ void main() {
 
       expect(find.byType(WebInlineLoginSurface), findsNothing);
       expect(find.byType(LoginPage), findsNothing);
-      expect(find.text(DiscoveryText.webPcCreateTabGallery), findsOneWidget);
-      expect(find.text(DiscoveryText.webPcCreateTabText), findsOneWidget);
-      expect(find.text(DiscoveryText.webPcCreateTabDrafts), findsOneWidget);
+      // 游客先看到创建工作台的动作面板，登录拦截下沉到具体账号态动作。
+      expect(find.byKey(TestKeys.webCreateActionPublishContent), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsOneWidget);
+      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsOneWidget);
       await tester.pump(const Duration(milliseconds: 1200));
     });
   });

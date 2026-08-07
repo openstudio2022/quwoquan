@@ -7,6 +7,33 @@ import 'package:shared_preferences/shared_preferences.dart';
 const String _defaultNicknameSample = '新同学_260622_6698692';
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
+/// `AuthSessionGrant` 的 wire 必填面（accountState / identityOrigin /
+/// logicalShard / anonymousRetentionPolicy / personaCount /
+/// sessionRememberTtlSeconds）全部是 NOT_NULL，云端每次登录授权都会下发。
+/// 本套件只验证 AuthSessionStore 的本机持久化语义，所以用例只声明自己断言的字段，
+/// 其余由 canonical 默认值补齐，避免每个用例重复整份授权体。
+AuthSessionGrant _grant(Map<String, dynamic> overrides) {
+  final accountHint = overrides['accountHint'];
+  return decodeAuthSessionGrant(<String, dynamic>{
+    'accountState': 'active',
+    'identityOrigin': 'phone',
+    'logicalShard': 1,
+    'anonymousRetentionPolicy': 'preserve',
+    'personaCount': 1,
+    'sessionRememberTtlSeconds': 0,
+    ...overrides,
+    if (accountHint is Map<String, dynamic>)
+      'accountHint': <String, dynamic>{
+        'nicknameCustomized': false,
+        'avatarUrl': '',
+        'avatarAssetId': '',
+        'maskedPhone': '',
+        'identityOrigin': 'phone',
+        ...accountHint,
+      },
+  });
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -15,7 +42,7 @@ void main() {
 
   test('saveLoginGrant persists tokens and active persona', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
-    final result = decodeAuthSessionGrant(<String, dynamic>{
+    final result = _grant(<String, dynamic>{
       'accessToken': 'access-1',
       'refreshToken': 'refresh-1',
       'ownerId': 'owner-1',
@@ -41,7 +68,7 @@ void main() {
       final store = AuthSessionStore(
         secureStorage: const FlutterSecureStorage(),
       );
-      final result = decodeAuthSessionGrant(<String, dynamic>{
+      final result = _grant(<String, dynamic>{
         'accessToken': 'access-2',
         'refreshToken': 'refresh-2',
         'ownerId': 'owner-2',
@@ -151,7 +178,7 @@ void main() {
         secureStorage: const FlutterSecureStorage(),
       );
       await store.saveLoginGrant(
-        decodeAuthSessionGrant(<String, dynamic>{
+        _grant(<String, dynamic>{
           'accessToken': 'access-soft',
           'refreshToken': 'refresh-soft',
           'ownerId': 'owner-soft',
@@ -187,7 +214,7 @@ void main() {
   test('softLogout uses cloud-issued remember TTL for expiry', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
     await store.saveLoginGrant(
-      decodeAuthSessionGrant(<String, dynamic>{
+      _grant(<String, dynamic>{
         'accessToken': 'access-ttl',
         'refreshToken': 'refresh-ttl',
         'ownerId': 'owner-ttl',
@@ -215,7 +242,7 @@ void main() {
         secureStorage: const FlutterSecureStorage(),
       );
       await store.saveLoginGrant(
-        decodeAuthSessionGrant(<String, dynamic>{
+        _grant(<String, dynamic>{
           'accessToken': 'access-hard',
           'refreshToken': 'refresh-hard',
           'ownerId': 'owner-hard',
@@ -251,7 +278,7 @@ void main() {
         secureStorage: const FlutterSecureStorage(),
       );
       await store.saveLoginGrant(
-        decodeAuthSessionGrant(<String, dynamic>{
+        _grant(<String, dynamic>{
           'accessToken': 'access-expired',
           'refreshToken': 'refresh-expired',
           'ownerId': 'owner-expired',
@@ -285,7 +312,7 @@ void main() {
         secureStorage: const FlutterSecureStorage(),
       );
       await store.saveLoginGrant(
-        decodeAuthSessionGrant(<String, dynamic>{
+        _grant(<String, dynamic>{
           'accessToken': 'access-old',
           'refreshToken': 'refresh-old',
           'ownerId': 'owner-refresh',
@@ -327,7 +354,7 @@ void main() {
   test('saveLoginGrant(phoneOtp) 记住完整手机号，软退出保留供自动预填', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
     await store.saveLoginGrant(
-      decodeAuthSessionGrant(<String, dynamic>{
+      _grant(<String, dynamic>{
         'accessToken': 'access-phone',
         'refreshToken': 'refresh-phone',
         'ownerId': 'owner-phone',
@@ -351,7 +378,7 @@ void main() {
   test('彻底退出清除本机完整手机号', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
     await store.saveLoginGrant(
-      decodeAuthSessionGrant(<String, dynamic>{
+      _grant(<String, dynamic>{
         'accessToken': 'access-phone',
         'refreshToken': 'refresh-phone',
         'ownerId': 'owner-phone',
@@ -370,7 +397,7 @@ void main() {
   test('非手机号登录方式不持有完整手机号', () async {
     final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
     await store.saveLoginGrant(
-      decodeAuthSessionGrant(<String, dynamic>{
+      _grant(<String, dynamic>{
         'accessToken': 'access-wechat',
         'refreshToken': 'refresh-wechat',
         'ownerId': 'owner-wechat',

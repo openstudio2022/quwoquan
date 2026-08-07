@@ -7,7 +7,7 @@
 
 按触达范围追加：
 
-- 触及 `lib/ui/**/pages/**` 或 `lib/runtime/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
+- 触及 `lib/service/**/presentation/**` 页面或 `lib/runtime/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
 - 触及登录入口、登录成功/关闭回退路径：补读 `.cursor/rules/15-auth-entry-no-loop.mdc`
 - 触及平台差异、Web/鸿蒙能力：补读 `.cursor/rules/14-cross-platform-portability.mdc`
 - 触及 `lib/design_system/pageflip/**` 或 `lib/service/content_service/content/post/presentation/article_reader/pageflip/**`：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
@@ -15,7 +15,7 @@
 ## App 端硬约束
 
 - UI 不得硬编码颜色、间距、字号、交互热区、中文文案；统一走 `AppColors`、`AppSpacing`、`AppTypography`、`UITextConstants`/`l10n`。
-- UI、`lib/app/**`、`lib/core/**` 不直连 mock 目录，也不直接实例化 Mock/Remote Repository。
+- 对象 `presentation/**`、`application/**` 与横切 `lib/runtime/**` 不直连 mock 目录，也不直接实例化 Mock/Remote Repository。
 - Repository、route、surface、operation、错误码、decoder context 以 metadata/codegen 为真相源。
 - 结构化错误统一走 `RuntimeFailure`、`RuntimeRecoveryPolicy`、runtime mapper；不要回退到原始字符串异常。
 - 用户可见错误提示必须来自 codegen 错误枚举、`toDisplayMessage(context.l10n)`、`UITextConstants` 或 l10n；禁止在 UI/Provider 中 switch 硬编码错误码字符串或中文提示。
@@ -38,19 +38,19 @@
 - production 装配按 domain 分片：`lib/runtime/di/<domain>_dependencies.dart` 是该 domain
  唯一可以命名 `Remote*` 实现的地方，Provider 只声明 typed port。缺文件时按同一范式新建，
  不要重建跨 domain 的单一 composition 或 adapter 枚举。
-- `lib/core/providers/app_providers.dart` 只是 domain 级 barrel，不得声明 Provider。新增或
+- `lib/runtime/di/app_providers.dart` 只是 domain 级 barrel，不得声明 Provider。新增或
  搬迁 Provider 落到所属 domain 的 provider 库，再由 barrel `export`。
 
 ## l10n ARB key 归属约定
 
 `lib/l10n/app_zh.arb` 与 `lib/l10n/app_en.arb` 是无法按 domain 分片的共享写点，只能靠
-key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
+key 命名表达归属，避免 15 条 domain 并行流互相覆盖。
 
 - 新增或重命名的 key 一律使用 `<domain>_` 前缀，前缀后仍为 lowerCamelCase，例如
  `content_postDeleteConfirmTitle`、`user_loginPhoneCodeResendTemplate`。
-- `<domain>` 只能取 `quwoquan_ops/gate/object_path_map.py` 派生出的 16 个 domain：
+- `<domain>` 只能取 `quwoquan_ops/gate/object_path_map.py` 派生出的 15 个 domain：
  `assistant`、`chat`、`circle`、`content`、`entity`、`gateway`、`integration`、
- `notification`、`ops`、`realtime`、`recommendation`、`rtc`、`search`、`tag`、`travel`、
+ `notification`、`ops`、`realtime`、`recommendation`、`rtc`、`search`、`tag`、
  `user`。不属于任何 domain 的横切文案使用 `runtime_` 或 `design_system_` 前缀，与
  `object_path_map.py` 的两个横切根同名。
 - 两个 arb 文件必须同 key 同序改动；`@key` 元数据紧跟其 key。
@@ -86,13 +86,13 @@ key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
 
 `cloudRuntimeEnvironmentProvider` 走 `CloudRuntimeEnvironment.fromCompileTime()`，因此
 「测试怎样满足 generated operation client 所在的 provider 图」是一个跨全部 domain 的共享
-写点。唯一被认可的机制在 `test/support/harness/cloud_boundary_test_scope.dart`。
+写点。唯一被认可的机制在 `test/support/runtime/cloud_boundary_test_scope.dart`。
 
 - Provider / Widget 的 `local_contract` 测试**不得**让 provider 图解析到 generated
   operation client：`ProviderScope` / `ProviderContainer` 的 `overrides` 必须以
   `sealedCloudBoundaryOverrides()` 开头，再叠加本测试真正依赖的对象级 typed port
   （`*CommandWriter` / `*Query`）override。样板见
-  `test/local_contract/ui/interest_match/interest_match_page__local_contract_test.dart`。
+  `test/local_contract/runtime/shell/interest_match/interest_match_page__local_contract_test.dart`。
 - 被测对象就是 generated client / decoder / 错误映射本身时，改用
   `generatedClientBoundaryOverrides(transport: MockClient(...))`：environment 由测试显式
   声明为字面值，传输必须是测试交出的 `MockClient`。样板见
@@ -120,7 +120,9 @@ key 命名表达归属，避免 16 条 domain 并行流互相覆盖。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
-import '../../../support/harness/cloud_boundary_test_scope.dart';
+// 对象测试位于 test/local_contract/service/<service>/<context>/<object>/，
+// 相对 test/ 根共五级，因此指向 test/support/runtime/ 的相对深度如下。
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 final class _InMemoryFooCommandWriter implements FooCommandWriter {
   final List<FooCommand> submitted = <FooCommand>[];

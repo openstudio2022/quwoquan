@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from content.execution.reviewed_closure_adoption_contract import (
+from content.execution.closure.adoption_contract import (
     canonical_digest,
     file_digest,
     validate_release_identity_incident,

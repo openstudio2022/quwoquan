@@ -1,22 +1,28 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/transport/links/trusted_endpoint_policy.dart';
 import 'package:quwoquan_app/runtime/platform/content_addressed_upload_headers.dart';
 
-/// Object-storage data-plane adapter. Authentication headers are intentionally
-/// absent because authorization is carried only by the server-issued URL.
+/// Object-storage data-plane adapter.
+///
+/// 走 `mediaDataPlaneHttpClientProvider` 注入的 [CloudHttpClient]，与 Gateway
+/// 调用共享超时预算、`CloudErrorMapper` 错误映射、传输失败分类与 API 延迟观测。
+/// 鉴权头故意缺席：授权只由服务端签发的 URL 承载。
 final class RemoteContentMediaObjectUploader {
-  RemoteContentMediaObjectUploader({http.Client? client, String? uploadBaseUrl})
-    : _uploadBaseUri = Uri.tryParse(
-        uploadBaseUrl ?? CloudRuntimeConfig.mediaUploadBaseUrl,
-      ),
-      _client = client ?? http.Client(),
-      _ownsClient = client == null;
+  RemoteContentMediaObjectUploader({
+    required CloudHttpClient client,
+    String? uploadBaseUrl,
+  }) : _uploadBaseUri = Uri.tryParse(
+         uploadBaseUrl ?? CloudRuntimeConfig.mediaUploadBaseUrl,
+       ),
+       _client = client;
 
-  final http.Client _client;
-  final bool _ownsClient;
+  final CloudHttpClient _client;
   final Uri? _uploadBaseUri;
 
   ContentMediaStreamObjectUpload get uploadStream => stream;
@@ -50,7 +56,7 @@ final class RemoteContentMediaObjectUploader {
           ..contentLength = contentLength;
     try {
       final responseFuture = _client
-          .send(request)
+          .sendDataPlaneStream(request)
           .then<(http.StreamedResponse?, Object?, StackTrace?)>(
             (response) => (response, null, null),
             onError: (Object error, StackTrace stackTrace) =>
@@ -84,9 +90,9 @@ final class RemoteContentMediaObjectUploader {
     }
   }
 
-  void dispose() {
-    if (_ownsClient) _client.close();
-  }
+  /// 传输层生命周期归 `mediaDataPlaneHttpClientProvider` 的 `ref.onDispose`，
+  /// 本 adapter 不持有 client 所有权，因此这里没有可释放的资源。
+  void dispose() {}
 }
 
 bool _isRetryableStatus(int statusCode) =>

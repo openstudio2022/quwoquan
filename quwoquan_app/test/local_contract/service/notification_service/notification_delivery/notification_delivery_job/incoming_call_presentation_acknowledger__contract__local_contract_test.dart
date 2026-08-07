@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification_delivery_job/application/public/incoming_call_presentation_acknowledger.dart';
 
 final class _RecordingAcknowledger
-    implements IncomingCallPresentationAcknowledger {
+    implements NotificationDeliveryJobProcessCommandWriter {
   IncomingCallPresentationReceipt? receipt;
 
   @override

@@ -4,10 +4,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_send_outbox.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_message_interaction.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_recording.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +46,7 @@ void main() {
   test('文本命令 drain 成功后出队且按原 clientMsgId 重放', () async {
     final sentClientMsgIds = <String>[];
     final outbox = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (command) async {
         sentClientMsgIds.add(command.clientMsgId);
@@ -64,6 +67,7 @@ void main() {
 
   test('队列项跨实例持久化：重启后仍可 drain（杀进程语义）', () async {
     final first = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (_) async => throw StateError('offline'),
       sendQueuedVoice: (_, _) async => VoiceSendStatus.failed,
@@ -76,6 +80,7 @@ void main() {
 
     final sentClientMsgIds = <String>[];
     final second = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (command) async {
         sentClientMsgIds.add(command.clientMsgId);
@@ -94,6 +99,7 @@ void main() {
 
   test('发送失败保留队列项等待下次连通恢复', () async {
     final outbox = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (_) async => throw StateError('still offline'),
       sendQueuedVoice: (_, _) async => VoiceSendStatus.failed,
@@ -110,6 +116,7 @@ void main() {
   test('语音项 drain 成功后出队，失败保留', () async {
     var voiceStatus = VoiceSendStatus.failed;
     final outbox = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (_) async {},
       sendQueuedVoice: (_, _) async => voiceStatus,
@@ -132,6 +139,7 @@ void main() {
   test('文本与语音统一队列保持入队顺序', () async {
     final delivered = <String>[];
     final outbox = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (command) async {
         delivered.add('command:${command.clientMsgId}');
@@ -161,6 +169,7 @@ void main() {
 
   test('分享卡片消息不入队（发起面即时反馈）', () async {
     final outbox = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (_) async {},
       sendQueuedVoice: (_, _) async => VoiceSendStatus.completed,
@@ -187,6 +196,7 @@ void main() {
     final delivered = <String>[];
     final deletedTemporaryFiles = <String>[];
     final outbox = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (command) async {
         delivered.add(command.clientMsgId);
@@ -216,6 +226,7 @@ void main() {
     await outbox.dispose();
 
     final reopened = ChatSendOutbox(
+      telemetry: _SilentExceptionTelemetryPort(),
       maxQueueSize: 10,
       sendCommand: (_) async {},
       sendQueuedVoice: (_, _) async => VoiceSendStatus.completed,
@@ -224,4 +235,37 @@ void main() {
     await reopened.init();
     expect(reopened.queueLength, 0);
   });
+}
+
+/// 本用例关注离线队列语义，不关注遥测内容：用最小 typed double 吞掉上报，
+/// 既满足注入契约，也不让测试依赖真实 telemetry 单例。
+final class _SilentExceptionTelemetryPort implements ExceptionTelemetryPort {
+  @override
+  Future<void> recordGlobalException({
+    required String source,
+    required String exceptionText,
+    required String stackText,
+    String pageId = '',
+    String pageName = '',
+    String surfaceId = '',
+    String routeId = '',
+    String operationId = '',
+    RuntimeFailureBase? runtimeFailure,
+    String exceptionType = '',
+  }) async {}
+
+  @override
+  Future<void> recordHandledException({
+    required String source,
+    required Object error,
+    required StackTrace stackTrace,
+    String pageId = '',
+    String pageName = '',
+    String surfaceId = '',
+    String routeId = '',
+    String operationId = '',
+  }) async {}
+
+  @override
+  Future<void> flushPending() async {}
 }

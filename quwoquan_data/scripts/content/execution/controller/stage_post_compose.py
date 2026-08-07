@@ -5,7 +5,7 @@ from content.execution.support import AUTO, Any, DataIssue, DataIssueCode, DataI
 
 def _run_post_plan(ctx: ExecutionContext) -> StageResult:
     """校验 content_plan 已物化 brief。"""
-    from content.execution.source_ready_scope import source_ready_runtime_spec
+    from content.execution.planning.source_ready_scope import source_ready_runtime_spec
     from content.post.content_plan_validation import validate_content_plan
     from content.post.content_plan_state import load_content_plan_packet
     active_spec = source_ready_runtime_spec(ctx.execution_id, _active_spec(ctx))

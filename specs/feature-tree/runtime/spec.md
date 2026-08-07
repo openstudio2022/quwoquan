@@ -107,7 +107,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
   - 本领域负责：提供 Public Web、地图、日历/提醒和旅行外链的受控运行边界。
   - 进入条件：网络、Connector 和 surface policy 允许。
   - 交付给下游的结果：带来源/能力状态的 observation 或 receipt。
-  - 不负责：不规划 Trip、不预订支付。
+  - 不负责：不规划 GatheringPlan、不预订支付。
 - [`JNY-013 / SCN-031`](../spec.md#scn-031)
   - 本领域负责：为主动提醒提供受管 Provider、后台执行与真实投递能力。
   - 进入条件：Trigger/Subscription 已由 Assistant 验证。

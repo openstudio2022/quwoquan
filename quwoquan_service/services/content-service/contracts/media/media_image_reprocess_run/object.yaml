@@ -1,4 +1,4 @@
-kind: aggregate_root
+kind: process_manager
 description: '对显式 image MediaAsset 集合执行一次可暂停、可恢复、可回滚的 descriptor
 
   重处理。它只编排同一 MediaAsset 内的 descriptor revision，不创建 variant
@@ -10,9 +10,9 @@ identity:
   fields:
   - runId
   version_field: version
-  version_source: field
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: public_contract_only
   queries: named_reader
 relationships:
@@ -25,6 +25,20 @@ relationships:
   reference_fields:
   - assetIds
   target_object: content.MediaAsset
+search_policy:
+  exposed: none
+  not_exposed_reason: "流程编排对象只表达内部推进状态与补偿进度，没有用户可检索语义。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "服务内部投影与编排状态不构成小趣可用上下文，只服务所属域自身推进。"
 business_rules:
 - runId、assetIds、targetDerivativePolicyVersion 在创建后不可变；assetIds 必须去重、非空且数量为 1..500
 - 仅显式传入的 processing=ready image MediaAsset 可进入 run；非 image、未 ready 或 deleted asset 必须被拒绝

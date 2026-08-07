@@ -7776,7 +7776,7 @@ def _command_package_unlocked(
         for service in services:
             svc_cmd = [
                 "bash",
-                "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+                "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh",
                 "--service",
                 service,
                 "--env",
@@ -17579,7 +17579,7 @@ def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, A
     started_monotonic, started_at = _start_timing()
     package_command = [
         "bash",
-        "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+        "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh",
         "--service",
         args.service,
         "--env",

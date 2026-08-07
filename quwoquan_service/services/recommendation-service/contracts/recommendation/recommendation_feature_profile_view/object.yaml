@@ -12,6 +12,20 @@ relationships:
 - {name: exposure, target_object: recommendation.RecommendationExposureFact, reference_fields: [lastExposureFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
 - {name: excluded_content, target_object: content.Post, reference_fields: [negativeContentIds], kind: reference, cardinality: 'N:N', consistency: eventual, access: event, on_delete: detach}
 - {name: hidden_authors, target_object: user.Persona, reference_fields: [hiddenAuthorIds], kind: reference, cardinality: 'N:N', consistency: eventual, access: event, on_delete: tombstone}
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "通讯录匹配等高敏个人数据对小趣完全关闭，不存在最小可开放子集。"
 business_rules:
 - 特征只从 typed 事实和公开关系事件投影，任何在线排序调用不得回写长期特征。
 - TagFeedbackRecorded 只由本对象消费：click/dislike 分别设置显式正/负 tagAffinity，ignore 清除，correct 仅推进事实收据且不臆造偏好。

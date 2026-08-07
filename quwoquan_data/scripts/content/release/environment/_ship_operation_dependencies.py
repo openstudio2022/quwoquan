@@ -27,6 +27,7 @@ class ShipOperationDependencies:
     run_creator_importer: Callable[..., Path]
     run_content_importer: Callable[..., Any]
     run_homepage_importer: Callable[..., Any]
+    write_environment_coverage_receipt: Callable[..., Path]
     write_release_evidence: Callable[..., Any]
     write_verification_result: Callable[..., Any]
     write_tag_consumer_verification: Callable[..., Path]

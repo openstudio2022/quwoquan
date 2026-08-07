@@ -34,6 +34,21 @@ local_identity_reasons:
     an aggregate Store identity
   traceId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.assistant_turn_view.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.assistant.assistant_turn_view.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 只消费 AssistantRun 的已提交事件，绝不从模型流式片段直接形成完成态。
 - 同一 turnId 的事件按 run sequence 幂等应用，终态之后拒绝回退到处理中。

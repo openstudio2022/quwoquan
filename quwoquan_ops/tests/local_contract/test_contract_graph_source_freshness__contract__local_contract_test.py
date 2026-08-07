@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 VERIFIER_PATH = (
     ROOT
-    / "quwoquan_service/scripts/verify/verify_contract_graph_single_track.py"
+    / "quwoquan_service/scripts/verify/contract_graph/verify_contract_graph_single_track.py"
 )
 
 

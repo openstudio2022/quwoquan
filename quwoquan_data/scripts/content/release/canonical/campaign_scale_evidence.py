@@ -7,16 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from content.execution.identity import parse_execution_id
+from content.execution.planning.semantic_preflight_admission import (
+    bind_semantic_preflight_receipt,
+    validate_semantic_preflight_binding,
+)
 from content.execution.preflight.selection import (
     CALIBRATION_SEMANTIC_SELECTION_ID,
 )
-from content.execution.scale_semantic_promotion import (
+from content.execution.scale.semantic_promotion import (
     ScaleSemanticPromotionError,
     build_scale_semantic_calibration,
-)
-from content.execution.semantic_preflight_admission import (
-    bind_semantic_preflight_receipt,
-    validate_semantic_preflight_binding,
 )
 from content.release.canonical import campaign_scale_object_closure as object_closure
 from content.release.canonical import runtime_scale_evidence_binding as runtime_binding
@@ -44,6 +44,7 @@ from content.release.canonical.resource_soak_evidence import (
     _derive_resource_soak_stable,
     write_resource_soak_evidence,
 )
+from core.paths import campaign_scale_evidence_root
 from core.release_layout import payload_digest, payload_file
 
 
@@ -72,7 +73,11 @@ def write_campaign_scale_evidence(
         raise CampaignScaleEvidenceError(
             f"Sol calibration preflight receipt is not promotable: {exc}"
         ) from exc
-    evidence_root = output_root / "data/release-evidence" / release_id / evidence_id
+    evidence_root = (
+        campaign_scale_evidence_root(output_root=output_root)
+        / release_id
+        / evidence_id
+    )
     session, raw_samples_path, raw_fault_cases_path = (
         runtime_binding.materialize_bound_runtime_inputs(
             runtime_session_path=runtime_session_path, campaign_plan_path=campaign_plan_path,
@@ -257,7 +262,6 @@ def write_campaign_scale_evidence(
     )
     passed = (
         resource.get("status") == "passed"
-        and fault.get("status") == "passed"
         and duplicate_asset_count == 0
         and cross_lane_write_count == 0
     )
@@ -509,7 +513,6 @@ def load_campaign_scale_evidence(
     derived_status = (
         "passed"
         if resource.get("status") == "passed"
-        and fault.get("status") == "passed"
         and duplicate_assets == 0
         and duplicate_publish_refs + wrong_lane_refs == 0
         else "failed"

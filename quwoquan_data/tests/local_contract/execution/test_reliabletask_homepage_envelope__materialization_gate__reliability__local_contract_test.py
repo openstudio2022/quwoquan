@@ -18,7 +18,7 @@ for path in (DATA_ROOT / "scripts", DATA_ROOT / "tests"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import reliabletask_worker  # noqa: E402
+from content.execution.queue.reliabletask import worker as reliabletask_worker
 
 
 def _homepage_job() -> SimpleNamespace:

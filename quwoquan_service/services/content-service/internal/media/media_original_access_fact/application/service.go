@@ -4,212 +4,103 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
-	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
-	originalaccesserrors "quwoquan_service/services/content-service/generated/media/media_original_access_fact"
-	mediaassetports "quwoquan_service/services/content-service/internal/media/media_asset/domain/ports"
 	originalaccessmodel "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/model"
 	originalaccessports "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/ports"
 )
 
-type Command struct {
-	AssetID  string
-	ViewerID string
-	Purpose  string
+// Decision is one already-made original media access outcome that must be
+// audited. Every mutable input (grant deadline included) is decided by
+// OriginalAccessQuota before it reaches this port.
+type Decision struct {
+	AssetID        string
+	ViewerID       string
+	Purpose        string
+	Outcome        string
+	Reason         string
+	IdempotencyKey string
+	CommandDigest  string
+	DecidedAt      time.Time
+	GrantExpiresAt time.Time
 }
 
-type Result struct {
-	AssetID     string    `json:"mediaId"`
-	Status      string    `json:"status"`
-	OriginalURL string    `json:"originalUrl"`
-	MimeType    string    `json:"format"`
-	FileSize    int64     `json:"sizeBytes"`
-	ExpiresAt   time.Time `json:"expiresAt"`
-	TTLSeconds  int       `json:"ttlSeconds"`
-	AuditID     string    `json:"auditId"`
+// Record is the immutable identity of one appended audit fact.
+type Record struct {
+	AuditID   string
+	Outcome   string
+	ExpiresAt time.Time
+	Replayed  bool
 }
 
-type PostVisibilityReader interface {
-	CanViewerAccessPublishedMedia(context.Context, string, string) (bool, error)
-}
-
-type DeliveryURLSigner interface {
-	DeliveryURLUntil(context.Context, string, time.Time) (string, error)
-}
-
+// Service implements the MediaOriginalAccessAuditPort runtime entrypoint.
+// It appends immutable decision facts and holds no instance-level mutable state.
 type Service struct {
-	store      originalaccessports.Store
-	assets     mediaassetports.OriginalAccessReader
-	visibility PostVisibilityReader
-	urls       DeliveryURLSigner
-	now        func() time.Time
+	store originalaccessports.Store
 }
 
-type Option func(*Service)
-
-func WithClock(now func() time.Time) Option {
-	return func(service *Service) {
-		if now != nil {
-			service.now = now
-		}
+func NewService(store originalaccessports.Store) *Service {
+	if store == nil {
+		panic("MediaOriginalAccessFact audit port requires store")
 	}
+	return &Service{store: store}
 }
 
-func NewService(
-	store originalaccessports.Store,
-	assets mediaassetports.OriginalAccessReader,
-	visibility PostVisibilityReader,
-	urls DeliveryURLSigner,
-	options ...Option,
-) *Service {
-	if store == nil || assets == nil || visibility == nil || urls == nil {
-		panic("MediaOriginalAccessFact service requires store, asset reader, visibility reader and URL signer")
-	}
-	service := &Service{
-		store: store, assets: assets, visibility: visibility, urls: urls, now: time.Now,
-	}
-	for _, option := range options {
-		option(service)
-	}
-	return service
-}
-
-func (service *Service) Request(ctx context.Context, command Command) (Result, error) {
-	purpose := strings.ToLower(strings.TrimSpace(command.Purpose))
-	if purpose == "" {
-		purpose = "view"
-	}
-	if purpose != "view" && purpose != "save" {
-		return Result{}, rterr.NewInvalidArgument(
+func (service *Service) AppendAudit(ctx context.Context, decision Decision) (Record, error) {
+	if strings.TrimSpace(decision.CommandDigest) == "" {
+		return Record{}, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
-			"purpose 仅支持 view/save",
-			"original media access purpose must be view or save",
+			"审计事实缺少命令摘要",
+			"media original access audit requires a command digest",
 		)
 	}
-	encoded, err := json.Marshal(command)
+	fact := originalaccessmodel.Fact{
+		AuditID:        auditID(decision),
+		AssetID:        strings.TrimSpace(decision.AssetID),
+		ViewerID:       strings.TrimSpace(decision.ViewerID),
+		Purpose:        strings.ToLower(strings.TrimSpace(decision.Purpose)),
+		Outcome:        strings.TrimSpace(decision.Outcome),
+		Reason:         strings.TrimSpace(decision.Reason),
+		IdempotencyKey: strings.TrimSpace(decision.IdempotencyKey),
+		GrantedAt:      decision.DecidedAt.UTC(),
+	}
+	if fact.Outcome == "granted" {
+		fact.ExpiresAt = decision.GrantExpiresAt.UTC()
+	}
+	appended, err := service.store.Append(ctx, originalaccessports.AppendRequest{
+		Fact:          fact,
+		CommandDigest: strings.TrimSpace(decision.CommandDigest),
+	})
 	if err != nil {
-		return Result{}, unavailable(err)
+		return Record{}, Unavailable(err)
 	}
-	commandDigest := digestCommand("RequestOriginalImageAccess", encoded)
-	idempotencyKey := strings.TrimSpace(commandmeta.IdempotencyKey(ctx))
-	if idempotencyKey == "" {
-		return Result{}, rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"idempotencyKey 必填",
-			"media original access command requires idempotencyKey",
-		)
-	}
-	viewerID := strings.TrimSpace(command.ViewerID)
-	if viewerID == "" {
-		return Result{}, originalaccesserrors.AppErrorFromOriginalAccessDenied(
-			"original media access requires an authenticated viewer",
-		)
-	}
-	asset, found, err := service.assets.FindOriginalAccessAsset(ctx, strings.TrimSpace(command.AssetID))
-	if err != nil {
-		return Result{}, unavailable(err)
-	}
-	if !found {
-		return Result{}, mediaasseterrors.AppErrorFromMediaNotFound(
-			fmt.Sprintf("media aggregate %s not found", strings.TrimSpace(command.AssetID)),
-		)
-	}
-	now := service.now().UTC().Truncate(time.Millisecond)
-	appendDecision := func(outcome string, reason string) (originalaccessports.AppendResult, error) {
-		auditDigest := sha256.Sum256([]byte(strings.Join([]string{
-			idempotencyKey, asset.AssetID, viewerID, purpose, outcome, reason,
-		}, ":")))
-		fact := originalaccessmodel.Fact{
-			AuditID: "moa_" + hex.EncodeToString(auditDigest[:16]), AssetID: asset.AssetID,
-			ViewerID: viewerID, Purpose: purpose, Outcome: outcome, Reason: reason,
-			IdempotencyKey: idempotencyKey, GrantedAt: now,
-		}
-		if outcome == "granted" {
-			fact.ExpiresAt = now.Add(time.Duration(
-				originalaccesserrors.ContentMediaOriginalAccessGrantTTLSeconds,
-			) * time.Second)
-		}
-		request := originalaccessports.AppendRequest{Fact: fact, CommandDigest: commandDigest}
-		if outcome == "granted" {
-			request.RateLimit = originalaccessports.RateLimit{
-				MaxGrants: originalaccesserrors.ContentMediaOriginalAccessRateLimitMaxGrants,
-				Window: time.Duration(
-					originalaccesserrors.ContentMediaOriginalAccessRateLimitWindowSeconds,
-				) * time.Second,
-			}
-		}
-		return service.store.Append(ctx, request)
-	}
-	deny := func(reason string, debugMessage string) (Result, error) {
-		if _, appendErr := appendDecision("denied", reason); appendErr != nil {
-			return Result{}, unavailable(appendErr)
-		}
-		return Result{}, originalaccesserrors.AppErrorFromOriginalAccessDenied(debugMessage)
-	}
-	if asset.ProcessingStatus != "ready" || asset.MediaType != "image" {
-		return deny("asset_not_ready", "original media access requires a ready image asset")
-	}
-	if asset.AccessPolicy == "owner_only" && asset.OwnerID != viewerID {
-		return deny("asset_policy", "original media access owner-only policy denied viewer")
-	}
-	visible, err := service.visibility.CanViewerAccessPublishedMedia(ctx, asset.AssetID, viewerID)
-	if err != nil {
-		return Result{}, unavailable(err)
-	}
-	if !visible {
-		return deny("post_visibility", "no viewer-visible published Post references the media asset")
-	}
-	appended, err := appendDecision("granted", "authorized")
-	if err != nil {
-		var appError *rterr.AppError
-		if errors.As(err, &appError) &&
-			appError.Code.String() == originalaccesserrors.AppErrorFromOriginalAccessRateLimited("").Code.String() {
-			if _, auditErr := appendDecision("rate_limited", "rate_limit_exhausted"); auditErr != nil {
-				return Result{}, unavailable(auditErr)
-			}
-			return Result{}, appError
-		}
-		return Result{}, unavailable(err)
-	}
-	if appended.Fact.Outcome == "rate_limited" {
-		return Result{}, originalaccesserrors.AppErrorFromOriginalAccessRateLimited(
-			"media original access rate limit exhausted",
-		)
-	}
-	if appended.Fact.Outcome != "granted" {
-		return Result{}, originalaccesserrors.AppErrorFromOriginalAccessDenied(
-			"original media access replay did not produce a grant",
-		)
-	}
-	originalURL, err := service.urls.DeliveryURLUntil(ctx, asset.ObjectKey, appended.Fact.ExpiresAt)
-	if err != nil {
-		return Result{}, unavailable(err)
-	}
-	return Result{
-		AssetID: asset.AssetID, Status: "granted", OriginalURL: originalURL,
-		MimeType: asset.MimeType, FileSize: asset.FileSize, ExpiresAt: appended.Fact.ExpiresAt,
-		TTLSeconds: originalaccesserrors.ContentMediaOriginalAccessGrantTTLSeconds,
-		AuditID:    appended.Fact.AuditID,
+	return Record{
+		AuditID:   appended.Fact.AuditID,
+		Outcome:   appended.Fact.Outcome,
+		ExpiresAt: appended.Fact.ExpiresAt,
+		Replayed:  appended.Replayed,
 	}, nil
 }
 
-func digestCommand(name string, encoded []byte) string {
-	hasher := sha256.New()
-	_, _ = hasher.Write([]byte(name))
-	_, _ = hasher.Write([]byte{0})
-	_, _ = hasher.Write(encoded)
-	return hex.EncodeToString(hasher.Sum(nil))
+func auditID(decision Decision) string {
+	digest := sha256.Sum256([]byte(strings.Join([]string{
+		strings.TrimSpace(decision.IdempotencyKey),
+		strings.TrimSpace(decision.AssetID),
+		strings.TrimSpace(decision.ViewerID),
+		strings.ToLower(strings.TrimSpace(decision.Purpose)),
+		strings.TrimSpace(decision.Outcome),
+		strings.TrimSpace(decision.Reason),
+	}, ":")))
+	return "moa_" + hex.EncodeToString(digest[:16])
 }
 
-func unavailable(err error) error {
+// Unavailable normalizes infrastructure failures into the shared content
+// dependency error while preserving already-typed AppErrors.
+func Unavailable(err error) error {
 	var appError *rterr.AppError
 	if errors.As(err, &appError) {
 		return appError

@@ -78,7 +78,7 @@ CHAIN_FILES = (
     "quwoquan_ops/cli/prod/resolve_prod_release_state.py",
     "quwoquan_ops/gate/verify_environment_packaging_contract.py",
     "quwoquan_ops/policies/config-release/slo_thresholds.yaml",
-    "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+    "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh",
     ".github/workflows/service_pipeline.yml",
     ".github/workflows/delivery-gate.yml",
     ".github/workflows/pre-release-gate.yml",
@@ -384,7 +384,7 @@ REQUIRED_SOURCE_TOKENS = {
         '"qwq.ops_portal_package"',
         '"qwq.service_package"',
     ),
-    "quwoquan_service/scripts/runtime/build_service_env_package.sh": (
+    "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh": (
         '"schema": "qwq.service_package"',
     ),
     "quwoquan_ops/ci/render_environment_chain_timing_diagnostics.py": (

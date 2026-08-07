@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,20 +14,87 @@ const (
 	DataContentQueue    = "reliabletask.data.content_supply"
 )
 
+// DataContentCampaignBinding is the immutable M100 campaign owner identity.
+// It is copied into Mongo task payloads so live observation never relies on
+// process environment variables as evidence.
+type DataContentCampaignBinding struct {
+	RootExecutionID     string `json:"rootExecutionId"`
+	RunID               string `json:"campaignRunId"`
+	Generation          int    `json:"campaignGeneration"`
+	FencingToken        string `json:"campaignFencingToken"`
+	PlanDigest          string `json:"campaignPlanDigest"`
+	SourceRevision      string `json:"campaignSourceRevision"`
+	SourceDigest        string `json:"campaignSourceDigest"`
+	EntityCatalogDigest string `json:"campaignEntityCatalogDigest"`
+}
+
+func (b DataContentCampaignBinding) empty() bool {
+	return strings.TrimSpace(b.RootExecutionID) == "" &&
+		strings.TrimSpace(b.RunID) == "" &&
+		b.Generation == 0 &&
+		strings.TrimSpace(b.FencingToken) == "" &&
+		strings.TrimSpace(b.PlanDigest) == "" &&
+		strings.TrimSpace(b.SourceRevision) == "" &&
+		strings.TrimSpace(b.SourceDigest) == "" &&
+		strings.TrimSpace(b.EntityCatalogDigest) == ""
+}
+
+func (b DataContentCampaignBinding) IsEmpty() bool {
+	return b.empty()
+}
+
+func (b DataContentCampaignBinding) Validate() error {
+	if strings.TrimSpace(b.RootExecutionID) == "" ||
+		strings.TrimSpace(b.RunID) == "" ||
+		b.Generation < 1 {
+		return fmt.Errorf("reliabletask campaign binding requires rootExecutionId, runId and generation")
+	}
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{name: "fencingToken", value: b.FencingToken},
+		{name: "planDigest", value: b.PlanDigest},
+		{name: "sourceRevision", value: b.SourceRevision},
+		{name: "sourceDigest", value: b.SourceDigest},
+		{name: "entityCatalogDigest", value: b.EntityCatalogDigest},
+	} {
+		if !validSHA256Digest(field.value) {
+			return fmt.Errorf("reliabletask campaign binding %s must be sha256", field.name)
+		}
+	}
+	return nil
+}
+
+func (b DataContentCampaignBinding) payload() map[string]string {
+	return map[string]string{
+		"campaignRootExecutionId":     strings.TrimSpace(b.RootExecutionID),
+		"campaignRunId":               strings.TrimSpace(b.RunID),
+		"campaignGeneration":          strconv.Itoa(b.Generation),
+		"campaignFencingToken":        strings.TrimSpace(b.FencingToken),
+		"campaignPlanDigest":          strings.TrimSpace(b.PlanDigest),
+		"campaignSourceRevision":      strings.TrimSpace(b.SourceRevision),
+		"campaignSourceDigest":        strings.TrimSpace(b.SourceDigest),
+		"campaignEntityCatalogDigest": strings.TrimSpace(b.EntityCatalogDigest),
+	}
+}
+
 // DataContentJob 是 quwoquan_data object_job 到 runtime/reliabletask 的强类型适配契约。
 // 幂等身份由 executionId + entity + carrier + sourceRevision + stage 构成。同一
 // immutable execution 的重复声明必须合并；retryOf 创建的新 execution 即使复用相同
 // 来源版本，也不得绑定旧 execution 的任务结果、死信或作者证据。
 type DataContentJob struct {
-	EntityRef      string `json:"entityRef"`
-	Carrier        string `json:"carrier"`
-	SourceRevision string `json:"sourceRevision"`
-	JobID          string `json:"jobId"`
-	ExecutionID    string `json:"executionId"`
-	Ref            string `json:"ref"`
-	Stage          string `json:"stage"`
-	PartitionKey   string `json:"partitionKey"`
-	IdempotencyKey string `json:"idempotencyKey"`
+	EntityRef               string                     `json:"entityRef"`
+	Carrier                 string                     `json:"carrier"`
+	SourceRevision          string                     `json:"sourceRevision"`
+	JobID                   string                     `json:"jobId"`
+	ExecutionID             string                     `json:"executionId"`
+	Ref                     string                     `json:"ref"`
+	Stage                   string                     `json:"stage"`
+	PartitionKey            string                     `json:"partitionKey"`
+	IdempotencyKey          string                     `json:"idempotencyKey"`
+	ExecutionEnvelopeDigest string                     `json:"executionEnvelopeDigest,omitempty"`
+	Campaign                DataContentCampaignBinding `json:"campaignBinding,omitempty"`
 }
 
 func (j DataContentJob) ExpectedIdempotencyKey() (string, error) {
@@ -76,11 +144,19 @@ func (j DataContentJob) ValidateIdentity() (string, error) {
 	if strings.TrimSpace(j.IdempotencyKey) != expected {
 		return "", fmt.Errorf("reliabletask data job idempotencyKey does not match immutable job identity")
 	}
+	if !j.Campaign.empty() {
+		if err := j.Campaign.Validate(); err != nil {
+			return "", err
+		}
+		if !validSHA256Digest(j.ExecutionEnvelopeDigest) {
+			return "", fmt.Errorf("reliabletask campaign job execution envelope digest must be sha256")
+		}
+	}
 	return expected, nil
 }
 
 func (j DataContentJob) payload(idempotencyKey string) map[string]string {
-	return map[string]string{
+	payload := map[string]string{
 		"schema":         "quwoquan.object_job",
 		"jobId":          strings.TrimSpace(j.JobID),
 		"executionId":    strings.TrimSpace(j.ExecutionID),
@@ -92,6 +168,13 @@ func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 		"sourceRevision": strings.TrimSpace(j.SourceRevision),
 		"idempotencyKey": idempotencyKey,
 	}
+	if !j.Campaign.empty() {
+		payload["executionEnvelopeDigest"] = strings.TrimSpace(j.ExecutionEnvelopeDigest)
+		for key, value := range j.Campaign.payload() {
+			payload[key] = value
+		}
+	}
+	return payload
 }
 
 // DataContentFleet 复用 runtime/reliabletask 的 Store/ReadyIndex/Worker，
@@ -176,6 +259,21 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 		partitionKey = strings.TrimSpace(job.EntityRef)
 	}
 	payload := job.payload(key)
+	payloadAllow := []string{"schema", "jobId", "executionId", "ref", "stage", "partitionKey", "entityRef", "carrier", "sourceRevision", "idempotencyKey"}
+	if !job.Campaign.empty() {
+		payloadAllow = append(
+			payloadAllow,
+			"campaignRootExecutionId",
+			"campaignRunId",
+			"campaignGeneration",
+			"campaignFencingToken",
+			"campaignPlanDigest",
+			"campaignSourceRevision",
+			"campaignSourceDigest",
+			"campaignEntityCatalogDigest",
+			"executionEnvelopeDigest",
+		)
+	}
 	return f.Store.DeclareTask(ctx, DeclareTaskRequest{
 		TaskType:        DataContentTaskType,
 		OwnerDomain:     "data",
@@ -185,7 +283,7 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 		IdempotencyKey:  key,
 		PartitionKey:    partitionKey,
 		Payload:         payload,
-		PayloadAllow:    []string{"schema", "jobId", "executionId", "ref", "stage", "partitionKey", "entityRef", "carrier", "sourceRevision", "idempotencyKey"},
+		PayloadAllow:    payloadAllow,
 		CreatedByModule: "data.task_outbox_dispatcher",
 	})
 }

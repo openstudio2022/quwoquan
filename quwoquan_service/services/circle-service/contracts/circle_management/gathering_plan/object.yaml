@@ -41,6 +41,24 @@ lifecycle:
   active_condition: plan exists and currentRevisionId/currentRevisionNumber/currentRevisionDigest identify one immutable PlanRevision
   optimistic_concurrency: version
   idempotency: command_receipt
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.circle.gathering_plan.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.circle.gathering_plan.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.circle.gathering_plan.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.circle.gathering_plan.write
 business_rules:
 - GatheringPlan 是可选能力；gatheringId 必须唯一，同一 Gathering 最多一个 Plan
 - GatheringPlan 不拥有或复制 title schedule Host Participation capacity lifecycle Outcome conversation

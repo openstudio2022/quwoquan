@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.scale_semantic_promotion import (
+from content.execution.scale.semantic_promotion import (
     ScaleSemanticPromotionError,
     validate_scale_semantic_calibration,
 )

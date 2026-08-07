@@ -365,7 +365,7 @@ func readUserDomainErrors(metadataDir string) (*errorsFile, error) {
 // contentDomainErrorsPaths 是 content 域错误码的固定合并顺序：
 // post（域共享 + Post 自有）在前，随后按对象目录字典序。
 // 与 quwoquan_app/scripts/runtime/verify_error_code_endcloud_parity.py 及
-// quwoquan_service/scripts/verify/verify_error_recovery_alignment.py 的列表保持一致。
+// quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py 的列表保持一致。
 func contentDomainErrorsPaths(metadataDir string) []string {
 	return []string{
 		filepath.Join(metadataDir, "content", "content", "post", "errors.yaml"),
@@ -376,7 +376,7 @@ func contentDomainErrorsPaths(metadataDir string) []string {
 		filepath.Join(metadataDir, "content", "content", "profile_interaction_read_fact", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "media", "filter_catalog_release", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "media", "media_asset", "errors.yaml"),
-		filepath.Join(metadataDir, "content", "media", "media_original_access_fact", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "media", "original_access_quota", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "media", "media_upload_session", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "content", "outbound_share_fact", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "trust_safety", "post_moderation_case", "errors.yaml"),

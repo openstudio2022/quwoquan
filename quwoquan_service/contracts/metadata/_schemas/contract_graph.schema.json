@@ -27,7 +27,7 @@
           "domain": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
           "kind": {
-            "enum": ["aggregate_root", "owned_entity", "value_object", "projection", "external_reference", "append_only_fact", "runtime_session"]
+            "enum": ["aggregate_root", "owned_entity", "value_object", "process_manager", "projection", "external_reference", "append_only_fact", "runtime_session"]
           },
           "kindExplicit": { "type": "boolean" },
           "aggregateOwner": { "type": "string", "minLength": 1 },
@@ -471,6 +471,8 @@
           "facet",
           "facadeMethod",
           "objectOwner",
+          "telemetry",
+          "slo",
           "sourcePath"
         ],
         "properties": {
@@ -504,8 +506,134 @@
           "idempotency": {
             "enum": ["event_id", "aggregate_version", "identity_payload_digest", "transaction_identity"]
           },
+          "telemetry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "trace"],
+            "properties": {
+              "metric": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "trace": { "const": true },
+              "attributes": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "slo": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "latencyP95Milliseconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "failureRatioPercent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              },
+              "freshnessP95Seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "backlogMaxEvents": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "deadLetterRatioPercent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              }
+            }
+          },
           "sourcePath": { "type": "string", "minLength": 1 }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "runtimeKind": {
+                  "enum": ["middleware", "internal_port"]
+                }
+              },
+              "required": ["runtimeKind"]
+            },
+            "then": {
+              "properties": {
+                "slo": {
+                  "required": [
+                    "latencyP95Milliseconds",
+                    "failureRatioPercent"
+                  ],
+                  "not": {
+                    "anyOf": [
+                      { "required": ["freshnessP95Seconds"] },
+                      { "required": ["backlogMaxEvents"] },
+                      { "required": ["deadLetterRatioPercent"] }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "runtimeKind": {
+                  "enum": ["projector", "event_handler", "subscription"]
+                }
+              },
+              "required": ["runtimeKind"]
+            },
+            "then": {
+              "properties": {
+                "slo": {
+                  "required": [
+                    "freshnessP95Seconds",
+                    "backlogMaxEvents",
+                    "failureRatioPercent"
+                  ],
+                  "not": {
+                    "anyOf": [
+                      { "required": ["latencyP95Milliseconds"] },
+                      { "required": ["deadLetterRatioPercent"] }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "runtimeKind": { "const": "external_port" }
+              },
+              "required": ["runtimeKind"]
+            },
+            "then": {
+              "properties": {
+                "slo": {
+                  "required": [
+                    "latencyP95Milliseconds",
+                    "failureRatioPercent",
+                    "deadLetterRatioPercent"
+                  ],
+                  "not": {
+                    "anyOf": [
+                      { "required": ["freshnessP95Seconds"] },
+                      { "required": ["backlogMaxEvents"] }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "projections": {
@@ -573,6 +701,7 @@
                     "owned_entity",
                     "value_object",
                     "append_only_fact",
+                    "process_manager",
                     "projection",
                     "external_reference",
                     "runtime_session"
@@ -898,7 +1027,7 @@
       "additionalProperties": false,
       "required": ["commands", "queries", "crossContext"],
       "properties": {
-        "commands": { "enum": ["aggregate_facade", "cli_facade", "via_aggregate_root", "append_only_sink", "session_facade", "none"] },
+        "commands": { "enum": ["aggregate_facade", "cli_facade", "via_aggregate_root", "append_only_sink", "process_facade", "session_facade", "none"] },
         "queries": { "enum": ["named_reader", "via_aggregate_projection", "external_port", "none"] },
         "crossContext": { "enum": ["public_contract_only", "event_only", "forbidden"] }
       }

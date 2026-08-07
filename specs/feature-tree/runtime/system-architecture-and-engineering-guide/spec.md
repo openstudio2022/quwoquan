@@ -74,7 +74,8 @@
 ### REQ-001 metadata 对象单轨与反向映射
 
 - context、独立对象根和 aggregate member 数量全部由服务本地契约扫描派生，不在规格、门禁或注册表重复登记
-- 每个独立对象的 kind 必须是 aggregate_root、append_only_fact、projection、external_reference、runtime_session 之一，实际分布由门禁报告计算
+- 每个独立对象的 kind 必须取自 [AppRoot REQ-010](../../spec.md#req-010) 声明的六类闭集，六类均已入仓且各自有真实对象；实际分布由门禁报告计算，规格不登记快照数量
+- `process_manager` 的写入口是专用 `process_facade`，`identity.version_source` 恒为 `checkpoint`，并必须声明状态机的 `state_field` 与 `states`；它的云侧必需层是 domain、application 与 infrastructure 三层，缺任一层即阻断
 - 任意 object root 只有一个 object.yaml.kind，domain/context/object 不在文件中重复声明
 - owned_entity/value_object 只作为聚合成员，不存在独立对象根
 - business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
@@ -87,7 +88,7 @@
 ### REQ-002 服务目录、DDD 依赖与 CQRS 规则
 
 - 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
-- 任意 App 业务文件符合 `quwoquan_app/lib/<domain>/<context>/<object>/<layer>/file`，其中 layer 只允许 domain、application、adapters、presentation；domain/context/object 必须来自 canonical ContractGraph 与所属 L1 工程归属，禁止由文件名启发式、人工 registry 或旧目录别名决定 owner。
+- 任意 App 业务文件符合 `quwoquan_app/lib/service/<service>/<context>/<object>/<layer>/file`，其中 layer 只允许 domain、application、adapters、presentation；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 必须来自 canonical ContractGraph 与所属 L1 工程归属，禁止由文件名启发式、人工 registry 或旧目录别名决定 owner。
 - App 的 `runtime`、`design_system` 与 `l10n` 是唯一横切根；业务对象不得落入旧 `ui/cloud/core/app/application/infrastructure` 大桶，横切根也不得成为无 owner 业务文件的 fallback。
 - App 层义务按 canonical 端侧能力事实派生：App-exposed operation 要求 application/adapters，页面认领要求 application/presentation，端侧不变式或状态机才要求 domain；未被 App 消费的纯云对象不要求 App 空目录或占位实现，append-only fact 不直接拥有 presentation。
 - 每个页面必须声明唯一 source owner，并保留全部 participant object；页面物理文件位于 source owner 的 presentation，其他 participant 只经公开 application port/facade 参与，移动文件不得删除语义参与关系。
@@ -145,7 +146,7 @@
 ### REQ-006 三层证据与 readiness 计算
 
 - UAT/DOM/SIT/GWT 仅在所属节点定义，真实测试直接写稳定 `spec_ref`，不登记测试文件路径清单
-- App 三层测试与生产对象同构为 `test/<layer>/<domain>/<context>/<object>`；服务 local_contract/api_integration 与生产对象同构为 `tests/<layer>/<context>/<object>`，`support` 只承载 harness、fixture factory 和 typed double 定义，不承载测试用例或生产成功事实。
+- App 三层测试与生产对象同构为 `test/<layer>/service/<service>/<context>/<object>`；服务 local_contract/api_integration 与生产对象同构为 `tests/<layer>/<context>/<object>`，`support` 只承载 harness、fixture factory 和 typed double 定义，不承载测试用例或生产成功事实。
 - runner 可由 `spec_ref` 定位实际测试、结果、环境和 commit/config/image 摘要；测试入口的路径与摘要属于结构证据，实际 CaseResult、环境和用户验收回执属于结果证据，两类必须分字段且不得互相替代。
 - local_contract 覆盖对象规则、kind、mapper/provider/widget 本地行为
 - api_integration 覆盖真实 HTTP/WS、字段、错误、鉴权、存储与 adapter 边界

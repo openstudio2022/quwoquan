@@ -21,6 +21,8 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 	request := map[string]any{
 		"schema":                    importer.FleetRequestSchema,
 		"executionId":               executionID,
+		"scaleClass":                "BELOW_M100",
+		"executionEnvelopeDigest":   "sha256:" + strings.Repeat("e", 64),
 		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
@@ -63,6 +65,79 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 	}
 }
 
+func TestDataFleetReadRequestCopiesCampaignBindingAndRejectsJobOverride(t *testing.T) {
+	executionID := "20260720--travel-image-m100--cn-zhejiang--scale-902"
+	entityRef := "/entity/地点/景区/西湖"
+	sourceRevision := "sha256:" + strings.Repeat("a", 64)
+	job := map[string]any{
+		"entityRef":      entityRef,
+		"carrier":        "image",
+		"sourceRevision": sourceRevision,
+		"idempotencyKey": executionID + "|" + entityRef + "|image|" + sourceRevision + "|publish",
+		"jobId":          "job-publish-001",
+		"executionId":    executionID,
+		"ref":            "image-source-001",
+		"stage":          "publish",
+		"partitionKey":   "canonical-publish",
+	}
+	binding := map[string]any{
+		"rootExecutionId":             "20260720--travel-homepage-m100--cn-zhejiang--scale-902",
+		"campaignRunId":               "campaign-run-902",
+		"campaignGeneration":          2,
+		"campaignFencingToken":        "sha256:" + strings.Repeat("1", 64),
+		"campaignPlanDigest":          "sha256:" + strings.Repeat("2", 64),
+		"campaignSourceRevision":      "sha256:" + strings.Repeat("3", 64),
+		"campaignSourceDigest":        "sha256:" + strings.Repeat("4", 64),
+		"campaignEntityCatalogDigest": "sha256:" + strings.Repeat("5", 64),
+	}
+	write := func(request map[string]any) string {
+		t.Helper()
+		payload, err := json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "request.json")
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	request := map[string]any{
+		"schema":                    importer.FleetRequestSchema,
+		"executionId":               executionID,
+		"scaleClass":                "M100_PLUS",
+		"executionEnvelopeDigest":   "sha256:" + strings.Repeat("e", 64),
+		"requireCommercial":         true,
+		"recoverDeadTasks":          false,
+		"objectTimeoutMilliseconds": 120000,
+		"requiredQuota":             1,
+		"campaignBinding":           binding,
+		"jobs":                      []map[string]any{job},
+	}
+	decoded, err := importer.ReadFleetRequest(write(request))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.CampaignBinding == nil ||
+		decoded.Jobs[0].Campaign != *decoded.CampaignBinding ||
+		decoded.Jobs[0].Campaign.Generation != 2 ||
+		decoded.Jobs[0].ExecutionEnvelopeDigest != request["executionEnvelopeDigest"] {
+		t.Fatalf("campaign binding was not copied into job: %#v", decoded)
+	}
+
+	delete(request, "campaignBinding")
+	if _, err := importer.ReadFleetRequest(write(request)); err == nil ||
+		!strings.Contains(err.Error(), "requires campaign binding") {
+		t.Fatalf("M100 request without campaign binding was not rejected: %v", err)
+	}
+	request["campaignBinding"] = binding
+	job["campaignBinding"] = binding
+	if _, err := importer.ReadFleetRequest(write(request)); err == nil ||
+		!strings.Contains(err.Error(), "cannot override campaign binding") {
+		t.Fatalf("job-level campaign override was not rejected: %v", err)
+	}
+}
+
 func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
 	executionID := "20260720--travel-image-publish--cn-zhejiang--canary-902"
 	entityRef := "/entity/地点/景区/西湖"
@@ -85,6 +160,8 @@ func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
 		request := map[string]any{
 			"schema":                    importer.FleetRequestSchema,
 			"executionId":               executionID,
+			"scaleClass":                "BELOW_M100",
+			"executionEnvelopeDigest":   "sha256:" + strings.Repeat("e", 64),
 			"requireCommercial":         true,
 			"recoverDeadTasks":          false,
 			"objectTimeoutMilliseconds": 120000,
@@ -133,6 +210,8 @@ func TestDataFleetReadRequestRejectsUnknownFields(t *testing.T) {
 	payload := `{
 		"schema":"quwoquan.data_content_fleet_request",
 		"executionId":"20260720--travel-image-publish--cn-zhejiang--canary-902",
+		"scaleClass":"BELOW_M100",
+		"executionEnvelopeDigest":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		"requireCommercial":true,
 		"recoverDeadTasks":false,
 		"objectTimeoutMilliseconds":120000,

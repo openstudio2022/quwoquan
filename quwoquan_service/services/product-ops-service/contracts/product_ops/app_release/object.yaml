@@ -9,8 +9,20 @@ access:
   cross_context: public_contract_only
   queries: external_port
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.ops.app_release.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 每个平台同时只有一个 current release，Build 为正十进制整数且只增不减
 - 公众 iOS 不提供原生更新地址，恢复地址只能是趣我圈官方 PWA；受控 Ad Hoc 地址不得进入公众版本接口

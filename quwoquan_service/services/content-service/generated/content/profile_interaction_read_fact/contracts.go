@@ -2,8 +2,8 @@
 package generated
 
 const (
-	RouteUpdateProfileInteractionStateMethod = "POST"
-	RouteUpdateProfileInteractionStatePath   = "/content/personas/{personaId}/interactions/{interactionId}/read-facts"
+	RouteAppendProfileInteractionReadFactMethod = "POST"
+	RouteAppendProfileInteractionReadFactPath   = "/content/personas/{personaId}/interactions/{interactionId}/read-facts"
 )
 
 var AllowedContentTypes = map[string]struct{}{}

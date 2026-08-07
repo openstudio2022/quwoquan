@@ -14,7 +14,7 @@ http.Response _responseFor(http.Request request) {
       request.url.path ==
           canonicalRemoteApiPath(
             AppCloudOperationIds
-                .contentProfileInteractionReadFactUpdateProfileInteractionState,
+                .contentProfileInteractionReadFactAppendProfileInteractionReadFact,
             pathParameters: const <String, String>{
               'personaId': 'persona-1',
               'interactionId': 'activity-1',
@@ -50,7 +50,7 @@ void main() {
           clientPageId: clientPageId,
           idempotencyKey:
               clientPageId ==
-                  ContentRequestPageIds.updateProfileInteractionState
+                  ContentRequestPageIds.appendProfileInteractionReadFact
               ? 'profile-interaction-path-contract'
               : null,
           actor: const CloudOperationActorContext(
@@ -74,7 +74,7 @@ void main() {
         log.last.path,
         canonicalRemoteApiPath(
           AppCloudOperationIds
-              .contentProfileInteractionReadFactUpdateProfileInteractionState,
+              .contentProfileInteractionReadFactAppendProfileInteractionReadFact,
           pathParameters: const <String, String>{
             'personaId': 'persona-1',
             'interactionId': 'activity-1',

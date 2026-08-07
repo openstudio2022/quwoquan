@@ -48,7 +48,7 @@ def _assert_cross_publish_image_unique(
 
 
 def _qualified_post_refs(execution_id: str) -> tuple[str, ...]:
-    from content.execution.post_review_closure import (
+    from content.execution.closure.post_review import (
         indexed_post_targets,
         load_post_review_closure,
     )

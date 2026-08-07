@@ -44,9 +44,9 @@
 - metadata 作者不得手写任何 evidence 字段，端侧也不得再建第二个 readiness 判定入口。
 - 云侧对象实现证据必须同时覆盖领域服务与 control-plane 两处对象层根；`platform_ops` 上下文的 owner 位于 control-plane，遗漏该根等于把该上下文全部对象误判为无证据。
 - 云侧两层对象验证路径按 context 与 object 精确定位，只有落在 canonical 对象路径下的文件才计入该对象证据。
-- 端侧实现证据从 `lib/<domain>/<context>/<object>` 的能力必需层派生；app_client 只取自对象 adapters，page 取自页面对象契约的 source owner/participants 与 source owner `presentation/**` 真实文件的交集，不额外强制 `pages` 子目录。
+- 端侧实现证据从 `lib/service/<service>/<context>/<object>` 的能力必需层派生；app_client 只取自对象 adapters，page 取自页面对象契约的 source owner/participants 与 source owner `presentation/**` 真实文件的交集，不额外强制 `pages` 子目录。
 - page 证据只在对象被页面对象契约认领时才要求；认领事实与页面文件事实必须分列两个字段，认领成立而页面文件缺失只让页面证据为空，不得退化成未认领而免除该项要求。
-- App 三层结构证据按 `test/<layer>/<domain>/<context>/<object>` 精确定位；服务与 App 的本地合同、真实边界验证入口必须按 producer 分侧表达，任何一侧存在入口都不能替代另一侧的能力义务。
+- App 三层结构证据按 `test/<layer>/service/<service>/<context>/<object>` 精确定位；服务与 App 的本地结构验证入口、真实边界验证入口必须按 producer 分侧表达，任何一侧存在入口都不能替代另一侧的能力义务。
 - 端侧对象目录搬迁期内，派生器遇到端侧路径缺失必须记为无证据并让 `objectReadiness.missing` 如实暴露，禁止 fail-fast 中断整个 metadata 装载，也禁止用占位证据补齐。
 - 四环境证据只认既有四环境证据产物，查不到即为空并由 missing 暴露，不得编造。
 
@@ -80,11 +80,15 @@
 ### REQ-007 Python 脚本 owner、角色与入口闭包必须由实时物理树派生
 
 - 稳定脚本角色闭集为 `gate / cli / lib / generator / runner / tool / migration / hook`；角色由物理位置、命名、入口引用和 import 关系实时派生，不维护 registry、inventory、债务 baseline 或 orphan allowlist。
+- App、Service、Ops、Data 物理树内的全部 Python 文件必须由同一派生器唯一归入受管脚本、生产模块、验证资产、测试 support、generated 或 vendor 边界；未知路径不得因不在脚本枚举根内而逃逸治理。生产模块、测试和 generated 的结构结论复用所属架构、测试目录与 codegen 门，不复制第二套规则。
 - App 领域脚本的 L1 必须与 `lib/service/<service_name>_service` 一致；只在脚本确实属于单一 context/object 时下钻 L2/L3，且对应生产 owner 目录必须真实存在。runtime、platform 与人工工具按 concern 归档，不得继续平铺。
 - Service 领域脚本的 L1 必须与 `services/<kebab-service>` 一致；只在单一 context/object owner 可证明时继续下钻。跨服务 contracts/codegen/runtime/verify/tools 保持 concern-first，`contracts` 不混入 verifier。
 - Ops 保持 `cli/ci/gate/hooks/migrations/environments/verify` 等职责树，跨环境验收 runner 保持在 canonical `service_ops/<service>` owner；Data 继续由 Data CLI-first 与既有脚本架构门派生。
+- Data canonical release 派生只消费 canonical/release snapshot 与其显式引用的治理快照；环境 import、homepage id、环境 URL 与运行回执只属于 environment append-only evidence，不得进入 immutable release lookup。
 - 稳定可执行路径、schema key 与测试标识禁止 `t1..t4 / m6 / m7 / b10 / phase0 / partN` 等阶段名；历史说明文字不作为可执行标识。
+- 源码域禁止解释器、测试、lint、编辑器缓存与临时/备份脚本；可再生产输出只进入 `.qwq_output` 或受管仓外缓存。一次性能力必须位于 migration concern，并具有可重复执行、回放或退出证据。
 - Make、workflow、gate、CLI 与脚本内帮助路径引用必须指向真实文件。rename 必须同时更新 producer、consumer、import、测试与文档，不提供旧路径 shim。
+- gate 或 scanner 必须证明目标根存在且至少命中一份受检源码；空扫描不得产生通过结果。人工 tool 必须能由 CLI、Make、runbook、spec 或测试中的当前引用证明 owner 与用途，否则属于确定性归类错误。
 - orphan 只作为报告候选，必须人工裁决为接线、转入 tool 或删除；不能仅凭静态未引用自动删除。`report` 对同一物理树必须字节幂等，`check` 只阻断可确定的路径、角色与命名违规。
 
 ## 4. 契约引用
@@ -101,7 +105,7 @@
 - canonical：`quwoquan_app/test/local_contract/<domain>/<context>/<object>`
 - canonical：`quwoquan_app/test/api_integration/<domain>/<context>/<object>`
 - canonical：`quwoquan_app/test/user_acceptance/<domain>/<context>/<object>`
-- canonical：`quwoquan_app/lib/<domain>/<context>/<object>/adapters`
+- canonical：`quwoquan_app/lib/service/<service>/<context>/<object>/adapters`
 - canonical：`quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`
 - canonical：`quwoquan_app/test/user_acceptance`
 - canonical：`quwoquan_ops/tests/acceptance/user_acceptance`
@@ -141,10 +145,11 @@
 <a id="gwt-004"></a>
 ### GWT-004 Python 脚本治理无第二 inventory 且可重复派生
 
-- GIVEN App、Service、Ops、Data 的脚本和生产 owner 物理树，以及当前 Make/workflow/gate/CLI/import 引用。
+- GIVEN App、Service、Ops、Data 的全部 Python 文件、受管 Shell 脚本和生产 owner 物理树，以及当前 Make/workflow/gate/CLI/import/test/spec/runbook 引用。
 - WHEN 对同一提交连续执行脚本治理 `report`，并执行入口路径闭包检查。
-- THEN 两次报告字节一致，且每个脚本的 scope、角色、引用和 orphan 候选由当前物理树派生，不读取 registry、baseline 或人工 allowlist。
+- THEN 两次报告字节一致，全部 Python 文件数等于各治理边界分类之和，且每个受管脚本的 scope、角色、引用和 orphan 候选由当前物理树派生，不读取 registry、baseline 或人工 allowlist。
 - AND App/Service 的 L1 owner、可证明的 context/object 下钻、Ops/Data concern、里程碑命名与失效入口均产生可定位结果。
+- AND 未分类 Python、临时缓存/备份、无 owner tool、空扫描 gate、canonical release 读取环境回执与失效测试/文档路径均产生阻断结果。
 - AND acceptance runner、generator 与被 import 的 lib 不被误判为可自动删除的 orphan；orphan 候选只报告、不自动删除。
 
 ## 6. 依赖

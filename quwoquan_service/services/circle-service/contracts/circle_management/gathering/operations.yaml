@@ -48,7 +48,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_draft_create
+    metric: circle_gathering_draft_create
     trace: true
     attributes:
     - outcome
@@ -114,7 +114,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_publish
+    metric: circle_gathering_publish
     trace: true
     attributes:
     - outcome
@@ -173,7 +173,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_update
+    metric: circle_gathering_update
     trace: true
     attributes:
     - outcome
@@ -226,7 +226,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_get
+    metric: circle_gathering_get
     trace: true
     attributes:
     - outcome
@@ -278,7 +278,7 @@ api_routes:
     response_classification: PUBLIC
     log_policy: metadata_only
   telemetry:
-    metric: gathering_public_get
+    metric: circle_gathering_public_get
     trace: true
     attributes:
     - outcome
@@ -337,7 +337,7 @@ api_routes:
     response_classification: PUBLIC
     log_policy: metadata_only
   telemetry:
-    metric: gathering_list_by_host
+    metric: circle_gathering_list_by_host
     trace: true
     attributes:
     - outcome
@@ -396,7 +396,7 @@ api_routes:
     response_classification: PUBLIC
     log_policy: metadata_only
   telemetry:
-    metric: gathering_list_by_source
+    metric: circle_gathering_list_by_source
     trace: true
     attributes:
     - outcome
@@ -456,7 +456,7 @@ api_routes:
     response_classification: SENSITIVE
     log_policy: none
   telemetry:
-    metric: gathering_application_inbox_list
+    metric: circle_gathering_application_inbox_list
     trace: true
     attributes:
     - outcome
@@ -515,7 +515,7 @@ api_routes:
     response_classification: SENSITIVE
     log_policy: none
   telemetry:
-    metric: gathering_roster_list
+    metric: circle_gathering_roster_list
     trace: true
     attributes:
     - outcome
@@ -575,7 +575,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_join_open
+    metric: circle_gathering_join_open
     trace: true
     attributes:
     - outcome
@@ -635,7 +635,7 @@ api_routes:
     response_classification: SENSITIVE
     log_policy: none
   telemetry:
-    metric: gathering_apply
+    metric: circle_gathering_apply
     trace: true
     attributes:
     - outcome
@@ -689,7 +689,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_application_withdraw
+    metric: circle_gathering_application_withdraw
     trace: true
     attributes:
     - outcome
@@ -747,7 +747,7 @@ api_routes:
     response_classification: SENSITIVE
     log_policy: none
   telemetry:
-    metric: gathering_application_review
+    metric: circle_gathering_application_review
     trace: true
     attributes:
     - outcome
@@ -808,7 +808,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_invite
+    metric: circle_gathering_invite
     trace: true
     attributes:
     - outcome
@@ -870,7 +870,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_invitation_accept
+    metric: circle_gathering_invitation_accept
     trace: true
     attributes:
     - outcome
@@ -926,7 +926,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_invitation_decline
+    metric: circle_gathering_invitation_decline
     trace: true
     attributes:
     - outcome
@@ -980,7 +980,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_invitation_revoke
+    metric: circle_gathering_invitation_revoke
     trace: true
     attributes:
     - outcome
@@ -1034,7 +1034,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_leave
+    metric: circle_gathering_leave
     trace: true
     attributes:
     - outcome
@@ -1091,7 +1091,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_participant_remove
+    metric: circle_gathering_participant_remove
     trace: true
     attributes:
     - outcome
@@ -1148,7 +1148,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_participant_reinstate
+    metric: circle_gathering_participant_reinstate
     trace: true
     attributes:
     - outcome
@@ -1203,7 +1203,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_admission_pause
+    metric: circle_gathering_admission_pause
     trace: true
     attributes:
     - outcome
@@ -1259,7 +1259,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_admission_resume
+    metric: circle_gathering_admission_resume
     trace: true
     attributes:
     - outcome
@@ -1315,7 +1315,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_capacity_change
+    metric: circle_gathering_capacity_change
     trace: true
     attributes:
     - outcome
@@ -1370,7 +1370,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_cohost_assign
+    metric: circle_gathering_cohost_assign
     trace: true
     attributes:
     - outcome
@@ -1423,7 +1423,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_cohost_revoke
+    metric: circle_gathering_cohost_revoke
     trace: true
     attributes:
     - outcome
@@ -1478,7 +1478,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_organizer_transfer
+    metric: circle_gathering_organizer_transfer
     trace: true
     attributes:
     - outcome
@@ -1535,7 +1535,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_revision_acknowledge
+    metric: circle_gathering_revision_acknowledge
     trace: true
     attributes:
     - outcome
@@ -1592,7 +1592,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_cancel
+    metric: circle_gathering_cancel
     trace: true
     attributes:
     - outcome
@@ -1647,7 +1647,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_arrival_declare
+    metric: circle_gathering_arrival_declare
     trace: true
     attributes:
     - outcome
@@ -1702,7 +1702,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_leave_early_declare
+    metric: circle_gathering_leave_early_declare
     trace: true
     attributes:
     - outcome
@@ -1756,7 +1756,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_self_complete
+    metric: circle_gathering_self_complete
     trace: true
     attributes:
     - outcome
@@ -1813,7 +1813,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_complete
+    metric: circle_gathering_complete
     trace: true
     attributes:
     - outcome
@@ -1870,7 +1870,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_end_early
+    metric: circle_gathering_end_early
     trace: true
     attributes:
     - outcome
@@ -1930,7 +1930,7 @@ api_routes:
     response_classification: SENSITIVE
     log_policy: none
   telemetry:
-    metric: gathering_safety_terminate
+    metric: circle_gathering_safety_terminate
     trace: true
     attributes:
     - outcome
@@ -1984,7 +1984,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_availability_watch
+    metric: circle_gathering_availability_watch
     trace: true
     attributes:
     - outcome
@@ -2036,7 +2036,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_availability_unwatch
+    metric: circle_gathering_availability_unwatch
     trace: true
     attributes:
     - outcome

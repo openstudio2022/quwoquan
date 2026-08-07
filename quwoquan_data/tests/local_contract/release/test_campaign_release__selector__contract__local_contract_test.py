@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution import campaign_submission_reconciliation
+from content.execution.campaign import submission_reconciliation as campaign_submission_reconciliation
 from content.release.canonical import campaign_release
 from content.release.canonical.campaign_release import (
     CampaignReleaseError,

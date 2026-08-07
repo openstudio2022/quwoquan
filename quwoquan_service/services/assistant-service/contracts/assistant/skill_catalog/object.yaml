@@ -25,8 +25,20 @@ relationships:
   target_object: assistant.SkillPackageRelease
 local_identity_reasons:
   domainId: stable Skill domain classification from the immutable manifest; it groups and routes catalog entries but is not the SkillCatalog projection identity
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.assistant.skill_catalog.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - ListSkills 只能使用 transport 验证后的 accountId，禁止信任客户端身份 header
 - active release、manifest、profile 或输入 schema 资产缺失及 digest 不一致均 fail-closed

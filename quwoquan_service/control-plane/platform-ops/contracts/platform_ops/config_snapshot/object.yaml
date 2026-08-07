@@ -16,8 +16,20 @@ access:
   cross_context: public_contract_only
   queries: external_port
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "运营与控制面对象，只由运营台按 operator scope 访问，不进入用户检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - 配置值只随发布包变化；任何环境不提供在线编辑、审批或热写入端点。
 - resolve 的 sys.* 有效值 = 服务 schema 默认值叠加所选环境 config.yaml 覆盖。

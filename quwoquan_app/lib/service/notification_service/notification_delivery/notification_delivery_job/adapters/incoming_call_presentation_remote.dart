@@ -6,7 +6,7 @@ typedef IncomingCallPresentationInvocationContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);
 
 final class RemoteIncomingCallPresentationAcknowledger
-    implements IncomingCallPresentationAcknowledger {
+    implements NotificationDeliveryJobProcessCommandWriter {
   const RemoteIncomingCallPresentationAcknowledger({
     required this.client,
     required this.invocationContext,

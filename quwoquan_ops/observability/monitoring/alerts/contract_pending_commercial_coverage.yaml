@@ -1,0 +1,570 @@
+# Code generated from quwoquan_service/generated/contract_graph.json.
+# Regenerate with verify_contract_alert_overlay.py --write.
+# commercial.status != ready 的 operation 覆盖。阈值同样来自 ContractGraph 的
+# slo.availabilityPercent / slo.latencyP95Milliseconds；selector 显式枚举 operation 与
+# contract_metric，不假设 contract_metric 以 <domain>_ 开头。
+groups:
+  - name: quwoquan_assistant_contract_object_pending_blocked_coverage
+    rules:
+      - alert: AssistantPendingBlockedContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"(assistant\\.assistant_run\\.StreamAssistantRunEvents)",contract_metric=~"(assistant_run_stream)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"(assistant\\.assistant_run\\.StreamAssistantRunEvents)",contract_metric=~"(assistant_run_stream)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: AssistantPendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"(assistant\\.assistant_preference\\.ListAssistantPreferences|assistant\\.assistant_preference\\.RestoreAssistantPreference|assistant\\.assistant_preference\\.RevokeAssistantPreference|assistant\\.assistant_preference\\.SetAssistantPreference|assistant\\.assistant_run\\.ApproveAssistantToolUse|assistant\\.assistant_run\\.PauseAssistantRun|assistant\\.assistant_run\\.ResumeAssistantRun|assistant\\.assistant_run\\.StartAssistantRun|assistant\\.assistant_run\\.SteerAssistantRun|assistant\\.assistant_run\\.SubmitDeviceActionReceipt|assistant\\.assistant_turn_view\\.ListSessionTurns|assistant\\.skill_surface_placement\\.GetSkillSurfacePlacement|assistant\\.skill_surface_placement\\.PutSkillSurfacePlacement)",contract_metric=~"(assistant_device_action_receipt|assistant_preference_command|assistant_preference_query|assistant_run_command|assistant_run_control|assistant_skill_surface_placement_command|assistant_skill_surface_placement_query|assistant_tool_approval|assistant_turn_view_query)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_assistant_contract_operation_requests_total{service="assistant-service",operation=~"(assistant\\.assistant_preference\\.ListAssistantPreferences|assistant\\.assistant_preference\\.RestoreAssistantPreference|assistant\\.assistant_preference\\.RevokeAssistantPreference|assistant\\.assistant_preference\\.SetAssistantPreference|assistant\\.assistant_run\\.ApproveAssistantToolUse|assistant\\.assistant_run\\.PauseAssistantRun|assistant\\.assistant_run\\.ResumeAssistantRun|assistant\\.assistant_run\\.StartAssistantRun|assistant\\.assistant_run\\.SteerAssistantRun|assistant\\.assistant_run\\.SubmitDeviceActionReceipt|assistant\\.assistant_turn_view\\.ListSessionTurns|assistant\\.skill_surface_placement\\.GetSkillSurfacePlacement|assistant\\.skill_surface_placement\\.PutSkillSurfacePlacement)",contract_metric=~"(assistant_device_action_receipt|assistant_preference_command|assistant_preference_query|assistant_run_command|assistant_run_control|assistant_skill_surface_placement_command|assistant_skill_surface_placement_query|assistant_tool_approval|assistant_turn_view_query)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: AssistantPendingBlockedContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"(assistant\\.assistant_run\\.PauseAssistantRun|assistant\\.assistant_run\\.ResumeAssistantRun|assistant\\.assistant_run\\.SteerAssistantRun)",contract_metric=~"(assistant_run_control)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: AssistantPendingBlockedContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"(assistant\\.assistant_preference\\.ListAssistantPreferences|assistant\\.assistant_preference\\.RestoreAssistantPreference|assistant\\.assistant_preference\\.RevokeAssistantPreference|assistant\\.assistant_preference\\.SetAssistantPreference|assistant\\.assistant_run\\.ApproveAssistantToolUse|assistant\\.assistant_run\\.SubmitDeviceActionReceipt|assistant\\.assistant_turn_view\\.ListSessionTurns|assistant\\.skill_surface_placement\\.GetSkillSurfacePlacement)",contract_metric=~"(assistant_device_action_receipt|assistant_preference_command|assistant_preference_query|assistant_skill_surface_placement_query|assistant_tool_approval|assistant_turn_view_query)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: AssistantPendingBlockedContractOperationLatencyP95Above700Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"(assistant\\.skill_surface_placement\\.PutSkillSurfacePlacement)",contract_metric=~"(assistant_skill_surface_placement_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.7
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation P95 超出 SLO（700ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=700。"
+      - alert: AssistantPendingBlockedContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"(assistant\\.assistant_run\\.StartAssistantRun)",contract_metric=~"(assistant_run_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+      - alert: AssistantPendingBlockedContractOperationLatencyP95Above2000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service="assistant-service",operation=~"(assistant\\.assistant_run\\.StreamAssistantRunEvents)",contract_metric=~"(assistant_run_stream)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 2
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: assistant
+          commercial_status: blocked
+        annotations:
+          summary: "assistant 待商用（blocked）operation P95 超出 SLO（2000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=2000。"
+  - name: quwoquan_circle_contract_object_pending_blocked_coverage
+    rules:
+      - alert: CirclePendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_circle_contract_operation_requests_total{service="circle-service",operation=~"(circle\\.gathering\\.AcknowledgeGatheringRevision|circle\\.gathering\\.AssignGatheringCoHost|circle\\.gathering\\.CompleteGatheringSelf|circle\\.gathering\\.DeclareGatheringArrival|circle\\.gathering\\.DeclareGatheringLeaveEarly|circle\\.gathering\\.DeclineGatheringInvitation|circle\\.gathering\\.LeaveGathering|circle\\.gathering\\.ListGatheringApplications|circle\\.gathering\\.ListGatheringRoster|circle\\.gathering\\.ListGatheringsByHost|circle\\.gathering\\.ListGatheringsBySource|circle\\.gathering\\.ReinstateGatheringParticipant|circle\\.gathering\\.RevokeGatheringCoHost|circle\\.gathering\\.RevokeGatheringInvitation|circle\\.gathering\\.TransferGatheringOrganizer|circle\\.gathering\\.UnwatchGatheringAvailability|circle\\.gathering\\.WithdrawGatheringApplication|circle\\.gathering_plan\\.CommitGatheringPlanProposal|circle\\.gathering_plan\\.CreateGatheringPlan|circle\\.gathering_plan\\.GetGatheringPlan|circle\\.gathering_plan\\.ListGatheringPlanRevisions|circle\\.gathering_plan\\.ProposeGatheringPlan)",contract_metric=~"(circle_gathering_application_inbox_list|circle_gathering_application_withdraw|circle_gathering_arrival_declare|circle_gathering_availability_unwatch|circle_gathering_cohost_assign|circle_gathering_cohost_revoke|circle_gathering_invitation_decline|circle_gathering_invitation_revoke|circle_gathering_leave|circle_gathering_leave_early_declare|circle_gathering_list_by_host|circle_gathering_list_by_source|circle_gathering_organizer_transfer|circle_gathering_participant_reinstate|circle_gathering_plan_commit|circle_gathering_plan_create|circle_gathering_plan_get|circle_gathering_plan_propose|circle_gathering_plan_revision_list|circle_gathering_revision_acknowledge|circle_gathering_roster_list|circle_gathering_self_complete)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_circle_contract_operation_requests_total{service="circle-service",operation=~"(circle\\.gathering\\.AcknowledgeGatheringRevision|circle\\.gathering\\.AssignGatheringCoHost|circle\\.gathering\\.CompleteGatheringSelf|circle\\.gathering\\.DeclareGatheringArrival|circle\\.gathering\\.DeclareGatheringLeaveEarly|circle\\.gathering\\.DeclineGatheringInvitation|circle\\.gathering\\.LeaveGathering|circle\\.gathering\\.ListGatheringApplications|circle\\.gathering\\.ListGatheringRoster|circle\\.gathering\\.ListGatheringsByHost|circle\\.gathering\\.ListGatheringsBySource|circle\\.gathering\\.ReinstateGatheringParticipant|circle\\.gathering\\.RevokeGatheringCoHost|circle\\.gathering\\.RevokeGatheringInvitation|circle\\.gathering\\.TransferGatheringOrganizer|circle\\.gathering\\.UnwatchGatheringAvailability|circle\\.gathering\\.WithdrawGatheringApplication|circle\\.gathering_plan\\.CommitGatheringPlanProposal|circle\\.gathering_plan\\.CreateGatheringPlan|circle\\.gathering_plan\\.GetGatheringPlan|circle\\.gathering_plan\\.ListGatheringPlanRevisions|circle\\.gathering_plan\\.ProposeGatheringPlan)",contract_metric=~"(circle_gathering_application_inbox_list|circle_gathering_application_withdraw|circle_gathering_arrival_declare|circle_gathering_availability_unwatch|circle_gathering_cohost_assign|circle_gathering_cohost_revoke|circle_gathering_invitation_decline|circle_gathering_invitation_revoke|circle_gathering_leave|circle_gathering_leave_early_declare|circle_gathering_list_by_host|circle_gathering_list_by_source|circle_gathering_organizer_transfer|circle_gathering_participant_reinstate|circle_gathering_plan_commit|circle_gathering_plan_create|circle_gathering_plan_get|circle_gathering_plan_propose|circle_gathering_plan_revision_list|circle_gathering_revision_acknowledge|circle_gathering_roster_list|circle_gathering_self_complete)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+          commercial_status: blocked
+        annotations:
+          summary: "circle 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: CirclePendingBlockedContractOperationLatencyP95Above400Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"(circle\\.gathering\\.ListGatheringApplications|circle\\.gathering\\.ListGatheringRoster|circle\\.gathering\\.ListGatheringsByHost|circle\\.gathering\\.ListGatheringsBySource|circle\\.gathering_plan\\.GetGatheringPlan|circle\\.gathering_plan\\.ListGatheringPlanRevisions)",contract_metric=~"(circle_gathering_application_inbox_list|circle_gathering_list_by_host|circle_gathering_list_by_source|circle_gathering_plan_get|circle_gathering_plan_revision_list|circle_gathering_roster_list)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: circle
+          commercial_status: blocked
+        annotations:
+          summary: "circle 待商用（blocked）operation P95 超出 SLO（400ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=400。"
+      - alert: CirclePendingBlockedContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"(circle\\.gathering\\.AcknowledgeGatheringRevision|circle\\.gathering\\.AssignGatheringCoHost|circle\\.gathering\\.CompleteGatheringSelf|circle\\.gathering\\.DeclareGatheringArrival|circle\\.gathering\\.DeclareGatheringLeaveEarly|circle\\.gathering\\.DeclineGatheringInvitation|circle\\.gathering\\.LeaveGathering|circle\\.gathering\\.ReinstateGatheringParticipant|circle\\.gathering\\.RevokeGatheringCoHost|circle\\.gathering\\.RevokeGatheringInvitation|circle\\.gathering\\.TransferGatheringOrganizer|circle\\.gathering\\.UnwatchGatheringAvailability|circle\\.gathering\\.WithdrawGatheringApplication|circle\\.gathering_plan\\.CommitGatheringPlanProposal|circle\\.gathering_plan\\.CreateGatheringPlan|circle\\.gathering_plan\\.ProposeGatheringPlan)",contract_metric=~"(circle_gathering_application_withdraw|circle_gathering_arrival_declare|circle_gathering_availability_unwatch|circle_gathering_cohost_assign|circle_gathering_cohost_revoke|circle_gathering_invitation_decline|circle_gathering_invitation_revoke|circle_gathering_leave|circle_gathering_leave_early_declare|circle_gathering_organizer_transfer|circle_gathering_participant_reinstate|circle_gathering_plan_commit|circle_gathering_plan_create|circle_gathering_plan_propose|circle_gathering_revision_acknowledge|circle_gathering_self_complete)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: circle
+          commercial_status: blocked
+        annotations:
+          summary: "circle 待商用（blocked）operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
+  - name: quwoquan_content_contract_object_pending_blocked_coverage
+    rules:
+      - alert: ContentPendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"(content\\.media_asset\\.GetMediaAsset|content\\.outbound_share_fact\\.AppendOutboundShareFact|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesReceived|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesSent|content\\.profile_interaction_read_fact\\.AppendProfileInteractionReadFact)",contract_metric=~"(content_media_asset_public_get|content_outbound_share_append|content_profile_interaction_received_list|content_profile_interaction_sent_list|content_profile_interaction_state_update)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service="content-service",operation=~"(content\\.media_asset\\.GetMediaAsset|content\\.outbound_share_fact\\.AppendOutboundShareFact|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesReceived|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesSent|content\\.profile_interaction_read_fact\\.AppendProfileInteractionReadFact)",contract_metric=~"(content_media_asset_public_get|content_outbound_share_append|content_profile_interaction_received_list|content_profile_interaction_sent_list|content_profile_interaction_state_update)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: content
+          commercial_status: blocked
+        annotations:
+          summary: "content 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: ContentPendingBlockedContractOperationLatencyP95Above400Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"(content\\.media_asset\\.GetMediaAsset)",contract_metric=~"(content_media_asset_public_get)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.4
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: content
+          commercial_status: blocked
+        annotations:
+          summary: "content 待商用（blocked）operation P95 超出 SLO（400ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=400。"
+      - alert: ContentPendingBlockedContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"(content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesReceived|content\\.profile_interaction_activity_view\\.ListProfileInteractionActivitiesSent|content\\.profile_interaction_read_fact\\.AppendProfileInteractionReadFact)",contract_metric=~"(content_profile_interaction_received_list|content_profile_interaction_sent_list|content_profile_interaction_state_update)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: content
+          commercial_status: blocked
+        annotations:
+          summary: "content 待商用（blocked）operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: ContentPendingBlockedContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service="content-service",operation=~"(content\\.outbound_share_fact\\.AppendOutboundShareFact)",contract_metric=~"(content_outbound_share_append)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: content
+          commercial_status: blocked
+        annotations:
+          summary: "content 待商用（blocked）operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+  - name: quwoquan_integration_contract_object_pending_blocked_coverage
+    rules:
+      - alert: IntegrationPendingBlockedContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"(integration\\.connector_invocation\\.InvokeConnectorCapability)",contract_metric=~"(integration_connector_invocation_command)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"(integration\\.connector_invocation\\.InvokeConnectorCapability)",contract_metric=~"(integration_connector_invocation_command)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: IntegrationPendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"(integration\\.connector_authorization\\.CompleteNativeConnectorAuthorization|integration\\.connector_authorization\\.CompleteOAuthConnectorAuthorization|integration\\.connector_authorization\\.GetConnectorAuthorization|integration\\.connector_authorization\\.StartConnectorAuthorization|integration\\.connector_connection\\.CreateConnectorConnection|integration\\.connector_connection\\.GetConnectorConnection|integration\\.connector_connection\\.ListConnectorConnections|integration\\.connector_connection\\.ResolveConnectorCapabilityGrant|integration\\.connector_connection\\.RevokeConnectorConnection|integration\\.connector_definition\\.GetConnectorDefinition|integration\\.connector_definition\\.ListConnectorDefinitions|integration\\.connector_definition\\.PublishConnectorDefinition|integration\\.connector_invocation\\.ContinueConnectorInvocation|integration\\.connector_invocation\\.GetConnectorInvocation|integration\\.connector_invocation\\.ListConnectorInvocations)",contract_metric=~"(integration_connector_authorization_command|integration_connector_authorization_query|integration_connector_capability_resolution|integration_connector_catalog_command|integration_connector_catalog_query|integration_connector_connection_command|integration_connector_connection_query|integration_connector_invocation_command|integration_connector_invocation_query)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_integration_contract_operation_requests_total{service="integration-service",operation=~"(integration\\.connector_authorization\\.CompleteNativeConnectorAuthorization|integration\\.connector_authorization\\.CompleteOAuthConnectorAuthorization|integration\\.connector_authorization\\.GetConnectorAuthorization|integration\\.connector_authorization\\.StartConnectorAuthorization|integration\\.connector_connection\\.CreateConnectorConnection|integration\\.connector_connection\\.GetConnectorConnection|integration\\.connector_connection\\.ListConnectorConnections|integration\\.connector_connection\\.ResolveConnectorCapabilityGrant|integration\\.connector_connection\\.RevokeConnectorConnection|integration\\.connector_definition\\.GetConnectorDefinition|integration\\.connector_definition\\.ListConnectorDefinitions|integration\\.connector_definition\\.PublishConnectorDefinition|integration\\.connector_invocation\\.ContinueConnectorInvocation|integration\\.connector_invocation\\.GetConnectorInvocation|integration\\.connector_invocation\\.ListConnectorInvocations)",contract_metric=~"(integration_connector_authorization_command|integration_connector_authorization_query|integration_connector_capability_resolution|integration_connector_catalog_command|integration_connector_catalog_query|integration_connector_connection_command|integration_connector_connection_query|integration_connector_invocation_command|integration_connector_invocation_query)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: IntegrationPendingBlockedContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"(integration\\.connector_authorization\\.GetConnectorAuthorization|integration\\.connector_connection\\.GetConnectorConnection|integration\\.connector_connection\\.ListConnectorConnections|integration\\.connector_connection\\.ResolveConnectorCapabilityGrant|integration\\.connector_definition\\.GetConnectorDefinition|integration\\.connector_definition\\.ListConnectorDefinitions|integration\\.connector_invocation\\.GetConnectorInvocation|integration\\.connector_invocation\\.ListConnectorInvocations)",contract_metric=~"(integration_connector_authorization_query|integration_connector_capability_resolution|integration_connector_catalog_query|integration_connector_connection_query|integration_connector_invocation_query)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: IntegrationPendingBlockedContractOperationLatencyP95Above700Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"(integration\\.connector_authorization\\.StartConnectorAuthorization)",contract_metric=~"(integration_connector_authorization_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.7
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation P95 超出 SLO（700ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=700。"
+      - alert: IntegrationPendingBlockedContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"(integration\\.connector_definition\\.PublishConnectorDefinition)",contract_metric=~"(integration_connector_catalog_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: IntegrationPendingBlockedContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"(integration\\.connector_connection\\.CreateConnectorConnection|integration\\.connector_connection\\.RevokeConnectorConnection|integration\\.connector_invocation\\.ContinueConnectorInvocation)",contract_metric=~"(integration_connector_connection_command|integration_connector_invocation_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+      - alert: IntegrationPendingBlockedContractOperationLatencyP95Above1200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"(integration\\.connector_authorization\\.CompleteNativeConnectorAuthorization|integration\\.connector_authorization\\.CompleteOAuthConnectorAuthorization)",contract_metric=~"(integration_connector_authorization_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1.2
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation P95 超出 SLO（1200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1200。"
+      - alert: IntegrationPendingBlockedContractOperationLatencyP95Above2000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service="integration-service",operation=~"(integration\\.connector_invocation\\.InvokeConnectorCapability)",contract_metric=~"(integration_connector_invocation_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 2
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: integration
+          commercial_status: blocked
+        annotations:
+          summary: "integration 待商用（blocked）operation P95 超出 SLO（2000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=2000。"
+  - name: quwoquan_notification_contract_object_pending_blocked_coverage
+    rules:
+      - alert: NotificationPendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_notification_contract_operation_requests_total{service="notification-service",operation=~"(notification\\.notification_delivery_job\\.GetNotificationDeliveryJobMetrics|notification\\.notification_delivery_job\\.ListNotificationDeliveryJobDeadLetters|notification\\.notification_delivery_job\\.RecoverNotificationDeliveryJob)",contract_metric=~"(notification_delivery_job_dead_letter_list|notification_delivery_job_metrics_read|notification_delivery_job_recovery)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_notification_contract_operation_requests_total{service="notification-service",operation=~"(notification\\.notification_delivery_job\\.GetNotificationDeliveryJobMetrics|notification\\.notification_delivery_job\\.ListNotificationDeliveryJobDeadLetters|notification\\.notification_delivery_job\\.RecoverNotificationDeliveryJob)",contract_metric=~"(notification_delivery_job_dead_letter_list|notification_delivery_job_metrics_read|notification_delivery_job_recovery)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: notification
+          commercial_status: blocked
+        annotations:
+          summary: "notification 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: NotificationPendingBlockedContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_notification_contract_operation_duration_seconds_bucket{service="notification-service",operation=~"(notification\\.notification_delivery_job\\.GetNotificationDeliveryJobMetrics|notification\\.notification_delivery_job\\.ListNotificationDeliveryJobDeadLetters|notification\\.notification_delivery_job\\.RecoverNotificationDeliveryJob)",contract_metric=~"(notification_delivery_job_dead_letter_list|notification_delivery_job_metrics_read|notification_delivery_job_recovery)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: notification
+          commercial_status: blocked
+        annotations:
+          summary: "notification 待商用（blocked）operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+  - name: quwoquan_ops_contract_object_pending_blocked_coverage
+    rules:
+      - alert: OpsPendingBlockedContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"(ops\\.event_record\\.GetEventDrilldown|ops\\.event_record\\.GetRtcMediaQoeSummary|ops\\.event_record\\.GetRuntimeLogDrilldown|ops\\.event_record\\.GetRuntimeLogSummary)",contract_metric=~"(ops_event_drilldown|ops_rtc_media_qoe_summary|ops_runtime_log_drilldown|ops_runtime_log_summary)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"(ops\\.event_record\\.GetEventDrilldown|ops\\.event_record\\.GetRtcMediaQoeSummary|ops\\.event_record\\.GetRuntimeLogDrilldown|ops\\.event_record\\.GetRuntimeLogSummary)",contract_metric=~"(ops_event_drilldown|ops_rtc_media_qoe_summary|ops_runtime_log_drilldown|ops_runtime_log_summary)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: OpsPendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"(ops\\.account_enforcement_case\\.GetAccountEnforcementCase|ops\\.account_enforcement_case\\.OpenAccountAppealCase|ops\\.account_enforcement_case\\.OpenAccountModerationCase|ops\\.account_enforcement_case\\.RetryAccountEnforcementDelivery|ops\\.account_enforcement_case\\.ReviewAccountEnforcementCase|ops\\.experiment_assignment_fact\\.GetExperimentAssignment|ops\\.experiment_assignment_fact\\.GetExperimentStats)",contract_metric=~"(ops_account_enforcement_case_command|ops_account_enforcement_case_read|ops_account_enforcement_delivery_recovery|ops_experiment_assignment_read|ops_experiment_assignment_stats)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_ops_contract_operation_requests_total{service="product-ops-service",operation=~"(ops\\.account_enforcement_case\\.GetAccountEnforcementCase|ops\\.account_enforcement_case\\.OpenAccountAppealCase|ops\\.account_enforcement_case\\.OpenAccountModerationCase|ops\\.account_enforcement_case\\.RetryAccountEnforcementDelivery|ops\\.account_enforcement_case\\.ReviewAccountEnforcementCase|ops\\.experiment_assignment_fact\\.GetExperimentAssignment|ops\\.experiment_assignment_fact\\.GetExperimentStats)",contract_metric=~"(ops_account_enforcement_case_command|ops_account_enforcement_case_read|ops_account_enforcement_delivery_recovery|ops_experiment_assignment_read|ops_experiment_assignment_stats)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: OpsPendingBlockedContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"(ops\\.experiment_assignment_fact\\.GetExperimentAssignment)",contract_metric=~"(ops_experiment_assignment_read)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: OpsPendingBlockedContractOperationLatencyP95Above600Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"(ops\\.account_enforcement_case\\.GetAccountEnforcementCase)",contract_metric=~"(ops_account_enforcement_case_read)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.6
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation P95 超出 SLO（600ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=600。"
+      - alert: OpsPendingBlockedContractOperationLatencyP95Above800Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"(ops\\.experiment_assignment_fact\\.GetExperimentStats)",contract_metric=~"(ops_experiment_assignment_stats)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation P95 超出 SLO（800ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+      - alert: OpsPendingBlockedContractOperationLatencyP95Above1000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"(ops\\.account_enforcement_case\\.OpenAccountAppealCase|ops\\.account_enforcement_case\\.OpenAccountModerationCase|ops\\.account_enforcement_case\\.RetryAccountEnforcementDelivery|ops\\.account_enforcement_case\\.ReviewAccountEnforcementCase)",contract_metric=~"(ops_account_enforcement_case_command|ops_account_enforcement_delivery_recovery)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation P95 超出 SLO（1000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+      - alert: OpsPendingBlockedContractOperationLatencyP95Above3000Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service="product-ops-service",operation=~"(ops\\.event_record\\.GetEventDrilldown|ops\\.event_record\\.GetRtcMediaQoeSummary|ops\\.event_record\\.GetRuntimeLogDrilldown|ops\\.event_record\\.GetRuntimeLogSummary)",contract_metric=~"(ops_event_drilldown|ops_rtc_media_qoe_summary|ops_runtime_log_drilldown|ops_runtime_log_summary)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 3
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: ops
+          commercial_status: blocked
+        annotations:
+          summary: "ops 待商用（blocked）operation P95 超出 SLO（3000ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=3000。"
+  - name: quwoquan_realtime_contract_object_pending_blocked_coverage
+    rules:
+      - alert: RealtimePendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"(realtime\\.connection\\.IssueConnectionTicket|realtime\\.connection\\.LongPoll|realtime\\.connection\\.WebSocketUpgrade)",contract_metric=~"(realtime_connection_session|realtime_connection_ticket)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_realtime_contract_operation_requests_total{service="realtime-gateway",operation=~"(realtime\\.connection\\.IssueConnectionTicket|realtime\\.connection\\.LongPoll|realtime\\.connection\\.WebSocketUpgrade)",contract_metric=~"(realtime_connection_session|realtime_connection_ticket)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: realtime
+          commercial_status: blocked
+        annotations:
+          summary: "realtime 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: RealtimePendingBlockedContractOperationLatencyP95Above200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service="realtime-gateway",operation=~"(realtime\\.connection\\.IssueConnectionTicket)",contract_metric=~"(realtime_connection_ticket)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: realtime
+          commercial_status: blocked
+        annotations:
+          summary: "realtime 待商用（blocked）operation P95 超出 SLO（200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=200。"
+      - alert: RealtimePendingBlockedContractOperationLatencyP95Above300Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service="realtime-gateway",operation=~"(realtime\\.connection\\.WebSocketUpgrade)",contract_metric=~"(realtime_connection_session)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.3
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: realtime
+          commercial_status: blocked
+        annotations:
+          summary: "realtime 待商用（blocked）operation P95 超出 SLO（300ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=300。"
+      - alert: RealtimePendingBlockedContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service="realtime-gateway",operation=~"(realtime\\.connection\\.LongPoll)",contract_metric=~"(realtime_connection_session)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: realtime
+          commercial_status: blocked
+        annotations:
+          summary: "realtime 待商用（blocked）operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+  - name: quwoquan_user_contract_object_pending_blocked_coverage
+    rules:
+      - alert: UserPendingBlockedContractOperationAvailabilityBelow99p9Percent
+        expr: |
+          sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"(user\\.account_appeal_intake\\.IssueAccountAppealCredential|user\\.account_appeal_intake\\.SubmitAccountAppealIntake|user\\.account_session\\.LoginOneTap|user\\.account_session\\.LoginWithAlipay|user\\.account_session\\.LoginWithQq|user\\.account_session\\.LoginWithWechat|user\\.authentication_challenge\\.CreateAlipayAuthorizationRequest|user\\.authentication_challenge\\.ResolveOneTapLoginHint|user\\.credential_binding\\.CompleteFederatedPhoneBinding)",contract_metric=~"(user_account_appeal_credential_command|user_account_appeal_intake_command|user_auth_alipay_authorization|user_auth_alipay_login|user_auth_one_tap_hint|user_auth_one_tap_login|user_auth_qq_login|user_auth_wechat_login|user_federated_phone_binding_complete)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"(user\\.account_appeal_intake\\.IssueAccountAppealCredential|user\\.account_appeal_intake\\.SubmitAccountAppealIntake|user\\.account_session\\.LoginOneTap|user\\.account_session\\.LoginWithAlipay|user\\.account_session\\.LoginWithQq|user\\.account_session\\.LoginWithWechat|user\\.authentication_challenge\\.CreateAlipayAuthorizationRequest|user\\.authentication_challenge\\.ResolveOneTapLoginHint|user\\.credential_binding\\.CompleteFederatedPhoneBinding)",contract_metric=~"(user_account_appeal_credential_command|user_account_appeal_intake_command|user_auth_alipay_authorization|user_auth_alipay_login|user_auth_one_tap_hint|user_auth_one_tap_login|user_auth_qq_login|user_auth_wechat_login|user_federated_phone_binding_complete)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+          commercial_status: blocked
+        annotations:
+          summary: "user 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.9%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: UserPendingBlockedContractOperationAvailabilityBelow99p95Percent
+        expr: |
+          sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"(user\\.user_account\\.RestoreAccount|user\\.user_account\\.SuspendAccount)",contract_metric=~"(user_account_restore|user_account_suspend)",commercial_status="blocked",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service="user-service",operation=~"(user\\.user_account\\.RestoreAccount|user\\.user_account\\.SuspendAccount)",contract_metric=~"(user_account_restore|user_account_suspend)",commercial_status="blocked"}[10m])) by (operation, contract_metric), 0.001) > 0.0005
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user
+          commercial_status: blocked
+        annotations:
+          summary: "user 待商用（blocked）operation 5xx 比率超出可用性 SLO（99.95%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；该 operation 尚未商用，先按 commercial.gapId 判断是否阻塞放量。"
+      - alert: UserPendingBlockedContractOperationLatencyP95Above500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"(user\\.account_appeal_intake\\.IssueAccountAppealCredential|user\\.account_appeal_intake\\.SubmitAccountAppealIntake)",contract_metric=~"(user_account_appeal_credential_command|user_account_appeal_intake_command)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: user
+          commercial_status: blocked
+        annotations:
+          summary: "user 待商用（blocked）operation P95 超出 SLO（500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=500。"
+      - alert: UserPendingBlockedContractOperationLatencyP95Above1200Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"(user\\.authentication_challenge\\.CreateAlipayAuthorizationRequest|user\\.authentication_challenge\\.ResolveOneTapLoginHint)",contract_metric=~"(user_auth_alipay_authorization|user_auth_one_tap_hint)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1.2
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: user
+          commercial_status: blocked
+        annotations:
+          summary: "user 待商用（blocked）operation P95 超出 SLO（1200ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1200。"
+      - alert: UserPendingBlockedContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service="user-service",operation=~"(user\\.account_session\\.LoginOneTap|user\\.account_session\\.LoginWithAlipay|user\\.account_session\\.LoginWithQq|user\\.account_session\\.LoginWithWechat|user\\.credential_binding\\.CompleteFederatedPhoneBinding|user\\.user_account\\.RestoreAccount|user\\.user_account\\.SuspendAccount)",contract_metric=~"(user_account_restore|user_account_suspend|user_auth_alipay_login|user_auth_one_tap_login|user_auth_qq_login|user_auth_wechat_login|user_federated_phone_binding_complete)",commercial_status="blocked"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: info
+          layer: l2
+          domain: user
+          commercial_status: blocked
+        annotations:
+          summary: "user 待商用（blocked）operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"

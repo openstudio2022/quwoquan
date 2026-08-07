@@ -1,0 +1,121 @@
+fields:
+  - name: quotaId
+    type: string
+    constraints:
+      - PK
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    description: viewerId、assetId、purpose 与窗口起点的摘要；额度行主键。
+  - name: viewerId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PII
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: assetId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: purpose
+    type: enum
+    enum_ref: MediaOriginalAccessPurpose
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: windowStartedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    description: 固定窗口起点；由决策时刻按 window_seconds 向下取整得到。
+  - name: windowExpiresAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    description: 额度行的绝对失效时间；存储 TTL 索引依据，禁止续期。
+  - name: grantCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - MIN_0
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    description: 当前窗口已成功预留的 grant 次数。
+  - name: maxGrants
+    type: int
+    constraints:
+      - NOT_NULL
+      - MIN_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    description: 当前窗口额度上限；来自 original_access_policy。
+  - name: grantTtlSeconds
+    type: int
+    constraints:
+      - NOT_NULL
+      - MIN_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    description: 预留成功时用于计算 grant 绝对到期时间的 TTL；来自 original_access_policy。
+types:
+  MediaOriginalAccessGrant:
+    description: Short-lived signed original-media access result and its immutable audit identity.
+    fields:
+      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: originalUrl, type: url, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: redact, api_exposure: read, ops_exposure: redacted}
+      - {name: format, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: sizeBytes, type: int, constraints: [NOT_NULL, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: ttlSeconds, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: auditId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+  ReserveOriginalImageAccessGrantRequest:
+    fields:
+      - {name: purpose, type: enum, enum_ref: MediaOriginalAccessPurpose, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RequestContentMediaOriginalAccessCommand:
+    fields:
+      - name: mediaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: purpose
+        type: enum
+        enum_ref: MediaOriginalAccessPurpose
+        client_default: MediaOriginalAccessPurpose.view

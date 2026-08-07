@@ -70,9 +70,12 @@
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_asset/image_variant_policy.yaml`
 - canonical：`quwoquan_data/scripts/core/media_asset_url.py`
 - canonical：`quwoquan_app/lib/service/content_service/media/media_asset/adapters/cdn_image_url_builder.dart`
-- canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/operations.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/original_access_quota/operations.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/original_access_quota/fields.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/original_access_quota/errors.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/object.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/fields.yaml`
-- canonical：`quwoquan_service/services/content-service/contracts/media/media_original_access_fact/original_access_policy.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/media/original_access_quota/original_access_policy.yaml`
 
 ## 5. 验收场景
 

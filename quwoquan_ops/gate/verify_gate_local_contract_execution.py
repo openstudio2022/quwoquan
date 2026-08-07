@@ -233,8 +233,10 @@ def _test_is_executed(
 
 
 def _load_baseline() -> tuple[set[str], list[str]]:
+    # 缺口容忍基线已在缺口归零后删除，本门禁转为零容忍：没有基线文件是正常状态，
+    # 任何缺口都是新增缺口。重新引入基线文件只会被当成额外容忍面，不应该发生。
     if not BASELINE_PATH.is_file():
-        return set(), ["baseline 文件缺失"]
+        return set(), []
     try:
         document = yaml.safe_load(BASELINE_PATH.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as error:
@@ -317,7 +319,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "[gate-local-contract] FAIL: 门禁挂在 gate 链上，但其配套 "
             "local_contract 测试没有任何 gate 链执行——门禁回退将无人可见。"
-            "把测试接进 gate 链（gate_repo.sh 直接执行，或纳入某条 pytest 目录）：",
+            "把测试补进 Makefile 的 test-gate-companion-local-contract："
+            "（禁止重新引入缺口容忍基线）",
             file=sys.stderr,
         )
         for key in new_keys:

@@ -90,3 +90,13 @@
 - 影响或价值：当前覆盖计量仍以较粗粒度聚合，App 与服务并非全部对象都有来自绿测试的可比结果，且无 owner 源码与未采集对象尚不能稳定阻断，因此不能证明对象级分支风险已闭环。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
 - 依赖：对象 source owner、三层 runner 结果和覆盖 producer 的单轨接线完成。
+- 门禁接线现状：`verify_coverage_ratchet.py --scope cloud|service` 在对象 source
+  owner 单轨闭合前 fail-closed，会在 `go test -coverprofile` 采集之前返回
+  `GATE_BLOCK`，因此不产出任何覆盖数据。`quwoquan_ops/gate/gate_repo.sh` 的
+  `run_service` 曾无条件调用它，使该阶段恒为红且零证据；该调用已移除，工具侧
+  fail-closed 行为保留。当 OPEN 关闭且云侧具备 canonical object source owner、
+  `-coverpkg` 能按对象产出数据时，必须同时把调用按 `--scope cloud` 重新接回
+  `run_service`。
+- App scope 现状：`discover_app_units()` 对 `quwoquan_app/lib/l10n/**` 等无 owner
+  的横切目录 fail-closed，导致 baseline 中没有任何 `app:` 单元；该项归属
+  `object_path_map` 对象归属工作，与本 OPEN 的云侧缺口分属两条链路。

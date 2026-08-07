@@ -100,17 +100,17 @@
   - 交付给下游的结果：typed surface/member/administrator 事实与 AssistantMentioned 事件。
   - 不负责：不拥有 Skill 设置、Consent、Subscription 或 Placement。
 - [`JNY-013 / SCN-030`](../spec.md#scn-030)
-  - 本领域负责：提供可见群消息窗口与明确对象引用，并承载 Trip card/Placement 入口。
+  - 本领域负责：提供可见群消息窗口与明确对象引用，并承载 GatheringPlan card/Board 入口。
   - 进入条件：成员可见 Conversation。
   - 交付给下游的结果：带可见范围的会话上下文和共享回复位置。
-  - 不负责：不把消息当 Trip 当前计划。
+  - 不负责：不把消息当 GatheringPlan 当前修订。
 - [`JNY-013 / SCN-031`](../spec.md#scn-031)
-  - 本领域负责：按 Assistant/Travel 公开投递结果写入去重的变化提醒消息。
+  - 本领域负责：按 Assistant/Circle 公开投递结果写入去重的变化提醒消息。
   - 进入条件：相关成员与 Conversation 投递策略有效。
   - 交付给下游的结果：可同步、可审计的提醒消息。
   - 不负责：不计算 Revision diff 或频控。
 - [`JNY-013 / SCN-033`](../spec.md#scn-033)
-  - 本领域负责：承载分享快照卡片和旅行后持续 Conversation。
+  - 本领域负责：承载隐私裁剪后的回顾/分享卡片和旅行后持续 Conversation。
   - 进入条件：分享对象可见且发送者有权限。
   - 交付给下游的结果：typed object card 与消息 receipt。
   - 不负责：不生成或发布游记。
@@ -153,7 +153,7 @@
 - 聊天全链路必须透传 `X-Request-Id` / `X-Trace-Id` / `X-Client-Page-Id` / `X-Client-Session-Id`
 - Message.seq 为服务端唯一真相，客户端禁止自行生成 seq
 - 成员变更事件必须同步触发 ChatInbox 读模型更新
-- 端侧 chat 页面必须在 `lib/ui/chat/` 下，禁止 `lib/features/chat/`
+- 端侧 chat 页面必须位于所属 chat 对象的 `lib/service/chat_service/<context>/<object>/presentation/` 下，禁止业务大桶或按功能分组的第二套页面根
 
 <a id="req-004"></a>
 ### REQ-004 Gathering 活动群聊是加入后默认主场

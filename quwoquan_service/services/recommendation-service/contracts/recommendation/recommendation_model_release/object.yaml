@@ -9,8 +9,20 @@ access:
   cross_context: public_contract_only
   queries: named_reader
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - release_id_and_model_digest_are_immutable
 - feature_contract_digest_is_canonical_and_immutable

@@ -63,7 +63,7 @@ domain_operation_page_ids:
     CompleteMediaUpload: content.media.complete
     DiscardMediaAsset: content.media.discard
     CreateComment: content.comment.create
-    CreateOutboundShare: content.outbound_share.create
+    AppendOutboundShareFact: content.outbound_share.create
     SubmitPostPublication: content.post.publish
     CreateReport: content.report.create
     DeleteComment: content.comment.delete

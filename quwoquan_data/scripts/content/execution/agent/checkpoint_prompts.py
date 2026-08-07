@@ -317,7 +317,7 @@ def _checkpoint_prompts(ctx: ExecutionContext, stage: str) -> list[str]:
         )
         from content.post import object_index as content_object
         from content.post.article.base_draft import base_draft_is_adaptable
-        from content.execution.handoff import build_author_job_packet
+        from content.execution.controller.execute.handoff import build_author_job_packet
         from core.io import write_json
         from content.post.article.writing_pack import primary_entity_name
         _ok, pending = _drafts_authored(ctx)

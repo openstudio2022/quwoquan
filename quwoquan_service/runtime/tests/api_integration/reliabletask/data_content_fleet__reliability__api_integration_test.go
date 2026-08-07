@@ -408,7 +408,7 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 		Command: []string{
 			python,
 			"-c",
-			"from content.execution.reliabletask_worker import run_process_worker; run_process_worker()",
+			"from content.execution.queue.reliabletask.worker import run_process_worker; run_process_worker()",
 		},
 		WorkDir: filepath.Join(repoRoot, "quwoquan_data"),
 		Environment: dataContentTestEnvironment(

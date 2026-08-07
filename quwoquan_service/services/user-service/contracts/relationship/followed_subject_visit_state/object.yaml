@@ -39,6 +39,20 @@ relationships:
   - entity.Homepage
   - circle.Circle
   - integration.Location
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.followed_subject_visit_state.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - personaId + subjectType + subjectId 唯一
 - lastVisitedAt 只能单调推进，重复 clientRequestId 返回同一 receipt

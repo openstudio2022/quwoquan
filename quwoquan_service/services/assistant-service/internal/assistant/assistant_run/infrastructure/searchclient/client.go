@@ -60,9 +60,10 @@ func (c *Client) Handler() toolpkg.Handler {
 			return toolpkg.Result{}, fmt.Errorf("app_search query is required")
 		}
 		wire := searchRequest{
-			Query: query,
-			Mode:  "result",
-			Limit: 10,
+			Query:       query,
+			Mode:        "result",
+			ObjectTypes: AssistantReadableObjectTypes(),
+			Limit:       10,
 		}
 		response, err := c.search(ctx, wire)
 		if err != nil {
@@ -73,16 +74,32 @@ func (c *Client) Handler() toolpkg.Handler {
 }
 
 // Retrieve 调用 canonical SearchIndexView，并返回未经助手二次排序的 typed 结果。
+// objectTypes 只能收窄到 assistant 可读集合之内：调用方要求的类型若未被对象契约开放，
+// 该类型直接被丢弃，而不是放宽为「调用方说了就算」。
 func (c *Client) Retrieve(
 	ctx context.Context,
 	query string,
 	objectTypes []string,
 	limit int,
 ) (rtsearch.RetrieveResponse, error) {
+	requested := AssistantReadableObjectTypes()
+	if len(objectTypes) > 0 {
+		requested = make([]string, 0, len(objectTypes))
+		for _, objectType := range objectTypes {
+			if assistantReadableObjectTypes[objectType] {
+				requested = append(requested, objectType)
+			}
+		}
+		if len(requested) == 0 {
+			// Asking only for closed types must not fall through to an unfiltered
+			// query; an empty objectTypes list means "every type" on the wire.
+			return rtsearch.RetrieveResponse{}, nil
+		}
+	}
 	return c.search(ctx, searchRequest{
 		Query:       strings.TrimSpace(query),
 		Mode:        "result",
-		ObjectTypes: objectTypes,
+		ObjectTypes: requested,
 		Limit:       limit,
 	})
 }
@@ -118,7 +135,30 @@ func (c *Client) search(ctx context.Context, wire searchRequest) (rtsearch.Retri
 	if err := json.Unmarshal(body, &result); err != nil {
 		return rtsearch.RetrieveResponse{}, fmt.Errorf("decode search-service response: %w", err)
 	}
-	return result, nil
+	// Every app_search response leaves through here, so this is where object-level
+	// assistant policy is enforced. Sending objectTypes on the request narrows the
+	// query but cannot be the enforcement point: the search surface owns its own
+	// recall and may widen or ignore the filter, and it has no reason to know what
+	// 小趣 is allowed to see.
+	return enforceAssistantAccess(result), nil
+}
+
+func enforceAssistantAccess(response rtsearch.RetrieveResponse) rtsearch.RetrieveResponse {
+	hits := make([]rtsearch.RetrieveHit, 0, len(response.Hits))
+	for _, hit := range response.Hits {
+		if assistantReadableObjectTypes[hit.ObjectType] {
+			hits = append(hits, hit)
+		}
+	}
+	citations := make([]rtsearch.Citation, 0, len(response.Citations))
+	for _, citation := range response.Citations {
+		if assistantCitableObjectTypes[citation.ObjectType] {
+			citations = append(citations, citation)
+		}
+	}
+	response.Hits = hits
+	response.Citations = citations
+	return response
 }
 
 func operationPath() (string, error) {

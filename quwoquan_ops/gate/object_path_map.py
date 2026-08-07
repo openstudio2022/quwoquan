@@ -34,7 +34,8 @@ evidence loader。该 loader 必须与本文件同源，复用同一套规则；
   `CLOUD_EXTERNAL_REFERENCE_EITHER`、`CLOUD_TEST_LAYERS`、
   `CLOUD_TEST_SUPPORT_ROOT`、`APP_OPERATION_REQUIRED_LAYERS`、
   `APP_PAGE_OWNER_REQUIRED_LAYERS`、`APP_CLIENT_INVARIANT_REQUIRED_LAYERS`、
-  `FORBIDDEN_APP_LAYERS_BY_KIND`、
+  `FORBIDDEN_APP_LAYERS_BY_KIND`、`APP_PROCESS_PORT_NAMING`、
+  `APP_APPEND_PORT_NAMING`、`APP_SESSION_PORT_NAMING`、
   `APP_LAYER_BY_SEGMENT`、`APP_LAYER_ALIASES`、`APP_CROSS_CUTTING_ROOTS`、
   `APP_CROSS_CUTTING_SEGMENTS`、`APP_CROSS_CUTTING_STRIPPED_PREFIXES`、
   `APP_DESIGN_SYSTEM_SEGMENTS`、`APP_COMPOSITION_ROOT_SEGMENT`、
@@ -154,6 +155,9 @@ APP_TO_CLOUD_LAYER_EQUIVALENCE = {
 REQUIRED_CLOUD_LAYERS_BY_KIND = {
     "aggregate_root": ("application", "domain", "infrastructure"),
     "append_only_fact": ("application", "domain", "infrastructure"),
+    # 长流程编排器（saga）三层缺一不可：domain 放状态机与补偿规则，application 放
+    # 编排，infrastructure 放 checkpoint 持久化。
+    "process_manager": ("application", "domain", "infrastructure"),
     "projection": ("application", "infrastructure"),
     "runtime_session": ("application", "domain", "infrastructure"),
 }
@@ -176,9 +180,77 @@ APP_PAGE_OWNER_REQUIRED_LAYERS = ("application", "presentation")
 #: invariantTarget 或一个物理目录都不能替端侧猜测能力。
 APP_CLIENT_INVARIANT_REQUIRED_LAYERS = ("domain",)
 
-#: 端侧禁止层：append_only_fact 不得拥有 presentation（事实流不直接成页）。
+#: 端侧禁止层：由云侧 object kind 的写面语义派生，`kind` 是唯一输入。
+#:
+#: * ``append_only_fact`` 不得拥有 presentation（事实流不直接成页）。
+#: * ``runtime_session`` 不得拥有 presentation：session 只在连接/请求期间存在，
+#:   不是持久业务聚合（见 ``realtime/connection/object.yaml``）。需要展示会话状态
+#:   时，由某个业务对象的 presentation 消费 session 的公开 query port，而不是让
+#:   session 自己成页。``runtime_session`` 同时禁止 PageOwned，该判据由
+#:   ``verify_app_client_contract_kind_alignment.py`` 的 ``runtime_session_app_shape``
+#:   按 ``PRESENTATION_REQUIREMENT_SOURCE`` 求值。
+#: * ``external_reference`` 不得拥有 domain 与 presentation：它没有端侧不变式
+#:   （刷新语义是 provider read-through without local authoritative state），也不
+#:   拥有页面；展示外部引用的页面归发起它的业务对象。
+#:
+#: ``projection`` 不进此表：projection 合法拥有 presentation（读模型页，如
+#: ``chat.chat_inbox_view`` 的会话列表页、``search.search_index_view`` 的搜索页），
+#: 用禁止层表达会把真实形态判成违规。它的 kind 义务是「端侧没有写面、没有本地可变
+#: patch 路径」，由 ``verify_app_client_contract_kind_alignment.py`` 的
+#: ``projection_local_mutation_path`` 求值。
+#:
+#: ``process_manager`` 不进此表：它通常不是 PageOwned（长流程由发起它的页面组合，
+#: 自身不拥有页面），但 ``assistant.assistant_run`` 这类"流程即体验主线"的对象
+#: 确实拥有 presentation，禁止层会把真实形态判成违规。是否 PageOwned 仍由
+#: ``PAGE_OBJECT_CONTRACT_PATH#pages[*].source_path`` 这一唯一权威信号决定。
 FORBIDDEN_APP_LAYERS_BY_KIND = {
     "append_only_fact": ("presentation",),
+    "external_reference": ("domain", "presentation"),
+    "runtime_session": ("presentation",),
+}
+
+#: 端侧 process port 命名规范（``process_manager`` 专用）。
+#:
+#: 长流程的端侧读写面必须与聚合读写面分开命名：状态/进度读取用 ``*ProcessQuery``，
+#: 推进/取消/恢复用 ``*ProcessCommandWriter``。禁止让流程状态更新复用聚合的
+#: ``*CommandWriter``——两者的失败语义不同（聚合命令要么成功要么失败，流程命令只是
+#: 向状态机投递一次推进意图，真实终态要回读 checkpoint），共用一个 port 会让调用方
+#: 无法区分"命令已受理"与"流程已完成"。
+#:
+#: 这里只登记规范本身并随 ``layerRules`` 输出，不在本文件内扫描端侧标识符：端侧
+#: port 改名会穿透 ``quwoquan_app/lib/runtime/di/**`` 与 generated client，属于独立
+#: 的端侧迁移工序。
+APP_PROCESS_PORT_NAMING = {
+    "query": "*ProcessQuery",
+    "commandWriter": "*ProcessCommandWriter",
+    "forbiddenSharedWithAggregate": "*CommandWriter",
+}
+
+#: 端侧 append port 命名规范（``append_only_fact`` 专用）。
+#:
+#: 事实只追加、不更新（``access.commands: append_only_sink``、
+#: ``lifecycle.immutable: true``），因此它的端侧写面必须与聚合写面**类型上可区分**：
+#: 聚合命令改变聚合状态，追加只是投递一条不可变事实。共用 ``*CommandWriter`` 会让
+#: 调用方以为可以 update 一条已追加的事实。
+#:
+#: 实际扫描由 ``verify_app_client_contract_kind_alignment.py`` 的
+#: ``append_only_fact_append_port_shape`` 承担；本文件只登记规范并随 ``layerRules``
+#: 输出，保持派生器与门禁同源。
+APP_APPEND_PORT_NAMING = {
+    "appender": "*FactAppender",
+    "query": "*FactQuery",
+    "forbiddenSharedWithAggregate": "*CommandWriter",
+}
+
+#: 端侧 session port 命名规范（``runtime_session`` 专用）。
+#:
+#: session 的写面是会话生命周期（``access.commands: session_facade``），不是聚合命令；
+#: 它不拥有 presentation、不成页，禁止层见 ``FORBIDDEN_APP_LAYERS_BY_KIND``。
+APP_SESSION_PORT_NAMING = {
+    "facade": "*SessionFacade",
+    "query": "*SessionQuery",
+    "forbiddenLayers": ("presentation",),
+    "forbiddenPageOwnership": True,
 }
 
 #: 三类端侧层义务的各自唯一来源。
@@ -2082,6 +2154,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "forbiddenAppLayersByKind": {
                 kind: list(layers)
                 for kind, layers in sorted(FORBIDDEN_APP_LAYERS_BY_KIND.items())
+            },
+            "appProcessPortNaming": dict(sorted(APP_PROCESS_PORT_NAMING.items())),
+            "appAppendPortNaming": dict(sorted(APP_APPEND_PORT_NAMING.items())),
+            "appSessionPortNaming": {
+                key: list(value) if isinstance(value, tuple) else value
+                for key, value in sorted(APP_SESSION_PORT_NAMING.items())
             },
             "appCrossCuttingRoots": APP_CROSS_CUTTING_ROOTS,
         },

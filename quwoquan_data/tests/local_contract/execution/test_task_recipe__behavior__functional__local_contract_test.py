@@ -22,7 +22,7 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import recipe, recipe_checkpoint
+from content.execution.planning.recipe import model as recipe, checkpoint as recipe_checkpoint
 from content.execution.identity import (
     build_execution_id,
     parse_execution_id,
@@ -498,7 +498,7 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         recover_stage=None,
         recovery_reason=None,
     )
-    from content.execution import semantic_selection
+    from content.execution.planning import semantic_selection
     from content.execution.agent import agent_conflicts
 
     def _blocked(*_args, **_kwargs) -> None:

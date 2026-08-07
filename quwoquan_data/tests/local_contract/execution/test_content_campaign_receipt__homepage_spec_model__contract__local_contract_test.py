@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from content.execution import campaign_receipt
-from content.execution.active_spec import active_spec
+from content.execution.campaign import receipt as campaign_receipt
+from content.execution.planning.active_spec import active_spec
 from content.execution.controller import homepage_authoring
 from content.execution.spec_contract import ExecutionSpec
 from support.execution_manifest_fixture import ExecutionFixtureBuilder

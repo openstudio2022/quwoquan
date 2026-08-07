@@ -12,7 +12,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show BehaviorEventType, ContentPostProjection;
+    show AssistantUsePolicy, BehaviorEventType, ContentPostProjection;
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
@@ -147,7 +147,7 @@ ContentPostViewData _post(String id) {
       postId: id,
       contentType: 'micro',
       contentIdentity: 'moment',
-      assistantUsePolicy: 'allow',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-$id',
       authorDisplayName: 'Attribution Author',
       authorAvatarUrl: '',

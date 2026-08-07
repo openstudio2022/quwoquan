@@ -71,11 +71,21 @@ void main() {
         prepared.payload['articleMarkdown'],
         contains('asset://image_asset_2'),
       );
+      // manifest 已是 typed 请求对象：断言 typed asset 身份，并用 canonical wire
+      // 做泄漏扫描（typed 对象的 toString 会把字段藏起来，扫不出本地路径）。
       final manifest =
-          prepared.payload['articleAssetManifest'] as Map<String, dynamic>;
-      final serialized = manifest.toString();
-      expect(serialized, contains('image_asset_1'));
-      expect(serialized, contains('image_asset_2'));
+          prepared.payload['articleAssetManifest']
+              as PostArticleAssetManifestInput;
+      expect(
+        manifest.assets.map((asset) => asset.assetId),
+        <String>['image_asset_1', 'image_asset_2'],
+      );
+      final serializedPayload = prepared.payload.map(
+        (key, value) => MapEntry<String, Object?>(
+          key,
+          value is PostArticleAssetManifestInput ? value.toWire() : value,
+        ),
+      );
       for (final forbidden in <String>[
         '/local/',
         'localPath',
@@ -84,7 +94,7 @@ void main() {
         'uploadUrl',
       ]) {
         expect(
-          '${prepared.payload}',
+          '$serializedPayload',
           isNot(contains(forbidden)),
           reason: 'Post command exposed $forbidden',
         );

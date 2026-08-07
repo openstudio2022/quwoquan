@@ -226,11 +226,11 @@ final class _AssistantSessionRunComposition
   final AssistantSessionCommandWriter sessionCommandWriter;
   final AssistantSessionQuery sessionQuery;
   final AssistantTurnQuery turnQuery;
-  final AssistantAnswerRunCommandWriter answerRunCommandWriter;
-  final AssistantRunQuery runQuery;
+  final AssistantAnswerRunProcessCommandWriter answerRunCommandWriter;
+  final AssistantRunProcessQuery runQuery;
   final AssistantRunEventStream runEventStream;
   final AssistantRunControlFacet runControl;
-  final AssistantCreationRunCommandWriter creationRunCommandWriter;
+  final AssistantCreationRunProcessCommandWriter creationRunCommandWriter;
 
   @override
   Future<AssistantSessionWire> createAssistantSession({
@@ -412,8 +412,8 @@ final class _AssistantSearchRunComposition implements AssistantSearchRunFacade {
   });
 
   final AssistantSessionCommandWriter sessionCommandWriter;
-  final AssistantRunIntentCommandWriter runIntentCommandWriter;
-  final AssistantRunQuery runQuery;
+  final AssistantRunIntentProcessCommandWriter runIntentCommandWriter;
+  final AssistantRunProcessQuery runQuery;
   final AssistantRunEventStream runEventStream;
 
   @override

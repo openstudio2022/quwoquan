@@ -116,6 +116,8 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertTrue(plan["flags"]["has_app"])
         self.assertIn("user-service", plan["go_services"])
         self.assertIn("service_architecture", plan["static_checks"])
+        self.assertIn("python_script_governance", plan["static_checks"])
+        self.assertIn("entrypoint_script_paths", plan["static_checks"])
 
     def test_flutter_guard_no_longer_forces_concurrency_one(self) -> None:
         source = FLUTTER_GUARD.read_text(encoding="utf-8")
@@ -138,6 +140,7 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertIn("fingerprint", source.lower())
         self.assertIn("HARD_BUDGET", source)
         self.assertIn("SOFT_BUDGET", source)
+        self.assertIn("entrypoint_script_paths", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope all", source)
 

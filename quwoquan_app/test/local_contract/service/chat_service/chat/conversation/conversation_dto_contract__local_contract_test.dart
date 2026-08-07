@@ -133,6 +133,12 @@ Map<String, Object?> _conversationWire([
     'creatorId': 'user_001',
     'circleId': '',
     'circleGroupId': '',
+    // 会话可由「发起活动」派生：非活动会话仍必须显式给出空 gatheringId 与 0 版本，
+    // canonical ChatConversation 不接受缺字段。
+    'gatheringId': '',
+    'gatheringSourceVersion': 0,
+    'accessMode': 'active',
+    'postingPolicy': 'member_chat',
     'entityId': '',
     'originType': 'direct_init',
     'maxSeq': 0,

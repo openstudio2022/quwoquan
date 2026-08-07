@@ -42,7 +42,7 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
         "reliabletask_fleet_report",
         label="reliabletask_fleet_report",
     )
-    from content.execution.reliabletask_fleet import ReliableTaskFleetReport
+    from content.execution.queue.reliabletask.report import ReliableTaskFleetReport
 
     ReliableTaskFleetReport.from_document(report)
     commercial_accepted = int(report.get("commercialAcceptedCount") or 0)

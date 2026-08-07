@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -236,7 +235,7 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
         ref.read(myIntersectionSummaryProvider.notifier).load();
       } catch (visitError, stackTrace) {
         unawaited(
-          AppExceptionTelemetryService.instance.recordGlobalException(
+          ref.read(exceptionTelemetryPortProvider).recordGlobalException(
             source: 'my_intersection_inbox.mark_visited',
             exceptionText: visitError.toString(),
             stackText: stackTrace.toString(),

@@ -17,11 +17,16 @@ from core.data_issue import (
     DataIssueStage,
     DataRecoveryAction,
 )
+
 from content.execution.context import ExecutionContext
 from content.execution.queue.core import _load_jobs
 from content.execution.queue.model import QueueJob
-from content.execution.queue.runtime import DISCARDED_ISSUE_CODES, record_reliabletask_failure
-from content.execution.reliabletask_jobs import uses_reliabletask
+from content.execution.queue.reliabletask.jobs import uses_reliabletask
+from content.execution.queue.runtime import (
+    DISCARDED_ISSUE_CODES,
+    record_reliabletask_failure,
+    record_reliabletask_stale_terminal_outcome,
+)
 
 
 _CHECKPOINT_QUEUE_STAGE = {
@@ -79,6 +84,27 @@ def _active_jobs(
         job
         for job in _remaining_jobs(execution_id, queue_stage)
         if job.state not in _TERMINAL_JOB_STATES
+    )
+
+
+def _terminal_partial_closure_ready(
+    ctx: ExecutionContext,
+    stage: ExecutionStage,
+    queue_stage: QueueJobStage,
+) -> bool:
+    """Return whether resume can reuse a non-empty terminal object closure."""
+
+    if _delivered_count(ctx, stage, queue_stage) <= 0:
+        return False
+    declared = _declared_jobs(ctx.execution_id, queue_stage)
+    return bool(declared) and all(
+        job.state is QueueJobState.SUCCEEDED
+        or (
+            job.state in _TERMINAL_JOB_STATES
+            and job.last_issue is not None
+            and job.last_issue.code in DISCARDED_ISSUE_CODES
+        )
+        for job in declared
     )
 
 
@@ -166,6 +192,14 @@ def _project_fleet_outcomes(
         job_id = str(getattr(outcome, "job_id", ""))
         status = str(getattr(outcome, "status", ""))
         job = jobs[job_id]
+        if job.state is QueueJobState.SUCCEEDED and status == "dead":
+            record_reliabletask_stale_terminal_outcome(
+                execution_id,
+                job_id,
+                attempts=int(getattr(outcome, "attempts", 0)),
+                failure_code=str(getattr(outcome, "failure_code", "")).strip(),
+            )
+            continue
         if status == "succeeded":
             if job.job_id in {item.job_id for item in _remaining_jobs(execution_id, queue_stage)}:
                 issues.append(
@@ -207,7 +241,7 @@ def _dispatch_fleet(
     queue_stage: QueueJobStage,
 ) -> ReliableTaskDispatchResult:
     from core.runtime_policy import active_runtime_policy
-    from content.execution.reliabletask_fleet import run_reliabletask_fleet
+    from content.execution.queue.reliabletask.fleet import run_reliabletask_fleet
 
     policy = active_runtime_policy()
     expected_job_ids = frozenset(
@@ -282,18 +316,20 @@ def _dispatch_fleet(
         blocking = ()
     elif _active_jobs(ctx.execution_id, queue_stage):
         status = ReliableTaskDispatchStatus.WAITING
+    elif delivered > 0:
+        # The candidate pool is terminal, but a non-empty reviewed closure
+        # exists. Quota is a scale milestone; publish every qualified object
+        # and retain the remainder as typed discards.
+        status = ReliableTaskDispatchStatus.COMPLETED
+        blocking = ()
     else:
-        # 候选池已全部终态但达标数不足配额：过采系数偏低或区域供给不足，
-        # 必须让运行者看见，而不是继续空转。
-        from content.execution.spec_contract import approved_quota
-
+        # Only an empty qualified closure blocks the lane.
         status = ReliableTaskDispatchStatus.BLOCKED
         blocking = (
             _contract_issue(
                 stage,
-                f"候选池耗尽但未达准出配额："
-                f"达标 {delivered}/{approved_quota(ctx.execution_id)}，"
-                f"丢弃 {len(discarded)}；需提高 oversampleFactor 或扩充区域实体供给",
+                "候选池耗尽且无合格对象；"
+                f"丢弃 {len(discarded)}，需扩充真实来源/媒体供给",
             ),
         )
     return ReliableTaskDispatchResult(
@@ -322,7 +358,11 @@ def dispatch_reliabletask_checkpoint(
         return None
     # 配额已交付即视为本 checkpoint 完成：剩余作业要么是终态丢弃对象，
     # 要么是过采冗余，再次派发只是重复消耗额度。
-    if _quota_reached(ctx, stage, queue_stage):
+    if _quota_reached(ctx, stage, queue_stage) or _terminal_partial_closure_ready(
+        ctx,
+        stage,
+        queue_stage,
+    ):
         return None
     return _dispatch_fleet(ctx, stage, queue_stage)
 

@@ -7,18 +7,28 @@ from types import SimpleNamespace
 
 import pytest
 
-from content.execution import handoff, post_review_closure, spec_contract
+from content.execution import spec_contract
+from content.execution.controller.execute import handoff
+from content.execution.closure import post_review as post_review_closure
 from content.execution.controller import (
     post_independent_review,
     stage_post_compose,
     stage_post_review,
 )
+from content.execution.controller import content_plan_decisions
 from content.execution.recovery import post_recovery
 from content.post import object_index
 from content.post.article import base_draft
 from content.release.canonical import post_promotion
 from content.source.media import check as media_check
 from core.control_types import StageStatus
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueLane,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
 from core.io import read_json
 
 
@@ -125,6 +135,60 @@ def test_post_review_quota_shortfall_still_loads_the_qualified_object(
             expected_object_targets=targets,
             require_quota_milestone=True,
         )
+
+
+def test_content_plan_absorbs_twelve_video_shortfalls_when_three_real_items_remain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(spec_contract, "approved_quota", lambda _execution_id: 10)
+    names = [f"视频候选-{index:02d}" for index in range(15)]
+    active_spec = {
+        "scope": {
+            "coverageTargets": [
+                {"name": name, "entityType": "地点/景区"} for name in names
+            ]
+        }
+    }
+    items = [
+        {"ref": f"video-{index}", "entityTags": [name]}
+        for index, name in enumerate(names[:3])
+    ]
+    issues = [
+        data_issue(
+            DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
+            stage=DataIssueStage.CONTENT_PLAN,
+            ref=name,
+            lane=DataIssueLane.VIDEO,
+            recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+            message="no acquired playable video",
+        )
+        for name in names[3:]
+    ]
+    persisted: dict[str, object] = {}
+
+    absorbed = content_plan_decisions.absorb_content_plan_shortfalls(
+        ctx=SimpleNamespace(execution_id=EXECUTION_ID.replace("article", "video")),
+        active_spec=active_spec,
+        items=items,
+        issues=issues,
+        carrier="video",
+        persist_absorb=lambda execution_id, **kwargs: persisted.update(
+            {"executionId": execution_id, **kwargs}
+        ),
+    )
+
+    assert absorbed
+    assert [
+        row["name"] for row in active_spec["scope"]["coverageTargets"]
+    ] == names[:3]
+    assert persisted["successful_names"] == names[:3]
+    assert len(persisted["issues"]) == 12
+    assert all(
+        issue.code is DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL
+        and issue.stage is DataIssueStage.CONTENT_PLAN
+        and issue.recovery is DataRecoveryAction.RETRY_SOURCE_DISCOVERY
+        for issue in persisted["issues"]
+    )
 
 
 def test_canonical_promotion_consumes_the_same_qualified_closure(

@@ -16,7 +16,7 @@ List<Override> mockContentFacetOverrides(
   ContentPostDetailReader? workBrowserDetailReader,
   ContentCommentFacet? commentFacet,
   ContentPostReactionPort? postReactionFacet,
-  ContentBehaviorCommandWriter? behaviorWriter,
+  ContentBehaviorFactAppender? behaviorWriter,
 }) {
   return <Override>[
     contentDiscoveryFeedQueryProvider.overrideWithValue(
@@ -35,7 +35,7 @@ List<Override> mockContentFacetOverrides(
       adapter as ContentPostDeleteCommandWriter,
     ),
     contentBehaviorCommandWriterProvider.overrideWithValue(
-      behaviorWriter ?? const _TestContentBehaviorCommandWriter(),
+      behaviorWriter ?? const _TestContentBehaviorFactAppender(),
     ),
     contentPostReactionFacetProvider.overrideWithValue(
       postReactionFacet ?? InMemoryContentPostReactionPort(),
@@ -52,9 +52,9 @@ List<Override> mockContentFacetOverrides(
   ];
 }
 
-final class _TestContentBehaviorCommandWriter
-    implements ContentBehaviorCommandWriter {
-  const _TestContentBehaviorCommandWriter();
+final class _TestContentBehaviorFactAppender
+    implements ContentBehaviorFactAppender {
+  const _TestContentBehaviorFactAppender();
 
   @override
   Future<void> reportBehaviors(ReportContentBehaviorsCommand command) async {}

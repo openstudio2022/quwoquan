@@ -24,6 +24,23 @@ type readyObservationStub struct {
 	snapshot ReadyIndexObservation
 }
 
+func observedCampaignBinding() DataContentCampaignBinding {
+	return DataContentCampaignBinding{
+		RootExecutionID:     "20260806--travel-homepage-m100--china--scale-001",
+		RunID:               "campaign-run-observer",
+		Generation:          7,
+		FencingToken:        "sha256:" + strings.Repeat("1", 64),
+		PlanDigest:          "sha256:" + strings.Repeat("2", 64),
+		SourceRevision:      "sha256:" + strings.Repeat("3", 64),
+		SourceDigest:        "sha256:" + strings.Repeat("4", 64),
+		EntityCatalogDigest: "sha256:" + strings.Repeat("5", 64),
+	}
+}
+
+func observedExecutionEnvelopeDigest() string {
+	return "sha256:" + strings.Repeat("6", 64)
+}
+
 func (s readyObservationStub) Observe(
 	_ context.Context,
 	_ int64,
@@ -44,7 +61,7 @@ func observedTask(
 	stage := "author"
 	idempotencyKey := executionID + "|" + entityRef + "|" + carrier + "|" +
 		sourceRevision + "|" + stage
-	return ReliableAsyncTask{
+	task := ReliableAsyncTask{
 		TaskID:         "runtime-" + jobID,
 		TaskType:       DataContentTaskType,
 		IdempotencyKey: idempotencyKey,
@@ -66,6 +83,11 @@ func observedTask(
 		CreatedAt:     createdAt,
 		UpdatedAt:     updatedAt,
 	}
+	for key, value := range observedCampaignBinding().payload() {
+		task.Payload[key] = value
+	}
+	task.Payload["executionEnvelopeDigest"] = observedExecutionEnvelopeDigest()
+	return task
 }
 
 func TestDataContentObserverBindsMongoAndRedisToOneExecution(t *testing.T) {
@@ -102,9 +124,11 @@ func TestDataContentObserverBindsMongoAndRedisToOneExecution(t *testing.T) {
 		Now: func() time.Time { return now },
 	}
 	request := DataContentExecutionObservationRequest{
-		ExecutionID:          executionID,
-		Carrier:              "homepage",
-		RequestBindingDigest: "sha256:" + strings.Repeat("b", 64),
+		ExecutionID:             executionID,
+		Carrier:                 "homepage",
+		RequestBindingDigest:    "sha256:" + strings.Repeat("b", 64),
+		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
+		Campaign:                observedCampaignBinding(),
 	}
 	observation, err := observer.ObserveExecution(context.Background(), request)
 	if err != nil {
@@ -159,9 +183,11 @@ func TestDataContentObserverRejectsCrossExecutionRedisEntry(t *testing.T) {
 	_, err := observer.ObserveExecution(
 		context.Background(),
 		DataContentExecutionObservationRequest{
-			ExecutionID:          executionID,
-			Carrier:              "image",
-			RequestBindingDigest: "sha256:" + strings.Repeat("c", 64),
+			ExecutionID:             executionID,
+			Carrier:                 "image",
+			RequestBindingDigest:    "sha256:" + strings.Repeat("c", 64),
+			ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
+			Campaign:                observedCampaignBinding(),
 		},
 	)
 	if err == nil || !strings.Contains(err.Error(), "crossed executionId") {
@@ -179,9 +205,11 @@ func TestDataContentObserverRejectsMongoCarrierAndSourceIdentityDrift(t *testing
 		Now:   func() time.Time { return now },
 	}
 	request := DataContentExecutionObservationRequest{
-		ExecutionID:          executionID,
-		Carrier:              "video",
-		RequestBindingDigest: "sha256:" + strings.Repeat("d", 64),
+		ExecutionID:             executionID,
+		Carrier:                 "video",
+		RequestBindingDigest:    "sha256:" + strings.Repeat("d", 64),
+		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
+		Campaign:                observedCampaignBinding(),
 	}
 	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
 		!strings.Contains(err.Error(), "identity drift") {
@@ -194,6 +222,67 @@ func TestDataContentObserverRejectsMongoCarrierAndSourceIdentityDrift(t *testing
 	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
 		!strings.Contains(err.Error(), "source identity drift") {
 		t.Fatalf("source drift was not rejected: %v", err)
+	}
+}
+
+func TestDataContentObserverRejectsMongoCampaignGenerationAndSourceDrift(t *testing.T) {
+	now := time.Now().UTC()
+	executionID := "20260806--travel-article-m100--china--scale-001"
+	request := DataContentExecutionObservationRequest{
+		ExecutionID:             executionID,
+		Carrier:                 "article",
+		RequestBindingDigest:    "sha256:" + strings.Repeat("6", 64),
+		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
+		Campaign:                observedCampaignBinding(),
+	}
+	task := observedTask(
+		executionID,
+		"article",
+		"job-article",
+		TaskStatusSucceeded,
+		now.Add(-time.Minute),
+		now,
+	)
+	observer := DataContentExecutionObserver{
+		Store: observationStoreStub{tasks: []ReliableAsyncTask{task}},
+		Ready: readyObservationStub{},
+		Now:   func() time.Time { return now },
+	}
+	task.Payload["executionEnvelopeDigest"] = "sha256:" + strings.Repeat("7", 64)
+	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
+	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
+		!strings.Contains(err.Error(), "execution envelope identity drift") {
+		t.Fatalf("execution envelope drift was not rejected: %v", err)
+	}
+
+	task = observedTask(
+		executionID,
+		"article",
+		"job-article",
+		TaskStatusSucceeded,
+		now.Add(-time.Minute),
+		now,
+	)
+	task.Payload["campaignGeneration"] = "8"
+	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
+	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
+		!strings.Contains(err.Error(), "campaign generation/source identity drift") {
+		t.Fatalf("campaign generation drift was not rejected: %v", err)
+	}
+
+	task = observedTask(
+		executionID,
+		"article",
+		"job-article",
+		TaskStatusSucceeded,
+		now.Add(-time.Minute),
+		now,
+	)
+	task.Payload["campaignSourceDigest"] = "sha256:" + strings.Repeat("9", 64)
+	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
+	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
+		!strings.Contains(err.Error(), "campaign generation/source identity drift") {
+		t.Fatalf("campaign source drift was not rejected: %v", err)
 	}
 }
 

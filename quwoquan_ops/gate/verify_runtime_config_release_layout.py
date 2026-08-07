@@ -42,7 +42,7 @@ def main() -> int:
             failures.append(f"runtime renderer missing single-track rule: {token}")
 
     packager = (
-        ROOT / "quwoquan_service/scripts/runtime/build_service_env_package.sh"
+        ROOT / "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh"
     ).read_text(encoding="utf-8")
     for token in (
         '"$stage_dir/config/config.yaml"',

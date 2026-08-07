@@ -15,7 +15,7 @@ void main() {
             postId: 'post-1',
             contentType: 'image',
             contentIdentity: 'work',
-            assistantUsePolicy: 'inherit',
+            assistantUsePolicy: AssistantUsePolicy.inherit,
             authorId: 'author-1',
             authorDisplayName: '测试作者',
             authorAvatarUrl: '',

@@ -186,7 +186,7 @@ void main() {
 
     test('comment deep links use the generated workBrowser builder', () {
       for (final path in <String>[
-        'lib/service/user_service/persona_management/persona/presentation/profile_comment_detail_route.dart',
+        'lib/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_comment_route.dart',
         'lib/runtime/di/navigation/app_message_navigation.dart',
       ]) {
         final source = File(path).readAsStringSync();

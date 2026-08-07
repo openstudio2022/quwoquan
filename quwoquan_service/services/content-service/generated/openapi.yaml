@@ -729,15 +729,15 @@ paths:
                 - bearerAuth: []
     /content/media/{mediaId}/original:access:
         post:
-            operationId: RequestOriginalImageAccess
-            x-contract-operation-id: content.media_original_access_fact.RequestOriginalImageAccess
-            x-object-id: content.media_original_access_fact
+            operationId: ReserveOriginalImageAccessGrant
+            x-contract-operation-id: content.original_access_quota.ReserveOriginalImageAccessGrant
+            x-object-id: content.original_access_quota
             x-actor: persona
             x-application:
                 kind: command
-                facet: MediaOriginalAccessAppendFacet
-                method: requestOriginalImageAccess
-                appendSink: MediaOriginalAccessFact
+                facet: OriginalAccessQuotaFacade
+                method: reserveOriginalImageAccessGrant
+                aggregateOwner: OriginalAccessQuota
             parameters:
                 - name: mediaId
                   in: path
@@ -1018,8 +1018,8 @@ paths:
                 - bearerAuth: []
     /content/personas/{personaId}/interactions/{interactionId}/read-facts:
         post:
-            operationId: UpdateProfileInteractionState
-            x-contract-operation-id: content.profile_interaction_read_fact.UpdateProfileInteractionState
+            operationId: AppendProfileInteractionReadFact
+            x-contract-operation-id: content.profile_interaction_read_fact.AppendProfileInteractionReadFact
             x-object-id: content.profile_interaction_read_fact
             x-actor: persona
             x-application:
@@ -1670,8 +1670,8 @@ paths:
                 - {}
     /content/posts/{postId}/outbound-shares:
         post:
-            operationId: CreateOutboundShare
-            x-contract-operation-id: content.outbound_share_fact.CreateOutboundShare
+            operationId: AppendOutboundShareFact
+            x-contract-operation-id: content.outbound_share_fact.AppendOutboundShareFact
             x-object-id: content.outbound_share_fact
             x-actor: persona_or_device
             x-application:

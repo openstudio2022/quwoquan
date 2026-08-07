@@ -20,6 +20,8 @@ void main() {
     final retiredService = File(
       <String>[
         'lib',
+        'service',
+        'assistant_service',
         'assistant',
         'memory',
         'preference',
@@ -29,7 +31,7 @@ void main() {
     );
     expect(retiredService.existsSync(), isFalse);
 
-    final assistantSources = Directory('lib/assistant')
+    final assistantSources = Directory('lib/service/assistant_service')
         .listSync(recursive: true)
         .whereType<File>()
         .where((file) => file.path.endsWith('.dart'));

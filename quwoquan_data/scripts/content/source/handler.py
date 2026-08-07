@@ -149,7 +149,7 @@ def handle_download(
     entity_ids = [str(entity_id).strip() for entity_id in entity_ids if str(entity_id).strip()]
     max_workers = max_workers or active_runtime_policy().download_concurrency
     selected_lanes = selected_download_lanes(lane)
-    from content.execution.campaign_external_input_runtime import (
+    from content.execution.campaign.external_input_runtime import (
         bound_runtime_external_input_context,
     )
     from content.execution.identity import parse_execution_id

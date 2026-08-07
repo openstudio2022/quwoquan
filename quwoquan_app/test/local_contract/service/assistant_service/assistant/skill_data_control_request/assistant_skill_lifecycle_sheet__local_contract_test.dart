@@ -14,7 +14,7 @@ const _skillName = '贴身旅行管家';
 
 Widget _host({
   required AssistantSkillActivityQuery activityQuery,
-  required AssistantSkillDataControlFacet dataControlFacet,
+  required _DataControlFacetFake dataControlFacet,
 }) {
   return CupertinoApp(
     locale: const Locale('zh'),
@@ -28,7 +28,8 @@ Widget _host({
           skillId: _skillId,
           skillName: _skillName,
           activityQuery: activityQuery,
-          dataControlFacet: dataControlFacet,
+          dataControlCommandWriter: dataControlFacet,
+          dataControlQuery: dataControlFacet,
           onProductAction: (_) {},
         ),
         child: const Text('open'),
@@ -40,7 +41,7 @@ Widget _host({
 Future<void> _openSheet(
   WidgetTester tester, {
   required AssistantSkillActivityQuery activityQuery,
-  required AssistantSkillDataControlFacet dataControlFacet,
+  required _DataControlFacetFake dataControlFacet,
 }) async {
   await tester.pumpWidget(
     _host(activityQuery: activityQuery, dataControlFacet: dataControlFacet),
@@ -408,7 +409,10 @@ final class _ActivityQueryFake implements AssistantSkillActivityQuery {
   }
 }
 
-final class _DataControlFacetFake implements AssistantSkillDataControlFacet {
+final class _DataControlFacetFake
+    implements
+        SkillDataControlProcessCommandWriter,
+        SkillDataControlProcessQuery {
   final List<Object> createFailures = <Object>[];
   final List<SkillDataControlMutationReceipt> createResults =
       <SkillDataControlMutationReceipt>[];

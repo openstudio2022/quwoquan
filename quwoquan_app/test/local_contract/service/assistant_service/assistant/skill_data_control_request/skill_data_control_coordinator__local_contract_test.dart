@@ -12,7 +12,8 @@ void main() {
         ..createFailures.add(StateError('network result unknown'));
       var sequence = 0;
       final coordinator = SkillDataControlCoordinator(
-        facet: facet,
+        commandWriter: facet,
+        query: facet,
         intentFactory: () => 'intent-${++sequence}',
         delay: (_) async {},
       );
@@ -69,7 +70,8 @@ void main() {
         );
       var sequence = 0;
       final coordinator = SkillDataControlCoordinator(
-        facet: facet,
+        commandWriter: facet,
+        query: facet,
         intentFactory: () => 'intent-${++sequence}',
         delay: (_) async {},
       );
@@ -123,7 +125,8 @@ void main() {
         );
       var sequence = 0;
       final coordinator = SkillDataControlCoordinator(
-        facet: facet,
+        commandWriter: facet,
+        query: facet,
         intentFactory: () => 'intent-${++sequence}',
         delay: (_) async {},
       );
@@ -166,7 +169,8 @@ void main() {
         _request(status: SkillDataControlRequestStatus.executing, revision: 2),
       ]);
     final coordinator = SkillDataControlCoordinator(
-      facet: facet,
+      commandWriter: facet,
+      query: facet,
       intentFactory: () => 'intent',
       delay: (_) async {},
       maximumPollAttempts: 2,
@@ -191,7 +195,8 @@ void main() {
         _request(status: SkillDataControlRequestStatus.cancelled, revision: 2),
       );
     final coordinator = SkillDataControlCoordinator(
-      facet: facet,
+      commandWriter: facet,
+      query: facet,
       intentFactory: () => 'intent',
       delay: (_) async {},
     );
@@ -224,7 +229,8 @@ void main() {
         );
       var sequence = 0;
       final coordinator = SkillDataControlCoordinator(
-        facet: facet,
+        commandWriter: facet,
+        query: facet,
         intentFactory: () => 'intent-${++sequence}',
         delay: (_) async {},
       );
@@ -271,7 +277,10 @@ SkillDataControlMutationReceipt _receipt(SkillDataControlRequest request) {
   return SkillDataControlMutationReceipt(request: request, replayed: false);
 }
 
-final class _DataControlFacetFake implements AssistantSkillDataControlFacet {
+final class _DataControlFacetFake
+    implements
+        SkillDataControlProcessCommandWriter,
+        SkillDataControlProcessQuery {
   final List<Object> createFailures = <Object>[];
   final List<Object> confirmFailures = <Object>[];
   final List<SkillDataControlMutationReceipt> createResults =

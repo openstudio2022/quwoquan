@@ -19,8 +19,8 @@ import '../../../../../support/service/assistant_service/assistant/assistant_run
 
 const _travelCompanionSkillId = 'travel_companion';
 const _travelCompanionRequiredScopes = <String>[
+  'assistant.learning.feedback_context.read',
   'assistant.memory.preferences.read',
-  'travel.trip.read',
 ];
 
 void main() {

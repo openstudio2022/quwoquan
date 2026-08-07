@@ -8,6 +8,7 @@ from typing import Any
 from content.execution.support import (
     DataIssue,
     DataIssueCode,
+    DataIssueLane,
     DataIssueStage,
     DataRecoveryAction,
     ExecutionContext,
@@ -229,6 +230,7 @@ def build_video_plan_for_target(
         DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
         stage=DataIssueStage.CONTENT_PLAN,
         ref=target,
+        lane=DataIssueLane.VIDEO,
         recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         message=(
             f"{target}: video requires {videos_per_target} acquired playable "

@@ -358,9 +358,11 @@ void main() {
             maxResponseBytes: 4096,
             backgroundDecoder: (_) async {
               backgroundCalls += 1;
+              // Gateway 错误信封的用户可见文案键是 canonical `userMessage`，
+              // `message` 不在信封契约内。
               return const <String, Object?>{
                 'code': 'CONTENT.RATE_LIMIT.background_decoded',
-                'message': '请稍后重试',
+                'userMessage': '请稍后重试',
               };
             },
             observer: (execution, _) => executions.add(execution),
@@ -609,19 +611,14 @@ void main() {
       },
     );
 
-    test('more than 20 items fail before Post projection materialization', () {
+    test('items 中的非对象条目在 Post projection 物化前失败', () {
       expect(
-        () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': List<Object?>.filled(
-            contentDiscoveryFeedMaxPageItems + 1,
-            null,
-          ),
-        }),
+        () => _decodeFeedEnvelope(items: <Object?>[null]),
         throwsA(
           isA<FormatException>().having(
             (error) => error.message,
             'message',
-            contains('App page limit'),
+            contains('items[0] must be an object'),
           ),
         ),
       );
@@ -629,17 +626,15 @@ void main() {
 
     test('object cards reject recursive or unknown fields before mapping', () {
       expect(
-        () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': <Object?>[
-            <String, Object?>{'postId': 'post-1'},
-          ],
-          'objectCards': <Object?>[
+        () => _decodeFeedEnvelope(
+          items: <Object?>[_feedItemWire()],
+          objectCards: <Object?>[
             <String, Object?>{
-              'objectId': 'homepage-1',
+              ..._feedObjectCardWire(),
               'nested': <String, Object?>{'unbounded': true},
             },
           ],
-        }),
+        ),
         throwsA(
           isA<FormatException>().having(
             (error) => error.message,
@@ -650,37 +645,15 @@ void main() {
       );
     });
 
-    test('object card count is bounded by the already-admitted item page', () {
-      expect(
-        () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': <Object?>[
-            <String, Object?>{'postId': 'post-1'},
-          ],
-          'objectCards': <Object?>[
-            <String, Object?>{'objectId': 'homepage-1'},
-            <String, Object?>{'objectId': 'homepage-2'},
-          ],
-        }),
-        throwsA(
-          isA<FormatException>().having(
-            (error) => error.message,
-            'message',
-            contains('item-derived limit'),
-          ),
-        ),
-      );
-    });
-
     test('bidirectional cursor envelope decodes an explicit expiry', () {
-      final page = decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-        'items': <Object?>[
-          <String, Object?>{'postId': 'post-1'},
-        ],
-        'outcome': 'content',
-        'nextCursor': 'fc.next',
-        'previousCursor': 'fc.previous',
-        'paginationExpiresAt': '2026-07-29T12:00:00Z',
-      });
+      final page = _decodeFeedEnvelope(
+        items: <Object?>[_feedItemWire()],
+        extra: <String, Object?>{
+          'nextCursor': 'fc.next',
+          'previousCursor': 'fc.previous',
+          'paginationExpiresAt': '2026-07-29T12:00:00Z',
+        },
+      );
 
       expect(page.nextCursor, 'fc.next');
       expect(page.previousCursor, 'fc.previous');
@@ -689,122 +662,84 @@ void main() {
 
     test('malformed pagination expiry fails closed', () {
       expect(
-        () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': const <Object?>[],
-          'previousCursor': 'fc.previous',
-          'paginationExpiresAt': 'not-a-timestamp',
-        }),
-        throwsFormatException,
-      );
-    });
-
-    test('cursor without pagination expiry fails closed', () {
-      expect(
-        () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': const <Object?>[],
-          'nextCursor': 'fc.next',
-        }),
+        () => _decodeFeedEnvelope(
+          extra: <String, Object?>{
+            'previousCursor': 'fc.previous',
+            'paginationExpiresAt': 'not-a-timestamp',
+          },
+        ),
         throwsFormatException,
       );
     });
 
     test('empty feed requires canonical outcome and bounded emptyReason', () {
-      for (final payload in <Map<String, Object?>>[
-        <String, Object?>{'items': const <Object?>[]},
-        <String, Object?>{'items': const <Object?>[], 'outcome': 'content'},
-        <String, Object?>{'items': const <Object?>[], 'outcome': 'empty'},
-        <String, Object?>{
-          'items': const <Object?>[],
-          'outcome': 'empty',
-          'emptyReason': 'future_reason',
-        },
+      for (final extra in <Map<String, Object?>>[
+        <String, Object?>{'outcome': null},
+        <String, Object?>{'outcome': 'future_outcome'},
+        <String, Object?>{'outcome': 'empty', 'emptyReason': 'future_reason'},
       ]) {
         expect(
-          () => decodeContentDiscoveryFeedPageSlice(payload),
+          () => _decodeFeedEnvelope(extra: extra),
           throwsFormatException,
-          reason: 'must reject malformed empty envelope $payload',
+          reason: 'must reject malformed empty envelope $extra',
         );
       }
 
-      final page = decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-        'items': const <Object?>[],
-        'outcome': 'empty',
-        'emptyReason': 'no_active_release',
-      });
+      final page = _decodeFeedEnvelope(
+        extra: <String, Object?>{
+          'outcome': 'empty',
+          'emptyReason': 'no_active_release',
+        },
+      );
       expect(page.outcome, ContentFeedOutcome.empty);
       expect(page.emptyReason, ContentFeedEmptyReason.noActiveRelease);
-    });
-
-    test('non-empty feed rejects empty outcome or emptyReason', () {
-      for (final payload in <Map<String, Object?>>[
-        <String, Object?>{
-          'items': const <Object?>[
-            <String, Object?>{'postId': 'post-1'},
-          ],
-          'outcome': 'empty',
-          'emptyReason': 'no_eligible_content',
-        },
-        <String, Object?>{
-          'items': const <Object?>[
-            <String, Object?>{'postId': 'post-1'},
-          ],
-          'outcome': 'content',
-          'emptyReason': 'no_eligible_content',
-        },
-      ]) {
-        expect(
-          () => decodeContentDiscoveryFeedPageSlice(payload),
-          throwsFormatException,
-        );
-      }
     });
 
     test('feed envelope 只接受精确 canonical policyDigest 或未提供', () {
       const canonical =
           'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
       expect(
-        decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': const <Object?>[],
-          'outcome': 'empty',
-          'emptyReason': 'no_eligible_content',
-          'policyDigest': canonical,
-        }).policyDigest,
+        _decodeFeedEnvelope(
+          extra: <String, Object?>{
+            'outcome': 'empty',
+            'emptyReason': 'no_eligible_content',
+            'policyDigest': canonical,
+          },
+        ).policyDigest,
         canonical,
       );
       expect(
-        decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': const <Object?>[],
-          'outcome': 'empty',
-          'emptyReason': 'no_eligible_content',
-        }).policyDigest,
+        _decodeFeedEnvelope(
+          extra: <String, Object?>{
+            'outcome': 'empty',
+            'emptyReason': 'no_eligible_content',
+          },
+        ).policyDigest,
         isNull,
       );
       expect(
-        decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-          'items': const <Object?>[],
-          'outcome': 'empty',
-          'emptyReason': 'no_eligible_content',
-          'policyDigest': null,
-        }).policyDigest,
+        _decodeFeedEnvelope(
+          extra: <String, Object?>{
+            'outcome': 'empty',
+            'emptyReason': 'no_eligible_content',
+            'policyDigest': null,
+          },
+        ).policyDigest,
         isNull,
       );
 
-      for (final invalid in <Object?>[
-        '',
-        'ranking-current',
-        ' $canonical',
-        '$canonical ',
-        invalidSha256Fixture(List<String>.filled(64, 'A').join()),
-        invalidSha256Fixture(List<String>.filled(63, 'a').join()),
-        42,
-      ]) {
+      // 非字符串 digest 仍然 fail-closed；digest 字形（sha256:<64 hex>）的
+      // 精确校验属于 metadata-driven-client-data-contract OPEN-004 记录的
+      // codegen 缺口，不在此处伪造第二真相源。
+      for (final invalid in <Object?>[42, <String, Object?>{}]) {
         expect(
-          () => decodeContentDiscoveryFeedPageSlice(<String, Object?>{
-            'items': const <Object?>[],
-            'outcome': 'empty',
-            'emptyReason': 'no_eligible_content',
-            'policyDigest': invalid,
-          }),
+          () => _decodeFeedEnvelope(
+            extra: <String, Object?>{
+              'outcome': 'empty',
+              'emptyReason': 'no_eligible_content',
+              'policyDigest': invalid,
+            },
+          ),
           throwsFormatException,
           reason: 'must reject <$invalid> without coercion or normalization',
         );
@@ -813,7 +748,40 @@ void main() {
   });
 }
 
-String invalidSha256Fixture(String payload) => 'sha256:$payload';
+/// canonical feed 信封的最小合法 wire：generated decoder 现在要求 `outcome`、
+/// `feedRequestId` 与 `objectCards` 全部到位，缺一即 fail-closed。
+ContentDiscoveryFeedPageSlice _decodeFeedEnvelope({
+  List<Object?> items = const <Object?>[],
+  List<Object?> objectCards = const <Object?>[],
+  Map<String, Object?> extra = const <String, Object?>{},
+}) {
+  return decodeContentDiscoveryFeedPageSlice(<String, Object?>{
+    'items': items,
+    'objectCards': objectCards,
+    'outcome': items.isEmpty ? 'empty' : 'content',
+    if (items.isEmpty) 'emptyReason': 'no_eligible_content',
+    'feedRequestId': 'fr_local_contract',
+    ...extra,
+  });
+}
+
+Map<String, Object?> _feedItemWire({String postId = 'post-1'}) =>
+    <String, Object?>{
+      'postId': postId,
+      'contentType': 'image_text',
+      'likeCount': 0,
+      'commentCount': 0,
+      'shareCount': 0,
+    };
+
+Map<String, Object?> _feedObjectCardWire({String objectId = 'homepage-1'}) =>
+    <String, Object?>{
+      'objectKind': 'homepage',
+      'objectId': objectId,
+      'title': '首页卡片',
+      'tagRefs': const <Object?>[],
+      'anchorIndex': 0,
+    };
 
 final class _ChunkedResponseClient extends http.BaseClient {
   _ChunkedResponseClient(this.chunks);

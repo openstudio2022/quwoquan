@@ -56,8 +56,20 @@ relationships:
   reference_fields:
   - reviewerId
   target_object: user.UserAccount
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "审核与举报对象受 trust and safety 约束，禁止进入任何检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "审核与举报数据只对 trust and safety 角色开放，助手读取会泄露处置过程。"
 business_rules:
 - reporter persona、targetType 与 targetId 创建后不可变
 - 同一 reporter 对同一 target 与 reason 的活动举报按 idempotency key 去重

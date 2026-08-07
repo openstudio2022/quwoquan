@@ -12,7 +12,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	contentgenerated "quwoquan_service/services/content-service/generated/media/media_original_access_fact"
+	contentgenerated "quwoquan_service/services/content-service/generated/media/original_access_quota"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 )
 
@@ -211,7 +211,7 @@ func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 	}
 }
 
-func TestRequestOriginalImageAccessContract(t *testing.T) {
+func TestReserveOriginalImageAccessGrantContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	eventSpy.Reset()
 

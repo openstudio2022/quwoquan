@@ -32,6 +32,23 @@ local_identity_reasons:
     an aggregate Store identity
   skillId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.skill_subscription.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.assistant.skill_subscription.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.assistant.skill_subscription.write
 business_rules:
 - owner persona、skillId 和 trigger 创建后不可变
 - cron 必须在 trigger.timezone 指定的 IANA 时区计算并将 nextAttemptAt 持久化为 UTC；禁止使用 Worker 本地时区或把 App 本地时刻误当 UTC

@@ -66,6 +66,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：`lib/ui` 与 `lib/components` 仍有 Material import、Theme/Colors、MaterialPageRoute 和 Material 控件存量，可能引入 Android 视觉语义或第二套 token。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：对象 `presentation` 层（`lib/service/<service>/<context>/<object>/presentation/**`）与横切 `lib/design_system/**`、`lib/runtime/shell/**` 仍有 Material import、Theme/Colors、MaterialPageRoute 和 Material 控件存量，可能引入 Android 视觉语义或第二套 token。
 - 完成判定：运行时扫描报告中的违规信号按真实语义清零或由最小平台适配边界解释；iOS surface、semantic token、深浅色和可访问性均有直接测试证据。
-- 依赖：`scan_material_leaks.py` 动态报告与 iOS native surface gate。
+- 依赖：`quwoquan_app/scripts/tools/design_system/scan_material_leaks.py`
+  动态报告与 iOS native surface gate。

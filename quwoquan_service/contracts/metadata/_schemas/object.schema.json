@@ -9,6 +9,8 @@
     "identity",
     "access",
     "relationships",
+    "search_policy",
+    "assistant_access",
     "business_rules",
     "lifecycle"
   ],
@@ -17,6 +19,7 @@
       "enum": [
         "aggregate_root",
         "append_only_fact",
+        "process_manager",
         "projection",
         "external_reference",
         "runtime_session"
@@ -66,11 +69,174 @@
         "minLength": 1
       }
     },
-    "taggable": {
-      "type": "boolean"
+    "search_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exposed"],
+      "properties": {
+        "exposed": {
+          "enum": [
+            "none",
+            "filter_only",
+            "local_only",
+            "remote_index",
+            "remote_provider",
+            "hybrid"
+          ]
+        },
+        "object_type_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "eligibility_ref": { "type": "string", "minLength": 1 },
+        "index_projector_ref": { "type": "string", "minLength": 1 },
+        "provider_egress_ref": { "type": "string", "minLength": 1 },
+        "privacy_filter_ref": { "type": "string", "minLength": 1 },
+        "delegated_enforcement": { "type": "string", "minLength": 16 },
+        "not_exposed_reason": { "type": "string", "minLength": 16 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["exposed"],
+            "properties": { "exposed": { "const": "none" } }
+          },
+          "then": {
+            "required": ["not_exposed_reason"],
+            "not": {
+              "anyOf": [
+                { "required": ["object_type_refs"] },
+                { "required": ["eligibility_ref"] },
+                { "required": ["index_projector_ref"] },
+                { "required": ["provider_egress_ref"] },
+                { "required": ["privacy_filter_ref"] },
+                { "required": ["delegated_enforcement"] }
+              ]
+            }
+          },
+          "else": { "not": { "required": ["not_exposed_reason"] } }
+        },
+        {
+          "if": {
+            "required": ["exposed"],
+            "properties": { "exposed": { "enum": ["remote_index", "hybrid"] } }
+          },
+          "then": {
+            "required": [
+              "eligibility_ref",
+              "index_projector_ref",
+              "privacy_filter_ref"
+            ],
+            "not": {
+              "anyOf": [
+                { "required": ["delegated_enforcement"] },
+                { "required": ["provider_egress_ref"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["exposed"],
+            "properties": { "exposed": { "const": "remote_provider" } }
+          },
+          "then": {
+            "required": ["provider_egress_ref", "privacy_filter_ref"],
+            "not": {
+              "anyOf": [
+                { "required": ["delegated_enforcement"] },
+                { "required": ["eligibility_ref"] },
+                { "required": ["index_projector_ref"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["exposed"],
+            "properties": {
+              "exposed": { "enum": ["local_only", "filter_only"] }
+            }
+          },
+          "then": {
+            "required": ["delegated_enforcement"],
+            "not": {
+              "anyOf": [
+                { "required": ["eligibility_ref"] },
+                { "required": ["index_projector_ref"] },
+                { "required": ["provider_egress_ref"] },
+                { "required": ["privacy_filter_ref"] }
+              ]
+            }
+          }
+        }
+      ]
     },
-    "vector_enabled": {
-      "type": "boolean"
+    "assistant_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read", "cite", "write"],
+      "properties": {
+        "read": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "scopes"],
+          "properties": {
+            "mode": {
+              "enum": ["none", "metadata_only", "owner_scoped", "public"]
+            },
+            "scopes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^assistant\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.read$"
+              }
+            }
+          }
+        },
+        "cite": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "scopes"],
+          "properties": {
+            "mode": {
+              "enum": ["none", "internal_reference", "public_citation"]
+            },
+            "scopes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^assistant\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.cite$"
+              }
+            }
+          }
+        },
+        "write": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "scopes"],
+          "properties": {
+            "mode": {
+              "enum": ["none", "proposal_only", "consented_command"]
+            },
+            "scopes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^assistant\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.write$"
+              }
+            },
+            "requires_user_consent": { "type": "boolean" },
+            "consent_scope_ref": { "type": "string", "minLength": 1 }
+          }
+        },
+        "denied_reason": { "type": "string", "minLength": 16 }
+      }
     },
     "relation_signal": {
       "type": "boolean"
@@ -190,6 +356,23 @@
               "checkpoint": { "type": "string", "minLength": 1 },
               "rebuild": { "type": "string", "minLength": 1 },
               "tombstone": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "process_manager" } } },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": { "version_source": { "const": "checkpoint" } }
+          },
+          "lifecycle": {
+            "required": ["state_field", "states"],
+            "properties": {
+              "state_field": { "type": "string", "minLength": 1 },
+              "states": { "type": "array", "minItems": 2, "uniqueItems": true }
             }
           }
         }

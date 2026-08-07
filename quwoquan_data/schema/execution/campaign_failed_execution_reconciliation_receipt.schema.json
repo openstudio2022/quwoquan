@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/campaign_failed_execution_reconciliation_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "decision",
+    "reason",
+    "errorCode",
+    "originalSourceIdentity",
+    "observedSourceIdentity",
+    "submissions",
+    "campaignEvidence",
+    "executionEvidence",
+    "blockerEvidence",
+    "retryPolicy",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.campaign_failed_execution_reconciliation_receipt"
+    },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "decision": { "const": "superseded" },
+    "reason": { "const": "source_drift" },
+    "errorCode": { "const": "DATA.CAMPAIGN.FAILED_EXECUTION_SOURCE_DRIFT" },
+    "originalSourceIdentity": {
+      "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/sourceIdentity"
+    },
+    "observedSourceIdentity": {
+      "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/sourceIdentity"
+    },
+    "submissions": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        },
+        "article": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        },
+        "image": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        },
+        "video": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        }
+      }
+    },
+    "campaignEvidence": {
+      "type": "object",
+      "required": ["plan", "report", "runtimeSnapshot", "claims"],
+      "additionalProperties": false,
+      "properties": {
+        "plan": { "$ref": "#/$defs/fileEvidence" },
+        "report": { "$ref": "#/$defs/fileEvidence" },
+        "runtimeSnapshot": { "$ref": "#/$defs/fileEvidence" },
+        "claims": {
+          "type": "object",
+          "required": ["homepage", "article", "image", "video"],
+          "additionalProperties": false,
+          "properties": {
+            "homepage": { "$ref": "#/$defs/fileEvidence" },
+            "article": { "$ref": "#/$defs/fileEvidence" },
+            "image": { "$ref": "#/$defs/fileEvidence" },
+            "video": { "$ref": "#/$defs/fileEvidence" }
+          }
+        }
+      }
+    },
+    "executionEvidence": {
+      "type": "object",
+      "required": ["lanes"],
+      "additionalProperties": false,
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/laneExecutionAbsence"
+          }
+        }
+      }
+    },
+    "blockerEvidence": { "$ref": "#/$defs/fileEvidence" },
+    "retryPolicy": { "const": "new_four_lane_execution_with_retryOf" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "receiptDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "fileEvidence": {
+      "type": "object",
+      "required": ["ref", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

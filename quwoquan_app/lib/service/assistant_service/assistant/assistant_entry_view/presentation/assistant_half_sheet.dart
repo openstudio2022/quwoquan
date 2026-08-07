@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -8,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
-import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
 import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AssistantEntryAction, AssistantEntryChip;
@@ -28,6 +28,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 final assistantHalfSheetPersonalizationProvider = FutureProvider.autoDispose
     .family<AssistantHalfSheetPersonalization, AssistantOpenContext>((
@@ -86,8 +87,13 @@ class AssistantHalfSheet extends ConsumerStatefulWidget {
     // 半屏助手入口曝光：复用 AppLog pageAccess 通道（telemetry catalog 暂无
     // half sheet 专属事件 id，事件进 catalog 需 metadata codegen 链解锁）。
     final trace = AppTraceContextStore.instance;
+    // 静态入口只拿到 BuildContext，日志端口从所在 ProviderScope 解析，
+    // 保持与 Consumer 调用点同一个可 override 的注入边界。
+    final eventLog = ProviderScope.containerOf(
+      modalContext,
+    ).read(appEventLogPortProvider);
     unawaited(
-      AppLogService.instance.writeEvent(
+      eventLog.writeEvent(
         logType: AppLogType.pageAccess,
         level: AppLogLevel.info,
         context: AppLogContext(

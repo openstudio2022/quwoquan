@@ -4,15 +4,15 @@ import hashlib
 from pathlib import Path
 
 import pytest
-from content.execution import runtime_evidence_queue as queue_evidence
-from content.execution import runtime_evidence_reliabletask as reliable_observer
-from content.execution import runtime_evidence_reliabletask_process as process_port
-from content.execution.runtime_evidence_contract import CARRIERS
-from content.execution.runtime_evidence_queue import QueueEvidenceBlocker
-from content.execution.runtime_evidence_reliabletask import (
+from content.execution.runtime_evidence import queue as queue_evidence
+from content.execution.runtime_evidence import reliabletask as reliable_observer
+from content.execution.runtime_evidence import reliabletask_process as process_port
+from content.execution.runtime_evidence.contract import CARRIERS
+from content.execution.runtime_evidence.queue import QueueEvidenceBlocker
+from content.execution.runtime_evidence.reliabletask import (
     ReliableTaskQueueEvidenceProvider,
 )
-from content.execution.runtime_evidence_sampling import LocalQueueEvidenceProvider
+from content.execution.runtime_evidence.sampling import LocalQueueEvidenceProvider
 from core.control_types import QueueBackend
 
 

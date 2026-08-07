@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/assistant_use_policy_codec.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Test/data-boundary projection of the authoritative service read model into
@@ -10,7 +11,10 @@ ContentPostProjection contentPostProjectionFromReadModelMap(
     postId: _requiredText(source, 'postId'),
     contentType: _requiredText(source, 'contentType'),
     contentIdentity: _optionalText(source['contentIdentity']),
-    assistantUsePolicy: _optionalText(source['assistantUsePolicy']),
+    assistantUsePolicy: assistantUsePolicyFromWire(
+      source['assistantUsePolicy'],
+      'ContentPostProjection.assistantUsePolicy',
+    ),
     authorId: _optionalText(source['authorId']),
     authorDisplayName: _optionalText(source['authorDisplayName']),
     authorAvatarUrl: _optionalText(source['authorAvatarUrl']),

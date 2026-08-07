@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -8,7 +9,6 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/runtime/shell/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/runtime/di/assistant_schedule_tasks_provider.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
-import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
 import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
@@ -30,7 +30,8 @@ import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
         assistantSkillActivityQueryProvider,
         assistantSkillCatalogFacetProvider,
         assistantSkillConsentFacetProvider,
-        assistantSkillDataControlFacetProvider,
+        skillDataControlProcessCommandWriterProvider,
+        skillDataControlProcessQueryProvider,
         assistantSessionRunFacetProvider,
         assistantSkillSubscriptionFacetProvider,
         assistantSkillUserSettingFacetProvider;
@@ -45,6 +46,7 @@ import 'package:quwoquan_app/runtime/di/presentation/assistant_skill_lifecycle_s
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_catalog/presentation/assistant_skill_subscription_setup_sheet.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 part 'assistant_skill_center_models.dart';
 part 'assistant_skill_center_sections.dart';
@@ -657,7 +659,10 @@ class _AssistantSkillCenterPageState
       skillId: skill.skillId,
       skillName: skill.catalog.displayName,
       activityQuery: ref.read(assistantSkillActivityQueryProvider),
-      dataControlFacet: ref.read(assistantSkillDataControlFacetProvider),
+      dataControlCommandWriter: ref.read(
+        skillDataControlProcessCommandWriterProvider,
+      ),
+      dataControlQuery: ref.read(skillDataControlProcessQueryProvider),
       onProductAction: (action) => unawaited(
         _logSkillLifecycleAction(skillId: skill.skillId, action: action),
       ),
@@ -699,7 +704,7 @@ class _AssistantSkillCenterPageState
     required int skillCount,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
+    await ref.read(appEventLogPortProvider).writeEvent(
       logType: AppLogType.pageAccess,
       level: AppLogLevel.info,
       context: AppLogContext(
@@ -724,7 +729,7 @@ class _AssistantSkillCenterPageState
     required bool enabled,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
+    await ref.read(appEventLogPortProvider).writeEvent(
       logType: AppLogType.pageAccess,
       level: AppLogLevel.info,
       context: AppLogContext(
@@ -749,7 +754,7 @@ class _AssistantSkillCenterPageState
     required AssistantSkillLifecycleUiAction action,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await AppLogService.instance.writeEvent(
+    await ref.read(appEventLogPortProvider).writeEvent(
       logType: AppLogType.pageAccess,
       level: AppLogLevel.info,
       context: AppLogContext(

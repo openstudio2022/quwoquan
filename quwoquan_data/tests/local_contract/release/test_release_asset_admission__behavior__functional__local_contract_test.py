@@ -158,7 +158,7 @@ def _publishable_video_receipt() -> dict[str, object]:
             "popularityScore": 9.2,
             "popularityPercentile": 1.0,
             "rankingEligible": True,
-            "rankingIneligibleReason": "",
+            "ineligibleReason": "",
             "comparisonCandidateCount": 2,
         },
     }
@@ -568,10 +568,10 @@ def test_daily_research_release_accepts_truthfully_unranked_video(
     if reason == "incomplete":
         signals["favoriteCount"] = None
         signals["popularityScore"] = None
-        signals["rankingIneligibleReason"] = "incomplete_popularity_signals"
+        signals["ineligibleReason"] = "incomplete_popularity_signals"
     else:
         signals["comparisonCandidateCount"] = 1
-        signals["rankingIneligibleReason"] = "insufficient_comparable_candidates"
+        signals["ineligibleReason"] = "insufficient_comparable_candidates"
     receipt["receiptDigest"] = canonical_digest(receipt, excluded="receiptDigest")
     _bind_video_review(tmp_path, receipt)
 

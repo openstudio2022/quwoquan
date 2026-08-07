@@ -7,6 +7,7 @@ import 'package:quwoquan_app/service/content_service/media/filter_catalog_releas
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/create_media_models.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_creation_launch_models.dart';
 
 void main() {
   testWidgets('视频摄像模式标题与默认后置摄像头，蓝色录像按钮替代白色快门', (tester) async {

@@ -10,10 +10,10 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
-import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_tab.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/share_interaction_models.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/runtime/di/profile_interaction_tab_composition.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/share_interaction/share_empty_state.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/share_interaction/share_interaction_row.dart';
@@ -65,7 +65,7 @@ void main() {
         ],
         child: const CupertinoApp(
           home: CupertinoPageScaffold(
-            child: ProfileInteractionTab(
+            child: ProfileInteractionTabComposition(
               mode: ProfileMode.mine,
               userId: 'fixture_user_current',
               isDark: false,
@@ -77,7 +77,7 @@ void main() {
     await tester.pump();
 
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(ProfileInteractionTab)),
+      tester.element(find.byType(ProfileInteractionTabComposition)),
     );
     container
         .read(profileNotifierProvider('fixture_user_current').notifier)

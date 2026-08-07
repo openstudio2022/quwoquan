@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
@@ -267,6 +268,14 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(GatheringDetailPage.approveKey('applicant')),
         300,
+        // Host console 里还有别的可滚动子树，必须显式指向页面主滚动体，
+        // 否则默认 finder 命中多个 Scrollable。
+        scrollable: find
+            .descendant(
+              of: find.byType(SingleChildScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.tap(find.byKey(GatheringDetailPage.approveKey('applicant')));
       await tester.pumpAndSettle();
@@ -310,7 +319,9 @@ void main() {
         ..detail = GatheringDetailPresentationSlice(
           publicDetail: publicGatheringDetail(),
         );
-      await tester.tap(find.text(gatheringDetailTestCopy.retryAction));
+      // 恢复动作文案由统一错误语义目录拥有；页面 copy 只是语义没有给出
+      // primary action 时的兜底，这里必须断言用户真正看到的恢复入口。
+      await tester.tap(find.text(SearchText.reload));
       await tester.pumpAndSettle();
 
       expect(port.queryCalls, 2);

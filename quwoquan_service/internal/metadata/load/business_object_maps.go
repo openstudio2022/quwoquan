@@ -293,7 +293,10 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 
 func storageRoleForKind(kind ast.ObjectKind) string {
 	switch kind {
-	case ast.ObjectKindAggregateRoot:
+	// process_manager 的 checkpoint 存储与聚合存储的 seam 语义相同：持久、权威、
+	// 经 CAS 提交。storage_role 描述存储 seam 而不是对象 kind，因此两者共用
+	// authoritative（正如 owned_entity/value_object 共用 owned）。
+	case ast.ObjectKindAggregateRoot, ast.ObjectKindProcessManager:
 		return "authoritative"
 	case ast.ObjectKindAppendOnlyFact:
 		return "append_only"

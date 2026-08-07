@@ -64,13 +64,18 @@ func currentPageTargets(current *graph.ContractGraph) (pageTargetCatalog, error)
 	return result, nil
 }
 
+// physicalPageOwner reads the canonical App object tree shape
+// `lib/service/<service>_service/<context>/<object>/presentation/<file>.dart`,
+// the same shape `load/evidence.go` uses to derive App presentation evidence.
+// Shell, design-system and runtime pages have no object owner and return "".
 func physicalPageOwner(sourcePath string) string {
 	segments := strings.Split(strings.TrimSpace(sourcePath), "/")
-	if len(segments) < 6 || segments[0] != "lib" || segments[4] != "presentation" {
+	if len(segments) < 7 || segments[0] != "lib" || segments[1] != "service" ||
+		segments[5] != "presentation" {
 		return ""
 	}
-	if segments[1] == "" || segments[3] == "" {
+	if segments[2] == "" || segments[3] == "" || segments[4] == "" {
 		return ""
 	}
-	return segments[1] + "." + segments[3]
+	return segments[3] + "." + segments[4]
 }

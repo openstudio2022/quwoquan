@@ -21,9 +21,9 @@ final class RemoteProfileInteractionReadFactWriter
     AppendContentProfileInteractionReadFactCommand command,
   ) {
     final base = invocationContext(
-      ContentRequestPageIds.updateProfileInteractionState,
+      ContentRequestPageIds.appendProfileInteractionReadFact,
     );
-    return client.contentProfileInteractionReadFactUpdateProfileInteractionState(
+    return client.contentProfileInteractionReadFactAppendProfileInteractionReadFact(
       command,
       context: CloudOperationInvocationContext(
         surfaceId: base.surfaceId,

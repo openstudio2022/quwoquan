@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_ports.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
@@ -86,7 +86,7 @@ GoRouter _buildRouter({
 Widget _buildApp({
   required SearchRepository searchRepository,
   AssistantSearchRunFacade? assistantXiaoquSearch,
-  SearchFeedbackCommandWriter? searchFeedbackWriter,
+  SearchFeedbackFactAppender? searchFeedbackWriter,
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
   ),
@@ -100,7 +100,7 @@ Widget _buildApp({
       ),
       recentSearchQueryProvider.overrideWithValue(recentSearches),
       recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
-      searchFeedbackCommandWriterProvider.overrideWithValue(
+      searchFeedbackFactAppenderProvider.overrideWithValue(
         searchFeedbackWriter ?? SearchFeedbackTypedDouble(),
       ),
       assistantSearchRunFacetProvider.overrideWithValue(
@@ -125,7 +125,7 @@ Widget _buildResultsPage({
   return ProviderScope(
     overrides: [
       searchRepositoryProvider.overrideWithValue(searchRepository),
-      searchFeedbackCommandWriterProvider.overrideWithValue(
+      searchFeedbackFactAppenderProvider.overrideWithValue(
         SearchFeedbackTypedDouble(),
       ),
       assistantSearchRunFacetProvider.overrideWithValue(

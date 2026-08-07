@@ -458,7 +458,7 @@ void main() {
       );
       expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
       final iosGateProbe = _readAppFile(
-        'scripts/device/verify_ios_native_startup_gate.py',
+        'scripts/tools/device/inspect_ios_native_startup.py',
       );
       expect(
         iosGateProbe,
@@ -957,7 +957,7 @@ void main() {
     test('iOS 裸 Debug 与 canonical launcher 共用完整 runtime handoff', () {
       final script = _readAppFile('scripts/ios/build_prepare_dart_defines.sh');
       final logHygiene = _readAppFile(
-        'scripts/ios/run_ios_shortcut_log_hygiene.py',
+        'scripts/tools/ios/ios_shortcut_log_hygiene.py',
       );
       final wrapper = _readAppFile('scripts/ios/build_xcode_backend.sh');
       final project = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');

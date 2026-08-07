@@ -27,6 +27,23 @@ relationships:
   reference_fields:
   - defaultIncomingCallRingtoneId
   target_object: content.MediaAsset
+search_policy:
+  exposed: none
+  not_exposed_reason: "偏好与设置只在所属用户的 Reader 内生效，不具备跨用户检索语义。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.user_settings.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.user.user_settings.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.user_settings.write
 business_rules:
 - identity 固定为 accountId，同一账号只有一个 UserSettings
 - Persona override 与 account default 分离，读取时由 named Reader 组装

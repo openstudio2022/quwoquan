@@ -45,6 +45,20 @@ relationships:
   reference_fields:
   - decidedByPersonaId
   target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "成员与关系记录只在所属对象的授权 Reader 内可见，不作为独立检索对象。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.circle.circle_group_membership.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - identity 固定为 groupId + personaId，同一身份只有一个可重入生命周期
 - persona 必须先具有同一 Circle 的 active membership

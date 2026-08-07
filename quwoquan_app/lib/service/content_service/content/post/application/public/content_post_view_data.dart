@@ -81,7 +81,10 @@ final class ContentPostViewData {
         'micro' => 'note',
         _ => throw FormatException('Unsupported contentType: $type'),
       },
-      assistantUsePolicy: wire.assistantUsePolicy?.trim() ?? 'inherit',
+      // 契约层已经把 wire 字符串解成 typed enum，这里只补 `DEFAULT_INHERIT`。
+      // 再走一次字符串 codec 会把枚举 toString 成 `AssistantUsePolicy.inherit`
+      // 并被 fromWire 拒绝。
+      assistantUsePolicy: wire.assistantUsePolicy ?? AssistantUsePolicy.inherit,
       authorId: wire.authorId?.trim() ?? '',
       displayName: wire.authorDisplayName?.trim() ?? '',
       avatarUrl: wire.authorAvatarUrl?.trim() ?? '',
@@ -125,7 +128,7 @@ final class ContentPostViewData {
   final String type;
   final String identity;
   final String displayFormat;
-  final String assistantUsePolicy;
+  final AssistantUsePolicy assistantUsePolicy;
   final String authorId;
   String get personaId => authorId;
   final String displayName;

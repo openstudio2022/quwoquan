@@ -15,7 +15,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from content.execution import handoff  # noqa: E402
+from content.execution.controller.execute import handoff
 from core.runtime_policy import active_runtime_policy  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 

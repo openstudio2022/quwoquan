@@ -21,6 +21,15 @@ func TestRuntimeEntrypointSchemaRejectsRetiredLifecycleConsumerFacts(t *testing.
 			"kind": "command", "facet": "SampleHandler",
 			"method": "apply", "object_owner": "Sample",
 		},
+		"telemetry": map[string]any{
+			"metric": "sample_event_ingest", "trace": true,
+			"attributes": []any{"outcome"},
+		},
+		"slo": map[string]any{
+			"freshness_p95_seconds": 60,
+			"backlog_max_events":    1000,
+			"failure_ratio_percent": 1,
+		},
 	}
 	if err := schema.Validate(map[string]any{
 		"api_routes": []any{}, "runtime_entrypoints": []any{validEntrypoint},

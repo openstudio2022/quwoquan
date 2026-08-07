@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/generated/content_media_post_projection_keys.g.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_media_viewer_policy.dart';
+import 'package:quwoquan_app/runtime/di/content_media_viewer_policy_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -193,6 +195,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   static const double _edgeDismissMinDistance = 56;
   static const double _edgeDismissMinVelocity = 520;
   static const Duration _externalEmptyExitDelay = Duration(seconds: 6);
+
+  ContentMediaViewerPolicy get _contentMediaViewerPolicy =>
+      ref.read(contentMediaViewerPolicyProvider);
 
   Set<String> _selectedWorkFilterIds = <String>{'all'};
   int _currentPage = 0;

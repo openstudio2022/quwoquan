@@ -89,7 +89,7 @@ void main() {
         tagLabels: <String>['城市漫步', '西湖'],
         entityRefs: <String>['entity:sight:west_lake'],
         entityNames: <String>['西湖景区'],
-        assistantUsePolicy: 'exclude',
+        assistantUsePolicy: AssistantUsePolicy.exclude,
       );
       final payload = settings.toPayloadFields();
       expect(payload['summary'], '西湖一日游摘要');

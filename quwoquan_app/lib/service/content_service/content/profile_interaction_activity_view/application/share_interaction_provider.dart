@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/domain/profile_interaction_activity_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/profile_interaction_activity_view_data_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/share_interaction_capabilities.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/share_interaction_models.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
@@ -79,7 +79,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState>
                 : InteractionDirection.sent,
           );
       final items = page.items
-          .map(ProfileInteractionActivityViewData.fromWire)
+          .map(profileInteractionActivityViewDataFromWire)
           .map((item) => ShareInteractionItem.fromActivity(item, key.direction))
           .toList(growable: false);
       if (!ref.mounted || requestGeneration != _generation) return;
@@ -125,7 +125,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState>
       if (!ref.mounted || requestGeneration != _generation) return;
       final existing = state.items.map((item) => item.interactionId).toSet();
       final appended = page.items
-          .map(ProfileInteractionActivityViewData.fromWire)
+          .map(profileInteractionActivityViewDataFromWire)
           .map((item) => ShareInteractionItem.fromActivity(item, key.direction))
           .where((item) => existing.add(item.interactionId))
           .toList(growable: false);

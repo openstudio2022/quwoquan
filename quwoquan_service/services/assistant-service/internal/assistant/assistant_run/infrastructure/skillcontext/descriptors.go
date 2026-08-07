@@ -125,7 +125,7 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 			descriptors[index].OwnerOperationRefs = []string{
 				"user.user_account.GetUserInterestProfile",
 			}
-			descriptors[index].ObjectTypeRefs = []string{"account.UserAccount"}
+			descriptors[index].ObjectTypeRefs = []string{"user.UserAccount"}
 		case "conversation.current_context":
 			descriptors[index].MaxFreshnessSeconds = 15 * 60
 			descriptors[index].OwnerOperationRefs = []string{

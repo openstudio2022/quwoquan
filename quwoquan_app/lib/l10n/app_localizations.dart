@@ -3560,6 +3560,72 @@ abstract class AppLocalizations {
   /// **' 回复 '**
   String get replyToPrefix;
 
+  /// No description provided for @content_createEntryPublishContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'发内容'**
+  String get content_createEntryPublishContent;
+
+  /// No description provided for @content_createEntryChooseActionSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择要发起的动作。'**
+  String get content_createEntryChooseActionSubtitle;
+
+  /// No description provided for @content_createEntryChooseContentSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择照片、视频或文字开始创作。'**
+  String get content_createEntryChooseContentSubtitle;
+
+  /// No description provided for @circle_createEntryStartGathering.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起活动'**
+  String get circle_createEntryStartGathering;
+
+  /// No description provided for @chat_createEntryStartGroupChat.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起群聊'**
+  String get chat_createEntryStartGroupChat;
+
+  /// No description provided for @circle_authGateTitleStartGathering.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后发起活动'**
+  String get circle_authGateTitleStartGathering;
+
+  /// No description provided for @circle_authGateSubtitleStartGathering.
+  ///
+  /// In zh, this message translates to:
+  /// **'活动将以你的账号身份创建，并保留后续参与和群聊协作。'**
+  String get circle_authGateSubtitleStartGathering;
+
+  /// No description provided for @circle_authGatePromptStartGathering.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后即可发起活动'**
+  String get circle_authGatePromptStartGathering;
+
+  /// No description provided for @circle_authContinuationStartGathering.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后将继续发起活动'**
+  String get circle_authContinuationStartGathering;
+
+  /// No description provided for @circle_gatheringCreateUnavailableTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'活动创建暂不可用'**
+  String get circle_gatheringCreateUnavailableTitle;
+
+  /// No description provided for @circle_gatheringCreateUnavailableMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本暂时无法打开活动创建，请稍后再试。'**
+  String get circle_gatheringCreateUnavailableMessage;
+
   /// Toast when user exceeds max image count on create flow
   ///
   /// In zh, this message translates to:

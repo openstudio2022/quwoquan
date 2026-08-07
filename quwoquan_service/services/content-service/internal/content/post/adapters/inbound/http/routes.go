@@ -17,7 +17,7 @@ import (
 	filtercatalogtransport "quwoquan_service/services/content-service/generated/media/filter_catalog_release/transport"
 	mediaassettransport "quwoquan_service/services/content-service/generated/media/media_asset/transport"
 	mediareprocesstransport "quwoquan_service/services/content-service/generated/media/media_image_reprocess_run/transport"
-	mediaoriginaltransport "quwoquan_service/services/content-service/generated/media/media_original_access_fact/transport"
+	originalaccessquotatransport "quwoquan_service/services/content-service/generated/media/original_access_quota/transport"
 	mediauploadtransport "quwoquan_service/services/content-service/generated/media/media_upload_session/transport"
 	moderationtransport "quwoquan_service/services/content-service/generated/trust_safety/post_moderation_case/transport"
 	reporttransport "quwoquan_service/services/content-service/generated/trust_safety/report/transport"
@@ -35,7 +35,7 @@ var generatedOperationResolvers = []func(*http.Request) (string, bool){
 	mediaassettransport.ResolveOperation,
 	filtercatalogtransport.ResolveOperation,
 	mediareprocesstransport.ResolveOperation,
-	mediaoriginaltransport.ResolveOperation,
+	originalaccessquotatransport.ResolveOperation,
 	mediauploadtransport.ResolveOperation,
 	moderationtransport.ResolveOperation,
 	reporttransport.ResolveOperation,
@@ -93,7 +93,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.dispatchComment(w, r, func(handler commentHTTPHandler) {
 			handler.CreateComment(w, r, strings.TrimSpace(r.PathValue("postId")))
 		})
-	case "CreateOutboundShare":
+	case "AppendOutboundShareFact":
 		if h.outboundShareHandler == nil {
 			writeHTTPError(
 				w,
@@ -102,7 +102,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 			)
 			return
 		}
-		h.outboundShareHandler.CreateOutboundShare(w, r)
+		h.outboundShareHandler.AppendOutboundShareFact(w, r)
 	case "CreateReport":
 		h.handleCreateReport(w, r)
 	case "DecidePostModeration":
@@ -257,12 +257,12 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.RecordProcessingResult(w, r) })
 	case "ReportBehaviors":
 		h.dispatchContentBehavior(w, r)
-	case "RequestOriginalImageAccess":
-		if h.mediaOriginalAccessHandler == nil {
-			writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("MediaOriginalAccessFact HTTP adapter is not configured"))
+	case "ReserveOriginalImageAccessGrant":
+		if h.originalAccessQuotaHandler == nil {
+			writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("OriginalAccessQuota HTTP adapter is not configured"))
 			return
 		}
-		h.mediaOriginalAccessHandler.Request(w, r)
+		h.originalAccessQuotaHandler.Reserve(w, r)
 	case "ResolveReport":
 		h.handleResolveReport(w, r)
 	case "RevokeGatheringSafetyTermination":
@@ -309,7 +309,7 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.dispatchMediaAsset(w, r, func(handler mediaAssetHTTPHandler) { handler.UpdateAccessPolicy(w, r) })
 	case "UpdatePostSettings":
 		h.handleUpdatePostSettings(w, r)
-	case "UpdateProfileInteractionState":
+	case "AppendProfileInteractionReadFact":
 		h.dispatchProfileInteractionReadFact(w, r, func(handler profileInteractionReadFactHTTPHandler) {
 			handler.Append(w, r)
 		})

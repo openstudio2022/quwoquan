@@ -3,6 +3,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_markdown_codec.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_manifest_resolver.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const MediaAssetManifestResolver _assetManifestResolver =
     MediaAssetManifestResolver(
@@ -148,7 +149,7 @@ title: 城市漫步指南
           tagRefs: const <String>['Topic/旅行/城市漫步'],
           entityRefs: const <String>['entity:sight:west_lake'],
           visibility: 'public',
-          assistantUsePolicy: 'allow_summary',
+          assistantUsePolicy: AssistantUsePolicy.exclude,
         );
 
         expect(markdown, contains('summary: "用户确认摘要"'));
@@ -156,7 +157,7 @@ title: 城市漫步指南
         expect(markdown, contains('- "Topic/旅行/城市漫步"'));
         expect(markdown, contains('entity_refs:'));
         expect(markdown, contains('- "entity:sight:west_lake"'));
-        expect(markdown, contains('assistantUsePolicy: allow_summary'));
+        expect(markdown, contains('assistantUsePolicy: exclude'));
 
         final parsed = ArticleMarkdownCodec.parseDocument(markdown);
         expect(parsed.title, '西湖一日游');

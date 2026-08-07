@@ -36,6 +36,23 @@ relationships:
   reference_fields:
   - lastTurnId
   target_object: assistant.AssistantTurnView
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.assistant_session.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.assistant.assistant_session.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.assistant.assistant_session.write
 business_rules:
 - session 创建后 owner persona 不可变
 - 同一 session 最多一个 active run

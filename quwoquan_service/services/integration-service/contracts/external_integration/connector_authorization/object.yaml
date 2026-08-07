@@ -14,8 +14,20 @@ access:
 relationships:
 - {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: eventual, on_delete: cascade}
 - {name: connectorDefinition, kind: reference, target_object: integration.ConnectorDefinition, cardinality: 'N:1', reference_fields: [connectorId], access: named_reader, consistency: strong, on_delete: restrict}
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "认证、凭据与会话安全对象，任何检索暴露都会直接削弱账号安全。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "认证凭据、会话密钥与风控状态对小趣完全关闭，不存在可开放的子集。"
 business_rules:
 - requestedCapabilities 必须是 active ConnectorDefinition.capabilities 的非空子集，authorizationMode 必须与该 immutable definition 一致
 - device_native 只接受受信 native attestation adapter 验证后的 proofRef；oauth2 只接受受信 callback adapter 校验 state、PKCE 与 provider response 后的 callbackRef

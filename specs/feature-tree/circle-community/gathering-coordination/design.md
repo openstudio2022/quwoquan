@@ -114,6 +114,6 @@
 ## 7. 迁移与回滚
 
 - 切换顺序：先 contracts/codegen 与 owner runtime，再唯一 room+membership projection，再公开详情/发现与 App composer，最后 Outcome/内容回流和可选能力；前一门未通过不得打开后一 flag。
-- 数据处理：旧 Gathering 按 target contract 一次性升级；travel-service 逐对象导入 Gathering/Plan/Experience 目标，环境内一次 target-only 切流，不保留旧值别名、双读或双写。
+- 数据处理：旧 Gathering 按 target contract 一次性升级；已退役 travel-service 的历史对象逐对象导入 Gathering/Plan/Experience 目标，环境内一次 target-only 切流，不保留旧值别名、双读或双写，也不为导入恢复源服务。
 - 删除的实现：发起结伴落到裸建群、Workspace/第二消息流、自动 mutual 与 Trip 公共根路径在目标能力落地时删除，不作为降级。
 - 回滚条件：出现超员、半加入、未授权 room access、Outcome 误计或隐私泄露时立即关闭新创建/发现/准入；回滚到上一验证 artifact/config，但不把切流后增量写回旧源。

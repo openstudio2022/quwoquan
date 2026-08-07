@@ -7,7 +7,6 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/di/assistant_dependencies.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../../../support/service/assistant_service/assistant/assistant_run/assistant_remote_test_support.dart';
 
@@ -193,13 +192,22 @@ void main() {
   );
 
   test(
-    'approved controls stay remote while pending tool actions fail unavailable',
+    'run controls and tool actions all delegate to their generated operations',
     () async {
       final transport = AssistantRecordingCommandClient(<Map<String, Object?>>[
         <String, Object?>{
           'runId': 'run-control',
           'sessionId': 'session-control',
           'status': 'paused',
+          'goal': 'pause the run',
+          'streamState': <String, Object?>{},
+          'createdAt': '2026-07-24T09:00:01Z',
+        },
+        <String, Object?>{'runId': 'run-control', 'state': 'approved'},
+        <String, Object?>{
+          'runId': 'run-control',
+          'sessionId': 'session-control',
+          'status': 'running',
           'goal': 'pause the run',
           'streamState': <String, Object?>{},
           'createdAt': '2026-07-24T09:00:01Z',
@@ -225,47 +233,46 @@ void main() {
         AppCloudOperationIds.assistantAssistantRunPauseAssistantRun,
       );
 
-      final unavailable = isA<RuntimeFailure>()
-          .having(
-            (failure) => failure.kind,
-            'kind',
-            RuntimeFailureKind.unavailable,
-          )
-          .having(
-            (failure) => failure.semanticReason,
-            'semanticReason',
-            'assistant_run_generated_handoff_pending',
-          );
-      await expectLater(
-        repository.approveAssistantToolUse(
-          runId: 'run-control',
-          toolInvocationId: 'tool-1',
-          commandRequestId: 'approve-control-1',
-          decision: 'approved',
-          approvalPermit: 'permit-1',
-        ),
-        throwsA(unavailable),
+      // 工具审批与设备动作回执已完成 generated handoff：两者都是真实 typed
+      // 操作，各自携带自己的 operation id 与稳定 Idempotency-Key。
+      final approval = await repository.approveAssistantToolUse(
+        runId: 'run-control',
+        toolInvocationId: 'tool-1',
+        commandRequestId: 'approve-control-1',
+        decision: 'approved',
+        approvalPermit: 'permit-1',
       );
-      await expectLater(
-        repository.submitDeviceActionReceipt(
-          runId: 'run-control',
-          toolInvocationId: 'tool-1',
-          commandRequestId: 'receipt-control-1',
-          receipt: AssistantDeviceActionExecutionReceipt(
-            installationId: 'installation_test',
-            deviceId: 'device_test',
-            capability: 'calendar_create_reminder',
-            inputDigest:
-                'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            permit: 'permit-1',
-            idempotencyKey: 'receipt-control-1',
-            outcome: 'completed',
-            executedAt: DateTime.utc(2026, 7, 24, 9, 1),
-          ),
-        ),
-        throwsA(unavailable),
+      expect(approval.runId, 'run-control');
+      expect(approval.state, 'approved');
+      expect(
+        transport.requests[1].headers['X-Client-Operation-Id'],
+        AppCloudOperationIds.assistantAssistantRunApproveAssistantToolUse,
       );
-      expect(transport.requests, hasLength(1));
+      expect(transport.requests[1].headers['Idempotency-Key'], 'approve-control-1');
+
+      final receiptResult = await repository.submitDeviceActionReceipt(
+        runId: 'run-control',
+        toolInvocationId: 'tool-1',
+        commandRequestId: 'receipt-control-1',
+        receipt: AssistantDeviceActionExecutionReceipt(
+          installationId: 'installation_test',
+          deviceId: 'device_test',
+          capability: 'calendar_create_reminder',
+          inputDigest:
+              'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          permit: 'permit-1',
+          idempotencyKey: 'receipt-control-1',
+          outcome: 'completed',
+          executedAt: DateTime.utc(2026, 7, 24, 9, 1),
+        ),
+      );
+      expect(receiptResult.runId, 'run-control');
+      expect(
+        transport.requests[2].headers['X-Client-Operation-Id'],
+        AppCloudOperationIds.assistantAssistantRunSubmitDeviceActionReceipt,
+      );
+      expect(transport.requests[2].headers['Idempotency-Key'], 'receipt-control-1');
+      expect(transport.requests, hasLength(3));
     },
   );
 }

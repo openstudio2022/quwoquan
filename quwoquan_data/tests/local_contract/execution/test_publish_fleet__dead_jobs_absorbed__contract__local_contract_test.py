@@ -193,7 +193,7 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "content.execution.qualification.finalize_execution_qualification",
+        "content.execution.planning.qualification.finalize_execution_qualification",
         lambda *_a, **_k: SimpleNamespace(passed=True, issues=()),
     )
     monkeypatch.setattr(
@@ -206,7 +206,7 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
         },
     )
     monkeypatch.setattr(
-        "content.execution.reliabletask_jobs.prepare_reliable_publish_jobs",
+        "content.execution.queue.reliabletask.jobs.prepare_reliable_publish_jobs",
         lambda _ctx, homepage_refs=None: (dead, *ok_jobs),
     )
     written: dict[str, object] = {}

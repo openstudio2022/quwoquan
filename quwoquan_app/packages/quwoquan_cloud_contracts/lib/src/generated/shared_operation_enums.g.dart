@@ -1,7 +1,24 @@
 // Code generated from canonical cross-domain enums. DO NOT EDIT.
-// ContractGraph SHA256: 5cebacbad8dfe3503f8dcf2d0f34dd34328ea5a6f0b3b297cbd11df0a9eb2d44
+// ContractGraph SHA256: b5683d7d096bfb9d5d550bb42fc6069321cdd8d781d57b85d8517db39af2390e
 
 library;
+
+enum AssistantUsePolicy {
+  inherit("inherit"),
+  exclude("exclude");
+
+  const AssistantUsePolicy(this.wireName);
+
+  final String wireName;
+
+  static AssistantUsePolicy fromWire(Object? value, String path) {
+    return switch (value) {
+      "inherit" => AssistantUsePolicy.inherit,
+      "exclude" => AssistantUsePolicy.exclude,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
 
 enum BehaviorEventType {
   impression("impression"),

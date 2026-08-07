@@ -21,7 +21,11 @@ void main() {
       final source = _chatConversationSource();
       expect(source, contains('ChatText.chatVoicePendingRetry'));
       expect(source, contains('FoundationText.retry'));
-      expect(source, contains('chatSendOutboxProvider'));
+      // 失败态与重试仍然只由发送 outbox 这一个载体驱动；页面读队列长度、点重试触发
+      // 同一个 outbox 的 drain，不得自建第二条重发通道。
+      expect(source, contains('chatSendOutboxQueueLengthProvider'));
+      expect(source, contains('chatSendOutboxControlProvider'));
+      expect(source, contains('.drain()'));
       final failedBarSection = source.split('_buildVoiceSendStatusBar').last;
       expect(failedBarSection, isNot(contains('ContentText.gotIt')));
     });

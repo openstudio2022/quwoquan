@@ -469,11 +469,11 @@ def test_popularity_never_invents_comparability(tmp_path: Path) -> None:
     )
     by_id = {row["assetId"]: row for row in receipt["assets"]}
     assert by_id["missing"]["popularitySignals"]["rankingEligible"] is False
-    assert by_id["missing"]["popularitySignals"]["rankingIneligibleReason"] == (
+    assert by_id["missing"]["popularitySignals"]["ineligibleReason"] == (
         "incomplete_popularity_signals"
     )
     assert by_id["single"]["popularitySignals"]["rankingEligible"] is False
-    assert by_id["single"]["popularitySignals"]["rankingIneligibleReason"] == (
+    assert by_id["single"]["popularitySignals"]["ineligibleReason"] == (
         "insufficient_comparable_candidates"
     )
     assert receipt["acceptedAssetCount"] == 2

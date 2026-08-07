@@ -19,7 +19,6 @@ from content.execution import production_contracts as pc
 from content.execution import store
 from content.execution.queue.core import (
     DEFAULT_LEASE_TTL_SECONDS,
-    STATE_BLOCKED,
     STATE_DEAD,
     STATE_FAILED,
     STATE_LEASED,
@@ -393,6 +392,35 @@ def record_reliabletask_failure(
         return failed
 
 
+def record_reliabletask_stale_terminal_outcome(
+    execution_id: str,
+    job_id: str,
+    *,
+    attempts: int,
+    failure_code: str,
+) -> QueueJob:
+    """Record a late remote DEAD without overriding verified local success."""
+
+    with _queue_lock(execution_id):
+        job = _read_job(execution_id, job_id)
+        if job.backend.value != "reliabletask" or job.state is not STATE_SUCCEEDED:
+            raise ValueError(
+                "stale ReliableTask terminal reconciliation requires local success"
+            )
+        reconciled = job.with_timing(
+            QueueTimelineEvent.RECONCILED,
+            at=store.now_iso(),
+            attributes={
+                "reason": "stale_remote_terminal_after_local_success",
+                "remoteStatus": "dead",
+                "remoteAttempts": attempts,
+                "remoteFailureCode": failure_code,
+            },
+        )
+        _write_job(reconciled)
+        return reconciled
+
+
 def reconcile_completed_refs(
     execution_id: str,
     refs: Iterable[str],
@@ -577,6 +605,7 @@ __all__ = [
     "reap_jobs",
     "reconcile_completed_refs",
     "record_reliabletask_failure",
+    "record_reliabletask_stale_terminal_outcome",
     "renew_lease",
     "revive_dead_startup_jobs",
 ]

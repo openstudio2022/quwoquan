@@ -43,7 +43,7 @@
 - 1v1 会话设置与群聊设置都应遵循“设置页用于会话管理，不用于动作型扩展能力”的统一原则。
 - 如未来新增“举报群”，必须通过独立 metadata 与对象建模接入，不能在设置页先加一个临时入口占位。
 - **禁止**：在全屏表单页使用帖子「更多功能」式 **描边大圆角卡片**（`selectionCardBorderRadius` + `blockBorderColor`）作为默认分组容器。
-- **适用**：Feed/媒体上下文贴底 `MoreActionPopup` 等，归属 `lib/components/settings_conversation/`，与全屏表单态区分，不得混用默认容器语义。
+- **适用**：Feed/媒体上下文贴底 `MoreActionPopup` 等，归属 `content.post` 对象的 `presentation` 层，与全屏表单态区分，不得混用默认容器语义。
 - 用户可见静态文案须 `UITextConstants` / l10n；群管理解散确认等 **禁止** 在业务 Dart 中硬编码中文（满足 `verify_dart_semantic`）。
 - 群管理页为 **管理员专项** 全屏页，**不**纳入本节 GS1–GS5 的「普通成员设置」清单，但 **必须** 与 §9.1 使用同一套表单态组件与 token，保证与群聊信息页视觉一致。
 

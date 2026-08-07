@@ -22,6 +22,20 @@ lifecycle:
   immutable: true
 local_identity_reasons:
   taskId: reliable-task terminal work item key scoped to this dead-letter fact; it is not a business-object reference
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 每个终态 requestId 至多一个 active dead-letter identity，恢复尝试另行追加审计事件而不修改原事实。
 - dead-letter 只保存稳定错误分类与脱敏上下文，不复制 provider 原始响应或凭据。

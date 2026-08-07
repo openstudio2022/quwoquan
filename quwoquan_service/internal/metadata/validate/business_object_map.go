@@ -423,10 +423,12 @@ func validateObjectSemantics(
 ) []Issue {
 	var issues []Issue
 	expectedStorageRole := map[ast.ObjectKind]string{
-		ast.ObjectKindAggregateRoot:     "authoritative",
-		ast.ObjectKindOwnedEntity:       "owned",
-		ast.ObjectKindValueObject:       "owned",
-		ast.ObjectKindAppendOnlyFact:    "append_only",
+		ast.ObjectKindAggregateRoot:  "authoritative",
+		ast.ObjectKindOwnedEntity:    "owned",
+		ast.ObjectKindValueObject:    "owned",
+		ast.ObjectKindAppendOnlyFact: "append_only",
+		// saga 的 checkpoint 存储 seam 与聚合存储同为持久权威存储，共用同一 role。
+		ast.ObjectKindProcessManager:    "authoritative",
 		ast.ObjectKindProjection:        "projection",
 		ast.ObjectKindExternalReference: "external",
 		ast.ObjectKindRuntimeSession:    "runtime",
@@ -447,6 +449,7 @@ func validateObjectSemantics(
 		ast.ObjectKindOwnedEntity:       {"owner"},
 		ast.ObjectKindValueObject:       {"owner"},
 		ast.ObjectKindAppendOnlyFact:    {"immutable"},
+		ast.ObjectKindProcessManager:    {"checkpoint"},
 		ast.ObjectKindProjection:        {"checkpoint"},
 		ast.ObjectKindExternalReference: {"external"},
 		ast.ObjectKindRuntimeSession:    {"session"},
@@ -462,30 +465,35 @@ func validateObjectSemantics(
 			object.Identity.VersionSource,
 		))
 	}
-	if object.ObjectKind == ast.ObjectKindAggregateRoot {
+	// process_manager 与 aggregate_root 同为状态所有者：两者都必须有入口、不变式与
+	// 生命周期绑定。saga 的生命周期绑定尤其不可省，它就是那台状态机本身。
+	if oneOf(object.ObjectKind, ast.ObjectKindAggregateRoot, ast.ObjectKindProcessManager) {
 		if len(object.MutationEntrypoints) == 0 && len(object.EventConsumers) == 0 &&
 			object.Access.Commands != "cli_facade" {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.ZERO_ENTRYPOINT_ROOT",
 				sourcePath,
-				"aggregate root %q must declare a command or typed event consumer",
+				"object %q kind %q must declare a command or typed event consumer",
 				object.CanonicalObject,
+				object.ObjectKind,
 			))
 		}
 		if len(object.InvariantRefs) == 0 {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.MISSING_INVARIANT_REF",
 				sourcePath,
-				"aggregate root %q must bind its invariant specification",
+				"object %q kind %q must bind its invariant specification",
 				object.CanonicalObject,
+				object.ObjectKind,
 			))
 		}
 		if len(object.LifecycleRefs) == 0 {
 			issues = append(issues, issue(
 				"CONTRACT.OBJECT_REGISTRY.MISSING_LIFECYCLE_REF",
 				sourcePath,
-				"aggregate root %q must bind its lifecycle specification",
+				"object %q kind %q must bind its lifecycle specification",
 				object.CanonicalObject,
+				object.ObjectKind,
 			))
 		}
 	}
@@ -672,6 +680,18 @@ func validateObjectAccess(
 		valid = commands == "append_only_sink" &&
 			oneOf(queries, "named_reader", "none") &&
 			oneOf(crossContext, "event_only", "public_contract_only")
+	case ast.ObjectKindProcessManager:
+		// 长流程编排器有专属命令面 process_facade，禁止复用 aggregate_facade：
+		// 调用方看到的是流程推进/取消/恢复，不是聚合状态写入。
+		// 对外经公开合同暴露的流程必须给出具名状态读取面；只经事件参与的内部
+		// saga（cross_context=event_only）没有外部调用方，可以没有 reader。
+		valid = commands == "process_facade" &&
+			oneOf(crossContext, "public_contract_only", "event_only")
+		if crossContext == "event_only" {
+			valid = valid && oneOf(queries, "named_reader", "none")
+		} else {
+			valid = valid && queries == "named_reader"
+		}
 	case ast.ObjectKindRuntimeSession:
 		valid = commands == "session_facade" &&
 			oneOf(queries, "named_reader", "none") &&

@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
@@ -12,6 +11,8 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/a
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 /// 与创作页排版工具栏 tab 对齐。
 enum ArticleTypographyThumbnailTab { paper, font }
@@ -26,7 +27,7 @@ enum ArticleTypographyThumbnailTab { paper, font }
 ///
 /// **仍可能偏差**：`resolvePaginatedArticlePages` 走结构化 fallback 时与主预览同源 fallback；基准分页与任务分页
 /// 页数不一致时序下标回退到 0；栅格逻辑宽度为 [AppSpacing.oneHundred]，与条上单元宽度不同，仅纵横比一致。
-class ArticleTypographyThumbnailStrip extends StatefulWidget {
+class ArticleTypographyThumbnailStrip extends ConsumerStatefulWidget {
   const ArticleTypographyThumbnailStrip({
     super.key,
     required this.editorState,
@@ -47,12 +48,12 @@ class ArticleTypographyThumbnailStrip extends StatefulWidget {
   final Widget child;
 
   @override
-  State<ArticleTypographyThumbnailStrip> createState() =>
+  ConsumerState<ArticleTypographyThumbnailStrip> createState() =>
       _ArticleTypographyThumbnailStripState();
 }
 
 class _ArticleTypographyThumbnailStripState
-    extends State<ArticleTypographyThumbnailStrip> {
+    extends ConsumerState<ArticleTypographyThumbnailStrip> {
   static const double _rasterLogicalWidth = AppSpacing.oneHundred;
 
   final GlobalKey _repaintKey = GlobalKey();
@@ -213,7 +214,7 @@ class _ArticleTypographyThumbnailStripState
             });
           }
           unawaited(
-            AppExceptionTelemetryService.instance.recordHandledException(
+            ref.read(exceptionTelemetryPortProvider).recordHandledException(
               source: 'content.article_typography.capture_thumbnail',
               error: error,
               stackTrace: stackTrace,

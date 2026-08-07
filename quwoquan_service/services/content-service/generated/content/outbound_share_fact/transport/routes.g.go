@@ -11,7 +11,7 @@ import (
 )
 
 var generatedRouteTable = []generatedRouteDef{
-	{method: "POST", pathTemplate: "/content/posts/{postId}/outbound-shares", operation: "CreateOutboundShare"},
+	{method: "POST", pathTemplate: "/content/posts/{postId}/outbound-shares", operation: "AppendOutboundShareFact"},
 }
 
 type generatedRouteDef struct {
@@ -121,7 +121,7 @@ func generatedSplitPath(raw string) []string {
 }
 
 var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
-	"CreateOutboundShare": {
+	"AppendOutboundShareFact": {
 		"channel":           {},
 		"destinationKind":   {},
 		"destination":       {},

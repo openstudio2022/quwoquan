@@ -220,8 +220,8 @@ def _run_post_review(ctx: ExecutionContext) -> StageResult:
     from content.post.handler import PostStageRequest, handle_post
     from content.post import object_index as content_object
     from content.post.article.base_draft import load_base_draft_ledger, save_base_draft_ledger
-    from content.execution.handoff import build_execution_reducer_gate, write_execution_reducer_gate
-    from content.execution.post_review_closure import (
+    from content.execution.controller.execute.handoff import build_execution_reducer_gate, write_execution_reducer_gate
+    from content.execution.closure.post_review import (
         indexed_post_targets,
         resolve_post_review_closure,
         write_post_review_closure,

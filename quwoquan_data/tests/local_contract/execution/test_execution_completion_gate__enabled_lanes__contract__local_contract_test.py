@@ -19,9 +19,9 @@ from content.execution.recovery import download_unresolved
 from content.execution.recovery import post_recovery
 from content.execution.recovery import stage_reset
 from content.execution import target_integrity
-from content.execution import source_ready_scope
+from content.execution.planning import source_ready_scope
 from content.homepage import homepage
-from core.io import write_json
+from core.io import read_json, write_json
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
@@ -49,7 +49,7 @@ def test_homepage_only_completion_ignores_disabled_article_and_image_lanes(monke
         lambda _execution_id: {"selectionPolicy": "frozen"},
     )
     monkeypatch.setattr(auto_research, "_download_auto_research_lanes", lambda _ctx: {"homepage"})
-    from content.execution import readiness_audit
+    from content.execution.planning import readiness_audit
 
     monkeypatch.setattr(
         readiness_audit,
@@ -89,7 +89,7 @@ def test_video_completion_accepts_video_lane_readiness(monkeypatch):
         "_download_auto_research_lanes",
         lambda _ctx: {ContentType.VIDEO.value},
     )
-    from content.execution import readiness_audit
+    from content.execution.planning import readiness_audit
 
     monkeypatch.setattr(
         readiness_audit,
@@ -114,7 +114,7 @@ def test_managed_completion_preserves_partial_qualified_objects(monkeypatch):
         "_download_auto_research_lanes",
         lambda _ctx: {ContentType.HOMEPAGE.value},
     )
-    from content.execution import readiness_audit
+    from content.execution.planning import readiness_audit
 
     monkeypatch.setattr(
         readiness_audit,
@@ -139,7 +139,7 @@ def test_managed_completion_blocks_when_no_object_qualified(monkeypatch):
         "_download_auto_research_lanes",
         lambda _ctx: {ContentType.HOMEPAGE.value},
     )
-    from content.execution import readiness_audit
+    from content.execution.planning import readiness_audit
 
     monkeypatch.setattr(
         readiness_audit,
@@ -158,7 +158,7 @@ def test_managed_completion_blocks_when_no_object_qualified(monkeypatch):
 
 
 def test_readiness_quota_projection_covers_every_content_type():
-    from content.execution.readiness_audit import _quota_by_lane
+    from content.execution.planning.readiness_audit import _quota_by_lane
 
     execution_id = "20260716--travel-video-coverage--test-region-a--pilot-100"
     spec = ExecutionFixtureBuilder(execution_id).spec()
@@ -177,6 +177,19 @@ def test_download_plan_availability_persists_frozen_target_failure(monkeypatch, 
     monkeypatch.setattr(download_unresolved, "_pending_download_repair_unresolved", lambda _ctx: {})
     monkeypatch.setattr(download_unresolved, "_download_plan_repair_exhausted_unresolved", lambda *_args: {})
     monkeypatch.setattr(download_unresolved, "_download_artifact_issues", lambda _ctx: {})
+    monkeypatch.setattr(
+        "content.execution.recovery.download_gate._download_research_lane_issues",
+        lambda _ctx, entity_id, _entity_type, _lane: [
+            data_issue(
+                DataIssueCode.SOURCE_RETAINED_SHORTFALL,
+                stage=DataIssueStage.SOURCE_GATE,
+                ref=entity_id,
+                lane=DataIssueLane.HOMEPAGE,
+                recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
+                message="homepage source needs repair",
+            )
+        ],
+    )
     monkeypatch.setattr(download_unresolved, "execution_root", lambda _execution_id: tmp_path)
     monkeypatch.setattr(
         download_unresolved,
@@ -191,7 +204,18 @@ def test_download_plan_availability_persists_frozen_target_failure(monkeypatch, 
     assert persisted["path"] == tmp_path / "_shared" / "source_unavailable_targets.json"
     assert persisted["data"] == report
     assert report["readyTargets"] == []
-    assert report["ineligibleTargets"][0]["entityId"] == "测试实体甲"
+    discard = report["ineligibleTargets"][0]
+    assert discard["entityId"] == "测试实体甲"
+    assert discard["objectRef"] == "/entity/地点/景区/测试实体甲"
+    assert discard["blockers"][0] == {
+        "code": DataIssueCode.SOURCE_RETAINED_SHORTFALL.value,
+        "stage": DataIssueStage.SOURCE_GATE.value,
+        "ref": "测试实体甲",
+        "lane": DataIssueLane.HOMEPAGE.value,
+        "recovery": DataRecoveryAction.RETRY_SOURCE_DISCOVERY.value,
+        "message": "homepage source needs repair",
+        "attrs": {},
+    }
 
 
 def test_download_plan_availability_ignores_pre_fetch_artifact_gate(monkeypatch, tmp_path):
@@ -331,7 +355,7 @@ def test_download_fetch_resumes_an_audited_absorbed_homepage_shortfall(monkeypat
     result = stage_download_build._run_download_fetch(ctx)
 
     assert result.status is StageStatus.DONE
-    assert "过采候选源缺口已吸收为丢弃池" in result.message
+    assert "候选源缺口已吸收为对象级丢弃池" in result.message
     assert calls == ["download_fetch_resume"]
 
 
@@ -463,6 +487,101 @@ def test_source_ready_runtime_spec_projects_absorbed_ready_targets(
     assert [
         target["name"] for target in runtime_spec["scope"]["coverageTargets"]
     ] == ["可用景区甲", "可用博物馆丙"]
+
+
+@pytest.mark.parametrize(
+    ("carrier", "candidate_count"),
+    (("homepage", 180), ("article", 180), ("image", 180), ("video", 15)),
+)
+def test_source_ready_runtime_spec_keeps_three_real_objects_as_partial_closure(
+    monkeypatch,
+    tmp_path,
+    carrier,
+    candidate_count,
+):
+    execution_id = (
+        f"20260807--travel-{carrier}-m100-root-cause--test-region-a--scale-001"
+    )
+    targets = tuple(
+        {"name": f"{carrier}-候选-{index:03d}", "entityType": "地点/景区"}
+        for index in range(candidate_count)
+    )
+    spec = ExecutionFixtureBuilder(
+        execution_id,
+        targets=targets,
+        approved_quota=100 if candidate_count == 180 else 10,
+    ).spec_payload()
+    ready = [str(target["name"]) for target in targets[:3]]
+    unavailable = [str(target["name"]) for target in targets[3:]]
+    availability_path = tmp_path / "_shared" / "source_unavailable_targets.json"
+    availability_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(
+        availability_path,
+        {
+            "schema": "quwoquan.content.source.source_availability",
+            "executionId": execution_id,
+            "readyTargets": ready,
+            "readyTargetCount": len(ready),
+            "ineligibleTargets": [
+                {
+                    "entityId": entity_id,
+                    "objectRef": f"/entity/地点/景区/{entity_id}",
+                    "lanes": [carrier],
+                    "issues": [f"{entity_id}: deterministic source/media shortfall"],
+                    "blockers": [
+                        data_issue(
+                            (
+                                DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL
+                                if carrier in {"image", "video"}
+                                else DataIssueCode.SOURCE_RETAINED_SHORTFALL
+                            ),
+                            stage=DataIssueStage.DOWNLOAD_PLAN,
+                            ref=entity_id,
+                            lane=DataIssueLane(carrier),
+                            recovery=(
+                                DataRecoveryAction.REPLACE_MEDIA
+                                if carrier in {"image", "video"}
+                                else DataRecoveryAction.RETRY_SOURCE_DISCOVERY
+                            ),
+                            message="deterministic candidate shortfall",
+                        ).as_dict()
+                    ],
+                    "recoveries": [
+                        (
+                            DataRecoveryAction.REPLACE_MEDIA
+                            if carrier in {"image", "video"}
+                            else DataRecoveryAction.RETRY_SOURCE_DISCOVERY
+                        ).value
+                    ],
+                }
+                for entity_id in unavailable
+            ],
+            "ineligibleTargetCount": len(unavailable),
+        },
+    )
+    monkeypatch.setattr(
+        source_ready_scope, "execution_root", lambda _execution_id: tmp_path
+    )
+
+    runtime_spec = source_ready_scope.source_ready_runtime_spec(execution_id, spec)
+
+    assert [
+        target["name"] for target in runtime_spec["scope"]["coverageTargets"]
+    ] == ready
+    persisted = read_json(availability_path)
+    assert len(persisted["ineligibleTargets"]) == candidate_count - 3
+    for row in persisted["ineligibleTargets"]:
+        blocker = row["blockers"][0]
+        assert row["objectRef"].startswith("/entity/")
+        assert blocker["stage"] == DataIssueStage.DOWNLOAD_PLAN.value
+        assert blocker["code"] in {
+            DataIssueCode.SOURCE_RETAINED_SHORTFALL.value,
+            DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL.value,
+        }
+        assert blocker["recovery"] in {
+            DataRecoveryAction.RETRY_SOURCE_DISCOVERY.value,
+            DataRecoveryAction.REPLACE_MEDIA.value,
+        }
 
 
 def test_homepage_runtime_spec_rejects_an_incomplete_availability_partition(

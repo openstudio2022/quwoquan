@@ -5,9 +5,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution import campaign_submission_reconciliation as reconciliation
-from content.execution import recipe_request
-from content.execution.campaign_external_inputs import payload_digest
+from content.execution.campaign import submission_reconciliation as reconciliation
+from content.execution.planning.recipe import request as recipe_request
+from content.execution.campaign.external_inputs import payload_digest
 from core.io import read_json, write_json
 from core.schema import assert_valid
 from support.semantic_preflight_fixture import ready_semantic_preflight

@@ -45,7 +45,7 @@
       "type": "object",
       "required": [
         "catalogRevision", "imageProviderPriority", "imageSearchAxes",
-        "videoPopularitySignals", "popularityNormalization"
+        "videoPopularity"
       ],
       "additionalProperties": false,
       "properties": {
@@ -59,12 +59,22 @@
           "type": "array",
           "const": ["category", "entity", "season", "style", "viewpoint", "popularity"]
         },
-        "videoPopularitySignals": {
-          "type": "array",
-          "const": ["play", "like", "comment", "share", "favorite"]
-        },
-        "popularityNormalization": {
-          "const": "same_platform_topic_time_bucket_percentile"
+        "videoPopularity": {
+          "type": "object",
+          "description": "Observed popularity availability and comparable-bucket ranking coverage are receipt statistics only.",
+          "required": ["signals", "normalization", "statistical", "nonBlocking"],
+          "additionalProperties": false,
+          "properties": {
+            "signals": {
+              "type": "array",
+              "const": ["play", "like", "comment", "share", "favorite"]
+            },
+            "normalization": {
+              "const": "same_platform_topic_time_bucket_percentile"
+            },
+            "statistical": {"const": true},
+            "nonBlocking": {"const": true}
+          }
         }
       }
     },
@@ -113,17 +123,26 @@
     "scaleMilestones": {
       "type": "object",
       "description": "Workload targets and structural M100-to-M1000 binding; target attainment and recovery rate do not gate promotion.",
-      "required": ["m100Targets", "m1000Targets", "requireM100PromotionBeforeM1000", "automaticRecoveryRateTarget"],
+      "required": ["m100Targets", "m1000Targets", "requireM100PromotionBeforeM1000", "automaticRecovery"],
       "additionalProperties": false,
       "properties": {
         "m100Targets": {"$ref": "#/$defs/m100Targets"},
         "m1000Targets": {"$ref": "#/$defs/m1000Targets"},
         "requireM100PromotionBeforeM1000": {"const": true},
-        "automaticRecoveryRateTarget": {
-          "description": "Statistical target only; resource isolation and observer evidence remain structural gates.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
+        "automaticRecovery": {
+          "type": "object",
+          "description": "Automatic recovery rate is recorded but never participates in aggregate passed or M1000 eligibility.",
+          "required": ["targetRate", "statistical", "nonBlocking"],
+          "additionalProperties": false,
+          "properties": {
+            "targetRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "statistical": {"const": true},
+            "nonBlocking": {"const": true}
+          }
         }
       }
     }

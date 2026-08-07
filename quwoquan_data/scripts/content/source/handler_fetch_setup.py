@@ -62,7 +62,7 @@ def prepare_entity_fetch_plan(
                 str(candidate.get("professionalAcquisitionReceiptRef") or "").strip()
                 for candidate in video_candidates
             ):
-                from content.execution.campaign_external_inputs import (
+                from content.execution.campaign.external_inputs import (
                     PROFESSIONAL_VIDEO_ACQUISITION_KIND,
                 )
 

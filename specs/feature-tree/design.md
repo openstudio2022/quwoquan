@@ -21,7 +21,7 @@
 - [`recommendation-platform`](./recommendation-platform/spec.md)：为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
 - [`runtime`](./runtime/spec.md)：runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integration-service 等独立机制 进程；部署边界不形成新的 L1，业务对象与 Vendor SDK 不得穿透。
 - [`shared-homepage-network`](./shared-homepage-network/spec.md)：让用户发现具体事物的长期主页、挂载内容和评价，并让可信主体通过认领、维护、状态上报与软下线保持主页事实可靠。
-- [`travel-journey`](./travel-journey/spec.md)：定义 Gathering 上 Plan、Map、Calendar、Experience 的旅行体验组合，并治理现有 travel-service 到 Circle 目标模型的 target-only 迁移；不再把 Trip 定义为长期公共独立根。
+- [`travel-journey`](./travel-journey/spec.md)：定义 Gathering 上 Plan、Map、Calendar、Experience 的旅行体验组合，并治理已退役 travel-service 的历史数据到 Circle 目标模型的 target-only 迁移；Trip 不是长期公共独立根，travel-service 不是现行能力。
 - [`user-identity-profile-relationship`](./user-identity-profile-relationship/spec.md)：让用户以默认账号或明确选择的 Persona 安全进入应用、维护公开资料和设置、建立或解除关系，并在所有业务领域获得一致的主体与权限语义。
 
 ## 3. 跨域协作与数据流
@@ -63,7 +63,7 @@
 - 决策：共同旅行的活动身份、Host、Participation、准入、会话、生命周期与 Outcome 由 Circle 的 Gathering 单轨拥有；Plan、Map、Calendar 与 Experience 是可选能力组合。`travel_companion` 只通过 active Skill package、公开 Reader、受控 Tool/Connector 和 typed ActionIntent 读取或提议改变 owner 事实。
 - 理由：1:1、多人兴趣活动和多日旅行共享同一参与与协作不变量；继续让 Trip 成为公共独立根会复制成员、会话、取消与完成状态。聊天文本和 Assistant 状态同样不能承担不可变修订、主动提醒、地图与内容关联。
 - 被否决方案：Trip 与 Gathering 长期双根、Chat Message 充当当前计划、Assistant 保存活动副本、按旅行垂类建立专用 App/Agent 分支。
-- 约束与影响：现有 travel-service 只按逐对象 target-only 流迁移；切流后只读 Circle 目标，不双读、不双写、不保留兼容 fallback。Presentation 只通过安全语义 AST 与 canonical object reference 打开 owner 页面。
+- 约束与影响：travel-service 的进程、contracts、generated client 与 App 装配已删除，其历史数据只按逐对象 target-only 流迁移；生产读写只指向 Circle 目标，不双读、不双写、不保留兼容 fallback，也不得为迁移恢复源服务。Presentation 只通过安全语义 AST 与 canonical object reference 打开 owner 页面。
 - 关联要求：`REQ-008`、`REQ-012`
 
 <a id="dec-004"></a>

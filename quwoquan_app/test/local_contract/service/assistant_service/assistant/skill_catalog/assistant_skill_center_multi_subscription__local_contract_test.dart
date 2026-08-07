@@ -16,8 +16,8 @@ void main() {
         accountId: 'account-1',
         skillId: 'travel_companion',
         grantedScopes: <String>[
-          'travel.trip.read',
           'assistant.learning.feedback_context.read',
+          'assistant.memory.preferences.read',
         ],
         grantedAt: '2026-08-04T00:00:00Z',
         granted: true,
@@ -32,7 +32,7 @@ void main() {
     expect(item.consentGranted, isTrue);
     expect(
       item.requiredConsentScopeLabels.map((scope) => scope.displayText),
-      <String>['读取有权访问的行程'],
+      <String>['读取助手偏好'],
     );
     expect(
       item.optionalConsentScopeLabels.map((scope) => scope.displayText),
@@ -51,7 +51,7 @@ void main() {
         id: 'consent-travel',
         accountId: 'account-1',
         skillId: 'travel_companion',
-        grantedScopes: <String>['travel.trip.read'],
+        grantedScopes: <String>['assistant.memory.preferences.read'],
         grantedAt: '2026-08-04T00:00:00Z',
         revokedAt: '2026-08-04T01:00:00Z',
         granted: false,
@@ -60,7 +60,10 @@ void main() {
 
     expect(item.consent, isNotNull);
     expect(item.consentGranted, isFalse);
-    expect(item.isConsentScopeGranted('travel.trip.read'), isFalse);
+    expect(
+      item.isConsentScopeGranted('assistant.memory.preferences.read'),
+      isFalse,
+    );
   });
 }
 
@@ -77,9 +80,12 @@ AssistantSkillCatalogItemView _catalog() => AssistantSkillCatalogItemView(
     displayText: '旅行与共同出行',
   ),
   requiresConsent: true,
-  requiredConsentScopes: const <String>['travel.trip.read'],
+  requiredConsentScopes: const <String>['assistant.memory.preferences.read'],
   consentScopeLabels: const <SkillCatalogSemanticLabel>[
-    SkillCatalogSemanticLabel(id: 'travel.trip.read', displayText: '读取有权访问的行程'),
+    SkillCatalogSemanticLabel(
+      id: 'assistant.memory.preferences.read',
+      displayText: '读取助手偏好',
+    ),
     SkillCatalogSemanticLabel(
       id: 'assistant.learning.feedback_context.read',
       displayText: '使用脱敏的助手反馈摘要',

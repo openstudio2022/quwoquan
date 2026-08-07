@@ -77,7 +77,7 @@ runtime_execution:
         symbols:
           - RealtimeConfig
           - realtimeConnectionWebSocketUpgrade
-      - path: lib/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart
+      - path: lib/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart
         symbols:
           - RealtimeConnectionNotifier
           - onAppForeground
@@ -992,6 +992,7 @@ pages:
       - content.media_asset
       - content.media_upload_session
       - content.media_original_access_fact
+      - content.original_access_quota
       - content.outbound_share_fact
     query_slices:
       - content.post.projection.post_read_presentation
@@ -999,6 +1000,7 @@ pages:
     command_operations:
       - circle.circle_post_placement.PlacePostInCircle
       - content.content_behavior_fact.ReportBehaviors
+      - content.original_access_quota.ReserveOriginalImageAccessGrant
     typed_presentation: [ContentPostViewData, ContentPostDetailSlice, WorkBrowserViewData]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }

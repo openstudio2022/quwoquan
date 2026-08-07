@@ -7,12 +7,13 @@ class ContentRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
     'ActivateFilterCatalogRelease': 'content.activate.filter.catalog.release',
+    'AppendOutboundShareFact': 'content.outbound_share.create',
+    'AppendProfileInteractionReadFact': 'content.append.profile.interaction.read.fact',
     'AuthorizeGatheringSafetyTermination': 'content.authorize.gathering.safety.termination',
     'BeginReportReview': 'content.begin.report.review',
     'BindMediaAssetsToComment': 'content.bind.media.assets.to.comment',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
-    'CreateOutboundShare': 'content.outbound_share.create',
     'CreateReport': 'content.report.create',
     'DecidePostModeration': 'content.decide.post.moderation',
     'DeleteComment': 'content.comment.delete',
@@ -65,7 +66,7 @@ class ContentRequestPageIds {
     'RecordMediaProcessingResult': 'content.record.media.processing.result',
     'RecoverContentAccountClosureDeadLetter': 'content.recover.content.account.closure.dead.letter',
     'ReportBehaviors': 'content.behaviors.report',
-    'RequestOriginalImageAccess': 'content.request.original.image.access',
+    'ReserveOriginalImageAccessGrant': 'content.reserve.original.image.access.grant',
     'ResolveReport': 'content.resolve.report',
     'RestoreComment': 'content.restore.comment',
     'ResumeMediaImageReprocessRun': 'content.resume.media.image.reprocess.run',
@@ -83,17 +84,17 @@ class ContentRequestPageIds {
     'UnpinComment': 'content.unpin.comment',
     'UpdateMediaAssetAccessPolicy': 'content.update.media.asset.access.policy',
     'UpdatePostSettings': 'content.post.settings',
-    'UpdateProfileInteractionState': 'content.update.profile.interaction.state',
   };
 
   static const String abortMediaUpload = 'content.media.abort';
   static const String activateFilterCatalogRelease = 'content.activate.filter.catalog.release';
+  static const String appendOutboundShareFact = 'content.outbound_share.create';
+  static const String appendProfileInteractionReadFact = 'content.append.profile.interaction.read.fact';
   static const String authorizeGatheringSafetyTermination = 'content.authorize.gathering.safety.termination';
   static const String beginReportReview = 'content.begin.report.review';
   static const String bindMediaAssetsToComment = 'content.bind.media.assets.to.comment';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
-  static const String createOutboundShare = 'content.outbound_share.create';
   static const String createReport = 'content.report.create';
   static const String decidePostModeration = 'content.decide.post.moderation';
   static const String deleteComment = 'content.comment.delete';
@@ -146,7 +147,7 @@ class ContentRequestPageIds {
   static const String recordMediaProcessingResult = 'content.record.media.processing.result';
   static const String recoverContentAccountClosureDeadLetter = 'content.recover.content.account.closure.dead.letter';
   static const String reportBehaviors = 'content.behaviors.report';
-  static const String requestOriginalImageAccess = 'content.request.original.image.access';
+  static const String reserveOriginalImageAccessGrant = 'content.reserve.original.image.access.grant';
   static const String resolveReport = 'content.resolve.report';
   static const String restoreComment = 'content.restore.comment';
   static const String resumeMediaImageReprocessRun = 'content.resume.media.image.reprocess.run';
@@ -164,5 +165,4 @@ class ContentRequestPageIds {
   static const String unpinComment = 'content.unpin.comment';
   static const String updateMediaAssetAccessPolicy = 'content.update.media.asset.access.policy';
   static const String updatePostSettings = 'content.post.settings';
-  static const String updateProfileInteractionState = 'content.update.profile.interaction.state';
 }

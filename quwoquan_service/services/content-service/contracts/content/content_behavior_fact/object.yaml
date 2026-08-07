@@ -50,6 +50,20 @@ local_identity_reasons:
   sessionId: runtime session correlation key injected by the trusted invocation context
   subjectId: polymorphic intersection feedback target coordinate interpreted by feedbackKind, not a ContentBehaviorFact identity
   taxonomyReleaseId: immutable taxonomy release reference validated by the taxonomy authority, not owned by ContentBehaviorFact
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - userId/personaId/deviceActorId 与 sessionId 只来自可信 Runtime Context，业务请求体不得伪造主体。
 - 同一主体与 clientEventId 只能追加一条语义一致的事实；不同语义重用幂等键必须冲突。
@@ -62,3 +76,10 @@ lifecycle:
   states:
   - recorded
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - ReportBehaviors
+    rationale: 内容行为埋点批量追加；热门内容为高并发写入热点，约束仅为语义键去重，任何实例级不变式都会制造热点聚合瓶颈。
+    evaluated_at: '2026-08-07'

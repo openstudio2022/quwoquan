@@ -19,14 +19,11 @@ import '../../../../../support/service/content_service/content/post/mock_content
 
 void main() {
   setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
-      const <String, String>{
-        'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
-        'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
-        'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
-      },
-      enforceNativeLaunchBinding: false,
-    );
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+      'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
+      'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
+      'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
+    }, enforceNativeLaunchBinding: false);
   });
 
   tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
@@ -99,11 +96,11 @@ void main() {
     test('Mock getPost 覆盖上文下三图文章详情', () async {
       final mockRepo = MockContentRepository();
       final detail = await mockRepo.getPost(
-        postId: 'alpha_article_top_three_images',
+        postId: 'home_showcase_article_top_three_images',
       );
       final view = projectArticleDetailViewFromPayload(
         detail,
-        fallbackArticleId: 'alpha_article_top_three_images',
+        fallbackArticleId: 'home_showcase_article_top_three_images',
       );
       final imageNodes = view.document.nodes
           .where((node) => node.isFigure)

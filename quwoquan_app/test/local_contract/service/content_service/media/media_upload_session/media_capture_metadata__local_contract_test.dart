@@ -97,7 +97,7 @@ void main() {
         longitudeRef: 'E',
       );
 
-      final metadata = _extractor.extract(bytes);
+      final metadata = _extractor.extractMediaCaptureMetadata(bytes);
 
       expect(metadata.cameraMake, 'SONY');
       expect(metadata.cameraModel, 'ILCE-7M4');
@@ -119,7 +119,7 @@ void main() {
         longitudeRef: 'W',
       );
 
-      final metadata = _extractor.extract(bytes);
+      final metadata = _extractor.extractMediaCaptureMetadata(bytes);
 
       expect(
         metadata.gpsLatitude,
@@ -134,12 +134,14 @@ void main() {
     test('无 EXIF 的 JPEG 返回空元数据而不是抛错', () {
       final bytes = img.encodeJpg(img.Image(width: 4, height: 4));
 
-      expect(_extractor.extract(bytes).isEmpty, isTrue);
+      expect(_extractor.extractMediaCaptureMetadata(bytes).isEmpty, isTrue);
     });
 
     test('非图片字节与截断字节返回空元数据', () {
       expect(
-        _extractor.extract(Uint8List.fromList(<int>[1, 2, 3, 4])),
+        _extractor.extractMediaCaptureMetadata(
+          Uint8List.fromList(<int>[1, 2, 3, 4]),
+        ),
         ExtractedMediaCaptureMetadata.empty,
       );
       final truncated = Uint8List.sublistView(
@@ -147,19 +149,19 @@ void main() {
         0,
         8,
       );
-      expect(_extractor.extract(truncated).isEmpty, isTrue);
+      expect(_extractor.extractMediaCaptureMetadata(truncated).isEmpty, isTrue);
     });
 
     test('相机时钟未初始化的年份被拒绝', () {
       final bytes = _jpegWithExif(dateTimeOriginal: '1800:01:01 00:00:00');
 
-      expect(_extractor.extract(bytes).capturedAt, isNull);
+      expect(_extractor.extractMediaCaptureMetadata(bytes).capturedAt, isNull);
     });
 
     test('缺少方向参考的坐标不落库', () {
       final bytes = _jpegWithExif(latitudeDms: <double>[30, 14, 30]);
 
-      expect(_extractor.extract(bytes).gpsLatitude, isNull);
+      expect(_extractor.extractMediaCaptureMetadata(bytes).gpsLatitude, isNull);
     });
   });
 

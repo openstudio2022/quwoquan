@@ -407,7 +407,10 @@ void main() {
         telemetry.recorded
             .map((event) => event.extensions['operationId'])
             .toSet(),
-        containsAll(<String>{'StartAssistantRun', 'StreamAssistantRunEvents'}),
+        containsAll(<String>{
+          AppCloudOperationIds.assistantAssistantRunStartAssistantRun,
+          AppCloudOperationIds.assistantAssistantRunStreamAssistantRunEvents,
+        }),
       );
     });
 

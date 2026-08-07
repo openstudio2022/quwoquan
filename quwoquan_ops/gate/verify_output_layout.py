@@ -16,6 +16,14 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.output_paths import output_root  # noqa: E402
 
+DATA_SCRIPTS_ROOT = ROOT / "quwoquan_data" / "scripts"
+if str(DATA_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(DATA_SCRIPTS_ROOT))
+
+from governance.protected_quarantine_evidence import (  # noqa: E402
+    load_protected_quarantine_receipts,
+)
+
 
 MANIFEST_PATH = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml"
 FORBIDDEN_SOURCE_TRUTH_DIRS = frozenset(
@@ -220,14 +228,27 @@ def _is_runtime_process_state_record(candidate: Path, output_root: Path) -> bool
 
 def output_source_truth_issues(root: Path) -> list[str]:
     """Reject reusable configuration, certificate and unredacted secret material."""
-    issues: list[str] = []
     if not root.is_dir():
-        return issues
+        return []
+    data_root = (root / "data").resolve()
+    protected, receipt_issues = load_protected_quarantine_receipts(
+        data_output_root=data_root
+    )
+    protected_roots = set(protected)
+    issues: list[str] = [
+        f"{_rel(data_root)}: invalid protected quarantine evidence: {issue}"
+        for issue in receipt_issues
+    ]
     for current, dirnames, filenames in os.walk(root):
         current_path = Path(current)
         retained: list[str] = []
         for name in dirnames:
             child = current_path / name
+            if (
+                not child.is_symlink()
+                and child.resolve() in protected_roots
+            ):
+                continue
             if name in FORBIDDEN_SOURCE_TRUTH_DIRS:
                 issues.append(
                     f"{_rel(child)}: reusable source truth is forbidden under disposable output"

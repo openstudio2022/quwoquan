@@ -1041,7 +1041,9 @@ def collect_gaps(graph: dict) -> list[Gap]:
                 )
             )
 
-        if kind == "aggregate_root" and object_id in command_objects:
+        # aggregate_root 与 process_manager 同为状态所有者，两者的命令都可能需要
+        # 事务性发布 seam，因此都必须显式表态是否发布领域事件。
+        if kind in STATE_OWNER_KINDS and object_id in command_objects:
             gaps.extend(domain_event_declaration_gaps(object_id, kind, stage, entry))
 
         packet = evidence_by_object.get(object_id)
@@ -1145,13 +1147,18 @@ def bound_storages(packet: dict, producer: str, field: str) -> set[str]:
     }
 
 
+#: 拥有权威状态、因而可能需要事务性发布 seam 的 kind 闭集。与 Go 侧
+#: `graph.deriveObjectReadiness` 中要求 `service.store` / 发布 seam 的分支同源。
+STATE_OWNER_KINDS = frozenset({"aggregate_root", "process_manager"})
+
+
 def domain_event_declaration_gaps(
     object_id: str,
     kind: str,
     stage: str,
     entry: dict,
 ) -> list[Gap]:
-    """有命令的聚合必须显式表态是否发布领域事件。
+    """有命令的状态所有者（聚合根 / 长流程编排器）必须显式表态是否发布领域事件。
 
     `implementation.outbox` 的必需性来自这份声明，所以「没有 events.yaml」不能等价于
     「声明不发事件」：那会让发件箱要求被静默跳过。写下 `events: []` 是显式否认，可以；

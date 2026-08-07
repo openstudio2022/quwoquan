@@ -157,7 +157,7 @@ func TestContextAssemblyRecallsAuthorizedIntersectionIntoSlots(t *testing.T) {
 	turn.IntersectionEvidence = []assistant.AuthorizedIntersectionEvidence{{
 		IntersectionID: "intersection-travel",
 		EvidenceID:     "evidence-travel",
-		SourceRef:      "shared_trip",
+		SourceRef:      "gathering:gathering-1",
 		ObjectTypeRef:  "place",
 		ObjectID:       "place-hangzhou",
 		PrimaryText:    "目的地是杭州，明天出发",

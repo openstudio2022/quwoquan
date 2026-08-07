@@ -703,11 +703,11 @@ def _validate_runtime_config_authority_parity(issues: list[str]) -> None:
         / "quwoquan_app"
         / "scripts"
         / "device"
-        / "start_app_instance.sh"
+        / "run_app_instance.sh"
     ).read_text(encoding="utf-8")
     for source_path, source in (
         ("run_environment_patrol_smoke.py", patrol_source),
-        ("start_app_instance.sh", app_instance_source),
+        ("run_app_instance.sh", app_instance_source),
     ):
         if "--media-base-url" in source or re.search(r"\bmedia_base_url\b", source):
             issues.append(

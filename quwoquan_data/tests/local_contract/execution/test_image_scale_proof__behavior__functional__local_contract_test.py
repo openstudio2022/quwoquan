@@ -32,7 +32,7 @@ from core.io import read_json, write_json  # noqa: E402
 from core.paths import STAGE_DOWNLOAD  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.execution import store  # noqa: E402
-from content.execution.selection import build_execution_spec  # noqa: E402
+from content.execution.planning.selection import build_execution_spec  # noqa: E402
 from content.source.image_scale_proof import (  # noqa: E402
     build_open_license_scale_proof,
     write_open_license_scale_proof,

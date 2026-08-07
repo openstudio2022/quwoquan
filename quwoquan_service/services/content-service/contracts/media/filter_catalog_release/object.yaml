@@ -42,6 +42,20 @@ relationships:
   target_object: content.FilterAdjustmentValues
 local_identity_reasons:
   recommendedFallbackPresetIds: 同一 FilterCatalogRelease 内预设排序选择器，随聚合校验并不可变，不是跨对象业务引用
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.content.filter_catalog_release.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - releaseId、canonicalDigest、categories、presets 与 recommendedFallbackPresetIds 在 Stage 成功后不可变
 - categories 数量 1..32、presets 数量 1..256，categoryId、category sort 与 presetId 分别全局唯一

@@ -37,8 +37,24 @@ relationships:
   reference_fields:
   - backgroundAssetId
   target_object: content.MediaAsset
-taggable: true
-vector_enabled: false
+search_policy:
+  exposed: remote_index
+  object_type_refs:
+  - user.profile
+  eligibility_ref: quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/user_search_projection.go#UserProfileSearchEligible
+  index_projector_ref: quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/user_search_projection.go#ProjectUserProfileToSearchDocument
+  privacy_filter_ref: quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/user_search_projection.go#UserProfileSearchEligible
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.user_account.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 账号根身份在存储 userId 与 wire ownerId/accountId 中只使用 `uo_<origin>_<4hex>_<26 lowercase Crockford>`；4hex 必须等于 origin 与 entropy 的 canonical routing hash 槽位，禁止版本段、别名格式或宽松解析
 - accountState、identityOrigin 与 logicalShard 仅由账号生命周期命令或受信事件修改

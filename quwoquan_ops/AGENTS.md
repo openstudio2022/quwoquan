@@ -11,6 +11,8 @@
 
 - 环境、打包、URL/topology、健康检查、巡检、诊断、修复和部署统一使用 `python3 quwoquan_ops/cli/stackctl.py`；不要新增第二套环境脚本入口。
 - Ops 脚本按职责归入 `cli/`、`ci/`、`gate/`、`observability/`、`runbooks/` 等横切目录；禁止在 `quwoquan_ops/` 中按业务特性新增 `assistant/`、`avatar/`、`chat_avatar/` 等脚本岛或第二套 feature runner。跨环境 smoke/gate/CI 脚本统一归 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>/`；领域内可解耦测试仍归各服务 `tests/local_contract` 或 `tests/api_integration`。
+- `cli/**` 内部 runner 与 shell 只能由 `stackctl` 或登记的 gate/CI 入口调用；存在实现文件不等于公开入口，Make/workflow/runbook 不得绕过 canonical 编排直接调用。
+- Ops 物理树内全部 Python 文件必须由脚本角色、三层测试、test support 或其他明确治理边界唯一归类；未知路径、无 owner 人工 tool、空扫描 gate、临时脚本和 Python/lint/test 缓存均为阻断项。
 - 四环境语义固定为 `alpha`、`beta`、`gamma`、`prod`；生产灰度是 `prod` rollout stage，不存在 `prod-gray`。
 - 四环境 App 均使用 production Remote composition。内容、Creator、实体与发布媒体只能由 canonical immutable release activation 产生；Alpha/Beta/Gamma 的账号、评论、圈子、会话和消息只允许 `stackctl verify` 使用真实非生产身份经领域公开 command/event 创建，Prod 只接受真实用户或正式运营行为。任何环境均禁止 Mongo/PostgreSQL/Redis 直写、fixture manifest、派生投影预填或 App 数据源切换。
 - 不手写端口、host、public URL、gateway/media base；统一读取 quwoquan_ops/environments manifests 与 stackctl 输出。
@@ -20,6 +22,7 @@
 - 远端唯一托管目标为 `prod-hosted`（ssh-hosted；远端 gamma 已退役，仅保留 `gamma-local`）。prod 远端访问按 `edge/media/service/data` 四平面去 root 隔离，凭据为按平面 SSH 私钥 `PROD_<PLANE>_SSH_KEY`，单一真相源 `quwoquan_ops/environments/prod/access-isolation.yaml`；已退役单一全权 `PROD_KUBECONFIG`，禁止任何 prod 路径再依赖它或 `kubectl`。
 - `repair` 只允许白名单修复；涉及 prod-hosted 放量、回滚版本、密钥、hosted URL 或破坏性动作时必须停下请求人工确认。
 - 门禁脚本应可重复、可解释、失败信息能指向修复路径；禁止用 allowlist 掩盖新债。
+- 可再生产 Python 输出和缓存只进入 `.qwq_output/env/repo/**` 或仓外受管缓存；源码树禁止 `__pycache__`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、编辑器备份与 scratch 文件。
 
 ## 证据要求
 

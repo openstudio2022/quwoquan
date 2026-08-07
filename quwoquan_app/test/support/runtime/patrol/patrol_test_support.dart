@@ -53,13 +53,10 @@ String _runtimeAnonymousSessionFailure = '';
 Future<void>? _runtimeAnonymousSessionLogin;
 
 bool get _usesRuntimeAnonymousSession =>
-    _patrolSessionMode == 'beta_local_anonymous_runtime' ||
-    _patrolSessionMode == 'gamma_local_anonymous_runtime' ||
-    _patrolSessionMode == 'prod_sim_anonymous_runtime';
+    _patrolSessionMode == 'runtime_anonymous_session';
 
 bool get _usesAnonymousPublicVideoSession =>
-    _patrolSessionMode == 'beta_local_anonymous_public_video' ||
-    _patrolSessionMode == 'gamma_local_anonymous_public_video';
+    _patrolSessionMode == 'anonymous_public_video_session';
 
 Completer<void> _runtimeAnonymousSessionGate() =>
     _runtimeAnonymousSessionReady ??= Completer<void>();

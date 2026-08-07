@@ -177,9 +177,10 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState>
           })
           .toList(growable: false),
     );
-    _cache.patchInbox(
+    // 乐观清零未读是展示提示，不是真值：inbox projection 的下一次读结果会覆盖它。
+    _cache.applyOptimisticInboxHint(
       conversationId,
-      const ChatInboxCachePatch(unreadCount: 0, mentionUnreadCount: 0),
+      const ChatInboxOptimisticHint(unreadCount: 0, mentionUnreadCount: 0),
     );
     state = state.copyWith(items: next);
   }

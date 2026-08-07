@@ -6,12 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from content.execution import (
-    context,
-    execution_supersession,
-    execution_terminal,
-    reconcile,
-)
+from content.execution import context, execution_supersession, execution_terminal
+from content.execution.controller.execute import reconcile
 from content.execution.execution_terminal import load_terminal_execution_evidence
 from core.control_types import ExecutionStateStatus
 from core.io import read_json, write_json

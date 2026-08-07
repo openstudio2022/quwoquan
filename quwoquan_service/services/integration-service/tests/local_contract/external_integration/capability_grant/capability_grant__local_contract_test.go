@@ -47,10 +47,10 @@ func TestCapabilityGrantSessionFacadeIsTheSoleTypedRuntimeEntryPoint(t *testing.
 			grantmodel.Requirement,
 		) ([]grantapp.DomainOperationCandidate, error) {
 			return []grantapp.DomainOperationCandidate{{
-				CapabilityKey: "travel.route.open",
+				CapabilityKey: "circle.gathering_plan.propose",
 				Binding: grantmodel.DomainOperationBinding{
-					OwnerOperationID: "travel.route.OpenRoute",
-					ContractDigest:   digest("travel-open-route-contract"),
+					OwnerOperationID: "circle.gathering_plan.ProposeGatheringPlan",
+					ContractDigest:   digest("gathering-plan-proposal-contract"),
 				},
 			}}, nil
 		}),
@@ -61,7 +61,7 @@ func TestCapabilityGrantSessionFacadeIsTheSoleTypedRuntimeEntryPoint(t *testing.
 		context.Background(),
 		grantmodel.Requirement{
 			ResolutionID:    "resolution-domain-operation-1",
-			CapabilityKey:   "travel.route.open",
+			CapabilityKey:   "circle.gathering_plan.propose",
 			BindingPriority: []grantmodel.BindingKind{grantmodel.BindingDomainOperation},
 		},
 	)

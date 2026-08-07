@@ -650,7 +650,7 @@ void main() {
     expect(pending.blocked, isFalse);
     expect(
       pending.publicationContinuation?.sourceEntityRef,
-      'travel.TripShareSnapshot:share-1@2',
+      'circle.GatheringPlan:plan-1@2',
     );
     first.dispose();
 
@@ -955,8 +955,8 @@ CreateDraft _continuationDraft() => CreateDraft(
   state: CreateEditorState.initial().copyWith(draftId: 'draft-1'),
   sourceType: 'article',
   publicationContinuation: const CreateDraftPublicationContinuationRef(
-    operationId: 'travel.content_link.put',
-    sourceEntityRef: 'travel.TripShareSnapshot:share-1@2',
+    operationId: 'circle.gathering_plan.ProposeGatheringPlan',
+    sourceEntityRef: 'circle.GatheringPlan:plan-1@2',
   ),
 );
 
@@ -1007,7 +1007,7 @@ final class _RecordingContinuationHandler
   final List<PostPublicationReceipt> receipts = <PostPublicationReceipt>[];
 
   @override
-  String get operationId => 'travel.content_link.put';
+  String get operationId => 'circle.gathering_plan.ProposeGatheringPlan';
 
   @override
   Future<void> apply({

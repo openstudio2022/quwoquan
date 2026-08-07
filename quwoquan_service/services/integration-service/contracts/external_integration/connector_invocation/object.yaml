@@ -1,21 +1,36 @@
-kind: aggregate_root
+kind: process_manager
 description: >-
   Assistant 或受信服务对账号 Connector capability 的单次调用聚合。只保存脱敏 digest、
   confirmation/continuation 引用和标准化终态，不保存原始请求、凭证或 Provider 响应正文。
 identity:
   fields: [invocationId]
   version_field: revision
-  version_source: field
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: public_contract_only
   queries: named_reader
 relationships:
 - {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: eventual, on_delete: cascade}
 - {name: connectorConnection, kind: reference, target_object: integration.ConnectorConnection, cardinality: 'N:1', reference_fields: [connectionId], access: named_reader, consistency: strong, on_delete: restrict}
 - {name: assistantRun, kind: reference, target_object: assistant.AssistantRun, cardinality: 'N:1', reference_fields: [assistantRunId], access: named_reader, consistency: eventual, on_delete: detach}
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "流程编排对象只表达内部推进状态与补偿进度，没有用户可检索语义。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.integration.connector_invocation.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.integration.connector_invocation.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.integration.connector_invocation.write
 business_rules:
 - 可用 capability 必须同时命中 active definition、active connection grant、调用方 policy、用户 Consent 与 runtime availability
 - 创建和每次继续执行前必须重新读取 Connection；撤权、过期或账号不匹配立即 fail-closed

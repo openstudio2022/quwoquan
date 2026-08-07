@@ -1,4 +1,4 @@
-kind: aggregate_root
+kind: process_manager
 description: >-
   Product Ops 账号治理处置的唯一事务边界。moderation 与 appeal 是显式 case 类型，
   共享同一审批、不可变 decision、投递回执与恢复状态机，禁止复制成两套工作流。
@@ -6,9 +6,9 @@ identity:
   fields:
   - id
   version_field: version
-  version_source: field
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: public_contract_only
   queries: named_reader
 relationships:
@@ -25,8 +25,20 @@ local_identity_reasons:
   sourceDecisionId: >-
     同一 AccountEnforcementCase 聚合边界内的不可变 suspension decision 引用；
     不存在可被独立修改的第二聚合或跨对象 Store
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "审核与举报对象受 trust and safety 约束，禁止进入任何检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "审核与举报数据只对 trust and safety 角色开放，助手读取会泄露处置过程。"
 business_rules:
 - caseKind 创建后不可变；moderation 只能签发 suspend，appeal 只能签发 restore
 - appeal 必须引用同一账号已成功投递且仍为最新终态的 suspend decision
