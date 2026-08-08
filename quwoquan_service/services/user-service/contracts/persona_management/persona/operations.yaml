@@ -581,3 +581,83 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/persona/persona_operations__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: persona_update_persona_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpdatePersona}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/persona/persona_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_retire_persona_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: RetirePersona}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/persona/persona_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_activate_persona_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ActivatePersona}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/persona/persona_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: evaluate-persona-gathering-host-authority-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: EvaluatePersonaGatheringHostAuthority}
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/persona_management/persona/host_authority_evaluator__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_create_persona_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreatePersona}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_update_persona_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdatePersona}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_apply_persona_profile_sync_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ApplyPersonaProfileSync}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_retire_persona_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RetirePersona}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_activate_persona_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ActivatePersona}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_update_user_profile_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateUserProfile}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

@@ -2,6 +2,7 @@ events:
 - name: FollowedSubjectVisited
   description: 当前 viewer 推进单个关注对象的私有访问水位
   delivery_semantics: transactional_outbox
+  wire_event_type: FollowedSubjectVisited
   payload_entity: FollowedSubjectVisitState
   payload_fields:
   - personaId

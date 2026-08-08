@@ -187,3 +187,19 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_request_fact/user_account_closed_projection__privacy__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: search_request_fact_list_hot_queries_app_local
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListHotQueries}
+  runner_source_path: quwoquan_app/test/local_contract/service/search_service/search/search_request_fact/hot_query_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: search_request_fact_list_hot_queries_app_api
+  spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-004
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListHotQueries}
+  runner_source_path: quwoquan_app/test/api_integration/service/search_service/search/search_request_fact/hot_query_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

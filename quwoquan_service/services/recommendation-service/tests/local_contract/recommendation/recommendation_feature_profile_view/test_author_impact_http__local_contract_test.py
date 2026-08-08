@@ -2,8 +2,8 @@
 # readiness_case: list-subject-intersections-local
 # readiness_case: list-object-intersections-local
 # readiness_case: get-intersection-supply-local
-# readiness_case: get-author-impact-local
-# readiness_case: list-author-impact-evidence-local
+# readiness_case: recommendation-feature-profile-view-get-recommendation-author-impact-local
+# readiness_case: recommendation-feature-profile-view-list-recommendation-author-impact-evidence-local
 from __future__ import annotations
 
 from datetime import datetime, timezone

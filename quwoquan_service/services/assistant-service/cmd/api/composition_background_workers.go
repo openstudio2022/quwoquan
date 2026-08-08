@@ -96,6 +96,13 @@ func startAssistantBackgroundWorkers(
 		learningOutboxRelayInterval,
 		128,
 	)
+	runStopHookRelay := runruntime.NewStopHookRelay(
+		deps.runRepository,
+		assistant.runHooks,
+		runtime.instanceID+":assistant-run-stop-hooks",
+		learningOutboxRelayInterval,
+		128,
+	)
 	subscriptionScheduler, err := scheduling.NewSkillSubscriptionScheduler(
 		assistant.service,
 		skillSubscriptionCronInterval,
@@ -364,6 +371,16 @@ func startAssistantBackgroundWorkers(
 	}
 
 	workerSpecs := []assistantBackgroundWorkerSpec{
+		{
+			name: "assistant_run_stop_hook_relay",
+			run:  runStopHookRelay.Run,
+			health: func(ctx context.Context) error {
+				return runStopHookRelay.Healthy(
+					ctx,
+					3*learningOutboxRelayInterval,
+				)
+			},
+		},
 		{
 			name: "assistant_run_terminal_relay",
 			run:  runTerminalRelay.Run,
@@ -654,6 +671,10 @@ func startAssistantBackgroundWorkers(
 	workers.Start()
 	committed = true
 
+	log.Printf(
+		"assistant-service run stop hook relay enabled interval=%s",
+		learningOutboxRelayInterval,
+	)
 	log.Printf(
 		"assistant-service run terminal relay enabled interval=%s",
 		learningOutboxRelayInterval,

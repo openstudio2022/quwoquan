@@ -225,9 +225,14 @@ type Object struct {
 type Member struct {
 	Name           string     `json:"name"`
 	Kind           ObjectKind `json:"kind,omitempty"`
+	Identity       []string   `json:"identity,omitempty"`
 	Cardinality    string     `json:"cardinality,omitempty"`
 	MaxCardinality int        `json:"maxCardinality,omitempty"`
+	Ownership      string     `json:"ownership,omitempty"`
+	WriteAccess    string     `json:"writeAccess,omitempty"`
+	AppendOnly     bool       `json:"appendOnly,omitempty"`
 	AggregateOwner string     `json:"aggregateOwner,omitempty"`
+	Description    string     `json:"description"`
 }
 
 // RuntimeEntrypoint models an object-owned typed invocation seam that is not an
@@ -260,9 +265,9 @@ type RuntimeEntrypoint struct {
 //
 //   - middleware / internal_port（同步在途）：latency_p95_ms + failure_ratio_percent
 //   - projector / event_handler / subscription（事件消费）：freshness_p95_seconds
-//     + backlog_max_events + failure_ratio_percent
+//   - backlog_max_events + failure_ratio_percent
 //   - external_port（外部调用）：latency_p95_ms + failure_ratio_percent
-//     + dead_letter_ratio_percent
+//   - dead_letter_ratio_percent
 type RuntimeEntrypointSLO struct {
 	LatencyP95Milliseconds int     `json:"latencyP95Milliseconds,omitempty"`
 	FailureRatioPercent    float64 `json:"failureRatioPercent,omitempty"`
@@ -586,6 +591,7 @@ type EventDefinition struct {
 	// DeliverySemantics 是受控投递保证，Topic 是该事件落在哪个具名主题上。
 	// 两者由 `channel` 拆出：那个字段没有值域，同时混装机制、topic 名和笔误。
 	DeliverySemantics     string
+	WireEventType         string
 	Topic                 string
 	PayloadEntity         string
 	PayloadShape          string

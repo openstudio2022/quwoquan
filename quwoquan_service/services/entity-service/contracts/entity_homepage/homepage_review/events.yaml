@@ -1,6 +1,7 @@
 events:
 - name: HomepageReviewPublished
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageReviewPublished
   payload_entity: HomepageReview
   payload_fields:
   - reviewId
@@ -13,6 +14,7 @@ events:
   - version
 - name: HomepageReviewUpdated
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageReviewUpdated
   payload_entity: HomepageReview
   payload_fields:
   - reviewId
@@ -25,6 +27,7 @@ events:
   - version
 - name: HomepageReviewRemoved
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageReviewRemoved
   payload_entity: HomepageReview
   payload_fields:
   - reviewId

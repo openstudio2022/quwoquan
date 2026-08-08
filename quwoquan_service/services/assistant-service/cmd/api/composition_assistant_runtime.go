@@ -143,7 +143,11 @@ func wireAssistantRuntime(
 		return resolveErr
 	})
 
-	externalClients, err := buildAssistantExternalClients(runtime, infrastructure)
+	externalClients, err := buildAssistantExternalClients(
+		runtime,
+		infrastructure,
+		descriptorCatalog,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +164,7 @@ func wireAssistantRuntime(
 		deps.publicWebEvidence,
 		deps.publicWebBudget,
 		deps.runRepository,
+		runtime.instanceID+":assistant-subtask",
 		deps.subscriptionStore,
 		externalClients.interestReader,
 		deps.consentStore,

@@ -54,6 +54,7 @@ lifecycle:
   checkpoint: user_account_event_id
   rebuild: import_active_creator_release_then_replay_user_account_closed_events
   tombstone: remove_public_profile_keep_release_audit
+  idempotency: event_id
   event_consumers:
   - name: ProjectCreatorRuntimeProfileAccountClosure
     kind: projector

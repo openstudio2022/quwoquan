@@ -104,6 +104,7 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 			GreetingID:                   "greeting-1",
 			RequesterPersonaID:           "persona-1",
 			TargetPersonaID:              "persona-2",
+			RecipientAccountID:           "account-2",
 			Source:                       "profile",
 			ExpireAt:                     "2026-08-20T12:30:00Z",
 			TargetAllowsStrangerGreeting: true,
@@ -177,6 +178,7 @@ func TestUserEventPublisherRetainsObjectOwnedMessageCoordinatesAndFields(t *test
 		"id":                           "greeting-1",
 		"requesterPersonaId":           "persona-1",
 		"targetPersonaId":              "persona-2",
+		"recipientAccountId":           "account-2",
 		"targetAllowsStrangerGreeting": "true",
 		"occurredAt":                   now.Format(time.RFC3339Nano),
 		"source":                       "profile",
@@ -204,8 +206,8 @@ func TestGreetingPublisherMapsEveryCanonicalContractPayload(t *testing.T) {
 	}{
 		{
 			name:  "sent",
-			event: greetingapp.GreetingStreamEvent{EventName: "GreetingRequestSent", Source: "profile", ExpireAt: "2026-08-20T12:30:00Z", TargetAllowsStrangerGreeting: true},
-			want:  map[string]string{"source": "profile", "expireAt": "2026-08-20T12:30:00Z", "targetAllowsStrangerGreeting": "true"},
+			event: greetingapp.GreetingStreamEvent{EventName: "GreetingRequestSent", RecipientAccountID: "account-2", Source: "profile", ExpireAt: "2026-08-20T12:30:00Z", TargetAllowsStrangerGreeting: true},
+			want:  map[string]string{"recipientAccountId": "account-2", "source": "profile", "expireAt": "2026-08-20T12:30:00Z", "targetAllowsStrangerGreeting": "true"},
 		},
 		{
 			name:  "replied",
@@ -241,6 +243,24 @@ func TestGreetingPublisherMapsEveryCanonicalContractPayload(t *testing.T) {
 			}
 			assertDurableFields(t, transport.durable[0], mq.GreetingEventStream, want)
 		})
+	}
+}
+
+func TestGreetingPublisherRejectsSentWithoutRecipientAccount(t *testing.T) {
+	transport := &recordedMessageTransport{}
+	publisher := mq.NewEventPublisher(transport)
+	err := publisher.PublishGreetingEvent(context.Background(), greetingapp.GreetingStreamEvent{
+		EventID:            "event-1",
+		EventName:          "GreetingRequestSent",
+		GreetingID:         "greeting-1",
+		RequesterPersonaID: "persona-1",
+		TargetPersonaID:    "persona-2",
+		Source:             "profile",
+		ExpireAt:           "2026-08-20T12:30:00Z",
+		OccurredAt:         time.Now().UTC(),
+	})
+	if err == nil || len(transport.durable) != 0 {
+		t.Fatalf("missing recipient account must fail closed: err=%v durable=%d", err, len(transport.durable))
 	}
 }
 

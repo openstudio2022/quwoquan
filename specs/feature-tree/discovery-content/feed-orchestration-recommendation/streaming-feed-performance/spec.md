@@ -69,6 +69,7 @@
 - 视频书仅对当前项和 N+1 项执行取消友好的封面/媒体预热，两者共用全局解码槽位与 6 秒准备预算；N+1 不自动播放，方向变更、切集、离开或内存压力立即取消。
 - QuerySnapshot 必须通过 `runtime-client-foundation/local-cache-architecture` 提供真实 stale-while-revalidate 与离线首屏；HLS/CMAF ABR 仅经 `runtime-media` P1-B 契约和 capability/feature flag 进入，失败时回退到同源 P0 progressive MP4。
 - 持久 QuerySnapshot 只能保存从首屏 `nextCursor` 连续可达的有界页链，禁止保存无法续接的“最新页孤岛”；当前策略最多保存连续 4 页，未证明的更长离线窗口保持开放事项。
+- QuerySnapshot 写盘前必须按 canonical 契约声明的逐字段 UTF-8 字节上限准入每个 Post 字段，任一字段超限即拒绝整个 snapshot/page，整页 2 MiB 预算只是聚合兜底，不得替代字段门。限额表只能由 content-service Post `fields.yaml` 与 discovery feed projection 的 `max_utf8_bytes` 经 codegen 派生（当前为 `postId=256`、`authorId=128`、`title=320`）；同一 wire key 在两处声明不一致或派生结果为空时，生成期 fail-closed，不得落盘空限额表。
 - HLS/CMAF 与 progressive MP4 切换属于同一 asset/version 时必须尽力从原位置续播；seek 恢复失败不得把可播放 fallback 误判为媒体失败。
 - 普通拖动与 source-switch seek 共用同一物理命令 admission 和绝对 deadline；平台 Future 不可取消时，跨 controller epoch 的未终止命令总量仍必须有 session 硬限，迟到完成只能释放预算且不得回写 superseded 状态。
 
@@ -157,6 +158,7 @@
 - AND 不出现无限 spinner、空白伪成功、请求风暴或无活动订阅轮询。
 - AND quota owner 淘汰、shard key 拒绝、shard byte 拒绝、repair 拒绝分别进入闭集指标与告警；无效/溢出配置阻止服务启动，拒绝路径不把其他 owner 数据或 Redis `maxmemory` 淘汰包装成成功。
 - AND path-versioned public slice 的 query-free HEAD/Range 共享同一 path cache identity、长期 immutable 与 CORS；任何 signed、冗余 query、unversioned 或 private media 均为 no-store 且不返回 public cache key，四环境不得另造缓存规则。
+- AND 超过 canonical 逐字段 UTF-8 字节上限的 Post 在 QuerySnapshot 写盘前被拒绝，既不落盘也不在下次冷启动恢复，不得靠整页 2 MiB 聚合预算兜底放行。
 
 <a id="gwt-005"></a>
 ### GWT-005 长会话不累积无界状态
@@ -224,7 +226,7 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：仍缺无网重启、主动 LRU/TTL 与真机磁盘压力组合证据。单 snapshot 内 Post 字段级 canonical UTF-8 byte admission 已从 ContractGraph 生成到 App，并在编码调度前按完整 snapshot fail-closed。长窗口双向续填、cursor session/expiry 约束和主动 expiry 已闭环：QuerySnapshot `freshFor=5m`、最大可恢复 24 小时，超过 24 小时在内存读取和持久恢复时删除。分页 cursor 只有在同 session 且 `paginationExpiresAt` 尚未到期时才可复用。四环境启用、CDN/弱网/真机 ABR、网关压力组合证据仍须以当前候选版本验证。QuerySnapshot 继续提供首屏 cache-first SWR、续页 remote-first 失败回退、从首屏 cursor 连续可达的最多 4 页离线链，以及 2 MiB UTF-8 persisted payload 硬限。写入按完整 snapshot/page 原子选择，首页连续链优先，单 active drain 合并并发变更并保证最新状态最终落盘。整页编码先用无输出有界 writer 精确预检，再逐字段、逐 item 写最终 payload，字符串临时分块为 1024 code units，因此不先物化整页 Map/List/局部 JSON String，超预算时保持 page/cursor 原子。HLS/CMAF 与物理命令 admission 的既有边界不变。
+- 影响或价值：仍缺无网重启、主动 LRU/TTL 与真机磁盘压力组合证据。单 snapshot 内 Post 字段级 canonical UTF-8 byte admission 已由 `REQ-003 / GWT-004` 接管：限额表经 codegen 从 Post `fields.yaml` 与 discovery feed projection 的 `max_utf8_bytes` 派生并已落盘（`postId=256`、`authorId=128`、`title=320`），超限字段在写盘前被拒绝；整页 2 MiB payload 预算仍在编码调度前 fail-closed。长窗口双向续填、cursor session/expiry 约束和主动 expiry 已闭环：QuerySnapshot `freshFor=5m`、最大可恢复 24 小时，超过 24 小时在内存读取和持久恢复时删除。分页 cursor 只有在同 session 且 `paginationExpiresAt` 尚未到期时才可复用。四环境启用、CDN/弱网/真机 ABR、网关压力组合证据仍须以当前候选版本验证。QuerySnapshot 继续提供首屏 cache-first SWR、续页 remote-first 失败回退、从首屏 cursor 连续可达的最多 4 页离线链，以及 2 MiB UTF-8 persisted payload 硬限。写入按完整 snapshot/page 原子选择，首页连续链优先，单 active drain 合并并发变更并保证最新状态最终落盘。整页编码先用无输出有界 writer 精确预检，再逐字段、逐 item 写最终 payload，字符串临时分块为 1024 code units，因此不先物化整页 Map/List/局部 JSON String，超预算时保持 page/cursor 原子。HLS/CMAF 与物理命令 admission 的既有边界不变。
 - 完成判定：`GWT-003` 与 `GWT-004` 对应三层证据通过，且不新建第二套实现。
 
 <a id="open-006"></a>

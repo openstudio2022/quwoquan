@@ -10,9 +10,7 @@ from typing import Any
 from core.control_types import ExecutionStateStatus, TargetSelector
 from core.data_issue import DataIssue
 from core.execution_branch import stamp_execution_branch
-from core.io import read_json
 from core.paths import (
-    execution_root,
     preset_path,
 )
 from core.runtime_policy import active_runtime_policy
@@ -33,10 +31,12 @@ from content.execution.planning.source_selection import (
     TargetSourceQualifier,
     qualify_source_ready_targets,
 )
+from content.execution.planning.source_pool_policy import source_pool_policy_fields
+from content.execution.planning.execution_plan_readback import (
+    execution_planned_entity_ids,
+)
 
 DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
-
-
 @dataclass(frozen=True)
 class SelectionRequest:
     """One immutable request for creating an execution work package."""
@@ -46,6 +46,9 @@ class SelectionRequest:
     limit: int
     quota: int
     oversample_factor: float
+    required_workers: int
+    partition_count: int
+    capacity_plan_digest: str
     region: str
     category: str
     name: str
@@ -56,6 +59,10 @@ class SelectionRequest:
     entity_homepages_per_target: int
     image_works_per_target: int
     video_works_per_target: int
+    scale_source_pool: Mapping[str, Any] | None = None
+    source_pool_evidence_root_ref: str | None = None
+    source_pool_selection: Mapping[str, Any] | None = None
+    source_pool_targets: tuple[dict[str, Any], ...] = ()
     created_by: str = "execute"
     selection_policy: SelectionPolicy = SelectionPolicy.FROZEN
     target_selector: TargetSelector = TargetSelector.ALL
@@ -323,6 +330,12 @@ def build_execution_spec(
     video_works_per_target: int,
     approved_quota: int,
     oversample_factor: float,
+    required_workers: int,
+    partition_count: int,
+    capacity_plan_digest: str,
+    scale_source_pool: Mapping[str, Any] | None = None,
+    source_pool_evidence_root_ref: str | None = None,
+    source_pool_selection: Mapping[str, Any] | None = None,
     intent_label: str | None = None,
     preset_ref: str | None = None,
     target_entity_count: int | None = None,
@@ -361,6 +374,23 @@ def build_execution_spec(
         or oversample_factor < 1
     ):
         raise ValueError("oversampleFactor must be a number >= 1")
+    if isinstance(required_workers, bool) or not isinstance(required_workers, int) or required_workers < 1:
+        raise ValueError("requiredWorkers must be a positive integer")
+    if partition_count not in {16, 32, 64, 128, 256}:
+        raise ValueError("partitionCount must be a governed partition count")
+    if (
+        not isinstance(capacity_plan_digest, str)
+        or len(capacity_plan_digest) != 71
+        or not capacity_plan_digest.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in capacity_plan_digest[7:])
+    ):
+        raise ValueError("capacityPlanDigest must be a canonical sha256 digest")
+    source_pool_fields = source_pool_policy_fields(
+        validated_execution_id,
+        binding=scale_source_pool,
+        evidence_root_ref=source_pool_evidence_root_ref,
+        selection=source_pool_selection,
+    )
     required_article_angles = DEFAULT_ARTICLE_ANGLES[:entity_articles_per_target]
     research_lanes = []
     if entity_homepages_per_target > 0:
@@ -463,10 +493,14 @@ def build_execution_spec(
         "targetObjectCount": target_object_count,
         "approvedQuota": approved_quota,
         "oversampleFactor": float(oversample_factor),
+        "requiredWorkers": required_workers,
+        "partitionCount": partition_count,
+        "capacityPlanDigest": capacity_plan_digest,
         # Scale article source plans must use the registry-admitted commercial
         # frontier; they may not fall back to uncontrolled platform sources.
         "articleCommercialClosure": carriers == ["article"],
     }
+    spec["executionPolicy"].update(source_pool_fields)
     # 冻结当前正式分支与 commit，供 execution schema、重放与审计同源消费。
     # detached campaign lane 仅可通过 execution_branch 的受控 frozen-mainline
     # 环境回退解析分支，普通 detached 执行仍会在 schema/preflight fail-closed。
@@ -485,35 +519,6 @@ def build_execution_spec(
     }
     stamp_execution_branch(spec)
     return spec
-def execution_planned_entity_ids(execution_id: str) -> list[str]:
-    shared = execution_root(execution_id) / "_shared"
-    report = read_json(shared / "auto_research_plan.json") if (shared / "auto_research_plan.json").is_file() else {}
-    availability = report.get("sourceAvailability") if isinstance(report.get("sourceAvailability"), dict) else {}
-    ids: list[str] = []
-    seen: set[str] = set()
-    for entity_id in availability.get("readyTargets") or []:
-        text = str(entity_id or "").strip()
-        if text and text not in seen:
-            ids.append(text)
-            seen.add(text)
-    for item in availability.get("ineligibleTargets") or []:
-        if not isinstance(item, dict):
-            continue
-        text = str(item.get("entityId") or "").strip()
-        if text and text not in seen:
-            ids.append(text)
-            seen.add(text)
-    if ids:
-        return ids
-    for item in report.get("updated") or []:
-        if not isinstance(item, dict):
-            continue
-        text = str(item.get("entityId") or "").strip()
-        if text and text not in seen:
-            ids.append(text)
-            seen.add(text)
-    return ids
-
 def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any], dict[str, Any]]:
     """Select targets and write the sole execution manifest/specification."""
     execution_id = validate_execution_id(request.execution_id)
@@ -526,19 +531,33 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
     discovery = request.discovery_path
     requested_limit = max(1, int(request.limit))
     approved_quota = int(request.quota)
-    targets, report = select_targets(
-        discovery_path=discovery,
-        limit=requested_limit,
-        quota=approved_quota,
-        target_selector=request.target_selector,
-        source_qualifier=request.source_qualifier,
-        qualification_source_key=request.qualification_source_key,
-        persist_qualified_source=request.persist_qualified_source,
-        target_names=request.target_names,
-        category=request.category,
-        inherit_frozen_targets=bool(request.inherit_frozen_targets),
-        inherited_targets=request.inherited_targets,
-    )
+    if request.scale_source_pool is not None:
+        from content.source.research.scale_source_pool_runtime import (
+            select_frozen_source_pool_targets,
+        )
+        targets, report = select_frozen_source_pool_targets(
+            targets=request.source_pool_targets,
+            requested_limit=requested_limit,
+            approved_quota=approved_quota,
+            target_names=request.target_names,
+            discovery_path=discovery,
+            pool_binding=request.scale_source_pool,
+            lane_selection=request.source_pool_selection or {},
+        )
+    else:
+        targets, report = select_targets(
+            discovery_path=discovery,
+            limit=requested_limit,
+            quota=approved_quota,
+            target_selector=request.target_selector,
+            source_qualifier=request.source_qualifier,
+            qualification_source_key=request.qualification_source_key,
+            persist_qualified_source=request.persist_qualified_source,
+            target_names=request.target_names,
+            category=request.category,
+            inherit_frozen_targets=bool(request.inherit_frozen_targets),
+            inherited_targets=request.inherited_targets,
+        )
     spec = build_execution_spec(
         execution_id=execution_id,
         name=request.name,
@@ -556,6 +575,12 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         target_entity_count=len(targets),
         approved_quota=approved_quota,
         oversample_factor=float(request.oversample_factor),
+        required_workers=request.required_workers,
+        partition_count=request.partition_count,
+        capacity_plan_digest=request.capacity_plan_digest,
+        scale_source_pool=request.scale_source_pool,
+        source_pool_evidence_root_ref=request.source_pool_evidence_root_ref,
+        source_pool_selection=request.source_pool_selection,
         selection_policy=request.selection_policy,
     )
     spec["title"] = str(request.title or request.name)

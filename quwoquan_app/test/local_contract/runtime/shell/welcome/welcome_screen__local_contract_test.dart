@@ -824,7 +824,7 @@ void main() {
     expect(welcome, contains('不取消硬截止'));
     expect(welcome, contains('phaseDeadline'));
 
-    final shell = _readAppFile('lib/runtime/di/shell/composition/quwoquan_app_shell.dart');
+    final shell = _readAppFile('lib/runtime/shell/composition/quwoquan_app_shell.dart');
     expect(shell, contains('_armStartupDeadline'));
     expect(shell, contains('startup_absolute_deadline'));
     expect(shell, contains('StartupStateMachine'));

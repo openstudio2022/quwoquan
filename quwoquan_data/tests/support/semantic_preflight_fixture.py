@@ -21,6 +21,7 @@ def ready_semantic_preflight(
     semantic_selection_id: str,
     *,
     output_root: Path = OUTPUT_ROOT,
+    effective_concurrency: int = 4,
 ) -> tuple[Path, dict[str, str]]:
     selection = resolve_semantic_preflight_selection(semantic_selection_id)
     report = {
@@ -68,9 +69,9 @@ def ready_semantic_preflight(
             "modelParameters": selection.model_selection.parameters_document(),
             "runtimeProfileDigest": selection.runtime_profile_digest,
             "ready": True,
-            "attempts": 8,
-            "successCount": 8,
-            "effectiveConcurrency": 1,
+            "attempts": max(8, effective_concurrency),
+            "successCount": max(8, effective_concurrency),
+            "effectiveConcurrency": effective_concurrency,
             "bridgeDisconnectCount": 0,
             "issues": [],
         },

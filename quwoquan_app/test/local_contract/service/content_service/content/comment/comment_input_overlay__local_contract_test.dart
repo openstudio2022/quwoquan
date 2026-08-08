@@ -13,7 +13,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/service/content_service/content/comment/application/comment_remote_config.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/application/public/comment_remote_config.dart';
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/presentation/comment_input_overlay.dart';

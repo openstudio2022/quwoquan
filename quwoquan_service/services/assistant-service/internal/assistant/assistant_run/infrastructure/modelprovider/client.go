@@ -26,7 +26,8 @@ type TierModels struct {
 type Config struct {
 	CompletionURL string
 	APIKey        string
-	// Models 至少必须提供 Balanced；缺失的档位回落到 Balanced。
+	// Models 至少必须提供 Balanced。Fast 缺失时可回落到 Balanced；Reasoning
+	// 必须由环境显式声明，禁止把普通档伪装成强推理能力。
 	Models TierModels
 	// NativeToolCalling 声明该 endpoint 是否已验证支持 tools/tool_choice 协议。
 	NativeToolCalling bool
@@ -43,7 +44,6 @@ type Client struct {
 type completionWireRequest struct {
 	Model          string        `json:"model"`
 	Messages       []messageWire `json:"messages"`
-	Temperature    float64       `json:"temperature"`
 	ResponseFormat *jsonFormat   `json:"response_format,omitempty"`
 	Tools          []toolWire    `json:"tools,omitempty"`
 	ToolChoice     string        `json:"tool_choice,omitempty"`
@@ -90,9 +90,10 @@ type streamOption struct {
 }
 
 type completionWireResponse struct {
-	Model   string       `json:"model"`
-	Choices []choiceWire `json:"choices"`
-	Usage   *usageWire   `json:"usage"`
+	Model   string          `json:"model"`
+	Choices []choiceWire    `json:"choices"`
+	Usage   *usageWire      `json:"usage"`
+	Error   json.RawMessage `json:"error"`
 }
 
 type choiceWire struct {
@@ -143,12 +144,6 @@ func resolveTierModels(raw TierModels) (TierModels, error) {
 		Balanced:  balanced,
 		Reasoning: strings.TrimSpace(raw.Reasoning),
 	}
-	if resolved.Fast == "" {
-		resolved.Fast = balanced
-	}
-	if resolved.Reasoning == "" {
-		resolved.Reasoning = balanced
-	}
 	return resolved, nil
 }
 
@@ -163,29 +158,25 @@ func (c *Client) SupportsParallelModelRequests() bool {
 	return c != nil && c.http != nil
 }
 
-// SupportsReasoningTier reports the configured provider-neutral tier, not a
-// concrete model identity. resolveTierModels guarantees the value is present.
+// SupportsReasoningTier reports only an explicitly configured provider-neutral
+// reasoning tier. A balanced model fallback is not evidence of that capability.
 func (c *Client) SupportsReasoningTier() bool {
 	return c != nil && strings.TrimSpace(c.models.Reasoning) != ""
 }
 
-func (c *Client) modelFor(tier ports.ModelTier) string {
+func (c *Client) modelFor(tier ports.ModelTier) (string, ports.ModelTier, bool) {
 	switch tier {
 	case ports.ModelTierFast:
-		return c.models.Fast
+		model := strings.TrimSpace(c.models.Fast)
+		if model == "" {
+			return c.models.Balanced, ports.ModelTierBalanced, true
+		}
+		return model, ports.ModelTierFast, true
 	case ports.ModelTierReasoning:
-		return c.models.Reasoning
+		model := strings.TrimSpace(c.models.Reasoning)
+		return model, ports.ModelTierReasoning, model != ""
 	default:
-		return c.models.Balanced
-	}
-}
-
-func servedTier(tier ports.ModelTier) ports.ModelTier {
-	switch tier {
-	case ports.ModelTierFast, ports.ModelTierBalanced, ports.ModelTierReasoning:
-		return tier
-	default:
-		return ports.ModelTierBalanced
+		return c.models.Balanced, ports.ModelTierBalanced, true
 	}
 }
 
@@ -194,7 +185,13 @@ func (c *Client) Complete(
 	request ports.ModelCompletionRequest,
 ) (ports.ModelCompletionResult, error) {
 	started := time.Now()
-	payload, err := json.Marshal(c.toWireRequest(request))
+	model, tierServed, ok := c.modelFor(request.Tier)
+	if !ok {
+		return ports.ModelCompletionResult{}, ports.ProviderFailure{
+			Capability: "model", Reason: ports.ProviderFailureUnavailable,
+		}
+	}
+	payload, err := json.Marshal(c.toWireRequest(request, model))
 	if err != nil {
 		return ports.ModelCompletionResult{}, ports.ProviderFailure{
 			Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
@@ -205,9 +202,7 @@ func (c *Client) Complete(
 		return ports.ModelCompletionResult{}, err
 	}
 	if status < http.StatusOK || status >= http.StatusMultipleChoices {
-		return ports.ModelCompletionResult{}, ports.ProviderFailure{
-			Capability: "model", Reason: ports.ProviderFailureUnavailable,
-		}
+		return ports.ModelCompletionResult{}, providerFailureForStatus(status)
 	}
 	var decoded completionWireResponse
 	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Choices) == 0 ||
@@ -222,7 +217,7 @@ func (c *Client) Complete(
 		Usage:        c.toUsage(*decoded.Usage, time.Since(started)),
 		ToolCalls:    toApplicationToolCalls(decoded.Choices[0].Message.ToolCalls),
 		ModelID:      strings.TrimSpace(decoded.Model),
-		TierServed:   servedTier(request.Tier),
+		TierServed:   tierServed,
 	}, nil
 }
 
@@ -232,7 +227,13 @@ func (c *Client) Stream(
 	emit func(ports.ModelTextDelta) error,
 ) (ports.ModelCompletionResult, error) {
 	started := time.Now()
-	payload, err := json.Marshal(c.toWireRequest(request))
+	model, tierServed, ok := c.modelFor(request.Tier)
+	if !ok {
+		return ports.ModelCompletionResult{}, ports.ProviderFailure{
+			Capability: "model", Reason: ports.ProviderFailureUnavailable,
+		}
+	}
+	payload, err := json.Marshal(c.toWireRequest(request, model))
 	if err != nil {
 		return ports.ModelCompletionResult{}, ports.ProviderFailure{
 			Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
@@ -245,15 +246,14 @@ func (c *Client) Stream(
 	defer response.Body.Close()
 	if status < http.StatusOK || status >= http.StatusMultipleChoices {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1024))
-		return ports.ModelCompletionResult{}, ports.ProviderFailure{
-			Capability: "model", Reason: ports.ProviderFailureUnavailable,
-		}
+		return ports.ModelCompletionResult{}, providerFailureForStatus(status)
 	}
 	var answer strings.Builder
 	var usage *usageWire
 	modelID := ""
 	finishReason := ""
 	toolCalls := newToolCallAccumulator()
+	done := false
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
 	for scanner.Scan() {
@@ -262,11 +262,20 @@ func (c *Client) Stream(
 			continue
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		if data == "" || data == "[DONE]" {
+		if data == "" {
 			continue
+		}
+		if data == "[DONE]" {
+			done = true
+			break
 		}
 		var chunk completionWireResponse
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			return ports.ModelCompletionResult{}, ports.ProviderFailure{
+				Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
+			}
+		}
+		if hasProviderErrorEnvelope(chunk.Error) {
 			return ports.ModelCompletionResult{}, ports.ProviderFailure{
 				Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
 			}
@@ -303,6 +312,11 @@ func (c *Client) Stream(
 	if err := scanner.Err(); err != nil {
 		return ports.ModelCompletionResult{}, providerFailureForTransport(err)
 	}
+	if !done {
+		return ports.ModelCompletionResult{}, ports.ProviderFailure{
+			Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
+		}
+	}
 	content := strings.TrimSpace(answer.String())
 	collected := toolCalls.collect()
 	if (content == "" && len(collected) == 0) ||
@@ -317,12 +331,18 @@ func (c *Client) Stream(
 		Usage:        c.toUsage(*usage, time.Since(started)),
 		ToolCalls:    collected,
 		ModelID:      modelID,
-		TierServed:   servedTier(request.Tier),
+		TierServed:   tierServed,
 	}, nil
+}
+
+func hasProviderErrorEnvelope(raw json.RawMessage) bool {
+	normalized := bytes.TrimSpace(raw)
+	return len(normalized) > 0 && !bytes.Equal(normalized, []byte("null"))
 }
 
 func (c *Client) toWireRequest(
 	request ports.ModelCompletionRequest,
+	model string,
 ) completionWireRequest {
 	messages := make([]messageWire, 0, len(request.Messages))
 	for _, message := range request.Messages {
@@ -333,10 +353,9 @@ func (c *Client) toWireRequest(
 		})
 	}
 	wire := completionWireRequest{
-		Model:       c.modelFor(request.Tier),
-		Messages:    messages,
-		Temperature: 0.2,
-		Stream:      request.Stream,
+		Model:    model,
+		Messages: messages,
+		Stream:   request.Stream,
 	}
 	if request.StructuredOutput {
 		wire.ResponseFormat = &jsonFormat{Type: "json_object"}
@@ -469,43 +488,30 @@ func (c *Client) postResponse(
 	payload []byte,
 	stream bool,
 ) (*http.Response, int, error) {
-	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		request, err := http.NewRequestWithContext(
-			ctx,
-			http.MethodPost,
-			c.endpoint,
-			bytes.NewReader(payload),
-		)
-		if err != nil {
-			return nil, 0, ports.ProviderFailure{
-				Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
-			}
-		}
-		request.Header.Set("Authorization", "Bearer "+c.apiKey)
-		request.Header.Set("Content-Type", "application/json")
-		if stream {
-			request.Header.Set("Accept", "text/event-stream")
-		}
-		response, err := c.http.Do(request)
-		if err == nil {
-			if response.StatusCode < http.StatusInternalServerError || attempt == 1 {
-				return response, response.StatusCode, nil
-			}
-			_ = response.Body.Close()
-			lastErr = errors.New("transient provider status")
-		} else {
-			lastErr = err
-		}
-		if attempt == 0 {
-			select {
-			case <-ctx.Done():
-				return nil, 0, providerFailureForTransport(ctx.Err())
-			case <-time.After(100 * time.Millisecond):
-			}
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.endpoint,
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return nil, 0, ports.ProviderFailure{
+			Capability: "model", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
-	return nil, 0, providerFailureForTransport(lastErr)
+	request.Header.Set("Authorization", "Bearer "+c.apiKey)
+	request.Header.Set("Content-Type", "application/json")
+	if stream {
+		request.Header.Set("Accept", "text/event-stream")
+	}
+	// TierDegradingModelProvider owns the only retry boundary. Replaying the same
+	// provider request here has no idempotency receipt and can create an
+	// unaccounted second completion after a response-loss or 5xx boundary.
+	response, err := c.http.Do(request)
+	if err != nil {
+		return nil, 0, providerFailureForTransport(err)
+	}
+	return response, response.StatusCode, nil
 }
 
 func providerFailureForTransport(err error) ports.ProviderFailure {
@@ -517,4 +523,15 @@ func providerFailureForTransport(err error) ports.ProviderFailure {
 	return ports.ProviderFailure{
 		Capability: "model", Reason: ports.ProviderFailureUnavailable,
 	}
+}
+
+func providerFailureForStatus(status int) ports.ProviderFailure {
+	reason := ports.ProviderFailureInvalidResponse
+	switch {
+	case status == http.StatusRequestTimeout:
+		reason = ports.ProviderFailureTimeout
+	case status == http.StatusTooManyRequests || status >= http.StatusInternalServerError:
+		reason = ports.ProviderFailureUnavailable
+	}
+	return ports.ProviderFailure{Capability: "model", Reason: reason}
 }

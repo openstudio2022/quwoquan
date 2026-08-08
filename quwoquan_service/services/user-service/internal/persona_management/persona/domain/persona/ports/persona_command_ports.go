@@ -22,6 +22,8 @@ var (
 	ErrPersonaIdempotencyConflict = errors.New("persona idempotency key was reused with a different command")
 	// ErrPersonaVersionConflict 表示提交与并发变更冲突（锁行 CAS 失败）。
 	ErrPersonaVersionConflict = errors.New("persona version conflict")
+	// ErrPersonaQuotaReached 表示 owner 已达 canonical Persona 数量上限。
+	ErrPersonaQuotaReached = errors.New("persona quota reached")
 )
 
 // PersonaCommandMeta 承载一次命令的业务重放身份。

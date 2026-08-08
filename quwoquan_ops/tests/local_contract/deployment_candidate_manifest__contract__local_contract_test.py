@@ -40,6 +40,8 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         ):
             (legal_current / relative).write_text("{}\n", encoding="utf-8")
         digest = "sha256:" + "a" * 64
+        self.configuration_digest = "sha256:" + "1" * 64
+        self.runtime_config_digest = "sha256:" + "2" * 64
         self.snapshot = {
             "baselineId": "sha256:" + "b" * 64,
             "sourceRevision": "c" * 40,
@@ -57,7 +59,7 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
             encoding="utf-8",
         )
         (self.app / "report.json").write_text(
-            json.dumps({"runtimeConfigDigest": digest}) + "\n",
+            json.dumps({"runtimeConfigDigest": self.runtime_config_digest}) + "\n",
             encoding="utf-8",
         )
         (self.app / "package-fingerprint.json").write_text(
@@ -182,7 +184,7 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
             "schema": "stackctl-package-oci-images",
             "environment": "alpha",
             "target": "alpha-local",
-            "configurationDigest": digest,
+            "configurationDigest": self.configuration_digest,
             "buildInputDigest": subject._sha256_json(
                 {
                     "firstPartyImageVersion": subject.immutable_image_digest(
@@ -227,6 +229,18 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         self.assertEqual(payload["candidateType"], subject.RUNTIME_CANDIDATE_TYPE)
         self.assertEqual(payload["baselineId"], self.snapshot["baselineId"])
         self.assertEqual(
+            payload["configurationDigest"],
+            self.configuration_digest,
+        )
+        self.assertEqual(
+            payload["runtimeConfigDigest"],
+            self.runtime_config_digest,
+        )
+        self.assertNotEqual(
+            payload["configurationDigest"],
+            payload["runtimeConfigDigest"],
+        )
+        self.assertEqual(
             payload["runtimeSchemaVersion"],
             "environment-runtime-package",
         )
@@ -258,6 +272,127 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
             require_full=True,
             candidate_root=self.candidate,
         )
+
+    def test_candidate_rejects_missing_configuration_identity(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+
+        for field in ("configurationDigest", "runtimeConfigDigest"):
+            with self.subTest(field=field):
+                malformed = dict(payload)
+                malformed.pop(field)
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "deployment candidate manifest fields mismatch",
+                ):
+                    subject.validate_candidate_manifest(
+                        malformed,
+                        expected_environment="alpha",
+                        expected_target="alpha-local",
+                        require_full=True,
+                        candidate_root=self.candidate,
+                    )
+
+    def test_candidate_rejects_extra_configuration_identity(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["legacyConfigurationDigest"] = self.configuration_digest
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "deployment candidate manifest fields mismatch",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
+    def test_candidate_rejects_swapped_configuration_identities(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["configurationDigest"], payload["runtimeConfigDigest"] = (
+            payload["runtimeConfigDigest"],
+            payload["configurationDigest"],
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "deployment candidate App runtime identity drifted",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
+    def test_candidate_rejects_oci_configuration_drift(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["configurationDigest"] = "sha256:" + "3" * 64
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "deployment candidate OCI identity drifted",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
+    def test_candidate_rejects_app_runtime_configuration_drift(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["runtimeConfigDigest"] = "sha256:" + "4" * 64
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "deployment candidate App runtime identity drifted",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
 
     def test_full_candidate_rejects_missing_release_binding(self) -> None:
         with self.assertRaisesRegex(

@@ -27,7 +27,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show homeChannelsProvider;
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';

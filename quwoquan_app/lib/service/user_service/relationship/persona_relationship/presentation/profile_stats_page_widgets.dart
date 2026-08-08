@@ -77,8 +77,36 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
               child: _buildEmptyCard(isDark, _activeTab),
             ),
           )
-        else
+        else ...<Widget>[
+          if (memory.refreshError != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  AppSpacing.containerSm,
+                  AppSpacing.containerMd,
+                  0,
+                ),
+                child: AppSectionErrorCard(
+                  semantic: ensureRetryUiErrorSemantic(
+                    runtimeErrorSemantic(
+                      context,
+                      error: memory.refreshError!,
+                      category: UiErrorCategory.sectionLoad,
+                      scope: UiErrorScope.section,
+                    ),
+                  ),
+                  onAction: (action) async {
+                    if (action.type == UiErrorActionType.retry ||
+                        action.type == UiErrorActionType.resubmit) {
+                      await _refreshActiveTab();
+                    }
+                  },
+                ),
+              ),
+            ),
           ..._buildListSlivers(isDark, memory),
+        ],
       ],
     );
   }
@@ -439,6 +467,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
       ),
       _ => (FoundationText.follow, true, () => _handleFollowAction(row)),
     };
+    final isPending = _pendingRelationshipTargets.isNotEmpty;
     final fillColor = isPrimary
         ? AppColors.iosAccent(context).withValues(alpha: 0.12)
         : CupertinoDynamicColor.resolve(CupertinoColors.systemGrey5, context);
@@ -459,7 +488,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
       ),
       borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
       color: fillColor,
-      onPressed: onPressed,
+      onPressed: isPending ? null : onPressed,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),

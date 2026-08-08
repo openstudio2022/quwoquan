@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260808--travel-article-m1--china-beta-bootstrap-not-m100--scale-031",
+  "executionBinding": "frozen",
+  "objectRef": "杭州西湖__article_frontier_wikivoyage_zh_e8cc82203075",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:50712dc2dcfacb57d5ad9e5b6d486c5a4eca2581b6a3309bbc4ad03905a09c0f"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:4f378760da5d130188a225ebae2d70433dbb4a5c5186aeca93293e7faa18a16e"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:8bdf45b8c19804e328e8d3b8d458512bc92f1a38332b2c959cbe710a6b1f3669"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:7c9eef6e62c5a802aa2dec6fdd18854c7f9a9a2319127142ee15d5b655423fef"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:1cd49fb1fc90b430f83b1658c40433a310a1f644d5e86e21180539e524e8196e"
+    }
+  ]
+}

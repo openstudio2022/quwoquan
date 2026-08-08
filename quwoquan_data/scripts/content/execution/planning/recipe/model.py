@@ -24,9 +24,10 @@ from core.source_digest import current_source_digest
 from governance.provider_policy import load_provider_policy
 
 from content.execution import store
+from content.execution.planning.recipe import request as recipe_request
+from content.execution.planning.recipe import support as recipe_support
+from content.execution.planning.recipe.contract import gate_recipe_contract, lint_recipe
 from content.execution.queue import backend as queue_backend
-from content.execution.planning.recipe import request as recipe_request, support as recipe_support
-from content.execution.planning.recipe.contract import lint_recipe
 from content.execution.request import (  # noqa: F401
     RuntimeExecutionRequest,
     resolve_candidate_pool,
@@ -68,34 +69,6 @@ def load_recipe(recipe_ref: str) -> dict[str, Any]:
     if errors:
         raise ValueError(f"recipe '{recipe_ref}' 不合法: " + "; ".join(errors))
     return doc
-
-
-def _contract_gate(recipe: dict[str, Any], execution_id: str) -> None:
-    contract = recipe.get("contract") or {}
-    spec = store.load_spec(execution_id)
-    errors: list[str] = []
-    declared_preset = store.spec_preset_ref(spec)
-    if declared_preset != str(recipe.get("presetRef") or ""):
-        errors.append(
-            f"content.presetRef={declared_preset!r} 与配方 presetRef={recipe.get('presetRef')!r} 不一致"
-        )
-    if (
-        bool(contract.get("requireActiveStatus", True))
-        and str(spec.get("status") or "") != "active"
-    ):
-        errors.append(f"task status 必须 active，实得 {spec.get('status')!r}")
-    # 分支治理（P4）：recipe 禁止声明 executionBranch（临时 feature 分支绑定已废止）；
-    # 商业执行只校验 branch policy（quwoquan_ops/policies/branch_policy.yaml）。
-    if contract.get("executionBranch"):
-        errors.append(
-            "contract.executionBranch 已废止：recipe 不得绑定 Git 分支，"
-            "正式分支由 branch_policy.yaml 治理"
-        )
-    from core.execution_branch import execution_branch_issues
-
-    errors.extend(execution_branch_issues(spec, cwd=REPO_ROOT))
-    if errors:
-        raise SystemExit("[task execute] 契约门 BLOCK: " + "; ".join(errors))
 
 
 def _execute(
@@ -151,6 +124,11 @@ def _runtime_preflight_argv(
         execution_root(execution_id),
         semantic_selection_id,
     )
+
+
+def _requires_runtime_preflight(*, campaign_bound: bool, stage: str) -> bool:
+    """Only Agent-bearing phases need a fresh runtime/network probe."""
+    return not (campaign_bound and stage == "run")
 
 
 def _retry_target_names(
@@ -287,7 +265,8 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
 
         require_campaign_external_inputs(identity)
-    if campaign_bound and stage == "run":
+    campaign_publish_resume = campaign_bound and stage == "run"
+    if campaign_publish_resume:
         from content.execution.campaign.receipt import (
             require_lane_review_receipt,
         )
@@ -467,11 +446,11 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
         return
     from content.execution import create_execution_manifest
-    from content.execution.identity import SelectionPolicy
     from content.execution.controller.execute.runner import (
         preflight_execution_models,
         write_execution_model_readiness,
     )
+    from content.execution.identity import SelectionPolicy
     from content.execution.workspace import TARGET_SET_REF, frozen_target_set_digest
 
     # plan-only 只验证可复用输入和工作包形状；它不得冒充 Agent/来源/发布成功，
@@ -489,7 +468,9 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
 
     from core.data_issue import DataIssueError
 
-    from content.execution.controller.execute.materialization import ensure_execution_spec
+    from content.execution.controller.execute.materialization import (
+        ensure_execution_spec,
+    )
 
     try:
         execution_spec_id = ensure_execution_spec(
@@ -542,7 +523,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             write_json(frozen_promotion_path, scale_promotion_receipt)
     if stage != "plan-only":
         write_execution_model_readiness(execution_id, model_readiness)
-    _contract_gate(recipe, execution_spec_id)
+    gate_recipe_contract(recipe, execution_spec_id)
     from content.execution import prepare_execution_qualification
 
     prepare_execution_qualification(execution_id)
@@ -552,9 +533,16 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     if stage == "readiness-only":
         _readiness(recipe, execution_id, invoke)
         return
-    rc = invoke(_runtime_preflight_argv(execution_id, semantic_selection_id))
-    if rc != 0:
-        raise SystemExit(f"[task execute] task preflight rc={rc}")
+    # campaign-lane-run 的 review 阶段已经以 frozenAt 绑定 semantic admission，
+    # 且 review receipt 证明所有 Agent 阶段结束。后续 run 只做 canonical publish；
+    # 不得再用瞬时 Cursor 网络探测推翻已冻结准入。
+    if _requires_runtime_preflight(
+        campaign_bound=campaign_bound,
+        stage=stage,
+    ):
+        rc = invoke(_runtime_preflight_argv(execution_id, semantic_selection_id))
+        if rc != 0:
+            raise SystemExit(f"[task execute] task preflight rc={rc}")
     from content.execution.planning.recipe.checkpoint import execute_recipe_stage
 
     execute_recipe_stage(

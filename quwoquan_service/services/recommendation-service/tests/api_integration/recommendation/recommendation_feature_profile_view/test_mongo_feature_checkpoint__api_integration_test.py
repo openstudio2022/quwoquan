@@ -2,8 +2,8 @@
 # readiness_case: list-subject-intersections-api
 # readiness_case: list-object-intersections-api
 # readiness_case: get-intersection-supply-api
-# readiness_case: get-author-impact-api
-# readiness_case: list-author-impact-evidence-api
+# readiness_case: recommendation-feature-profile-view-get-recommendation-author-impact-api
+# readiness_case: recommendation-feature-profile-view-list-recommendation-author-impact-evidence-api
 # readiness_case: project-feature-profile-api
 # readiness_case: project-feature-tag-feedback-api
 # readiness_case: project-feature-persona-relationship-api

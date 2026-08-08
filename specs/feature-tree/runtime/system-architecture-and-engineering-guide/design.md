@@ -232,6 +232,7 @@
 - 决策：每个页面在页面对象契约中保留唯一 source owner 与全部 participant object；物理页面位于 source owner 的 presentation，participant 只通过各自 `application/public/**` 下的 port/facade/event/read view 参与，文件归档不得改写页面的语义参与集合。
 - 决策：App 对象内依赖方向为 presentation 指向自身 application/domain、application 指向自身 domain、adapters 实现自身 application port 并使用自身 domain；具体 adapter 仅由 `runtime/di` 组合，presentation 不导入具体 adapter，domain 不依赖 Flutter、IO、generated transport 或其他层。
 - 决策：跨对象 import 的唯一代码入口是目标对象的 `application/public/**`；该公开子边界只暴露纯 port/facade/event/read view，并且自身只能依赖所属对象 domain 与纯 generated value type。对象私有 application、domain、adapters、presentation、barrel re-export、旧路径 shim、双轨 import 与 compatibility fallback 均不构成公开边界。
+- 决策：每个 `clientContract` 必须有唯一真实消费身份。页面消费以 `object_ids` 与 `query_slices/command_operations` 绑定，非页面后台/runtime 消费以 `runtime_execution` 绑定 object、operation、production path 与 symbol；仅存在 generated adapter/DI 不算消费，同一 object/operation 不得同时登记页面 participant 与 runtime execution。
 - 理由：多对象页面若按单一物理路径覆盖参与关系，会把真实跨对象依赖藏进 UI import；若 presentation 直接拿 concrete adapter，则测试 double 隔离、错误恢复和 Remote composition 都无法在对象边界验证。
 - 被否决方案：把多对象页面放回全局 pages 大桶、让 `runtime/shell` 成为业务页面 owner、允许 presentation 直接导入 adapter、以 barrel 或旧路径 export 维持迁移期双轨。
 - 约束：`runtime/di` 是唯一业务装配例外，其他 runtime/design_system/l10n 代码不得反向拥有或导入业务对象私有实现。
@@ -303,6 +304,20 @@
 - 约束与影响：端侧 port 改名会穿透 `runtime/di` 与 generated client，因此命名族只在架构门禁的层规则中登记并随其输出，实际标识符扫描由端侧 kind 对齐门禁承担，两处不得各自定义命名族。
 - 关联要求：对象种类与端侧分层对应 `REQ-001`、`REQ-002`
 - 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的 `REQ-012` 按本条派生端侧层义务与 port 命名族。
+- 关联验收：`SIT-001`
+
+<a id="dec-024"></a>
+### DEC-024 对象级隐私、事件线上身份与 storage 实现必须从 canonical authoring 派生并反向对帐
+
+- 决策：对象 `privacy.yaml` 的字段策略是日志字段治理的唯一 authoring source；生成器从当前对象身份派生 `fieldPrivacyPolicies` 到 Go、Dart、Python 与运营端 catalog，运行时按 `operationId -> objectId` 选择策略。App 不保留手写敏感键表或第二套字段策略。
+- 决策：`first_party_service_internal` 表达仅第一方服务内部可见的字段。事件载荷字段与消费对象的 lifecycle 反向边必须逐字段通过该可见性约束；`content.post.moderationStatus` 属于该内部类别，不因对 App 不可见而从安全关键事件中删除。
+- 决策：`transactional_outbox` 事件的线上身份由 `events.yaml.wire_event_type` 唯一 authoring，并由服务端与 Python 生成器产出常量；production producer/consumer 不得长期持有并行字面量。
+- 决策：所有读取 object-local `storage.yaml` 的 Go、App 与 Ops production/governance consumer 必须经 canonical `storagecontract.Decode` 或其 strict JSON view；启动失败、超时、非零退出、空/非 JSON/stderr、键集漂移与 source TOCTOU 均 fail-closed。Python 不得直接 `safe_load` storage authoring、复制键表或保留 fallback。
+- 决策：`storage.yaml.indexes` 只有在声明的键集与 production 建立、查询或唯一性守卫语义等价时才成立。门禁按键、顺序、唯一性、partial predicate 与真实 create/use 语义比对，不以索引名字相等作为判据，也不允许声明但无人建立或建立但无人使用的索引通过。
+- 理由：字段隐私、事件线上身份与索引都曾出现「声明存在但运行时不消费」或「运行时硬编码但声明不拥有」的第二真相源；从 authoring 单向生成并对 production 使用反向核验，才能同时发现欠覆盖、过覆盖与 stale 声明。
+- 约束：source generator、校验器与模板完成只证明 authoring/implementation 机制成立；generated catalog、运行时常量和环境证据必须来自同一稳定 source hash 的唯一 fresh generation，不能由移动中的生成物或手改产物替代。
+- 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 承接 fresh generation、双端运行时消费、Data 冻结项与全链漂移门的剩余准出。
+- 关联要求：`REQ-001`、`REQ-002`
 - 关联验收：`SIT-001`
 
 ## 5. 失败与恢复

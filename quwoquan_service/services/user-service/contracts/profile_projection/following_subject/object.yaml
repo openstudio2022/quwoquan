@@ -64,6 +64,7 @@ lifecycle:
   checkpoint: per_owner_event_sequence
   rebuild: replay_all_typed_follow_subject_events
   tombstone: delete_following_subject_keep_checkpoint
+  idempotency: aggregate_version
   event_consumers:
   - name: ProjectFollowingSubject
     kind: projector

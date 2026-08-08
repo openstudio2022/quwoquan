@@ -1,7 +1,28 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Iterable, Mapping, Sequence, StageResult, data_issues, execution_root, issue_messages, load_execution_state, read_json, save_execution_state, shutil, store
+
 from core.io import write_json
+
+from content.execution.support import (
+    DataIssue,
+    DataIssueCode,
+    DataIssueStage,
+    DataRecoveryAction,
+    ExecutionContext,
+    Iterable,
+    Mapping,
+    Sequence,
+    StageResult,
+    data_issues,
+    execution_root,
+    issue_messages,
+    load_execution_state,
+    read_json,
+    save_execution_state,
+    shutil,
+    store,
+)
+
 
 def _content_issue_matchers(
     ctx: ExecutionContext,
@@ -140,7 +161,12 @@ def _invalidate_ref_for_retry(ctx: ExecutionContext, ref: str, *, preserve_draft
     单点失败回退；显式 retry-stage / 写包契约变更仍用默认销毁语义。
     """
     from content.post import object_index as content_object
-    from content.post.article.draft_io import draft_package_dir, read_writing_pack, write_image_evidence_draft, write_placeholder_draft
+    from content.post.article.draft_io import (
+        draft_package_dir,
+        read_writing_pack,
+        write_image_evidence_draft,
+        write_placeholder_draft,
+    )
     try:
         obj_dir = content_object.content_object_dir(ctx.execution_id, ref)
         draft_dir = draft_package_dir(ctx.execution_id, ref)
@@ -284,14 +310,16 @@ def _record_post_review_retry_history(
     save_execution_state(state)
 
 def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, target_stage: str) -> bool:
-    from content.execution.controller.stage_post_review import _approved_review_refs
+    from content.execution.controller.post_review_support import approved_review_refs
     from content.execution.queue.jobs import enqueue_ref_job
     from content.execution.queue.management import requeue_refs
-    from content.post.article.draft_io import read_writing_pack
+    from content.execution.queue.reliabletask.jobs import (
+        post_author_job_definition,
+    )
     refs, issue_map = _post_review_retry_refs(ctx, result.issue_records)
     # 单点失败隔离（防塌方）：已通过对象级 review gate 的稿件（含已写正文）一律不动，
     # 除非批级发布门直接点名该 ref/path；失败对象的回退绝不波及无关绿对象的已写正文。
-    approved_refs = set(_approved_review_refs(ctx))
+    approved_refs = set(approved_review_refs(ctx))
     refs = [
         ref for ref in refs
         if ref not in approved_refs
@@ -325,32 +353,13 @@ def _prepare_post_review_retry(ctx: ExecutionContext, result: StageResult, targe
     ) if reset else []
     missing = [ref for ref in reset if ref not in set(requeued)]
     if missing:
-        from content.post import object_index as content_object
-        from governance.creators.assignment import creator_assignment_issues, creator_from_payload
         for ref in missing:
-            pack = read_writing_pack(ctx.execution_id, ref) or {}
-            brief = content_object.read_brief_object(ctx.execution_id, ref) or {}
-            carrier = str(pack.get("carrier") or "article")
-            # 复用 author 入队的同一 creator 解析链（pack -> brief），不重造（R24/R25）。
-            creator = creator_from_payload(pack) or creator_from_payload(brief)
-            meta: dict[str, Any] = {
-                "baseSourceRef": pack.get("baseSourceRef") or ref,
-                "contentObjectDir": content_object.content_object_rel(ctx.execution_id, ref),
-            }
-            # 仅当有完整 registry creator 装配时才声明 contentType（触发 enqueue 严格 creator 门）。
-            # managed 模式全程无 creator 装配：省略 contentType/carrier，对齐 enqueue_partition_leaves，
-            # 让 author 执行阶段按 pack/brief/plan 默认解析 creator，避免 fanout 专用门在重试路径误崩。
-            if creator and not creator_assignment_issues(
-                creator,
-                carrier=carrier,
-            ):
-                meta["contentType"] = carrier
-                meta.update(creator)
+            mutex_key, meta = post_author_job_definition(ctx, ref)
             enqueue_ref_job(
                 ctx.execution_id,
                 ref,
                 "author",
-                mutex_key=str(pack.get("baseSourceRef") or ref),
+                mutex_key=mutex_key,
                 meta=meta,
             )
     if reset:

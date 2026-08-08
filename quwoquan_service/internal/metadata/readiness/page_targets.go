@@ -20,6 +20,17 @@ type pageTargetCatalog map[string]pageTarget
 // does not read the worktree, so evaluation cannot silently mix a graph with a
 // newer page contract.
 func currentPageTargets(current *graph.ContractGraph) (pageTargetCatalog, error) {
+	identities, err := currentObjectPathIdentities(current)
+	if err != nil {
+		return nil, err
+	}
+	return currentPageTargetsWithIdentities(current, identities)
+}
+
+func currentPageTargetsWithIdentities(
+	current *graph.ContractGraph,
+	identities map[string]objectPathIdentity,
+) (pageTargetCatalog, error) {
 	result := pageTargetCatalog{}
 	found := false
 	for _, document := range current.Documents {
@@ -57,7 +68,7 @@ func currentPageTargets(current *graph.ContractGraph) (pageTargetCatalog, error)
 			}
 			result[pageID] = pageTarget{
 				participants:  objects,
-				physicalOwner: physicalPageOwner(page.SourcePath),
+				physicalOwner: physicalPageOwner(page.SourcePath, identities),
 			}
 		}
 	}
@@ -66,9 +77,13 @@ func currentPageTargets(current *graph.ContractGraph) (pageTargetCatalog, error)
 
 // physicalPageOwner reads the canonical App object tree shape
 // `lib/service/<service>_service/<context>/<object>/presentation/<file>.dart`,
-// the same shape `load/evidence.go` uses to derive App presentation evidence.
+// with the exact service segment derived into this ContractGraph's evidence by
+// `load/evidence.go`. A merely non-empty service segment cannot claim an object.
 // Shell, design-system and runtime pages have no object owner and return "".
-func physicalPageOwner(sourcePath string) string {
+func physicalPageOwner(
+	sourcePath string,
+	identities map[string]objectPathIdentity,
+) string {
 	segments := strings.Split(strings.TrimSpace(sourcePath), "/")
 	if len(segments) < 7 || segments[0] != "lib" || segments[1] != "service" ||
 		segments[5] != "presentation" {
@@ -77,5 +92,12 @@ func physicalPageOwner(sourcePath string) string {
 	if segments[2] == "" || segments[3] == "" || segments[4] == "" {
 		return ""
 	}
-	return segments[3] + "." + segments[4]
+	objectID := segments[3] + "." + segments[4]
+	identity, exists := identities[objectID]
+	if !exists || identity.appServiceRoot == "" ||
+		segments[2] != identity.appServiceRoot || segments[3] != identity.context ||
+		segments[4] != identity.object {
+		return ""
+	}
+	return objectID
 }

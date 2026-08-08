@@ -32,11 +32,11 @@ from content.execution.campaign.plan import (
     wait_for_submissions,
     write_report,
 )
-from content.execution.campaign.process import (
+from content.execution.campaign.lane import (
     CAMPAIGN_CARRIERS,
     LaneRunner,
-    run_phase,
 )
+from content.execution.campaign.process import run_phase
 from content.execution.campaign.receipt import load_lane_receipt
 from content.execution.campaign.runtime import campaign_run_session
 from content.execution.campaign.workspace import (
@@ -81,9 +81,7 @@ def run_campaign(
     effective_submission_timeout = (
         submission_timeout_seconds or policy.campaign_submission_timeout_seconds
     )
-    effective_lane_timeout = (
-        lane_timeout_seconds or policy.campaign_lane_timeout_seconds
-    )
+    effective_lane_timeout: float | None = None
     started_at = utc_now()
     lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
     workspaces: dict[str, CampaignLaneWorkspace] = {}
@@ -122,6 +120,10 @@ def run_campaign(
                 lanes[carrier]["executionId"] = str(submissions[carrier]["executionId"])
             final_phase = "freeze"
             plan, plan_digest = freeze_plan(runtime, root_id, submissions)
+            effective_lane_timeout = (
+                lane_timeout_seconds
+                or policy.campaign_lane_timeout_seconds_for_scale(str(plan["scale"]))
+            )
             campaign_run.campaign_checkpoint(
                 phase="freeze",
                 plan_digest=plan_digest,

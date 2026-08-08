@@ -54,20 +54,31 @@ CURRENT_ALLOWED_EXACT_OUTPUTS = frozenset(
     {
         "lib/runtime/transport/generated/cloud_api_defaults.g.dart",
         "lib/service/content_service/content/post/adapters/generated/article_detail_wire_keys.g.dart",
-        "lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
-        "lib/service/content_service/content/post/adapters/generated/content_post_immersive_wire_keys.g.dart",
         "lib/service/recommendation_service/recommendation/"
         "recommendation_feature_profile_view/presentation/generated/"
         "impact_help_type_metadata.g.dart",
         "lib/service/recommendation_service/recommendation/"
         "recommendation_feature_profile_view/presentation/generated/"
         "intersection_display_metadata.g.dart",
-        "lib/service/search_service/search/search_index_view/application/generated/search_contract.g.dart",
-        "lib/service/search_service/search/search_index_view/application/generated/search_registry.g.dart",
         "lib/service/content_service/content/post/presentation/generated/content_ui_config.g.dart",
         "lib/runtime/observability/generated/app_telemetry_catalog.g.dart",
         "packages/quwoquan_cloud_contracts/lib/src/rtc/"
         "rtc_operation_contracts.g.dart",
+    }
+)
+RETIRED_ZERO_CONSUMER_OUTPUTS = frozenset(
+    {
+        "lib/service/content_service/content/post/adapters/generated/"
+        "content_post_immersive_wire_keys.g.dart",
+        "lib/service/content_service/content/post/application/generated/"
+        "content_metadata.g.dart",
+        "lib/service/recommendation_service/recommendation/"
+        "recommendation_feature_profile_view/presentation/generated/"
+        "intersection_kind_metadata.g.dart",
+        "lib/service/search_service/search/search_index_view/application/generated/"
+        "search_contract.g.dart",
+        "lib/service/search_service/search/search_index_view/application/generated/"
+        "search_registry.g.dart",
     }
 )
 
@@ -217,6 +228,7 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             f"{domain}/{domain}_api_metadata.g.dart"
             for domain in LEGACY_API_METADATA_DOMAINS
         )
+        retired_outputs.update(RETIRED_ZERO_CONSUMER_OUTPUTS)
         for path in retired_outputs:
             self.assertFalse(
                 verifier.is_allowed_generated_path(path),
@@ -240,14 +252,13 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
         )
         for path in {
             "lib/runtime/transport/generated/cloud_api_defaults.g.dart",
-            "lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
             "lib/service/recommendation_service/recommendation/"
             "recommendation_feature_profile_view/presentation/generated/"
             "intersection_display_metadata.g.dart",
-            "lib/service/search_service/search/search_index_view/application/generated/search_contract.g.dart",
-            "lib/service/search_service/search/search_index_view/application/generated/search_registry.g.dart",
         }:
             self.assertTrue(verifier.is_allowed_generated_path(path))
+        for path in RETIRED_ZERO_CONSUMER_OUTPUTS:
+            self.assertFalse(verifier.is_allowed_generated_path(path))
         self.assertTrue(
             verifier.is_allowed_generated_path(
                 "lib/service/content_service/content/post/presentation/generated/content_ui_config.g.dart"
@@ -356,6 +367,8 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             if path.startswith("packages/"):
                 continue
             self.assertIn(f"quwoquan_app/{path}", write_paths)
+        for path in RETIRED_ZERO_CONSUMER_OUTPUTS:
+            self.assertNotIn(f"quwoquan_app/{path}", write_paths)
         self.assertIn(
             "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/rtc/**",
             write_paths,

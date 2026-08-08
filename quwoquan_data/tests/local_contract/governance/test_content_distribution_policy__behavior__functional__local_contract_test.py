@@ -4,6 +4,7 @@ from governance.coverage.distribution import (
     AcquisitionStatus,
     DistributionDecision,
     RightsStatus,
+    asset_contract_missing_fields,
     distribution_decision,
     image_distribution_decision,
     load_content_distribution_policy,
@@ -29,11 +30,12 @@ def _asset(*, rights_status: str, proof: str = "") -> dict[str, object]:
     }
 
 
-def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
+def test_research_policy_is_explicit_and_disables_media_generation() -> None:
     policy = load_content_distribution_policy()
 
-    assert policy.product_lifecycle_state.value == "commercial"
-    assert policy.release_class.value == "commercial"
+    assert policy.policy_id == "research-content-cold-start"
+    assert policy.product_lifecycle_state.value == "research"
+    assert policy.release_class.value == "research"
     assert policy.image_generation_allowed is False
     assert policy.video_generation_allowed is False
     assert policy.image_provider_priority[:2] == ("pinterest", "tuchong")
@@ -41,7 +43,7 @@ def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
     assert policy.text_only_rate_target == 0.1
     assert policy.automatic_recovery_rate_target == 0.95
     assert policy.automatic_recovery_statistical is True
-    assert policy.automatic_recovery_non_blocking is True
+    assert policy.automatic_recovery_non_blocking is False
     assert policy.video_popularity_signals == (
         "play",
         "like",
@@ -50,7 +52,7 @@ def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
         "favorite",
     )
     assert policy.video_popularity_statistical is True
-    assert policy.video_popularity_non_blocking is True
+    assert policy.video_popularity_non_blocking is False
     assert dict(policy.m100_targets) == {
         "homepage": 100,
         "article": 100,
@@ -63,14 +65,40 @@ def test_commercial_policy_is_explicit_and_disables_media_generation() -> None:
         "image": 1000,
         "video": 100,
     }
+    assert dict(policy.m10000_targets) == {
+        "homepage": 10000,
+        "article": 10000,
+        "image": 10000,
+        "video": 1000,
+    }
+    assert policy.require_m100_promotion_before_m1000 is True
+    assert policy.require_m1000_promotion_before_m10000 is True
+    assert policy.milestone_attainment_required is True
+    assert policy.attainment_counting_mode == "cumulative_unique_finalized_objects"
+
+
+def test_scale_target_supports_every_governed_milestone() -> None:
+    policy = load_content_distribution_policy()
+
+    assert policy.scale_target("M100", "video") == 10
+    assert policy.scale_target("M1000", "video") == 100
+    assert policy.scale_target("M10000", "video") == 1000
+
+
+def test_research_admission_accepts_acquired_non_restricted_rights() -> None:
+    for rights_status in (
+        RightsStatus.VERIFIED,
+        RightsStatus.UNVERIFIED,
+        RightsStatus.UNKNOWN,
+    ):
+        assert distribution_decision(
+            acquisition_status=AcquisitionStatus.ACQUIRED,
+            rights_status=rights_status,
+            authorization_proof="",
+        ) is DistributionDecision.RESEARCH_ALLOWED
 
 
 def test_acquisition_and_distribution_rights_are_independent() -> None:
-    assert distribution_decision(
-        acquisition_status=AcquisitionStatus.ACQUIRED,
-        rights_status=RightsStatus.UNVERIFIED,
-        authorization_proof="",
-    ) is DistributionDecision.RESEARCH_ALLOWED
     assert distribution_decision(
         acquisition_status=AcquisitionStatus.ACQUIRED,
         rights_status=RightsStatus.VERIFIED,
@@ -81,6 +109,48 @@ def test_acquisition_and_distribution_rights_are_independent() -> None:
         rights_status=RightsStatus.RESTRICTED,
         authorization_proof="",
     ) is DistributionDecision.BLOCKED
+    for acquisition_status in (AcquisitionStatus.FAILED, AcquisitionStatus.BLOCKED):
+        assert distribution_decision(
+            acquisition_status=acquisition_status,
+            rights_status=RightsStatus.VERIFIED,
+            authorization_proof="https://rights.example/proof",
+        ) is DistributionDecision.BLOCKED
+
+
+def test_missing_asset_contract_fields_fail_admission_validation() -> None:
+    missing = asset_contract_missing_fields(
+        {
+            "assetId": "asset-incomplete",
+            "acquisitionStatus": "acquired",
+            "rightsStatus": "unknown",
+            "distributionDecision": "research_allowed",
+        }
+    )
+
+    assert {
+        "authorizationProof",
+        "authorizationRequired",
+        "capturedAt",
+        "contentSha256",
+        "creator",
+        "license",
+        "platform",
+        "rightsIssues",
+        "sourceUrl",
+        "termsUrl",
+    }.issubset(missing)
+
+
+def test_environment_cannot_select_lifecycle_or_release_class(monkeypatch) -> None:
+    monkeypatch.setenv("QWQ_PRODUCT_LIFECYCLE_STATE", "commercial")
+    monkeypatch.setenv("QWQ_RELEASE_CLASS", "commercial")
+    monkeypatch.setenv("QWQ_CONTENT_DISTRIBUTION_POLICY", "commercial-rights-closure")
+
+    policy = load_content_distribution_policy()
+
+    assert policy.policy_id == "research-content-cold-start"
+    assert policy.product_lifecycle_state.value == "research"
+    assert policy.release_class.value == "research"
 
 
 def test_image_commercial_admission_cannot_exceed_frozen_usage_or_model_release_scope() -> None:

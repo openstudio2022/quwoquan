@@ -11,7 +11,6 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
-import 'package:quwoquan_app/runtime/di/discovery_state_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show BehaviorEventType;
 
@@ -69,10 +68,8 @@ Future<void> openHomeFeedPost(
       .indexWhere((item) => item.id == post.id)
       .clamp(0, viewerPosts.length - 1);
   final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+    ref: ref,
     posts: viewerPosts,
-    discoveryState: ref.read(discoveryStateProvider),
-    relationshipState: ref.read(userRelationshipStateProvider),
-    postInteractionState: ref.read(postInteractionStateProvider),
   );
   primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
   final result = await context.push<Object?>(

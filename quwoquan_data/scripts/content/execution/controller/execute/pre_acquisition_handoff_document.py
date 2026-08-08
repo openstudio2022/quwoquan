@@ -16,6 +16,7 @@ from core.source_digest import (
     SourceDigest,
     content_source_revision,
 )
+from content.execution.campaign.scale import campaign_workload_targets
 
 HANDOFF_SCHEMA = "quwoquan_data.content_pre_acquisition_handoff"
 HANDOFFS_RELATIVE_ROOT = Path("data/local/workspace/content-pre-acquisition-handoffs")
@@ -246,6 +247,13 @@ def build_pre_acquisition_handoff(
         carrier: int(workload_targets[carrier])
         for carrier in _CARRIERS
     }
+    canonical_targets = campaign_workload_targets(str(scale))
+    if targets != canonical_targets:
+        raise _typed(
+            "WORKLOAD_INVALID",
+            "workloadTargets must equal the canonical scale targets: "
+            f"expected={canonical_targets}, observed={targets}",
+        )
     retry_of = str(campaign_retry_of or "").strip() or None
     if campaign_sequence == 1 and retry_of is not None:
         raise _typed(

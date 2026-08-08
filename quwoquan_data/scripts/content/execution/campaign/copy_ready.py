@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.receipt import lane_receipt_path, load_lane_receipt
 from content.execution.campaign.submission import campaign_root
 from core.io import read_json, write_json

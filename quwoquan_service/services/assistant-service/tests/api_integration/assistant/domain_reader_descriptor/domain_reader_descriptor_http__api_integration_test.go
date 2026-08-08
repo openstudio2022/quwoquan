@@ -52,12 +52,20 @@ func TestDomainReaderDescriptorHTTPIsTypedBoundedAndServiceOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	anonymous := performRequest(handler.Routes(), "/internal/assistant/domain-readers", false)
-	if anonymous.Code != http.StatusUnauthorized {
-		t.Fatalf("anonymous status=%d body=%s", anonymous.Code, anonymous.Body.String())
-	}
+	anonymous := performRequest(handler.Routes(), "/internal/assistant/domain-readers", "")
+	assertHTTPError(t, anonymous, http.StatusUnauthorized, "GATEWAY.USER.unauthorized")
+	wrongScope := performRequest(
+		handler.Routes(),
+		"/internal/assistant/domain-readers",
+		"assistant.domain_reader.other",
+	)
+	assertHTTPError(t, wrongScope, http.StatusForbidden, "GATEWAY.USER.forbidden")
 
-	listed := performRequest(handler.Routes(), "/internal/assistant/domain-readers?limit=1", true)
+	listed := performRequest(
+		handler.Routes(),
+		"/internal/assistant/domain-readers?limit=1",
+		"assistant.domain_reader.read",
+	)
 	if listed.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", listed.Code, listed.Body.String())
 	}
@@ -74,7 +82,7 @@ func TestDomainReaderDescriptorHTTPIsTypedBoundedAndServiceOnly(t *testing.T) {
 	detail := performRequest(
 		handler.Routes(),
 		"/internal/assistant/domain-readers/circle.gathering_context",
-		true,
+		"assistant.domain_reader.read",
 	)
 	if detail.Code != http.StatusOK {
 		t.Fatalf("detail status=%d body=%s", detail.Code, detail.Body.String())
@@ -88,12 +96,16 @@ func TestDomainReaderDescriptorHTTPIsTypedBoundedAndServiceOnly(t *testing.T) {
 		t.Fatalf("detail response=%+v", got)
 	}
 
-	invalid := performRequest(handler.Routes(), "/internal/assistant/domain-readers?limit=101", true)
+	invalid := performRequest(
+		handler.Routes(),
+		"/internal/assistant/domain-readers?limit=101",
+		"assistant.domain_reader.read",
+	)
 	assertHTTPError(t, invalid, http.StatusBadRequest, "ASSISTANT.USER.domain_reader_invalid_argument")
 	missing := performRequest(
 		handler.Routes(),
 		"/internal/assistant/domain-readers/missing",
-		true,
+		"assistant.domain_reader.read",
 	)
 	assertHTTPError(t, missing, http.StatusNotFound, "ASSISTANT.USER.domain_reader_descriptor_not_found")
 }
@@ -143,15 +155,15 @@ func testRouteDescriptors() descriptorhttp.RouteDescriptors {
 func performRequest(
 	handler http.Handler,
 	path string,
-	servicePrincipal bool,
+	scope string,
 ) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodGet, path, nil)
-	if servicePrincipal {
+	if strings.TrimSpace(scope) != "" {
 		request = request.WithContext(rtauth.WithPrincipal(
 			request.Context(),
 			rtauth.Principal{Claims: rtauth.Claims{
 				Subject: "assistant-service",
-				Scope:   "assistant.domain_reader.read",
+				Scope:   scope,
 				Roles:   []string{"service"},
 			}},
 		))

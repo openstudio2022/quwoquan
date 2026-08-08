@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_store.dart';
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/intersection_display_config.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_display_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';

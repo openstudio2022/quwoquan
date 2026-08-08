@@ -12,7 +12,7 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/my_footprint_page.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_footprint_tab.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/profile_footprint_tab.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show BehaviorEventType;
 
@@ -135,8 +135,11 @@ void main() {
             routes: [
               GoRoute(
                 path: '/',
-                builder: (_, _) => const CupertinoPageScaffold(
-                  child: ProfileFootprintTab(isDark: false),
+                builder: (_, _) => CupertinoPageScaffold(
+                  child: ProfileFootprintTab(
+                    isDark: false,
+                    trackPostClick: (_) {},
+                  ),
                 ),
               ),
               GoRoute(

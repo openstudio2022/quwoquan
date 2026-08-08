@@ -188,11 +188,23 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
   Future<void> _blockProfileUser(BuildContext context) async {
     final startedAt = DateTime.now();
     try {
+      final targetPersonaId = ref
+          .read(profileNotifierProvider(widget.userId))
+          .profile
+          ?.personaId
+          .trim();
+      if (targetPersonaId == null || targetPersonaId.isEmpty) {
+        throw CloudErrorMapper.invalidResponse(
+          message: 'Profile relationship action requires canonical personaId',
+          requestPath: 'profile/block',
+          functionModule: 'profile_shell',
+        );
+      }
       await ref
           .read(
             personaRelationshipBlockWriterProvider(AppUiSurfaces.profileHome),
           )
-          .blockUser(BlockUserCommand(targetPersonaId: widget.userId));
+          .blockUser(BlockUserCommand(targetPersonaId: targetPersonaId));
       ref.invalidate(profileNotifierProvider(widget.userId));
       unawaited(
         ref
@@ -202,7 +214,7 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
               action: 'block_user',
               pageName: 'user_profile_shell',
               targetType: 'user',
-              targetKey: widget.userId,
+              targetKey: targetPersonaId,
               payload: {
                 'result': 'success',
                 'durationMs': DateTime.now()

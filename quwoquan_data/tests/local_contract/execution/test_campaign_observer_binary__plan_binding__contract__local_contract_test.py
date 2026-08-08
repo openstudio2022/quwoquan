@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from content.execution.campaign import observer_binary as campaign_binary
 from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.runtime_evidence import reliabletask_observer_build as observer_build
 from content.execution.runtime_evidence import reliabletask_process as process_port
 from core.io import read_json
 
@@ -50,7 +51,7 @@ def _prepared(
     return process_port.PreparedReliableTaskObserverBinary(
         binding=binding,
         source_digest=source_digest,
-        build_attestation_digest=process_port.observer_build_attestation_digest(
+        build_attestation_digest=observer_build.observer_build_attestation_digest(
             source_digest=source_digest,
             binding=binding,
         ),
@@ -111,13 +112,13 @@ def test_controller_prepare_rejects_inherited_lane_binding(
         "sha256:" + "d" * 64,
     )
     monkeypatch.setattr(
-        process_port,
+        observer_build,
         "_observer_source_digest",
         lambda: pytest.fail("controller must reject env before source build"),
     )
 
     with pytest.raises(process_port.ReliableTaskObserverError) as captured:
-        process_port.prepare_controller_observer_binary()
+        observer_build.prepare_controller_observer_binary()
 
     assert captured.value.code.endswith("CONTROLLER_ENV_INVALID")
 
@@ -127,11 +128,6 @@ def test_capsule_missing_binding_never_scans_service_source(
 ) -> None:
     monkeypatch.delenv(process_port.OBSERVER_BINARY_REF_ENV, raising=False)
     monkeypatch.delenv(process_port.OBSERVER_BINARY_SHA256_ENV, raising=False)
-    monkeypatch.setattr(
-        process_port,
-        "_observer_source_digest",
-        lambda: pytest.fail("capsule must not scan absent Service source"),
-    )
 
     with pytest.raises(process_port.ReliableTaskObserverError) as captured:
         process_port.load_frozen_observer_binary_binding()

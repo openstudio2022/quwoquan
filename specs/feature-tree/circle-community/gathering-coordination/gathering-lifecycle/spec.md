@@ -112,6 +112,78 @@
 - THEN 每条 Participation 绑定同一 Revision 形成独立确认结果，拒绝/逾期者按 owner policy 退出并撤销访问。
 - AND 多人和 capacity=2 都不要求群体 unanimous，也不静默视为同意。
 
+<a id="gwt-004"></a>
+### GWT-004 CreateGatheringDraft 只创建未发布草稿
+
+- GIVEN actor 具有可验证 Host authority，来源、日程与披露输入可由 owner 校验。
+- WHEN actor 以同一意图重复调用 `CreateGatheringDraft`，并以同一幂等身份提交冲突输入。
+- THEN 首次调用只创建一个 unpublished Gathering draft，返回的 typed owner identity 与 version 可由后续 owner readback 读回。
+- AND 完全重放返回同一结果，冲突输入返回 canonical idempotency failure 且不创建第二个 Gathering 或公开投影。
+
+<a id="gwt-005"></a>
+### GWT-005 GetGathering 只向有权 viewer 返回 private detail
+
+- GIVEN 同一 Gathering 分别由当前 Organizer、有效参与者、已撤权参与者与无关 Persona 读取。
+- WHEN viewer 调用 `GetGathering`。
+- THEN 当前 Organizer 或有权参与者获得与 owner version 一致、按 viewer disclosure 裁剪的 typed private detail。
+- AND 已撤权或无关 viewer 返回 canonical access failure，不泄露申请答案、名单、精确地点或其他 private 字段。
+
+<a id="gwt-006"></a>
+### GWT-006 ListGatheringsByHost 按 canonical Host identity 分页
+
+- GIVEN 同一 Host 下存在 draft、published、cancelled 与不同 disclosure 的 Gathering，另有其他 Host 的公开活动。
+- WHEN public viewer 以 canonical Host identity 调用 `ListGatheringsByHost` 并翻页。
+- THEN typed page 只包含该 Host 已公开且当前仍可披露的 `published`、`cancelled` 或 `completed` Gathering，保留真实 lifecycle/Outcome，不包含 draft、private 或其他 Host 条目；cursor 重放保持稳定且不重复。
+- AND 形状合法但没有匹配项的 Host identity 返回 typed empty page；Host kind/identity 形状无效或 owner store 失败时返回 canonical failure，不把依赖失败伪装成空页。
+
+<a id="gwt-007"></a>
+### GWT-007 ListGatheringsBySource 按 canonical source identity 分页
+
+- GIVEN 多个 Gathering 已在 authoring/publish 边界把可导航、遵守 owner 可见性的 Post、Homepage、Circle 或地点冻结为 canonical source identity 与 source digest。
+- WHEN public viewer 以 canonical source identity 调用 `ListGatheringsBySource` 并翻页。
+- THEN typed page 只包含精确引用该冻结 source identity、已公开且当前为 `published`、`cancelled` 或 `completed` 的 Gathering；列表不在读路径重新解释 source 类型或复制 source 展示事实，cursor 重放保持稳定且不重复。
+- AND 形状合法但没有匹配项的 source identity 返回 typed empty page；source identity 形状无效或 Gathering owner store 失败时返回 canonical failure，不回退到模糊类型匹配或其他来源结果。
+
+<a id="gwt-008"></a>
+### GWT-008 AssignGatheringCoHost 只授予独立管理权
+
+- GIVEN primary Organizer 持有当前 Gathering version，目标 Persona 具有有效 Host authority 且可被任命。
+- WHEN primary Organizer 调用 `AssignGatheringCoHost` 并重放同一意图。
+- THEN 目标只获得该 Gathering 的 co-host 管理能力，独立 Participation、席位和关系事实保持不变。
+- AND 重放返回同一结果，越权、无效 authority 或陈旧 version 返回 canonical failure 且不产生部分 Chat admin access。
+
+<a id="gwt-009"></a>
+### GWT-009 RevokeGatheringCoHost 只撤销 OrganizerAssignment
+
+- GIVEN 一名 Persona 持有当前 co-host `OrganizerAssignment` 且可能同时拥有独立有效 Participation，primary Organizer 持有当前 Gathering aggregate version。
+- WHEN primary Organizer 以 `coHostPersonaId` 与 `expectedGatheringVersion` 调用专用 `RevokeGatheringCoHost` command 并重放同一意图。
+- THEN 该 Persona 的 co-host 管理能力被撤销，独立 Participation、席位和普通参与访问保持 owner 合同规定的状态。
+- AND 该 command 不得复用 Participation command wire，也不得携带或校验 `participantPersonaId`、`expectedParticipationVersion`；重放返回同一结果，越权或陈旧 aggregate version 返回 canonical failure 且不撤销其他 Organizer 或参与者权限。
+
+<a id="gwt-010"></a>
+### GWT-010 TransferGatheringOrganizer 原子转移 primary authority
+
+- GIVEN 尚未开场的 Gathering 具有当前 primary Organizer，目标 Persona 具有可验证 Host authority。
+- WHEN current primary Organizer 以当前 version 调用 `TransferGatheringOrganizer`。
+- THEN primary authority 原子转移到目标并形成 material GatheringRevision；不得创建、删除或改变双方及其他人的 Participation identity、state 或 seat，已有 active Participation 只安装该 material revision 的 `pending` acknowledgement 并推进自身 version。
+- AND 越权、无效 authority、开场后请求或陈旧 version 返回 canonical failure，不留下双 primary 或部分 Chat admin projection。
+
+<a id="gwt-011"></a>
+### GWT-011 CancelGathering 只允许开场前取消
+
+- GIVEN upcoming 与已经开场的 Gathering 各自持有当前 owner version。
+- WHEN 有权 Organizer 调用 `CancelGathering` 并重放同一意图。
+- THEN upcoming Gathering 进入 cancelled 终态并关闭准入，相关访问撤销意图与 owner command receipt 在同一一致性结果中可审计。
+- AND 开场后、越权或陈旧 version 请求返回 canonical failure，不能伪装成提前结束或安全终止，重放不产生第二终态。
+
+<a id="gwt-012"></a>
+### GWT-012 CompleteGathering 只终结 ended 活动并独立计算 Outcome
+
+- GIVEN ended Gathering 包含充分、缺失或互相冲突的独立参与证据，Organizer 或 reconciler 持有当前 version。
+- WHEN actor 调用 `CompleteGathering` 并重放同一意图。
+- THEN 合法请求把 lifecycle 收敛为 completed，Outcome 由 Circle 按参与证据计算且 completed 本身不等于 occurred。
+- AND 证据不足或争议保持 canonical unverified/disputed 结果，越权、陈旧或重复请求不伪造 occurred、关系事实或第二完成记录。
+
 ## 6. 依赖
 
 - 前置要求：[`gathering-coordination`](../spec.md) 的范围、要求与 SIT。
@@ -128,5 +200,5 @@
 - 准出影响：`block`
 - 尚缺实现：完整 lifecycle/temporal/admission reconciliation、GatheringRevision 跨域确认、证据化 Outcome production UAT 及校园 canonical release/import readback 尚未闭环。
 - 影响或价值：尚缺 lifecycle/temporal/admission 分离、room-ready publish、GatheringRevision、开场后取消边界、证据化 Outcome，以及校园 canonical 数据 release/import 与 production Remote UAT；metadata/local_contract 已证明旅行与校园 profile 复用同一行为合同。
-- 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 由 Circle local_contract、api_integration 与跨域 user_acceptance 直接覆盖；校园 Post/Entity/tag 绑定同一 immutable release、环境 import receipt 与 Remote readback，且 occurred 误计、第二活动根、自动 mutual、专用校园对象/服务与开场后普通取消均为零。
+- 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004`、`GWT-005`、`GWT-006`、`GWT-007`、`GWT-008`、`GWT-009`、`GWT-010`、`GWT-011`、`GWT-012` 由 Circle local_contract、api_integration 与跨域 user_acceptance 直接覆盖；校园 Post/Entity/tag 绑定同一 immutable release、环境 import receipt 与 Remote readback，且 occurred 误计、第二活动根、自动 mutual、专用校园对象/服务与开场后普通取消均为零。
 - 依赖：父 L2 `OPEN-001`、`OPEN-002`，`quwoquan_data` 校园 canonical release/import，以及后续真实账号 Remote UAT。

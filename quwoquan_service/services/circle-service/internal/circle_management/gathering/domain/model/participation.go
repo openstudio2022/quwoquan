@@ -147,6 +147,21 @@ func WithdrawApplication(current Gathering, input ParticipationCommandInput) (Ga
 	if err := requireSelfParticipation(input); err != nil {
 		return Gathering{}, err
 	}
+	if err := validateParticipationInput(current, input); err != nil {
+		return Gathering{}, err
+	}
+	_, participation, err := requireParticipationVersion(
+		current,
+		input.ParticipantPersonaID,
+		input.ExpectedParticipationVersion,
+	)
+	if err != nil {
+		return Gathering{}, err
+	}
+	if current.LifecycleStatus != contract.GatheringLifecycleStatusPublished ||
+		participation.AdmissionSource != AdmissionSourceApplication {
+		return Gathering{}, gatheringerrors.ErrGatheringTransitionForbidden
+	}
 	return closeParticipation(
 		current,
 		CloseParticipationInput{ParticipationCommandInput: input},

@@ -46,6 +46,11 @@ type fieldDef struct {
 	ItemEntity          string            `yaml:"item_entity"`
 	ObjectRef           string            `yaml:"object_ref"`
 	MaxUTF8Bytes        int               `yaml:"max_utf8_bytes"`
+	// 信封级准入表达位。max_items 约束列表长度，format 约束字符串 canonical
+	// 字形，co_present_with 声明必须同时出现或同时缺失的 nullable 字段组。
+	MaxItems      int      `yaml:"max_items"`
+	Format        string   `yaml:"format"`
+	CoPresentWith []string `yaml:"co_present_with"`
 }
 
 type entityDef struct {
@@ -124,10 +129,15 @@ type projectionFieldDef struct {
 	DartType    string `yaml:"dart_type"`
 	WireType    string `yaml:"type"`
 	EnumRef     string `yaml:"enum_ref"`
-	Nullable    bool   `yaml:"nullable"`
-	Source      string `yaml:"source"`
-	Default     string `yaml:"default"`
-	Description string `yaml:"description"`
+	Nullable     bool   `yaml:"nullable"`
+	Source       string `yaml:"source"`
+	Default      string `yaml:"default"`
+	Description  string `yaml:"description"`
+	MaxUTF8Bytes int    `yaml:"max_utf8_bytes"`
+	// 与 fieldDef 同名的信封级准入表达位；投影字段是 App 响应信封的声明位。
+	MaxItems      int      `yaml:"max_items"`
+	Format        string   `yaml:"format"`
+	CoPresentWith []string `yaml:"co_present_with"`
 	// When dart_type is List<SomeDto>, set to SomeDto; fromMap uses SomeDto.fromMap per element.
 	ListElementDartClass string `yaml:"list_element_dart_class"`
 	// When dart_type is a class with SomeDto.fromMap(Map<String,dynamic>) and wire is a JSON object.

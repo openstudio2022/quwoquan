@@ -11,15 +11,15 @@ from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
 
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.request_envelope import (
     _OPERATIONS,
     _require_stable_source_inputs,
     build_envelope,
     envelope_path,
 )
-from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
 
 
 def _reconciliation_inputs(
@@ -110,7 +110,10 @@ def _assert_one_source_identity(
         )
     if predecessor_reconciliation_receipt is None:
         return
-    if predecessor_reconciliation_receipt.get("reason") != "source_drift":
+    if predecessor_reconciliation_receipt.get("reason") not in {
+        "source_drift",
+        "claimed_execution_source_drift",
+    }:
         return
     original_identity = predecessor_reconciliation_receipt.get(
         "originalSourceIdentity"
@@ -149,6 +152,51 @@ def _assert_one_handoff_identity(
         )
 
 
+def _assert_one_capacity_plan(
+    payloads: Mapping[str, Mapping[str, Any]],
+) -> None:
+    digests = {str(payload["capacityPlanDigest"]) for payload in payloads.values()}
+    if len(digests) != 1:
+        raise ValueError(
+            "campaign capacity plan changed while freezing carriers"
+        )
+    if any(
+        isinstance(payload.get("requiredWorkers"), bool)
+        or int(payload.get("requiredWorkers") or 0) < 1
+        or int(payload.get("partitionCount") or 0) not in {16, 32, 64, 128, 256}
+        for payload in payloads.values()
+    ):
+        raise ValueError("campaign capacity plan contains an invalid lane binding")
+
+
+def _assert_one_scale_source_pool(
+    payloads: Mapping[str, Mapping[str, Any]], *, scale: str
+) -> None:
+    bindings = {
+        json.dumps(
+            payload.get("scaleSourcePool"), sort_keys=True, separators=(",", ":")
+        )
+        for payload in payloads.values()
+    }
+    evidence_refs = {
+        str(payload.get("sourcePoolEvidenceRootRef") or "")
+        for payload in payloads.values()
+    }
+    if scale in {"M100", "M1000", "M10000"}:
+        if len(bindings) != 1 or "null" in bindings or len(evidence_refs) != 1:
+            raise ValueError("DATA.SOURCE.POOL_SHORTFALL: campaign pool binding drift")
+        carriers = {
+            str((payload.get("sourcePoolSelection") or {}).get("carrier") or "")
+            for payload in payloads.values()
+        }
+        if carriers != set(CAMPAIGN_CARRIERS):
+            raise ValueError("DATA.SOURCE.POOL_SHORTFALL: lane pool selections incomplete")
+    elif bindings != {"null"} or evidence_refs != {""}:
+        raise ValueError(
+            "DATA.SOURCE.POOL_SHORTFALL: below-M100 forbids source pool binding"
+        )
+
+
 def write_scale_envelopes(
     scale: str | None = None,
     *,
@@ -171,10 +219,13 @@ def write_scale_envelopes(
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
+    promotion_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
+    scale_source_pool: Path | None = None,
+    source_pool_evidence_root: Path | None = None,
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
 
@@ -235,10 +286,14 @@ def write_scale_envelopes(
             semantic_preflight_output_root=semantic_preflight_output_root,
             predecessor_reconciliation=predecessor_reconciliation,
             promotion_receipt=promotion_receipt,
+            promotion_output_root=(promotion_output_root or output_root or paths.OUTPUT_ROOT),
             pre_acquisition_handoff=pre_acquisition_handoff,
             pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
             external_input_refs=(external_input_refs_by_carrier or {}).get(carrier, ()),
             acquisition_root=acquisition_root,
+            scale_source_pool=scale_source_pool,
+            source_pool_evidence_root=source_pool_evidence_root,
+            source_pool_output_root=(output_root or paths.OUTPUT_ROOT),
         )
         assert_valid(
             payload,
@@ -252,6 +307,8 @@ def write_scale_envelopes(
         predecessor_reconciliation_receipt=reconciliation_receipt,
     )
     _assert_one_handoff_identity(payloads)
+    _assert_one_capacity_plan(payloads)
+    _assert_one_scale_source_pool(payloads, scale=resolved.scale)
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     frozen_source = next(iter(payloads.values()))["sourceDigest"]
     if not isinstance(frozen_source, dict):

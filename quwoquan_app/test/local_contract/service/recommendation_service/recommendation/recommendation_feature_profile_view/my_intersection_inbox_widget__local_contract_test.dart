@@ -11,7 +11,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
-import 'package:quwoquan_app/runtime/di/presentation/my_intersection_inbox_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';

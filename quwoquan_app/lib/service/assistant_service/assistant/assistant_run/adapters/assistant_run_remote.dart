@@ -130,8 +130,12 @@ final class AssistantRunGeneratedAdapter
 
   @override
   Future<AssistantRunEnvelopeWire> getAssistantRun({required String runId}) {
+    final normalizedRunId = _requireRunId(
+      runId,
+      AppCloudOperationIds.assistantAssistantRunGetAssistantRun,
+    );
     return client.assistantAssistantRunGetAssistantRun(
-      AssistantRunByIdQuery(runId: runId),
+      AssistantRunByIdQuery(runId: normalizedRunId),
       context: invocationContext(
         AssistantRequestPageIds.getAssistantRun,
         networkSurface: networkSurface,
@@ -222,9 +226,13 @@ final class AssistantRunGeneratedAdapter
     required String runId,
     String lastEventId = '',
   }) {
+    final normalizedRunId = _requireRunId(
+      runId,
+      AppCloudOperationIds.assistantAssistantRunStreamAssistantRunEvents,
+    );
     return client.assistantAssistantRunStreamAssistantRunEvents(
       AssistantRunEventStreamQuery(
-        runId: runId,
+        runId: normalizedRunId,
         resumeToken: lastEventId.trim().isEmpty ? null : lastEventId.trim(),
       ),
       context: invocationContext(
@@ -235,11 +243,10 @@ final class AssistantRunGeneratedAdapter
   }
 }
 
-/// 仅暴露 approved generated graph 已具备的 Run 控制能力。
+/// 只经 approved generated graph 暴露 Run 控制、工具批准与设备回执能力。
 ///
-/// Tool approval 与 device-action receipt 已进入 source contracts，但尚未进入
-/// App handoff。这里在 production composition 边界显式 unavailable，既不调用已退休
-/// ContinueAssistantToolUse，也不绕过 generated client 拼装请求。
+/// production composition 不调用已退休的 ContinueAssistantToolUse，也不绕过
+/// generated client 拼装请求。
 final class AssistantRunHandoffControlAdapter
     implements AssistantRunControlFacet {
   const AssistantRunHandoffControlAdapter({required this.generated});
@@ -347,6 +354,18 @@ String _requireRunRequestId(String value, String operation) {
       value,
       'clientRequestId',
       '$operation requires a stable client request identity',
+    );
+  }
+  return normalized;
+}
+
+String _requireRunId(String value, String operation) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(
+      value,
+      'runId',
+      '$operation requires a canonical run identity',
     );
   }
   return normalized;

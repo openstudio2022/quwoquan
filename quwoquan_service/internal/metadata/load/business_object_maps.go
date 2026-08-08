@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/storagecontract"
 )
 
 // businessObjectMaps remains a ContractGraph projection for existing validators
@@ -198,7 +199,7 @@ func deriveBusinessObjectMaps(catalog *ast.Catalog, errs *[]error) {
 		var storage ast.StorageDocument
 		if document, exists := documents[storagePath]; exists {
 			var err error
-			storage, err = decodeStorageJSON(document.Content)
+			storage, err = storagecontract.DecodeJSON(document.Content)
 			if err != nil {
 				*errs = append(*errs, fmt.Errorf("%s: decode storage: %w", storagePath, err))
 				continue

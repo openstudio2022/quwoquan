@@ -17,6 +17,7 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/forward_share_dependencies.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
@@ -30,8 +31,8 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/c
 import 'package:quwoquan_app/service/content_service/content/outbound_share_fact/application/public/content_outbound_share_appender.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_external_share_service.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_confirm_sheet.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_recipient_picker_route.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_recipient_widgets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -182,12 +183,10 @@ class _ConnectedContentShareSheetState
 
   Future<List<AppForwardRecipient>> _loadRecentRecipients() async {
     final conversations = await ref
-        .read(chatConversationRepositoryProvider)
-        .listConversations(limit: 30);
+        .read(forwardShareDependenciesProvider)
+        .loadRecentRecipients(limit: 30);
     final recipients = uniqueForwardRecipients(
-      sortForwardRecipientsByRecent(
-        conversations.map(AppForwardRecipient.fromConversation),
-      ),
+      sortForwardRecipientsByRecent(conversations),
     ).take(AppForwardLimits.recentRecipients).toList(growable: false);
     _recentRecipients = recipients;
     return recipients;

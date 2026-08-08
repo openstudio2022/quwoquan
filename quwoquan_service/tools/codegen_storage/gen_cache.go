@@ -19,7 +19,7 @@ type cacheData struct {
 	KeyPattern   string
 	KeyFunc      string
 	KeyParamName string
-	TTLSeconds   int
+	TTLSeconds   int64
 	CacheType    string
 	ModelImport  string
 	DomainPkg    string
@@ -79,7 +79,7 @@ func generateCache(ctx *genContext, cache RedisCacheDef) error {
 		KeyPattern:   cache.Key,
 		KeyFunc:      snakeEntity + "Key",
 		KeyParamName: paramName,
-		TTLSeconds:   cache.TTLSeconds,
+		TTLSeconds:   storageCacheTTL(cache),
 		CacheType:    cacheType,
 		ModelImport:  ctx.source.modelImport(ctx.modulePath()),
 		DomainPkg:    ctx.domainPkg(),
@@ -113,6 +113,13 @@ func generateCache(ctx *genContext, cache RedisCacheDef) error {
 	path := filepath.Join(dir, fileName)
 	fmt.Printf("  cache: %s\n", fileName)
 	return os.WriteFile(path, formatted, 0644)
+}
+
+func storageCacheTTL(cache RedisCacheDef) int64 {
+	if cache.TTLSeconds == nil {
+		return 0
+	}
+	return *cache.TTLSeconds
 }
 
 func init() {

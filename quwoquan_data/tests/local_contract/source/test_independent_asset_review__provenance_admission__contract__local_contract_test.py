@@ -107,7 +107,7 @@ def _acquisition(
     *,
     rights_status: str = "unverified",
 ) -> tuple[dict, Path]:
-    acquisition_root = output_root / "data/local/workspace/source-acquisition/image"
+    acquisition_root = output_root / "data/local/workspace/source-acquisition"
     plan, plan_path = create_professional_image_discovery_plan(
         entities=["九寨沟"],
         category="风光",
@@ -372,7 +372,7 @@ def test_canonical_adoption_binds_exact_review_bytes_and_source_identity(
     receipt, _path = _write_review(output_root)
     execution_root = output_root / "data/tasks" / EXECUTION_ID
     execution_manifest = read_json(execution_root / "execution_manifest.json")
-    acquisition_root = "data/local/workspace/source-acquisition/image/"
+    acquisition_root = "data/local/workspace/source-acquisition/"
     acquisition_ref = str(receipt["acquisitionReceiptRef"])
     assert acquisition_ref.startswith(acquisition_root)
     source = {
@@ -397,7 +397,8 @@ def test_canonical_adoption_binds_exact_review_bytes_and_source_identity(
     assert binding is not None
     assert binding["sourceRevision"] == receipt["sourceRevision"]
     assert binding["entityCatalogDigest"] == receipt["entityCatalogDigest"]
-    assert (object_root / binding["receiptRef"]).read_bytes() == _path.read_bytes()
+    assert binding["receiptRef"] == _path.relative_to(output_root).as_posix()
+    assert not (object_root / "asset_reviews").exists()
     rights_asset = {
         "acquisitionReceiptRef": binding["acquisitionReceiptRef"],
         "independentAssetReview": binding,
@@ -407,7 +408,7 @@ def test_canonical_adoption_binds_exact_review_bytes_and_source_identity(
         },
     }
     assert validate_frozen_asset_review_binding(
-        object_root=object_root,
+        output_root=output_root,
         object_ref=OBJECT_REF,
         rights_asset=rights_asset,
         source_digest=receipt["sourceDigest"],
@@ -416,7 +417,7 @@ def test_canonical_adoption_binds_exact_review_bytes_and_source_identity(
     drifted_binding = {**binding, "entityCatalogDigest": _digest("drifted-catalog")}
     with pytest.raises(ObjectTransactionError, match="binding drift"):
         validate_frozen_asset_review_binding(
-            object_root=object_root,
+            output_root=output_root,
             object_ref=OBJECT_REF,
             rights_asset={
                 **rights_asset,

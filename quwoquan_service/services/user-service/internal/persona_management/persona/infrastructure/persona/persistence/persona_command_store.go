@@ -22,6 +22,8 @@ type PersonaCommandPostgresStore struct {
 	pool *pgxpool.Pool
 }
 
+const personaQuotaLimit = 5
+
 func NewPersonaCommandPostgresStore(pool *pgxpool.Pool) (*PersonaCommandPostgresStore, error) {
 	if pool == nil {
 		return nil, errors.New("Persona command PostgreSQL pool is required")
@@ -41,6 +43,24 @@ func (s *PersonaCommandPostgresStore) CommitCreate(
 			errors.New("persona create requires aggregate identity")
 	}
 	return s.commit(ctx, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
+		if _, err := tx.Exec(
+			ctx,
+			`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+			"persona-owner-quota:"+strings.TrimSpace(persona.UserID),
+		); err != nil {
+			return personaports.PersonaCommandResult{}, err
+		}
+		var personaCount int
+		if err := tx.QueryRow(
+			ctx,
+			`SELECT COUNT(*) FROM personas WHERE user_id=$1`,
+			persona.UserID,
+		).Scan(&personaCount); err != nil {
+			return personaports.PersonaCommandResult{}, err
+		}
+		if personaCount >= personaQuotaLimit {
+			return personaports.PersonaCommandResult{}, personaports.ErrPersonaQuotaReached
+		}
 		now := time.Now().UTC()
 		persona.CreatedAt = now
 		persona.UpdatedAt = now

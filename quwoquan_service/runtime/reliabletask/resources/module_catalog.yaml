@@ -409,7 +409,7 @@ tasks:
       backoff: exponential
     retentionPolicyRef: reliabletask.retention.standard
     rateLimitPolicyRef: reliabletask.rate.chat_avatar
-    runtimeFailureModule: CHAT.GROUP_AVATAR
+    runtimeFailureModule: CHAT.GROUPAVATAR
   chat.roster_projection.rebuild:
     ownerDomain: chat
     dispatcherModule: chat.task_outbox_dispatcher

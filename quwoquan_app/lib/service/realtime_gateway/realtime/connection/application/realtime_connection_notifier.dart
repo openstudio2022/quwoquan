@@ -1,15 +1,9 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/remote_realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_operation_gateway.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_conversation_lifecycle.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
-import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
-import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_conversation_lifecycle.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
 
 typedef RealtimeCurrentUserIdResolver = String Function(Ref ref);
 typedef RealtimeConnectionDelegateFactory =
@@ -18,8 +12,6 @@ typedef RealtimeConnectionDelegateFactory =
       required RealtimeConnectionStateListener onStateChanged,
       required RealtimeCurrentUserIdResolver currentUserIdResolver,
     });
-typedef RealtimeConnectionOperationGatewayResolver =
-    RealtimeConnectionOperationGateway Function(Ref ref);
 
 /// `realtime.connection` 的 session facade：只在 WebSocket/LongPoll 连接期间存在，
 /// 不是持久业务聚合，因此不拥有 presentation，也不被登记为页面物理 owner。
@@ -27,15 +19,14 @@ typedef RealtimeConnectionOperationGatewayResolver =
 /// 需要展示连接状态的页面只消费 `TransportState`（本 provider 的公开读取面）或
 /// [RealtimeConversationLifecycle]，由该页面所属业务对象的 presentation 承载 UI。
 ///
-/// production 默认装配只能创建 Remote delegate；alpha/test 如需 fixture，必须从独立
-/// composition root 显式注入 factory。production 不读取运行时 mode，也不存在失败
-/// 回退或 Mock 热切换路径。
+/// application 层只接受 typed delegate factory；production Remote 构造由
+/// `runtime/di/realtime_dependencies.dart` 注入。测试如需 typed double，同样必须从
+/// 独立 composition root 显式注入 factory，不存在运行时 mode 或失败回退。
 class RealtimeConnectionNotifier extends Notifier<TransportState>
     implements RealtimeConversationLifecycle {
   RealtimeConnectionNotifier({
     RealtimeCurrentUserIdResolver? currentUserIdResolver,
-    this._delegateFactory,
-    this._operationGatewayResolver,
+    required this._delegateFactory,
   }) : _currentUserIdResolver =
            currentUserIdResolver ?? _defaultCurrentUserIdResolver;
 
@@ -52,82 +43,18 @@ class RealtimeConnectionNotifier extends Notifier<TransportState>
   }
 
   final RealtimeCurrentUserIdResolver _currentUserIdResolver;
-  final RealtimeConnectionDelegateFactory? _delegateFactory;
-  final RealtimeConnectionOperationGatewayResolver? _operationGatewayResolver;
+  final RealtimeConnectionDelegateFactory _delegateFactory;
   RealtimeConnectionDelegate? _delegate;
   bool _isAppForeground = false;
-
-  static RealtimeConnectionDelegate _createRemoteDelegate({
-    required Ref ref,
-    required RealtimeConnectionStateListener onStateChanged,
-    required RealtimeCurrentUserIdResolver currentUserIdResolver,
-    required RealtimeConnectionOperationGateway operations,
-  }) {
-    return RemoteRealtimeConnectionDelegate(
-      read: ref.read,
-      invalidate: ref.invalidate,
-      currentUserIdResolver: () => currentUserIdResolver(ref),
-      authTokenProvider: ProviderBackedCloudAuthTokenProvider(
-        () => ref
-            .read(authSessionControllerProvider.notifier)
-            .accessTokenForRequest(),
-      ),
-      operations: operations,
-      onStateChanged: onStateChanged,
-      telemetryRecorder:
-          ({
-            required transport,
-            required result,
-            required durationMs,
-            failReasonCode,
-          }) async {
-            try {
-              await ref
-                  .read(appTelemetryReporterProvider)
-                  .record(
-                    AppTelemetryPayload.realtimeConnectResult(
-                      transport: transport,
-                      result: result,
-                      durationMs: durationMs,
-                      failReasonCode: failReasonCode,
-                    ),
-                  );
-            } catch (error, stackTrace) {
-              developer.log(
-                'realtime connect telemetry failed',
-                name: 'RealtimeConnectionNotifier',
-                error: error,
-                stackTrace: stackTrace,
-              );
-            }
-          },
-    );
-  }
 
   @override
   TransportState build() {
     _silentlyDisposeDelegate(_delegate);
-    final delegateFactory = _delegateFactory;
-    if (delegateFactory != null) {
-      _delegate = delegateFactory(
-        ref: ref,
-        onStateChanged: _syncDelegateState,
-        currentUserIdResolver: _currentUserIdResolver,
-      );
-    } else {
-      final gatewayResolver = _operationGatewayResolver;
-      if (gatewayResolver == null) {
-        throw StateError(
-          'production realtime notifier requires generated operation gateway',
-        );
-      }
-      _delegate = _createRemoteDelegate(
-        ref: ref,
-        onStateChanged: _syncDelegateState,
-        currentUserIdResolver: _currentUserIdResolver,
-        operations: gatewayResolver(ref),
-      );
-    }
+    _delegate = _delegateFactory(
+      ref: ref,
+      onStateChanged: _syncDelegateState,
+      currentUserIdResolver: _currentUserIdResolver,
+    );
     ref.listen<AuthSessionState>(authSessionControllerProvider, (
       previous,
       next,

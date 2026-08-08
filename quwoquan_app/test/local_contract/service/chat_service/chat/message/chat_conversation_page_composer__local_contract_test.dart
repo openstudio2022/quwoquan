@@ -35,6 +35,16 @@ final class _ComposerPersonaQuery extends Fake implements PersonaQuery {
 }
 
 final class _NoopRealtimeConnectionNotifier extends RealtimeConnectionNotifier {
+  _NoopRealtimeConnectionNotifier()
+    : super(
+        delegateFactory:
+            ({
+              required ref,
+              required onStateChanged,
+              required currentUserIdResolver,
+            }) => throw StateError('overridden build must not create delegate'),
+      );
+
   @override
   TransportState build() => TransportState.idle;
 

@@ -179,6 +179,7 @@ class ExternalInputRuntimeContext:
     envelope: dict[str, Any]
     refs: tuple[dict[str, Any], ...]
     blob_refs_by_digest: dict[str, str]
+    capsule_root: Path | None = None
 
     def has_kind(self, kind: str) -> bool:
         return any(row.get("kind") == kind for row in self.refs)
@@ -337,6 +338,7 @@ def resolve_runtime_external_input_context(
         envelope=envelope,
         refs=tuple(dict(row) for row in refs),
         blob_refs_by_digest=blobs,
+        capsule_root=capsule_root,
     )
     if requested_kind is not None:
         if requested_receipt_refs is None:

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	rterrors "quwoquan_service/runtime/errors"
 	recentsearch "quwoquan_service/services/search-service/internal/search/recent_search_state/application"
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/domain/model"
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/domain/ports"
@@ -207,8 +208,13 @@ func TestRecentSearchReceiptReplayAndDigestConflict(t *testing.T) {
 	// 缺 Idempotency-Key：结构化 invalid_argument。
 	if _, err := facade.Upsert(ctx, recentsearch.UpsertCommand{
 		PersonaID: "persona-2", Scope: "all", Query: "no key",
-	}); err == nil {
-		t.Fatal("missing Idempotency-Key must be rejected")
+	}); err == nil || rterrors.NormalizeError(err).Code.String() != "SEARCH.USER.recent_invalid_argument" {
+		t.Fatalf("missing Idempotency-Key must use recent invalid code: %v", err)
+	}
+	if _, err := facade.Upsert(ctx, recentsearch.UpsertCommand{
+		PersonaID: "persona-2", Scope: "all", Query: " ", IdempotencyKey: "empty-query",
+	}); err == nil || rterrors.NormalizeError(err).Code.String() != "SEARCH.USER.recent_invalid_argument" {
+		t.Fatalf("empty query must use recent invalid code: %v", err)
 	}
 }
 

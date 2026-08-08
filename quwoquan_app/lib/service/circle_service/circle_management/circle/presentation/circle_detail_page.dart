@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_behavior_fact/application/public/circle_behavior_fact_appender.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group_membership/application/public/circle_group_membership_access.dart';
-import 'package:quwoquan_app/runtime/di/presentation/circle_shell.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_shell.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_shell_participant_slots.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_engagement_tracker.dart';
@@ -27,7 +28,7 @@ class CircleDetailPage extends ConsumerStatefulWidget {
   final ContentEngagementTracker contentEngagementTracker;
   final bool hasAuthenticatedOwner;
   final CircleBehaviorFactAppender? behaviorFactAppender;
-  final CircleMembershipApprovalPageBuilder membershipApprovalPageBuilder;
+  final CircleShellParticipantSlots participantSlots;
   final CircleGroupMembershipAccess? groupMembershipAccess;
   final ReferralSource referralSource;
   final UiErrorAppearanceMode sourceAppearanceMode;
@@ -40,7 +41,7 @@ class CircleDetailPage extends ConsumerStatefulWidget {
     required this.contentEngagementTracker,
     required this.hasAuthenticatedOwner,
     required this.behaviorFactAppender,
-    required this.membershipApprovalPageBuilder,
+    required this.participantSlots,
     this.groupMembershipAccess,
     this.referralSource = ReferralSource.organicFeed,
     this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
@@ -97,11 +98,13 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
           )
           .catchError((Object error, StackTrace stackTrace) {
             unawaited(
-              ref.read(exceptionTelemetryPortProvider).recordGlobalException(
-                source: 'circle.behavior.${eventType.wireName}',
-                exceptionText: error.toString(),
-                stackText: stackTrace.toString(),
-              ),
+              ref
+                  .read(exceptionTelemetryPortProvider)
+                  .recordGlobalException(
+                    source: 'circle.behavior.${eventType.wireName}',
+                    exceptionText: error.toString(),
+                    stackText: stackTrace.toString(),
+                  ),
             );
           }),
     );
@@ -111,7 +114,7 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
   Widget build(BuildContext context) {
     return CircleShell(
       circleId: widget.circleId,
-      membershipApprovalPageBuilder: widget.membershipApprovalPageBuilder,
+      participantSlots: widget.participantSlots,
       groupMembershipAccess: widget.groupMembershipAccess,
       onBack: widget.onBack,
       sourceAppearanceMode: widget.sourceAppearanceMode,

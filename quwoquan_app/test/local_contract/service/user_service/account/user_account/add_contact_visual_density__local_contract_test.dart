@@ -9,7 +9,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/search/app_search_field.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/add_contact_entry_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/my_qr_card.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_card.dart';
 
 const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://mock.quwoquan.local/u/current',

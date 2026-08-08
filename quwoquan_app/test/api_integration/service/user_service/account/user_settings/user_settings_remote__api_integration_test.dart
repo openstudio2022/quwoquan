@@ -1,4 +1,11 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/appearance-accessibility-settings/spec.md#gwt-001
+// readiness_case: user_settings_get_notification_settings_app_api
+// readiness_case: user_settings_update_notification_settings_app_api
+// readiness_case: user_settings_get_call_settings_app_api
+// readiness_case: user_settings_update_call_settings_app_api
+// readiness_case: user_settings_get_appearance_settings_app_api
+// readiness_case: user_settings_update_appearance_settings_app_api
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -56,5 +63,47 @@ void main() {
       minimumCount: 1,
     );
     expect(telemetryEvents.every((event) => event.succeeded), isTrue);
+  });
+
+  test('AppearanceSettings 通过 production Remote 往返并恢复原值', () async {
+    final original = await harness.settingsReader.getAppearanceSettings();
+    expect(original.version, greaterThanOrEqualTo(1));
+
+    final targetTheme = original.themeMode == ThemeModeSetting.dark
+        ? ThemeModeSetting.light
+        : ThemeModeSetting.dark;
+    final applyScope = original.hasPersonaOverride
+        ? AppearanceApplyScope.currentPersona
+        : AppearanceApplyScope.allAccounts;
+
+    try {
+      final updated = await harness.settingsCommands.updateAppearanceSettings(
+        UpdateAppearanceSettingsCommand(
+          themeMode: targetTheme,
+          fontSizePreset: original.fontSizePreset,
+          applyScope: applyScope,
+        ),
+      );
+      expect(updated.themeMode, targetTheme);
+      expect(updated.version, greaterThan(original.version));
+
+      final readback = await harness.settingsReader.getAppearanceSettings();
+      expect(readback.themeMode, targetTheme);
+      expect(readback.fontSizePreset, original.fontSizePreset);
+      expect(readback.version, updated.version);
+    } finally {
+      await harness.settingsCommands.updateAppearanceSettings(
+        UpdateAppearanceSettingsCommand(
+          themeMode: original.themeMode,
+          fontSizePreset: original.fontSizePreset,
+          applyScope: applyScope,
+        ),
+      );
+    }
+
+    final restored = await harness.settingsReader.getAppearanceSettings();
+    expect(restored.themeMode, original.themeMode);
+    expect(restored.fontSizePreset, original.fontSizePreset);
+    expect(restored.hasPersonaOverride, original.hasPersonaOverride);
   });
 }

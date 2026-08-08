@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
-import 'package:quwoquan_app/service/content_service/content/comment/application/comment_remote_config.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/application/public/comment_remote_config.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/application/public/content_report_ports.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';

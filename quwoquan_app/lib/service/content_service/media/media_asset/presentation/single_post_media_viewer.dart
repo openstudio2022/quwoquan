@@ -4,8 +4,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
-import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 
@@ -25,9 +24,8 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
   final dto = detail.post;
   final raw = detail.mergedArticleWireMap;
   final snapshot = buildMediaViewerInteractionSnapshot(
+    ref: ref,
     posts: <ContentPostViewData>[dto],
-    relationshipState: ref.read(userRelationshipStateProvider),
-    postInteractionState: ref.read(postInteractionStateProvider),
   );
   return MediaViewerExtra(
     posts: <ContentSurfaceView>[

@@ -49,9 +49,17 @@
 
 - GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“元数据驱动的客户端数据契约（metadata-driven-client-data-contract）”对应的公开行为。
-- THEN 同一 **Repository 抽象接口** 的 `Mock*` 与 `Remote*` 实现：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** Mock 返回「另一套 Map 键名」而 Remote 另一套。
+- THEN 同一 typed port 的生产 Remote 实现与测试树对象级 typed double：对同一业务操作返回 **同一 codegen 类型**（或经同一 `fromMap`/工厂解析到该类型），**禁止** typed double 返回「另一套 Map 键名」而 Remote 另一套。
 - AND 四环境 artifact、kernel/AOT 可达图与 UAT support 始终解析为同一 Remote composition，Mock/fixture/Noop 数量为零；对象级 typed double 只存在测试树。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-002"></a>
+### GWT-002 Feed 信封准入由契约生成并 fail-closed
+
+- GIVEN feed slice 契约声明列表上限、canonical SHA256 字形和 nullable 字段共现约束。
+- WHEN App generated decoder 收到越过分页或卡片数量上限、非法 digest，或只携带 `cursor`/`paginationExpiresAt` 其中之一的信封。
+- THEN decoder 在进入 presentation 前拒绝该信封，并返回 canonical failure。
+- AND 生成器对未知格式、类型不匹配、悬空或非 nullable 的共现声明在生成期拒绝。
 
 ## 6. 依赖
 
@@ -92,11 +100,12 @@
 - 依赖：环境 topology、canonical release activation 与 App core readback。
 
 <a id="open-004"></a>
-### OPEN-004 端侧 generated decoder 缺少信封准入约束表达位
+### OPEN-004 信封准入约束待在 feed slice 契约声明并重建
 
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：当前 Dart generated decoder 只表达字段存在性、类型、枚举边界与未知字段拒绝，无法表达信封级准入约束。手写 decoder 退役后，`ContentDiscoveryFeedPageSlice` 上原有的分页上限、`objectCards` 数量有界、`cursor` 与 `paginationExpiresAt` 成对出现，以及 `policyDigest` 必须为 `sha256:<64 hex>` 字形这几条准入约束在端侧不再 fail-closed，异常信封只能在更下游被发现。
-- 完成判定：contracts metadata 能声明信封级准入约束并由 codegen 落到 Dart decoder，上述四条约束各自恢复 fail-closed 并有对应 local_contract 断言。
-- 依赖：contracts metadata 约束表达位与 Dart 客户端生成器。
+- 影响或价值：仍缺 feed slice 契约上的取值声明与重建后的落盘 decoder，表达位与生成能力已就位。响应字段现在可声明三类信封准入位：`max_items`（列表长度上界）、`format: canonical_sha256`（字符串 canonical 字形）、`co_present_with`（必须同时出现或同时缺失的 nullable 字段组）；前两者的 schema 位在 `contracts/metadata/_schemas/fields.schema.json`，`co_present_with` 为本次新增。`tools/codegen_app_metadata` 的 `renderDomainResponseModel` / `renderDomainDecoderHelpers` 会分别生成 `_requiredBoundedList`、`_requiredCanonicalSha256Digest`（复用 `quwoquan_cloud_contracts` 的 `isCanonicalSha256Digest`，不复制字形正则）与 `_requireCoPresentFields`，并对未知 `format`、非 string 上的 `format`、非 list 上的 `max_items`、悬空或非 nullable 的 `co_present_with` 生成期 fail-closed，由 `TestDomainResponseDecoderEnforcesEnvelopeAdmission` 与 `TestDomainResponseDecoderRejectsInvalidAdmissionDeclarations` 覆盖。`content/content/post/projections/content_discovery_feed_page_slice.yaml` 尚未声明这些取值，磁盘上的 generated decoder 也未重建，因此分页上限、`objectCards` 数量有界、`cursor` 与 `paginationExpiresAt` 成对出现、`policyDigest` 的 `sha256:<64 hex>` 字形在端侧仍未 fail-closed。
+- 完成判定：`GWT-002` 通过；feed slice 契约声明上述四条取值，重跑 codegen 后 generated decoder 带上对应准入调用，并由 App `local_contract` 断言四条越界信封各自被拒绝。
+- 依赖：`projections/*.yaml` 目前没有 JSON Schema（`validate.MetadataSchemas` 只覆盖 `fields.yaml` 等对象包文件），投影侧声明位仍靠 compiler 与生成器语义校验。
+- 当前边界：`codegen-app` 落盘链路本身已验证可用（直接调用 `tools/codegen_app_metadata` 消费现存 `generated/contract_graph.json`，与 App lock 哈希一致且产物幂等），因此剩余阻断只在契约取值声明与端侧越界证据，不在重建窗口。

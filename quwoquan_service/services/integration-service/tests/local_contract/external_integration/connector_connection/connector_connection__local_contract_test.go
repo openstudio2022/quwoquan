@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
 // readiness_case: list-connector-connections-local
 // readiness_case: get-connector-connection-local
 // readiness_case: create-connector-connection-local
@@ -17,6 +18,13 @@ import (
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
+	grantadapter "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/adapters/inbound/runtime"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
+	grantmodel "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/domain/model"
+	grantcandidate "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/candidate"
+	grantresolver "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/resolver"
 	connectionhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/adapters/inbound/http"
 	connectionapp "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/application"
 	connectionmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/model"
@@ -225,6 +233,86 @@ type capabilityConnectionReader struct {
 	connection connectionmodel.Connection
 }
 
+type connectorGrantStore struct {
+	grants []grantmodel.ResolvedCapabilityGrant
+}
+
+func (store *connectorGrantStore) Save(
+	_ context.Context,
+	grant grantmodel.ResolvedCapabilityGrant,
+) error {
+	store.grants = append(store.grants, grant)
+	return nil
+}
+
+func (store *connectorGrantStore) Load(
+	_ context.Context,
+	resolutionID string,
+) (grantapp.StoredSession, error) {
+	for _, grant := range store.grants {
+		if grant.ResolutionID != resolutionID || grant.ExpiresAt == nil {
+			continue
+		}
+		bindingDigest, err := grantmodel.BindingDigest(grant)
+		if err != nil {
+			return grantapp.StoredSession{}, err
+		}
+		return grantapp.StoredSession{
+			ResolutionID:       grant.ResolutionID,
+			AccountDigest:      grantmodel.OpaqueDigest(grant.AccountID),
+			ServiceActorDigest: grant.ServiceActorDigest,
+			CapabilityKey:      grant.CapabilityKey,
+			SurfaceKind:        grant.SurfaceKind,
+			BindingKind:        grant.BindingKind,
+			BindingDigest:      bindingDigest,
+			InputDigest:        grant.InputDigest,
+			ConfirmationDigest: grant.ConfirmationDigest,
+			PermitDigest:       grant.PermitDigest,
+			IdempotencyDigest:  grant.IdempotencyDigest,
+			ResolvedAt:         grant.ResolvedAt,
+			ExpiresAt:          *grant.ExpiresAt,
+		}, nil
+	}
+	return grantapp.StoredSession{}, grantapp.ErrCapabilityGrantSessionNotFound
+}
+
+func newConnectorCapabilityFacade(
+	reader capabilityConnectionReader,
+	definition definitionmodel.Definition,
+	now time.Time,
+) (*connectionapp.QueryFacade, *connectorGrantStore) {
+	unavailable := grantcandidate.NewUnavailableSources("not required by connector resolution")
+	resolver := grantresolver.NewCandidateResolver(
+		unavailable,
+		grantcandidate.NewConnectorReaderSource(
+			reader,
+			definitionReader{definition: definition},
+			func() time.Time { return now },
+		),
+		unavailable,
+		unavailable,
+		func() time.Time { return now },
+	)
+	store := &connectorGrantStore{}
+	session := grantapp.NewCapabilityGrantSessionFacade(resolver, store)
+	return connectionapp.NewCapabilityQueryFacade(
+		reader,
+		grantadapter.NewMiddleware(session),
+	), store
+}
+
+func connectorGrantAuthorization(t *testing.T) grantapp.TrustedRuntimeAuthorization {
+	t.Helper()
+	authorization, err := grantapp.NewTrustedRuntimeAuthorization(
+		"account-1",
+		"assistant-service",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return authorization
+}
+
 func (reader capabilityConnectionReader) Get(
 	_ context.Context,
 	accountID string,
@@ -257,18 +345,19 @@ func TestCapabilityResolutionRechecksConnectionDefinitionAndSurface(t *testing.T
 		CreatedAt:           now.Add(-time.Hour),
 		UpdatedAt:           now.Add(-time.Minute),
 	}
-	facade := connectionapp.NewCapabilityQueryFacade(
+	facade, store := newConnectorCapabilityFacade(
 		capabilityConnectionReader{connection: connection},
-		definitionReader{definition: definitionmodel.Definition{
+		definitionmodel.Definition{
 			ConnectorID:           "system_calendar",
 			Capabilities:          []string{"calendar.event.create"},
 			SupportedSurfaceKinds: []string{"personal"},
 			Status:                definitionmodel.StatusActive,
-		}},
-		func() time.Time { return now },
+			ReleaseDigest:         "sha256:" + strings.Repeat("a", 64),
+		},
+		now,
 	)
-	allowed, err := facade.ResolveCapability(context.Background(), connectionmodel.ResolveCapabilityInput{
-		AccountID:      "account-1",
+	allowed, err := facade.ResolveCapability(context.Background(), connectorGrantAuthorization(t), connectionmodel.ResolveCapabilityInput{
+		ResolutionID:   "resolution-allowed",
 		CapabilityKey:  "calendar.event.create",
 		SurfaceKind:    "personal",
 		ConnectionRefs: []string{"connection-1"},
@@ -277,8 +366,8 @@ func TestCapabilityResolutionRechecksConnectionDefinitionAndSurface(t *testing.T
 		allowed.Reason != connectionmodel.CapabilityReasonAllowed {
 		t.Fatalf("active personal grant was not allowed: decision=%+v err=%v", allowed, err)
 	}
-	shared, err := facade.ResolveCapability(context.Background(), connectionmodel.ResolveCapabilityInput{
-		AccountID:      "account-1",
+	shared, err := facade.ResolveCapability(context.Background(), connectorGrantAuthorization(t), connectionmodel.ResolveCapabilityInput{
+		ResolutionID:   "resolution-shared",
 		CapabilityKey:  "calendar.event.create",
 		SurfaceKind:    "circle",
 		ConnectionRefs: []string{"connection-1"},
@@ -286,19 +375,23 @@ func TestCapabilityResolutionRechecksConnectionDefinitionAndSurface(t *testing.T
 	if err != nil || shared.Allowed || shared.Reason != connectionmodel.CapabilityReasonSurfaceDenied {
 		t.Fatalf("personal connector leaked into shared surface: decision=%+v err=%v", shared, err)
 	}
+	if len(store.grants) != 1 {
+		t.Fatalf("persisted capability sessions=%d want=1", len(store.grants))
+	}
 	connection.Status = connectionmodel.StatusRevoked
-	revokedFacade := connectionapp.NewCapabilityQueryFacade(
+	revokedFacade, _ := newConnectorCapabilityFacade(
 		capabilityConnectionReader{connection: connection},
-		definitionReader{definition: definitionmodel.Definition{
+		definitionmodel.Definition{
 			ConnectorID:           "system_calendar",
 			Capabilities:          []string{"calendar.event.create"},
 			SupportedSurfaceKinds: []string{"personal"},
 			Status:                definitionmodel.StatusActive,
-		}},
-		func() time.Time { return now },
+			ReleaseDigest:         "sha256:" + strings.Repeat("a", 64),
+		},
+		now,
 	)
-	revoked, err := revokedFacade.ResolveCapability(context.Background(), connectionmodel.ResolveCapabilityInput{
-		AccountID:      "account-1",
+	revoked, err := revokedFacade.ResolveCapability(context.Background(), connectorGrantAuthorization(t), connectionmodel.ResolveCapabilityInput{
+		ResolutionID:   "resolution-revoked",
 		CapabilityKey:  "calendar.event.create",
 		SurfaceKind:    "personal",
 		ConnectionRefs: []string{"connection-1"},
@@ -310,7 +403,7 @@ func TestCapabilityResolutionRechecksConnectionDefinitionAndSurface(t *testing.T
 
 func TestCapabilityResolutionInternalHTTPReturnsOnlyRedactedDecision(t *testing.T) {
 	now := time.Date(2026, time.August, 3, 15, 0, 0, 0, time.UTC)
-	facade := connectionapp.NewCapabilityQueryFacade(
+	facade, _ := newConnectorCapabilityFacade(
 		capabilityConnectionReader{connection: connectionmodel.Connection{
 			ConnectionID: "connection-1", AccountID: "account-1",
 			ConnectorID:         "system_calendar",
@@ -318,20 +411,31 @@ func TestCapabilityResolutionInternalHTTPReturnsOnlyRedactedDecision(t *testing.
 			Status:              connectionmodel.StatusActive, FreshnessAt: now.Add(-time.Minute),
 			Revision: 1, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Minute),
 		}},
-		definitionReader{definition: definitionmodel.Definition{
+		definitionmodel.Definition{
 			ConnectorID: "system_calendar", Capabilities: []string{"calendar.event.create"},
 			SupportedSurfaceKinds: []string{"personal"}, Status: definitionmodel.StatusActive,
-		}},
-		func() time.Time { return now },
+			ReleaseDigest: "sha256:" + strings.Repeat("a", 64),
+		},
+		now,
 	)
 	mux := http.NewServeMux()
 	connectionhttp.NewHandler(nil, facade).RegisterRoutes(mux)
-	body := []byte(`{"accountId":"account-1","capabilityKey":"calendar.event.create","surfaceKind":"personal","connectionRefs":["connection-1"]}`)
+	body := []byte(`{"capabilityKey":"calendar.event.create","surfaceKind":"personal","connectionRefs":["connection-1"]}`)
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/internal/integrations/connector-capability-grants:resolve",
 		bytes.NewReader(body),
 	)
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{
+			TokenType:      rtauth.TokenTypeAccess,
+			Subject:        "account-1",
+			ServiceActorID: "assistant-service",
+			Scope:          "integration.connector_grant.read",
+			Roles:          []string{"service"},
+		},
+		Actor: operation.ActorContext{AccountID: "account-1"},
+	}))
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
@@ -349,5 +453,41 @@ func TestCapabilityResolutionInternalHTTPReturnsOnlyRedactedDecision(t *testing.
 		if strings.Contains(encoded, forbidden) {
 			t.Fatalf("internal capability decision leaked %q: %s", forbidden, encoded)
 		}
+	}
+	spoofed := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/integrations/connector-capability-grants:resolve",
+		bytes.NewReader([]byte(`{"accountId":"account-spoofed","capabilityKey":"calendar.event.create","surfaceKind":"personal","connectionRefs":["connection-1"]}`)),
+	).WithContext(request.Context())
+	spoofedResponse := httptest.NewRecorder()
+	mux.ServeHTTP(spoofedResponse, spoofed)
+	if spoofedResponse.Code != http.StatusBadRequest {
+		t.Fatalf("body accountId was not rejected: status=%d body=%s", spoofedResponse.Code, spoofedResponse.Body.String())
+	}
+	legacyServiceRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/integrations/connector-capability-grants:resolve",
+		bytes.NewReader(body),
+	)
+	legacyServiceRequest = legacyServiceRequest.WithContext(rtauth.WithPrincipal(
+		legacyServiceRequest.Context(),
+		rtauth.Principal{
+			Claims: rtauth.Claims{
+				TokenType: rtauth.TokenTypeAccess,
+				Subject:   "service:assistant-service",
+				Scope:     "integration.connector_grant.read",
+				Roles:     []string{"service"},
+			},
+			Actor: operation.ActorContext{AccountID: "service:assistant-service"},
+		},
+	))
+	legacyServiceResponse := httptest.NewRecorder()
+	mux.ServeHTTP(legacyServiceResponse, legacyServiceRequest)
+	if legacyServiceResponse.Code != http.StatusForbidden {
+		t.Fatalf(
+			"legacy service subject was accepted as account: status=%d body=%s",
+			legacyServiceResponse.Code,
+			legacyServiceResponse.Body.String(),
+		)
 	}
 }

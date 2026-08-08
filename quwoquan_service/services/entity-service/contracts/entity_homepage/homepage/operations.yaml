@@ -1020,3 +1020,163 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage/homepage_handler__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: homepage_search_homepages_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SearchHomepages}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_search_homepages_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: SearchHomepages}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: evaluate-entity-homepage-gathering-host-authority-local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: EvaluateEntityHomepageGatheringHostAuthority}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage/host_authority_evaluator__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_homepage_detail_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-entry-and-preview/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetHomepageDetail}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_homepage_shell_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-overview-and-module-shell/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetHomepageShell}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_homepage_introduction_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetHomepageIntroduction}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_object_page_bundle_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetObjectPageBundle}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_entity_impact_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetEntityImpact}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_homepage_review_summary_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetHomepageReviewSummary}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_homepage_related_groups_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetHomepageRelatedGroups}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_suggest_homepage_candidate_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/missing-homepage-suggestion-and-review/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SuggestHomepageCandidate}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_update_claimed_homepage_basics_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/claimed-homepage-basic-maintenance/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateClaimedHomepageBasics}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_get_homepage_detail_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-entry-and-preview/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetHomepageDetail}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_get_homepage_shell_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-overview-and-module-shell/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetHomepageShell}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_get_homepage_introduction_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetHomepageIntroduction}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_get_object_page_bundle_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetObjectPageBundle}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_get_entity_impact_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/entity-homepage-intersection-redesign/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetEntityImpact}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_get_homepage_review_summary_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetHomepageReviewSummary}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_get_homepage_related_groups_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/object-homepage-gamma-real-data-closure/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetHomepageRelatedGroups}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_suggest_homepage_candidate_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/missing-homepage-suggestion-and-review/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: SuggestHomepageCandidate}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

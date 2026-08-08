@@ -88,12 +88,12 @@ lifecycle:
   - name: ProjectGatheringInvitation
     kind: event_handler
     facet: GatheringInvitationProjection
-    method: project
+    method: handle
     idempotency: identity_payload_digest
   - name: CancelGatheringInvitations
     kind: event_handler
     facet: GatheringInvitationProjection
-    method: cancelGathering
+    method: handle
     idempotency: event_id
   - name: ApplyNotificationAccountRestriction
     kind: event_handler

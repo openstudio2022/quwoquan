@@ -21,6 +21,195 @@ codes:
     defaultLocation:
       businessObject: assistant_turn
       functionModule: pipeline_engine
+  - code: AUTH.DELEGATEDGRANT.invalid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.audience_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.actor_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.scope_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.digest_mismatch
+    origin: user
+    kind: contract
+    nature: permanent
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.target_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.auth_epoch_mismatch
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: account_security_authority
+  - code: AUTH.DELEGATEDGRANT.replay
+    origin: user
+    kind: auth
+    nature: permanent
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_replay_guard
+  - code: AUTH.DELEGATEDGRANT.store_unavailable
+    origin: remoteDependency
+    kind: storage
+    nature: transient
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_replay_store
+  - code: AUTH.OIDC.invalid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: operator_identity
+      functionModule: oidc_verifier
+  - code: AUTH.OIDC.key_not_found
+    origin: remoteDependency
+    kind: auth
+    nature: transient
+    defaultLocation:
+      businessObject: operator_identity
+      functionModule: oidc_key_resolver
+  - code: AUTH.OIDC.mfa_required
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: operator_identity
+      functionModule: oidc_verifier
+  - code: AUTH.TOKEN.expired
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: AUTH.TOKEN.invalid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: AUTH.TOKEN.not_yet_valid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: AUTH.TOKEN.version_mismatch
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: CHAT.GROUPAVATAR.recompute_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: chat_conversation
+      functionModule: group_avatar_worker
+  - code: CHAT.GROUPAVATAR.patch_fanout_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: chat_conversation
+      functionModule: notification_fanout_worker
+  - code: CHAT.GROUPAVATAR.notification_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: chat_conversation
+      functionModule: notification_retry
+  - code: CLIENT.PLATFORM.capability_unavailable
+    origin: localClient
+    kind: unsupported
+    nature: permanent
+    defaultLocation:
+      businessObject: app_runtime
+      functionModule: platform_capability_gateway
+  - code: RELIABLETASK.NOTIFICATION.fanout_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: reliable_notification
+      functionModule: notification_fanout_worker
+  - code: RELIABLETASK.NOTIFICATION.retry
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: reliable_notification
+      functionModule: notification_retry
+  - code: RELIABLETASK.WORKER.handler_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: reliable_task
+      functionModule: task_worker
+  - code: SEARCH.BACKEND.recall_failed
+    origin: remoteDependency
+    kind: unavailable
+    nature: transient
+    defaultLocation:
+      businessObject: search_request
+      functionModule: recall_backend
+  - code: SEARCH.PLANNER.unknown_target
+    origin: developer
+    kind: validation
+    nature: bug
+    defaultLocation:
+      businessObject: search_request
+      functionModule: retrieve_planner
+  - code: SEARCH.USER.sensitive_query
+    origin: user
+    kind: validation
+    nature: permanent
+    defaultLocation:
+      businessObject: search_request
+      functionModule: query_safety
+  - code: SERVICE.RUNTIME.log_encoding_failed
+    origin: system
+    kind: parsing
+    nature: bug
+    defaultLocation:
+      businessObject: runtime_log_record
+      functionModule: canonical_log_encoder
   - code: APP.NETWORK.offline
     origin: environment
     kind: network

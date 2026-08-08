@@ -1,7 +1,7 @@
 part of 'homepage_detail_shell.dart';
 
 extension _HomepageBuilders on _HomepageDetailShellState {
-  /// 「我的交集」区块：与圈子/用户主页直接消费同一 [ObjectIntersectionSection]。
+  /// 「我的交集」区块：由 runtime/di 注入 Recommendation participant。
   Widget _buildIntersectionCard(bool isDark) {
     final objectId = (_reference?.id ?? '').trim();
     if (objectId.isEmpty) {
@@ -20,7 +20,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     if (!query.isResolvable) {
       return const SizedBox.shrink();
     }
-    return ObjectIntersectionSection(
+    return widget.recommendationSlots.buildObjectIntersection(
       key: const ValueKey<String>('homepage-my-intersection-card'),
       query: query,
       title: ObjectHomepageText.objectMyIntersectionsTitle,
@@ -35,9 +35,8 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     if (objectId.isEmpty) {
       return const SizedBox.shrink();
     }
-    return ObjectImpactPreviewCard(
+    return widget.recommendationSlots.buildObjectImpact(
       objectId: objectId,
-      target: ObjectImpactTarget.homepage,
       referralSource: ReferralSource.entityPage,
       title: ObjectHomepageText.objectImpactTitleEntity,
       enumerableHint: ObjectHomepageText.impactEnumerableHintEntity,

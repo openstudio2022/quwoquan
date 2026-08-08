@@ -17,7 +17,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/bottom_navigation.dart';
-import 'package:quwoquan_app/runtime/di/shell/main_app_shell.dart';
+import 'package:quwoquan_app/runtime/shell/main_app_shell.dart';
 import 'package:quwoquan_app/runtime/shell/web_app_install_banner.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';

@@ -1,6 +1,7 @@
 events:
 - name: HomepageStatusReported
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageStatusReported
   payload_entity: HomepageStatusReport
   payload_fields:
   - reportId
@@ -12,6 +13,7 @@ events:
   - version
 - name: HomepageStatusReportReviewed
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageStatusReportReviewed
   payload_entity: HomepageStatusReport
   payload_fields:
   - reportId

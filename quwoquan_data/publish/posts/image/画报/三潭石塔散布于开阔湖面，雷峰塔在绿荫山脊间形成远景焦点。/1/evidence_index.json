@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260808--travel-image-m1--china-beta-bootstrap-not-m100--scale-028",
+  "executionBinding": "frozen",
+  "objectRef": "杭州西湖_image",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:527d6a3a3c7827c88b69477ecfa5bff44eea938693dd738c7c57a249275289e8"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:5dc62ed7429b8ec12c27e9bfc2c93cb63cb93eaa8e187646935ac67f9c59126c"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:347b142948a356856ec23ce0921d41329f9248b5c6ec4f896a266cf98733c766"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:4c27281323cb04bafa24786daf6908ada6e2d8e6c60d79ebd6f98f6c0106fb1d"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:edc771ce4f184f4ee01e2c0cbbb4dbba31867078ed36aaef370be65825119f3d"
+    }
+  ]
+}

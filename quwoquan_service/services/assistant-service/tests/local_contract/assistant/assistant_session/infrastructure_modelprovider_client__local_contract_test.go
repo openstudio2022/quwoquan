@@ -73,6 +73,93 @@ func TestClientStreamsTypedModelCompletion(t *testing.T) {
 	}
 }
 
+func TestClientAdvertisesOnlyExplicitReasoningTier(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+
+	balancedOnly, err := New(Config{
+		CompletionURL: server.URL,
+		APIKey:        "test-key",
+		Models:        TierModels{Balanced: "balanced-model"},
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New(balanced only) error = %v", err)
+	}
+	if ports.SupportsReasoningTier(balancedOnly) {
+		t.Fatal("balanced-only configuration must not advertise reasoning capability")
+	}
+	if _, err := balancedOnly.Complete(t.Context(), ports.ModelCompletionRequest{
+		Stage:    ports.ModelStageReasoning,
+		Tier:     ports.ModelTierReasoning,
+		Messages: []ports.ModelMessage{{Role: "user", Content: "reason"}},
+	}); err == nil || !strings.Contains(err.Error(), "unavailable") {
+		t.Fatalf("unconfigured reasoning request error = %v, want fail-closed unavailable", err)
+	}
+	if _, err := balancedOnly.Stream(t.Context(), ports.ModelCompletionRequest{
+		Stage:    ports.ModelStageReasoning,
+		Tier:     ports.ModelTierReasoning,
+		Stream:   true,
+		Messages: []ports.ModelMessage{{Role: "user", Content: "reason"}},
+	}, nil); err == nil || !strings.Contains(err.Error(), "unavailable") {
+		t.Fatalf("unconfigured reasoning stream error = %v, want fail-closed unavailable", err)
+	}
+
+	explicitReasoning, err := New(Config{
+		CompletionURL: server.URL,
+		APIKey:        "test-key",
+		Models: TierModels{
+			Balanced:  "balanced-model",
+			Reasoning: "reasoning-model",
+		},
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New(explicit reasoning) error = %v", err)
+	}
+	if !ports.SupportsReasoningTier(explicitReasoning) {
+		t.Fatal("explicit reasoning configuration must advertise reasoning capability")
+	}
+}
+
+func TestClientReportsActualTierWhenFastUsesBalancedFallback(t *testing.T) {
+	requestedModels := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var body struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		requestedModels <- body.Model
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"model":"served-balanced","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	client, err := New(Config{
+		CompletionURL: server.URL,
+		APIKey:        "test-key",
+		Models:        TierModels{Balanced: "balanced-model"},
+	}, server.Client())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	result, err := client.Complete(t.Context(), ports.ModelCompletionRequest{
+		Stage:    ports.ModelStageFinal,
+		Tier:     ports.ModelTierFast,
+		Messages: []ports.ModelMessage{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+	if requestedModel := <-requestedModels; requestedModel != "balanced-model" {
+		t.Fatalf("request model = %q, want balanced fallback", requestedModel)
+	}
+	if result.TierServed != ports.ModelTierBalanced {
+		t.Fatalf("tier served = %q, want truthful balanced receipt", result.TierServed)
+	}
+}
+
 func TestClientRejectsCompletionWithoutProviderReceiptIdentityOrUsage(t *testing.T) {
 	tests := map[string]string{
 		"missing model": `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,

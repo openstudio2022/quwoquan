@@ -38,16 +38,19 @@ func (e DataContentProcessExecutor) ExecuteDataContentObject(
 	input, err := json.Marshal(dataContentProcessRequest{
 		Schema: "quwoquan.data_content_worker_request",
 		Item: dataContentProcessWorkItem{
-			RuntimeTaskID:  item.RuntimeTaskID,
-			JobID:          item.JobID,
-			ExecutionID:    item.ExecutionID,
-			Ref:            item.Ref,
-			Stage:          item.Stage,
-			PartitionKey:   item.PartitionKey,
-			EntityRef:      item.EntityRef,
-			Carrier:        item.Carrier,
-			SourceRevision: item.SourceRevision,
-			IdempotencyKey: item.IdempotencyKey,
+			RuntimeTaskID:        item.RuntimeTaskID,
+			JobID:                item.JobID,
+			ExecutionID:          item.ExecutionID,
+			Ref:                  item.Ref,
+			Stage:                item.Stage,
+			PartitionKey:         item.PartitionKey,
+			EntityRef:            item.EntityRef,
+			Carrier:              item.Carrier,
+			SourceRevision:       item.SourceRevision,
+			IdempotencyKey:       item.IdempotencyKey,
+			JobSetEnvelopeDigest: item.JobSetEnvelopeDigest,
+			JobSetDigest:         item.JobSetDigest,
+			ActualTaskDigest:     item.ActualTaskDigest,
 		},
 	})
 	if err != nil {
@@ -123,16 +126,19 @@ type dataContentProcessRequest struct {
 }
 
 type dataContentProcessWorkItem struct {
-	RuntimeTaskID  string `json:"runtimeTaskId"`
-	JobID          string `json:"jobId"`
-	ExecutionID    string `json:"executionId"`
-	Ref            string `json:"ref"`
-	Stage          string `json:"stage"`
-	PartitionKey   string `json:"partitionKey"`
-	EntityRef      string `json:"entityRef"`
-	Carrier        string `json:"carrier"`
-	SourceRevision string `json:"sourceRevision"`
-	IdempotencyKey string `json:"idempotencyKey"`
+	RuntimeTaskID        string `json:"runtimeTaskId"`
+	JobID                string `json:"jobId"`
+	ExecutionID          string `json:"executionId"`
+	Ref                  string `json:"ref"`
+	Stage                string `json:"stage"`
+	PartitionKey         string `json:"partitionKey"`
+	EntityRef            string `json:"entityRef"`
+	Carrier              string `json:"carrier"`
+	SourceRevision       string `json:"sourceRevision"`
+	IdempotencyKey       string `json:"idempotencyKey"`
+	JobSetEnvelopeDigest string `json:"jobSetEnvelopeDigest"`
+	JobSetDigest         string `json:"jobSetDigest"`
+	ActualTaskDigest     string `json:"actualTaskDigest"`
 }
 
 type dataContentProcessResponse struct {

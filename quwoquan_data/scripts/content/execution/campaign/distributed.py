@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import fcntl
+import time
 from pathlib import Path
 from typing import Any
 
@@ -10,12 +11,10 @@ from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
 from core.schema import assert_valid
 
 from content.execution.campaign.copy_ready import maybe_write_copy_ready_receipt
-from content.execution.campaign.external_input_runtime import (
-    freeze_execution_external_input_envelope,
-)
 from content.execution.campaign.fleet_transport import (
     resolve_campaign_fleet_transport,
 )
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS, LaneRunner
 from content.execution.campaign.lane_claim import (
     campaign_lane_claim_session,
     read_lane_claim,
@@ -36,11 +35,7 @@ from content.execution.campaign.plan import (
     wait_for_submissions,
     write_report,
 )
-from content.execution.campaign.process import (
-    CAMPAIGN_CARRIERS,
-    LaneRunner,
-    run_phase,
-)
+from content.execution.campaign.process import run_phase
 from content.execution.campaign.receipt import load_lane_receipt
 from content.execution.campaign.runtime import (
     campaign_run_session,
@@ -50,14 +45,14 @@ from content.execution.campaign.submission import campaign_root, load_submission
 from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
     CampaignRuntimePaths,
-    SourceCapsule,
     assert_frozen_main_tree,
-    prepare_lane_workspace,
-    prepare_source_capsule,
     release_lane_workspace,
 )
+from content.execution.campaign.distributed_workspace import (
+    prepare_distributed_capsule,
+    prepare_distributed_workspace,
+)
 from content.execution.identity import validate_execution_id
-
 
 def _load_distributed_plan(
     runtime: CampaignRuntimePaths,
@@ -82,7 +77,6 @@ def _load_distributed_plan(
     ):
         raise ValueError("distributed campaign plan identity or digest drift")
     return plan
-
 
 def _reuse_existing_frozen_campaign(
     runtime: CampaignRuntimePaths,
@@ -140,44 +134,52 @@ def _reuse_existing_frozen_campaign(
         raise ValueError("existing frozen campaign report identity drift")
     return path
 
-
-def _prepare_capsule(
-    runtime: CampaignRuntimePaths,
-    plan: dict[str, Any],
-) -> SourceCapsule:
-    return prepare_source_capsule(
-        runtime,
-        commit_sha=str(plan["gitCommitSha"]),
-        source_revision=str(plan["sourceRevision"]),
-        source_digest=str(plan["sourceDigest"]),
-        entity_catalog_digest=str(plan["entityCatalogDigest"]),
-        lane_external_inputs=dict(plan["laneExternalInputs"]),
-        external_inputs_digest=str(plan["externalInputsDigest"]),
-    )
-
-
-def _prepare_workspace(
+def _wait_for_parallel_review_claims(
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
+    *,
     plan: dict[str, Any],
-    submissions: dict[str, dict[str, Any]],
-    capsule: SourceCapsule,
-    carrier: str,
-) -> CampaignLaneWorkspace:
-    workspace = prepare_lane_workspace(
-        runtime,
-        capsule=capsule,
-        carrier=carrier,
-        execution_id=str(submissions[carrier]["executionId"]),
-    )
-    freeze_execution_external_input_envelope(
-        runtime=runtime,
-        root_execution_id=root_execution_id,
-        plan=plan,
-        submission=submissions[carrier],
-        workspace=workspace,
-    )
-    return workspace
+    timeout_seconds: float,
+) -> None:
+    """Start review only after every frozen lane owns its matching claim."""
+    distributed = plan["distributedRun"]
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        missing: list[str] = []
+        for carrier in CAMPAIGN_CARRIERS:
+            claim = read_lane_claim(runtime, root_execution_id, carrier)
+            if claim is None:
+                missing.append(carrier)
+                continue
+            if (
+                claim.get("rootExecutionId") != root_execution_id
+                or claim.get("planDigest") != plan["planDigest"]
+                or claim.get("campaignRunId") != distributed["campaignRunId"]
+                or claim.get("campaignGeneration")
+                != distributed["campaignGeneration"]
+                or claim.get("campaignFencingToken")
+                != distributed["campaignFencingToken"]
+                or claim.get("carrier") != carrier
+                or claim.get("executionId")
+                != plan["executionIds"].get(carrier)
+            ):
+                raise ValueError(
+                    f"{carrier} review barrier claim identity drift"
+                )
+            if claim.get("status") not in {"active", "starting", "running"}:
+                raise RuntimeError(
+                    f"{carrier} review barrier claim is not runnable: "
+                    f"{claim.get('status')}"
+                )
+        if not missing:
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                "campaign review barrier timed out waiting for lane claims: "
+                + ", ".join(sorted(missing))
+            )
+        time.sleep(min(0.05, remaining))
 
 
 def freeze_campaign(
@@ -233,9 +235,9 @@ def freeze_campaign(
             },
         )
         session.campaign_checkpoint(phase="capsule", plan_digest=plan_digest)
-        capsule = _prepare_capsule(runtime, plan)
+        capsule = prepare_distributed_capsule(runtime, plan)
         for carrier in CAMPAIGN_CARRIERS:
-            workspace = _prepare_workspace(
+            workspace = prepare_distributed_workspace(
                 runtime,
                 root_id,
                 plan,
@@ -290,8 +292,11 @@ def run_campaign_lane(
         raise ValueError(f"campaign carrier is invalid: {carrier}")
     runtime = runtime_paths or CampaignRuntimePaths.defaults()
     policy = load_runtime_policy(DEFAULT_RUNTIME_PROFILE_ID)
-    timeout = lane_timeout_seconds or policy.campaign_lane_timeout_seconds
     plan = _load_distributed_plan(runtime, root_id)
+    timeout = (
+        lane_timeout_seconds
+        or policy.campaign_lane_timeout_seconds_for_scale(str(plan["scale"]))
+    )
     submissions = load_submissions(root_id, root=runtime.campaigns_root)
     if set(submissions) != set(CAMPAIGN_CARRIERS):
         raise ValueError("distributed campaign submissions are incomplete")
@@ -313,8 +318,8 @@ def run_campaign_lane(
         commit_sha=str(plan["gitCommitSha"]),
         source_digest=str(plan["sourceDigest"]),
     )
-    capsule = _prepare_capsule(runtime, plan)
-    workspace = _prepare_workspace(
+    capsule = prepare_distributed_capsule(runtime, plan)
+    workspace = prepare_distributed_workspace(
         runtime,
         root_id,
         plan,
@@ -351,6 +356,12 @@ def run_campaign_lane(
                 expected_quota=int(submissions[carrier]["quota"]),
             )
             if review is None:
+                _wait_for_parallel_review_claims(
+                    runtime,
+                    root_id,
+                    plan=plan,
+                    timeout_seconds=timeout,
+                )
                 reviewed = run_phase(
                     {carrier: workspace},
                     {carrier: submissions[carrier]},
@@ -442,12 +453,12 @@ def finalize_campaign(
         submissions = load_submissions(root_id, root=runtime.campaigns_root)
         if set(submissions) != set(CAMPAIGN_CARRIERS):
             raise ValueError("distributed campaign submissions are incomplete")
-        capsule = _prepare_capsule(runtime, plan)
+        capsule = prepare_distributed_capsule(runtime, plan)
         lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
         failure_rows: list[str] = []
         for carrier in CAMPAIGN_CARRIERS:
             execution_id = str(submissions[carrier]["executionId"])
-            workspace = _prepare_workspace(
+            workspace = prepare_distributed_workspace(
                 runtime,
                 root_id,
                 plan,

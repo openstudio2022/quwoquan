@@ -34,9 +34,7 @@ fields:
   type: object
 - name: labels
   type: object
-  description: 多目标标签如 click
-  like: null
-  dwell_s: null
+  description: 多目标标签如 click、like、dwell_s
 - name: ts
   type: timestamp
 - name: featureSnapshotAt

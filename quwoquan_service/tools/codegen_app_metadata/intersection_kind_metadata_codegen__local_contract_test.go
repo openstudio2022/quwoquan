@@ -71,10 +71,6 @@ func TestCanonicalIntersectionMetadataHasLayeredOwnersWithoutLegacyOutput(
 			appDir,
 			"intersection_display_metadata.g.dart",
 		),
-		"actionKeyMeta": recommendationFeatureProfilePresentationOutputPath(
-			appDir,
-			"intersection_kind_metadata.g.dart",
-		),
 	}
 	outputs := map[string]string{}
 	for name, path := range paths {
@@ -171,23 +167,12 @@ func TestCanonicalIntersectionMetadataHasLayeredOwnersWithoutLegacyOutput(
 		t.Fatal("presentation metadata regenerates dead kind/tone fields")
 	}
 
-	for _, symbol := range []string{
-		"class IntersectionActionKeyMeta",
-		"intersectionActionKeyMeta",
-		"intersectionActionKeys",
-	} {
-		if !strings.Contains(outputs["actionKeyMeta"], symbol) {
-			t.Fatalf("action key metadata misses %q", symbol)
-		}
-	}
-	for _, forbidden := range []string{
-		"iconKey",
-		"visualTone",
-		"IntersectionKindDisplayMetadata",
-	} {
-		if strings.Contains(outputs["actionKeyMeta"], forbidden) {
-			t.Fatalf("action key metadata leaks %q", forbidden)
-		}
+	legacy := recommendationFeatureProfilePresentationOutputPath(
+		appDir,
+		"intersection_kind_metadata.g.dart",
+	)
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatalf("retired intersection metadata output was emitted: %v", err)
 	}
 
 	for _, symbol := range []string{
@@ -442,14 +427,51 @@ func TestIntersectionMetadataRenderingIsMapOrderIndependent(t *testing.T) {
 		{"presentation", func(value *recintersectionmeta.Registry) string {
 			return renderIntersectionDisplayMetadataDart(sourcePath, value)
 		}},
-		{"actionKeyMeta", func(value *recintersectionmeta.Registry) string {
-			return renderIntersectionActionKeyMetadataDart(sourcePath, value)
-		}},
 	}
 	for _, renderer := range renderers {
 		if got, want := renderer.run(&copy), renderer.run(registry); got != want {
 			t.Fatalf("%s rendering depends on Go map insertion order", renderer.name)
 		}
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
+func TestIntersectionGeneratedVocabularyAndPoliciesRejectUnknownValues(t *testing.T) {
+	sourcePath, registry, _ := loadIntersectionGeneratedTestRegistry(t)
+	vocabulary := renderIntersectionContractVocabularyDart(sourcePath, registry)
+	application := renderIntersectionClientPolicyDart(sourcePath, registry)
+	presentation := renderIntersectionDisplayMetadataDart(sourcePath, registry)
+
+	// Every package-owned wire enum must reject unknown wire values. Returning a
+	// default enum would hide contract drift and recreate the retired fallback.
+	if got, want := strings.Count(
+		vocabulary,
+		"_ => throw FormatException('$path has an invalid enum value')",
+	), 9; got != want {
+		t.Fatalf("wire enum unknown guards = %d, want %d", got, want)
+	}
+	for name, payload := range map[string]string{
+		"application":  application,
+		"presentation": presentation,
+	} {
+		for _, forbidden := range []string{
+			"?? IntersectionObjectKind.",
+			"?? IntersectionActionKey.",
+			"defaultIntersection",
+		} {
+			if strings.Contains(payload, forbidden) {
+				t.Fatalf("%s output contains unknown-value fallback %q", name, forbidden)
+			}
+		}
+	}
+	if !strings.Contains(application, "_ => null,") {
+		t.Fatal("unknown objectType must remain non-routable")
+	}
+	if !strings.Contains(
+		presentation,
+		"return intersectionKindDisplayMetadata[kind.trim()];",
+	) {
+		t.Fatal("unknown display kind must not receive a default presentation")
 	}
 }
 
@@ -545,7 +567,7 @@ func TestIntersectionDimensionHasOnePackageOwner(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
-func TestIntersectionGeneratedTargetsOwnCanonicalOutputsAndRetireLegacy(t *testing.T) {
+func TestIntersectionGeneratedTargetsRetireLegacyOutput(t *testing.T) {
 	appDir := t.TempDir()
 	application := recommendationFeatureProfileApplicationOutputPath(
 		appDir,
@@ -561,10 +583,13 @@ func TestIntersectionGeneratedTargetsOwnCanonicalOutputsAndRetireLegacy(t *testi
 	} {
 		if relative, err := filepath.Rel(appDir, target); err != nil {
 			t.Fatalf("%s target relative path: %v", label, err)
-		} else if !strings.HasPrefix(
+		} else if layer := map[string]string{
+			"application":  "application",
+			"presentation": "presentation",
+		}[label]; !strings.HasPrefix(
 			filepath.ToSlash(relative),
 			"lib/service/recommendation_service/recommendation/"+
-				"recommendation_feature_profile_view/"+label+"/generated/",
+				"recommendation_feature_profile_view/"+layer+"/generated/",
 		) {
 			t.Fatalf("%s target = %q", label, target)
 		}
@@ -586,7 +611,10 @@ func TestIntersectionGeneratedTargetsOwnCanonicalOutputsAndRetireLegacy(t *testi
 		}
 	}
 
-	legacy := "lib/cloud/runtime/generated/recommendation/" +
+	legacyRuntimePath := "lib/cloud/runtime/generated/recommendation/" +
+		"intersection_kind_metadata.g.dart"
+	activeLegacyPath := "lib/service/recommendation_service/recommendation/" +
+		"recommendation_feature_profile_view/presentation/generated/" +
 		"intersection_kind_metadata.g.dart"
 	activeExact := map[string]struct{}{}
 	for _, path := range appGeneratedExactOutputs {
@@ -596,11 +624,14 @@ func TestIntersectionGeneratedTargetsOwnCanonicalOutputsAndRetireLegacy(t *testi
 	for _, path := range appRetiredGeneratedExactOutputs {
 		retiredExact[path] = struct{}{}
 	}
-	if _, ok := activeExact[legacy]; ok {
-		t.Fatal("legacy intersection exact output remains active after App cutover")
+	if _, retired := retiredExact[activeLegacyPath]; !retired {
+		t.Fatal("same-object legacy output is not retired after consumer cutover")
 	}
-	if _, retired := retiredExact[legacy]; !retired {
-		t.Fatal("legacy intersection exact output is not retired after App cutover")
+	if _, ok := activeExact[legacyRuntimePath]; ok {
+		t.Fatal("old runtime intersection output remains active after App cutover")
+	}
+	if _, retired := retiredExact[legacyRuntimePath]; !retired {
+		t.Fatal("old runtime intersection output is not retired after App cutover")
 	}
 }
 

@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/message-home-commercial-ia/spec.md#gwt-001
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
@@ -93,7 +95,7 @@ void main() {
       expect(directState.rows.single.unreadCount, 0);
     });
 
-    test('远端失败时用本机最近聊天兜底并标记 copyKey', () async {
+    test('远端刷新失败保留 last-confirmed 并进入错误态', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
         overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
@@ -104,14 +106,84 @@ void main() {
       repo.failRequests = true;
       container.read(messageHomeRowsRefreshProvider('all'))();
 
-      final state = await container.read(messageHomeRowsProvider('all').future);
+      await expectLater(
+        container.read(messageHomeRowsProvider('all').future),
+        throwsA(isA<StateError>()),
+      );
+      final state = container.read(messageHomeRowsProvider('all'));
 
-      expect(state.rows.single.conversationId, 'conv_group_01');
-      expect(state.isCacheFallback, isTrue);
-      expect(state.copyKey, 'chatListCacheFallback');
-      expect(state.cacheFallbackError, isA<StateError>());
+      expect(state.hasError, isTrue);
+      expect(state.hasValue, isTrue);
+      expect(state.value?.rows.single.conversationId, 'conv_group_01');
+      expect(state.value?.isCacheFallback, isFalse);
+    });
+
+    test('被失效的迟到响应不能覆盖较新的 authoritative 结果', () async {
+      final repo = _ControlledChatRepository();
+      final container = ProviderContainer(
+        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+
+      final stale = Completer<List<MessageHomeRow>>();
+      final fresh = Completer<List<MessageHomeRow>>();
+      repo.responses.addAll(<Completer<List<MessageHomeRow>>>[stale, fresh]);
+
+      final staleFuture = container.read(messageHomeRowsProvider('all').future);
+      await Future<void>.delayed(Duration.zero);
+      container.read(messageHomeRowsRefreshProvider('all'))();
+      final freshFuture = container.read(messageHomeRowsProvider('all').future);
+      fresh.complete(<MessageHomeRow>[
+        _messageHomeRow(
+          id: 'conv_fresh',
+          kind: 'conversation',
+          conversationId: 'conv_fresh',
+          title: '最新会话',
+          summary: 'authoritative',
+        ),
+      ]);
+      expect((await freshFuture).rows.single.conversationId, 'conv_fresh');
+
+      stale.complete(<MessageHomeRow>[
+        _messageHomeRow(
+          id: 'conv_stale',
+          kind: 'conversation',
+          conversationId: 'conv_stale',
+          title: '迟到会话',
+          summary: 'stale',
+        ),
+      ]);
+      await staleFuture;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        container
+            .read(messageHomeRowsProvider('all'))
+            .value
+            ?.rows
+            .single
+            .conversationId,
+        'conv_fresh',
+      );
     });
   });
+}
+
+final class _ControlledChatRepository extends MockChatRepository {
+  final List<Completer<List<MessageHomeRow>>> responses =
+      <Completer<List<MessageHomeRow>>>[];
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 100,
+  }) {
+    if (responses.isEmpty) {
+      throw StateError('missing controlled response');
+    }
+    return responses.removeAt(0).future;
+  }
 }
 
 final class _FakeChatRepository extends MockChatRepository {

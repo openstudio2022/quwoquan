@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.local_device_trust import install_device_trust
+from quwoquan_ops.cli.lib.local_runtime_consumer_lease import active_consumer_leases
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
@@ -564,6 +565,64 @@ def enable_android_adb_reverse(
     if not adb:
         raise RuntimeError("GATE_BLOCK: adb not found in PATH; cannot prepare Android physical device reverse tunnel.")
     ports = local_target_ports(target_name, topology=topology)
+    manifest = topology or load_environment_topology()
+    local_targets = sorted(
+        {
+            target
+            for target in DEV_UP_APP_TARGETS.values()
+            if target and target != "prod-hosted"
+        }
+    )
+    for other_target in local_targets:
+        if other_target == target_name:
+            continue
+        for lease in active_consumer_leases(other_target, adb_path=adb):
+            if str(lease.get("device") or "").strip() == device_id:
+                raise RuntimeError(
+                    "GATE_BLOCK: Android device has an active consumer lease for "
+                    f"{other_target}; release that app session before switching to {target_name}."
+                )
+
+    canonical_ports: set[int] = set()
+    for local_target in local_targets:
+        try:
+            candidate = get_target(manifest, local_target)
+        except (KeyError, ValueError):
+            continue
+        profile_name = str(candidate.get("portProfile") or "").strip()
+        if profile_name:
+            canonical_ports.update(
+                int(port)
+                for port in profile_ports(load_port_manifest(), profile_name).values()
+            )
+    desired_ports = set(ports)
+    listed_before = subprocess.run(
+        [adb, "-s", device_id, "reverse", "--list"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if listed_before.returncode != 0:
+        detail = (listed_before.stderr or listed_before.stdout or "").strip()
+        raise RuntimeError(
+            f"GATE_BLOCK: cannot inspect existing adb reverse mappings for {device_id}: "
+            f"{detail or 'unknown adb failure'}"
+        )
+    existing_ports = _same_port_adb_reverse_mappings(listed_before.stdout)
+    stale_ports = sorted((existing_ports & canonical_ports) - desired_ports)
+    for port in stale_ports:
+        removed = subprocess.run(
+            [adb, "-s", device_id, "reverse", "--remove", f"tcp:{port}"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if removed.returncode != 0:
+            detail = (removed.stderr or removed.stdout or "").strip()
+            raise RuntimeError(
+                f"GATE_BLOCK: cannot remove stale adb reverse tcp:{port} for {device_id}: "
+                f"{detail or 'unknown adb failure'}"
+            )
     for port in ports:
         probe = subprocess.run(
             [adb, "-s", device_id, "reverse", f"tcp:{port}", f"tcp:{port}"],
@@ -600,6 +659,28 @@ def enable_android_adb_reverse(
             "GATE_BLOCK: adb reverse verification is incomplete for "
             f"{device_id}; missing ports={','.join(str(port) for port in missing)}"
         )
+    remaining_stale = sorted(
+        (_same_port_adb_reverse_mappings(listed.stdout) & canonical_ports)
+        - desired_ports
+    )
+    if remaining_stale:
+        raise RuntimeError(
+            "GATE_BLOCK: stale cross-target adb reverse mappings remain for "
+            f"{device_id}: {','.join(str(port) for port in remaining_stale)}"
+        )
+    return ports
+
+
+def _same_port_adb_reverse_mappings(output: str) -> set[int]:
+    ports: set[int] = set()
+    for line in output.splitlines():
+        endpoints = [part for part in line.split() if part.startswith("tcp:")]
+        if len(endpoints) < 2 or endpoints[-2] != endpoints[-1]:
+            continue
+        try:
+            ports.add(int(endpoints[-1].removeprefix("tcp:")))
+        except ValueError:
+            continue
     return ports
 
 

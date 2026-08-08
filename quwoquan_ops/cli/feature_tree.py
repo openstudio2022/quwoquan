@@ -34,6 +34,31 @@ SPEC_REF_RE = re.compile(
     r"specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md#[A-Za-z0-9_.%\-\u4e00-\u9fff]+"
 )
 REPO_SPEC_PATH_RE = re.compile(r"`(specs/[A-Za-z0-9_./-]+\.md)(?:#[^`]*)?`")
+# 复合验收的结果子句：结果角色的顶层 bullet 是子句的载体。角色只由行首关键字决定，
+# `GIVEN`/`WHEN`/`条件：` 是前置条件，`AND` 不表达独立性、只继承最近一条角色 bullet 的角色，
+# 因此 `GIVEN` 后的 `AND` 仍是前置条件，`THEN` 后的 `AND` 是另一条结果。
+TOP_BULLET_RE = re.compile(r"^-\s+(\S.*)$")
+NESTED_BULLET_RE = re.compile(r"^\s+[-*]\s")
+PRECONDITION_BULLET_RE = re.compile(r"^(?:GIVEN|WHEN)\b|^条件：")
+INHERITING_BULLET_RE = re.compile(r"^AND\b")
+# 一个结果 bullet 内部的并列独立结果分隔符。
+#
+# 中文技术写作里，顶层并列小句必带前置停顿：`；` 本身就是并列小句分隔符，`，` 紧跟
+# 并列连词同理。而单一结果的自然表述——定语并列（`非 mutual 且未拉黑的用户`）、
+# 形容词并列（`明确且可恢复的终态`、`有序且无重复`）——从不在连词前带停顿。因此以
+# 「前置停顿 + 并列连词」为界，能切出真正相互独立、需要各自观测才能证伪的结果，
+# 又不会把同一个结果的多个属性拆成噪音。
+#
+# `以及` 在本仓库只用于并列名词短语（`answerText，以及状态、trace 与恢复状态`），
+# 因此不作为分隔符；`并` 排除 `并发/并行/并列/并存` 等构词，避免切开名词。
+OUTCOME_CLAUSE_SPLIT_RE = re.compile(r"；|，\s*(?:且|并且|同时|并(?![发行列存]))")
+CODE_SPAN_RE = re.compile(r"`[^`]*`")
+ACCEPTANCE_SECTION_RE = re.compile(
+    r"^#{3,6}\s+((?:UAT|DOM|SIT|GWT)-\d{3,})\b.*?$([\s\S]*?)(?=^#{1,6}\s|\Z)", re.MULTILINE
+)
+# 子句级 spec_ref：`...spec.md#gwt-004.t2` 绑定该锚点第 2 个结果子句。
+CLAUSE_ANCHOR_RE = re.compile(r"^((?:uat|dom|sit|gwt)-\d{3,})\.t(\d+)$")
+OPEN_BLOCK_RE = re.compile(r"^###\s+(OPEN-\d{3,})\b[\s\S]*?(?=^###\s|^##\s|\Z)", re.MULTILINE)
 FORBIDDEN_GLOBALS = (
     "tree_index.yaml",
     "journey_scenario_registry.yaml",
@@ -170,25 +195,239 @@ def acceptance_ids(path: Path) -> list[str]:
     return [f"{kind}-{number}" for kind, number in ACCEPTANCE_ID_RE.findall(path.read_text(encoding="utf-8"))]
 
 
+def outcome_bullets(body: str) -> list[str]:
+    """切出锚点正文中结果角色的顶层 bullet，含缩进续行。
+
+    角色完全由行首关键字决定，不推断语义；嵌套子 bullet 与前置条件 bullet 都不承载
+    结果子句。
+    """
+
+    bullets: list[str] = []
+    role_is_outcome = True
+    current: list[str] | None = None
+
+    def flush() -> None:
+        nonlocal current
+        if current is not None:
+            bullets.append(" ".join(current))
+            current = None
+
+    for line in body.splitlines():
+        match = TOP_BULLET_RE.match(line)
+        if match:
+            flush()
+            bullet = match.group(1)
+            if INHERITING_BULLET_RE.match(bullet):
+                pass
+            elif PRECONDITION_BULLET_RE.match(bullet):
+                role_is_outcome = False
+            else:
+                role_is_outcome = True
+            if role_is_outcome:
+                current = [bullet]
+            continue
+        if current is None or NESTED_BULLET_RE.match(line):
+            continue
+        if line.strip() and line.startswith((" ", "\t")):
+            current.append(line.strip())
+        else:
+            flush()
+    flush()
+    return bullets
+
+
+def outcome_sub_clauses(bullet: str) -> list[str]:
+    """把一个结果 bullet 拆成其中相互独立的结果。
+
+    折叠漏口：把多个相互独立的结果用 `；` 或 `，且` 折叠进同一个 bullet，会让整组
+    结果只占一个子句位——测试覆盖其中任意一个就足以让全部结果显示为已绑定，剩下的
+    结果实际无人验证却呈现为已闭合。按并列分隔符切分后，每个独立结果各占一个可裁定
+    的子句位。
+
+    反引号代码片段整体屏蔽，标识符里的标点不会被当成分隔符。
+    """
+
+    masked = CODE_SPAN_RE.sub(lambda match: "\x00" * len(match.group(0)), bullet)
+    pieces: list[str] = []
+    start = 0
+    for match in OUTCOME_CLAUSE_SPLIT_RE.finditer(masked):
+        pieces.append(bullet[start : match.start()])
+        start = match.end()
+    pieces.append(bullet[start:])
+    return [piece for piece in (item.strip() for item in pieces) if piece]
+
+
+def outcome_clause_count(body: str) -> int:
+    """统计锚点正文的结果子句数。
+
+    判据只读行首角色关键字与并列分隔符，不推断语义，因此同一段文本任何时候都得到
+    同一个数；也不存在「把独立结果折叠进 `AND`、`；` 或 `，且` 以规避子句级绑定」
+    的写法。
+    """
+
+    return sum(len(outcome_sub_clauses(bullet)) for bullet in outcome_bullets(body))
+
+
+def acceptance_clause_counts_in_text(text: str) -> dict[str, int]:
+    """从验收锚点正文派生结果子句数量。
+
+    子句 ID 由 spec 文本自身决定（第 N 条结果子句即 `tN`），不额外声明数量，
+    避免出现与正文并列的第二真相源。
+    """
+
+    return {
+        match.group(1): outcome_clause_count(match.group(2))
+        for match in ACCEPTANCE_SECTION_RE.finditer(text)
+    }
+
+
+def acceptance_clause_counts(path: Path) -> dict[str, int]:
+    if not path.is_file():
+        return {}
+    return acceptance_clause_counts_in_text(path.read_text(encoding="utf-8"))
+
+
+def open_completion_field(block: str) -> str:
+    """返回 OPEN 的完成判定全文，含缩进续行与子 bullet。
+
+    完成判定经常写成「一句总述 + 逐条证据子 bullet」，锚点引用往往落在子 bullet 里。
+    只读首行会同时造成两种错判：把已引用锚点的 OPEN 误报为不可裁定，以及放过子
+    bullet 里引用了不存在锚点的 OPEN。
+    """
+
+    match = re.search(
+        r"^- 完成判定：(.*(?:\n(?:[ \t]+\S.*|[ \t]*$))*)", block, re.MULTILINE
+    )
+    return match.group(1) if match else ""
+
+
+def acceptance_refs_in_open_text(text: str) -> set[str]:
+    refs: set[str] = set()
+    for block in open_blocks_in_text(text).values():
+        refs.update(
+            re.findall(r"\b(?:UAT|DOM|SIT|GWT)-\d{3,}\b", open_completion_field(block))
+        )
+    return refs
+
+
 def acceptance_refs_in_open(path: Path) -> set[str]:
     """返回同一 spec 的 OPEN 完成判定所引用的尚未闭合验收。"""
 
     if not path.is_file():
         return set()
-    text = path.read_text(encoding="utf-8")
-    refs: set[str] = set()
-    for match in re.finditer(r"^###\s+OPEN-\d{3,}\b[\s\S]*?(?=^###\s+OPEN-\d{3,}\b|\Z)", text, re.MULTILINE):
-        block = match.group(0)
-        done = re.search(r"^- 完成判定：(.+)$", block, re.MULTILINE)
-        if done:
-            refs.update(re.findall(r"\b(?:UAT|DOM|SIT|GWT)-\d{3,}\b", done.group(1)))
-    return refs
+    return acceptance_refs_in_open_text(path.read_text(encoding="utf-8"))
 
 
 def invalid_acceptance_refs_in_open(path: Path) -> set[str]:
     """返回 OPEN 完成判定中不存在于同一 spec 的验收锚点。"""
 
     return acceptance_refs_in_open(path) - set(acceptance_ids(path))
+
+
+def open_blocks_in_text(text: str) -> dict[str, str]:
+    """返回 OPEN 编号到其正文块的映射。
+
+    块尾空白随后续内容变化（末块到 `\\Z`，非末块到下一个标题），必须归一化，
+    否则在既有 OPEN 后面插入新 OPEN 会把前者误判为「本次改动过」。
+    """
+
+    return {
+        match.group(1): match.group(0).rstrip()
+        for match in OPEN_BLOCK_RE.finditer(text)
+    }
+
+
+def anchorless_opens_in_text(text: str) -> set[str]:
+    """返回完成判定不引用任何验收锚点的 OPEN。
+
+    这类 OPEN 结构上不可裁定：没有任何证据能证明它关闭，也不会被双向门禁看见，
+    因此既不能推动实现，也不会因为长期悬空而暴露。
+    """
+
+    anchorless: set[str] = set()
+    for open_id, block in open_blocks_in_text(text).items():
+        completion = open_completion_field(block)
+        if not completion or not re.search(r"\b(?:UAT|DOM|SIT|GWT)-\d{3,}\b", completion):
+            anchorless.add(open_id)
+    return anchorless
+
+
+def open_anchor_ratchet_targets(spec_rel: str) -> set[str]:
+    """返回本次 Git 增量中新增或改写的 OPEN。
+
+    与子句级棘轮同一思路：存量不被追溯，代价只由真正动到该 OPEN 的改动承担，
+    因此不需要 allowlist 或豁免名单。
+    """
+
+    path = REPO_ROOT / spec_rel
+    if not path.is_file():
+        return set()
+    before = open_blocks_in_text(git_head_text(spec_rel))
+    after = open_blocks_in_text(path.read_text(encoding="utf-8"))
+    return {open_id for open_id, block in after.items() if before.get(open_id) != block}
+
+
+def clause_binding_transitions(spec_rel: str) -> set[str]:
+    """返回本次 Git 增量中「开始声称已闭合」的验收锚点。
+
+    棘轮触发点，覆盖三种声称闭合的动作：认领它的 OPEN 被删除、直接新增一个不挂
+    OPEN 的锚点、以及改写一个已声称闭合锚点的正文。存量锚点不被追溯，代价只由
+    真正做出闭合声称的改动承担。
+    """
+
+    head = git_head_text(spec_rel)
+    path = REPO_ROOT / spec_rel
+    now = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if not now:
+        return set()
+    before_pending = acceptance_refs_in_open_text(head)
+    after_pending = acceptance_refs_in_open_text(now)
+    before_clauses = acceptance_clause_counts_in_text(head)
+    after_clauses = acceptance_clause_counts_in_text(now)
+    transitions: set[str] = set()
+    for anchor_id, count in after_clauses.items():
+        if anchor_id in after_pending:
+            continue
+        was_pending = anchor_id in before_pending
+        newly_added = anchor_id not in before_clauses
+        body_changed = anchor_id in before_clauses and before_clauses[anchor_id] != count
+        if was_pending or newly_added or body_changed:
+            transitions.add(anchor_id)
+    return transitions
+
+
+def validate_acceptance_clause_coverage(
+    spec_rel: str,
+    clause_counts: dict[str, int],
+    pending: set[str],
+    bound_clauses: dict[str, set[int]],
+    ratchet_anchors: set[str],
+) -> list[str]:
+    """校验复合验收的子句级覆盖。
+
+    - 精度不可半途：锚点一旦出现任一子句级绑定，其全部 THEN 组必须都被绑定，
+      禁止只绑定容易验证的那一条却对外表现为精确覆盖。
+    - 闭合即需精度：本次增量中开始声称已闭合的复合锚点（THEN 组 >= 2）必须逐条绑定。
+    """
+
+    errors: list[str] = []
+    for anchor_id, count in sorted(clause_counts.items()):
+        if anchor_id in pending or count < 2:
+            continue
+        bound = bound_clauses.get(anchor_id, set())
+        expected = set(range(1, count + 1))
+        missing = sorted(expected - bound)
+        if bound and missing:
+            errors.append(
+                f"{spec_rel}#{anchor_id.lower()}: 子句级绑定不完整，"
+                f"共 {count} 条结果子句，缺 {', '.join(f't{index}' for index in missing)}"
+            )
+        elif not bound and anchor_id in ratchet_anchors:
+            errors.append(
+                f"{spec_rel}#{anchor_id.lower()}: 声称已闭合的复合验收共 {count} 条结果子句，"
+                f"缺少子句级 spec_ref（需 {anchor_id.lower()}.t1..t{count} 逐条绑定）"
+            )
+    return errors
 
 
 def open_item_details(node: Node) -> list[dict[str, str | int]]:
@@ -1093,20 +1332,57 @@ def command_verify(args: argparse.Namespace) -> int:
 
     refs_by_test = test_spec_refs()
     referenced: set[str] = set()
+    bound_clauses: dict[str, dict[str, set[int]]] = {}
     for test, refs in refs_by_test.items():
         for ref in refs:
             target_text, _, anchor = ref.partition("#")
             target = REPO_ROOT / target_text
+            clause_match = CLAUSE_ANCHOR_RE.match(anchor)
+            if clause_match:
+                anchor_id = clause_match.group(1).upper()
+                index = int(clause_match.group(2))
+                count = acceptance_clause_counts(target).get(anchor_id, 0)
+                if not target.is_file() or count == 0:
+                    errors.append(f"{test}: 无效 spec_ref `{ref}`")
+                elif not 1 <= index <= count:
+                    errors.append(
+                        f"{test}: 悬空子句 spec_ref `{ref}`，该验收只有 {count} 条结果子句"
+                    )
+                else:
+                    referenced.add(f"{target_text}#{clause_match.group(1)}")
+                    bound_clauses.setdefault(target_text, {}).setdefault(anchor_id, set()).add(index)
+                continue
             if not target.is_file() or anchor not in headings(target):
                 errors.append(f"{test}: 无效 spec_ref `{ref}`")
             else:
                 referenced.add(ref)
+    changed_specs = {
+        rel for rel in git_changed_paths()
+        if rel.startswith("specs/feature-tree/") and rel.endswith("spec.md")
+    }
     for node in nodes:
         pending = acceptance_refs_in_open(node.spec)
         for acceptance_id in acceptance_ids(node.spec):
             ref = canonical_spec_ref(node.spec, acceptance_id)
             if ref not in referenced and acceptance_id not in pending:
                 errors.append(f"{node.rel}#{acceptance_id.lower()}: 已支持验收缺少真实测试/可执行门 spec_ref")
+        errors.extend(
+            validate_acceptance_clause_coverage(
+                node.rel,
+                acceptance_clause_counts(node.spec),
+                pending,
+                bound_clauses.get(node.rel, {}),
+                clause_binding_transitions(node.rel) if node.rel in changed_specs else set(),
+            )
+        )
+        if node.rel in changed_specs:
+            anchorless = anchorless_opens_in_text(node.spec.read_text(encoding="utf-8"))
+            for open_id in sorted(anchorless & open_anchor_ratchet_targets(node.rel)):
+                errors.append(
+                    f"{node.rel}#{open_id.lower()}: 完成判定未引用任何验收锚点，"
+                    "该 OPEN 结构上不可裁定；请引用 GWT/SIT/DOM/UAT（必要时含子句 .tN），"
+                    "缺对应验收时先补锚点"
+                )
 
     if args.changes:
         report_args = argparse.Namespace()
@@ -1124,6 +1400,25 @@ def command_verify(args: argparse.Namespace) -> int:
         return 1
     counts = {level: sum(node.level == level for node in nodes) for level in range(4)}
     print(f"OK: directory-native feature tree verified (AppRoot={counts[0]}, L1={counts[1]}, L2={counts[2]}, L3={counts[3]})")
+    residual = 0
+    for node in nodes:
+        pending = acceptance_refs_in_open(node.spec)
+        bound = bound_clauses.get(node.rel, {})
+        residual += sum(
+            1
+            for anchor_id, count in acceptance_clause_counts(node.spec).items()
+            if count >= 2 and anchor_id not in pending and not bound.get(anchor_id)
+        )
+    print(f"RATCHET: 声称已闭合但尚无子句级绑定的复合验收 {residual} 条（只减不增，改动即需补齐）")
+    anchorless_total = sum(
+        len(anchorless_opens_in_text(node.spec.read_text(encoding="utf-8")))
+        for node in nodes
+        if node.spec.is_file()
+    )
+    print(
+        f"RATCHET: 完成判定不引用任何验收锚点、结构上不可裁定的 OPEN {anchorless_total} 条"
+        "（只减不增，改动即需补齐）"
+    )
     return 0
 
 

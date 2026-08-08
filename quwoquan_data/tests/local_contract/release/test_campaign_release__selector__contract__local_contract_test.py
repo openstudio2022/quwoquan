@@ -17,6 +17,7 @@ from content.release.canonical.campaign_release import (
 )
 from core.release_layout import payload_digest
 from core.runtime_policy import runtime_profile_digest
+from core.schema import assert_valid
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 CARRIERS = ("homepage", "article", "image", "video")
@@ -108,6 +109,136 @@ def _published_refs(carrier: str) -> dict[str, list[str]]:
     }
 
 
+def _scale_source_pool(
+    output_root: Path,
+    *,
+    source_revision: str,
+) -> tuple[dict[str, object], str, dict[str, dict[str, object]]]:
+    evidence_root = output_root / "data/local/workspace/scale-source-pools/m100/evidence"
+    candidates: list[dict[str, object]] = []
+    object_refs = {
+        "homepage": "entities/地点/景区/测试实体",
+        "article": "posts/article/测试/article-001/001",
+        "image": "posts/image/测试/image-001/001",
+        "video": "posts/video/测试/video-001/001",
+    }
+
+    def evidence(carrier: str, kind: str) -> tuple[str, str, str]:
+        ref = f"{carrier}/{kind}.json"
+        document = {
+            "schema": f"quwoquan_data.test_{kind}_evidence",
+            "carrier": carrier,
+            "objectRef": object_refs[carrier],
+        }
+        path = evidence_root / ref
+        _write(path, document)
+        return ref, _digest(document), _file_digest(path)
+
+    for carrier in CARRIERS:
+        source_unit = evidence(carrier, "source_unit")
+        acquisition = evidence(carrier, "acquisition")
+        rights = evidence(carrier, "rights")
+        quality = evidence(carrier, "quality")
+        playability = evidence(carrier, "playability") if carrier == "video" else None
+        candidates.append(
+            {
+                "candidateId": f"{carrier}-candidate-001",
+                "carrier": carrier,
+                "objectRef": object_refs[carrier],
+                "entityRef": "地点/景区/测试实体",
+                "observedEntityRef": "地点/景区/测试实体",
+                "sourceRevision": source_revision,
+                "sourceDigest": SOURCE_DIGEST,
+                "entityCatalogDigest": CATALOG_DIGEST,
+                "sourceUnitRef": source_unit[0],
+                "sourceUnitDigest": source_unit[1],
+                "sourceUnitFileSha256": source_unit[2],
+                "provider": "fixture_provider",
+                "contentSha256": "sha256:" + {
+                    "homepage": "1",
+                    "article": "2",
+                    "image": "3",
+                    "video": "4",
+                }[carrier]
+                * 64,
+                "acquisitionStatus": "acquired",
+                "acquisitionRef": acquisition[0],
+                "acquisitionDigest": acquisition[1],
+                "acquisitionFileSha256": acquisition[2],
+                "rightsStatus": "verified",
+                "distributionDecision": "commercial_allowed",
+                "rightsRef": rights[0],
+                "rightsDigest": rights[1],
+                "rightsFileSha256": rights[2],
+                "qualityStatus": "passed",
+                "qualityRef": quality[0],
+                "qualityDigest": quality[1],
+                "qualityFileSha256": quality[2],
+                "generated": False,
+                "playabilityRef": None if playability is None else playability[0],
+                "playabilityDigest": None if playability is None else playability[1],
+                "playabilityFileSha256": None if playability is None else playability[2],
+                "videoReadiness": None
+                if carrier != "video"
+                else {
+                    "playable": True,
+                    "motion": True,
+                    "premiumEligible": True,
+                    "playCount": 100,
+                    "likeCount": 20,
+                    "commentCount": 5,
+                    "shareCount": 3,
+                    "favoriteCount": 7,
+                    "observedAt": "2026-08-05T00:00:00+00:00",
+                    "popularityPercentile": 0.9,
+                    "comparisonBucket": {
+                        "provider": "fixture_provider",
+                        "topic": "fixture-topic",
+                        "timeBucket": "2026-08-05",
+                        "candidateCount": 2,
+                    },
+                },
+            }
+        )
+    pool_stable: dict[str, object] = {
+        "schema": "quwoquan_data.scale_source_pool",
+        "poolId": "campaign-release-selector-m100-pool",
+        "targetScale": "M100",
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "createdAt": "2026-08-05T00:00:00+00:00",
+        "requiredNewCandidateCounts": [
+            {"carrier": carrier, "minimumCandidateCount": 1}
+            for carrier in CARRIERS
+        ],
+        "candidates": candidates,
+    }
+    pool = {**pool_stable, "planDigest": _digest(pool_stable)}
+    assert_valid(pool, "source", "scale_source_pool", label="fixture scale source pool")
+    pool_path = output_root / "data/local/workspace/scale-source-pools/m100/plan.json"
+    _write(pool_path, pool)
+    binding: dict[str, object] = {
+        "poolId": pool["poolId"],
+        "targetScale": pool["targetScale"],
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "planRef": pool_path.relative_to(output_root).as_posix(),
+        "planDigest": pool["planDigest"],
+        "planFileSha256": _file_digest(pool_path),
+    }
+    selections: dict[str, dict[str, object]] = {}
+    for carrier in CARRIERS:
+        stable = {
+            "carrier": carrier,
+            "candidateIds": [f"{carrier}-candidate-001"],
+            "candidateCount": 1,
+        }
+        selections[carrier] = {**stable, "selectionDigest": _digest(stable)}
+    return binding, evidence_root.relative_to(output_root).as_posix(), selections
+
+
 def _fixture(tmp_path: Path) -> dict[str, object]:
     output_root = tmp_path / "output"
     _preflight_path, semantic_preflight_binding = ready_semantic_preflight(
@@ -149,6 +280,10 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         }
         for carrier in CARRIERS
     }
+    pool_binding, pool_evidence_ref, pool_selections = _scale_source_pool(
+        output_root,
+        source_revision=source_revision,
+    )
     submissions: dict[str, dict[str, object]] = {}
     older_image_id = _execution_id("image", 200)
     for carrier in CARRIERS:
@@ -156,6 +291,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         retry_of = older_image_id if carrier == "image" else None
         stable: dict[str, object] = {
             "schema": "quwoquan_data.content_execution_submission",
+            "scale": "M100",
             "rootExecutionId": root_id,
             "executionId": execution_id,
             "operation": f"{carrier}.generate",
@@ -165,11 +301,17 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             "selector": "auto",
             "quota": 1,
             "count": 1,
+            "requiredWorkers": 1,
+            "partitionCount": 16,
+            "capacityPlanDigest": "sha256:" + "6" * 64,
             "topic": None,
             "targetNames": ["测试实体"],
             "sourceProviders": [],
             "semanticSelectionId": "default",
             "semanticPreflightReceipt": semantic_preflight_binding,
+            "scaleSourcePool": pool_binding,
+            "sourcePoolEvidenceRootRef": pool_evidence_ref,
+            "sourcePoolSelection": pool_selections[carrier],
             "retryOf": retry_of,
             "gitBranch": "dev1.0",
             "gitCommitSha": "d" * 40,
@@ -204,6 +346,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
         "executionMode": "central",
+        "scale": "M100",
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
@@ -211,6 +354,9 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "scaleSourcePool": pool_binding,
+        "sourcePoolEvidenceRootRef": pool_evidence_ref,
+        "laneSourcePoolSelections": pool_selections,
         "laneExternalInputs": lane_inputs,
         "externalInputsDigest": _digest(
             {
@@ -226,6 +372,91 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
     }
     plan = {**plan_stable, "planDigest": _digest(plan_stable)}
     _write(campaign_root / "campaign_plan.json", plan)
+    capsule_stable: dict[str, object] = {
+        "schema": "quwoquan_data.content_campaign_source_capsule",
+        "format": "source-snapshot-v1",
+        "gitCommitSha": plan["gitCommitSha"],
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "roots": ["quwoquan_data"],
+        "laneExternalInputs": {
+            carrier: {
+                "rootRef": f"external-inputs/{carrier}",
+                "externalInputRefs": [],
+                "externalInputsDigest": empty_external,
+            }
+            for carrier in CARRIERS
+        },
+        "externalInputsDigest": plan["externalInputsDigest"],
+        "scaleSourcePool": pool_binding,
+        "sourcePoolSnapshotRootRef": "scale-source-pool",
+        "laneSourcePoolSelections": pool_selections,
+    }
+    capsule_digest = _digest(capsule_stable)
+    capsule_root = (
+        output_root
+        / "data/local/cache/content-campaign-workspaces/content-addressed-capsules"
+        / capsule_digest.removeprefix("sha256:")
+    )
+    pool_path = output_root / str(pool_binding["planRef"])
+    _write(
+        capsule_root / "scale-source-pool/plan.json",
+        json.loads(pool_path.read_text(encoding="utf-8")),
+    )
+    _write(
+        capsule_root / ".qwq_campaign_capsule.json",
+        {
+            **capsule_stable,
+            "capsuleDigest": capsule_digest,
+            "treeDigest": "sha256:" + "e" * 64,
+        },
+    )
+    capsule_ref = capsule_root.relative_to(output_root).as_posix()
+    _write(
+        campaign_root / "campaign_report.json",
+        {
+            "schema": "quwoquan_data.content_campaign_report",
+            "rootExecutionId": root_id,
+            "campaignRunId": RUN_ID,
+            "campaignGeneration": 3,
+            "campaignFencingToken": FENCE,
+            "status": "succeeded",
+            "phase": "completed",
+            "planDigest": plan["planDigest"],
+            "gitBranch": plan["gitBranch"],
+            "gitCommitSha": plan["gitCommitSha"],
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+            "lanes": {
+                carrier: {
+                    "executionId": execution_ids[carrier],
+                    "status": "finalized",
+                    "phase": "publish",
+                    "reviewReturnCode": 0,
+                    "publishReturnCode": 0,
+                    "sourceCapsuleRef": capsule_ref,
+                    "sourceCapsuleDigest": capsule_digest,
+                    "sourceCapsuleCommitSha": plan["gitCommitSha"],
+                    "sourceCapsuleSourceDigest": SOURCE_DIGEST,
+                    "sourceCapsuleReadOnly": True,
+                    "executionRootRef": f"data/tasks/{execution_ids[carrier]}",
+                    "cleanupStatus": "cleaned",
+                    "approvedQuota": 1,
+                    "qualifiedCount": 1,
+                    "finalizedCount": 1,
+                    "selectedCount": 1,
+                    "discardedCount": 0,
+                    "shortfallCount": 0,
+                    "error": None,
+                }
+                for carrier in CARRIERS
+            },
+            "failure": None,
+            "startedAt": "2026-08-05T00:00:00+00:00",
+            "updatedAt": "2026-08-05T00:01:00+00:00",
+        },
+    )
     runtime = {
         "schema": "quwoquan_data.content_campaign_runtime_snapshot",
         "rootExecutionId": root_id,

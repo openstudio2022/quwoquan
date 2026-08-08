@@ -13,6 +13,7 @@ import (
 )
 
 const interactionFailureCollection = "interaction_notification_failures"
+const interactionFailureRetention = 7 * 24 * time.Hour
 
 // MongoInteractionFailureStore 为互动通知消费保存逐消息失败计数与终态标记；
 // 计数达到上限后 source PEL 保持待恢复，TTL 兜底防止残留。
@@ -32,10 +33,10 @@ func NewMongoInteractionFailureStore(database *mongo.Database) *MongoInteraction
 func (store *MongoInteractionFailureStore) EnsureIndexes(ctx context.Context) error {
 	_, err := store.failures.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys: bson.D{{Key: "updatedAt", Value: 1}},
+			Keys: bson.D{{Key: "expiresAt", Value: 1}},
 			Options: options.Index().
-				SetName("idx_interaction_notification_failures_ttl").
-				SetExpireAfterSeconds(int32((7 * 24 * time.Hour).Seconds())),
+				SetName("ttl_interaction_notification_failures").
+				SetExpireAfterSeconds(0),
 		},
 	})
 	return err
@@ -64,6 +65,7 @@ func (store *MongoInteractionFailureStore) RecordInteractionFailure(
 			"interaction notification failure error class is required",
 		)
 	}
+	now := time.Now().UTC()
 	var document struct {
 		Attempts int64 `bson:"attempts"`
 	}
@@ -76,7 +78,8 @@ func (store *MongoInteractionFailureStore) RecordInteractionFailure(
 				"eventDigest": irreversibleNotificationDigest(eventID),
 				"errorClass":  errorClass,
 				"errorDigest": irreversibleNotificationDigest(cause.Error()),
-				"updatedAt":   time.Now().UTC(),
+				"updatedAt":   now,
+				"expiresAt":   now.Add(interactionFailureRetention),
 			},
 		},
 		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
@@ -123,6 +126,7 @@ func (store *MongoInteractionFailureStore) MarkInteractionDeadLettered(
 				"deadLetteredAt": now,
 				"updatedAt":      now,
 			},
+			"$unset": bson.M{"expiresAt": ""},
 		},
 	)
 	if err != nil {

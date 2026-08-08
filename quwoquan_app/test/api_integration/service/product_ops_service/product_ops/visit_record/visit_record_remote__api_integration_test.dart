@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
+// readiness_case: visit_record_record_visit_app_api
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/service/product_ops_service/product_ops/visit_record/adapters/ops_visit_append_writer.dart';

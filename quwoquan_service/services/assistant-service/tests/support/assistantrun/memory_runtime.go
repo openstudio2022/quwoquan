@@ -20,15 +20,24 @@ type MemoryRuntime struct {
 	ready    []string
 	claims   map[string]runruntime.WorkClaim
 	fencing  int64
+	now      func() time.Time
 }
 
 func NewMemoryRuntime() *MemoryRuntime {
+	return NewMemoryRuntimeWithClock(time.Now)
+}
+
+func NewMemoryRuntimeWithClock(now func() time.Time) *MemoryRuntime {
+	if now == nil {
+		now = time.Now
+	}
 	return &MemoryRuntime{
 		runs:     map[string]runruntime.Run{},
 		requests: map[string]string{},
 		events:   map[string][]runruntime.JournalEvent{},
 		receipts: map[string]runruntime.CommandReceipt{},
 		claims:   map[string]runruntime.WorkClaim{},
+		now:      now,
 	}
 }
 
@@ -83,6 +92,34 @@ func (r *MemoryRuntime) Commit(
 ) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.commitLocked(expectedRevision, run, events, receipt)
+}
+
+func (r *MemoryRuntime) CommitClaim(
+	_ context.Context,
+	claim runruntime.WorkClaim,
+	expectedRevision int64,
+	run runruntime.Run,
+	events []runruntime.JournalEvent,
+	receipt *runruntime.CommandReceipt,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, ok := r.claims[claim.RunID]
+	if !ok || claim.RunID != run.RunID || current.WorkerID != claim.WorkerID ||
+		current.FencingToken != claim.FencingToken ||
+		!current.ExpiresAt.After(r.now().UTC()) {
+		return runruntime.ErrExecutionFenced
+	}
+	return r.commitLocked(expectedRevision, run, events, receipt)
+}
+
+func (r *MemoryRuntime) commitLocked(
+	expectedRevision int64,
+	run runruntime.Run,
+	events []runruntime.JournalEvent,
+	receipt *runruntime.CommandReceipt,
+) error {
 	current, found := r.runs[run.RunID]
 	if found {
 		if current.Revision != expectedRevision {
@@ -163,12 +200,21 @@ func (r *MemoryRuntime) ClaimNext(
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(r.ready) == 0 {
-		return runruntime.WorkClaim{}, runruntime.ErrNoWork
+		now := r.now().UTC()
+		for runID, claim := range r.claims {
+			if !claim.ExpiresAt.After(now) {
+				r.ready = append(r.ready, runID)
+				break
+			}
+		}
+		if len(r.ready) == 0 {
+			return runruntime.WorkClaim{}, runruntime.ErrNoWork
+		}
 	}
 	runID := r.ready[0]
 	r.ready = r.ready[1:]
 	r.fencing++
-	now := time.Now().UTC()
+	now := r.now().UTC()
 	claim := runruntime.WorkClaim{
 		RunID:        runID,
 		WorkerID:     workerID,
@@ -189,10 +235,11 @@ func (r *MemoryRuntime) HeartbeatClaim(
 	defer r.mu.Unlock()
 	current, ok := r.claims[claim.RunID]
 	if !ok || current.WorkerID != claim.WorkerID ||
-		current.FencingToken != claim.FencingToken {
+		current.FencingToken != claim.FencingToken ||
+		!current.ExpiresAt.After(r.now().UTC()) {
 		return runruntime.WorkClaim{}, runruntime.ErrLeaseConflict
 	}
-	current.ExpiresAt = time.Now().UTC().Add(ttl)
+	current.ExpiresAt = r.now().UTC().Add(ttl)
 	r.claims[claim.RunID] = current
 	return current, nil
 }
@@ -207,7 +254,8 @@ func (r *MemoryRuntime) CompleteClaim(
 	defer r.mu.Unlock()
 	current, ok := r.claims[claim.RunID]
 	if !ok || current.WorkerID != claim.WorkerID ||
-		current.FencingToken != claim.FencingToken {
+		current.FencingToken != claim.FencingToken ||
+		!current.ExpiresAt.After(r.now().UTC()) {
 		return runruntime.ErrLeaseConflict
 	}
 	delete(r.claims, claim.RunID)

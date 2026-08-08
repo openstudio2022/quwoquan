@@ -17,7 +17,7 @@ from content.execution.campaign.external_inputs import (
     external_inputs_digest,
     payload_digest,
 )
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.receipt import load_lane_receipt
 from content.execution.campaign.submission import campaign_root, load_submissions
 from content.execution.campaign.workspace import (
@@ -33,6 +33,7 @@ from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding_at,
 )
+from content.execution.campaign.plan_source_pool import aggregate_plan_source_pool
 
 if TYPE_CHECKING:
     from content.execution.campaign.runtime import CampaignRunSession
@@ -281,6 +282,7 @@ def freeze_plan(
     source_revisions = {
         str(row.get("sourceRevision") or "") for row in submissions.values()
     }
+    scales = {str(row.get("scale") or "") for row in submissions.values()}
     regions = {str(row.get("regionRef") or "") for row in submissions.values()}
     semantic_selections = {
         str(row.get("semanticSelectionId") or "") for row in submissions.values()
@@ -308,18 +310,25 @@ def freeze_plan(
         or len(catalog_digests) != 1
         or len(source_revisions) != 1
         or not next(iter(source_revisions))
+        or len(scales) != 1
+        or not next(iter(scales))
         or len(semantic_selections) != 1
         or not next(iter(semantic_selections))
         or len(semantic_preflights) != 1
     ):
         raise ValueError(
             "campaign lanes must share one branch, commit, sourceRevision, "
-            "sourceDigest, and entityCatalogDigest"
+            "sourceDigest, entityCatalogDigest, and scale"
         )
     if len(regions) != 1:
         raise ValueError("campaign lanes must share one regionRef")
     if str(submissions["homepage"].get("executionId") or "") != root_execution_id:
         raise ValueError("homepage submission executionId must equal campaign root")
+    (
+        source_pool_binding,
+        source_pool_evidence_ref,
+        lane_source_pool_selections,
+    ) = aggregate_plan_source_pool(submissions)
     adoption_values = [
         submissions[carrier].get(CAMPAIGN_ADOPTION_FIELD)
         for carrier in CAMPAIGN_CARRIERS
@@ -388,6 +397,7 @@ def freeze_plan(
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_execution_id,
         "executionMode": execution_mode,
+        "scale": next(iter(scales)),
         "gitBranch": next(iter(branches)),
         "gitCommitSha": frozen_commit,
         "sourceRevision": next(iter(source_revisions)),
@@ -417,6 +427,10 @@ def freeze_plan(
         stable["semanticPreflightReceipt"] = dict(semantic_preflight)
     if reviewed_closure_adoption is not None:
         stable[CAMPAIGN_ADOPTION_FIELD] = reviewed_closure_adoption
+    if source_pool_binding is not None:
+        stable["scaleSourcePool"] = source_pool_binding
+        stable["sourcePoolEvidenceRootRef"] = source_pool_evidence_ref
+        stable["laneSourcePoolSelections"] = lane_source_pool_selections
     path = plan_path(runtime, root_execution_id)
     if path.is_file():
         existing = read_json(path)

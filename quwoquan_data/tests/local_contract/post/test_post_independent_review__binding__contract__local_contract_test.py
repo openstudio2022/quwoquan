@@ -27,6 +27,35 @@ def test_agent_provider_value_accepts_only_governed_provider_values() -> None:
         post_independent_review._agent_provider_value("unregistered_sdk")
 
 
+def test_research_lifecycle_projects_vertical_enforcement_as_audit_only(
+    tmp_path: Path,
+) -> None:
+    object_dir = tmp_path / "object"
+    object_dir.mkdir()
+
+    policy = json.loads(
+        post_independent_review._media_policy(
+            object_dir,
+            {
+                "vertical": "travel",
+                "sourceUrls": ["https://media.example/source"],
+                "assets": [
+                    {
+                        "assetId": "video",
+                        "fileName": "video.mp4",
+                        "sha256": "sha256:" + "a" * 64,
+                        "rightsAuditStatus": "unverified",
+                        "rightsAuditIssues": ["commercial authorization is unverified"],
+                    }
+                ],
+            },
+        )
+    )
+
+    assert policy["rightsEnforcementMode"] == "audit_only"
+    assert "do not add them to issues" in policy["rightsDecisionRule"]
+
+
 def test_independent_post_review_replaces_deterministic_reviewer_binding(
     tmp_path: Path,
 ) -> None:

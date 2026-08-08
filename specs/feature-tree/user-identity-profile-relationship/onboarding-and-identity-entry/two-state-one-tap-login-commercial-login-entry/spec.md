@@ -150,6 +150,17 @@
 - 已登录账号在设置页执行 `BindPhoneCredential` 时继续使用不带社交 ticket 的 `bind_phone` challenge；社交 completion 只接受与自身 ticket 精确关联的 challenge，两条流程不得互相冒充。
 - 用户返回、ticket 过期、进程重启或绑定失败均回到可操作登录态，不进入 Shell、不消费原动作 continuation。
 
+<a id="req-015"></a>
+### REQ-015 canonical user.login 只经 production Remote 完成一键、OTP 与联合登录绑定
+
+- canonical `user.login` 页面只能经 `account_session`、`authentication_challenge` 与 `credential_binding` 的 generated client 和 production Remote composition 推进登录；不得由本地摘要、Provider 回调或页面状态直接签发会话。
+- 本机号一键登录必须先取得当前能力与脱敏提示。
+- 手机号登录必须使用当前 OTP challenge。
+- 微信、支付宝或 QQ 联合登录必须把 Provider 票据交给云侧校验，并在服务端要求时完成与同一 ticket 绑定的手机号验证。
+- 一键、OTP 或联合登录绑定成功都只能产生一次 canonical session grant，并在账号、Persona、credential、device 与 consent 已原子收敛后续接原动作。
+- OTP 不匹配或过期、频控、Provider 取消或不可用、credential conflict、binding ticket 过期及网络失败均不得进入 Shell 或消费 continuation；页面必须保留与失败类型相符的可恢复状态，并允许重试、换号、切换方式或安全关闭。
+- OTP、Provider 原始票据、binding ticket、access token 与完整手机号不得进入页面文案、日志、埋点或结果回执。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_app/test/local_contract/service/user_service/account/account_session/login_page_widget__local_contract_test.dart`
@@ -191,6 +202,15 @@
 - THEN binding ticket 被一次性消费，手机号与社交凭证归属同一 OwnerAccount，并且只在绑定成功后返回 `AuthSessionGrant`。
 - AND 若手机号已属于另一 OwnerAccount，则返回 `credential_conflict`，不创建、不合并、不签 session；更换手机号后仍可继续完成本次绑定。
 
+<a id="gwt-004"></a>
+### GWT-004 user.login 一键、OTP 与联合登录绑定的 production Remote 成功和恢复
+
+- GIVEN 未登录用户进入 canonical `user.login`，App 使用 production Remote composition，且一键能力、OTP Provider 或联合登录 Provider 至少有一条真实可执行路径。
+- WHEN 用户选择本机号一键登录、手机号 OTP，或选择微信、支付宝、QQ 并在云侧要求时完成手机号绑定。
+- THEN 任一成功路径只返回一个 canonical session grant，在账号事实原子收敛后进入目标 Shell，并且原动作 continuation 最多消费一次。
+- AND OTP 不匹配或过期、频控、Provider 取消或不可用、credential conflict、binding ticket 过期及网络失败均不签发会话、不进入 Shell，页面保留可恢复状态并提供与失败语义一致的重试、换号、切换方式或安全关闭动作。
+- AND 页面与观测不得暴露 OTP、Provider 原始票据、binding ticket、access token 或完整手机号。
+
 <a id="gwt-011"></a>
 ### GWT-011 真机与灰度商用证据
 
@@ -211,6 +231,6 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：iPhone 17 截图覆盖图一/图二。
-- 完成判定：`GWT-011` 对应行为满足且真实测试 `spec_ref` 有效。
+- 准出影响：`block`
+- 影响或价值：尚缺 `GWT-004` 在真实运营商、短信与联合登录 Provider 下的一键、OTP、手机号绑定及失败恢复闭环；现有本地状态与截图证据不能证明 production Remote 登录或 continuation 单次消费。
+- 完成判定：`GWT-004` 与 `GWT-011` 由同一 commit、ContractGraph、candidate、环境和真实 Provider 的 production journey 覆盖，且 Android 物理设备与 iPhone 物理设备 `ReadinessResultBundle` 均为 passed；failed、blocked、skipped、模拟器、动态 skip 或测试 double 均不计通过。

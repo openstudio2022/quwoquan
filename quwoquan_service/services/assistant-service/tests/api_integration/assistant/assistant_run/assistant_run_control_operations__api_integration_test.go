@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	runhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/adapters/inbound/http"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
@@ -183,6 +185,48 @@ func TestAssistantRunApprovalAndDeviceReceiptCrossHTTPAndMongoBoundary(t *testin
 		t.Fatalf("approval response=%+v err=%v", approval, err)
 	}
 	permit := approval.DeviceActionPermit
+	receiptBody := map[string]any{
+		"installationId": permit.InstallationID,
+		"deviceId":       permit.DeviceID,
+		"capability":     permit.Capability,
+		"inputDigest":    permit.InputDigest,
+		"permit":         permit.Permit,
+		"idempotencyKey": permit.IdempotencyKey,
+		"outcome":        "completed",
+		"executedAt":     now.Add(time.Second).Format(time.RFC3339Nano),
+		"deviceObjectId": "calendar-event-api-1",
+	}
+	beforeInvalid := assistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+	)
+	invalidBody := cloneAssistantRunControlBody(receiptBody)
+	invalidBody["inputDigest"] = "sha256:" + strings.Repeat("b", 64)
+	invalid := assistantRunControlRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/runs/"+run.RunID+"/tool-invocations/"+toolUseID+"/device-action-receipt",
+		"device-owner",
+		toolUseID,
+		invalidBody,
+	)
+	assertAssistantRunControlError(
+		t,
+		invalid,
+		http.StatusForbidden,
+		"ASSISTANT.USER.device_action_permit_invalid",
+	)
+	assertAssistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+		beforeInvalid,
+	)
+
 	receipt := assistantRunControlRequest(
 		t,
 		handler,
@@ -190,17 +234,7 @@ func TestAssistantRunApprovalAndDeviceReceiptCrossHTTPAndMongoBoundary(t *testin
 		"/assistant/runs/"+run.RunID+"/tool-invocations/"+toolUseID+"/device-action-receipt",
 		"device-owner",
 		toolUseID,
-		map[string]any{
-			"installationId": permit.InstallationID,
-			"deviceId":       permit.DeviceID,
-			"capability":     permit.Capability,
-			"inputDigest":    permit.InputDigest,
-			"permit":         permit.Permit,
-			"idempotencyKey": permit.IdempotencyKey,
-			"outcome":        "completed",
-			"executedAt":     now.Add(time.Second).Format(time.RFC3339Nano),
-			"deviceObjectId": "calendar-event-api-1",
-		},
+		receiptBody,
 	)
 	if receipt.Code != http.StatusOK {
 		t.Fatalf(
@@ -217,6 +251,246 @@ func TestAssistantRunApprovalAndDeviceReceiptCrossHTTPAndMongoBoundary(t *testin
 			"calendar-event-api-1" {
 		t.Fatalf("device receipt was not durably persisted: run=%+v err=%v", stored, err)
 	}
+	acceptedFacts := assistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+	)
+	exactReplay := assistantRunControlRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/runs/"+run.RunID+"/tool-invocations/"+toolUseID+"/device-action-receipt",
+		"device-owner",
+		toolUseID,
+		receiptBody,
+	)
+	if exactReplay.Code != http.StatusOK {
+		t.Fatalf("exact receipt replay status=%d body=%s", exactReplay.Code, exactReplay.Body)
+	}
+	assertAssistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+		acceptedFacts,
+	)
+
+	changedBody := cloneAssistantRunControlBody(receiptBody)
+	changedBody["deviceObjectId"] = "different-calendar-event"
+	changedReplay := assistantRunControlRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/runs/"+run.RunID+"/tool-invocations/"+toolUseID+"/device-action-receipt",
+		"device-owner",
+		toolUseID,
+		changedBody,
+	)
+	assertAssistantRunControlError(
+		t,
+		changedReplay,
+		http.StatusConflict,
+		"ASSISTANT.USER.device_action_permit_replayed",
+	)
+	newIdentityReplay := assistantRunControlRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/runs/"+run.RunID+"/tool-invocations/"+toolUseID+"/device-action-receipt",
+		"device-owner",
+		"new-device-receipt-command",
+		receiptBody,
+	)
+	assertAssistantRunControlError(
+		t,
+		newIdentityReplay,
+		http.StatusConflict,
+		"ASSISTANT.USER.device_action_permit_replayed",
+	)
+	assertAssistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+		acceptedFacts,
+	)
+}
+
+func TestAssistantRunExpiredDevicePermitCrossesHTTPAndMongoWithoutFacts(t *testing.T) {
+	database := requirePublicWebMongo(t)
+	resetAssistantRunControlState(t)
+	repository := runpersistence.NewMongoRunRepository(database)
+	if err := repository.EnsureIndexes(t.Context()); err != nil {
+		t.Fatalf("ensure AssistantRun indexes: %v", err)
+	}
+	now := time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC)
+	commands := newAssistantRunControlService(repository, &now)
+	handler := runhttp.NewHandler(commands).Routes()
+	run, err := commands.Start(t.Context(), runruntime.StartCommand{
+		UserID:          "expired-device-owner",
+		PersonaID:       "expired-device-owner:persona",
+		SessionID:       "expired-device-session",
+		ClientRequestID: "expired-device-start",
+		InputText:       "创建一个到期边界提醒",
+	})
+	if err != nil {
+		t.Fatalf("start expired permit Run: %v", err)
+	}
+	const toolUseID = "tool-use-expired-device"
+	continuationToken := assistantRunControlContinuationToken(run.RunID, toolUseID)
+	persistAssistantRunWaitingApproval(
+		t,
+		repository,
+		run,
+		toolUseID,
+		continuationToken,
+		&now,
+	)
+	_, permit, err := commands.ApproveToolUse(
+		t.Context(),
+		runruntime.ApproveToolUseCommand{
+			UserID:           run.UserID,
+			RunID:            run.RunID,
+			ToolInvocationID: toolUseID,
+			CommandID:        "approve-expired-device",
+			Decision:         "approved",
+			ApprovalPermit:   continuationToken,
+			InstallationID:   "expired-installation",
+			DeviceID:         "expired-device",
+		},
+	)
+	if err != nil || permit == nil {
+		t.Fatalf("approve expired permit fixture: permit=%+v err=%v", permit, err)
+	}
+	// newAssistantRunControlService advances one second for the next command;
+	// place the clock exactly one second before expiry to exercise equality.
+	now = permit.ExpiresAt.Add(-time.Second)
+	baseline := assistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+	)
+	expired := assistantRunControlRequest(
+		t,
+		handler,
+		http.MethodPost,
+		"/assistant/runs/"+run.RunID+"/tool-invocations/"+toolUseID+"/device-action-receipt",
+		run.UserID,
+		permit.IdempotencyKey,
+		map[string]any{
+			"installationId": permit.InstallationID,
+			"deviceId":       permit.DeviceID,
+			"capability":     permit.Capability,
+			"inputDigest":    permit.InputDigest,
+			"permit":         permit.Permit,
+			"idempotencyKey": permit.IdempotencyKey,
+			"outcome":        "completed",
+			"executedAt":     permit.ExpiresAt.Add(-time.Second).Format(time.RFC3339Nano),
+			"deviceObjectId": "expired-calendar-event",
+		},
+	)
+	assertAssistantRunControlError(
+		t,
+		expired,
+		http.StatusGone,
+		"ASSISTANT.USER.device_action_permit_expired",
+	)
+	assertAssistantRunControlFactCounts(
+		t,
+		database,
+		repository,
+		run.RunID,
+		baseline,
+	)
+}
+
+type assistantRunControlFacts struct {
+	journalEvents   int
+	commandReceipts int64
+	deviceReceipts  int
+	revision        int64
+}
+
+func assistantRunControlFactCounts(
+	t *testing.T,
+	database *mongo.Database,
+	repository runruntime.Repository,
+	runID string,
+) assistantRunControlFacts {
+	t.Helper()
+	events, err := repository.EventsAfter(t.Context(), runID, 0, 1000)
+	if err != nil {
+		t.Fatalf("load AssistantRun journal facts: %v", err)
+	}
+	receiptCount, err := database.Collection(
+		"assistant_run_command_receipts",
+	).CountDocuments(t.Context(), map[string]any{"runId": runID})
+	if err != nil {
+		t.Fatalf("count AssistantRun command receipts: %v", err)
+	}
+	run, err := repository.Load(t.Context(), runID)
+	if err != nil {
+		t.Fatalf("load AssistantRun facts: %v", err)
+	}
+	deviceReceipts := 0
+	if run.Checkpoint != nil {
+		deviceReceipts = len(run.Checkpoint.DeviceActionReceipts)
+	}
+	return assistantRunControlFacts{
+		journalEvents:   len(events),
+		commandReceipts: receiptCount,
+		deviceReceipts:  deviceReceipts,
+		revision:        run.Revision,
+	}
+}
+
+func assertAssistantRunControlFactCounts(
+	t *testing.T,
+	database *mongo.Database,
+	repository runruntime.Repository,
+	runID string,
+	want assistantRunControlFacts,
+) {
+	t.Helper()
+	if got := assistantRunControlFactCounts(t, database, repository, runID); got != want {
+		t.Fatalf("rejected HTTP command wrote facts: got=%+v want=%+v", got, want)
+	}
+}
+
+func assertAssistantRunControlError(
+	t *testing.T,
+	recorder *httptest.ResponseRecorder,
+	wantStatus int,
+	wantCode string,
+) {
+	t.Helper()
+	var failure struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &failure); err != nil {
+		t.Fatalf("decode AssistantRun failure: %v body=%s", err, recorder.Body)
+	}
+	if recorder.Code != wantStatus || failure.Code != wantCode {
+		t.Fatalf(
+			"AssistantRun failure status/code=%d/%s want=%d/%s body=%s",
+			recorder.Code,
+			failure.Code,
+			wantStatus,
+			wantCode,
+			recorder.Body,
+		)
+	}
+}
+
+func cloneAssistantRunControlBody(value map[string]any) map[string]any {
+	clone := make(map[string]any, len(value))
+	for key, item := range value {
+		clone[key] = item
+	}
+	return clone
 }
 
 func newAssistantRunControlService(
@@ -376,6 +650,7 @@ func resetAssistantRunControlState(t *testing.T) {
 		"assistant_run_worker_leases",
 		"assistant_run_work_queue",
 		"assistant_run_terminal_outbox",
+		"assistant_run_hook_outbox",
 	} {
 		if _, err := database.Collection(collection).DeleteMany(
 			t.Context(),

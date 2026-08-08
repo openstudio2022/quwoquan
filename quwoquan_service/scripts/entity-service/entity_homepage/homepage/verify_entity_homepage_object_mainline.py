@@ -19,7 +19,10 @@ REPO_ROOT = next(
 SERVICE_ROOT = (
     REPO_ROOT / "quwoquan_service/services/entity-service"
 )
-APP_ENTITY_ROOT = REPO_ROOT / "quwoquan_app/lib/ui/entity"
+APP_ENTITY_ROOT = (
+    REPO_ROOT
+    / "quwoquan_app/lib/service/entity_service/entity_homepage"
+)
 HOMEPAGE_FIELDS = (
     SERVICE_ROOT / "contracts/entity_homepage/homepage/fields.yaml"
 )
@@ -63,7 +66,7 @@ REQUIRED_FILES = (
     "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence/mongo_homepage_store.go",
     "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/domain/model/homepage_claim_request.go",
     "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/domain/model/homepage_status_report.go",
-    "quwoquan_app/lib/ui/entity/models/homepage_type_labels.dart",
+    "quwoquan_app/lib/service/entity_service/entity_homepage/homepage/presentation/homepage_type_labels.dart",
 )
 
 

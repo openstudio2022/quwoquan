@@ -86,3 +86,11 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/message_receipt_fact/message_receipt_fact_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: message_receipt_fact_get_receipts_app_api
+  spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/delivery-and-read-receipt/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetReceipts}
+  runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/message_receipt_fact/message_receipt_fact_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

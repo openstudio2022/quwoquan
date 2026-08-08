@@ -59,6 +59,7 @@ lifecycle:
   checkpoint: per_source_partition_sequence
   rebuild: recreate_candidate_indexes_then_replay_all_source_events
   tombstone: remove_candidate_and_auxiliary_indexes_keep_checkpoint
+  idempotency: aggregate_version
   event_consumers:
   - name: ProjectRecommendationCandidatePostLifecycle
     kind: projector

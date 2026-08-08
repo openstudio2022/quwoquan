@@ -11,14 +11,15 @@ from typing import Any
 from core import paths
 from core.io import read_json
 from core.source_digest import current_source_digest
-from governance.coverage.distribution import load_content_distribution_policy
-
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.request_envelope import (
     normalize_execution_scope,
     write_scale_envelopes,
 )
-from content.execution.campaign.scale import resolve_campaign_scale
+from content.execution.campaign.scale import (
+    campaign_workload_targets,
+    resolve_campaign_scale,
+)
 from content.execution.model_contract import SEMANTIC_SELECTION_IDS
 from content.execution.controller.execute.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
@@ -84,6 +85,12 @@ def _summary(paths: dict[str, Path]) -> dict[str, Any]:
             str(envelope["quota"]),
             "--count",
             str(envelope["count"]),
+            "--required-workers",
+            str(envelope["requiredWorkers"]),
+            "--partition-count",
+            str(envelope["partitionCount"]),
+            "--capacity-plan-digest",
+            str(envelope["capacityPlanDigest"]),
             "--semantic-selection-id",
             str(envelope["semanticSelectionId"]),
             "--semantic-preflight-receipt",
@@ -101,6 +108,26 @@ def _summary(paths: dict[str, Path]) -> dict[str, Any]:
             command.extend(["--source-provider", str(provider)])
         for target in envelope.get("targetNames") or []:
             command.extend(["--target", str(target)])
+        pool = envelope.get("scaleSourcePool")
+        selection = envelope.get("sourcePoolSelection")
+        if isinstance(pool, dict) and isinstance(selection, dict):
+            command.extend(
+                [
+                    "--scale-source-pool-id", str(pool["poolId"]),
+                    "--scale-source-pool-target-scale", str(pool["targetScale"]),
+                    "--scale-source-pool-plan-ref", str(pool["planRef"]),
+                    "--scale-source-pool-plan-digest", str(pool["planDigest"]),
+                    "--scale-source-pool-plan-file-sha256", str(pool["planFileSha256"]),
+                    "--source-pool-source-revision", str(pool["sourceRevision"]),
+                    "--source-pool-source-digest", str(pool["sourceDigest"]),
+                    "--source-pool-entity-catalog-digest", str(pool["entityCatalogDigest"]),
+                    "--source-pool-evidence-root-ref", str(envelope["sourcePoolEvidenceRootRef"]),
+                    "--source-pool-carrier", str(selection["carrier"]),
+                    "--source-pool-selection-digest", str(selection["selectionDigest"]),
+                ]
+            )
+            for candidate_id in selection["candidateIds"]:
+                command.extend(["--source-pool-candidate-id", str(candidate_id)])
         return command
 
     def coordination_command(stage: str) -> list[str]:
@@ -179,6 +206,8 @@ def _require_phase_args(args: argparse.Namespace) -> None:
                 "video_input",
                 "predecessor_reconciliation_receipt",
                 "promotion_receipt",
+                "scale_source_pool",
+                "source_pool_evidence_root",
             )
             if getattr(args, name, None)
         ]
@@ -228,19 +257,21 @@ def _require_phase_args(args: argparse.Namespace) -> None:
             "envelopes phase forbids handoff creation arguments: "
             + ", ".join(f"--{name.replace('_', '-')}" for name in handoff_only)
         )
+    scale = str(args.scale)
+    pool_values = (
+        getattr(args, "scale_source_pool", None),
+        getattr(args, "source_pool_evidence_root", None),
+    )
+    if scale in {"M100", "M1000", "M10000"} and not all(pool_values):
+        raise ValueError(
+            "M100+ envelopes require --scale-source-pool and --source-pool-evidence-root"
+        )
+    if scale not in {"M100", "M1000", "M10000"} and any(pool_values):
+        raise ValueError("below-M100 envelopes forbid scale source pool inputs")
 
 
 def _workload_targets(scale: str) -> dict[str, int]:
-    resolved = resolve_campaign_scale(scale=scale)
-    policy = load_content_distribution_policy()
-    return {
-        carrier: (
-            policy.scale_target(resolved.scale, carrier)
-            if resolved.scale in {"M100", "M1000"}
-            else resolved.quota
-        )
-        for carrier in CAMPAIGN_CARRIERS
-    }
+    return campaign_workload_targets(scale)
 
 
 def _handle_handoff(args: argparse.Namespace) -> None:
@@ -343,6 +374,16 @@ def _handle_envelopes(args: argparse.Namespace) -> None:
         .expanduser()
         .resolve(),
         external_input_refs_by_carrier=external_inputs,
+        scale_source_pool=(
+            Path(str(getattr(args, "scale_source_pool", ""))).expanduser().resolve()
+            if str(getattr(args, "scale_source_pool", "") or "").strip()
+            else None
+        ),
+        source_pool_evidence_root=(
+            Path(str(getattr(args, "source_pool_evidence_root", ""))).expanduser().resolve()
+            if str(getattr(args, "source_pool_evidence_root", "") or "").strip()
+            else None
+        ),
     )
     print(json.dumps(_summary(paths), ensure_ascii=False, indent=2))
 
@@ -391,6 +432,8 @@ def register_prepare_campaign_parser(sub: argparse._SubParsersAction) -> None:
     parser.add_argument("--semantic-preflight-receipt")
     parser.add_argument("--predecessor-reconciliation-receipt")
     parser.add_argument("--promotion-receipt")
+    parser.add_argument("--scale-source-pool")
+    parser.add_argument("--source-pool-evidence-root")
     for carrier in CAMPAIGN_CARRIERS:
         parser.add_argument(f"--{carrier}-retry-of")
     parser.add_argument(

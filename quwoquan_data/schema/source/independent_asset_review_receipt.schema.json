@@ -109,6 +109,20 @@
     "assetSnapshot": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {
+        "popularCandidateId": [
+          "popularCatalogRef", "popularCatalogDigest", "popularCatalogFileSha256"
+        ],
+        "popularCatalogRef": [
+          "popularCandidateId", "popularCatalogDigest", "popularCatalogFileSha256"
+        ],
+        "popularCatalogDigest": [
+          "popularCandidateId", "popularCatalogRef", "popularCatalogFileSha256"
+        ],
+        "popularCatalogFileSha256": [
+          "popularCandidateId", "popularCatalogRef", "popularCatalogDigest"
+        ]
+      },
       "required": [
         "assetId", "entityId", "observedEntityId", "contentSha256",
         "casRef", "sourceUrl", "platform", "creator", "capturedAt",
@@ -124,6 +138,13 @@
         "casRef": {"$ref": "#/$defs/safeRef"},
         "sourceUrl": {"type": "string", "pattern": "^https://"},
         "platform": {"type": "string", "minLength": 1},
+        "popularCandidateId": {
+          "type": "string",
+          "pattern": "^popular-video:[a-z0-9_-]+:[0-9a-f]{16}$"
+        },
+        "popularCatalogRef": {"$ref": "#/$defs/safeRef"},
+        "popularCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "popularCatalogFileSha256": {"$ref": "#/$defs/sha256"},
         "creator": {"type": "string", "minLength": 1},
         "capturedAt": {"type": "string", "minLength": 1},
         "license": {"type": "string", "minLength": 1},

@@ -563,7 +563,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                             / "quwoquan_app"
                             / "scripts"
                             / "ios"
-                            / "prepare_dart_defines.sh"
+                            / "build_prepare_dart_defines.sh"
                         ),
                     ],
                     cwd=ROOT / "quwoquan_app",

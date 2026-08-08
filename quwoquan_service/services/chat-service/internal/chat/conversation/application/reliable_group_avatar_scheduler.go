@@ -544,7 +544,7 @@ func (s *ReliableGroupAvatarTaskScheduler) handleRecomputeTask(ctx context.Conte
 	)
 	if err != nil {
 		return s.store.FailTask(ctx, task.TaskID, task.LeaseToken, reliabletask.RuntimeFailure{
-			Code:    "CHAT.GROUP_AVATAR.recompute_failed",
+			Code:    "CHAT.GROUPAVATAR.recompute_failed",
 			Message: err.Error(),
 			Attributes: map[string]string{
 				"conversationId": task.AggregateID,
@@ -581,7 +581,7 @@ func (s *ReliableGroupAvatarTaskScheduler) handleNotification(ctx context.Contex
 		if err != nil {
 			failed = true
 			_ = s.store.MarkRecipientFailed(ctx, notification.NotificationID, ledger.RecipientID, reliabletask.RuntimeFailure{
-				Code:    "CHAT.GROUP_AVATAR.patch_fanout_failed",
+				Code:    "CHAT.GROUPAVATAR.patch_fanout_failed",
 				Message: err.Error(),
 			})
 			continue
@@ -601,7 +601,7 @@ func (s *ReliableGroupAvatarTaskScheduler) handleNotification(ctx context.Contex
 
 func (s *ReliableGroupAvatarTaskScheduler) retryNotification(ctx context.Context, notification reliabletask.NotificationOutboxRecord, err error) error {
 	return s.store.RetryNotification(ctx, notification.NotificationID, notification.LeaseToken, reliabletask.RuntimeFailure{
-		Code:    "CHAT.GROUP_AVATAR.notification_failed",
+		Code:    "CHAT.GROUPAVATAR.notification_failed",
 		Message: err.Error(),
 		Attributes: map[string]string{
 			"conversationId": notification.AggregateID,

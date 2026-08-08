@@ -13,7 +13,9 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/share_interaction_models.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
-import 'package:quwoquan_app/runtime/di/profile_interaction_tab_composition.dart';
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_interaction_tab_host.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/share_interaction/share_empty_state.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/share_interaction/share_interaction_row.dart';
@@ -63,9 +65,10 @@ void main() {
             const TestProfileInteractionFacets(),
           ),
         ],
-        child: const CupertinoApp(
+        child: CupertinoApp(
           home: CupertinoPageScaffold(
-            child: ProfileInteractionTabComposition(
+            child: ProfileInteractionTabHost(
+              participantSlots: profileParticipantSlots,
               mode: ProfileMode.mine,
               userId: 'fixture_user_current',
               isDark: false,
@@ -77,7 +80,7 @@ void main() {
     await tester.pump();
 
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(ProfileInteractionTabComposition)),
+      tester.element(find.byType(ProfileInteractionTabHost)),
     );
     container
         .read(profileNotifierProvider('fixture_user_current').notifier)

@@ -3771,7 +3771,7 @@ def register_parser(
     travel.add_argument(
         "--parity-receipt",
         default="",
-        help="100% parity migration receipt；cutover 必需",
+        help="100%% parity migration receipt；cutover 必需",
     )
     travel.add_argument(
         "--target-backup-receipt",
@@ -3827,7 +3827,7 @@ def register_parser(
     travel.add_argument(
         "--post-restore-parity-receipt",
         default="",
-        help="restore 后 100% parity migration receipt",
+        help="restore 后 100%% parity migration receipt",
     )
 
 

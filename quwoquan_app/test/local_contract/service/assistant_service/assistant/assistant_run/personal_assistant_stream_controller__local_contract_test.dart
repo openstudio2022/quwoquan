@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,23 +32,12 @@ import 'package:quwoquan_app/runtime/transport/actor_queue/actor_queue_storage.d
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/assistant_service/assistant/assistant_run/assistant_facets_typed_double.dart';
+import '../../../../../support/service/assistant_service/assistant/assistant_run/controllable_assistant_run_facets.dart';
 import '../../../../../support/runtime/transport/actor_queue/actor_queue_test_storage.dart';
 import '../../../../../support/service/assistant_service/assistant/assistant_run/assistant_scenario_fixtures.dart';
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 
 late ActorQueueStorage _actorQueueStorage;
-
-class _EmptyAssistantHistoryLoader implements AssistantHistoryLoader {
-  const _EmptyAssistantHistoryLoader();
-
-  @override
-  Future<AssistantHistorySnapshot?> load({
-    required String personaId,
-    String sessionId = '',
-  }) async {
-    return null;
-  }
-}
 
 void main() {
   late Directory hiveDirectory;
@@ -79,7 +69,7 @@ void main() {
             ScenarioMockAssistantRepository(pack: scenarioPack),
           ),
           assistantHistoryLoaderProvider.overrideWithValue(
-            const _EmptyAssistantHistoryLoader(),
+            const EmptyAssistantHistoryLoader(),
           ),
           actorQueueStorageProvider.overrideWithValue(_actorQueueStorage),
           assistantLearningFactOutboxEnvironmentProvider.overrideWithValue(
@@ -113,25 +103,25 @@ void main() {
 
     test('projects typed stream and ignores duplicate seq', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '你好，'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '重复'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 1,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '乱序'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 3,
               eventType: 'completed',
               payload: const <String, dynamic>{'text': '你好，我是找私助。'},
@@ -164,10 +154,10 @@ void main() {
     test(
       'retries one command identity without creating a second session',
       () async {
-        final repository = _FakeAssistantRepository(
+        final repository = ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'completed',
               payload: const <String, dynamic>{'text': '重试成功'},
@@ -209,10 +199,10 @@ void main() {
     test(
       'retries an unacknowledged session creation with the same intent',
       () async {
-        final repository = _FakeAssistantRepository(
+        final repository = ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'completed',
               payload: const <String, dynamic>{'text': '会话重试成功'},
@@ -252,10 +242,10 @@ void main() {
     );
 
     test('交集入口只向下一次 StartAssistantRun 提交强类型证据引用', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(seq: 1, eventType: 'run_started'),
-          _event(
+          assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+          assistantRunStreamEventFixture(
             seq: 2,
             eventType: 'completed',
             payload: const <String, dynamic>{'text': '已按交集说明。'},
@@ -299,10 +289,10 @@ void main() {
     });
 
     test('完整会话入口在首个 StartAssistantRun 前上报同一份页面上下文', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(seq: 1, eventType: 'run_started'),
-          _event(
+          assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+          assistantRunStreamEventFixture(
             seq: 2,
             eventType: 'completed',
             payload: const <String, dynamic>{'text': '已整理页面上下文。'},
@@ -336,7 +326,7 @@ void main() {
     });
 
     test('页面上下文上报失败时完整会话不得启动 Run', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: const <AssistantStreamEventWire>[],
       )..failPageContextReport = true;
       final container = _containerWith(assistantRepository: repository);
@@ -365,15 +355,15 @@ void main() {
     test('终态流按目录化 assistant_turn_quality 上报全链路质量', () async {
       final telemetry = RecordingAppTelemetryRecorder();
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '正在整理'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 3,
               eventType: 'completed',
               payload: const <String, dynamic>{'text': '整理完成'},
@@ -416,19 +406,19 @@ void main() {
 
     test('restarted run_started 清空重启前的回答增量', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(
+            assistantRunStreamEventFixture(
               seq: 1,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '旧回答'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'run_started',
               payload: const <String, dynamic>{'restarted': true},
             ),
-            _event(seq: 3, eventType: 'completed'),
+            assistantRunStreamEventFixture(seq: 3, eventType: 'completed'),
           ],
         ),
       );
@@ -453,9 +443,9 @@ void main() {
           snapshot: await _buildAssistantHistorySnapshot(),
         );
         final container = _containerWith(
-          assistantRepository: _FakeAssistantRepository(
+          assistantRepository: ControllableAssistantRunFacets(
             events: <AssistantStreamEventWire>[
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 1,
                 eventType: 'completed',
                 payload: const <String, dynamic>{'text': '你好，我是找私助。'},
@@ -512,7 +502,7 @@ void main() {
     test(
       'history load failure stays visible and retry restores the cloud transcript',
       () async {
-        final repository = _FakeAssistantRepository(
+        final repository = ControllableAssistantRunFacets(
           events: const <AssistantStreamEventWire>[],
         );
         final historyLoader = _FakeAssistantHistoryLoader(
@@ -557,14 +547,14 @@ void main() {
       'keeps each personal assistant turn in canonical timeline order',
       () async {
         final container = _containerWith(
-          assistantRepository: _FakeAssistantRepository(
+          assistantRepository: ControllableAssistantRunFacets(
             events: <AssistantStreamEventWire>[
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 1,
                 eventType: 'process_replace',
                 payload: const <String, dynamic>{'processes': <Object?>[]},
               ),
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 2,
                 eventType: 'process_append',
                 payload: const <String, dynamic>{
@@ -578,7 +568,7 @@ void main() {
                   },
                 },
               ),
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 3,
                 eventType: 'process_commit',
                 payload: const <String, dynamic>{
@@ -592,7 +582,7 @@ void main() {
                   },
                 },
               ),
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 4,
                 eventType: 'completed',
                 payload: const <String, dynamic>{'text': '第一轮答案'},
@@ -635,9 +625,9 @@ void main() {
       'terminal replay restores process and citation from completed snapshot',
       () async {
         final container = _containerWith(
-          assistantRepository: _FakeAssistantRepository(
+          assistantRepository: ControllableAssistantRunFacets(
             events: <AssistantStreamEventWire>[
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 9,
                 eventType: 'completed',
                 payload: const <String, dynamic>{
@@ -690,9 +680,9 @@ void main() {
 
     test('projects runtime failure instead of raw debug text', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(
+            assistantRunStreamEventFixture(
               seq: 1,
               eventType: 'failed',
               runtimeFailure: const RuntimeFailureWire(
@@ -725,10 +715,10 @@ void main() {
       'uses retrievalProcessing counts instead of tool event counts',
       () async {
         final container = _containerWith(
-          assistantRepository: _FakeAssistantRepository(
+          assistantRepository: ControllableAssistantRunFacets(
             events: <AssistantStreamEventWire>[
-              _event(seq: 1, eventType: 'run_started'),
-              _event(
+              assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+              assistantRunStreamEventFixture(
                 seq: 2,
                 eventType: 'process_append',
                 payload: const <String, dynamic>{
@@ -742,7 +732,7 @@ void main() {
                   },
                 },
               ),
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 3,
                 eventType: 'process_commit',
                 payload: const <String, dynamic>{
@@ -769,7 +759,7 @@ void main() {
                   },
                 },
               ),
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 4,
                 eventType: 'completed',
                 payload: const <String, dynamic>{'text': '深圳天气回答'},
@@ -798,10 +788,10 @@ void main() {
 
     test('在回答生成过程提交后持久化回答组织叙述', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'process_commit',
               payload: const <String, dynamic>{
@@ -818,12 +808,12 @@ void main() {
                 },
               },
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 3,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '深圳今天适合'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 4,
               eventType: 'process_commit',
               payload: const <String, dynamic>{
@@ -836,7 +826,7 @@ void main() {
                 },
               },
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 5,
               eventType: 'completed',
               payload: const <String, dynamic>{'text': '深圳今天适合短时户外活动，请留意午后阵雨。'},
@@ -874,10 +864,10 @@ void main() {
       'projects user-visible planning summary without raw search queries',
       () async {
         final container = _containerWith(
-          assistantRepository: _FakeAssistantRepository(
+          assistantRepository: ControllableAssistantRunFacets(
             events: <AssistantStreamEventWire>[
-              _event(seq: 1, eventType: 'run_started'),
-              _event(
+              assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+              assistantRunStreamEventFixture(
                 seq: 2,
                 eventType: 'process_append',
                 payload: const <String, dynamic>{
@@ -891,7 +881,7 @@ void main() {
                   },
                 },
               ),
-              _event(
+              assistantRunStreamEventFixture(
                 seq: 3,
                 eventType: 'completed',
                 payload: const <String, dynamic>{'text': '深圳亲子出行建议'},
@@ -915,7 +905,7 @@ void main() {
 
     test('loads app message unread summary', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[],
         ),
         appMessageQuery: _FakeAppMessageQuery(unreadCount: 2),
@@ -932,11 +922,23 @@ void main() {
     });
 
     test('opens app message target turn in personal assistant state', () async {
-      final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
-          events: <AssistantStreamEventWire>[],
+      final repository = ControllableAssistantRunFacets(
+        events: <AssistantStreamEventWire>[],
+        getRunResult: const AssistantRunEnvelopeWire(
+          runId: 'arn_test_personal',
+          sessionId: 'asn_mock_personal_assistant',
+          status: 'completed',
+          goal: '明早出发前提醒我带伞',
+          terminalSnapshot: AssistantRunTerminalSnapshotView(
+            answerText: '明早出发前带伞，提醒任务已完成。',
+            processes: <AssistantRunVisibleProcessView>[],
+          ),
+          traceId: 'trace_mock_personal_assistant',
+          createdAt: '2026-04-29T00:00:00Z',
+          completedAt: '2026-04-29T00:01:00Z',
         ),
       );
+      final container = _containerWith(assistantRepository: repository);
       addTearDown(container.dispose);
 
       await container
@@ -946,7 +948,9 @@ void main() {
       final state = container.read(personalAssistantStreamControllerProvider);
       expect(state.runId, 'arn_test_personal');
       expect(state.sessionId, 'asn_mock_personal_assistant');
-      expect(state.answer, contains('已打开主动提醒'));
+      expect(state.answer, '明早出发前带伞，提醒任务已完成。');
+      expect(state.running, isFalse);
+      expect(repository.streamResumeTokens, isEmpty);
       expect(
         state.transcript.map(
           (item) =>
@@ -961,7 +965,7 @@ void main() {
     test(
       'skill center separates default enablement from proactive subscription',
       () async {
-        final repository = _FakeAssistantRepository(
+        final repository = ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[],
         );
         final container = _containerWith(assistantRepository: repository);
@@ -1006,7 +1010,7 @@ void main() {
     );
 
     test('无 runId 时反馈仅本地记录，不产生学习上报', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[],
       );
       final container = _containerWith(assistantRepository: repository);
@@ -1024,9 +1028,9 @@ void main() {
 
     // ── C. 学习回路：submitFeedback → AppendAssistantLearningFact ──
     test('submitFeedback 追加学习事实且 eventId 稳定派生', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(
+          assistantRunStreamEventFixture(
             seq: 1,
             eventType: 'completed',
             payload: const <String, dynamic>{'text': '反馈用回答'},
@@ -1071,9 +1075,9 @@ void main() {
     });
 
     test('学习上报失败不阻塞 UI，事件进待重试并在下一轮 turn 完成后补发', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(
+          assistantRunStreamEventFixture(
             seq: 1,
             eventType: 'completed',
             payload: const <String, dynamic>{'text': '第一轮回答'},
@@ -1115,9 +1119,9 @@ void main() {
     });
 
     test('学习部分确认只移除已确认的稳定反馈事件', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(
+          assistantRunStreamEventFixture(
             seq: 1,
             eventType: 'completed',
             payload: const <String, dynamic>{'text': '第一轮回答'},
@@ -1168,15 +1172,15 @@ void main() {
     test('completed 的 emergedTags 合成 assistant_interest 行为回流', () async {
       final behaviorRepo = RecordingContentBehaviorRepository();
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '稻城亚丁秋季最佳。'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 3,
               eventType: 'completed',
               payload: const <String, dynamic>{
@@ -1207,9 +1211,9 @@ void main() {
     test('无 completed emergedTags 时不回流 assistant_interest', () async {
       final behaviorRepo = RecordingContentBehaviorRepository();
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(
+            assistantRunStreamEventFixture(
               seq: 1,
               eventType: 'completed',
               payload: const <String, dynamic>{'text': '没有命中站内内容。'},
@@ -1230,14 +1234,14 @@ void main() {
 
     test('extractAssistantEmergedTags 仅取 completed 并去重过滤空值', () {
       final tags = extractAssistantEmergedTags(<AssistantStreamEventWire>[
-        _event(
+        assistantRunStreamEventFixture(
           seq: 1,
           eventType: 'answer_delta',
           payload: const <String, dynamic>{
             'emergedTags': <String>['Topic/应忽略'],
           },
         ),
-        _event(
+        assistantRunStreamEventFixture(
           seq: 2,
           eventType: 'completed',
           payload: const <String, dynamic>{
@@ -1251,9 +1255,9 @@ void main() {
     // ---- 会话生命周期新能力合同（R-ASSIST-001 收口）----
 
     test('缺少终态事件的中断流进入可重试失败而非伪造完成', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(seq: 1, eventType: 'run_started'),
+          assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
         ],
       );
       final container = _containerWith(assistantRepository: repository);
@@ -1274,10 +1278,10 @@ void main() {
 
     test('cancelled 且无回答增量时收尾为停止占位', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'cancelled',
               payload: const <String, dynamic>{'status': 'cancelled'},
@@ -1302,15 +1306,15 @@ void main() {
 
     test('cancelled 保留已生成的回答增量', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: <AssistantStreamEventWire>[
-            _event(seq: 1, eventType: 'run_started'),
-            _event(
+            assistantRunStreamEventFixture(seq: 1, eventType: 'run_started'),
+            assistantRunStreamEventFixture(
               seq: 2,
               eventType: 'answer_delta',
               payload: const <String, dynamic>{'text': '已生成一半'},
             ),
-            _event(
+            assistantRunStreamEventFixture(
               seq: 3,
               eventType: 'cancelled',
               payload: const <String, dynamic>{'status': 'cancelled'},
@@ -1336,7 +1340,7 @@ void main() {
         snapshot: await _buildAssistantHistorySnapshot(),
       );
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: const <AssistantStreamEventWire>[],
         ),
         historyLoader: historyLoader,
@@ -1361,7 +1365,7 @@ void main() {
         snapshot: await _buildAssistantHistorySnapshot(),
       );
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: const <AssistantStreamEventWire>[],
         ),
         historyLoader: historyLoader,
@@ -1388,7 +1392,7 @@ void main() {
 
     test('ensureHistoryInitialized 绑定最近云端会话 sessionId 供续聊', () async {
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: const <AssistantStreamEventWire>[],
         ),
         historyLoader: _FakeAssistantHistoryLoader(
@@ -1408,9 +1412,9 @@ void main() {
     });
 
     test('regenerateLastAnswer 保持原问题并先写入会话偏好', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: <AssistantStreamEventWire>[
-          _event(
+          assistantRunStreamEventFixture(
             seq: 1,
             eventType: 'completed',
             payload: const <String, dynamic>{'text': '第一次回答'},
@@ -1448,7 +1452,7 @@ void main() {
     });
 
     test('ApproveTool 批准与 Device receipt 保持两个独立 command', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: const <AssistantStreamEventWire>[],
         approvalDevicePermit: _devicePermit(),
       );
@@ -1466,12 +1470,16 @@ void main() {
         personalAssistantStreamControllerProvider.notifier,
       );
       final approved = _approveToolAction();
+      final activeRun = await _openActiveActionRun(notifier, repository);
 
       expect(notifier.canHandlePresentationAction(approved), isTrue);
-      await notifier.handlePresentationAction(
+      final approvedFuture = notifier.handlePresentationAction(
         runId: 'arn_action',
         action: approved,
       );
+      await pumpEventQueue();
+      await _completeActionRun(activeRun);
+      await approvedFuture;
 
       expect(repository.approvedToolUses, hasLength(1));
       expect(repository.approvedToolUses.single.decision, 'approved');
@@ -1488,10 +1496,12 @@ void main() {
         intentId: 'reject_calendar',
         jti: 'reject_calendar_jti',
       );
+      final rejectedRun = await _openActiveActionRun(notifier, repository);
       await notifier.handlePresentationAction(
         runId: 'arn_action',
         action: rejected,
       );
+      await _completeActionRun(rejectedRun);
       expect(repository.approvedToolUses, hasLength(2));
       expect(repository.approvedToolUses.last.decision, 'rejected');
       expect(executor.intents, hasLength(1));
@@ -1499,7 +1509,7 @@ void main() {
     });
 
     test('批准结果没有 Device permit 时不等于设备执行成功', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: const <AssistantStreamEventWire>[],
       );
       final executor = _RecordingAssistantDeviceActionExecutor();
@@ -1512,13 +1522,18 @@ void main() {
         ),
       );
       addTearDown(container.dispose);
+      final notifier = container.read(
+        personalAssistantStreamControllerProvider.notifier,
+      );
+      final activeRun = await _openActiveActionRun(notifier, repository);
 
-      await container
-          .read(personalAssistantStreamControllerProvider.notifier)
-          .handlePresentationAction(
-            runId: 'arn_action',
-            action: _approveToolAction(),
-          );
+      final approvalFuture = notifier.handlePresentationAction(
+        runId: 'arn_action',
+        action: _approveToolAction(),
+      );
+      await pumpEventQueue();
+      await _completeActionRun(activeRun);
+      await approvalFuture;
 
       expect(repository.approvedToolUses, hasLength(1));
       expect(executor.intents, isEmpty);
@@ -1526,7 +1541,7 @@ void main() {
     });
 
     test('未知 kind、过期、digest mismatch 与 replay 均零新增执行', () async {
-      final repository = _FakeAssistantRepository(
+      final repository = ControllableAssistantRunFacets(
         events: const <AssistantStreamEventWire>[],
       );
       final executor = _RecordingAssistantDeviceActionExecutor();
@@ -1578,10 +1593,14 @@ void main() {
       expect(repository.deviceReceipts, isEmpty);
 
       final execute = _executeDeviceAction();
-      await notifier.handlePresentationAction(
+      final activeRun = await _openActiveActionRun(notifier, repository);
+      final executeFuture = notifier.handlePresentationAction(
         runId: 'arn_action',
         action: execute,
       );
+      await pumpEventQueue();
+      await _completeActionRun(activeRun);
+      await executeFuture;
       expect(notifier.canHandlePresentationAction(execute), isFalse);
       await notifier.handlePresentationAction(
         runId: 'arn_action',
@@ -1595,7 +1614,7 @@ void main() {
       final navigate = _RecordingNavigateIntentHandler();
       final input = _RecordingProvideInputIntentHandler();
       final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
+        assistantRepository: ControllableAssistantRunFacets(
           events: const <AssistantStreamEventWire>[],
         ),
         navigateIntentHandler: navigate,
@@ -1865,7 +1884,7 @@ ProviderContainer _containerWith({
         ),
       ),
       assistantHistoryLoaderProvider.overrideWithValue(
-        historyLoader ?? const _EmptyAssistantHistoryLoader(),
+        historyLoader ?? const EmptyAssistantHistoryLoader(),
       ),
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
@@ -1877,6 +1896,55 @@ ProviderContainer _containerWith({
 
 Future<void> _flushLearningFactOutbox(ProviderContainer container) =>
     container.read(assistantLearningFactOutboxProvider.notifier).flush();
+
+Future<
+  ({StreamController<AssistantStreamEventWire> stream, Future<void> openFuture})
+>
+_openActiveActionRun(
+  PersonalAssistantStreamController notifier,
+  ControllableAssistantRunFacets repository,
+) async {
+  final stream = StreamController<AssistantStreamEventWire>.broadcast();
+  repository
+    ..getRunResult = const AssistantRunEnvelopeWire(
+      runId: 'arn_action',
+      sessionId: 'asn_action',
+      status: 'waiting_approval',
+      goal: '执行已确认的设备动作',
+      traceId: 'trace_action',
+      createdAt: '2026-08-08T00:00:00Z',
+    )
+    ..eventStreamsByRunId['arn_action'] = stream.stream;
+  final openFuture = notifier.openRunFromAppMessage('arn_action');
+  await pumpEventQueue();
+  stream.add(
+    assistantRunStreamEventFixture(
+      seq: 1,
+      eventType: 'run_started',
+      runId: 'arn_action',
+      sessionId: 'asn_action',
+    ),
+  );
+  await pumpEventQueue();
+  return (stream: stream, openFuture: openFuture);
+}
+
+Future<void> _completeActionRun(
+  ({StreamController<AssistantStreamEventWire> stream, Future<void> openFuture})
+  activeRun,
+) async {
+  activeRun.stream.add(
+    assistantRunStreamEventFixture(
+      seq: 2,
+      eventType: 'completed',
+      runId: 'arn_action',
+      sessionId: 'asn_action',
+      payload: const <String, dynamic>{'text': '动作已完成'},
+    ),
+  );
+  await activeRun.stream.close();
+  await activeRun.openFuture;
+}
 
 Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
   // 云端历史恢复真相源：CloudAssistantHistoryLoader 消费 List sessions/turns
@@ -1934,246 +2002,6 @@ class _HistoryFacetStub extends InMemoryAssistantFacets {
     String cursor = '',
   }) async {
     return AssistantTurnListView(items: turns);
-  }
-}
-
-AssistantStreamEventWire _event({
-  required int seq,
-  required String eventType,
-  Map<String, dynamic> payload = const <String, dynamic>{},
-  RuntimeFailureWire? runtimeFailure,
-}) {
-  final wirePayload = <String, dynamic>{...payload};
-  if (eventType == 'completed' &&
-      !wirePayload.containsKey('finalAnswer') &&
-      wirePayload['text'] is String) {
-    wirePayload['finalAnswer'] = wirePayload['text'];
-  }
-  return AssistantStreamEventWire(
-    schema: 'assistant_stream_event',
-    eventId: 'evt_$seq',
-    sessionId: 'asn_test_personal',
-    runId: 'arn_test_personal',
-    seq: seq,
-    eventType: parseAssistantStreamEventTypeStrict(eventType),
-    payload: wirePayload,
-    runtimeFailure: runtimeFailure,
-    createdAt: '2026-04-29T00:00:00Z',
-  );
-}
-
-class _FakeAssistantRepository extends InMemoryAssistantFacets {
-  _FakeAssistantRepository({required this.events, this.approvalDevicePermit});
-
-  final List<AssistantStreamEventWire> events;
-  final AssistantDeviceActionPermit? approvalDevicePermit;
-  int _turnCounter = 0;
-  int createSessionFailuresRemaining = 0;
-  int startRunFailuresRemaining = 0;
-  bool failPageContextReport = false;
-  final List<String> createdSessionRequestIds = <String>[];
-  final List<String> startedRunClientRequestIds = <String>[];
-  final List<String> callOrder = <String>[];
-  final List<String> reportedPageContextActions = <String>[];
-  AssistantOpenContext? reportedPageContext;
-
-  @override
-  Future<PageContextReceipt> reportPageContext({
-    required AssistantOpenContext context,
-    String? userAction,
-  }) async {
-    callOrder.add('reportPageContext');
-    reportedPageContext = context;
-    reportedPageContextActions.add(userAction ?? '');
-    if (failPageContextReport) {
-      throw StateError('page context unavailable (test)');
-    }
-    return PageContextReceipt(
-      accepted: true,
-      contextKey: 'ctx_test',
-      expiresAt: '2026-08-02T12:05:00Z',
-    );
-  }
-
-  /// 记录单轨学习事实 command；可按 eventId 模拟失败以覆盖重试语义。
-  final List<AssistantLearningFactAppendCommand> learningFacts =
-      <AssistantLearningFactAppendCommand>[];
-  bool failLearningFactAppend = false;
-  final Set<String> rejectedLearningFactIds = <String>{};
-
-  @override
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AssistantLearningFactAppendCommand request,
-  }) async {
-    learningFacts.add(request);
-    if (failLearningFactAppend ||
-        rejectedLearningFactIds.contains(request.eventId)) {
-      throw StateError('learning append unavailable (test)');
-    }
-    return AssistantLearningFactReceipt(
-      eventId: request.eventId,
-      accepted: true,
-      deduplicated: false,
-      appendSequence: learningFacts.length,
-      payloadDigest:
-          '0000000000000000000000000000000000000000000000000000000000000000',
-      recordedAt: DateTime.now().toUtc().toIso8601String(),
-    );
-  }
-
-  @override
-  Future<AssistantSessionWire> createAssistantSession({
-    String summary = '',
-    required String clientRequestId,
-  }) async {
-    createdSessionRequestIds.add(clientRequestId);
-    if (createSessionFailuresRemaining > 0) {
-      createSessionFailuresRemaining -= 1;
-      throw StateError('assistant session unavailable (test)');
-    }
-    return const AssistantSessionWire(
-      sessionId: 'asn_test_personal',
-      userId: 'user_test',
-      createdAt: '2026-04-29T00:00:00Z',
-      updatedAt: '2026-04-29T00:00:00Z',
-    );
-  }
-
-  /// 记录 StartAssistantRun 提交文本（regenerate 合同断言消费）。
-  final List<String> startedRunTexts = <String>[];
-  List<AssistantIntersectionEvidenceRef> startedIntersectionEvidenceRefs =
-      const <AssistantIntersectionEvidenceRef>[];
-
-  @override
-  Future<AssistantRunEnvelopeWire> startAssistantRun({
-    required String sessionId,
-    required String text,
-    required String clientRequestId,
-    String turnType = 'user',
-    String skillId = '',
-    String domainId = '',
-    List<AssistantIntersectionEvidenceRef> intersectionEvidenceRefs =
-        const <AssistantIntersectionEvidenceRef>[],
-  }) async {
-    callOrder.add('startAssistantRun');
-    _turnCounter += 1;
-    startedRunTexts.add(text);
-    startedRunClientRequestIds.add(clientRequestId);
-    startedIntersectionEvidenceRefs =
-        List<AssistantIntersectionEvidenceRef>.unmodifiable(
-          intersectionEvidenceRefs,
-        );
-    if (startRunFailuresRemaining > 0) {
-      startRunFailuresRemaining -= 1;
-      throw StateError('assistant start unavailable (test)');
-    }
-    return AssistantRunEnvelopeWire(
-      runId: _turnCounter == 1
-          ? 'arn_test_personal'
-          : 'arn_test_personal_$_turnCounter',
-      sessionId: sessionId,
-      goal: text,
-      traceId: 'trace_test',
-      createdAt: '2026-04-29T00:00:00Z',
-    );
-  }
-
-  /// 记录 CancelAssistantRun 调用（stopGeneration 合同断言消费）。
-  final List<String> cancelledRunIds = <String>[];
-  final List<
-    ({
-      String runId,
-      String toolInvocationId,
-      String decision,
-      String approvalPermit,
-    })
-  >
-  approvedToolUses = [];
-  final List<
-    ({
-      String runId,
-      String toolInvocationId,
-      AssistantDeviceActionExecutionReceipt receipt,
-    })
-  >
-  deviceReceipts = [];
-
-  @override
-  Future<AssistantRunEnvelopeWire> cancelAssistantRun({
-    required String runId,
-    required String commandRequestId,
-  }) async {
-    cancelledRunIds.add(runId);
-    return AssistantRunEnvelopeWire(
-      runId: runId,
-      sessionId: 'asn_test_personal',
-      status: 'cancelled',
-      traceId: 'trace_test',
-      createdAt: '2026-04-29T00:00:00Z',
-    );
-  }
-
-  @override
-  Future<AssistantToolApprovalResult> approveAssistantToolUse({
-    required String runId,
-    required String toolInvocationId,
-    required String commandRequestId,
-    required String decision,
-    required String approvalPermit,
-    String? installationId,
-    String? deviceId,
-  }) async {
-    approvedToolUses.add((
-      runId: runId,
-      toolInvocationId: toolInvocationId,
-      decision: decision,
-      approvalPermit: approvalPermit,
-    ));
-    return AssistantToolApprovalResult(
-      runId: runId,
-      state: decision == 'approved' ? 'executing' : 'cancelled',
-      deviceActionPermit: decision == 'approved' ? approvalDevicePermit : null,
-    );
-  }
-
-  @override
-  Future<AssistantRunEnvelopeWire> submitDeviceActionReceipt({
-    required String runId,
-    required String toolInvocationId,
-    required String commandRequestId,
-    required AssistantDeviceActionExecutionReceipt receipt,
-  }) async {
-    deviceReceipts.add((
-      runId: runId,
-      toolInvocationId: toolInvocationId,
-      receipt: receipt,
-    ));
-    return AssistantRunEnvelopeWire(
-      runId: runId,
-      sessionId: 'asn_test_personal',
-      status: 'executing',
-      traceId: 'trace_test',
-      createdAt: '2026-04-29T00:00:00Z',
-    );
-  }
-
-  @override
-  Stream<AssistantStreamEventWire> watchAssistantRunEvents({
-    required String runId,
-    String lastEventId = '',
-  }) async* {
-    if (lastEventId.isNotEmpty && events.isEmpty) {
-      yield _event(
-        seq: (int.tryParse(lastEventId) ?? 0) + 1,
-        eventType: 'completed',
-        payload: <String, dynamic>{
-          'status': 'completed',
-          'finalAnswer': '设备上的系统日程已创建。',
-        },
-      );
-      return;
-    }
-    yield* Stream<AssistantStreamEventWire>.fromIterable(events);
   }
 }
 

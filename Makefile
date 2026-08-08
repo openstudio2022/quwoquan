@@ -75,11 +75,12 @@
 .PHONY: observability-es-smoke
 .PHONY: verify-reliable-task-topology
 .PHONY: verify-service-architecture
-.PHONY: verify-coverage-ratchet
-.PHONY: verify-coverage-ratchet-app
-.PHONY: verify-coverage-ratchet-service
-.PHONY: write-coverage-ratchet-baseline
+.PHONY: verify-canonical-coverage
+.PHONY: verify-canonical-coverage-app
+.PHONY: verify-canonical-coverage-service
+.PHONY: write-canonical-coverage-baseline
 .PHONY: verify-metadata
+.PHONY: verify-append-only-fact-command-admission
 .PHONY: verify-contract-alert-overlay
 .PHONY: verify-metric-identity-homology
 .PHONY: verify-operation-privacy-redaction
@@ -97,15 +98,18 @@
 .PHONY: verify-behavior-event-type-contract
 .PHONY: verify-object-relation-edge-type-contract
 .PHONY: verify-object-alert-coverage
-.PHONY: verify-object-evidence-closure
+.PHONY: verify-object-evidence-closure verify-object-evidence-commercial-closure
+.PHONY: verify-readiness-execution-plan collect-readiness-result-bundle
 .PHONY: verify-app-domain-remote-api-integration
 .PHONY: verify-homepage-type-contract
 .PHONY: verify-app-cloud-runtime-single-path
 .PHONY: verify-app-cloud-security-cutovers
 .PHONY: accept-app-contract-handoff
 .PHONY: verify-app-contract-handoff
+.PHONY: verify-app-contract-handoff-inputs
 .PHONY: verify-app-generated-manifest
 .PHONY: verify-app-enum-typed-binding
+.PHONY: verify-app-cohesion-ratchet
 .PHONY: verify-app-shell-navigation
 .PHONY: verify-app-cloud-package-boundaries
 .PHONY: codegen
@@ -465,24 +469,28 @@ verify-service-architecture:
 	@find . \( -path './.git' -o -path './.qwq_output' \) -prune -o -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -exec rm -rf {} + ; true
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_service_architecture.py
 
-# 覆盖率棘轮（端侧行/分支 + 云侧语句，只增不减）。--collect 会真跑测试采集覆盖率，
+# 唯一 canonical coverage rule（端侧行/分支 + 云侧语句，只增不减）。--collect 会真跑测试采集覆盖率，
 # 因此比纯静态门禁慢；已挂入 gate_repo.sh 的 run_app / run_service 分支。
-verify-coverage-ratchet:
-	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect
+verify-canonical-coverage:
+	@python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect
 
-verify-coverage-ratchet-app:
-	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --scope app
+verify-canonical-coverage-app:
+	@python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope app
 
-verify-coverage-ratchet-service:
-	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --scope service
+verify-canonical-coverage-service:
+	@python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope service
 
-# 覆盖率提升后收紧基线。SCOPE=app|service|all，或 UNIT=service:tag-service。
-write-coverage-ratchet-baseline:
-	@python3 quwoquan_ops/gate/verify_coverage_ratchet.py --collect --write-baseline \
-		$(if $(UNIT),--unit $(UNIT),--scope $(if $(SCOPE),$(SCOPE),all))
+# 仅在 App/Cloud/Python/Ops 全单元同次绿采集后整体写入唯一 canonical baseline。
+# 禁止 SCOPE/UNIT 分区更新，避免同一 baseline 混入不同时点的 receipt。
+write-canonical-coverage-baseline:
+	@python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --write-baseline
 
 verify-metadata:
 	@$(MAKE) -C quwoquan_service verify-metadata
+
+# append_only_fact 的公开 command 不得承载实例级不变式，追加语义必须保持不可变。
+verify-append-only-fact-command-admission:
+	@python3 quwoquan_service/scripts/verify/structure/verify_append_only_fact_command_admission.py
 
 # 手写 PromQL 收敛：可派生规则必须迁入 codegen，剩余规则必须在 overlay manifest 登记不可派生理由。
 verify-contract-alert-overlay:
@@ -695,11 +703,49 @@ verify-object-alert-coverage:
 
 # 对象 × 层 × 三层测试的 readiness 证据闭合：判定源是 metadata 装载/图构建管线派生的
 # ContractGraph（readinessEvidence + objectReadiness.missing），门禁只展开缺口，不重算
-# readiness 规则。缺省读 committed 图（其新鲜度由 quwoquan_service 的 qwq_contract check
-# 保证）；--derive 现场派生，--graph 指定任意图。存量缺口按维度 × kind 计数走棘轮基线。
+# readiness 规则。缺省现场派生图；--derive 为显式同义入口，--graph 只评估
+# 调用者绑定的精确图字节。STRUCTURAL 维度严格要求零缺口，不读取任何基线。
 verify-object-evidence-closure:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_object_evidence_closure.py
-	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/test_object_evidence_closure__ratchet_baseline__contract_graph__local_contract_test.py
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/test_object_evidence_closure__strict_zero__contract_graph__local_contract_test.py
+
+# 动态商业闭合只接受同一候选的六项完整 trust input。Make 不推导、不签名、
+# 不补默认值；缺任一项必须在构建 Go evaluator 前以 usage error 阻断。
+verify-object-evidence-commercial-closure:
+	@test -n "$(OBJECT_EVIDENCE_READINESS_BUNDLE)" || { echo "GATE_BLOCK missing OBJECT_EVIDENCE_READINESS_BUNDLE"; exit 2; }
+	@test -n "$(OBJECT_EVIDENCE_SIGNED_CURRENT_SNAPSHOT)" || { echo "GATE_BLOCK missing OBJECT_EVIDENCE_SIGNED_CURRENT_SNAPSHOT"; exit 2; }
+	@test -n "$(OBJECT_EVIDENCE_SNAPSHOT_KEYRING)" || { echo "GATE_BLOCK missing OBJECT_EVIDENCE_SNAPSHOT_KEYRING"; exit 2; }
+	@test -n "$(OBJECT_EVIDENCE_RUNNER_KEYRING)" || { echo "GATE_BLOCK missing OBJECT_EVIDENCE_RUNNER_KEYRING"; exit 2; }
+	@test -n "$(OBJECT_EVIDENCE_RECEIPT_ROOT)" || { echo "GATE_BLOCK missing OBJECT_EVIDENCE_RECEIPT_ROOT"; exit 2; }
+	@test -n "$(OBJECT_EVIDENCE_EVIDENCE_ROOT)" || { echo "GATE_BLOCK missing OBJECT_EVIDENCE_EVIDENCE_ROOT"; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_object_evidence_closure.py \
+		--require-commercial-readiness \
+		--readiness-bundle "$(OBJECT_EVIDENCE_READINESS_BUNDLE)" \
+		--signed-current-snapshot "$(OBJECT_EVIDENCE_SIGNED_CURRENT_SNAPSHOT)" \
+		--snapshot-keyring "$(OBJECT_EVIDENCE_SNAPSHOT_KEYRING)" \
+		--runner-keyring "$(OBJECT_EVIDENCE_RUNNER_KEYRING)" \
+		--receipt-root "$(OBJECT_EVIDENCE_RECEIPT_ROOT)" \
+		--evidence-root "$(OBJECT_EVIDENCE_EVIDENCE_ROOT)"
+
+# 只读展开 ContractGraph authored case × execution slots。该 target 不执行
+# runner、不签名，也不生产 receipt/ResultBundle；缺显式 graph 输入即 usage BLOCK。
+verify-readiness-execution-plan:
+	@test -n "$(READINESS_EXECUTION_PLAN_GRAPH)" || { echo "GATE_BLOCK missing READINESS_EXECUTION_PLAN_GRAPH"; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_readiness_execution_plan.py \
+		--graph "$(READINESS_EXECUTION_PLAN_GRAPH)"
+
+# 从当前 ContractGraph authored slots 与受信 runner receipt/evidence 汇聚唯一
+# ReadinessResultBundle。stdout 是唯一产物；本入口不签名、不运行环境、不写 receipt。
+collect-readiness-result-bundle:
+	@test -n "$(READINESS_RESULT_BUNDLE_GRAPH)" || { echo "GATE_BLOCK missing READINESS_RESULT_BUNDLE_GRAPH"; exit 2; }
+	@test -n "$(READINESS_RESULT_BUNDLE_RUNNER_KEYRING)" || { echo "GATE_BLOCK missing READINESS_RESULT_BUNDLE_RUNNER_KEYRING"; exit 2; }
+	@test -n "$(READINESS_RESULT_BUNDLE_RECEIPT_ROOT)" || { echo "GATE_BLOCK missing READINESS_RESULT_BUNDLE_RECEIPT_ROOT"; exit 2; }
+	@test -n "$(READINESS_RESULT_BUNDLE_EVIDENCE_ROOT)" || { echo "GATE_BLOCK missing READINESS_RESULT_BUNDLE_EVIDENCE_ROOT"; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/collect_readiness_result_bundle.py \
+		--graph "$(READINESS_RESULT_BUNDLE_GRAPH)" \
+		--runner-keyring "$(READINESS_RESULT_BUNDLE_RUNNER_KEYRING)" \
+		--receipt-root "$(READINESS_RESULT_BUNDLE_RECEIPT_ROOT)" \
+		--evidence-root "$(READINESS_RESULT_BUNDLE_EVIDENCE_ROOT)"
 
 # 五域对象级 App api_integration 证据：ContractGraph 派生 generated Remote 用例与
 # service api_integration 配对，并以对象/文件计数单调棘轮阻断回退。
@@ -728,11 +774,33 @@ verify-app-cloud-security-cutovers:
 verify-app-enum-typed-binding:
 	@python3 quwoquan_app/scripts/runtime/codegen/verify_app_enum_typed_binding.py
 
+# 端侧内聚棘轮：缺层对象、DI 里的 presentation、空目录只允许减少。
+verify-app-cohesion-ratchet:
+	@python3 quwoquan_app/scripts/runtime/architecture/verify_app_cohesion_ratchet.py
+
 accept-app-contract-handoff:
-	@python3 quwoquan_ops/cli/cloud_contract_handoff.py accept
+	@test -n "$(APP_CONTRACT_PREVIOUS_LOCK)" || { \
+		echo "APP_CONTRACT_PREVIOUS_LOCK is required" >&2; exit 2; \
+	}
+	@test -n "$(APP_CONTRACT_PREVIOUS_LOCK_SHA256)" || { \
+		echo "APP_CONTRACT_PREVIOUS_LOCK_SHA256 is required" >&2; exit 2; \
+	}
+	@test -n "$(APP_CONTRACT_EXPECTED_CURRENT_LOCK_SHA256)" || { \
+		echo "APP_CONTRACT_EXPECTED_CURRENT_LOCK_SHA256 is required" >&2; exit 2; \
+	}
+	@python3 quwoquan_ops/cli/cloud_contract_handoff.py accept \
+		--previous-lock "$(APP_CONTRACT_PREVIOUS_LOCK)" \
+		--previous-lock-sha256 "$(APP_CONTRACT_PREVIOUS_LOCK_SHA256)" \
+		--expected-current-lock-sha256 "$(APP_CONTRACT_EXPECTED_CURRENT_LOCK_SHA256)"
 
 verify-app-contract-handoff:
 	@python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+
+# ContractGraph 的实现/测试输入由编译期按 --repo-root 扫描派生，声明侧
+# sourceDigestSetSha256 与 compilerHash 都覆盖不到它们。这个目标把 graph 记录的
+# path+sha256 绑定与磁盘现状对一次，用来判定 graph 相对自身输入是否已过期。
+verify-app-contract-handoff-inputs:
+	@python3 quwoquan_ops/cli/cloud_contract_handoff.py verify-inputs
 
 verify-app-generated-manifest:
 	@python3 quwoquan_app/scripts/runtime/codegen/verify_app_generated_manifest.py
@@ -762,9 +830,15 @@ gate:
 	@$(MAKE) verify-homepage-type-contract
 	@$(MAKE) verify-app-cloud-runtime-single-path
 	@$(MAKE) verify-app-contract-handoff
+	@$(MAKE) verify-app-contract-handoff-inputs
 	@$(MAKE) verify-app-generated-manifest
 	@$(MAKE) verify-app-cloud-package-boundaries
 	@$(MAKE) verify-app-cloud-security-cutovers
+	@$(MAKE) verify-append-only-fact-command-admission
+	@$(MAKE) verify-contract-alert-overlay
+	@$(MAKE) verify-metric-identity-homology
+	@$(MAKE) verify-app-enum-typed-binding
+	@$(MAKE) verify-app-cohesion-ratchet
 	@$(MAKE) verify-feature-tree
 	@$(MAKE) verify-assistant-agent-replay-evaluation
 	@$(MAKE) verify-test-directory-layout
@@ -960,7 +1034,8 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/test_behavior_event_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_canonical_recommendation_policy__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_ci_cd_evidence_contracts__canonical__local_contract_test.py \
-		quwoquan_ops/tests/local_contract/test_coverage_ratchet__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_canonical_coverage__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_canonical_coverage_app_sharding__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_directory_layout__app_domain_dirs_from_roster__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_directory_layout__canonical_service_tests__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_env_artifact_isolation__local_contract_test.py \
@@ -970,6 +1045,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/test_nonprod_business_data_provisioning__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_object_idempotency_dedup__declared_required_without_dedup__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_object_relation_edge_type_contract__shared_enum_parity__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_readiness_result_bundle_collector__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_retired_runtime_architecture__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_runtime_log_governance__candidate_owned_elasticsearch__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_service_architecture__contract__local_contract_test.py \

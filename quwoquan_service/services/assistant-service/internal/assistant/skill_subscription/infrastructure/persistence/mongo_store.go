@@ -62,7 +62,6 @@ func (s *MongoStore) EnsureIndexes(ctx context.Context) error {
 		{Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_owner_status")},
 		{Keys: bson.D{{Key: "owner.ownerId", Value: 1}, {Key: "skillId", Value: 1}, {Key: "updatedAt", Value: -1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_owner_skill")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}, Options: options.Index().SetName("idx_skill_subscriptions_status_updated")},
-		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "trigger.type", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_trigger")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "deliveryState.nextAttemptAt", Value: 1}, {Key: "updatedAt", Value: 1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_skill_subscriptions_delivery")},
 	}
 	if _, err := s.coll.Indexes().CreateMany(ctx, indexes); err != nil {

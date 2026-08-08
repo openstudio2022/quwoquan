@@ -5,7 +5,11 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
+import pytest
 from content.release.canonical import post_promotion as subject
+from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
+)
 from core.io import write_json
 from core.tree_integrity import tree_integrity_stats
 
@@ -108,3 +112,112 @@ def test_promote_post_object_skips_apply_when_canonical_matches_package(
     assert result["canonicalObjectRef"] == f"posts/{post_ref}"
     assert apply_calls == []
     assert package_object  # silence unused in lint-free path
+
+
+@pytest.mark.parametrize(
+    ("drift_key", "canonical_value"),
+    (
+        ("executionId", "a-different-execution"),
+        ("sourceDigest", {"algorithm": "sha256", "digest": "b" * 64}),
+        ("title", "a different Merkle payload"),
+    ),
+)
+def test_promote_post_object_rejects_existing_canonical_identity_or_merkle_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    drift_key: str,
+    canonical_value: object,
+) -> None:
+    publish = tmp_path / "publish"
+    output = tmp_path / "output"
+    execution_id = "20260731--travel-image-idempotent--test-region-a--pilot-902"
+    post_ref = "image/摄影/已发布/2"
+    root = tmp_path / execution_id
+    post_root = root / "posts" / post_ref
+    write_json(post_root / "manifest.json", {"contentType": "image"})
+    write_json(post_root / "5.review/attestation.json", {"decision": "approved"})
+    package_manifest = {
+        "contentType": "image",
+        "executionId": execution_id,
+        "sourceDigest": {"algorithm": "sha256", "digest": "a" * 64},
+        "title": "expected payload",
+    }
+
+    monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
+    monkeypatch.setattr(subject, "OUTPUT_ROOT", output)
+    monkeypatch.setattr(subject, "execution_root", lambda _eid: root)
+    monkeypatch.setattr(subject, "_qualified_post_refs", lambda _eid: (post_ref,))
+    monkeypatch.setattr(
+        subject,
+        "_assert_cross_publish_image_unique",
+        lambda **_kwargs: None,
+    )
+
+    def fake_build(**kwargs: object) -> None:
+        package_root = kwargs["package_root"]
+        assert isinstance(package_root, Path)
+        write_json(package_root / "object/manifest.json", package_manifest)
+        canonical_manifest = dict(package_manifest)
+        canonical_manifest[drift_key] = canonical_value
+        write_json(
+            publish / "posts" / post_ref / "manifest.json",
+            canonical_manifest,
+        )
+
+    monkeypatch.setattr(subject, "build_post_object_transaction_package", fake_build)
+    monkeypatch.setattr(
+        subject,
+        "audit_object_transaction",
+        lambda **_kwargs: pytest.fail("drifted canonical must not be audited/applied"),
+    )
+    monkeypatch.setattr(
+        subject,
+        "apply_object_transaction",
+        lambda **_kwargs: pytest.fail("drifted canonical must not be applied"),
+    )
+
+    with pytest.raises(
+        ObjectTransactionError,
+        match="completed post transaction canonical object drift",
+    ):
+        subject.promote_post_object(execution_id, post_ref)
+
+
+def test_promote_execution_posts_does_not_count_existing_canonical_on_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_id = "20260731--travel-image-idempotent--test-region-a--pilot-903"
+    post_ref = "image/摄影/冲突/1"
+    publish = tmp_path / "publish"
+    write_json(
+        publish / "posts" / post_ref / "manifest.json",
+        {"executionId": "a-different-execution"},
+    )
+    publish_ref_writes: list[tuple[str, tuple[str, ...]]] = []
+
+    monkeypatch.setattr(subject, "PUBLISH_ROOT", publish)
+    monkeypatch.setattr(subject, "_qualified_post_refs", lambda _eid: (post_ref,))
+    monkeypatch.setattr(
+        subject,
+        "promote_post_object",
+        lambda _eid, _ref: (_ for _ in ()).throw(
+            ObjectTransactionError("canonical identity drift")
+        ),
+    )
+    monkeypatch.setattr(
+        "content.execution.spec_contract.approved_quota",
+        lambda _eid: 1,
+    )
+    monkeypatch.setattr(
+        subject,
+        "write_publish_ref",
+        lambda eid, *, post_refs: publish_ref_writes.append(
+            (eid, tuple(post_refs))
+        ),
+    )
+
+    with pytest.raises(ObjectTransactionError, match="promoted=0 required=1"):
+        subject.promote_execution_posts(execution_id)
+
+    assert publish_ref_writes == []

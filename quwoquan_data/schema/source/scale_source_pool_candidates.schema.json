@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/scale_source_pool_candidates.schema.json",
+  "title": "Digest-bound four-carrier scale source-pool candidates",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "targetScale",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "projectionBindings",
+    "candidateCounts",
+    "candidates",
+    "candidatesDigest"
+  ],
+  "properties": {
+    "schema": { "const": "quwoquan_data.scale_source_pool_candidates" },
+    "targetScale": { "enum": ["M100", "M1000", "M10000"] },
+    "sourceRevision": { "$ref": "#/$defs/sha256" },
+    "sourceDigest": { "$ref": "#/$defs/sha256" },
+    "entityCatalogDigest": { "$ref": "#/$defs/sha256" },
+    "projectionBindings": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "$ref": "#/$defs/homepageArticleBinding" },
+        { "$ref": "#/$defs/imageVideoBinding" }
+      ],
+      "items": false
+    },
+    "candidateCounts": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        { "$ref": "#/$defs/homepageCount" },
+        { "$ref": "#/$defs/articleCount" },
+        { "$ref": "#/$defs/imageCount" },
+        { "$ref": "#/$defs/videoCount" }
+      ],
+      "items": false
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "object" }
+    },
+    "candidatesDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "inputBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "documentDigest", "fileSha256"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "documentDigest": { "$ref": "#/$defs/sha256" },
+        "fileSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "projectionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "projectionDigest", "inputBindings"],
+      "properties": {
+        "kind": { "enum": ["homepage_article", "image_video"] },
+        "projectionDigest": { "$ref": "#/$defs/sha256" },
+        "inputBindings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/inputBinding" }
+        }
+      }
+    },
+    "homepageArticleBinding": {
+      "allOf": [
+        { "$ref": "#/$defs/projectionBinding" },
+        { "properties": { "kind": { "const": "homepage_article" } } }
+      ]
+    },
+    "imageVideoBinding": {
+      "allOf": [
+        { "$ref": "#/$defs/projectionBinding" },
+        { "properties": { "kind": { "const": "image_video" } } }
+      ]
+    },
+    "carrierCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier", "candidateCount"],
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "candidateCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "homepageCount": {
+      "allOf": [
+        { "$ref": "#/$defs/carrierCount" },
+        { "properties": { "carrier": { "const": "homepage" } } }
+      ]
+    },
+    "articleCount": {
+      "allOf": [
+        { "$ref": "#/$defs/carrierCount" },
+        { "properties": { "carrier": { "const": "article" } } }
+      ]
+    },
+    "imageCount": {
+      "allOf": [
+        { "$ref": "#/$defs/carrierCount" },
+        { "properties": { "carrier": { "const": "image" } } }
+      ]
+    },
+    "videoCount": {
+      "allOf": [
+        { "$ref": "#/$defs/carrierCount" },
+        { "properties": { "carrier": { "const": "video" } } }
+      ]
+    }
+  }
+}

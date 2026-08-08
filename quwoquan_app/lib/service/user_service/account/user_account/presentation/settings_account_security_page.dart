@@ -26,6 +26,7 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class SettingsAccountSecurityPage extends ConsumerStatefulWidget {
   const SettingsAccountSecurityPage({super.key});
@@ -191,8 +192,9 @@ class _SettingsAccountSecurityPageState
     setState(() {
       _closingAccount = true;
     });
+    late final CloseAccountResultWire result;
     try {
-      await ref
+      result = await ref
           .read(accountLifecycleCommandWriterProvider)
           .closeAccount(CloseAccountCommand());
     } catch (error) {
@@ -210,6 +212,32 @@ class _SettingsAccountSecurityPageState
           allowRetry: false,
           presentation: UiErrorPresentation.actionDialog,
         ),
+      );
+      return;
+    }
+
+    if (result.accountState != AccountState.closed) {
+      if (!mounted) return;
+      setState(() {
+        _closingAccount = false;
+      });
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: _nonClosedAccountResultFailure(result.accountState),
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.dialog,
+            presentation: UiErrorPresentation.actionDialog,
+          ),
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _confirmCloseAccount();
+          }
+        },
       );
       return;
     }
@@ -232,12 +260,14 @@ class _SettingsAccountSecurityPageState
       cleanupReceiptPersisted = true;
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'account_closure_local_cleanup_receipt',
-          error: error,
-          stackTrace: stackTrace,
-          operationId: AppCloudOperationIds.userUserAccountCloseAccount,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'account_closure_local_cleanup_receipt',
+              error: error,
+              stackTrace: stackTrace,
+              operationId: AppCloudOperationIds.userUserAccountCloseAccount,
+            ),
       );
     }
     final sessionController = ref.read(authSessionControllerProvider.notifier);
@@ -247,12 +277,14 @@ class _SettingsAccountSecurityPageState
     } catch (error, stackTrace) {
       sessionController.forceGuestAfterTerminalAccountClosure();
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'account_closure_local_session_cleanup',
-          error: error,
-          stackTrace: stackTrace,
-          operationId: AppCloudOperationIds.userUserAccountCloseAccount,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'account_closure_local_session_cleanup',
+              error: error,
+              stackTrace: stackTrace,
+              operationId: AppCloudOperationIds.userUserAccountCloseAccount,
+            ),
       );
     }
     try {
@@ -262,12 +294,14 @@ class _SettingsAccountSecurityPageState
       }
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'account_closure_local_privacy_cleanup',
-          error: error,
-          stackTrace: stackTrace,
-          operationId: AppCloudOperationIds.userUserAccountCloseAccount,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'account_closure_local_privacy_cleanup',
+              error: error,
+              stackTrace: stackTrace,
+              operationId: AppCloudOperationIds.userUserAccountCloseAccount,
+            ),
       );
       if (cleanupReceiptPersisted) {
         unawaited(ref.read(accountClosureLocalCleanupRecoveryProvider)());
@@ -340,4 +374,30 @@ class _SettingsAccountSecurityPageState
       context.go(AppRoutePaths.settings);
     }
   }
+}
+
+RuntimeFailure _nonClosedAccountResultFailure(AccountState accountState) {
+  return RuntimeFailure(
+    code: RuntimeFailureCodes.appContractInvalidResponse,
+    semanticReason: 'close_account_non_closed_result',
+    origin: RuntimeFailureOrigin.remoteDependency,
+    kind: RuntimeFailureKind.contract,
+    nature: RuntimeFailureNature.bug,
+    location: const RuntimeFailureLocation(
+      businessObject: 'user.user_account',
+      functionModule: 'settings_account_security_page',
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(
+          key: 'accountState',
+          value: accountState.wireName,
+        ),
+      ],
+    ),
+    recovery: const RuntimeRecoveryDirective(
+      action: 'retry',
+      disruptionLevel: 'inlineCard',
+    ),
+  );
 }

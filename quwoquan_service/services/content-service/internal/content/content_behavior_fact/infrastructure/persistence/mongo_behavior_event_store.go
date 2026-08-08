@@ -58,9 +58,6 @@ func (s *MongoBehaviorEventStore) ensureIndexes() {
 		{
 			Keys: bson.D{{Key: "contentId", Value: 1}, {Key: "createdAt", Value: -1}},
 		},
-		{
-			Keys: bson.D{{Key: "feedRequestId", Value: 1}, {Key: "channelId", Value: 1}, {Key: "recallPath", Value: 1}, {Key: "createdAt", Value: -1}},
-		},
 	}
 
 	for _, idx := range indexes {

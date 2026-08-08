@@ -9,6 +9,7 @@ import (
 
 func validateEventGovernance(contractGraph *graph.ContractGraph) []Issue {
 	entities := map[string]struct{}{}
+	objectsByID := map[string]ast.Object{}
 	localEntityFields := map[string]map[string]struct{}{}
 	for _, field := range contractGraph.Governance.Fields {
 		entities[field.Entity] = struct{}{}
@@ -19,6 +20,7 @@ func validateEventGovernance(contractGraph *graph.ContractGraph) []Issue {
 		localEntityFields[key][field.Name] = struct{}{}
 	}
 	for _, object := range contractGraph.Objects {
+		objectsByID[object.ID] = object
 		entities[object.Name] = struct{}{}
 	}
 	for _, projection := range contractGraph.Projections {
@@ -26,10 +28,49 @@ func validateEventGovernance(contractGraph *graph.ContractGraph) []Issue {
 	}
 	var issues []Issue
 	producedEvents := map[string][]ast.EventDefinition{}
+	wireTypeOwners := map[string]string{}
+	fieldVisibility := map[string]map[string][]string{}
 	for _, packet := range contractGraph.Governance.Objects {
+		if packet.Privacy != nil {
+			fieldVisibility[packet.ObjectID] = map[string][]string{}
+			for _, policy := range packet.Privacy.Document.FieldVisibility {
+				fieldVisibility[packet.ObjectID][strings.TrimSpace(policy.Field)] =
+					append([]string(nil), policy.Visibility...)
+			}
+		}
 		for _, event := range packet.Events {
 			eventRef := ast.CanonicalEventRef(packet.ObjectID, event.Name)
 			producedEvents[eventRef] = append(producedEvents[eventRef], event)
+			wireType := strings.TrimSpace(event.WireEventType)
+			if event.DeliverySemantics == "transactional_outbox" {
+				if wireType == "" {
+					issues = append(issues, issue(
+						"CONTRACT.EVENT.MISSING_WIRE_EVENT_TYPE",
+						event.SourcePath,
+						"transactional_outbox event_ref %q must declare its actual wire_event_type",
+						eventRef,
+					))
+				} else if previous, duplicate := wireTypeOwners[wireType]; duplicate {
+					issues = append(issues, issue(
+						"CONTRACT.EVENT.DUPLICATE_WIRE_EVENT_TYPE",
+						event.SourcePath,
+						"wire_event_type %q is owned by both %q and %q",
+						wireType,
+						previous,
+						eventRef,
+					))
+				} else {
+					wireTypeOwners[wireType] = eventRef
+				}
+			} else if wireType != "" {
+				issues = append(issues, issue(
+					"CONTRACT.EVENT.UNEXPECTED_WIRE_EVENT_TYPE",
+					event.SourcePath,
+					"event_ref %q declares wire_event_type but delivery_semantics is %q, not transactional_outbox",
+					eventRef,
+					event.DeliverySemantics,
+				))
+			}
 		}
 	}
 	for eventRef, producers := range producedEvents {
@@ -120,6 +161,7 @@ func validateEventGovernance(contractGraph *graph.ContractGraph) []Issue {
 		for _, event := range packet.Events {
 			eventRef := ast.CanonicalEventRef(packet.ObjectID, event.Name)
 			consumers := reverseConsumers[eventRef]
+			producer := objectsByID[packet.ObjectID]
 			if event.ClientWSType != "" {
 				if previous, duplicate := clientWSTypeOwners[event.ClientWSType]; duplicate {
 					issues = append(issues, issue(
@@ -165,6 +207,31 @@ func validateEventGovernance(contractGraph *graph.ContractGraph) []Issue {
 					eventRef,
 					field,
 				))
+			}
+			for _, field := range event.PayloadFields {
+				visibility, governed := fieldVisibility[packet.ObjectID][strings.TrimSpace(field)]
+				if !governed {
+					continue
+				}
+				for _, consumerID := range consumers {
+					consumer, exists := objectsByID[consumerID]
+					if exists && eventPayloadVisibilityAllowsConsumer(
+						visibility,
+						producer,
+						consumer,
+					) {
+						continue
+					}
+					issues = append(issues, issue(
+						"CONTRACT.EVENT.PAYLOAD_FIELD_VISIBILITY_MISMATCH",
+						event.SourcePath,
+						"event_ref %q payload field %q is consumed by %q outside field_visibility %v",
+						eventRef,
+						field,
+						consumerID,
+						visibility,
+					))
+				}
 			}
 			if declaredFields := localEntityFields[packet.ObjectID+"\x00"+event.PayloadEntity]; event.PayloadShape == "exact" &&
 				len(declaredFields) > 0 && len(event.PayloadFields) > 0 {
@@ -257,4 +324,33 @@ func validateEventGovernance(contractGraph *graph.ContractGraph) []Issue {
 		}
 	}
 	return issues
+}
+
+func eventPayloadVisibilityAllowsConsumer(
+	visibility []string,
+	producer ast.Object,
+	consumer ast.Object,
+) bool {
+	for _, raw := range visibility {
+		value := strings.TrimSpace(raw)
+		switch value {
+		case "all", "first_party_service_internal":
+			return true
+		case "self":
+			if consumer.ID == producer.ID {
+				return true
+			}
+		case "platform-ops":
+			if consumer.Domain == "ops" {
+				return true
+			}
+		default:
+			const suffix = "-service-internal"
+			if strings.HasSuffix(value, suffix) &&
+				consumer.Domain == strings.TrimSuffix(value, suffix) {
+				return true
+			}
+		}
+	}
+	return false
 }

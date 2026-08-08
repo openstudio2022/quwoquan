@@ -278,7 +278,11 @@ class GammaCaseResultProducerContractTest(unittest.TestCase):
                 mock.patch.object(
                     run_local_gamma_release_consumer_api,
                     "run_release_consumer",
-                    return_value={"status": "passed", "exitCode": 0},
+                    return_value={
+                        "status": "passed",
+                        "mutationPolicy": "read_only",
+                        "exitCode": 0,
+                    },
                 ),
                 mock.patch.object(
                     run_local_gamma_release_consumer_api.sys,
@@ -341,7 +345,11 @@ class GammaCaseResultProducerContractTest(unittest.TestCase):
                         mock.patch.object(
                             run_local_gamma_release_consumer_api,
                             "run_release_consumer",
-                            return_value={"status": "passed", "exitCode": 0},
+                            return_value={
+                                "status": "passed",
+                                "mutationPolicy": "read_only",
+                                "exitCode": 0,
+                            },
                         ) as consumer,
                         mock.patch.object(
                             run_local_gamma_release_consumer_api,

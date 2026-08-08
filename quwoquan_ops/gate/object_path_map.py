@@ -38,14 +38,16 @@ evidence loader。该 loader 必须与本文件同源，复用同一套规则；
   `APP_APPEND_PORT_NAMING`、`APP_SESSION_PORT_NAMING`、
   `APP_LAYER_BY_SEGMENT`、`APP_LAYER_ALIASES`、`APP_CROSS_CUTTING_ROOTS`、
   `APP_CROSS_CUTTING_SEGMENTS`、`APP_CROSS_CUTTING_STRIPPED_PREFIXES`、
-  `APP_DESIGN_SYSTEM_SEGMENTS`、`APP_COMPOSITION_ROOT_SEGMENT`、
+  `APP_DESIGN_SYSTEM_SEGMENTS`、`APP_L10N_CONFIG_PATH`、`APP_ENTRY_FILE_RE`、
+  `APP_COMPOSITION_ROOT_SEGMENT`、
   `APP_COMPOSITION_ROOT_TARGET_PREFIX`、`APP_TARGET_SHAPE_SEGMENTS`、
   `APP_TEST_TARGET_SHAPE_SEGMENTS`、`ALIAS_TRIM_SUFFIXES`、
   `CLAIM_METHOD_CONFIDENCE`。
 - 函数：`derive_cloud_source_identity`、`derive_cloud_test_identity`、
   `object_aliases`、`derive_app_object_claim`、`derive_app_layer`、
   `derive_app_target_shape_identity`、`derive_app_test_target_shape_identity`、
-  `derive_app_cross_cutting_shape_root`、`derive_app_is_composition_root`、
+  `derive_app_cross_cutting_shape_root`、`derive_app_l10n_cross_cutting_root`、
+  `derive_app_is_entry_file`、`derive_app_is_composition_root`、
   `derive_app_target_path`、`derive_app_test_target_path`、
   `derive_app_cross_cutting_root`、`derive_app_cross_cutting_target_path`、
   `derive_page_physical_owner`、`required_app_layers`、`required_cloud_layers`。
@@ -58,7 +60,7 @@ evidence loader。该 loader 必须与本文件同源，复用同一套规则；
 （`lib/service/<service>/<context>/<object>/<layer>/`）、
 `derive_app_test_target_shape_identity`
 （`test/<layer>/service/<service>/<context>/<object>/`）与
-`derive_app_cross_cutting_shape_root`（`lib/runtime/`、`lib/design_system/`）精确识别，
+`derive_app_cross_cutting_shape_root`（`APP_CROSS_CUTTING_ROOTS` 的三个根）精确识别，
 命中后一切基于旧命名的启发式让位：身份与层由固定物理位置决定，目标路径即自身。
 本不变量由 `test_object_path_map__derivation__local_contract_test.py` 断言；它是四条
 domain 流与 W1b 边搬边跑派生器/门禁的前提，破坏它会持续产生假归属与假违规。
@@ -80,6 +82,7 @@ import argparse
 import ast
 import hashlib
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from functools import lru_cache
@@ -121,6 +124,18 @@ CLOUD_TEST_LAYERS = ("local_contract", "api_integration")
 #: 与 verify_service_architecture.py 只校验 local_contract / api_integration 一致。
 CLOUD_TEST_SUPPORT_ROOT = "support"
 APP_TEST_LAYERS = ("local_contract", "api_integration", "user_acceptance", "support")
+
+#: 非对象测试身份来自测试树的物理语义，而不是人工清单。它们不承载某个
+#: business object 的三层测试证据：runtime/design_system 是横切能力，journeys
+#: 是跨对象结果，Patrol 目录只是 runner shell。
+APP_CROSS_OBJECT_JOURNEY_ROOT = "journeys"
+APP_CROSS_OBJECT_JOURNEY_TEST_LAYERS = frozenset(
+    {"local_contract", "user_acceptance"}
+)
+APP_PATROL_RUNNER_ROOT = "patrol"
+APP_PATROL_RUNNER_LAYER = "user_acceptance"
+APP_PATROL_RUNNER_FILES = frozenset({"patrol_test_main.dart", "test_bundle.dart"})
+APP_TEST_NON_OBJECT_IDENTITY_METHOD = "test_non_object_identity"
 
 OUTPUT_DIR_NAME = "object-path-map"
 
@@ -352,10 +367,40 @@ APP_LAYER_BY_SEGMENT = {
 #: ``remote`` 段在端侧同时表达「出向适配」与「云契约客户端」，统一归 adapters。
 APP_LAYER_ALIASES = {"remote_adapters": "adapters"}
 
-#: 横切面根：不归属任何 business object 的端侧文件的唯一两个落点。
+#: flutter gen-l10n 的配置。`arb-dir` 同时决定 arb 输入与 `app_localizations*.dart`
+#: 的生成落点，因此 l10n 根不是可自由搬迁的目录，而是由工具链固定的物理位置。
+APP_L10N_CONFIG_PATH = APP_ROOT / "l10n.yaml"
+
+
+def derive_app_l10n_cross_cutting_root() -> str:
+    """从 `quwoquan_app/l10n.yaml` 的 `arb-dir` 派生 l10n 横切根段。
+
+    这是 l10n 根的唯一真相源：门禁不得另写死 ``"l10n"`` 字面量，否则改 `arb-dir`
+    会让「R1 顶层白名单」与「派生器横切根」再次分叉。
+    """
+    document = (
+        yaml.safe_load((ROOT / APP_L10N_CONFIG_PATH).read_text(encoding="utf-8")) or {}
+    )
+    arb_dir = str(document.get("arb-dir") or "").strip().strip("/")
+    if not arb_dir.startswith("lib/"):
+        raise ValueError(
+            f"{APP_L10N_CONFIG_PATH.as_posix()}: arb-dir 必须位于 lib/ 之下，"
+            f"实测 {arb_dir!r}"
+        )
+    return arb_dir[len("lib/") :].split("/")[0]
+
+
+#: 横切面根：不归属任何 business object 的端侧文件的唯一落点，也是 `lib/` 顶层
+#: 除 service 容器与入口文件之外允许存在的全部目录。三个根都是**终态**位置：
+#: `runtime` / `design_system` 由本文件定义，l10n 根由 `l10n.yaml` 派生。
+#: 顶层白名单（`verify_app_architecture.allowed_top_level_directories`）与这里必须
+#: 是同一份集合；分叉会让某个根同时是「合法顶层」与「待搬迁横切件」，从而在
+#: 覆盖率归属上既不算对象也不算 canonical 横切，整批文件变成无主源码。
 APP_CROSS_CUTTING_ROOTS = {
-    "design_system": "lib/design_system",
-    "runtime": "lib/runtime",
+    root: f"lib/{root}"
+    for root in sorted(
+        {"design_system", "runtime", derive_app_l10n_cross_cutting_root()}
+    )
 }
 
 #: 横切面根在 ``lib/`` 之下的顶层段，由 APP_CROSS_CUTTING_ROOTS 派生而非另写死。
@@ -382,6 +427,13 @@ APP_COMPOSITION_ROOT_TARGET_PREFIX = (
     f"{APP_COMPOSITION_ROOT_SEGMENT}/"
 )
 
+#: `lib/` 顶层唯一允许的文件形态：Flutter 入口，云侧 `cmd/main.go` 的端侧对等物。
+#: 入口位置由 Flutter 工具链固定（`lib/main*.dart`），它既不属于任何 business
+#: object，也**不是待搬迁的横切件**——把它推去 `lib/runtime/main.dart` 会让 App
+#: 跑不起来。因此入口文件的横切目标路径就是它自己。
+#: `verify_app_architecture.TOP_LEVEL_ENTRY_RE` 直接复用本常量，不另写一份。
+APP_ENTRY_FILE_RE = re.compile(r"^main[a-z0-9_]*\.dart$")
+
 #: 横切面目标路径构造时可剥离的现状前缀段（避免 `lib/runtime/core/...` 冗余）。
 #: 目标根自身的段（`runtime` / `design_system`）也必须剥离，否则已搬迁路径会被
 #: 反复套壳成 `lib/runtime/runtime/di/...`，派生失去幂等。
@@ -402,6 +454,7 @@ CLAIM_METHOD_CONFIDENCE = {
     "context_only": "scope",
     "domain_only": "scope",
     "cross_cutting": "cross_cutting",
+    "test_non_object_identity": "cross_cutting",
     "unowned": "none",
 }
 
@@ -661,11 +714,68 @@ def derive_app_test_target_shape_identity(
     return domain, context, object_name
 
 
+def derive_app_test_non_object_identity(
+    test_layer: str | None,
+    test_relative_parts: Sequence[str],
+) -> dict[str, str] | None:
+    """派生不属于单一 business object 的 canonical 测试身份。
+
+    测试目录本身是唯一输入：不读取 registry、spec_ref、import 或文件名来猜对象。
+    这类身份只让横切/Journey/runner 测试脱离 ``unowned`` 诊断，绝不能反向填充
+    ``object_view[objectId].app.tests``，因为它们不是对象级三层证据。
+    """
+    if not test_layer or not test_relative_parts:
+        return None
+
+    cross_cutting_root = derive_app_cross_cutting_shape_root(test_relative_parts)
+    if cross_cutting_root is not None:
+        return {
+            "kind": "test_support_cross_cutting"
+            if test_layer == "support"
+            else "test_cross_cutting",
+            "root": cross_cutting_root,
+            "status": "canonical_test_support_cross_cutting"
+            if test_layer == "support"
+            else "canonical_test_cross_cutting",
+        }
+
+    if (
+        test_layer in APP_CROSS_OBJECT_JOURNEY_TEST_LAYERS
+        and len(test_relative_parts) >= 3
+        and test_relative_parts[0] == APP_CROSS_OBJECT_JOURNEY_ROOT
+    ):
+        return {
+            "kind": "cross_object_journey",
+            "root": APP_CROSS_OBJECT_JOURNEY_ROOT,
+            "status": "canonical_cross_object_journey",
+        }
+
+    if (
+        test_layer == APP_PATROL_RUNNER_LAYER
+        and len(test_relative_parts) == 2
+        and test_relative_parts[0] == APP_PATROL_RUNNER_ROOT
+        and test_relative_parts[1] in APP_PATROL_RUNNER_FILES
+    ):
+        return {
+            "kind": "patrol_runner",
+            "root": APP_PATROL_RUNNER_ROOT,
+            "status": "canonical_patrol_runner",
+        }
+    return None
+
+
 def derive_app_cross_cutting_shape_root(relative_parts: Sequence[str]) -> str | None:
     """已处于横切面目标位置时返回其根名（``runtime`` / ``design_system``），否则 None。"""
     if not relative_parts:
         return None
     return APP_CROSS_CUTTING_SEGMENTS.get(relative_parts[0])
+
+
+def derive_app_is_entry_file(relative_parts: Sequence[str]) -> bool:
+    """路径是否是 `lib/` 顶层的 Flutter 入口文件（``lib/main*.dart``）。"""
+    return len(relative_parts) == 1 and bool(
+        APP_ENTRY_FILE_RE.match(relative_parts[0])
+    )
 
 
 def derive_app_is_composition_root(relative_parts: Sequence[str]) -> bool:
@@ -757,6 +867,10 @@ def derive_app_cross_cutting_target_path(
     派生再套一层，导致组合根漏判与假违规随搬迁推进不断累积。
     """
     parts = list(relative_to_lib)
+    # 顶层入口已经在工具链固定的终态位置，目标路径即自身；否则会被推成
+    # `lib/runtime/main.dart`，既永远 already_placed=False，也不是可执行的落点。
+    if derive_app_is_entry_file(parts):
+        return f"{APP_LIB_ROOT.as_posix()}/{parts[0]}"
     strippable = set(APP_CROSS_CUTTING_STRIPPED_PREFIXES) | {
         segment
         for segment, mapped_root in APP_CROSS_CUTTING_SEGMENTS.items()
@@ -892,7 +1006,8 @@ def derive_app_object_claim(
 
     信号按权威性排序，第一个成立的胜出：
 
-    1. ``app_target_shape``：文件已处于 ``<domain>/<context>/<object>/<layer>/``
+    1. ``app_target_shape``：文件已处于
+       ``service/<service>/<context>/<object>/<layer>/``
        目标形态，身份由物理位置精确决定，与云侧同级。**必须排在最前**：已完成的
        搬迁决定就是最终事实，若让 page contract 或别名启发式覆盖它，已搬迁文件会
        被反推回旧结论（甚至落回 ``multi_object_page`` / ``context_only``），派生失去
@@ -1515,6 +1630,11 @@ def scan_app(
             }
         else:
             claim = derive_app_object_claim(inner, roster, page_claims, relative_path)
+        non_object_identity = (
+            derive_app_test_non_object_identity(test_layer, inner)
+            if shaped_test is None
+            else None
+        )
         row = {
             "side": "app",
             "role": f"test:{test_layer}" if test_layer else "test",
@@ -1536,7 +1656,8 @@ def scan_app(
                     "context": record["context"],
                     "objectName": record["objectName"],
                     "targetLayer": test_layer,
-                    # 已在 `test/<layer>/<domain>/<context>/<object>/` 目标形态时目标
+                    # 已在 `test/<layer>/service/<service>/<context>/<object>/`
+                    # 目标形态时目标
                     # 路径即自身（保留对象下可选子路径），否则按目标形态构造。
                     "targetPath": relative_path
                     if shaped_test is not None
@@ -1548,6 +1669,20 @@ def scan_app(
                         path.name,
                     ),
                     "status": "canonical" if shaped_test is not None else "mappable",
+                }
+            )
+        elif non_object_identity is not None:
+            row.update(
+                {
+                    "method": APP_TEST_NON_OBJECT_IDENTITY_METHOD,
+                    "confidence": CLAIM_METHOD_CONFIDENCE[
+                        APP_TEST_NON_OBJECT_IDENTITY_METHOD
+                    ],
+                    "testIdentityKind": non_object_identity["kind"],
+                    "testIdentityRoot": non_object_identity["root"],
+                    "status": non_object_identity["status"],
+                    # 这些根是测试树的终态位置；不存在待搬迁的 object target。
+                    "targetPath": relative_path,
                 }
             )
         else:
@@ -1724,12 +1859,23 @@ def build_baseline(
     cross_cutting_rows = [
         row
         for row in app_rows
-        if not row.get("objectId") and row.get("method") == "cross_cutting"
+        if not str(row.get("role", "production")).startswith("test")
+        and not row.get("objectId")
+        and row.get("method") == "cross_cutting"
+    ]
+    non_object_test_rows = [
+        row
+        for row in app_rows
+        if str(row.get("role", "")).startswith("test")
+        and not row.get("objectId")
+        and row.get("method") == APP_TEST_NON_OBJECT_IDENTITY_METHOD
     ]
     ownerless_rows = [
         row
         for row in app_rows
-        if not row.get("objectId") and row.get("method") != "cross_cutting"
+        if not row.get("objectId")
+        and row.get("method")
+        not in {"cross_cutting", APP_TEST_NON_OBJECT_IDENTITY_METHOD}
     ]
     unowned_by_tree = Counter(
         _app_top_level_tree(row["path"]) for row in ownerless_rows
@@ -1739,6 +1885,12 @@ def build_baseline(
         str(row.get("crossCuttingRoot") or "unknown") for row in cross_cutting_rows
     )
     cross_cutting_by_status = Counter(row["status"] for row in cross_cutting_rows)
+    non_object_tests_by_kind = Counter(
+        str(row.get("testIdentityKind") or "unknown") for row in non_object_test_rows
+    )
+    non_object_tests_by_root = Counter(
+        str(row.get("testIdentityRoot") or "unknown") for row in non_object_test_rows
+    )
     claim_by_method = Counter(
         row["method"] for row in app_rows if row.get("objectId")
     )
@@ -1795,6 +1947,13 @@ def build_baseline(
         ],
         "appPendingCrossCuttingFileTotal": len(cross_cutting_rows)
         - cross_cutting_by_status["canonical_cross_cutting"],
+        "appTestNonObjectIdentityFilesByKind": dict(
+            sorted(non_object_tests_by_kind.items())
+        ),
+        "appTestNonObjectIdentityFilesByRoot": dict(
+            sorted(non_object_tests_by_root.items())
+        ),
+        "appTestNonObjectIdentityFileTotal": len(non_object_test_rows),
         "appClaimsByMethod": dict(sorted(claim_by_method.items())),
         "appStatusTotals": dict(sorted(status_totals.items())),
         # 搬迁进度：已处于目标形态（对象树或横切根）的端侧文件数。四条 domain 流与
@@ -1904,6 +2063,13 @@ def render_baseline_report(
     )
     for root, count in baseline["appCrossCuttingFilesByRoot"].items():
         lines.append(f"  - `{root}`：{count}")
+    lines.append(
+        "- 非对象测试身份："
+        f"{baseline['appTestNonObjectIdentityFileTotal']}"
+        "（不计入任何 object 的测试覆盖）"
+    )
+    for kind, count in baseline["appTestNonObjectIdentityFilesByKind"].items():
+        lines.append(f"  - `{kind}`：{count}")
     lines.append(f"- 端侧无主文件合计：{baseline['appUnownedFileTotal']}")
     lines.append("- 按无主原因：")
     for status, count in baseline["appUnownedFilesByStatus"].items():

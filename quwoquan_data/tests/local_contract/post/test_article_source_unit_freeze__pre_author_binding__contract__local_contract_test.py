@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from content.execution.controller import content_plan_items
@@ -143,6 +144,72 @@ def test_freeze_is_create_once_and_revalidated_before_author(
             execution_id=EXECUTION_ID,
             execution_root_path=root,
         )
+
+
+def test_semantic_article_plan_is_bound_before_author_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _source_dir, refs = _fixture(tmp_path, monkeypatch)
+    packet_path = root / "evidence/content_plan.json"
+    packet = {
+        "items": [
+            {
+                "ref": "九寨沟_article",
+                "carrier": "article",
+                "publishMediaMode": "illustrated",
+                "baseSourceRef": "sources/article-source-001/source.md",
+                "assetRefs": refs,
+            }
+        ]
+    }
+    write_json(packet_path, packet)
+    brief = dict(packet["items"][0])
+
+    from content.execution import workspace
+    from content.post import content_plan_state, object_index
+    from core import paths
+
+    monkeypatch.setattr(paths, "execution_root", lambda _execution_id: root)
+    monkeypatch.setattr(source_unit_freeze, "execution_root", lambda _execution_id: root)
+    monkeypatch.setattr(
+        workspace,
+        "execution_content_plan_packet_path",
+        lambda _execution_id: packet_path,
+    )
+    monkeypatch.setattr(
+        content_plan_state,
+        "load_content_plan_packet",
+        lambda _execution_id: read_json(packet_path),
+    )
+    monkeypatch.setattr(
+        object_index,
+        "read_brief_object",
+        lambda _execution_id, _ref: dict(brief),
+    )
+    written_brief: dict[str, object] = {}
+    monkeypatch.setattr(
+        content_plan_items,
+        "write_brief_object",
+        lambda _execution_id, _ref, payload, **_kwargs: written_brief.update(
+            payload
+        ),
+    )
+
+    issues = content_plan_items.bind_article_plan_source_unit_freezes(
+        SimpleNamespace(execution_id=EXECUTION_ID)
+    )
+
+    assert issues == []
+    bound_item = read_json(packet_path)["items"][0]
+    assert validate_article_source_unit_freeze(
+        bound_item["articleSourceUnitFreeze"],
+        execution_id=EXECUTION_ID,
+        execution_root_path=root,
+    )
+    assert written_brief["articleSourceUnitFreeze"] == bound_item[
+        "articleSourceUnitFreeze"
+    ]
 
 
 def test_freeze_rejects_text_only_or_one_image_as_illustrated_input(
@@ -436,6 +503,47 @@ def test_text_only_plan_item_does_not_create_an_image_freeze(
         items=items,
     )
     assert written[0]["publishMediaMode"] == "text_only"
+    assert written[0]["titleHint"] == "九寨沟纯文字指南"
     assert "articleSourceUnitFreeze" not in written[0]
     assert items[0]["publishMediaMode"] == "text_only"
     assert "articleSourceUnitFreeze" not in items[0]
+
+
+def test_broad_source_title_freezes_exact_article_target_coordinate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    written: list[dict[str, object]] = []
+
+    class _Scheduler:
+        def assign(self, **_kwargs: object) -> dict[str, str]:
+            return {"creatorId": "creator-target-bound"}
+
+        def schedule(self, _assignment: object) -> dict[str, str]:
+            return {"publishAt": "2026-08-08T00:00:00Z"}
+
+    monkeypatch.setattr(
+        content_plan_items,
+        "write_brief_object",
+        lambda _execution_id, _ref, brief, **_kwargs: written.append(dict(brief)),
+    )
+    items: list[dict[str, object]] = []
+    content_plan_items.append_article_plan_items(
+        ctx=SimpleNamespace(execution_id=EXECUTION_ID),
+        scheduler=_Scheduler(),
+        entity_type="地点/景区",
+        target="杭州西湖",
+        candidates=[
+            {
+                "writingIntent": "planning_consultation",
+                "draftTitle": "杭州",
+                "sourceId": "article_frontier_wikivoyage_zh_e8cc82203075",
+                "sourceDir": Path("unused"),
+                "sourceRef": "sources/article/source.md",
+                "sourceUseMode": "factual_reference_only",
+                "assetRefs": [],
+            }
+        ],
+        items=items,
+    )
+    assert written[0]["titleHint"] == "杭州西湖攻略"
+    assert items[0]["title"] == "杭州西湖攻略"

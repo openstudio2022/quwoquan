@@ -40,7 +40,7 @@ func (w *DurableWorker) awaitCoordinatedCancellation(
 func (w *DurableWorker) monitorRunControl(
 	ctx context.Context,
 	runID string,
-	cancel context.CancelFunc,
+	cancel context.CancelCauseFunc,
 	done <-chan struct{},
 ) {
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -54,16 +54,32 @@ func (w *DurableWorker) monitorRunControl(
 		case <-ticker.C:
 			run, err := w.repository.Load(ctx, runID)
 			if err != nil {
-				cancel()
+				cancel(&runControlObservationError{cause: err})
 				return
 			}
 			if terminalRunState(run.State) || run.PauseRequested ||
 				run.State == generated.AssistantRunStatePaused {
-				cancel()
+				cancel(nil)
 				return
 			}
 		}
 	}
+}
+
+// runControlObservationError distinguishes a failed durable control read from
+// an AgentLoop failure. The worker must stop producing new work while control
+// is unknown, but the same Run remains runnable and must be retried instead of
+// being committed as failed.
+type runControlObservationError struct {
+	cause error
+}
+
+func (e *runControlObservationError) Error() string {
+	return fmt.Sprintf("observe assistant run control: %v", e.cause)
+}
+
+func (e *runControlObservationError) Unwrap() error {
+	return e.cause
 }
 
 func (w *DurableWorker) checkpointAndPause(
@@ -71,38 +87,53 @@ func (w *DurableWorker) checkpointAndPause(
 	current Run,
 	result ExecutionResult,
 ) error {
-	paused, err := w.commitMutation(ctx, current.RunID, "checkpoint_committed", func(
+	_, err := w.commitMutation(ctx, current.RunID, "checkpoint_committed", func(
 		run *Run,
 		now time.Time,
 	) error {
-		if err := run.MergeConfirmedSlots(result.ConfirmedSlots, now); err != nil {
-			return err
-		}
-		if run.State == generated.AssistantRunStateExecuting {
-			if err := run.Transition(
-				generated.AssistantRunStateCheckpointing,
-				"pause_requested",
-				now,
-			); err != nil {
-				return err
-			}
-		}
-		if _, err := run.CreateCheckpoint(
-			"checkpoint:"+run.RunID+":"+fmt.Sprint(run.Revision+1),
-			run.DefinitionOfDone.Outcome,
-			[]string{"执行已在安全边界暂停"},
-			"",
-			remainingBudget(*run),
-			now,
-		); err != nil {
-			return err
-		}
-		return run.ApplySafeBoundary(now)
+		return applyCheckpointAndPause(run, result, now)
 	})
 	if err != nil {
 		return err
 	}
-	return w.runStopHook(ctx, paused.RunID, "paused")
+	return nil
+}
+
+func applyCheckpointAndPause(
+	run *Run,
+	result ExecutionResult,
+	now time.Time,
+) error {
+	previousGoalRevision := run.GoalRevision
+	if err := run.MergeConfirmedSlots(result.ConfirmedSlots, now); err != nil {
+		return err
+	}
+	if run.State == generated.AssistantRunStateExecuting {
+		if err := run.Transition(
+			generated.AssistantRunStateCheckpointing,
+			"pause_requested",
+			now,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := run.CreateCheckpoint(
+		"checkpoint:"+run.RunID+":"+fmt.Sprint(run.Revision+1),
+		run.DefinitionOfDone.Outcome,
+		[]string{"执行已在安全边界暂停"},
+		"",
+		remainingBudget(*run),
+		now,
+	); err != nil {
+		return err
+	}
+	if err := run.ApplySafeBoundary(now); err != nil {
+		return err
+	}
+	if run.GoalRevision != previousGoalRevision {
+		return appendGoalRevisionPlanItem(run, now)
+	}
+	return nil
 }
 
 func (w *DurableWorker) waitRun(
@@ -110,15 +141,27 @@ func (w *DurableWorker) waitRun(
 	current Run,
 	result ExecutionResult,
 ) error {
-	var err error
-	current, err = w.persistPresentation(ctx, current, result.Presentation)
+	current, pauseWon, err := w.persistWaitingPresentation(
+		ctx,
+		current,
+		result.Presentation,
+	)
 	if err != nil {
 		return err
 	}
-	waiting, err := w.commitMutation(ctx, current.RunID, "checkpoint_committed", func(
+	if pauseWon {
+		return w.checkpointAndPause(ctx, current, result)
+	}
+	_, err = w.commitMutation(ctx, current.RunID, "checkpoint_committed", func(
 		run *Run,
 		now time.Time,
 	) error {
+		if run.State == generated.AssistantRunStatePaused {
+			return nil
+		}
+		if run.PauseRequested {
+			return applyCheckpointAndPause(run, result, now)
+		}
 		if err := run.MergeConfirmedSlots(result.ConfirmedSlots, now); err != nil {
 			return err
 		}
@@ -146,5 +189,5 @@ func (w *DurableWorker) waitRun(
 	if err != nil {
 		return err
 	}
-	return w.runStopHook(ctx, waiting.RunID, waiting.State.WireName())
+	return nil
 }

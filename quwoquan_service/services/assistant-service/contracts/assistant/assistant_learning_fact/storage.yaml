@@ -12,14 +12,6 @@ collections:
       keys:
         userId: 1
         appendSequence: 1
-    - name: idx_assistant_learning_fact_turn
-      keys:
-        assistantTurnId: 1
-        appendSequence: 1
-    - name: idx_assistant_learning_fact_type
-      keys:
-        factType: 1
-        appendSequence: 1
   assistant_learning_fact_receipts:
     entity: AssistantLearningFact
     description: durable append receipt；保存 identity、payload digest 与原始 append sequence。
@@ -53,9 +45,6 @@ collections:
         userId: 1
         personaId: 1
         updatedAt: -1
-    - name: idx_assistant_learning_projection_watermark
-      keys:
-        watermarkSequence: 1
   assistant_learning_projection_receipts:
     entity: AssistantLearningProjection
     description: 每个 canonical fact append sequence 与 active rebuild generation 的 durable projection receipt。

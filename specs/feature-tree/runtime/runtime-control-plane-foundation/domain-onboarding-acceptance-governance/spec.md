@@ -89,6 +89,8 @@
 - 源码域禁止解释器、测试、lint、编辑器缓存与临时/备份脚本；可再生产输出只进入 `.qwq_output` 或受管仓外缓存。一次性能力必须位于 migration concern，并具有可重复执行、回放或退出证据。
 - Make、workflow、gate、CLI 与脚本内帮助路径引用必须指向真实文件。rename 必须同时更新 producer、consumer、import、测试与文档，不提供旧路径 shim。
 - gate 或 scanner 必须证明目标根存在且至少命中一份受检源码；空扫描不得产生通过结果。人工 tool 必须能由 CLI、Make、runbook、spec 或测试中的当前引用证明 owner 与用途，否则属于确定性归类错误。
+- 「什么是仓库根」只有一份实现，判据是多个仓库根标记同时存在；两棵脚本树各自只保留一份按物理路径转发的极薄 bootstrap，不得重复实现推导算法。
+- 门禁脚本禁止用相对父级层数推导仓库根：脚本移动或多包一层目录时该层数会静默失配，推导结果仍是真实存在的目录，扫描因而落空并让门禁反报通过。调用方必须显式声明扫描根，使空扫描在验证器内部即失败。
 - orphan 只作为报告候选，必须人工裁决为接线、转入 tool 或删除；不能仅凭静态未引用自动删除。`report` 对同一物理树必须字节幂等，`check` 只阻断可确定的路径、角色与命名违规。
 
 ## 4. 契约引用
@@ -102,9 +104,9 @@
 - canonical：`quwoquan_service/control-plane/*/internal/<context>/<object>/<layer>`
 - canonical：`quwoquan_service/services/*/tests/local_contract/<context>/<object>`
 - canonical：`quwoquan_service/services/*/tests/api_integration/<context>/<object>`
-- canonical：`quwoquan_app/test/local_contract/<domain>/<context>/<object>`
-- canonical：`quwoquan_app/test/api_integration/<domain>/<context>/<object>`
-- canonical：`quwoquan_app/test/user_acceptance/<domain>/<context>/<object>`
+- canonical：`quwoquan_app/test/local_contract/service/<service>/<context>/<object>`
+- canonical：`quwoquan_app/test/api_integration/service/<service>/<context>/<object>`
+- canonical：`quwoquan_app/test/user_acceptance/service/<service>/<context>/<object>`
 - canonical：`quwoquan_app/lib/service/<service>/<context>/<object>/adapters`
 - canonical：`quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml`
 - canonical：`quwoquan_app/test/user_acceptance`
@@ -121,7 +123,7 @@
 
 - GIVEN 领域对象、源码、部署和测试资产已进入统一扫描范围。
 - WHEN 执行统一服务架构门禁并汇总三层测试结果。
-- THEN domain/context/object/layer 可唯一反推，接入与 readiness 由证据计算。
+- THEN service/context/object/layer 可唯一反推，所属 L1 domain 由 service `domain.yaml` 与工程 owner 唯一派生，接入与 readiness 由证据计算。
 - THEN 服务、App、runtime 与 Ops 的 production/test/generated/environment-output 路径均可由 metadata、依赖和环境契约反推，出现旧测试根、fixture/Mock production reachability、第二 composition root 或仓内 deploy work root 即阻断。
 - THEN onboarding/readiness/对象服务注册表缺失不会阻断，出现则门禁失败。
 

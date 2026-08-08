@@ -127,3 +127,19 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_definition/connector_definition_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_definition_list_connector_definitions_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListConnectorDefinitions}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_definition/connector_definition_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connector_definition_get_connector_definition_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetConnectorDefinition}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_definition/connector_definition_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

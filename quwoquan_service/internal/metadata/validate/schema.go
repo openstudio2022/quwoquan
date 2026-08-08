@@ -25,6 +25,11 @@ var metadataSchemaByFilename = map[string]string{
 	"privacy.yaml":    "privacy.schema.json",
 }
 
+// projectionSchemaFilename 校验对象包 projections/ 目录下的读模型与紧邻客户端
+// codegen 文档。投影文件名由读模型自己决定，所以它无法按 filename 索引，只能按
+// 「宿主对象包的 projections/ 目录」这一位置事实路由。
+const projectionSchemaFilename = "projection.schema.json"
+
 // MetadataSchemas 使用仓库内唯一 JSON Schema 校验商用 metadata 文档。
 // compiler 不读取旧格式，也不保留版本目录或迁移兼容分支。
 func MetadataSchemas(metadataDir string) ([]Issue, error) {
@@ -46,6 +51,24 @@ func MetadataSchemas(metadataDir string) ([]Issue, error) {
 			if name == ".git" || name == "test_fixtures" || strings.HasPrefix(name, "_") {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+
+		if isProjectionDocument(path, entry) {
+			instance, decodeErr := decodeYAMLAsJSON(path)
+			if decodeErr != nil {
+				return decodeErr
+			}
+			sourcePath := relativeMetadataPath(metadataDir, path)
+			if validateErr := compiled[projectionSchemaFilename].
+				Validate(instance); validateErr != nil {
+				issues = append(
+					issues, schemaValidationIssues(sourcePath, validateErr)...,
+				)
+			}
+			issues = append(
+				issues, projectionCoPresenceIssues(sourcePath, instance)...,
+			)
 			return nil
 		}
 
@@ -102,14 +125,28 @@ func ContractGraphSchema(metadataDir string, contractGraph any) error {
 }
 
 func compileMetadataSchemas(metadataDir string) (map[string]*jsonschema.Schema, error) {
-	result := make(map[string]*jsonschema.Schema, len(metadataSchemaByFilename))
+	result := make(map[string]*jsonschema.Schema, len(metadataSchemaByFilename)+1)
 	schemaRoot := filepath.Join(metadataDir, "_schemas")
+	schemaNames := make([]string, 0, len(metadataSchemaByFilename)+1)
 	for _, schemaName := range metadataSchemaByFilename {
+		schemaNames = append(schemaNames, schemaName)
+	}
+	schemaNames = append(schemaNames, projectionSchemaFilename)
+	for _, schemaName := range schemaNames {
 		if _, exists := result[schemaName]; exists {
 			continue
 		}
 		schemaPath := filepath.Join(schemaRoot, schemaName)
 		compiler := jsonschema.NewCompiler()
+		if schemaName == projectionSchemaFilename {
+			// 投影字段的信封准入表达位不复制，直接 $ref 进 fields.schema.json 的
+			// canonical 定义，因此编译投影 schema 必须先挂上那一份资源。
+			if err := addSchemaResource(
+				compiler, filepath.Join(schemaRoot, "fields.schema.json"),
+			); err != nil {
+				return nil, err
+			}
+		}
 		schema, err := compiler.Compile(schemaPath)
 		if err != nil {
 			return nil, fmt.Errorf("compile metadata schema %s: %w", schemaName, err)
@@ -117,6 +154,31 @@ func compileMetadataSchemas(metadataDir string) (map[string]*jsonschema.Schema, 
 		result[schemaName] = schema
 	}
 	return result, nil
+}
+
+// addSchemaResource 按文档自己声明的 $id 注册资源，$id 只有 schema 文件一处真相源。
+func addSchemaResource(compiler *jsonschema.Compiler, schemaPath string) error {
+	file, err := os.Open(schemaPath)
+	if err != nil {
+		return fmt.Errorf("open metadata schema %s: %w", schemaPath, err)
+	}
+	defer file.Close()
+	document, err := jsonschema.UnmarshalJSON(file)
+	if err != nil {
+		return fmt.Errorf("decode metadata schema %s: %w", schemaPath, err)
+	}
+	mapping, ok := document.(map[string]any)
+	if !ok {
+		return fmt.Errorf("metadata schema %s must be a JSON object", schemaPath)
+	}
+	identifier, _ := mapping["$id"].(string)
+	if strings.TrimSpace(identifier) == "" {
+		return fmt.Errorf("metadata schema %s must declare $id", schemaPath)
+	}
+	if err := compiler.AddResource(identifier, document); err != nil {
+		return fmt.Errorf("register metadata schema %s: %w", schemaPath, err)
+	}
+	return nil
 }
 
 func decodeYAMLAsJSON(path string) (any, error) {

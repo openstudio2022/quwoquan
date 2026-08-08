@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// readiness_case: intersection_visit_state_get_my_intersection_summary_app_api
+// readiness_case: intersection_visit_state_get_object_intersections_app_api
+// readiness_case: intersection_visit_state_list_my_intersections_app_api
+// readiness_case: intersection_visit_state_mark_intersections_visited_app_api
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';

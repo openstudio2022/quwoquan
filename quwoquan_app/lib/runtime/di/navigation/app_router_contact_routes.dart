@@ -42,7 +42,9 @@ List<GoRoute> _contactRoutes() => [
   ),
   GoRoute(
     path: AppRoutePaths.myQrCode,
-    pageBuilder: (context, state) =>
-        appRoutePage<void>(state: state, child: const MyQrCodePage()),
+    pageBuilder: (context, state) => appRoutePage<void>(
+      state: state,
+      child: const MyQrCodePage(sharePresenter: profileQrSharePresenter),
+    ),
   ),
 ];

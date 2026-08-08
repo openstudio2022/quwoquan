@@ -94,6 +94,9 @@ type DataContentJob struct {
 	PartitionKey            string                     `json:"partitionKey"`
 	IdempotencyKey          string                     `json:"idempotencyKey"`
 	ExecutionEnvelopeDigest string                     `json:"executionEnvelopeDigest,omitempty"`
+	JobSetEnvelopeDigest    string                     `json:"jobSetEnvelopeDigest,omitempty"`
+	JobSetDigest            string                     `json:"jobSetDigest,omitempty"`
+	ActualTaskDigest        string                     `json:"actualTaskDigest,omitempty"`
 	Campaign                DataContentCampaignBinding `json:"campaignBinding,omitempty"`
 }
 
@@ -152,21 +155,29 @@ func (j DataContentJob) ValidateIdentity() (string, error) {
 			return "", fmt.Errorf("reliabletask campaign job execution envelope digest must be sha256")
 		}
 	}
+	if !validSHA256Digest(j.JobSetEnvelopeDigest) ||
+		!validSHA256Digest(j.JobSetDigest) ||
+		!validSHA256Digest(j.ActualTaskDigest) {
+		return "", fmt.Errorf("reliabletask data job requires frozen job-set digests")
+	}
 	return expected, nil
 }
 
 func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 	payload := map[string]string{
-		"schema":         "quwoquan.object_job",
-		"jobId":          strings.TrimSpace(j.JobID),
-		"executionId":    strings.TrimSpace(j.ExecutionID),
-		"ref":            strings.TrimSpace(j.Ref),
-		"stage":          strings.TrimSpace(j.Stage),
-		"partitionKey":   strings.TrimSpace(j.PartitionKey),
-		"entityRef":      strings.TrimSpace(j.EntityRef),
-		"carrier":        strings.TrimSpace(j.Carrier),
-		"sourceRevision": strings.TrimSpace(j.SourceRevision),
-		"idempotencyKey": idempotencyKey,
+		"schema":               "quwoquan.object_job",
+		"jobId":                strings.TrimSpace(j.JobID),
+		"executionId":          strings.TrimSpace(j.ExecutionID),
+		"ref":                  strings.TrimSpace(j.Ref),
+		"stage":                strings.TrimSpace(j.Stage),
+		"partitionKey":         strings.TrimSpace(j.PartitionKey),
+		"entityRef":            strings.TrimSpace(j.EntityRef),
+		"carrier":              strings.TrimSpace(j.Carrier),
+		"sourceRevision":       strings.TrimSpace(j.SourceRevision),
+		"idempotencyKey":       idempotencyKey,
+		"jobSetEnvelopeDigest": strings.TrimSpace(j.JobSetEnvelopeDigest),
+		"jobSetDigest":         strings.TrimSpace(j.JobSetDigest),
+		"actualTaskDigest":     strings.TrimSpace(j.ActualTaskDigest),
 	}
 	if !j.Campaign.empty() {
 		payload["executionEnvelopeDigest"] = strings.TrimSpace(j.ExecutionEnvelopeDigest)
@@ -212,10 +223,11 @@ type DataContentExecutionStore interface {
 		ctx context.Context,
 		executionID string,
 	) (DataContentExecutionPurgeResult, error)
-	CountDataContentOutboxes(
+	CountDataContentOutboxesByIdempotencyKeys(
 		ctx context.Context,
 		executionID string,
 		stage string,
+		idempotencyKeys []string,
 	) (int64, error)
 	ListDataContentExecutionTasks(
 		ctx context.Context,
@@ -229,6 +241,26 @@ type DataContentExecutionPurgeResult struct {
 	TaskIDs         []string
 	TasksDeleted    int64
 	OutboxesDeleted int64
+}
+
+// DataContentPartitionCheckpoint is a durable progress watermark for one
+// immutable execution/stage/partition. JobSetDigest is the fencing identity;
+// a replacement attempt cannot advance a checkpoint owned by another job set.
+type DataContentPartitionCheckpoint struct {
+	ExecutionID    string
+	Stage          string
+	PartitionKey   string
+	JobSetDigest   string
+	CursorJobID    string
+	CompletedCount int
+	FlushedAt      time.Time
+}
+
+type DataContentCheckpointStore interface {
+	FlushDataContentPartitionCheckpoint(
+		ctx context.Context,
+		checkpoint DataContentPartitionCheckpoint,
+	) error
 }
 
 func (f DataContentFleet) executionID() (string, error) {
@@ -259,7 +291,11 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 		partitionKey = strings.TrimSpace(job.EntityRef)
 	}
 	payload := job.payload(key)
-	payloadAllow := []string{"schema", "jobId", "executionId", "ref", "stage", "partitionKey", "entityRef", "carrier", "sourceRevision", "idempotencyKey"}
+	payloadAllow := []string{
+		"schema", "jobId", "executionId", "ref", "stage", "partitionKey",
+		"entityRef", "carrier", "sourceRevision", "idempotencyKey",
+		"jobSetEnvelopeDigest", "jobSetDigest", "actualTaskDigest",
+	}
 	if !job.Campaign.empty() {
 		payloadAllow = append(
 			payloadAllow,

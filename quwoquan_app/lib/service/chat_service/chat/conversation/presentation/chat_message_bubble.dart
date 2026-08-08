@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_display_item.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/design_system/chat/message_bubble_frame.dart';
@@ -12,7 +13,7 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/typography/app_font_families.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_mention_text.dart';
-import 'package:quwoquan_app/runtime/di/presentation/voice_message_bubble.dart';
+import 'package:quwoquan_app/runtime/di/chat_presentation_slots.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/rtc_call_log_bubble.dart';
 
 /// 聊天气泡最大宽度（语义尺寸，多屏适配由布局约束决定）
@@ -22,7 +23,7 @@ const double chatBubbleWidthFactor = 0.84;
 /// 聊天气泡内图片展示尺寸（语义尺寸）
 const double chatBubbleImageSize = AppSpacing.chatBubbleImageSize;
 
-class ChatMessageBubble extends StatelessWidget {
+class ChatMessageBubble extends ConsumerWidget {
   const ChatMessageBubble({
     super.key,
     required this.message,
@@ -75,7 +76,7 @@ class ChatMessageBubble extends StatelessWidget {
   final ValueChanged<String>? onMentionTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final viewportWidth = MediaQuery.of(context).size.width;
     const horizontalPadding = AppSpacing.chatBubbleHorizontalPadding;
     final effectiveMaxWidth = useFullWidth
@@ -145,7 +146,7 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'audio') {
-      contentWidget = VoiceMessageBubble(
+      contentWidget = ref.watch(voiceMessageBubbleBuilderProvider)(
         messageId: message.id,
         mediaUrl: message.mediaUrl,
         durationMs: message.audioDurationMs,

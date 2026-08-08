@@ -21,6 +21,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/notificationclient"
+	readerports "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/ports"
 	skillcatalogactive "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/activerelease"
 	placementapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/application"
 	placementauthority "quwoquan_service/services/assistant-service/internal/assistant/skill_surface_placement/infrastructure/authority"
@@ -70,6 +71,7 @@ type assistantExternalClients struct {
 func buildAssistantExternalClients(
 	runtime *assistantAPIRuntime,
 	infrastructure *assistantInfrastructure,
+	descriptorCatalog readerports.Catalog,
 ) (*assistantExternalClients, error) {
 	newObservedEgressClient := observedEgressClientFactory(runtime.newObservedEgressClient)
 	notificationCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
@@ -178,48 +180,52 @@ func buildAssistantExternalClients(
 	if err != nil {
 		return nil, dependencyError("content-service", "intersection-reader", err)
 	}
-	canonicalDomainHTTPClients := map[string]*http.Client{
-		"circle-service": newObservedEgressClient(
-			"assistant-service.circle-context",
-			runtime.config.CircleService.TimeoutMs,
-		),
-		"content-service": newObservedEgressClient(
-			"assistant-service.content-context",
-			runtime.config.ContentService.TimeoutMs,
-		),
-		"entity-service": newObservedEgressClient(
-			"assistant-service.entity-context",
-			runtime.config.EntityService.TimeoutMs,
-		),
+	canonicalDomainTransports := map[string]domainreader.ReaderTransport{
+		"circle-service": {
+			BaseURL: runtime.config.CircleService.BaseURL,
+			HTTPClient: newObservedEgressClient(
+				"assistant-service.circle-context",
+				runtime.config.CircleService.TimeoutMs,
+			),
+		},
+		"content-service": {
+			BaseURL: runtime.config.ContentService.BaseURL,
+			HTTPClient: newObservedEgressClient(
+				"assistant-service.content-context",
+				runtime.config.ContentService.TimeoutMs,
+			),
+		},
+		"entity-service": {
+			BaseURL: runtime.config.EntityService.BaseURL,
+			HTTPClient: newObservedEgressClient(
+				"assistant-service.entity-context",
+				runtime.config.EntityService.TimeoutMs,
+			),
+		},
 	}
 	canonicalDomainReaders, err := domainreader.NewCanonicalReaders(
 		domainreader.CanonicalReadersConfig{
-			ServiceBaseURLs: map[string]string{
-				"circle-service":  runtime.config.CircleService.BaseURL,
-				"content-service": runtime.config.ContentService.BaseURL,
-				"entity-service":  runtime.config.EntityService.BaseURL,
-			},
-			ServiceHTTPClients: canonicalDomainHTTPClients,
+			Descriptors:       descriptorCatalog,
+			Definitions:       domainreader.ProductionReaderDefinitions(),
+			ServiceTransports: canonicalDomainTransports,
 		},
 	)
 	if err != nil {
 		return nil, dependencyError("assistant-domain-reader", "canonical-readers", err)
 	}
-	for _, owner := range []struct {
-		name    string
-		service string
-		baseURL string
-	}{
-		{name: "circle_context_reader", service: "circle-service", baseURL: runtime.config.CircleService.BaseURL},
-		{name: "content_context_reader", service: "content-service", baseURL: runtime.config.ContentService.BaseURL},
-		{name: "entity_context_reader", service: "entity-service", baseURL: runtime.config.EntityService.BaseURL},
-	} {
-		owner := owner
-		infrastructure.healthChecker.Register(owner.name, func(ctx context.Context) error {
+	for _, ownerService := range canonicalDomainReaders.OwnerServices() {
+		ownerService := ownerService
+		transport := canonicalDomainTransports[ownerService]
+		healthName := strings.ReplaceAll(
+			strings.TrimSuffix(ownerService, "-service"),
+			"-",
+			"_",
+		) + "_context_reader"
+		infrastructure.healthChecker.Register(healthName, func(ctx context.Context) error {
 			return checkServiceHealth(
 				ctx,
-				canonicalDomainHTTPClients[owner.service],
-				owner.baseURL,
+				transport.HTTPClient,
+				transport.BaseURL,
 			)
 		})
 	}
@@ -227,7 +233,7 @@ func buildAssistantExternalClients(
 	if err != nil {
 		return nil, dependencyError("integration-service", "operation-contract", err)
 	}
-	connectorGrantAuthorization, err := rtauth.NewHS256ServiceAuthorizationProvider(
+	connectorGrantAuthorization, err := rtauth.NewHS256ServiceAccountAuthorizationProvider(
 		runtime.accessTokenConfig,
 		"assistant-service",
 		[]string{connectorGrantScope},

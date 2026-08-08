@@ -114,6 +114,38 @@ def test_redactor_masks_the_actual_key_even_without_cursor_prefix():
     ) == "provider rejected <redacted-cursor-key>"
 
 
+def test_runtime_child_environment_removes_every_cursor_secret_channel():
+    secret_environment = {
+        name: f"secret-for-{index}"
+        for index, name in enumerate(
+            sorted(cc.CURSOR_SENSITIVE_PROCESS_ENV_KEYS), start=1
+        )
+    }
+    source = {
+        **secret_environment,
+        cc.CURSOR_API_KEY_FILE_ENV: "/restricted/cursor_api_key",
+        "PATH": "/usr/bin",
+    }
+
+    sanitized = cc.cursor_safe_subprocess_env(source)
+
+    assert not cc.CURSOR_SENSITIVE_PROCESS_ENV_KEYS.intersection(sanitized)
+    assert sanitized[cc.CURSOR_API_KEY_FILE_ENV] == "/restricted/cursor_api_key"
+    assert sanitized["PATH"] == "/usr/bin"
+
+
+def test_fd_environment_replaces_inherited_cursor_secret_channels():
+    inherited = {
+        name: "must-not-survive"
+        for name in cc.CURSOR_SENSITIVE_PROCESS_ENV_KEYS
+    }
+    inherited["PATH"] = "/usr/bin"
+
+    environment = cc.cursor_credential_subprocess_env(inherited, credential_fd=17)
+
+    assert environment == {"PATH": "/usr/bin", cc.CURSOR_API_KEY_FD_ENV: "17"}
+
+
 def test_auth_error_classification_excludes_bridge_noise():
     assert cc.is_cursor_auth_error("rejected", status=401)
     assert cc.is_cursor_auth_error("plan_required for this model")

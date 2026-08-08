@@ -17,7 +17,7 @@ void main() {
       addTearDown(container.dispose);
 
       final rows = await container.read(
-        chatContactsRowsForSubTabProvider(ChatText.contactsTabAll).future,
+        chatContactsRowsForSubTabProvider(ChatContactHomeFilter.all).future,
       );
 
       expect(repo.requestedFilters, <String>['all']);
@@ -38,9 +38,7 @@ void main() {
       addTearDown(container.dispose);
 
       final rows = await container.read(
-        chatContactsRowsForSubTabProvider(
-          ChatText.contactsTabMutualFollow,
-        ).future,
+        chatContactsRowsForSubTabProvider(ChatContactHomeFilter.mutual).future,
       );
 
       expect(repo.requestedFilters, <String>['mutual']);
@@ -58,10 +56,10 @@ void main() {
       addTearDown(container.dispose);
 
       final circleRows = await container.read(
-        chatContactsRowsForSubTabProvider(ChatText.contactsTabCircles).future,
+        chatContactsRowsForSubTabProvider(ChatContactHomeFilter.circle).future,
       );
       final groupRows = await container.read(
-        chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups).future,
+        chatContactsRowsForSubTabProvider(ChatContactHomeFilter.group).future,
       );
 
       expect(repo.requestedFilters, <String>['circle', 'group']);

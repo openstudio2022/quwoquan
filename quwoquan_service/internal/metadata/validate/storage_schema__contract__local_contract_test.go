@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/storagecontract"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
@@ -37,6 +38,10 @@ func TestAllServiceStorageDocumentsMatchClosedNestedSchema(t *testing.T) {
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return readErr
+		}
+		if _, decodeErr := storagecontract.DecodeYAML(data); decodeErr != nil {
+			t.Errorf("%s does not match canonical StorageDocument: %v", path, decodeErr)
+			return nil
 		}
 		var instance any
 		if decodeErr := yaml.Unmarshal(data, &instance); decodeErr != nil {

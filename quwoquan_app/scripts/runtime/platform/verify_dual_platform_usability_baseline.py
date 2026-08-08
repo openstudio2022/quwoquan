@@ -177,6 +177,10 @@ def main() -> int:
         "video-player-ready",
         "chat-inbox-row-",
         "AppRoutePaths.profile",
+        "DATA_RELEASE_CREATOR_USER_HANDLE",
+        "DATA_RELEASE_CREATOR_PERSONA_ID",
+        "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
+        "profile-header-avatar-image",
         "startupRecoveryTitle",
     ):
         if needle not in patrol:

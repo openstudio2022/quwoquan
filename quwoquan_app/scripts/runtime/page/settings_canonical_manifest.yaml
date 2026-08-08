@@ -4,7 +4,7 @@
 pages:
   - path: quwoquan_app/lib/service/user_service/account/user_settings/presentation/settings_page.dart
     shell: inset_form
-  - path: quwoquan_app/lib/service/user_service/account/user_settings/presentation/settings_permissions_page.dart
+  - path: quwoquan_app/lib/runtime/shell/settings/settings_permissions_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/service/user_service/account/user_settings/presentation/settings_notifications_page.dart
     shell: inset_form
@@ -24,7 +24,7 @@ pages:
     shell: inset_form
   - path: quwoquan_app/lib/service/user_service/account/user_settings/presentation/settings_dark_mode_page.dart
     shell: inset_form
-  - path: quwoquan_app/lib/service/user_service/account/user_settings/presentation/settings_about_page.dart
+  - path: quwoquan_app/lib/runtime/shell/settings/settings_about_page.dart
     shell: inset_form
   - path: quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_settings_page.dart
     shell: inset_form

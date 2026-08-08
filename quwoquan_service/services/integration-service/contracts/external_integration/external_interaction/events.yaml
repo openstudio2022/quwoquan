@@ -3,6 +3,7 @@ events:
 - name: ExternalInteractionResultReported
   description: 已记录的 provider attempt 通过 durable event relay 输出；只表示 provider 接受或拒绝，不表示终端设备已展示或已送达。
   delivery_semantics: transactional_outbox
+  wire_event_type: ExternalInteractionResultReported
   payload_entity: ExternalInteractionResultReportedEvent
   payload_fields:
   - eventId

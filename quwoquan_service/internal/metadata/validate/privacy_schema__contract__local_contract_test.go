@@ -64,6 +64,17 @@ func TestPrivacySchemaAndTypedDocumentHaveRecursiveKeyParity(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+func TestPrivacySchemaAcceptsFirstPartyServiceInternalAsAConsumerCategory(t *testing.T) {
+	t.Parallel()
+
+	document := canonicalPrivacyDocument()
+	firstVisibility(document)["visibility"] = []any{"platform-ops", "first_party_service_internal"}
+	if err := compilePrivacySchema(t).Validate(document); err != nil {
+		t.Fatalf("privacy schema rejected canonical first-party service consumer category: %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestPrivacySchemaRejectsRetiredAliasesUnknownKeysAndIncompletePolicies(t *testing.T) {
 	t.Parallel()
 

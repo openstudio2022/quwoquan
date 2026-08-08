@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from content.execution.campaign import submission_reconciliation as reconciliation
+from content.execution.campaign import failed_execution_reconciliation
 from content.execution.planning.recipe import request as recipe_request
 from content.execution.campaign.external_inputs import payload_digest
 from core.io import read_json, write_json
@@ -54,6 +55,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
         )
         stable: dict[str, object] = {
             "schema": "quwoquan_data.content_execution_submission",
+            "scale": "M3",
             "rootExecutionId": ROOT_ID,
             "executionId": execution_id,
             "operation": f"{carrier}.generate",
@@ -442,6 +444,7 @@ def test_retry_target_names_use_completed_review_failure_campaign_submissions(
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
+        "scale": "M3",
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": submissions["homepage"]["sourceRevision"],
@@ -531,3 +534,139 @@ def test_retry_target_names_use_completed_review_failure_campaign_submissions(
             "20260805--travel-homepage-m3--china--scale-001",
             output_root=output_root,
         )
+
+
+def test_failed_campaign_reconciliation_terminalizes_dead_source_drift_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root, campaigns_root, blocker = _fixture(tmp_path)
+    _patch_observed_identity(monkeypatch)
+    monkeypatch.setattr(
+        failed_execution_reconciliation,
+        "current_source_digest",
+        reconciliation.current_source_digest,
+    )
+    monkeypatch.setattr(
+        failed_execution_reconciliation,
+        "entity_catalog_digest",
+        lambda _ref: CATALOG_DIGEST,
+    )
+    campaign = campaigns_root / ROOT_ID
+    plan_digest = "sha256:" + "e" * 64
+    run_id = "frozen-run"
+    token = "sha256:" + "f" * 64
+    write_json(
+        campaign / "campaign_plan.json",
+        {
+            "rootExecutionId": ROOT_ID,
+            "planDigest": plan_digest,
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+            "distributedRun": {
+                "campaignRunId": run_id,
+                "campaignGeneration": 1,
+                "campaignFencingToken": token,
+            },
+        },
+    )
+    successor_failure = (
+        "ValueError: campaign sourceDigest drift: "
+        f"frozen={SOURCE_DIGEST} current={OBSERVED_SOURCE_DIGEST}"
+    )
+    successor_lanes = {
+        carrier: {
+            "executionId": f"20260805--travel-{carrier}-m3--china--scale-001",
+            "status": "pending",
+            "phase": "submission",
+            "reviewReturnCode": None,
+            "publishReturnCode": None,
+            "executionRootRef": None,
+            "cleanupStatus": "not_created",
+            "approvedQuota": None,
+            "qualifiedCount": None,
+            "finalizedCount": None,
+            "selectedCount": None,
+            "discardedCount": None,
+            "shortfallCount": None,
+            "error": None,
+        }
+        for carrier in CARRIERS
+    }
+    write_json(
+        campaign / "campaign_report.json",
+        {
+            "rootExecutionId": ROOT_ID,
+            "campaignRunId": "successor-run",
+            "campaignGeneration": 2,
+            "campaignFencingToken": "sha256:" + "1" * 64,
+            "status": "blocked",
+            "phase": "freeze",
+            "planDigest": None,
+            "sourceDigest": None,
+            "entityCatalogDigest": None,
+            "lanes": successor_lanes,
+            "failure": successor_failure,
+        },
+    )
+    write_json(
+        campaign / "runtime/snapshot.json",
+        {
+            "rootExecutionId": ROOT_ID,
+            "runId": "successor-run",
+            "generation": 2,
+            "fencingToken": "sha256:" + "1" * 64,
+            "status": "blocked",
+            "phase": "freeze",
+            "planDigest": None,
+            "lanes": {},
+            "finishedAt": "2026-08-08T04:12:35Z",
+            "failure": successor_failure,
+        },
+    )
+    for carrier in CARRIERS:
+        execution_id = f"20260805--travel-{carrier}-m3--china--scale-001"
+        dead = carrier == "video"
+        write_json(
+            campaign / "claims" / f"{carrier}.json",
+            {
+                "schema": "quwoquan_data.content_campaign_lane_claim",
+                "rootExecutionId": ROOT_ID,
+                "planDigest": plan_digest,
+                "campaignRunId": run_id,
+                "campaignGeneration": 1,
+                "campaignFencingToken": token,
+                "carrier": carrier,
+                "executionId": execution_id,
+                "claimId": "sha256:" + str(CARRIERS.index(carrier) + 2) * 64,
+                "claimAttempt": 1,
+                "status": "running" if dead else "failed",
+                "phase": "review-only" if dead else "completed",
+                "capsuleRef": "data/local/cache/content-campaign-workspaces/capsule",
+                "executionRoot": str(output_root / "data/tasks" / execution_id),
+                "pid": 999_999 if dead else 123,
+                "pgid": 999_999 if dead else 123,
+                "returnCode": None if dead else 130,
+                "error": None if dead else "controller terminated",
+                "terminationOwner": None if dead else "lane_process",
+                "terminationSignal": None,
+                "acquiredAt": "2026-08-08T03:45:39Z",
+                "heartbeatAt": "2026-08-08T03:55:26Z",
+                "updatedAt": "2026-08-08T03:55:26Z",
+                "finishedAt": None if dead else "2026-08-08T03:55:29Z",
+            },
+        )
+
+    receipt, _path = failed_execution_reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        blocker_evidence=blocker,
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    video_claim = read_json(campaign / "claims/video.json")
+    assert video_claim["status"] == "failed"
+    assert video_claim["phase"] == "completed"
+    assert video_claim["returnCode"] == 130
+    assert video_claim["terminationOwner"] == "external_or_kernel"
+    assert receipt["decision"] == "superseded"

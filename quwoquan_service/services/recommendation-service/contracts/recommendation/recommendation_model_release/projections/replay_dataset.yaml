@@ -11,6 +11,7 @@ fields:
 - {name: scenario, type: string}
 - {name: frozenAt, type: timestamp}
 - {name: sampleCount, type: int}
+- {name: datasetDigest, type: string}
 - {name: snapshotCollection, type: string}
 - name: privacyStatus
   type: enum

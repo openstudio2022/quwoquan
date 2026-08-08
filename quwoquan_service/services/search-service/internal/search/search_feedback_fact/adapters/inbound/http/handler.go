@@ -73,11 +73,7 @@ func (h *Handler) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		writeErr(
 			w,
 			requestID,
-			rterrors.NewInvalidArgument(
-				moduleSearch,
-				"反馈格式不正确。",
-				"decode feedback body: "+err.Error(),
-			),
+			feedbackInvalidArgument("decode feedback body: "+err.Error()),
 		)
 		return
 	}
@@ -86,11 +82,7 @@ func (h *Handler) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		writeErr(
 			w,
 			requestID,
-			rterrors.NewInvalidArgument(
-				moduleSearch,
-				"反馈格式不正确。",
-				"feedback body must contain exactly one JSON object",
-			),
+			feedbackInvalidArgument("feedback body must contain exactly one JSON object"),
 		)
 		return
 	}
@@ -99,9 +91,7 @@ func (h *Handler) handleFeedback(w http.ResponseWriter, r *http.Request) {
 		writeErr(
 			w,
 			requestID,
-			rterrors.NewInvalidArgument(
-				moduleSearch,
-				"反馈缺少有效的幂等标识。",
+			feedbackInvalidArgument(
 				"Idempotency-Key is required and must be at most 200 characters",
 			),
 		)
@@ -127,11 +117,7 @@ func (h *Handler) handleFeedback(w http.ResponseWriter, r *http.Request) {
 			writeErr(
 				w,
 				requestID,
-				rterrors.NewInvalidArgument(
-					moduleSearch,
-					"反馈格式不正确。",
-					err.Error(),
-				),
+				feedbackInvalidArgument(err.Error()),
 			)
 		case errors.Is(err, feedbackapplication.ErrIdempotencyConflict):
 			writeErr(
@@ -214,4 +200,13 @@ func writeErr(w http.ResponseWriter, requestID string, err error) {
 		err,
 		rterrors.HTTPWriteOptions{RequestID: requestID},
 	)
+}
+
+func feedbackInvalidArgument(debug string) error {
+	return rterrors.NewAppError(
+		rterrors.NewCode(moduleSearch, rterrors.KindUser, "feedback_invalid_argument"),
+		"反馈格式不正确。",
+		debug,
+	).WithMetadata("feedback_invalid_argument", http.StatusBadRequest).
+		WithRecoveryDirective("surface", "inlineCard", 0)
 }

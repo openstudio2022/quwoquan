@@ -47,7 +47,10 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
                     "$target.",
             )
         }
-    if (preflightResult.exitValue != 0 || preflight["status"] != "passed") {
+    if (
+        preflightResult.exitValue != 0 ||
+            preflight["status"] !in setOf("passed", "warning")
+    ) {
         val details =
             (preflight["details"] as? List<*>)
                 ?.map { it.toString() }
@@ -58,18 +61,10 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
                 (details.firstOrNull() ?: "unknown typed blocker"),
         )
     }
-    val contentBinding = mutableMapOf<String, String>()
-    for ((handoffKey, receiptKey) in listOf(
-        "contentReleaseId" to "releaseId",
-        "contentManifestDigest" to "manifestDigest",
-        "contentReadinessReceiptDigest" to "readinessReceiptDigest",
-    )) {
-        val value = preflight[receiptKey]?.toString()?.trim().orEmpty()
-        check(value.isNotEmpty()) {
-            "GATE_BLOCK: app-debug-preflight receipt is missing $receiptKey."
-        }
-        contentBinding[handoffKey] = value
-    }
+    (preflight["warnings"] as? List<*>)
+        ?.map { it.toString().trim() }
+        ?.filter { it.isNotEmpty() }
+        ?.forEach { logger.warn("[android-runtime] WARN: $it") }
     val output =
         providers.exec {
             commandLine(
@@ -81,16 +76,12 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
                 target,
                 "--launch-mode",
                 "direct_flutter_run",
+                "--launch-policy",
+                "test_live",
                 "--app-instance-id",
                 "direct-flutter-run",
                 "--app-instance-namespace",
                 "direct-flutter-run",
-                "--content-release-id",
-                contentBinding.getValue("contentReleaseId"),
-                "--content-manifest-digest",
-                contentBinding.getValue("contentManifestDigest"),
-                "--content-readiness-receipt-digest",
-                contentBinding.getValue("contentReadinessReceiptDigest"),
             )
             environment("PYTHONDONTWRITEBYTECODE", "1")
         }.standardOutput.asText.get()
@@ -126,6 +117,8 @@ val releaseKeyPassword = System.getenv("QWQ_ANDROID_RELEASE_KEY_PASSWORD")?.trim
 val explicitAppRuntimeEnvironment = System.getenv("QWQ_APP_RUNTIME_ENV")?.trim().orEmpty()
 val explicitAppLaunchTarget = System.getenv("QWQ_LAUNCH_TARGET")?.trim().orEmpty()
 val explicitAppLaunchMode = System.getenv("QWQ_APP_LAUNCH_MODE")?.trim().orEmpty()
+val explicitAppLaunchPolicy =
+    System.getenv("QWQ_APP_LAUNCH_POLICY")?.trim().orEmpty()
 val explicitAppBuildContext = System.getenv("QWQ_APP_BUILD_CONTEXT")?.trim().orEmpty()
 val explicitDartDefinesDigest = System.getenv("QWQ_DART_DEFINES_DIGEST")?.trim().orEmpty()
 val explicitRuntimeConfigDigest =
@@ -165,6 +158,10 @@ val appLaunchTarget =
 val appBuildContext =
     explicitAppBuildContext.ifEmpty {
         if (isDirectDebugHandoff) "direct-debug" else ""
+    }
+val appLaunchPolicy =
+    explicitAppLaunchPolicy.ifEmpty {
+        handoffString(directDebugHandoff, "launchPolicy")
     }
 val dartDefinesDigest =
     explicitDartDefinesDigest.ifEmpty {
@@ -221,6 +218,8 @@ val nativeRuntimeDefineKeys =
         "MEDIA_UPLOAD_BASE_URL",
         "RTC_MEDIA_CONNECTION_URL",
         "QWQ_APP_LAUNCH_MODE",
+        "APP_LAUNCH_POLICY",
+        "CONTENT_BINDING_STATE",
     )
 val suppliedRuntimeDefines =
     decodeDartDefines(providers.gradleProperty("dart-defines").orNull)
@@ -614,16 +613,13 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
             ) {
                 "GATE_BLOCK: direct Flutter Debug must use the selected canonical local handoff."
             }
-            check(contentReleaseId.isNotEmpty()) {
-                "GATE_BLOCK: Android Debug content release identity is absent."
-            }
-            check(contentManifestDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
-                "GATE_BLOCK: Android Debug content manifest digest is absent."
-            }
-            check(
-                contentReadinessReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}")),
-            ) {
-                "GATE_BLOCK: Android Debug content readiness receipt digest is absent."
+            if (consumerID.isEmpty()) {
+                logger.warn(
+                    "[android-runtime] WARN: compile-only direct Debug does not own " +
+                        "device trust, adb reverse, or a runtime consumer lease; use run.sh " +
+                        "for a device-bound test_live session.",
+                )
+                return@doLast
             }
             val trustCommand =
                 mutableListOf(
@@ -646,9 +642,16 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                 trustCommand.addAll(listOf("--device", serial))
             }
             val trustOutput = ByteArrayOutputStream()
-            exec {
+            val trustResult = exec {
                 commandLine(trustCommand)
                 standardOutput = trustOutput
+                isIgnoreExitValue = true
+            }
+            if (trustResult.exitValue != 0) {
+                logger.warn(
+                    "[android-runtime] WARN: device trust is unavailable; " +
+                        "test_live continues with typed network recovery.",
+                )
             }
             @Suppress("UNCHECKED_CAST")
             val trustReceipt =
@@ -677,7 +680,7 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                 }
             }
             val reverseOutput = ByteArrayOutputStream()
-            exec {
+            val leaseResult = exec {
                 commandLine(
                     android.adbExecutable,
                     "-s",
@@ -720,23 +723,16 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                     directPorts.joinToString(","),
                     "--handoff-digest",
                     effectiveLaunchManifestDigest,
-                    "--release-id",
-                    contentReleaseId,
-                    "--manifest-digest",
-                    contentManifestDigest,
-                    "--readiness-receipt-digest",
-                    contentReadinessReceiptDigest,
                 )
                 environment("PYTHONDONTWRITEBYTECODE", "1")
                 standardOutput = leaseOutput
+                isIgnoreExitValue = true
             }
-            @Suppress("UNCHECKED_CAST")
-            val leaseReceipt =
-                JsonSlurper().parseText(
-                    leaseOutput.toString(StandardCharsets.UTF_8),
-                ) as Map<String, Any?>
-            check(leaseReceipt["exitCode"] == 0) {
-                "GATE_BLOCK: Android direct Debug failed to acquire its runtime consumer lease."
+            if (leaseResult.exitValue != 0) {
+                logger.warn(
+                    "[android-runtime] WARN: runtime consumer lease is unavailable; " +
+                        "compile-first test_live continues.",
+                )
             }
             return@doLast
         }
@@ -746,16 +742,18 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
         check(buildContext == "runtime") {
             "GATE_BLOCK: QWQ_APP_BUILD_CONTEXT must be runtime or package-only."
         }
-        check(contentReleaseId.isNotEmpty()) {
-            "GATE_BLOCK: Android runtime content release identity is absent."
-        }
-        check(contentManifestDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
-            "GATE_BLOCK: Android runtime content manifest digest is absent."
-        }
-        check(
-            contentReadinessReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}")),
-        ) {
-            "GATE_BLOCK: Android runtime content readiness receipt digest is absent."
+        if (appLaunchPolicy == "prod_release") {
+            check(contentReleaseId.isNotEmpty()) {
+                "GATE_BLOCK: Android Prod content release identity is absent."
+            }
+            check(contentManifestDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
+                "GATE_BLOCK: Android Prod content manifest digest is absent."
+            }
+            check(
+                contentReadinessReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}")),
+            ) {
+                "GATE_BLOCK: Android Prod content readiness receipt digest is absent."
+            }
         }
         check(launchTarget in setOf("alpha-local", "beta-local", "gamma-local", "prod-sim")) {
             "GATE_BLOCK: Android debug/profile runtime launch requires an explicit local target; " +
@@ -765,12 +763,13 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
             "GATE_BLOCK: Android debug/profile requires QWQ_RUN_DEVICE_ID and matching " +
                 "ANDROID_SERIAL from a canonical environment launcher."
         }
-        check(consumerID.isNotEmpty() && leaseAcquired == "1") {
-            "GATE_BLOCK: Android local runtime consumer lease is absent; " +
-                "use a canonical environment launcher."
-        }
-        check(consumerLeaseID.matches(Regex("sha256:[0-9a-f]{64}"))) {
-            "GATE_BLOCK: Android local runtime consumer lease identity is absent."
+        if (appLaunchPolicy == "prod_release") {
+            check(consumerID.isNotEmpty() && leaseAcquired == "1") {
+                "GATE_BLOCK: Android Prod runtime consumer lease is absent."
+            }
+            check(consumerLeaseID.matches(Regex("sha256:[0-9a-f]{64}"))) {
+                "GATE_BLOCK: Android Prod runtime consumer lease identity is absent."
+            }
         }
         check(reverseReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
             "GATE_BLOCK: Android adb reverse receipt digest is absent."

@@ -14,14 +14,12 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
 import json
 import re
-import sys
-from pathlib import Path
 
-REPO_ROOT = _PATHS.REPO_ROOT
+from _common.paths import REPO_ROOT
+
+
 CONTRACT_LOCK = (
     REPO_ROOT
     / "quwoquan_app"

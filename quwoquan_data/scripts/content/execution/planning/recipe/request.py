@@ -43,6 +43,20 @@ def resolve_frozen_selection(
             "intentLabel": intent,
             "limit": request.count,
             "approvedQuota": request.quota,
+            "requiredWorkers": request.required_workers,
+            "partitionCount": request.partition_count,
+            "capacityPlanDigest": request.capacity_plan_digest,
+            "scaleSourcePool": (
+                dict(request.scale_source_pool)
+                if request.scale_source_pool is not None
+                else None
+            ),
+            "sourcePoolEvidenceRootRef": request.source_pool_evidence_root_ref,
+            "sourcePoolSelection": (
+                dict(request.source_pool_selection)
+                if request.source_pool_selection is not None
+                else None
+            ),
         }
     )
     return selection
@@ -202,9 +216,6 @@ def handle_execute(
                 submission_timeout_seconds=getattr(
                     args, "submission_timeout_seconds", None
                 ),
-                lane_timeout_seconds=getattr(
-                    args, "campaign_lane_timeout_seconds", None
-                ),
             )
         except (
             OSError,
@@ -343,6 +354,9 @@ def handle_execute(
             intent=identity.intent,
             count=count,
             quota=quota,
+            required_workers=getattr(args, "required_workers", None),
+            partition_count=getattr(args, "partition_count", None),
+            capacity_plan_digest=getattr(args, "capacity_plan_digest", None),
         ),
         invoke=invoke,
     )

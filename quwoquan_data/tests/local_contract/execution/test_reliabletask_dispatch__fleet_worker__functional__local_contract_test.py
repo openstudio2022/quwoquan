@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 
 DATA_ROOT = next(
     parent
@@ -16,28 +17,31 @@ for path in (DATA_ROOT / "scripts", DATA_ROOT / "tests"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution.agent import reliabletask_dispatch  # noqa: E402
-from content.execution.agent.agent_checkpoint import _managed_author_ref  # noqa: E402
-from content.execution.agent.outcome import AgentRunOutcome  # noqa: E402
-from content.execution.context import ExecutionContext  # noqa: E402
-from content.execution.queue.core import _read_job, _write_job  # noqa: E402
-from content.execution.queue.jobs import enqueue_ref_job  # noqa: E402
-from content.execution.queue.model import QueueLease  # noqa: E402
-from content.execution.queue.reliabletask.fleet import (  # noqa: E402
+from content.execution.agent import reliabletask_dispatch
+from content.execution.agent.agent_checkpoint import _managed_author_ref
+from content.execution.agent.outcome import AgentRunOutcome
+from content.execution.context import ExecutionContext
+from content.execution.planning.recipe.model import (
+    _runtime_preflight_argv,
+)
+from content.execution.queue.core import _read_job, _write_job
+from content.execution.queue.backend import ReliableTaskJobSetCollisionError
+from content.execution.queue.jobs import enqueue_ref_job
+from content.execution.queue.model import QueueLease
+from content.execution.queue.reliabletask.fleet import (
     _has_audited_remote_recovery,
     fleet_batch_timeout_seconds,
 )
-from content.execution.queue.reliabletask.report import (  # noqa: E402
+from content.execution.queue.reliabletask.report import (
     ReliableTaskFleetOutcome,
     ReliableTaskFleetReport,
 )
-from content.execution.queue.reliabletask.worker import (  # noqa: E402
+from content.execution.queue.reliabletask.author import (
     _recover_completed_author_outcome,
 )
-from content.execution.workspace import execution_root  # noqa: E402
-from content.execution.planning.recipe.model import _runtime_preflight_argv  # noqa: E402
-from content.templates.registry import TemplateRegistry  # noqa: E402
-from core.control_types import (  # noqa: E402
+from content.execution.workspace import execution_root
+from content.templates.registry import TemplateRegistry
+from core.control_types import (
     AgentFailureKind,
     AgentProvider,
     ContentType,
@@ -49,9 +53,8 @@ from core.control_types import (  # noqa: E402
     ReliableTaskDispatchStatus,
     RuntimeEnvironment,
 )
-from governance.creators.assignment import creator_assignment_from_profile  # noqa: E402
-from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
-
+from governance.creators.assignment import creator_assignment_from_profile
+from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 EXECUTION_ID = "20260722--travel-homepage-generate--test-region-a--pilot-901"
 OBJECT_REF = "/entity/地点/景区/测试实体甲"
@@ -174,6 +177,326 @@ def test_local_controller_delegates_declared_job_to_service_fleet(monkeypatch) -
         is None
     )
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_job_set_collision_is_a_typed_contract_blocker(monkeypatch) -> None:
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(EXECUTION_ID)
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=EXECUTION_ID,
+        entity_ids=("测试实体甲",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    enqueue_ref_job(
+        EXECUTION_ID,
+        OBJECT_REF,
+        "author",
+        mutex_key=OBJECT_REF,
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.HOMEPAGE.value,
+            "carrier": ContentType.HOMEPAGE.value,
+            "entityRef": OBJECT_REF,
+            "sourceRevision": "sha256:" + "a" * 64,
+            "contentObjectDir": "entities/地点/景区/测试实体甲",
+        },
+    )
+    from content.execution.controller import homepage_authoring
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    monkeypatch.setattr(
+        homepage_authoring,
+        "homepage_quota_verdict",
+        lambda _ctx: homepage_authoring.HomepageQuotaVerdict(
+            approved_quota=1,
+            qualified_refs=(),
+            discarded={},
+        ),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ReliableTaskJobSetCollisionError("same digest, different bytes")
+        ),
+    )
+
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.BUILD_HOMEPAGE,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.BLOCKED
+    assert [issue.code.value for issue in result.issues] == [
+        "DATA.CONTRACT.INVALID"
+    ]
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_remote_author_success_projects_exact_local_completion_envelope(
+    monkeypatch,
+) -> None:
+    execution_id = "20260808--travel-article-m1--china--scale-093"
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(execution_id)
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=("测试实体甲",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    content_object_dir = "posts/article/攻略/测试实体甲/1"
+    creator_assignment = creator_assignment_from_profile(
+        TemplateRegistry.load().creators["qwq_creator_highland_travel_blogger_001"]
+    )
+    job = enqueue_ref_job(
+        execution_id,
+        "测试实体甲_article",
+        "author",
+        mutex_key="测试实体甲_article",
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.ARTICLE.value,
+            "carrier": ContentType.ARTICLE.value,
+            "entityRef": "/entity/地点/景区/测试实体甲",
+            "sourceRevision": "sha256:" + ("7" * 64),
+            "contentObjectDir": content_object_dir,
+            **creator_assignment,
+        },
+    )
+    envelope = execution_root(execution_id) / content_object_dir / "4.draft"
+    envelope.mkdir(parents=True, exist_ok=True)
+    envelope_path = envelope / "agent_result_envelope.json"
+    envelope_path.write_text("{}\n", encoding="utf-8")
+
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+    from content.execution.queue.reliabletask import projection
+
+    def record_completion(
+        observed_execution_id,
+        observed_job_id,
+        *,
+        evidence_path,
+        evidence_root,
+        envelope_workspace_root,
+    ):
+        assert observed_execution_id == execution_id
+        assert observed_job_id == job.job_id
+        assert evidence_path == envelope_path
+        assert envelope_workspace_root == envelope
+        stored = _read_job(execution_id, job.job_id)
+        completed = stored.with_timing(
+            QueueTimelineEvent.SUCCEEDED,
+            at="2026-08-08T00:00:00Z",
+            state=QueueJobState.SUCCEEDED,
+            lease=QueueLease(),
+        )
+        _write_job(completed)
+        return completed
+
+    monkeypatch.setattr(projection, "record_reliabletask_completion", record_completion)
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        lambda *_args, **_kwargs: ReliableTaskFleetReport(
+            total=1,
+            succeeded=1,
+            outcomes=(
+                ReliableTaskFleetOutcome(
+                    job_id=job.job_id,
+                    status="succeeded",
+                    attempts=1,
+                ),
+            ),
+        ),
+    )
+
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.POST_AUTHOR,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 1
+    assert result.issues == ()
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+
+
+def test_remote_success_cannot_project_author_evidence_superseded_by_repair(
+    monkeypatch,
+) -> None:
+    execution_id = "20260808--travel-article-m1--china--scale-094"
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(execution_id)
+    fixture.build()
+    content_object_dir = "posts/article/攻略/测试实体乙/1"
+    creator_assignment = creator_assignment_from_profile(
+        TemplateRegistry.load().creators["qwq_creator_highland_travel_blogger_001"]
+    )
+    job = enqueue_ref_job(
+        execution_id,
+        "测试实体乙_article",
+        "author",
+        mutex_key="测试实体乙_article",
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.ARTICLE.value,
+            "carrier": ContentType.ARTICLE.value,
+            "entityRef": "/entity/地点/景区/测试实体乙",
+            "sourceRevision": "sha256:" + ("8" * 64),
+            "contentObjectDir": content_object_dir,
+            **creator_assignment,
+        },
+    )
+    draft_dir = execution_root(execution_id) / content_object_dir / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    envelope = draft_dir / "agent_result_envelope.json"
+    envelope.write_text("{}\n", encoding="utf-8")
+    repair = draft_dir.parent / "5.review" / "repair_report.json"
+    repair.parent.mkdir(parents=True)
+    repair.write_text("{}\n", encoding="utf-8")
+
+    from content.execution.queue.reliabletask import projection
+
+    monkeypatch.setattr(
+        projection,
+        "record_reliabletask_completion",
+        lambda *_args, **_kwargs: pytest.fail(
+            "stale author envelope must not be projected as success"
+        ),
+    )
+
+    assert not reliabletask_dispatch._project_local_success_evidence(job)
+    assert _read_job(execution_id, job.job_id).state is QueueJobState.QUEUED
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+
+
+def test_fleet_empty_pending_race_rechecks_delivered_quota(monkeypatch) -> None:
+    execution_id = "20260807--travel-homepage-m1--china--scale-091"
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(execution_id)
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=("测试实体甲",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    enqueue_ref_job(
+        execution_id,
+        OBJECT_REF,
+        "author",
+        mutex_key=OBJECT_REF,
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.HOMEPAGE.value,
+            "carrier": ContentType.HOMEPAGE.value,
+            "entityRef": OBJECT_REF,
+            "sourceRevision": "sha256:" + ("9" * 64),
+            "contentObjectDir": "entities/地点/景区/测试实体甲",
+        },
+    )
+    from content.execution.controller import homepage_authoring
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    delivered = {"ready": False}
+    monkeypatch.setattr(
+        homepage_authoring,
+        "homepage_quota_verdict",
+        lambda _ctx: homepage_authoring.HomepageQuotaVerdict(
+            approved_quota=1,
+            qualified_refs=(("地点/景区/测试实体甲",) if delivered["ready"] else ()),
+            discarded={},
+        ),
+    )
+
+    def terminal_race(*_args, **_kwargs):
+        delivered["ready"] = True
+        raise ValueError(f"execution 无待执行 ReliableTask author jobs：{execution_id}")
+
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        terminal_race,
+    )
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.BUILD_HOMEPAGE,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 1
+    assert result.issues == ()
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+
+
+def test_fleet_empty_pending_race_continues_controller_after_author_completion(
+    monkeypatch,
+) -> None:
+    execution_id = "20260807--travel-homepage-m1--china--scale-092"
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(execution_id)
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=("测试实体甲",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    job = enqueue_ref_job(
+        execution_id,
+        OBJECT_REF,
+        "author",
+        mutex_key=OBJECT_REF,
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.HOMEPAGE.value,
+            "carrier": ContentType.HOMEPAGE.value,
+            "entityRef": OBJECT_REF,
+            "sourceRevision": "sha256:" + ("8" * 64),
+            "contentObjectDir": "entities/地点/景区/测试实体甲",
+        },
+    )
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    def terminal_race(*_args, **_kwargs):
+        stored = _read_job(execution_id, job.job_id)
+        _write_job(
+            stored.with_timing(
+                QueueTimelineEvent.SUCCEEDED,
+                at="2026-08-07T00:00:00Z",
+                state=QueueJobState.SUCCEEDED,
+                lease=QueueLease(),
+            )
+        )
+        raise ValueError(f"execution 无待执行 ReliableTask author jobs：{execution_id}")
+
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        terminal_race,
+    )
+
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.BUILD_HOMEPAGE,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 0
+    assert result.issues == ()
+    shutil.rmtree(execution_root(execution_id), ignore_errors=True)
 
 
 def test_reliabletask_resume_accepts_receipt_for_only_remaining_jobs__reliability__local_contract(
@@ -389,6 +712,21 @@ def test_reliabletask_fleet__projects_terminal_worker_failure__reliability__loca
     assert stored.attempt == job.max_attempts
     assert stored.last_issue is not None
     assert "failureCode=RELIABLETASK.WORKER.handler_failed" in stored.last_issue.message
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("terminal resume must not dispatch an empty fleet")
+        ),
+    )
+    resumed = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.BUILD_HOMEPAGE,
+    )
+    assert resumed is not None
+    assert resumed.status is ReliableTaskDispatchStatus.BLOCKED
+    assert resumed.issues
+    assert resumed.discarded
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
@@ -468,7 +806,7 @@ def test_reliabletask_late_remote_dead_preserves_verified_local_success(
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
-def test_failed_publish_receipt_is_a_batch_gate_not_environment_unavailability(
+def test_failed_commercial_batch_does_not_block_nonempty_publish_closure(
     monkeypatch,
 ) -> None:
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
@@ -533,11 +871,9 @@ def test_failed_publish_receipt_is_a_batch_gate_not_environment_unavailability(
     )
 
     assert result is not None
-    assert result.status is ReliableTaskDispatchStatus.BLOCKED
-    assert len(result.issues) == 1
-    assert result.issues[0].code.value == "DATA.CONTRACT.INVALID"
-    assert "passed=false" in result.issues[0].message
-    assert "fleet unavailable" not in result.issues[0].message
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 1
+    assert result.issues == ()
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
@@ -560,6 +896,7 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
     monkeypatch,
 ) -> None:
     from content.execution.agent import agent_checkpoint
+    from content.execution.queue.reliabletask import author
     from content.post.article import draft_io
 
     execution_id = "20260728--travel-article-golden--test-region-a--pilot-001"
@@ -585,6 +922,11 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
         lambda *_args, **_kwargs: [],
     )
     monkeypatch.setattr(draft_io, "read_draft_meta", lambda *_args: meta)
+    monkeypatch.setattr(
+        author,
+        "_durable_author_output_is_quiescent",
+        lambda *_args, **_kwargs: True,
+    )
     failed = AgentRunOutcome.failed(
         AgentFailureKind.FUTURE_TIMEOUT,
         provider=AgentProvider.CURSOR_SDK,
@@ -610,3 +952,41 @@ def test_reliabletask_author__recovers_completed_provenance_bound_output_after_t
     assert recovered.succeeded
     assert recovered.run_id == "author_run_1"
     assert recovered.completion_mode == "durable_output_recovery"
+
+
+def test_reliabletask_author__rejects_late_write_after_timeout_recovery__(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution.production_contracts import sha256_file
+    from content.execution.queue.reliabletask import author
+
+    execution_id = "20260808--travel-article-m1--china--scale-094"
+    draft_dir = tmp_path / "posts/article/攻略/测试/1/4.draft"
+    draft_dir.mkdir(parents=True)
+    draft = draft_dir / "draft.article.md"
+    draft.write_text("first version\n", encoding="utf-8")
+    expected = sha256_file(draft)
+    job = SimpleNamespace(
+        execution_id=execution_id,
+        content_object_dir="posts/article/攻略/测试/1",
+        carrier=SimpleNamespace(value="article"),
+    )
+    monkeypatch.setattr(author, "execution_root", lambda _execution_id: tmp_path)
+    calls = 0
+
+    def late_write(_seconds: float) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            draft.write_text("final version\n", encoding="utf-8")
+
+    monkeypatch.setattr(author.time, "sleep", late_write)
+
+    assert (
+        author._durable_author_output_is_quiescent(
+            job,
+            expected_sha256=expected,
+        )
+        is False
+    )

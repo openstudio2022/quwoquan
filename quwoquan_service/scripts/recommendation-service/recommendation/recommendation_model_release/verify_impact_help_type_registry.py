@@ -37,7 +37,11 @@ DART_META = (
     REPO_ROOT
     / "quwoquan_app/lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/impact_help_type_metadata.g.dart"
 )
-RESOLVER = REPO_ROOT / "quwoquan_app/lib/components/object_page/intersection_icon_resolver.dart"
+RESOLVER = (
+    REPO_ROOT
+    / "quwoquan_app/lib/service/recommendation_service/recommendation"
+    / "recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart"
+)
 
 LANG_GO = SVC / "services/content-service/internal/content/post/application/authorimpact/author_impact_language.go"
 EVIDENCE_GO = SVC / "services/content-service/internal/content/post/application/authorimpact/author_impact_evidence_view.go"
@@ -45,7 +49,11 @@ BEHAVIOR_GO = (
     SVC
     / "services/content-service/internal/content/content_behavior_fact/application/behavior_service.go"
 )
-STORE_GO = SVC / "services/content-service/internal/content/post/infrastructure/persistence/author_impact_store.go"
+#: `rm_author_impact` 的持久化已由 recommendation-service 接管，content-service
+#: 只经 author_impact_reader_client 读取，author_impact_store.go 随之退役。去重
+#: 不变量不随该文件消失：整棵 content-service 实现树都不得再定义第二份
+#: AuthorImpactHelp* 常量。
+CONTENT_SERVICE_INTERNAL = SVC / "services/content-service/internal"
 CIRCLE_GO = SVC / "services/circle-service/internal/circle_management/circle/application/circle_service.go"
 
 FIXTURE_DIR = SVC / "services/content-service/tests/support/contract_fixtures/scenarios"
@@ -292,13 +300,25 @@ def check_consumers(exp: dict, problems: list[str]) -> None:
             if tok not in src:
                 problems.append(f"consumer not table-driven: {where} must consume {tok}")
 
-    # author_impact_store.go must NOT redefine AuthorImpactHelp* constants (dedup).
-    if STORE_GO.exists():
-        store = STORE_GO.read_text(encoding="utf-8")
-        if re.search(r"AuthorImpactHelp[A-Za-z]+\s*=", store):
-            problems.append("author_impact_store.go must not redefine AuthorImpactHelp* constants (use rtimpact.Help*)")
+    # content-service 实现树内不得出现第二份 AuthorImpactHelp* 常量定义（dedup）。
+    if not CONTENT_SERVICE_INTERNAL.is_dir():
+        problems.append(
+            f"content-service implementation tree missing: {CONTENT_SERVICE_INTERNAL}"
+        )
     else:
-        problems.append(f"author_impact_store.go missing: {STORE_GO}")
+        scanned = 0
+        for path in sorted(CONTENT_SERVICE_INTERNAL.rglob("*.go")):
+            scanned += 1
+            if re.search(r"AuthorImpactHelp[A-Za-z]+\s*=", path.read_text(encoding="utf-8")):
+                problems.append(
+                    f"{path.relative_to(REPO_ROOT)} must not redefine AuthorImpactHelp* "
+                    "constants (use rtimpact.Help*)"
+                )
+        if scanned == 0:
+            problems.append(
+                f"AuthorImpactHelp* dedup scan found no Go source under "
+                f"{CONTENT_SERVICE_INTERNAL}; 目录轴变更后必须把扫描面指向新的 canonical 路径"
+            )
 
     # circle_service.go must reference rtimpact.Help* (not helpType string literals).
     if CIRCLE_GO.exists():

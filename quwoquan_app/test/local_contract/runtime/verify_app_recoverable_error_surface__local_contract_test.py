@@ -55,7 +55,7 @@ class VerifyAppRecoverableErrorSurfaceTest(unittest.TestCase):
                 "quwoquan_app/lib/runtime/shell/root.dart": (
                     "Widget build() => CircularProgressIndicator();\n"
                 ),
-                "quwoquan_app/lib/runtime/di/shell/app.dart": (
+                "quwoquan_app/lib/runtime/shell/app.dart": (
                     "Widget build() => CupertinoActivityIndicator();\n"
                 ),
             }

@@ -624,7 +624,7 @@ func writeSchemas(t *testing.T, metadataDir string) {
 		"context.schema.json", "object.schema.json", "fields.schema.json",
 		"operations.schema.json", "storage.schema.json", "events.schema.json",
 		"errors.schema.json", "privacy.schema.json",
-		"contract_graph.schema.json",
+		"projection.schema.json", "contract_graph.schema.json",
 	} {
 		data, err := os.ReadFile(filepath.Join(repositorySchemaRoot, name))
 		if err != nil {

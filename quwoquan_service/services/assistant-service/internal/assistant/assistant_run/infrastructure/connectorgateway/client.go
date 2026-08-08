@@ -25,14 +25,14 @@ const (
 type Client struct {
 	baseURL       *url.URL
 	http          *http.Client
-	authorization rtauth.ServiceAuthorizationProvider
+	authorization rtauth.ServiceAccountAuthorizationProvider
 	path          string
 }
 
 func New(
 	baseURL string,
 	httpClient *http.Client,
-	authorization rtauth.ServiceAuthorizationProvider,
+	authorization rtauth.ServiceAccountAuthorizationProvider,
 ) (*Client, error) {
 	parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil ||
@@ -74,12 +74,10 @@ func (client *Client) ResolveCapability(
 		return toolaccess.ConnectorGrantDecision{}, fmt.Errorf("connector gateway is not initialized")
 	}
 	payload, err := json.Marshal(struct {
-		AccountID      string   `json:"accountId"`
 		CapabilityKey  string   `json:"capabilityKey"`
 		SurfaceKind    string   `json:"surfaceKind"`
 		ConnectionRefs []string `json:"connectionRefs"`
 	}{
-		AccountID:      strings.TrimSpace(input.AccountID),
 		CapabilityKey:  strings.TrimSpace(input.CapabilityKey),
 		SurfaceKind:    strings.TrimSpace(input.SurfaceKind),
 		ConnectionRefs: append([]string(nil), input.ConnectionRefs...),
@@ -98,7 +96,10 @@ func (client *Client) ResolveCapability(
 	if err != nil {
 		return toolaccess.ConnectorGrantDecision{}, fmt.Errorf("build connector capability request: %w", err)
 	}
-	authorization, err := client.authorization.AuthorizationHeader(ctx)
+	authorization, err := client.authorization.AuthorizationHeaderForAccount(
+		ctx,
+		strings.TrimSpace(input.AccountID),
+	)
 	if err != nil {
 		return toolaccess.ConnectorGrantDecision{}, fmt.Errorf("authorize connector capability request: %w", err)
 	}

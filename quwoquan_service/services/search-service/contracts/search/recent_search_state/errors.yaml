@@ -12,19 +12,6 @@ errors:
   user_message:
     zh: 最近搜索请求格式不正确
     en: Invalid recent search request
-- code: SEARCH.USER.recent_entry_not_found
-  reason: recent_entry_not_found
-  http_status: 404
-  emitted_by:
-  - surface: http
-    operations: [DeleteRecentSearch]
-  recovery_action: retry
-  disruption_level: snackbar
-  dart_const: recentEntryNotFound
-  go_const: ErrRecentEntryNotFound
-  user_message:
-    zh: 最近搜索记录不存在或已删除
-    en: Recent search entry not found
 - code: SEARCH.USER.recent_version_conflict
   reason: recent_version_conflict
   http_status: 409

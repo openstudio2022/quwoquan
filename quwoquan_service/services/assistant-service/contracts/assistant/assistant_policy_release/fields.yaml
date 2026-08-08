@@ -186,7 +186,7 @@ members:
       role: authoritative_state
     description: 显式 skill/domain 匹配规则；未命中时只能使用 defaultTemplateId。
   AssistantPolicyLearningContextDefinition:
-    kind: owned_entity
+    kind: value_object
     fields:
     - name: enabled
       type: bool

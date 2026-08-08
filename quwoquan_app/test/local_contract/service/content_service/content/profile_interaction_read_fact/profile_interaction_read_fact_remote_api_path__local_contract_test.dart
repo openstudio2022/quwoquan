@@ -1,6 +1,8 @@
 /// 对象级端云契约：Remote adapter 的 HTTP path 与 generated metadata 对齐。
 library;
 
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
+// readiness_case: profile_interaction_read_fact_append_profile_interaction_read_fact_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';

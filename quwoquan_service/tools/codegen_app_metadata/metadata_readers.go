@@ -104,6 +104,21 @@ func readProjection(path string) (*projectionFile, error) {
 	return &parsed, nil
 }
 
+// canonicalClientFields returns the field set this projection exposes to App
+// codegen. client_projection carries output placement only, so the canonical
+// top-level fields list is the field-shape truth; an explicitly declared
+// client_projection.fields list still wins while any contract declares one,
+// because such a list may intentionally narrow or rename the exposed set.
+func (projection *projectionFile) canonicalClientFields() []projectionFieldDef {
+	if projection == nil {
+		return nil
+	}
+	if projection.clientProjectionFieldsDeclared {
+		return projection.ClientProjection.Fields
+	}
+	return projection.Fields
+}
+
 // inferCanonicalProjectionDecoderBinding derives the Dart object decoder from
 // the canonical projection field type. Object-local fields remain the only
 // field-shape truth; client_projection carries output placement only.

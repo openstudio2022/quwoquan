@@ -54,6 +54,13 @@
 - 所有对用户可见的编辑工具必须产生真实像素结果，禁止占位面板或确认后无效果的空壳工具。
 - 唯一像素真相源 `ImageEditorExportEngine`：解码（`decodeConstrained`，长边上限 4096 防 OOM；预览降采样 1440）、裁剪、旋转/翻转、矩阵应用、局部径向锚点、曲线 LUT、马赛克化与笔画合成、文字合成、PNG/JPEG 编码。预览与导出共用同一几何/参数，禁止第二坐标链或把局部调整退化为全图平均矩阵。
 
+<a id="req-006"></a>
+### REQ-006 真实 FilterCatalog 读取与发布职责交接
+
+- `media.image_editor` 的滤镜目录必须由 generated client 经 production Remote 读取当前 active `FilterCatalogRelease`；主路径必须校验 release 身份与 canonical digest，bootstrap、fixture、测试 double 或未绑定当前候选的缓存结果不得冒充该读取成功。
+- 编辑器只拥有本地编辑会话、像素烘焙与完成结果交接；媒体上传、`MediaAsset` 生命周期和 `Post` 发布继续由各自对象的公开 command 拥有，编辑器不得直接写入这些事实或把本地文件当作已发布结果。
+- 目录不可用、摘要不一致、导出或交接失败时必须保留原图与已确认的编辑历史，提供对同一 Remote 或同一完成动作的可执行重试，并禁止空结果、旧目录或 Toast 冒充成功终态。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart`
@@ -64,6 +71,8 @@
 - canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_text_models.dart`
 - canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_step_stack.dart`
 - canonical：`quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_top_bar.dart`
+- canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/operations.yaml#GetActiveFilterCatalog`
+- canonical：`quwoquan_service/services/content-service/contracts/media/filter_catalog_release/projections/filter_catalog_slice.yaml#FilterCatalogSlice`
 
 ## 5. 验收场景
 
@@ -111,8 +120,28 @@
 - AND 无修改时直接退出。
 - THEN 顶栏「完成」提交编辑结果并上报 submit 埋点。
 
+<a id="gwt-005"></a>
+### GWT-005 production Remote FilterCatalog 到编辑结果交接
+
+- GIVEN 已认证用户从真实创作入口打开 `media.image_editor`，当前候选存在已激活且摘要可校验的 `FilterCatalogRelease`。
+- WHEN App 通过 generated client 与 production Remote 读取 active FilterCatalog，用户应用至少一个目录滤镜和一个本地像素工具后提交完成结果。
+- THEN 页面使用同一 release 的目录定义产生真实像素变化，并只把编辑结果交还所属创作流程；编辑器自身不创建 `MediaAsset` 或 `Post` 成功事实。
+- AND Remote、目录摘要、导出或交接失败时保留原图与已确认历史，用户可重试同一边界或安全放弃，且 fixture、bootstrap、动态 skip、错误转空与旧 release 不得计为成功。
+- AND 本场景只有在同一 commit、ContractGraph、candidate、environment 与真实 Provider 上取得 Android 物理设备及 iPhone 物理设备 `ReadinessResultBundle` 后才计通过；模拟器、Widget-only、blocked、failed 或 skipped 结果均不计。
+
 ## 6. 依赖
 
 - 前置要求：[`publish-comment-reaction`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 图片编辑 production Remote 与双物理设备验收
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：Data/content media sourceDigest 与发布物当前仍冻结，本场景保持 `WAIT_CONTENT`；尚缺绑定同一候选的 active FilterCatalog production Remote readback、真实创作交接以及 Android/iPhone 双物理设备结果，现有像素 local_contract、Widget 或 App Remote 代码不得替代。
+- 完成判定：`GWT-005` 的每条结果均由职责匹配的 production user_acceptance runner 直接 `spec_ref`，且 Android 与 iPhone 物理设备 `ReadinessResultBundle` 绑定同一 commit、ContractGraph、candidate、environment 与真实 Provider 并全部为 passed。

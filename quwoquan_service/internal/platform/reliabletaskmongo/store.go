@@ -12,15 +12,16 @@ import (
 
 // Store 使用 MongoDB 持久化可靠任务事实、通知账本与租约。
 type Store struct {
-	db               *mongo.Database
-	outboxes         *mongo.Collection
-	tasks            *mongo.Collection
-	notifications    *mongo.Collection
-	ledgers          *mongo.Collection
-	attempts         *mongo.Collection
-	resultOutboxes   *mongo.Collection
-	recoveryReceipts *mongo.Collection
-	leases           *mongo.Collection
+	db                     *mongo.Database
+	outboxes               *mongo.Collection
+	tasks                  *mongo.Collection
+	notifications          *mongo.Collection
+	ledgers                *mongo.Collection
+	attempts               *mongo.Collection
+	resultOutboxes         *mongo.Collection
+	recoveryReceipts       *mongo.Collection
+	leases                 *mongo.Collection
+	dataContentCheckpoints *mongo.Collection
 }
 
 // DataContentStore is the Post import task adapter. It intentionally exposes
@@ -43,14 +44,19 @@ var (
 
 // New 创建 MongoDB 可靠任务存储适配器。
 func New(db *mongo.Database) *Store {
-	return newStore(db, "notification_outbox", "notification_delivery_ledger")
+	store := newStore(db)
+	store.notifications = db.Collection("notification_outbox")
+	store.ledgers = db.Collection("notification_delivery_ledger")
+	return store
 }
 
 // NewExternalInteraction adds the Integration-owned provider attempt ledger
 // and result outbox to the generic reliable-task queue. Other services must
 // not even initialize these collections in their own databases.
 func NewExternalInteraction(db *mongo.Database) *Store {
-	store := newStore(db, "notification_outbox", "notification_delivery_ledger")
+	store := newStore(db)
+	store.notifications = db.Collection("notification_outbox")
+	store.ledgers = db.Collection("notification_delivery_ledger")
 	store.attempts = db.Collection("external_provider_attempt_ledger")
 	store.resultOutboxes = db.Collection("external_interaction_result_outbox")
 	return store
@@ -60,7 +66,10 @@ func NewExternalInteraction(db *mongo.Database) *Store {
 // NotificationDeliveryJob 权威集合。其他服务继续使用各自的可靠任务集合，
 // 不得借此构造跨限界上下文共享的通知仓库。
 func NewNotificationDeliveryJobs(db *mongo.Database) *Store {
-	return newStore(db, "notification_delivery_jobs", "notification_delivery_job_recipients")
+	store := newStore(db)
+	store.notifications = db.Collection("notification_delivery_jobs")
+	store.ledgers = db.Collection("notification_delivery_job_recipients")
+	return store
 }
 
 // NewDataContentImport binds the reliable task state machine to collections
@@ -68,20 +77,19 @@ func NewNotificationDeliveryJobs(db *mongo.Database) *Store {
 // a Content worker a cross-service database writer.
 func NewDataContentImport(db *mongo.Database) *DataContentStore {
 	return &DataContentStore{Store: &Store{
-		db:               db,
-		outboxes:         db.Collection("post_import_task_outbox"),
-		tasks:            db.Collection("post_import_task"),
-		recoveryReceipts: db.Collection("post_import_task_recovery_receipt"),
+		db:                     db,
+		outboxes:               db.Collection("post_import_task_outbox"),
+		tasks:                  db.Collection("post_import_task"),
+		recoveryReceipts:       db.Collection("post_import_task_recovery_receipt"),
+		dataContentCheckpoints: db.Collection("post_import_task_checkpoint"),
 	}}
 }
 
-func newStore(db *mongo.Database, notificationCollection, ledgerCollection string) *Store {
+func newStore(db *mongo.Database) *Store {
 	return &Store{
 		db:               db,
 		outboxes:         db.Collection("reliable_task_outbox"),
 		tasks:            db.Collection("reliable_async_task"),
-		notifications:    db.Collection(notificationCollection),
-		ledgers:          db.Collection(ledgerCollection),
 		recoveryReceipts: db.Collection("reliable_task_recovery_receipts"),
 		leases:           db.Collection("reliable_task_leases"),
 	}
@@ -227,5 +235,16 @@ func (s *DataContentStore) EnsureIndexes(ctx context.Context) error {
 	if err := s.ensureTaskIndexes(ctx); err != nil {
 		return err
 	}
-	return s.ensureRecoveryIndexes(ctx)
+	if err := s.ensureRecoveryIndexes(ctx); err != nil {
+		return err
+	}
+	_, err := s.dataContentCheckpoints.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "executionId", Value: 1},
+			{Key: "stage", Value: 1},
+			{Key: "partitionKey", Value: 1},
+		},
+		Options: options.Index().SetUnique(true),
+	})
+	return err
 }

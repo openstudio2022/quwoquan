@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from content.execution.context import load_execution_state
+from content.execution.identity import parse_execution_id
 from core.control_types import ExecutionStage, ExecutionStateStatus
 from core.runtime_policy import active_runtime_policy
 
@@ -24,7 +25,10 @@ def execute_until_checkpoint(
 ) -> None:
     """Keep one campaign lane alive across bounded managed-agent yields."""
     policy = active_runtime_policy()
-    deadline = time.monotonic() + float(policy.campaign_lane_timeout_seconds)
+    frozen_scale = parse_execution_id(execution_id).intent.upper()
+    deadline = time.monotonic() + float(
+        policy.campaign_lane_timeout_seconds_for_scale(frozen_scale)
+    )
     poll_seconds = min(
         5.0,
         max(0.2, float(policy.agent_future_poll_timeout_seconds)),

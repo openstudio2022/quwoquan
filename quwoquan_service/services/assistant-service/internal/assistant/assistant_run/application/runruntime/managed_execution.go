@@ -31,6 +31,16 @@ func NewManagedRunExecutor(delegate RunExecutor) *ManagedRunExecutor {
 	}
 }
 
+// VerifiesCompletionWithinExecutionBudget preserves the delegate's production
+// completion-verification marker across the execution fencing wrapper.
+func (m *ManagedRunExecutor) VerifiesCompletionWithinExecutionBudget() bool {
+	if m == nil || m.delegate == nil {
+		return false
+	}
+	verifier, ok := m.delegate.(InExecutionCompletionVerifier)
+	return ok && verifier.VerifiesCompletionWithinExecutionBudget()
+}
+
 func (m *ManagedRunExecutor) Execute(
 	ctx context.Context,
 	request ExecutionRequest,
@@ -117,7 +127,8 @@ func (e *managedExecution) AwaitStopped(ctx context.Context) error {
 }
 
 var (
-	_ RunExecutor            = (*ManagedRunExecutor)(nil)
-	_ ChildExecutionRegistry = (*ManagedRunExecutor)(nil)
-	_ ChildExecution         = (*managedExecution)(nil)
+	_ RunExecutor                   = (*ManagedRunExecutor)(nil)
+	_ InExecutionCompletionVerifier = (*ManagedRunExecutor)(nil)
+	_ ChildExecutionRegistry        = (*ManagedRunExecutor)(nil)
+	_ ChildExecution                = (*managedExecution)(nil)
 )

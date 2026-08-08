@@ -47,6 +47,7 @@ case "$QWQ_APP_RUNTIME_ENV" in
 esac
 export QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"
 export QWQ_APP_BUILD_CONTEXT=runtime
+export QWQ_APP_LAUNCH_POLICY=test_live
 
 cd "$APP_DIR"
 
@@ -105,14 +106,52 @@ if [[ -z "$DEVICE_ID" ]]; then
   exit 2
 fi
 
-echo "[run] validating full Debug runtime for $QWQ_LAUNCH_TARGET..."
+if ! PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - "$DEVICE_ID" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.dev_up import find_device
+
+device_id = sys.argv[1].strip()
+device = find_device(device_id, include_desktop=False)
+if device is None:
+    raise SystemExit(
+        f"GATE_BLOCK: Flutter device {device_id!r} is not currently connected; "
+        "boot or attach an iOS/Android device before runtime preflight."
+    )
+platform = str(device.get("targetPlatform") or "").strip().lower()
+if platform != "ios" and not platform.startswith("android"):
+    raise SystemExit(
+        f"GATE_BLOCK: Flutter device {device_id!r} has unsupported platform {platform!r}; "
+        "use an iOS or Android device for Remote runtime launch."
+    )
+PY
+then
+  echo "[run] GATE_BLOCK: a connected iOS/Android device is required before runtime preflight." >&2
+  exit 2
+fi
+
+echo "[run] validating test_live launch safety for $QWQ_LAUNCH_TARGET..."
 if ! APP_CONTENT_PREFLIGHT_JSON="$(
   PYTHONDONTWRITEBYTECODE=1 python3 \
     "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
     app-debug-preflight --target "$QWQ_LAUNCH_TARGET"
 )"; then
   echo "$APP_CONTENT_PREFLIGHT_JSON" >&2
-  echo "[run] GATE_BLOCK: target runtime or SMS Provider is not ready; fix the first typed blocker above before flutter run." >&2
+  echo "[run] GATE_BLOCK: test_live launch safety validation failed." >&2
+  exit 2
+fi
+if ! python3 - "$APP_CONTENT_PREFLIGHT_JSON" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+if payload.get("status") not in {"passed", "warning"}:
+    raise SystemExit("App Debug preflight did not allow test_live")
+for warning in payload.get("warnings") or []:
+    print(f"[run] WARN: {warning}", file=sys.stderr)
+PY
+then
+  echo "[run] GATE_BLOCK: App Debug preflight returned an invalid test_live receipt." >&2
   exit 2
 fi
 APP_CONTENT_EXPORTS="$(
@@ -122,17 +161,14 @@ import shlex
 import sys
 
 payload = json.loads(sys.argv[1])
-if payload.get("status") != "passed":
-    raise SystemExit("App Debug preflight did not pass")
 for key, field in (
     ("QWQ_CONTENT_RELEASE_ID", "releaseId"),
     ("QWQ_CONTENT_MANIFEST_DIGEST", "manifestDigest"),
     ("QWQ_CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"),
 ):
     value = str(payload.get(field) or "").strip()
-    if not value:
-        raise SystemExit(f"App content preflight is missing {field}")
-    print(f"export {key}={shlex.quote(value)}")
+    if value:
+        print(f"export {key}={shlex.quote(value)}")
 PY
 )" || {
   echo "[run] GATE_BLOCK: App content preflight returned an invalid receipt." >&2
@@ -151,8 +187,19 @@ export QWQ_RUN_CONSUMER_ID="flutter-run-$$"
 export QWQ_CONSUMER_LEASE_ACQUIRED=0
 export QWQ_CONSUMER_LEASE_ID=""
 export QWQ_ANDROID_REVERSE_OWNED_PORTS=""
+export QWQ_ANDROID_VM_FORWARD_PREEXISTING=0
 
 release_consumer_lease() {
+  if command -v adb >/dev/null 2>&1 \
+    && [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]] \
+    && [[ "$QWQ_ANDROID_VM_FORWARD_PREEXISTING" != "1" ]]; then
+    current_vm_forward="$({ adb forward --list 2>/dev/null || true; } \
+      | awk -v device="$DEVICE_ID" '$1 == device && $2 == "tcp:8888" { print $2; exit }')"
+    if [[ "$current_vm_forward" == "tcp:8888" ]] \
+      && ! adb -s "$DEVICE_ID" forward --remove tcp:8888 >/dev/null 2>&1; then
+      echo "[run] WARN: failed to remove owned Flutter VM adb forward tcp:8888."
+    fi
+  fi
   if command -v adb >/dev/null 2>&1 \
     && [[ -n "$QWQ_ANDROID_REVERSE_OWNED_PORTS" ]]; then
     IFS=',' read -r -a reverse_ports <<< "$QWQ_ANDROID_REVERSE_OWNED_PORTS"
@@ -219,6 +266,19 @@ if device_kind.startswith("android"):
         int(match.group(1))
         for match in re.finditer(r"tcp:(\d+)\s+tcp:\d+", before.stdout)
     }
+    forwards = subprocess.run(
+        ["adb", "forward", "--list"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if forwards.returncode != 0:
+        raise SystemExit("unable to read existing adb forward mappings")
+    vm_forward_preexisting = any(
+        fields[:2] == [device_id, "tcp:8888"]
+        for fields in (line.split() for line in forwards.stdout.splitlines())
+        if len(fields) >= 2
+    )
     ports = enable_android_adb_reverse(device_id, target, topology=topology)
     port_list = ",".join(str(port) for port in ports)
     owned_port_list = ",".join(
@@ -228,6 +288,10 @@ if device_kind.startswith("android"):
     print("export QWQ_ANDROID_REVERSE_EXPECTED_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_ACTUAL_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_OWNED_PORTS=" + shlex.quote(owned_port_list))
+    print(
+        "export QWQ_ANDROID_VM_FORWARD_PREEXISTING="
+        + ("1" if vm_forward_preexisting else "0")
+    )
     print("export QWQ_ANDROID_REVERSE_RECEIPT_DIGEST=" + shlex.quote(
         "sha256:" + hashlib.sha256(
             f"{target}\0{device_id}\0{port_list}".encode("utf-8")
@@ -284,8 +348,7 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
     DEVICE_TRUST_COMMAND+=(--allow-unprovisioned-system-trust)
   fi
   if ! PYTHONDONTWRITEBYTECODE=1 "${DEVICE_TRUST_COMMAND[@]}" >/dev/null; then
-    echo "[run] GATE_BLOCK: failed to install target-bound device system trust." >&2
-    exit 2
+    echo "[run] WARN: target-bound device trust is unavailable; test_live will start with typed network recovery." >&2
   fi
 fi
 
@@ -319,8 +382,8 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
       --ports "$QWQ_ANDROID_LOCAL_PORTS"
     )
   fi
-  LEASE_JSON="$(PYTHONDONTWRITEBYTECODE=1 "${LEASE_COMMAND[@]}")"
-  QWQ_CONSUMER_LEASE_ID="$(
+  if LEASE_JSON="$(PYTHONDONTWRITEBYTECODE=1 "${LEASE_COMMAND[@]}")"; then
+    QWQ_CONSUMER_LEASE_ID="$(
     python3 - "$LEASE_JSON" <<'PY'
 import json
 import sys
@@ -330,9 +393,12 @@ if not lease_id:
     raise SystemExit("consumer lease response is missing leaseId")
 print(lease_id)
 PY
-  )"
-  export QWQ_CONSUMER_LEASE_ID
-  QWQ_CONSUMER_LEASE_ACQUIRED=1
+    )"
+    export QWQ_CONSUMER_LEASE_ID
+    QWQ_CONSUMER_LEASE_ACQUIRED=1
+  else
+    echo "[run] WARN: runtime consumer lease is unavailable; compile-first test_live continues." >&2
+  fi
 fi
 
 HANDOFF_CMD=(
@@ -340,13 +406,22 @@ HANDOFF_CMD=(
   --env "$QWQ_APP_RUNTIME_ENV"
   --target "$QWQ_LAUNCH_TARGET"
   --launch-mode canonical_launcher
+  --launch-policy test_live
   --app-instance-id "$QWQ_APP_RUNTIME_ENV-run"
   --app-instance-namespace "$QWQ_APP_RUNTIME_ENV-run"
-  --content-release-id "$QWQ_CONTENT_RELEASE_ID"
-  --content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST"
-  --content-readiness-receipt-digest \
-  "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
 )
+if [[ -n "${QWQ_CONTENT_RELEASE_ID:-}" ]]; then
+  HANDOFF_CMD+=(--content-release-id "$QWQ_CONTENT_RELEASE_ID")
+fi
+if [[ -n "${QWQ_CONTENT_MANIFEST_DIGEST:-}" ]]; then
+  HANDOFF_CMD+=(--content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST")
+fi
+if [[ -n "${QWQ_CONTENT_READINESS_RECEIPT_DIGEST:-}" ]]; then
+  HANDOFF_CMD+=(
+    --content-readiness-receipt-digest
+    "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
+  )
+fi
 if [[ -n "$ANDROID_LOCAL_GATEWAY_BASE_URL" ]]; then
   HANDOFF_CMD+=(--gateway-base-url "$ANDROID_LOCAL_GATEWAY_BASE_URL")
 fi
@@ -365,7 +440,8 @@ fi
 if [[ -n "$ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL" ]]; then
   HANDOFF_CMD+=(--media-upload-base-url "$ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL")
 fi
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* \
+   && "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
   HANDOFF_CMD+=(
     --transport-required
     --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
@@ -445,7 +521,8 @@ VERIFY_HANDOFF_CMD=(
   --effective-launch-manifest-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
   --defines-json "$DEFINES_JSON"
 )
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* \
+   && "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
   VERIFY_HANDOFF_CMD+=(
     --transport-required
     --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
@@ -468,6 +545,7 @@ for key, value in json.loads(sys.argv[1]).items():
 PY
 )
 
+set +e
 flutter run \
   --no-pub \
   --target "$ENTRYPOINT" \
@@ -475,3 +553,72 @@ flutter run \
   --dds-port=8889 \
   "${DART_DEFINES[@]}" \
   "$@"
+FLUTTER_RUN_EXIT_CODE=$?
+set -e
+
+TEST_LIVE_REPORT_DIR="$ROOT_DIR/.qwq_output/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-${QWQ_LAUNCH_TARGET}-flutter-test-live"
+mkdir -p "$TEST_LIVE_REPORT_DIR"
+TEST_LIVE_REPORT_PATH="$TEST_LIVE_REPORT_DIR/report.json"
+python3 - \
+  "$APP_CONTENT_PREFLIGHT_JSON" \
+  "$FLUTTER_RUN_EXIT_CODE" \
+  "$QWQ_APP_RUNTIME_ENV" \
+  "$QWQ_LAUNCH_TARGET" \
+  "$DEVICE_ID" \
+  "${QWQ_RUN_DEVICE_KIND:-unknown}" \
+  "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST" \
+  "$TEST_LIVE_REPORT_PATH" <<'PY'
+import json
+import pathlib
+import sys
+
+(
+    preflight_json,
+    flutter_exit_code,
+    environment,
+    target,
+    device_id,
+    platform,
+    handoff_digest,
+    report_path,
+) = sys.argv[1:]
+preflight = json.loads(preflight_json)
+exit_code = int(flutter_exit_code)
+runtime_checks = list(preflight.get("runtimeChecks") or [])
+service_health = {
+    str(check.get("name") or "unknown"): {
+        "ready": bool(check.get("ready")),
+        "statusCode": check.get("statusCode"),
+    }
+    for check in runtime_checks
+}
+provider_availability = {
+    name: service_health.get(name, {"ready": False, "statusCode": None})
+    for name in ("provider-protocol-substitute", "sms-provider-substitute")
+}
+report = {
+    "schema": "quwoquan_app.test_live_launch",
+    "environment": environment,
+    "target": target,
+    "deviceId": device_id,
+    "platform": platform,
+    "launchPolicy": "test_live",
+    "compileStatus": "passed" if exit_code == 0 else "failed_or_not_completed",
+    "launchStatus": "completed" if exit_code == 0 else "failed_or_not_completed",
+    "exitCode": exit_code,
+    "runtimeWarnings": list(preflight.get("warnings") or []),
+    "serviceHealth": service_health,
+    "contentAvailability": preflight.get("contentAvailability")
+    or {"state": "unbound"},
+    "providerAvailability": provider_availability,
+    "effectiveLaunchManifestDigest": handoff_digest,
+}
+path = pathlib.Path(report_path)
+path.write_text(
+    json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+print(f"[run] test_live report: {path}")
+PY
+
+exit "$FLUTTER_RUN_EXIT_CODE"

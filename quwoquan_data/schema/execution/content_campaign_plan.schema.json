@@ -6,6 +6,7 @@
     "schema",
     "rootExecutionId",
     "executionMode",
+    "scale",
     "gitBranch",
     "gitCommitSha",
     "sourceRevision",
@@ -24,6 +25,7 @@
     "schema": { "const": "quwoquan_data.content_campaign_plan" },
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "executionMode": { "enum": ["central", "distributed"] },
+    "scale": {"type": "string", "pattern": "^M[1-9][0-9]{0,5}$"},
     "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
@@ -32,6 +34,19 @@
     "semanticSelectionId": {"enum": ["default", "cursor_auto", "not_applicable"]},
     "semanticPreflightReceipt": {
       "$ref": "semantic_preflight_receipt_ref.schema.json"
+    },
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+    "laneSourcePoolSelections": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"$ref": "scale_source_pool_selection.schema.json"},
+        "article": {"$ref": "scale_source_pool_selection.schema.json"},
+        "image": {"$ref": "scale_source_pool_selection.schema.json"},
+        "video": {"$ref": "scale_source_pool_selection.schema.json"}
+      }
     },
     "laneExternalInputs": {
       "type": "object",
@@ -109,6 +124,30 @@
       },
       "then": {"required": ["distributedRun"]},
       "else": {"not": {"required": ["distributedRun"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "rootExecutionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-homepage-m(?:100|1000|10000)--"
+          }
+        },
+        "required": ["rootExecutionId"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "laneSourcePoolSelections"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["scaleSourcePool"]},
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["laneSourcePoolSelections"]}
+          ]
+        }
+      }
     }
   ],
   "$defs": {

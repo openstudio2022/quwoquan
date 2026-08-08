@@ -138,6 +138,48 @@ func TestCatalogUsesFrozenReleaseFromRunContextAfterActivationChanges(t *testing
 	}
 }
 
+func TestCatalogChecksSkillMembershipOnlyInFrozenRelease(t *testing.T) {
+	frozen := buildActiveCatalogFixture(t)
+	active := buildActiveCatalogFixture(t)
+	active.Release.ReleaseDigest = "sha256:" + strings.Repeat("2", 64)
+	resolver := &activeReleaseResolverStub{
+		resolved: active,
+		releases: map[string]packageapplication.ResolvedRelease{
+			frozen.Release.ReleaseDigest: frozen,
+		},
+	}
+	source := activerelease.NewCatalogSource(
+		resolver,
+		activerelease.OfficialPackageID,
+		orchestration.ValidateAssistantDomainSkillCatalog,
+	)
+	if _, err := source.ContainsSkillInFrozenPackage(
+		t.Context(),
+		"travel_companion",
+	); err == nil {
+		t.Fatal("membership followed active pointer without a frozen release")
+	}
+	ctx := skillpkg.WithPackageRelease(t.Context(), skillpkg.PackageReleaseIdentity{
+		PackageID:     frozen.Release.PackageID,
+		ReleaseDigest: frozen.Release.ReleaseDigest,
+	})
+	found, err := source.ContainsSkillInFrozenPackage(ctx, "travel_companion")
+	if err != nil || !found {
+		t.Fatalf("frozen travel_companion membership found=%v err=%v", found, err)
+	}
+	found, err = source.ContainsSkillInFrozenPackage(ctx, "not_in_release")
+	if err != nil || found {
+		t.Fatalf("unknown frozen Skill membership found=%v err=%v", found, err)
+	}
+	if resolver.calls != 0 || resolver.exactCalls != 2 {
+		t.Fatalf(
+			"membership active/exact reads=%d/%d, want 0/2",
+			resolver.calls,
+			resolver.exactCalls,
+		)
+	}
+}
+
 func TestCatalogReadsActiveImmutablePackageOnEveryRequest(t *testing.T) {
 	resolved := buildActiveCatalogFixture(t)
 	resolver := &activeReleaseResolverStub{resolved: resolved}

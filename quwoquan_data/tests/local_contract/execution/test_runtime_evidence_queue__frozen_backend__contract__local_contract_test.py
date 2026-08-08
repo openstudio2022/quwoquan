@@ -22,18 +22,29 @@ def _execution_ids() -> dict[str, str]:
 
 def _envelope(execution_id: str, backend: QueueBackend) -> dict[str, object]:
     marker = CARRIERS.index(execution_id.removeprefix("execution-")) + 1
+
+    def digest_marker(offset: int) -> str:
+        return f"{marker + offset:x}" * 64
+
     return {
         "executionId": execution_id,
         "queueBackend": backend.value,
-        "envelopeDigest": "sha256:" + str(marker) * 64,
-        "queuePolicyDigest": "sha256:" + str(marker + 4) * 64,
-        "executionManifestDigest": "sha256:" + str(marker + 5) * 64,
+        "envelopeDigest": "sha256:" + digest_marker(0),
+        "queuePolicyDigest": "sha256:" + digest_marker(4),
+        "executionManifestDigest": "sha256:" + digest_marker(5),
         "sourceDigest": {
             "algorithm": "sha256",
-            "digest": "sha256:" + str(marker + 6) * 64,
+            "digest": "sha256:" + "a" * 64,
             "inputs": [f"input-{marker}"],
         },
-        "targetSetDigest": str(marker + 7) * 64,
+        "targetSetDigest": digest_marker(7),
+        "rootExecutionId": "execution-homepage",
+        "campaignRunId": "campaign-run-001",
+        "campaignGeneration": 1,
+        "campaignFencingToken": "sha256:" + "b" * 64,
+        "campaignPlanDigest": "sha256:" + "c" * 64,
+        "campaignSourceRevision": "sha256:" + "d" * 64,
+        "campaignEntityCatalogDigest": "sha256:" + "e" * 64,
     }
 
 
@@ -95,17 +106,49 @@ def test_reliabletask_uses_governed_mongo_redis_reader_bound_to_frozen_jobs(
             **binary_fields,
         },
     )
+    def job_set(execution_id: str) -> tuple[dict[str, object], ...]:
+        carrier = execution_id.removeprefix("execution-")
+        backend = _envelope(execution_id, QueueBackend.RELIABLE_TASK)
+        source_revision = "sha256:" + "a" * 64
+        return ({
+            "executionId": execution_id,
+                "carrier": carrier,
+                "stage": "author",
+                "attemptOrdinal": 1,
+                "previousJobSetEnvelopeDigest": None,
+            "queueBackendEnvelopeDigest": backend["envelopeDigest"],
+            "campaignBinding": {
+                "rootExecutionId": "execution-homepage",
+                "campaignRunId": "campaign-run-001",
+                "campaignGeneration": 1,
+                "campaignFencingToken": "sha256:" + "b" * 64,
+                "campaignPlanDigest": "sha256:" + "c" * 64,
+                "campaignSourceRevision": "sha256:" + "d" * 64,
+                "campaignSourceDigest": "sha256:" + "a" * 64,
+                "campaignEntityCatalogDigest": "sha256:" + "e" * 64,
+            },
+            "expectedTasks": [{
+                "jobId": f"job-{carrier}",
+                "entityRef": f"/entity/{carrier}",
+                "stage": "author",
+                "sourceRevision": source_revision,
+                "executionId": execution_id,
+                "carrier": carrier,
+                "idempotencyKey": (
+                    f"{execution_id}|/entity/{carrier}|{carrier}|"
+                    f"{source_revision}|author"
+                ),
+                "ref": f"ref-{carrier}",
+                "partitionKey": f"partition-{carrier}",
+            }],
+            "jobSetDigest": "sha256:" + "9" * 64,
+            "envelopeDigest": "sha256:" + "8" * 64,
+        },)
+
     monkeypatch.setattr(
         reliable_observer,
-        "_expected_tasks",
-        lambda carrier, execution_id: (
-            reliable_observer._ExpectedTask(
-                job_id=f"job-{carrier}",
-                entity_ref=f"/entity/{carrier}",
-                stage="author",
-                source_revision="sha256:" + "a" * 64,
-            ),
-        ),
+        "load_reliabletask_job_set_envelopes",
+        job_set,
     )
 
     provider = queue_evidence.resolve_frozen_queue_evidence_provider(
@@ -113,7 +156,7 @@ def test_reliabletask_uses_governed_mongo_redis_reader_bound_to_frozen_jobs(
     )
 
     assert isinstance(provider, ReliableTaskQueueEvidenceProvider)
-    assert provider.binding.provider_id == "reliabletask_mongo_redis_observer_v1"
+    assert provider.binding.provider_id == "reliabletask_mongo_redis_observer_v3"
     assert provider.binding.configuration_digest.startswith("sha256:")
 
 

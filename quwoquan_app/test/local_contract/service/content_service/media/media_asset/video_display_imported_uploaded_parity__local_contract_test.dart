@@ -59,13 +59,15 @@ Map<String, dynamic> _videoWire({
   required String coverStrategy,
   required int coverFrameTimeMs,
 }) {
+  // read model 已单轨收敛到 canonical Post 字段名（postId/contentType/
+  // contentIdentity/authorDisplayName），不再接受旧读模型别名。
   return <String, dynamic>{
-    'id': id,
-    'type': 'video',
-    'identity': 'work',
+    'postId': id,
+    'contentType': 'video',
+    'contentIdentity': 'work',
     'authorId': 'author',
-    'displayName': '作者',
-    'avatarUrl': '',
+    'authorDisplayName': '作者',
+    'authorAvatarUrl': '',
     'videoUrl': videoUrl,
     'thumbnailUrl': thumbnailUrl,
     'coverUrl': thumbnailUrl,

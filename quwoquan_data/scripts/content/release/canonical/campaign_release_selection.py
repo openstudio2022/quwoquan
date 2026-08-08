@@ -12,7 +12,7 @@ from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission import campaign_root, load_submissions
 from content.execution.campaign.submission_reconciliation import (
     load_reconciliation_reference,

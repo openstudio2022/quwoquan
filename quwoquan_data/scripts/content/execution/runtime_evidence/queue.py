@@ -76,6 +76,19 @@ def _frozen_envelopes(
                     "observerBinarySha256": envelope.get(
                         "observerBinarySha256"
                     ),
+                    "rootExecutionId": envelope.get("rootExecutionId"),
+                    "campaignRunId": envelope.get("campaignRunId"),
+                    "campaignGeneration": envelope.get("campaignGeneration"),
+                    "campaignFencingToken": envelope.get(
+                        "campaignFencingToken"
+                    ),
+                    "campaignPlanDigest": envelope.get("campaignPlanDigest"),
+                    "campaignSourceRevision": envelope.get(
+                        "campaignSourceRevision"
+                    ),
+                    "campaignEntityCatalogDigest": envelope.get(
+                        "campaignEntityCatalogDigest"
+                    ),
                 }
             )
         rows.append(row)

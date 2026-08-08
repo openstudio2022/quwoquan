@@ -4,6 +4,8 @@ package reliabletask_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,7 +50,79 @@ func dataJob(i int) reliabletask.DataContentJob {
 		panic(err)
 	}
 	job.IdempotencyKey = key
+	job.JobSetEnvelopeDigest = "sha256:" + strings.Repeat("e", 64)
+	job.JobSetDigest = "sha256:" + strings.Repeat("f", 64)
+	job.ActualTaskDigest = job.JobSetDigest
 	return job
+}
+
+func registerMongoCleanup(
+	t *testing.T,
+	client *mongo.Client,
+	databaseName string,
+) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := client.Database(databaseName).Drop(ctx); err != nil {
+			t.Errorf("drop ReliableTask integration database %s: %v", databaseName, err)
+		}
+		names, err := client.ListDatabaseNames(ctx, bson.M{"name": databaseName})
+		if err != nil {
+			t.Errorf("verify ReliableTask integration database cleanup %s: %v", databaseName, err)
+		} else if len(names) != 0 {
+			t.Errorf("ReliableTask integration database cleanup left %v", names)
+		}
+		if err := client.Disconnect(context.Background()); err != nil {
+			t.Errorf("disconnect ReliableTask integration Mongo: %v", err)
+		}
+	})
+}
+
+func registerReliableTaskExecutionCleanup(
+	t *testing.T,
+	store *reliabletaskmongo.DataContentStore,
+	router *rtredis.Router,
+	ready *reliabletask.RedisReadyIndex,
+	stream string,
+	executionIDs ...string,
+) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		taskIDs := make([]string, 0)
+		for _, executionID := range executionIDs {
+			result, err := store.PurgeDataContentExecution(ctx, executionID)
+			if err != nil {
+				t.Errorf("purge ReliableTask execution %s: %v", executionID, err)
+				continue
+			}
+			taskIDs = append(taskIDs, result.TaskIDs...)
+		}
+		if err := ready.Purge(ctx, taskIDs); err != nil {
+			t.Errorf("purge ReliableTask Redis stream %s: %v", stream, err)
+		}
+		redisClient := router.Scene("reliabletask")
+		keys := []string{stream}
+		for _, taskID := range taskIDs {
+			keys = append(keys, stream+":queued:"+taskID)
+		}
+		for _, key := range keys {
+			if _, err := redisClient.Get(ctx, key); !errors.Is(err, rtredis.ErrKeyNotFound) {
+				t.Errorf("ReliableTask Redis cleanup left key %s: %v", key, err)
+			}
+		}
+		if err := router.Close(); err != nil {
+			t.Errorf("close ReliableTask integration Redis: %v", err)
+		}
+	})
+}
+
+func productionReadyStream(executionID string) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(executionID)))
+	return "reliabletask:data:content:" + hex.EncodeToString(digest[:])
 }
 
 func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
@@ -64,9 +138,9 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Disconnect(ctx)
-	db := client.Database(fmt.Sprintf("reliabletask_data_%d", time.Now().UnixNano()))
-	t.Cleanup(func() { _ = db.Drop(context.Background()) })
+	databaseName := fmt.Sprintf("reliabletask_data_%d", time.Now().UnixNano())
+	registerMongoCleanup(t, client, databaseName)
+	db := client.Database(databaseName)
 	store := reliabletaskmongo.NewDataContentImport(db)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
@@ -90,6 +164,16 @@ func TestDataContentFleetMongoRedisEndToEnd(t *testing.T) {
 	if err := ready.Ensure(ctx); err != nil {
 		t.Fatal(err)
 	}
+	registerReliableTaskExecutionCleanup(
+		t,
+		store,
+		router,
+		ready,
+		stream,
+		dataJob(0).ExecutionID,
+		"20260720--travel-homepage-coverage--cn-sichuan--scale-001",
+		"20260720--travel-homepage-coverage--cn-zhejiang--canary-002",
+	)
 	fleet := reliabletask.DataContentFleet{
 		Store:          store,
 		ExecutionID:    dataJob(0).ExecutionID,
@@ -323,12 +407,13 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 		outputRoot,
 		publishRoot,
 	)
-	fixtureOutput, err := fixtureCommand.Output()
+	fixtureOutput, err := fixtureCommand.CombinedOutput()
 	if err != nil {
-		t.Fatalf("prepare real Python worker fixture: %v", err)
+		t.Fatalf("prepare real Python worker fixture: %v\n%s", err, fixtureOutput)
 	}
 	var fixture struct {
 		Schema               string                      `json:"schema"`
+		SourceCapsuleRoot    string                      `json:"sourceCapsuleRoot"`
 		Job                  reliabletask.DataContentJob `json:"job"`
 		IdempotencyKey       string                      `json:"idempotencyKey"`
 		ExpectedCanonicalRef string                      `json:"expectedCanonicalRef"`
@@ -338,6 +423,9 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	}
 	if fixture.Schema != "quwoquan.reliabletask_process_fixture" {
 		t.Fatalf("fixture schema drift: %q", fixture.Schema)
+	}
+	if !filepath.IsAbs(fixture.SourceCapsuleRoot) {
+		t.Fatalf("fixture source capsule root is not absolute: %q", fixture.SourceCapsuleRoot)
 	}
 	key, err := fixture.Job.ValidateIdentity()
 	if err != nil {
@@ -353,9 +441,9 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Disconnect(ctx)
-	db := client.Database(fmt.Sprintf("reliabletask_data_process_%d", time.Now().UnixNano()))
-	t.Cleanup(func() { _ = db.Drop(context.Background()) })
+	databaseName := fmt.Sprintf("reliabletask_data_process_%d", time.Now().UnixNano())
+	registerMongoCleanup(t, client, databaseName)
+	db := client.Database(databaseName)
 	store := reliabletaskmongo.NewDataContentImport(db)
 	if err := store.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
@@ -366,15 +454,15 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 		},
 		DefaultScene: "reliabletask",
 	})
-	t.Cleanup(func() { _ = router.Close() })
+	stream := fmt.Sprintf(
+		"reliabletask:data:content:process:%d",
+		time.Now().UnixNano(),
+	)
 	ready, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
 		Client: router.Scene("reliabletask"),
-		Stream: fmt.Sprintf(
-			"reliabletask:data:content:process:%d",
-			time.Now().UnixNano(),
-		),
-		Group: "data.content_supply.process.integration",
-		Queue: reliabletask.DataContentQueue,
+		Stream: stream,
+		Group:  "data.content_supply.process.integration",
+		Queue:  reliabletask.DataContentQueue,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -382,6 +470,14 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 	if err := ready.Ensure(ctx); err != nil {
 		t.Fatal(err)
 	}
+	registerReliableTaskExecutionCleanup(
+		t,
+		store,
+		router,
+		ready,
+		stream,
+		fixture.Job.ExecutionID,
+	)
 	fleet := reliabletask.DataContentFleet{
 		Store:          store,
 		ExecutionID:    fixture.Job.ExecutionID,
@@ -410,11 +506,12 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 			"-c",
 			"from content.execution.queue.reliabletask.worker import run_process_worker; run_process_worker()",
 		},
-		WorkDir: filepath.Join(repoRoot, "quwoquan_data"),
-		Environment: dataContentTestEnvironment(
+		WorkDir: filepath.Join(fixture.SourceCapsuleRoot, "quwoquan_data"),
+		Environment: dataContentCapsuleEnvironment(
 			os.Environ(),
 			outputRoot,
 			publishRoot,
+			fixture.SourceCapsuleRoot,
 		),
 	}
 	deadline := time.Now().Add(60 * time.Second)
@@ -431,7 +528,8 @@ func TestDataContentFleetRunsRealPythonObjectTransaction(t *testing.T) {
 		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 			t.Fatal(err)
 		}
-		if err == nil && task.Status == reliabletask.TaskStatusSucceeded {
+		if err == nil && (task.Status == reliabletask.TaskStatusSucceeded ||
+			task.Status == reliabletask.TaskStatusDead) {
 			break
 		}
 		if !processed {
@@ -503,16 +601,21 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 		outputRoot,
 		publishRoot,
 	)
-	fixtureOutput, err := fixtureCommand.Output()
+	fixtureOutput, err := fixtureCommand.CombinedOutput()
 	if err != nil {
-		t.Fatalf("prepare production fleet fixture: %v", err)
+		t.Fatalf("prepare production fleet fixture: %v\n%s", err, fixtureOutput)
 	}
 	var fixture struct {
 		Job                  reliabletask.DataContentJob `json:"job"`
 		ExpectedCanonicalRef string                      `json:"expectedCanonicalRef"`
+		FleetRequest         json.RawMessage             `json:"fleetRequest"`
+		SourceCapsuleRoot    string                      `json:"sourceCapsuleRoot"`
 	}
 	if err := json.Unmarshal(fixtureOutput, &fixture); err != nil {
 		t.Fatalf("decode production fleet fixture: %v", err)
+	}
+	if !filepath.IsAbs(fixture.SourceCapsuleRoot) {
+		t.Fatalf("production fixture source capsule root is not absolute: %q", fixture.SourceCapsuleRoot)
 	}
 	databaseName := fmt.Sprintf(
 		"reliabletask_data_cli_%d",
@@ -522,10 +625,39 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		_ = client.Database(databaseName).Drop(context.Background())
-		_ = client.Disconnect(context.Background())
+	registerMongoCleanup(t, client, databaseName)
+	cleanupStore := reliabletaskmongo.NewDataContentImport(
+		client.Database(databaseName),
+	)
+	cleanupRouter := platformredis.MustNewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"reliabletask": {Mode: "standalone", Addr: redisAddr},
+		},
+		DefaultScene: "reliabletask",
 	})
+	cleanupStream := productionReadyStream(fixture.Job.ExecutionID)
+	cleanupReady, err := reliabletask.NewRedisReadyIndex(
+		reliabletask.RedisReadyIndexConfig{
+			Client: cleanupRouter.Scene("reliabletask"),
+			Stream: cleanupStream,
+			Group: "data.content_supply." + strings.TrimPrefix(
+				cleanupStream,
+				"reliabletask:data:content:",
+			),
+			Queue: reliabletask.DataContentQueue,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registerReliableTaskExecutionCleanup(
+		t,
+		cleanupStore,
+		cleanupRouter,
+		cleanupReady,
+		cleanupStream,
+		fixture.Job.ExecutionID,
+	)
 	requestPath := filepath.Join(tempRoot, "fleet_request.json")
 	reportPath := filepath.Join(
 		outputRoot,
@@ -536,19 +668,10 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 		"reliabletask",
 		"publish_fleet_report.json",
 	)
-	requestPayload, err := json.Marshal(map[string]any{
-		"schema":                    "quwoquan.data_content_fleet_request",
-		"executionId":               fixture.Job.ExecutionID,
-		"requireCommercial":         true,
-		"recoverDeadTasks":          false,
-		"objectTimeoutMilliseconds": dataContentFleetIntegrationObjectTimeout.Milliseconds(),
-		"requiredQuota":             1,
-		"jobs":                      []reliabletask.DataContentJob{fixture.Job},
-	})
-	if err != nil {
-		t.Fatal(err)
+	if len(fixture.FleetRequest) == 0 {
+		t.Fatal("fixture frozen fleet request is missing")
 	}
-	if err := os.WriteFile(requestPath, requestPayload, 0o600); err != nil {
+	if err := os.WriteFile(requestPath, fixture.FleetRequest, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	command := exec.Command(
@@ -572,8 +695,8 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 			"QWQ_DATA_FLEET_REDIS_ADDR":          redisAddr,
 			"QWQ_DATA_FLEET_PENDING_MIN_IDLE_MS": "10",
 			"QWQ_DATA_FLEET_PYTHON":              python,
-			"QWQ_DATA_FLEET_SCRIPTS_ROOT":        filepath.Join(repoRoot, "quwoquan_data", "scripts"),
-			"QWQ_DATA_FLEET_WORK_DIR":            filepath.Join(repoRoot, "quwoquan_data"),
+			"QWQ_DATA_FLEET_SCRIPTS_ROOT":        filepath.Join(fixture.SourceCapsuleRoot, "quwoquan_data", "scripts"),
+			"QWQ_DATA_FLEET_WORK_DIR":            filepath.Join(fixture.SourceCapsuleRoot, "quwoquan_data"),
 			"QWQ_DATA_FLEET_PUBLISH_ROOT":        publishRoot,
 			"QWQ_DATA_FLEET_EVIDENCE_ROOT":       outputRoot,
 			"QWQ_DATA_FLEET_WORKERS":             "2",
@@ -610,10 +733,27 @@ func TestProductionDataContentWorkerUsesReliableTaskFleet(t *testing.T) {
 		}
 	}
 	if !report.Passed ||
-		report.CommercialAcceptedCount != 1 ||
+		report.ResearchAcceptedCount != 1 ||
+		report.CommercialAcceptedCount != 0 ||
+		report.ObjectTransactionResultCount != 1 ||
 		report.RequiredQuota != 1 ||
 		report.EndToEndAcceptedThroughputPerHour <= 0 {
-		t.Fatalf("production fleet report is not commercially accepted: %#v", report)
+		tasks, taskErr := cleanupStore.ListDataContentExecutionTasks(
+			context.Background(),
+			fixture.Job.ExecutionID,
+		)
+		failures := make([]reliabletask.RuntimeFailure, 0, len(tasks))
+		for _, task := range tasks {
+			if task.LastFailure != nil {
+				failures = append(failures, *task.LastFailure)
+			}
+		}
+		t.Fatalf(
+			"production fleet report is not research accepted: %#v failures=%#v taskErr=%v",
+			report,
+			failures,
+			taskErr,
+		)
 	}
 	if _, err := os.Stat(filepath.Join(
 		publishRoot,
@@ -639,6 +779,27 @@ func dataContentTestEnvironment(
 		overrides["PYTHONPATH"] = scriptsRoot + string(os.PathListSeparator) + repoRoot
 	}
 	return dataContentEnvironment(current, overrides)
+}
+
+func dataContentCapsuleEnvironment(
+	current []string,
+	outputRoot string,
+	publishRoot string,
+	sourceCapsuleRoot string,
+) []string {
+	return dataContentEnvironment(
+		current,
+		map[string]string{
+			"PYTHONDONTWRITEBYTECODE": "1",
+			"PYTHONPATH": filepath.Join(
+				sourceCapsuleRoot,
+				"quwoquan_data",
+				"scripts",
+			),
+			"QWQ_OUTPUT_ROOT":  outputRoot,
+			"QWQ_PUBLISH_ROOT": publishRoot,
+		},
+	)
 }
 
 func dataContentEnvironment(

@@ -122,6 +122,9 @@ lifecycle:
 members:
   CircleSectionConfig:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [sectionType]
+    cardinality: many
     max_cardinality: 16
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: Circle 详情分区的有界顺序配置，只能经 Circle 行为修改。

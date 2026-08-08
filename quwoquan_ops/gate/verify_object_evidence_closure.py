@@ -26,11 +26,10 @@
 `_schemas/events.schema.json` 的 enum 与 required 直接强制，两类情况都在 schema 层就无法
 通过，维度随之关闭——这正是当时写在缺口文案里的「取值收敛后本缺口自动关闭」。
 
-存量缺口由 `quwoquan_ops/policies/gates/object_evidence_closure_baseline.json` 的棘轮基线
-承接：基线只按「缺口维度 × 对象 kind」登记**计数**，不登记任何 objectId。因此它不是
-allowlist——没有任何具体缺口拿到身份豁免，格内换对象必须同时关掉一条才能持平，缺席的格按
-0 计算，所以新维度、新 kind 与任何一格的增量都直接 BLOCK。基线只能在实测缺口下降后用
-`--update-baseline` 显式收紧。
+结构缺口已进入严格零值模式：任何 STRUCTURAL 维度只要实测大于 0 就直接
+BLOCK。历史棘轮基线已退役，既不提供刷新入口，也不允许通过重建基线为缺口发放额度。
+`commercial.result_bundle` 和四环境回执仍是 RESULT 证据：它们必须在可信 runner 中完成，
+静态结构门只报告、不伪造动态 PASS。
 
 fail-closed：没有 allowlist、没有豁免、没有 warn-only。
 """
@@ -57,11 +56,10 @@ PAGE_OBJECT_CONTRACT = (
     SERVICE_ROOT / "contracts" / "metadata" / "_shared" / "page_object_contract.yaml"
 )
 RUN_DIR = ROOT / ".qwq_output" / "env" / "repo" / "runs" / "object-evidence-closure"
-BASELINE_PATH = (
-    ROOT / "quwoquan_ops" / "policies" / "gates" / "object_evidence_closure_baseline.json"
-)
-BASELINE_SCHEMA = "object-evidence-closure-baseline"
-GOVERNANCE_KEYS = ("owner", "reason", "expires_when")
+READINESS_METADATA_DIR = SERVICE_ROOT / "contracts" / "metadata"
+READINESS_EVALUATOR_PACKAGE = "./tools/evaluate_readiness"
+READINESS_EVALUATOR_BUILD_TIMEOUT_SECONDS = 120
+READINESS_EVALUATOR_RUN_TIMEOUT_SECONDS = 120
 # 证据分层。分层依据写在这里而不是靠维度名约定：同一个键改判哪一层必须改这张表，
 # 改动因此会出现在 diff 里。
 #
@@ -87,6 +85,7 @@ EVIDENCE_CLASS_BY_DIMENSION = {
     "cloud.publication_delivery": STRUCTURAL,
     "cloud.reader": STRUCTURAL,
     "cloud.transport": STRUCTURAL,
+    "cloud.external_implementation": STRUCTURAL,
     "contract.storage_publication_role_unannotated": STRUCTURAL,
     "contract.storage_publication_undeclared": STRUCTURAL,
     "contract.storage_declaration_missing": STRUCTURAL,
@@ -94,6 +93,9 @@ EVIDENCE_CLASS_BY_DIMENSION = {
     "test.local_contract": STRUCTURAL,
     "test.api_integration": STRUCTURAL,
     "test.user_acceptance_entry": STRUCTURAL,
+    "ops.environment_acceptance_entry": STRUCTURAL,
+    "ops.rollback_runner_entry": STRUCTURAL,
+    "ops.replay_runner_entry": STRUCTURAL,
     "app.client": STRUCTURAL,
     "app.page": STRUCTURAL,
     "page.consumption_unproven": STRUCTURAL,
@@ -105,10 +107,6 @@ EVIDENCE_CLASS_BY_DIMENSION = {
     "derivation.readiness_missing": STRUCTURAL,
     "derivation.artifact_missing": STRUCTURAL,
     "derivation.artifact_digest": STRUCTURAL,
-    "environment.alpha": RESULT,
-    "environment.beta": RESULT,
-    "environment.gamma": RESULT,
-    "environment.prod": RESULT,
     "commercial.result_bundle": RESULT,
     "blindspot.publication_write_tracking": BLINDSPOT,
     "blindspot.publication_delivery_tracking": BLINDSPOT,
@@ -136,14 +134,13 @@ DART_NON_CODE_RE = re.compile(
     re.DOTALL,
 )
 REPORT_GRAPH_FIELD = "contractGraph"
-REPORT_BASELINE_FIELD = "ratchetBaseline"
 REPORT_BLIND_SPOT_REGISTRY_FIELD = "blindSpotRegistry"
 
 # missing 键 → 缺口维度。与 graph.implementationEvidenceReady /
 # commercialEvidenceReady 产出的键一一对应。
 LAYER_BY_MISSING_KEY = {
-    "implementation.domain_behavior": "cloud.domain_behavior",
-    "implementation.store": "cloud.store",
+    "implementation.service.domain": "cloud.domain_behavior",
+    "implementation.service.store": "cloud.store",
     # 事务性事件发布 seam 的三条互斥缺口（见 graph.requirePublicationSeam）：判别位缺失、
     # 归属未声明、事务性追加未观测到。关闭方式各不相同，所以维度也必须分开。
     "contract.storage_publication_unannotated": "contract.storage_publication_role_unannotated",
@@ -157,21 +154,28 @@ LAYER_BY_MISSING_KEY = {
     "blindspot.publication_write_tracking": "blindspot.publication_write_tracking",
     "blindspot.publication_delivery_tracking": "blindspot.publication_delivery_tracking",
     "blindspot.python_store_invisible": "blindspot.python_store_invisible",
-    "implementation.reader": "cloud.reader",
-    "implementation.transport": "cloud.transport",
-    "implementation.local_contract": "test.local_contract",
-    "implementation.api_integration": "test.api_integration",
-    "implementation.app_client": "app.client",
-    "implementation.page": "app.page",
+    "implementation.service.reader": "cloud.reader",
+    "implementation.service.transport": "cloud.transport",
+    # external_reference 只要求 store / transport 任一实现边界；不能把二选一
+    # 缺口伪装成其中某一条单轨缺口，因此使用独立结构维度。
+    "implementation.service.store_or_transport": "cloud.external_implementation",
+    # Canonical producer-separated App evidence keys.  These are source/test
+    # entrypoints, not runner results, so they remain strict structural gaps.
+    "implementation.app.application": "app.client",
+    "implementation.app.adapters": "app.client",
+    "implementation.app.local_contract": "test.local_contract",
+    "implementation.app.api_integration": "test.api_integration",
+    "implementation.app.presentation": "app.page",
+    "implementation.app.user_acceptance": "test.user_acceptance_entry",
+    "implementation.service.local_contract": "test.local_contract",
+    "implementation.service.api_integration": "test.api_integration",
+    "implementation.ops.environment_acceptance": "ops.environment_acceptance_entry",
+    "implementation.ops.rollback_runner": "ops.rollback_runner_entry",
+    "implementation.ops.replay_runner": "ops.replay_runner_entry",
     "implementation.operation_coverage": "derivation.operation_coverage",
     "implementation.evidence_provenance": "derivation.evidence_provenance",
     # UAT 入口是结构性证据；四环境是结果证据（只能由 runner 附加）。维度名以此区分，
     # 避免把「入口缺失」读成「用例未通过」。
-    "commercial.user_acceptance": "test.user_acceptance_entry",
-    "commercial.environment.alpha": "environment.alpha",
-    "commercial.environment.beta": "environment.beta",
-    "commercial.environment.gamma": "environment.gamma",
-    "commercial.environment.prod": "environment.prod",
     "commercial.result_bundle": "commercial.result_bundle",
     "readiness.evidence": "derivation.evidence_packet",
     "readiness.evidence.duplicate": "derivation.evidence_packet_duplicate",
@@ -296,6 +300,12 @@ class Gap:
         }
 
 
+@dataclass(frozen=True)
+class DynamicEvaluation:
+    exit_code: int
+    report: dict
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -316,23 +326,48 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--baseline",
-        type=Path,
-        default=BASELINE_PATH,
-        help="缺口棘轮基线（维度 × kind 计数）",
-    )
-    parser.add_argument(
-        "--update-baseline",
-        action="store_true",
-        help="把实测缺口写回基线；只在人工确认缺口确实下降后使用",
-    )
-    parser.add_argument(
         "--require-commercial-readiness",
         action="store_true",
         help=(
-            "要求可信动态 ReadinessResultBundle 闭合。当前静态 gate 没有 snapshot "
-            "authority / trusted receipt resolver，启用时必须 fail closed"
+            "结构证据严格为零后，以六项完整 trust input 直接调用 canonical Go "
+            "evaluator；缺项或协议错误返回 2"
         ),
+    )
+    parser.add_argument(
+        "--readiness-bundle",
+        type=Path,
+        default=None,
+        help="untrusted ReadinessResultBundle JSON; trust comes from signed receipts",
+    )
+    parser.add_argument(
+        "--signed-current-snapshot",
+        type=Path,
+        default=None,
+        help="package-bound Ed25519 SignedCurrentSnapshot JSON",
+    )
+    parser.add_argument(
+        "--snapshot-keyring",
+        type=Path,
+        default=None,
+        help="trusted snapshot authority public-key keyring JSON",
+    )
+    parser.add_argument(
+        "--runner-keyring",
+        type=Path,
+        default=None,
+        help="trusted runner public-key keyring JSON",
+    )
+    parser.add_argument(
+        "--receipt-root",
+        type=Path,
+        default=None,
+        help="restricted root containing detached-signed readiness receipts",
+    )
+    parser.add_argument(
+        "--evidence-root",
+        type=Path,
+        default=None,
+        help="restricted content-addressed readiness evidence root",
     )
     parser.add_argument(
         "--report-dir",
@@ -343,9 +378,27 @@ def parse_args() -> argparse.Namespace:
     arguments = parser.parse_args()
     if arguments.derive and arguments.graph is not None:
         parser.error("--derive 与 --graph 互斥：判定源必须唯一")
-    if arguments.update_baseline and arguments.require_commercial_readiness:
-        parser.error("--update-baseline 不能与 --require-commercial-readiness 同时使用")
+    commercial_values = commercial_input_values(arguments)
+    if any(value is not None for value in commercial_values.values()) and not (
+        arguments.require_commercial_readiness
+    ):
+        parser.error(
+            "dynamic readiness inputs require --require-commercial-readiness"
+        )
     return arguments
+
+
+def commercial_input_values(arguments: argparse.Namespace) -> dict[str, Path | None]:
+    return {
+        "resultBundle": getattr(arguments, "readiness_bundle", None),
+        "signedCurrentSnapshot": getattr(
+            arguments, "signed_current_snapshot", None
+        ),
+        "snapshotKeyring": getattr(arguments, "snapshot_keyring", None),
+        "runnerKeyring": getattr(arguments, "runner_keyring", None),
+        "receiptRoot": getattr(arguments, "receipt_root", None),
+        "evidenceRoot": getattr(arguments, "evidence_root", None),
+    }
 
 
 def select_graph_path(arguments: argparse.Namespace) -> Path:
@@ -439,6 +492,250 @@ def display_path(path: Path) -> str:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def digest_readiness_input(path: Path) -> dict[str, str | int]:
+    """绑定商业判定输入的当前字节；目录按相对路径 + 文件字节确定性摘要。
+
+    receipt/evidence root 是 evaluator 的受限查找边界，不是单个文件。这里不解释
+    其中内容，只保证报告能精确指向本次执行看到的整棵普通文件树。symlink 与特殊文件
+    一律拒绝，避免摘要与 Go resolver 实际读取的对象不一致。
+    """
+    if path.is_symlink():
+        raise ValueError(f"input must not be a symlink: {path}")
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError(f"input does not exist or cannot be resolved: {path}: {error}") from error
+    if resolved.is_file():
+        return {
+            "path": display_path(resolved),
+            "kind": "file",
+            "sha256": sha256_file(resolved),
+            "fileCount": 1,
+        }
+    if not resolved.is_dir():
+        raise ValueError(f"input must be a regular file or directory: {path}")
+
+    digest = hashlib.sha256()
+    file_count = 0
+    for candidate in sorted(resolved.rglob("*"), key=lambda value: value.as_posix()):
+        if candidate.is_symlink():
+            raise ValueError(f"input tree must not contain symlinks: {candidate}")
+        if candidate.is_dir():
+            continue
+        if not candidate.is_file():
+            raise ValueError(f"input tree contains a special file: {candidate}")
+        relative = candidate.relative_to(resolved).as_posix().encode("utf-8")
+        payload = candidate.read_bytes()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        digest.update(len(payload).to_bytes(8, "big"))
+        digest.update(payload)
+        file_count += 1
+    return {
+        "path": display_path(resolved),
+        "kind": "directory",
+        "sha256": digest.hexdigest(),
+        "fileCount": file_count,
+    }
+
+
+def readiness_input_bindings(arguments: argparse.Namespace) -> dict[str, dict]:
+    bindings: dict[str, dict] = {}
+    for name, path in commercial_input_values(arguments).items():
+        if path is None:
+            raise ValueError(f"missing commercial readiness input: {name}")
+        bindings[name] = digest_readiness_input(Path(path))
+    return bindings
+
+
+def verify_readiness_input_bindings(
+    arguments: argparse.Namespace,
+    expected: dict[str, dict],
+) -> None:
+    actual = readiness_input_bindings(arguments)
+    if actual != expected:
+        raise ValueError(
+            "commercial readiness inputs changed during evaluation: "
+            f"expected={expected!r} actual={actual!r}"
+        )
+
+
+def decode_single_json_document(stdout: str) -> dict:
+    def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict:
+        result: dict = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON key: {key}")
+            result[key] = value
+        return result
+
+    decoder = json.JSONDecoder(object_pairs_hook=reject_duplicate_keys)
+    try:
+        payload, offset = decoder.raw_decode(stdout.lstrip())
+    except (json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"readiness evaluator emitted invalid JSON: {error}") from error
+    consumed_prefix = len(stdout) - len(stdout.lstrip())
+    if stdout[consumed_prefix + offset :].strip():
+        raise ValueError("readiness evaluator emitted multiple JSON documents")
+    if not isinstance(payload, dict):
+        raise ValueError("readiness evaluator JSON must be an object")
+    return payload
+
+
+def build_readiness_evaluator(work_root: Path) -> tuple[Path, str]:
+    binary = work_root / "evaluate_readiness"
+    environment = {**os.environ, "GOFLAGS": "-mod=readonly"}
+    try:
+        completed = subprocess.run(
+            [
+                "go",
+                "build",
+                "-trimpath",
+                "-o",
+                str(binary),
+                READINESS_EVALUATOR_PACKAGE,
+            ],
+            cwd=SERVICE_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=READINESS_EVALUATOR_BUILD_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"cannot build readiness evaluator: {error}") from error
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout).strip()[:2000]
+        raise ValueError(f"cannot build readiness evaluator: {detail}")
+    if not binary.is_file() or binary.is_symlink():
+        raise ValueError("readiness evaluator build did not produce a regular binary")
+    return binary, sha256_file(binary)
+
+
+def evaluate_dynamic_readiness(
+    arguments: argparse.Namespace,
+    graph_path: Path,
+    graph_digest: str,
+) -> DynamicEvaluation:
+    """薄调用 canonical Go evaluator；不在 Python 重算任何 readiness 规则。"""
+    try:
+        bindings = readiness_input_bindings(arguments)
+    except (OSError, ValueError) as error:
+        return DynamicEvaluation(
+            2,
+            {
+                "status": "invalid_input",
+                "commercialReady": False,
+                "evaluatorExitCode": 2,
+                "closure": None,
+                "inputs": {},
+                "reason": str(error),
+            },
+        )
+
+    cache_root = (
+        ROOT
+        / ".qwq_output"
+        / "env"
+        / "repo"
+        / "local"
+        / "object-evidence-closure"
+        / "cache"
+    )
+    cache_root.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix="readiness-evaluator-", dir=cache_root
+        ) as temporary:
+            binary, binary_digest = build_readiness_evaluator(Path(temporary))
+            completed = subprocess.run(
+                [
+                    str(binary),
+                    "--graph",
+                    str(graph_path),
+                    "--bundle",
+                    str(arguments.readiness_bundle),
+                    "--snapshot",
+                    str(arguments.signed_current_snapshot),
+                    "--snapshot-keyring",
+                    str(arguments.snapshot_keyring),
+                    "--runner-keyring",
+                    str(arguments.runner_keyring),
+                    "--receipt-root",
+                    str(arguments.receipt_root),
+                    "--evidence-root",
+                    str(arguments.evidence_root),
+                    "--metadata-dir",
+                    str(READINESS_METADATA_DIR),
+                ],
+                cwd=SERVICE_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=READINESS_EVALUATOR_RUN_TIMEOUT_SECONDS,
+            )
+    except (OSError, subprocess.TimeoutExpired, ValueError) as error:
+        return DynamicEvaluation(
+            2,
+            {
+                "status": "invalid_input",
+                "commercialReady": False,
+                "evaluatorExitCode": 2,
+                "closure": None,
+                "inputs": bindings,
+                "reason": f"readiness evaluator unavailable: {error}",
+            },
+        )
+
+    try:
+        verify_graph_digest(graph_path, graph_digest)
+        verify_readiness_input_bindings(arguments, bindings)
+        payload = decode_single_json_document(completed.stdout)
+        if completed.returncode not in {0, 1, 2}:
+            raise ValueError(
+                f"readiness evaluator returned illegal exit code {completed.returncode}"
+            )
+        commercial_ready = payload.get("commercialReady")
+        if not isinstance(commercial_ready, bool):
+            raise ValueError("readiness evaluator omitted boolean commercialReady")
+        if completed.returncode == 0 and commercial_ready is not True:
+            raise ValueError("readiness evaluator exit 0 did not report commercialReady=true")
+        if completed.returncode in {1, 2} and commercial_ready is not False:
+            raise ValueError(
+                "readiness evaluator blocked/invalid exit did not report commercialReady=false"
+            )
+        if completed.returncode == 2 and not isinstance(payload.get("error"), str):
+            raise ValueError("readiness evaluator exit 2 omitted error")
+    except (SystemExit, ValueError) as error:
+        return DynamicEvaluation(
+            2,
+            {
+                "status": "invalid_input",
+                "commercialReady": False,
+                "evaluatorExitCode": 2,
+                "closure": None,
+                "inputs": bindings,
+                "reason": str(error),
+            },
+        )
+
+    return DynamicEvaluation(
+        completed.returncode,
+        {
+            "status": "evaluated" if completed.returncode in {0, 1} else "invalid_input",
+            "commercialReady": commercial_ready,
+            "evaluatorExitCode": completed.returncode,
+            "evaluator": {
+                "package": READINESS_EVALUATOR_PACKAGE,
+                "binarySha256": binary_digest,
+                "stdoutSha256": hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest(),
+            },
+            "inputs": bindings,
+            "closure": payload,
+        },
+    )
 
 
 def _shape_block(location: str, detail: str) -> None:
@@ -665,20 +962,15 @@ def verify_optional_input_digest(
 
 def validate_report_policy_bindings(
     report: Path,
-    baseline_path: Path,
-    baseline_digest: str,
     registry_path: Path,
     registry_digest: str | None,
 ) -> None:
-    """report 必须绑定本次实际消费的 baseline 与 blindspot registry 字节。"""
+    """report 必须绑定本次实际消费的 blindspot registry 字节。"""
     try:
         document = json.loads(report.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise SystemExit(f"GATE_BLOCK 无法读取对象证据报告 {report}: {error}") from error
     expected = {
-        REPORT_BASELINE_FIELD: _report_input_binding(
-            baseline_path, baseline_digest
-        ),
         REPORT_BLIND_SPOT_REGISTRY_FIELD: _report_input_binding(
             registry_path, registry_digest
         ),
@@ -689,7 +981,6 @@ def validate_report_policy_bindings(
                 f"GATE_BLOCK 对象证据报告的 {field} 输入绑定不一致："
                 f"report={document.get(field)!r} expected={binding!r}"
             )
-    verify_optional_input_digest(baseline_path, baseline_digest, "缺口棘轮基线")
     verify_optional_input_digest(registry_path, registry_digest, "盲点登记册")
 
 
@@ -1478,119 +1769,18 @@ def cells_from_gaps(gaps: list[Gap]) -> dict[str, dict[str, int]]:
     }
 
 
-def load_baseline_with_digest(
-    path: Path,
-) -> tuple[dict[str, dict[str, int]], str]:
-    try:
-        payload = path.read_bytes()
-        document = json.loads(payload.decode("utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise SystemExit(
-            f"GATE_BLOCK 无法读取缺口棘轮基线 {path}: {error}；"
-            "基线是受版本控制的真相源，缺失时不得放行"
-        ) from error
-    if not isinstance(document, dict):
-        raise SystemExit(f"GATE_BLOCK 缺口棘轮基线 {path} 必须是 JSON object")
-    governance = document.get("_governance") or {}
-    missing = [key for key in GOVERNANCE_KEYS if not str(governance.get(key) or "").strip()]
-    if missing:
-        raise SystemExit(
-            f"GATE_BLOCK 基线 {display_path(path)} 的 _governance 缺少 "
-            f"{', '.join(missing)}；policy 基线必须写明归属、理由与退出条件"
-        )
-    if document.get("schema") != BASELINE_SCHEMA:
-        raise SystemExit(
-            f"GATE_BLOCK 基线 {display_path(path)} 的 schema 必须为 {BASELINE_SCHEMA}"
-        )
-    cells: dict[str, dict[str, int]] = {}
-    for dimension, kinds in (document.get("cells") or {}).items():
-        if dimension not in EVIDENCE_CLASS_BY_DIMENSION:
-            raise SystemExit(
-                f"GATE_BLOCK 基线 {display_path(path)} 含未分层维度 "
-                f"cells.{dimension}；新维度不得静默获得结构债额度"
-            )
-        evidence_layer = EVIDENCE_CLASS_BY_DIMENSION[dimension]
-        if evidence_layer != STRUCTURAL:
-            raise SystemExit(
-                f"GATE_BLOCK 基线 {display_path(path)} 只能登记 STRUCTURAL 维度；"
-                f"cells.{dimension} 属于 {evidence_layer}，真实环境结果与 scanner 盲点"
-                "不得进入结构棘轮"
-            )
-        if not isinstance(kinds, dict):
-            raise SystemExit(
-                f"GATE_BLOCK 基线 {display_path(path)} 的 cells.{dimension} 必须是 "
-                "kind → 计数 的映射"
-            )
-        for kind, count in kinds.items():
-            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-                raise SystemExit(
-                    f"GATE_BLOCK 基线 {display_path(path)} 的 cells.{dimension}.{kind} "
-                    "必须是非负整数计数"
-                )
-        cells[dimension] = dict(kinds)
-    return cells, hashlib.sha256(payload).hexdigest()
-
-
-def load_baseline(path: Path) -> dict[str, dict[str, int]]:
-    return load_baseline_with_digest(path)[0]
-
-
-@dataclass(frozen=True)
-class Regression:
-    dimension: str
-    kind: str
-    baseline: int
-    observed: int
-
-    @property
-    def delta(self) -> int:
-        return self.observed - self.baseline
-
-
-def compare_with_baseline(
-    observed: dict[str, dict[str, int]],
-    baseline: dict[str, dict[str, int]],
-) -> tuple[list[Regression], list[Regression]]:
-    """缺席的格按 0 计算，所以新维度、新 kind 与任何增量都会落进 regressions。"""
-    regressions: list[Regression] = []
-    improvements: list[Regression] = []
-    dimensions = sorted(set(observed) | set(baseline))
-    for dimension in dimensions:
-        kinds = sorted(set(observed.get(dimension, {})) | set(baseline.get(dimension, {})))
-        for kind in kinds:
-            allowed = baseline.get(dimension, {}).get(kind, 0)
-            actual = observed.get(dimension, {}).get(kind, 0)
-            if actual > allowed:
-                regressions.append(Regression(dimension, kind, allowed, actual))
-            elif actual < allowed:
-                improvements.append(Regression(dimension, kind, allowed, actual))
-    return regressions, improvements
-
-
-def write_baseline(path: Path, cells: dict[str, dict[str, int]]) -> None:
-    document = json.loads(path.read_text(encoding="utf-8"))
-    document["cells"] = cells
-    path.write_text(
-        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-
-
 def write_reports(
     report_dir: Path,
     graph_path: Path,
     graph_digest: str,
-    baseline_path: Path,
-    baseline_digest: str,
     registry_path: Path,
     registry_digest: str | None,
     graph: dict,
     gaps: list[Gap],
     cells: dict[str, dict[str, int]],
-    regressions: list[Regression],
-    improvements: list[Regression],
+    dynamic_readiness: dict | None = None,
 ) -> Path:
     verify_graph_digest(graph_path, graph_digest)
-    verify_optional_input_digest(baseline_path, baseline_digest, "缺口棘轮基线")
     verify_optional_input_digest(registry_path, registry_digest, "盲点登记册")
     report_dir.mkdir(parents=True, exist_ok=True)
     stages = Counter(
@@ -1601,9 +1791,6 @@ def write_reports(
             "path": display_path(graph_path),
             "sha256": graph_digest,
         },
-        REPORT_BASELINE_FIELD: _report_input_binding(
-            baseline_path, baseline_digest
-        ),
         REPORT_BLIND_SPOT_REGISTRY_FIELD: _report_input_binding(
             registry_path, registry_digest
         ),
@@ -1615,35 +1802,17 @@ def write_reports(
         ),
         "gapsByKind": dict(sorted(Counter(gap.kind for gap in gaps).items())),
         "gapsByDimensionKind": cells,
-        "ratchet": {
-            "regressions": [
-                {
-                    "dimension": item.dimension,
-                    "kind": item.kind,
-                    "baseline": item.baseline,
-                    "observed": item.observed,
-                    "delta": item.delta,
-                }
-                for item in regressions
-            ],
-            "improvements": [
-                {
-                    "dimension": item.dimension,
-                    "kind": item.kind,
-                    "baseline": item.baseline,
-                    "observed": item.observed,
-                    "delta": item.delta,
-                }
-                for item in improvements
-            ],
+        "structuralPolicy": {
+            "mode": "strict_zero",
+            "allowedGapCount": 0,
         },
-        "dynamicReadiness": {
+        "dynamicReadiness": dynamic_readiness or {
             "status": "not_evaluated",
             "commercialReady": False,
             "resultBundle": None,
             "reason": (
-                "static structural gate has no package-bound snapshot authority "
-                "or trusted receipt resolver"
+                "commercial evaluation was not requested; static structure never "
+                "implies a trusted readiness result"
             ),
         },
         "gaps": [gap.as_dict() for gap in gaps],
@@ -1655,8 +1824,6 @@ def write_reports(
     validate_report_graph_binding(report, graph_path)
     validate_report_policy_bindings(
         report,
-        baseline_path,
-        baseline_digest,
         registry_path,
         registry_digest,
     )
@@ -1701,26 +1868,21 @@ def print_blind_spots(gaps: list[Gap], registry: dict[tuple[str, str], dict]) ->
         print(f"    attested_scope: {attested}")
 
 
-def print_regressions(regressions: list[Regression], gaps: list[Gap]) -> None:
-    gaps_by_cell: dict[tuple[str, str], list[Gap]] = defaultdict(list)
-    for gap in gaps:
-        gaps_by_cell[(gap.dimension, gap.kind)].append(gap)
+def print_structural_gaps(gaps: list[Gap]) -> None:
     print(
-        f"GATE_BLOCK 结构性证据闭合缺口超出棘轮基线：{len(regressions)} 格新增，"
-        f"共 +{sum(item.delta for item in regressions)} 条"
+        f"GATE_BLOCK STRUCTURAL 严格零值要求未满足：{len(gaps)} 条缺口，"
+        f"覆盖 {len({gap.object_id for gap in gaps})} 个对象"
     )
-    for item in sorted(regressions, key=lambda entry: (-entry.delta, entry.dimension)):
+    print_gap_inventory(gaps)
+    for gap in sorted(gaps, key=lambda entry: (entry.dimension, entry.object_id)):
         print(
-            f"  {item.dimension} / {item.kind}: 基线 {item.baseline} → 实测 "
-            f"{item.observed}（+{item.delta}）"
+            f"    - {gap.dimension} / {gap.object_id} ({gap.kind}, {gap.stage}): "
+            f"{gap.detail}"
         )
-        for gap in sorted(gaps_by_cell[(item.dimension, item.kind)],
-                          key=lambda entry: entry.object_id):
-            print(f"    - {gap.object_id} ({gap.stage}): {gap.detail}")
     print(
-        "修复路径：关闭上列任一对象的该维度缺口（补齐实现 seam / 三层测试入口 / "
-        "页面消费），或撤回引入新缺口的改动。基线只能在实测下降后用 "
-        "`--update-baseline` 收紧，不得为放行而调高。"
+        "修复路径：按对象补齐实现 seam、精确 runner/marker 与三层测试入口，"
+        "或撤回引入缺口的改动。门禁不读取任何基线，"
+        "禁止为结构缺口发放额度。"
     )
 
 
@@ -1734,9 +1896,6 @@ def main() -> int:
     partitions = partition_by_evidence_class(gaps)
     structural = partitions[STRUCTURAL]
     cells = cells_from_gaps(structural)
-    baseline_path = arguments.baseline.resolve()
-    baseline, baseline_digest = load_baseline_with_digest(baseline_path)
-    regressions, improvements = compare_with_baseline(cells, baseline)
     registry_path = BLIND_SPOT_REGISTRY.resolve()
     blind_spots, registry_digest = load_blind_spot_registry_with_digest(registry_path)
     blind_spot_problems = blind_spot_gaps(partitions[BLINDSPOT], blind_spots)
@@ -1744,15 +1903,11 @@ def main() -> int:
         arguments.report_dir,
         graph_path,
         graph_digest,
-        baseline_path,
-        baseline_digest,
         registry_path,
         registry_digest,
         graph,
         gaps,
         cells,
-        regressions,
-        improvements,
     )
 
     objects = len(graph.get("objects") or [])
@@ -1762,17 +1917,13 @@ def main() -> int:
     )
     print(f"graph={display_path(graph_path)}")
     print(f"graph_sha256={graph_digest}")
-    print(f"baseline={display_path(baseline_path)}")
+    print("structural_policy=strict_zero")
     print(f"objects={objects} evidence_packets={packets}")
     print(
         "stages="
         + " ".join(f"{stage}={count}" for stage, count in sorted(stages.items()))
     )
 
-    # Baseline refresh is a narrowing operation, never an escape hatch.  New
-    # evidence dimensions and unresolved scanner blind spots must fail before
-    # any baseline bytes can be rewritten, even when they do not contribute a
-    # structural ratchet cell.
     if unclassified:
         print(
             "GATE_BLOCK 出现未分层的缺口维度：" + "、".join(unclassified) + "。"
@@ -1788,40 +1939,15 @@ def main() -> int:
         print(f"report={display_path(report)}")
         return 1
 
-    if arguments.update_baseline:
-        if regressions:
-            print_regressions(regressions, structural)
-            print(
-                "REFUSED --update-baseline：实测缺口高于基线。刷新入口只用于登记下降，"
-                "不得用来吸收新增缺口。"
-            )
-            print(f"report={display_path(report)}")
-            return 1
-        write_baseline(baseline_path, cells)
-        print(
-            f"基线已刷新：{len(gaps)} 条缺口 / {sum(len(kinds) for kinds in cells.values())} 格"
-            f"（收紧 {len(improvements)} 格）"
-        )
-        print(f"report={display_path(report)}")
-        return 0
-
     print_result_layer(partitions[RESULT])
     print_blind_spots(partitions[BLINDSPOT], blind_spots)
 
-    if regressions:
-        print_regressions(regressions, structural)
+    if structural:
+        print_structural_gaps(structural)
         print(f"report={display_path(report)}")
         return 1
 
     if arguments.require_commercial_readiness:
-        if structural:
-            print(
-                "GATE_BLOCK 动态商业 readiness 要求结构性证据零缺口；"
-                "棘轮基线只能承接迁移债，不能成为商业准出豁免"
-            )
-            print_gap_inventory(structural)
-            print(f"report={display_path(report)}")
-            return 1
         if partitions[BLINDSPOT]:
             print(
                 "GATE_BLOCK 动态商业 readiness 要求 scanner blindspot 零缺口；"
@@ -1830,34 +1956,65 @@ def main() -> int:
             print_gap_inventory(partitions[BLINDSPOT])
             print(f"report={display_path(report)}")
             return 1
-        print(
-            "GATE_BLOCK 动态商业 readiness 未执行：当前入口只有结构性 ContractGraph，"
-            "没有 package-bound CurrentSnapshotProvider、可信 ReceiptResolver 或经 Go "
-            "Evaluator 验真的 ReadinessResultBundle；本地 JSON/文件摘要不得提升为 PASS"
+        missing = [
+            name
+            for name, value in commercial_input_values(arguments).items()
+            if value is None
+        ]
+        if missing:
+            dynamic = {
+                "status": "invalid_input",
+                "commercialReady": False,
+                "evaluatorExitCode": 2,
+                "closure": None,
+                "inputs": {},
+                "reason": "missing complete signed readiness inputs: " + ", ".join(missing),
+            }
+            report = write_reports(
+                arguments.report_dir,
+                graph_path,
+                graph_digest,
+                registry_path,
+                registry_digest,
+                graph,
+                gaps,
+                cells,
+                dynamic,
+            )
+            print(
+                "GATE_BLOCK 动态商业 readiness 输入不完整："
+                + "、".join(missing)
+            )
+            print(f"report={display_path(report)}")
+            return 2
+
+        outcome = evaluate_dynamic_readiness(arguments, graph_path, graph_digest)
+        report = write_reports(
+            arguments.report_dir,
+            graph_path,
+            graph_digest,
+            registry_path,
+            registry_digest,
+            graph,
+            gaps,
+            cells,
+            outcome.report,
         )
+        if outcome.exit_code == 0:
+            print("动态商业 readiness：canonical Go evaluator 判定 commercialReady=true")
+        elif outcome.exit_code == 1:
+            print("GATE_BLOCK 动态商业 readiness：canonical Go evaluator 判定未闭合")
+        else:
+            print("GATE_BLOCK 动态商业 readiness 输入/协议无效")
         print(f"report={display_path(report)}")
-        return 1
+        return outcome.exit_code
 
     if not structural:
         print("对象 × 层 × 三层测试入口的结构性证据闭合：无缺口"
               "（不代表任何用例已通过；用例结果属结果证据，由 runner 附加）")
-        if baseline:
-            print("基线仍有存量格，请用 `--update-baseline` 清空后删除基线文件。")
         print(f"report={display_path(report)}")
         return 0
-
-    print(
-        f"结构性证据闭合缺口 {len(structural)} 条（覆盖 "
-        f"{len({gap.object_id for gap in structural})} 个对象），未超出棘轮基线："
-    )
-    print_gap_inventory(structural)
-    if improvements:
-        print(
-            f"有 {len(improvements)} 格已低于基线（共 -"
-            f"{sum(-item.delta for item in improvements)} 条），请用 `--update-baseline` 收紧。"
-        )
-    print(f"report={display_path(report)}")
-    return 0
+    raise AssertionError("structural gaps must have returned above")
 
 
 if __name__ == "__main__":

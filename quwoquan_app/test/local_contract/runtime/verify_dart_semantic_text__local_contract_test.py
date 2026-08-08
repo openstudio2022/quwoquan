@@ -137,7 +137,7 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
 
     def test_scans_runtime_composition_shell_copy(self) -> None:
         violations = self.scan(
-            "quwoquan_app/lib/runtime/di/shell/example.dart",
+            "quwoquan_app/lib/runtime/shell/example.dart",
             "Widget build() => App(title: '应用标题');\n",
         )
         self.assertEqual(len(violations), 1)

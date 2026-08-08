@@ -1,1 +1,8 @@
-{"axisRole":"contentAngle","createdAt":"2026-05-15T00:00:00+08:00","description":"通俗易懂的知识普及","label":"知识科普","labelEn":"Knowledge Popularization","updatedAt":"2026-05-15T00:00:00+08:00"}
+{
+  "label": "知识科普",
+  "labelEn": "Knowledge Popularization",
+  "description": "通俗易懂的知识普及",
+  "axisRole": "contentAngle",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

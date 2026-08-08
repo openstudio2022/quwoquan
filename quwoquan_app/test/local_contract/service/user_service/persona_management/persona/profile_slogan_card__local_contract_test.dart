@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_slogan_card.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_slogan_card.dart';
 
 void main() {
   testWidgets('ProfileSloganCard 点击整块 slogan 触发编辑入口', (tester) async {
@@ -45,5 +46,23 @@ void main() {
 
     expect(find.text('...全部'), findsNothing);
     expect(find.text(longBio), findsOneWidget);
+  });
+
+  testWidgets('ProfileSloganCard 空简介文案由 Persona presentation 显式提供', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        home: CupertinoPageScaffold(
+          child: ProfileSloganCard(
+            isDark: false,
+            bio: '  ',
+            showEmptyPrompt: true,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text(ProfileText.profileEmptyBioPrompt), findsOneWidget);
   });
 }

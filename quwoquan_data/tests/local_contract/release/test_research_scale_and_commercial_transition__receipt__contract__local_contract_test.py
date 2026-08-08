@@ -39,6 +39,7 @@ def _semantic_jobs(carrier: str) -> dict[str, object]:
         "semanticJobIds": job_ids,
         "semanticJobSucceededIds": job_ids,
         "semanticJobTerminalIds": job_ids,
+        "perSlotThroughputSamples": [0.01] * 10,
         "activeDurationSeconds": 3600,
         "activeIntervals": [
             {
@@ -127,6 +128,38 @@ def _video_popularity_statistics() -> dict[str, object]:
     }
 
 
+def _professional_image_assets(count: int = 100) -> list[dict[str, object]]:
+    providers = ["Pinterest"] * 60 + ["图虫"] * 20 + ["Wikimedia Commons"] * 20
+    assert count == len(providers)
+    return [
+        {
+            "assetId": (
+                "old-unverified" if index == 1 else f"image-asset-{index:03d}"
+            ),
+            "objectRef": (
+                "posts/image/example"
+                if index == 1
+                else f"posts/image/work-{index:03d}"
+            ),
+            "acquisitionStatus": "acquired",
+            "rightsStatus": "unverified",
+            "authorizationRequired": True,
+            "distributionDecision": "research_allowed",
+            "sourceUrl": f"https://media.example.test/original/{index:03d}.jpg",
+            "platform": provider,
+            "creator": f"creator-{index:03d}",
+            "capturedAt": "2026-08-05T00:00:00Z",
+            "contentSha256": "sha256:" + f"{index:064x}",
+            "license": "authorization_pending",
+            "termsUrl": "https://media.example.test/terms",
+            "authorizationProof": "",
+            "rightsIssues": ["creator_authorization_pending"],
+            "generated": False,
+        }
+        for index, provider in enumerate(providers, start=1)
+    ]
+
+
 def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
     release = output_root / "data/releases/research-release"
     carrier_counts = [
@@ -156,14 +189,14 @@ def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
             "productLifecycleState": "research",
             "authorizationRequiredAssetIds": ["old-unverified"],
             "carrierCounts": carrier_counts,
-            "articleMediaCoverage": {"illustratedRate": 0.9},
-            "assets": [
-                {
-                    "assetId": "old-unverified",
-                    "objectRef": "posts/image/example",
-                    "distributionDecision": "research_allowed",
-                }
-            ],
+            "articleMediaCoverage": {
+                "articleCount": article_count,
+                "illustratedCount": int(article_count * 0.9),
+                "textOnlyCount": article_count - int(article_count * 0.9),
+                "illustratedRate": 0.9,
+                "textOnlyRate": 0.1,
+            },
+            "assets": _professional_image_assets(),
         },
     )
     return release
@@ -201,7 +234,7 @@ def _commercial_release(output_root: Path) -> Path:
     return release
 
 
-def test_research_m100_promotion_keeps_targets_and_rates_statistical(
+def test_research_m100_promotion_blocks_shortfall_and_weak_rates(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -286,6 +319,13 @@ def test_research_m100_promotion_keeps_targets_and_rates_statistical(
         "sourceRevision": "sha256:" + "b" * 64,
         "sourceDigest": "sha256:" + "a" * 64,
         "entityCatalogDigest": "sha256:" + "d" * 64,
+        "targetScale": "M100",
+        "sourcePoolDigest": "sha256:" + "1" * 64,
+        "predecessorSourcePoolDigests": [],
+        "scaleStartedAt": "2026-08-05T00:00:00Z",
+        "scaleCompletedAt": "2026-08-05T01:01:00Z",
+        "wallClockBudgetSeconds": None,
+        "wallClockSeconds": 3660,
         "lanes": lanes,
         "duplicateAssetCount": 0,
         "crossLaneWriteCount": 0,
@@ -297,6 +337,7 @@ def test_research_m100_promotion_keeps_targets_and_rates_statistical(
         "faultInjectionEvidenceDigest": "sha256:" + "0" * 64,
     }
     resource_evidence = {
+        "evidenceDigest": "sha256:" + "9" * 64,
         "status": "passed",
         "durationSeconds": 3600,
         "semanticJobsByLane": [
@@ -332,88 +373,131 @@ def test_research_m100_promotion_keeps_targets_and_rates_statistical(
         lambda *_args, **_kwargs: _video_popularity_statistics(),
     )
 
+    with pytest.raises(ResearchScalePromotionError, match="ATTAINMENT_SHORTFALL"):
+        write_research_scale_promotion(
+            release_id="research-release",
+            promotion_id="promotion-shortfall",
+            campaign_evidence_path=evidence_path,
+            release_root=output_root / "data/releases",
+            output_root=output_root,
+        )
+
+
+def test_research_m100_promotion_requires_actual_cumulative_attainment(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    release = _research_release(output_root)
+    targets = {"homepage": 100, "article": 100, "image": 100, "video": 10}
+    lanes = []
+    for carrier, target in targets.items():
+        receipt_path = (
+            output_root / f"data/campaigns/campaign-1/receipts/{carrier}-publish.json"
+        )
+        _write(
+            receipt_path,
+            {
+                "schema": "quwoquan_data.content_campaign_lane_receipt",
+                "rootExecutionId": "homepage-execution",
+                "executionId": f"{carrier}-execution",
+                "carrier": carrier,
+                "phase": "publish",
+                "status": "finalized",
+                "approvedQuota": target,
+                "qualifiedCount": target,
+                "finalizedCount": target,
+                "selectedCount": target,
+                "discardedCount": 0,
+                "shortfallCount": 0,
+                "executionPublishRef": f"data/tasks/{carrier}-execution/publish_ref.json",
+                "executionPublishSha256": "sha256:" + "6" * 64,
+                "campaignRunId": "campaign-run",
+                "campaignGeneration": 1,
+                "campaignFencingToken": "sha256:" + "7" * 64,
+                "discards": [],
+            },
+        )
+        lanes.append(
+            {
+                "carrier": carrier,
+                "executionId": f"{carrier}-execution",
+                "retryChain": [f"{carrier}-execution"],
+                "publishReceiptRef": receipt_path.relative_to(output_root).as_posix(),
+                "publishReceiptSha256": "sha256:"
+                + hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
+                "finalizedCount": target,
+                "researchAcceptedCount": target,
+                "semanticCalibration": _semantic_calibration(carrier),
+            }
+        )
+    evidence_path = output_root / "data/campaigns/campaign-1/campaign-scale.json"
+    _write(evidence_path, {"canonical": True})
+    evidence = {
+        "status": "passed",
+        "releaseId": "research-release",
+        "manifestDigest": payload_digest(release),
+        "sourceRevision": "sha256:" + "b" * 64,
+        "sourceDigest": "sha256:" + "a" * 64,
+        "entityCatalogDigest": "sha256:" + "d" * 64,
+        "targetScale": "M100",
+        "sourcePoolDigest": "sha256:" + "1" * 64,
+        "predecessorSourcePoolDigests": [],
+        "scaleStartedAt": "2026-08-05T00:00:00Z",
+        "scaleCompletedAt": "2026-08-05T01:01:00Z",
+        "wallClockBudgetSeconds": None,
+        "wallClockSeconds": 3660,
+        "lanes": lanes,
+        "duplicateAssetCount": 0,
+        "crossLaneWriteCount": 0,
+        "articleIllustratedRate": 0.9,
+        "evidenceDigest": "sha256:" + "8" * 64,
+        "resourceSoakEvidenceRef": "data/campaigns/campaign-1/resource-soak.json",
+        "resourceSoakEvidenceDigest": "sha256:" + "9" * 64,
+        "faultInjectionEvidenceRef": "data/campaigns/campaign-1/fault-injection.json",
+        "faultInjectionEvidenceDigest": "sha256:" + "0" * 64,
+    }
+    resource_evidence = {
+        "evidenceDigest": "sha256:" + "9" * 64,
+        "status": "passed",
+        "durationSeconds": 3600,
+        "semanticJobsByLane": [_semantic_jobs(carrier) for carrier in targets],
+        "fourLaneOverlapSampleCount": 60,
+        "fourLaneOverlapDurationSeconds": 3600,
+        "fourLaneLongestContinuousOverlapSeconds": 3600,
+        "allSemanticJobsTerminalAt": "2026-08-05T01:00:00Z",
+        "terminalResidualSampleAt": "2026-08-05T01:01:00Z",
+        "terminalResidualMeasuredAfterAllJobs": True,
+    }
+    fault_evidence = {
+        "status": "passed",
+        "automaticRecoveryStatus": "MEASURED",
+        "recoveryEligibleCount": 20,
+        "automaticRecoveredCount": 19,
+        "automaticRecoveryRate": 0.95,
+    }
+    monkeypatch.setattr(
+        promotion_module,
+        "load_campaign_scale_evidence",
+        lambda *_args, **_kwargs: (evidence, resource_evidence, fault_evidence),
+    )
+    monkeypatch.setattr(
+        promotion_module,
+        "_collect_m100_video_popularity",
+        lambda *_args, **_kwargs: _video_popularity_statistics(),
+    )
+
     promotion, _path = write_research_scale_promotion(
         release_id="research-release",
-        promotion_id="promotion-statistics",
+        promotion_id="promotion-m100-attained",
         campaign_evidence_path=evidence_path,
         release_root=output_root / "data/releases",
         output_root=output_root,
     )
 
-    assert promotion["m1000Eligible"] is True
-    assert promotion["carrierCounts"] == [
-        {
-            "carrier": carrier,
-            "targetCount": target_counts[carrier],
-            "qualifiedCount": 1,
-            "finalizedCount": 1,
-            "selectedCount": 2,
-            "discardedCount": 1,
-            "shortfallCount": target_counts[carrier] - 1,
-            "researchAcceptedCount": 1,
-        }
-        for carrier in ("homepage", "article", "image", "video")
-    ]
-
-    homepage_receipt = (
-        output_root / "data/campaigns/campaign-1/receipts/homepage-publish.json"
-    )
-    homepage_receipt.write_text(
-        homepage_receipt.read_text(encoding="utf-8") + "\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(ResearchScalePromotionError, match="publish receipt digest drift"):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-tampered-receipt",
-            campaign_evidence_path=evidence_path,
-            release_root=output_root / "data/releases",
-            output_root=output_root,
-        )
-    statistics = promotion["statistics"]
-    assert statistics["objectPassRate"] == {
-        "numerator": 4,
-        "denominator": 8,
-        "rate": 0.5,
-    }
-    assert statistics["illustratedRate"] == {
-        "numerator": 0,
-        "denominator": 1,
-        "rate": 0.0,
-    }
-    assert statistics["automaticRecoveryRate"] == {
-        "statistical": True,
-        "nonBlocking": True,
-        "status": "MEASURED",
-        "eligibleCount": 4,
-        "automaticCount": 1,
-        "targetRate": 0.95,
-        "rate": 0.25,
-    }
-    assert statistics["videoPopularity"] == {
-        "statistical": True,
-        "nonBlocking": True,
-        **_video_popularity_statistics(),
-    }
-    assert statistics["firstPassRate"] == {
-        "numerator": 3,
-        "denominator": 4,
-        "rate": 0.75,
-    }
-    assert statistics["discardRate"] == {
-        "numerator": 4,
-        "denominator": 8,
-        "rate": 0.5,
-    }
-    assert statistics["quotaAttainmentByCarrier"] == [
-        {
-            "carrier": carrier,
-            "numerator": 1,
-            "denominator": target_counts[carrier],
-            "rate": 0.1 if carrier == "video" else 0.01,
-        }
-        for carrier in ("homepage", "article", "image", "video")
-    ]
+    assert promotion["nextScaleEligible"] == "M1000"
+    assert all(row["shortfallCount"] == 0 for row in promotion["carrierCounts"])
+    assert promotion["carrierCounts"][0]["totalUniqueFinalizedCount"] == 100
 
 
 def test_research_m100_promotion_rejects_handwritten_boolean_evidence(

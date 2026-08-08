@@ -153,7 +153,14 @@ func (e *Evaluator) Evaluate(
 	}
 
 	globalContextValid := validateEvaluationContext(evaluation, &closure.Violations)
-	pageTargets, pageTargetErr := currentPageTargets(current)
+	objectPaths, objectPathErr := currentObjectPathIdentities(current)
+	if objectPathErr != nil {
+		closure.Violations = append(closure.Violations, violation(
+			"READINESS.GRAPH.OBJECT_PATH_IDENTITIES_INVALID", "", "", objectPathErr.Error(),
+		))
+		globalContextValid = false
+	}
+	pageTargets, pageTargetErr := currentPageTargetsWithIdentities(current, objectPaths)
 	if pageTargetErr != nil {
 		closure.Violations = append(closure.Violations, violation(
 			"READINESS.GRAPH.PAGE_TARGETS_INVALID", "", "", pageTargetErr.Error(),
@@ -181,7 +188,8 @@ func (e *Evaluator) Evaluate(
 	invalidObjects := map[string]struct{}{}
 	for _, contract := range caseContracts {
 		valid := validateCaseContract(
-			contract, objects, operationOwners, lifecycleConsumerObjects, pageTargets, sourcePaths,
+			contract, objects, objectPaths, operationOwners, lifecycleConsumerObjects,
+			pageTargets, sourcePaths,
 			&closure.Violations,
 		)
 		key := caseContractKey(
@@ -254,7 +262,8 @@ func (e *Evaluator) Evaluate(
 			))
 		}
 		if !validateResult(
-			ctx, result, contract, requirement, evaluation, currentSourceHash, receipts,
+			ctx, result, contract, requirement, evaluation, currentSourceHash,
+			objectPaths[result.ObjectID], receipts,
 			&closure.Violations,
 		) {
 			valid = false
@@ -404,6 +413,7 @@ func validDeploymentBinding(value DeploymentBinding) bool {
 func validateCaseContract(
 	contract ReadinessCaseContract,
 	objects map[string]struct{},
+	objectPaths map[string]objectPathIdentity,
 	operationOwners map[string]string,
 	lifecycleConsumerObjects map[string]struct{},
 	pageTargets pageTargetCatalog,
@@ -429,10 +439,11 @@ func validateCaseContract(
 		))
 		valid = false
 	}
-	if !validProducerRunnerSourcePath(
-		contract.RunnerSourcePath, contract.ObjectID, contract.SourcePath,
-		contract.Producer, contract.Layer,
-	) {
+	identity, identityExists := objectPaths[contract.ObjectID]
+	if !identityExists || !contractMatchesObjectIdentity(contract.SourcePath, identity) ||
+		!validProducerRunnerSourcePath(
+			contract.RunnerSourcePath, identity, contract.Producer, contract.Layer,
+		) {
 		*violations = append(*violations, violation(
 			"READINESS.CASE_CONTRACT.RUNNER_SOURCE_INVALID",
 			contract.ObjectID, contract.CaseID,
@@ -527,6 +538,7 @@ func validateResult(
 	requirement ExecutionRequirement,
 	evaluation EvaluationContext,
 	currentSourceHash string,
+	identity objectPathIdentity,
 	receipts ReceiptResolver,
 	violations *[]Violation,
 ) bool {
@@ -636,7 +648,7 @@ func validateResult(
 	if !receiptBindingMatchesResult(receipt.Binding, result) {
 		add("READINESS.RESULT.RECEIPT_IDENTITY_MISMATCH", "receipt identity does not attest the bundle result")
 	}
-	if !validateRunnerProvenance(result, contract, receipt.Binding, add) {
+	if !validateRunnerProvenance(result, contract, identity, receipt.Binding, add) {
 		valid = false
 	}
 	digest := sha256.Sum256(receipt.Bytes)
@@ -717,6 +729,7 @@ func receiptBindingMatchesResult(binding ReceiptBinding, result ReadinessCaseRes
 func validateRunnerProvenance(
 	result ReadinessCaseResult,
 	contract ReadinessCaseContract,
+	identity objectPathIdentity,
 	binding ReceiptBinding,
 	add func(code, message string),
 ) bool {
@@ -731,8 +744,7 @@ func validateRunnerProvenance(
 	require(
 		binding.RunnerSourcePath == contract.RunnerSourcePath &&
 			validProducerRunnerSourcePath(
-				binding.RunnerSourcePath, result.ObjectID, contract.SourcePath,
-				result.Producer, result.Layer,
+				binding.RunnerSourcePath, identity, result.Producer, result.Layer,
 			),
 		"READINESS.RESULT.RUNNER_SOURCE_INVALID",
 		"receipt runner source must exactly match the canonical case contract",
@@ -746,7 +758,7 @@ func validateRunnerProvenance(
 	case result.Producer == ProducerApp && result.Layer == LayerUserAcceptance:
 		require(
 			validUserAcceptanceSourcePath(
-				binding.RunnerSourcePath, result.ObjectID, contract.SourcePath,
+				binding.RunnerSourcePath, identity,
 			),
 			"READINESS.RESULT.UAT_RUNNER_SOURCE_INVALID",
 			"user acceptance receipt must attest an object-shaped or journey runner source",
@@ -788,294 +800,4 @@ func validateRunnerProvenance(
 		)
 	}
 	return valid
-}
-
-func validUserAcceptanceSourcePath(value, objectID, contractSourcePath string) bool {
-	if value == "" || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") {
-		return false
-	}
-	parts := strings.Split(value, "/")
-	for _, part := range parts {
-		if part == "" || part == "." || part == ".." {
-			return false
-		}
-	}
-	prefix := []string{"quwoquan_app", "test", "user_acceptance"}
-	if len(parts) < len(prefix)+3 {
-		return false
-	}
-	for index, want := range prefix {
-		if parts[index] != want {
-			return false
-		}
-	}
-	relative := parts[len(prefix):]
-	if relative[0] == "journeys" {
-		return len(relative) >= 3
-	}
-	objectParts := strings.Split(objectID, ".")
-	contractParts := strings.Split(strings.Trim(contractSourcePath, "/"), "/")
-	if len(objectParts) != 2 || len(contractParts) < 3 ||
-		contractParts[len(contractParts)-1] != "operations.yaml" {
-		return false
-	}
-	context := objectParts[0]
-	if len(contractParts) >= 4 {
-		context = contractParts[len(contractParts)-3]
-	}
-	return len(relative) >= 5 && relative[0] == "service" &&
-		relative[1] != "" && relative[2] == context &&
-		relative[3] == objectParts[1]
-}
-
-func validProducerRunnerSourcePath(
-	value string,
-	objectID string,
-	contractSourcePath string,
-	producer Producer,
-	layer Layer,
-) bool {
-	if value == "" || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") {
-		return false
-	}
-	parts := strings.Split(value, "/")
-	for _, part := range parts {
-		if part == "" || part == "." || part == ".." {
-			return false
-		}
-	}
-	objectParts := strings.Split(objectID, ".")
-	if len(objectParts) != 2 {
-		return false
-	}
-	contractParts := strings.Split(strings.Trim(contractSourcePath, "/"), "/")
-	if len(contractParts) < 3 || contractParts[len(contractParts)-1] != "operations.yaml" {
-		return false
-	}
-	object := contractParts[len(contractParts)-2]
-	domain := contractParts[0]
-	context := domain
-	if len(contractParts) >= 4 {
-		context = contractParts[len(contractParts)-3]
-	}
-	if domain != objectParts[0] || object != objectParts[1] {
-		return false
-	}
-
-	switch producer {
-	case ProducerService:
-		return (layer == LayerLocalContract || layer == LayerAPIIntegration) &&
-			len(parts) >= 8 && parts[0] == "quwoquan_service" &&
-			parts[1] == "services" && parts[2] != "" && parts[3] == "tests" &&
-			parts[4] == string(layer) && parts[5] == context && parts[6] == object &&
-			isCanonicalServiceTestFile(parts[len(parts)-1])
-	case ProducerApp:
-		if layer == LayerUserAcceptance {
-			return validUserAcceptanceSourcePath(value, objectID, contractSourcePath)
-		}
-		return (layer == LayerLocalContract || layer == LayerAPIIntegration) &&
-			len(parts) >= 8 && parts[0] == "quwoquan_app" && parts[1] == "test" &&
-			parts[2] == string(layer) && parts[3] == "service" &&
-			parts[4] != "" && parts[5] == context && parts[6] == object
-	case ProducerOps:
-		return (layer == LayerEnvironmentAcceptance || layer == LayerRollback ||
-			layer == LayerReplay) && len(parts) >= 8 &&
-			parts[0] == "quwoquan_ops" && parts[1] == "tests" &&
-			parts[2] == "acceptance" && parts[3] == string(layer) &&
-			parts[4] == objectParts[0] && parts[5] == context && parts[6] == object
-	default:
-		return false
-	}
-}
-
-func isCanonicalServiceTestFile(name string) bool {
-	return strings.HasSuffix(name, "_test.go") || strings.HasSuffix(name, "_test.py")
-}
-
-func validExecution(value ExecutionRequirement) bool {
-	return validEnvironment(value.Environment) &&
-		validNonSecretIdentity(value.Platform) &&
-		validNonSecretIdentity(value.DeviceClass) &&
-		validNonSecretIdentity(value.Provider) &&
-		(value.DigestBinding == DigestCandidate ||
-			value.DigestBinding == DigestRelease || value.DigestBinding == DigestEither)
-}
-
-func validNonSecretIdentity(value string) bool {
-	if len(value) == 0 || len(value) > 128 {
-		return false
-	}
-	for index, current := range value {
-		if (current >= 'a' && current <= 'z') ||
-			(current >= 'A' && current <= 'Z') ||
-			(current >= '0' && current <= '9') {
-			continue
-		}
-		if index > 0 && (current == '.' || current == '_' || current == '-' || current == '/') {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func validRelativeArtifactPath(value string) bool {
-	if len(value) == 0 || len(value) > 512 || strings.HasPrefix(value, "/") ||
-		strings.Contains(value, "\\") || strings.Contains(value, ":") {
-		return false
-	}
-	for _, segment := range strings.Split(value, "/") {
-		if segment == "" || segment == "." || segment == ".." ||
-			!validNonSecretPathSegment(segment) {
-			return false
-		}
-	}
-	return true
-}
-
-func validReceiptReference(value string) bool {
-	if !validNonSecretIdentity(value) || strings.Contains(value, ":") {
-		return false
-	}
-	for _, segment := range strings.Split(value, "/") {
-		if segment == "" || segment == "." || segment == ".." {
-			return false
-		}
-	}
-	return true
-}
-
-func validNonSecretPathSegment(value string) bool {
-	for _, current := range value {
-		if (current >= 'a' && current <= 'z') ||
-			(current >= 'A' && current <= 'Z') ||
-			(current >= '0' && current <= '9') || current == '.' ||
-			current == '_' || current == '-' {
-			continue
-		}
-		return false
-	}
-	return value != ""
-}
-
-func validLayer(value Layer) bool {
-	switch value {
-	case LayerLocalContract, LayerAPIIntegration, LayerUserAcceptance,
-		LayerEnvironmentAcceptance, LayerRollback, LayerReplay:
-		return true
-	default:
-		return false
-	}
-}
-
-func validProducer(value Producer) bool {
-	return value == ProducerService || value == ProducerApp || value == ProducerOps
-}
-
-func producerOwnsLayer(producer Producer, layer Layer) bool {
-	switch producer {
-	case ProducerService:
-		return layer == LayerLocalContract || layer == LayerAPIIntegration
-	case ProducerApp:
-		return layer == LayerLocalContract || layer == LayerAPIIntegration ||
-			layer == LayerUserAcceptance
-	case ProducerOps:
-		return layer == LayerEnvironmentAcceptance || layer == LayerRollback ||
-			layer == LayerReplay
-	default:
-		return false
-	}
-}
-
-func validStatus(value Status) bool {
-	switch value {
-	case StatusPassed, StatusFailed, StatusBlocked, StatusSkipped:
-		return true
-	default:
-		return false
-	}
-}
-
-func validTarget(value ReadinessTarget) bool {
-	if strings.TrimSpace(value.ID) == "" {
-		return false
-	}
-	return value.Kind == TargetOperation || value.Kind == TargetPage || value.Kind == TargetObject
-}
-
-func validEnvironment(value string) bool {
-	return value == "alpha" || value == "beta" || value == "gamma" || value == "prod"
-}
-
-func isSHA256(value string) bool {
-	return len(value) == 64 && isLowerHex(value)
-}
-
-func isDigest(value string) bool {
-	return len(value) == 71 && strings.HasPrefix(value, "sha256:") &&
-		isLowerHex(strings.TrimPrefix(value, "sha256:"))
-}
-
-func isCommitSHA(value string) bool {
-	return (len(value) == 40 || len(value) == 64) && isLowerHex(value)
-}
-
-func isLowerHex(value string) bool {
-	for _, current := range value {
-		if (current < '0' || current > '9') && (current < 'a' || current > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
-func caseContractKey(
-	objectID string,
-	specRef string,
-	caseID string,
-	producer Producer,
-	layer Layer,
-	target ReadinessTarget,
-) string {
-	return strings.Join([]string{
-		objectID, specRef, caseID, string(producer), string(layer), string(target.Kind), target.ID,
-	}, "\x00")
-}
-
-func resultSlotKey(caseKey string, execution ExecutionRequirement) string {
-	return strings.Join([]string{
-		caseKey,
-		execution.Environment,
-		execution.Platform,
-		execution.DeviceClass,
-		execution.Provider,
-	}, "\x00")
-}
-
-func violation(code, objectID, caseID, message string) Violation {
-	return Violation{Code: code, ObjectID: objectID, CaseID: caseID, Message: message}
-}
-
-func keys(values map[string]struct{}) []string {
-	result := make([]string, 0, len(values))
-	for value := range values {
-		result = append(result, value)
-	}
-	sort.Strings(result)
-	return result
-}
-
-func sortViolations(values []Violation) {
-	sort.Slice(values, func(i, j int) bool {
-		if values[i].Code != values[j].Code {
-			return values[i].Code < values[j].Code
-		}
-		if values[i].ObjectID != values[j].ObjectID {
-			return values[i].ObjectID < values[j].ObjectID
-		}
-		if values[i].CaseID != values[j].CaseID {
-			return values[i].CaseID < values[j].CaseID
-		}
-		return values[i].Message < values[j].Message
-	})
 }

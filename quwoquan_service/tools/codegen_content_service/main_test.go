@@ -238,55 +238,34 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
-func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
+func TestContentServiceReadyOperationsDispatchThroughCanonicalOwners(t *testing.T) {
 	t.Parallel()
 
-	generated, err := os.ReadFile(filepath.Join(
+	routesSource, err := os.ReadFile(filepath.Join(
 		"..", "..", "services", "content-service", "internal", "content", "post",
 		"adapters", "inbound", "http", "routes.go",
 	))
 	if err != nil {
-		t.Fatalf("read generated routes: %v", err)
+		t.Fatalf("read content service routes: %v", err)
 	}
 
 	for operation, handler := range map[string]string{
-		"BeginReportReview":              "handleBeginReportReview",
-		"ActivateFilterCatalogRelease":   "handleActivateFilterCatalogRelease",
-		"BindMediaAssetsToComment":       "handleBindMediaAssetsToComment",
-		"CreateComment":                  "handleCreateComment",
-		"AppendOutboundShareFact":            "handleAppendOutboundShareFact",
-		"DeleteComment":                  "handleDeleteComment",
-		"DismissReport":                  "handleDismissReport",
-		"GetActiveFilterCatalog":         "handleGetActiveFilterCatalog",
-		"GetMediaImageReprocessRun":      "handleGetMediaImageReprocessRun",
-		"GetReport":                      "handleGetReport",
-		"GetCurrentPostModerationCase":   "handleGetCurrentPostModerationCase",
-		"GetMediaAssetReference":         "handleGetMediaAssetReference",
-		"GetMediaAssetDeliveryReference": "handleGetMediaAssetDeliveryReference",
-		"HideComment":                    "handleHideComment",
-		"ListCommentReplies":             "handleListCommentReplies",
-		"ListComments":                   "handleListComments",
-		"ListCommentsByAuthor":           "handleListCommentsByAuthor",
-		"ListCommentsForPostAuthor":      "handleListCommentsForPostAuthor",
-		"ListMyReports":                  "handleListMyReports",
-		"ListReports":                    "handleListReports",
-		"PinComment":                     "handleSetCommentPinned",
-		"PauseMediaImageReprocessRun":    "handlePauseMediaImageReprocessRun",
-		"ReactToComment":                 "handleReactToComment",
-		"ResolveReport":                  "handleResolveReport",
-		"RestoreComment":                 "handleRestoreComment",
-		"ResumeMediaImageReprocessRun":   "handleResumeMediaImageReprocessRun",
-		"RollbackFilterCatalogRelease":   "handleRollbackFilterCatalogRelease",
-		"RollbackMediaImageReprocessRun": "handleRollbackMediaImageReprocessRun",
-		"StageFilterCatalogRelease":      "handleStageFilterCatalogRelease",
-		"StartMediaImageReprocessRun":    "handleStartMediaImageReprocessRun",
-		"SubmitPostPublication":          "handleSubmitPostPublication",
-		"UpdatePostSettings":             "handleUpdatePostSettings",
-		"PromotePostToWork":              "handlePromotePostToWork",
-		"DeletePost":                     "handleDeletePost",
-		"UnpinComment":                   "handleSetCommentPinned",
+		"BeginReportReview":            "handleBeginReportReview",
+		"ActivateFilterCatalogRelease": "handleActivateFilterCatalogRelease",
+		"DismissReport":                "handleDismissReport",
+		"GetActiveFilterCatalog":       "handleGetActiveFilterCatalog",
+		"GetReport":                    "handleGetReport",
+		"ListMyReports":                "handleListMyReports",
+		"ListReports":                  "handleListReports",
+		"ResolveReport":                "handleResolveReport",
+		"RollbackFilterCatalogRelease": "handleRollbackFilterCatalogRelease",
+		"StageFilterCatalogRelease":    "handleStageFilterCatalogRelease",
+		"SubmitPostPublication":        "handleSubmitPostPublication",
+		"UpdatePostSettings":           "handleUpdatePostSettings",
+		"PromotePostToWork":            "handlePromotePostToWork",
+		"DeletePost":                   "handleDeletePost",
 	} {
-		block := generatedOperationDispatchBlock(t, string(generated), operation)
+		block := generatedOperationDispatchBlock(t, string(routesSource), operation)
 		if !strings.Contains(block, "h."+handler+"(") {
 			t.Errorf(
 				"%s dispatch does not call %s directly:\n%s",
@@ -304,6 +283,79 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		}
 	}
 
+	type objectDispatch struct {
+		helper  string
+		handler string
+	}
+	for operation, dispatch := range map[string]objectDispatch{
+		"BindMediaAssetsToComment":       {helper: "dispatchComment", handler: "BindMediaAssetsToComment"},
+		"CreateComment":                  {helper: "dispatchComment", handler: "CreateComment"},
+		"DeleteComment":                  {helper: "dispatchComment", handler: "DeleteComment"},
+		"GetCurrentPostModerationCase":   {helper: "dispatchPostModerationCase", handler: "GetCurrent"},
+		"GetMediaAssetDeliveryReference": {helper: "dispatchMediaAsset", handler: "GetDeliveryReference"},
+		"GetMediaAssetReference":         {helper: "dispatchMediaAsset", handler: "GetReference"},
+		"GetMediaImageReprocessRun":      {helper: "dispatchMediaImageReprocess", handler: "Get"},
+		"HideComment":                    {helper: "dispatchComment", handler: "HideComment"},
+		"ListCommentReplies":             {helper: "dispatchComment", handler: "ListCommentReplies"},
+		"ListComments":                   {helper: "dispatchComment", handler: "ListComments"},
+		"ListCommentsByAuthor":           {helper: "dispatchComment", handler: "ListCommentsByAuthor"},
+		"ListCommentsForPostAuthor":      {helper: "dispatchComment", handler: "ListCommentsForPostAuthor"},
+		"PauseMediaImageReprocessRun":    {helper: "dispatchMediaImageReprocess", handler: "Pause"},
+		"PinComment":                     {helper: "dispatchComment", handler: "SetCommentPinned"},
+		"ReactToComment":                 {helper: "dispatchContentReaction", handler: "ReactToComment"},
+		"RestoreComment":                 {helper: "dispatchComment", handler: "RestoreComment"},
+		"ResumeMediaImageReprocessRun":   {helper: "dispatchMediaImageReprocess", handler: "Resume"},
+		"RollbackMediaImageReprocessRun": {helper: "dispatchMediaImageReprocess", handler: "Rollback"},
+		"StartMediaImageReprocessRun":    {helper: "dispatchMediaImageReprocess", handler: "Start"},
+		"UnpinComment":                   {helper: "dispatchComment", handler: "SetCommentPinned"},
+	} {
+		block := generatedOperationDispatchBlock(t, string(routesSource), operation)
+		for _, expected := range []string{
+			"h." + dispatch.helper + "(",
+			"handler." + dispatch.handler + "(",
+		} {
+			if !strings.Contains(block, expected) {
+				t.Errorf(
+					"%s dispatch must call canonical owner through %s:\n%s",
+					operation,
+					expected,
+					block,
+				)
+			}
+		}
+		if strings.Contains(block, "handleNotImplemented") {
+			t.Errorf(
+				"%s dispatch must not route through handleNotImplemented:\n%s",
+				operation,
+				block,
+			)
+		}
+	}
+
+	outboundShareBlock := generatedOperationDispatchBlock(
+		t,
+		string(routesSource),
+		"AppendOutboundShareFact",
+	)
+	for _, expected := range []string{
+		"if h.outboundShareHandler == nil",
+		"h.outboundShareHandler.AppendOutboundShareFact(",
+	} {
+		if !strings.Contains(outboundShareBlock, expected) {
+			t.Errorf(
+				"AppendOutboundShareFact dispatch must contain %s:\n%s",
+				expected,
+				outboundShareBlock,
+			)
+		}
+	}
+	if strings.Contains(outboundShareBlock, "handleNotImplemented") {
+		t.Errorf(
+			"AppendOutboundShareFact dispatch must not route through handleNotImplemented:\n%s",
+			outboundShareBlock,
+		)
+	}
+
 	for operation, parameters := range map[string][]string{
 		"BindMediaAssetsToComment": {"commentId"},
 		"CreateComment":            {"postId"},
@@ -316,7 +368,7 @@ func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 		"RestoreComment":           {"commentId"},
 		"UnpinComment":             {"postId", "commentId"},
 	} {
-		block := generatedOperationDispatchBlock(t, string(generated), operation)
+		block := generatedOperationDispatchBlock(t, string(routesSource), operation)
 		for _, parameter := range parameters {
 			want := `r.PathValue("` + parameter + `")`
 			if !strings.Contains(block, want) {

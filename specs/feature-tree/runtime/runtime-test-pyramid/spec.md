@@ -13,7 +13,7 @@
 ### In Scope
 
 - 三层测试命名、case ID、环境语义和执行入口
-- App、Service、Data、Ops 测试路径到 domain/context/object owner 的反向关联
+- App、Service、Data、Ops 测试路径到 service/context/object owner 的反向关联
 - support 边界、真实依赖分层、对象级分支覆盖率和运行报告计算
 - 测试入口结构证据与 CaseResult、环境及用户验收结果证据的分离
 

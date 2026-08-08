@@ -5,6 +5,7 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,7 +37,55 @@ func TestListHotQueriesUsesTheObjectOwnedReaderAndBoundedHTTPWire(t *testing.T) 
 	}
 }
 
+func TestListHotQueriesEmitsObjectOwnedErrors(t *testing.T) {
+	for name, testCase := range map[string]struct {
+		handler    http.Handler
+		target     string
+		wantStatus int
+		wantCode   string
+	}{
+		"invalid limit": {
+			handler: httpadapter.NewHandler(readinessTermHeatReader{}).Routes(),
+			target:  "/search/hot-queries?limit=21", wantStatus: http.StatusBadRequest,
+			wantCode: "SEARCH.USER.hot_query_invalid_argument",
+		},
+		"reader unavailable": {
+			handler: httpadapter.NewHandler(failingTermHeatReader{}).Routes(),
+			target:  "/search/hot-queries", wantStatus: http.StatusServiceUnavailable,
+			wantCode: "SEARCH.MIDDLEWARE.hot_query_unavailable",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, testCase.target, nil)
+			response := httptest.NewRecorder()
+			testCase.handler.ServeHTTP(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status=%d want=%d body=%s", response.Code, testCase.wantStatus, response.Body.String())
+			}
+			var body struct {
+				Code string `json:"code"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if body.Code != testCase.wantCode {
+				t.Fatalf("code=%q want=%q", body.Code, testCase.wantCode)
+			}
+		})
+	}
+}
+
 type readinessTermHeatReader struct{}
+
+type failingTermHeatReader struct{}
+
+func (failingTermHeatReader) RelatedTerms(
+	context.Context,
+	string,
+	int,
+) ([]queryheat.TermHeat, error) {
+	return nil, errors.New("term heat unavailable")
+}
 
 func (readinessTermHeatReader) RelatedTerms(
 	context.Context,

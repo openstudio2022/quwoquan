@@ -19,7 +19,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circles_hub_page.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/home_circles_hub_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/home_circles_category_tab.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';

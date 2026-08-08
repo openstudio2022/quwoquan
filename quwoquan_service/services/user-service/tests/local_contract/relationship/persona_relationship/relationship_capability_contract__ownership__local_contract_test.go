@@ -68,13 +68,16 @@ func TestRelationshipCapabilityContractHasSinglePersonaRelationshipOwner(t *test
 	}
 }
 
+// 订阅拓扑的 canonical 声明位是消费对象 object.yaml 的 lifecycle.source_events，
+// 且必须写成 <domain>.<object>.<Event> 指回真实生产者；只写事件短名会让消费方
+// 订阅一个没有 owner 的别名。
 func TestFollowingSubjectProjectionSubscribesToProducedVisitEvent(t *testing.T) {
 	t.Parallel()
 
 	serviceRoot := userServiceRoot(t)
 	consumer := readContract(t, filepath.Join(
 		serviceRoot,
-		"contracts", "profile_projection", "following_subject", "events.yaml",
+		"contracts", "profile_projection", "following_subject", "object.yaml",
 	))
 	producer := readContract(t, filepath.Join(
 		serviceRoot,
@@ -83,8 +86,11 @@ func TestFollowingSubjectProjectionSubscribesToProducedVisitEvent(t *testing.T) 
 	if !strings.Contains(producer, "name: FollowedSubjectVisited") {
 		t.Fatal("FollowedSubjectVisited producer contract is missing")
 	}
-	if !strings.Contains(consumer, "- FollowedSubjectVisited") {
-		t.Fatal("following-subject projection does not subscribe to FollowedSubjectVisited")
+	if !strings.Contains(
+		consumer,
+		"- user.followed_subject_visit_state.FollowedSubjectVisited",
+	) {
+		t.Fatal("following-subject projection does not subscribe to the produced FollowedSubjectVisited")
 	}
 	if strings.Contains(consumer, "FollowingSubjectVisited") {
 		t.Fatal("following-subject projection retains the non-produced FollowingSubjectVisited alias")

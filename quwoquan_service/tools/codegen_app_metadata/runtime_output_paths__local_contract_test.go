@@ -229,6 +229,30 @@ func TestDirectNonAssistantGeneratedTargetsHaveSingleCanonicalOwners(
 					"impact_help_type_metadata.g.dart",
 			),
 		},
+		"intersection client policy": {
+			got: recommendationFeatureProfileApplicationOutputPath(
+				appDir,
+				"intersection_client_policy.g.dart",
+			),
+			want: filepath.Join(
+				appDir,
+				"lib/service/recommendation_service/recommendation/"+
+					"recommendation_feature_profile_view/application/generated/"+
+					"intersection_client_policy.g.dart",
+			),
+		},
+		"intersection display metadata": {
+			got: recommendationFeatureProfilePresentationOutputPath(
+				appDir,
+				"intersection_display_metadata.g.dart",
+			),
+			want: filepath.Join(
+				appDir,
+				"lib/service/recommendation_service/recommendation/"+
+					"recommendation_feature_profile_view/presentation/generated/"+
+					"intersection_display_metadata.g.dart",
+			),
+		},
 	}
 	for name, output := range canonicalOutputs {
 		if output.got != output.want {
@@ -334,6 +358,34 @@ func TestMainEmitsRuntimeArtifactsOnlyThroughCanonicalTargetHelpers(t *testing.T
 }
 
 // spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
+func TestZeroConsumerMixedOutputsHaveNoEmitterSource(t *testing.T) {
+	sources := map[string][]string{
+		"main.go": {
+			"content_metadata.g.dart",
+			"search_contract.g.dart",
+			"search_registry.g.dart",
+		},
+		"intersection_kind_metadata_codegen.go": {
+			"intersection_kind_metadata.g.dart",
+		},
+		"post_read_presentation_codegen.go": {
+			"content_post_immersive_wire_keys.g.dart",
+		},
+	}
+	for sourcePath, retiredOutputs := range sources {
+		source, err := os.ReadFile(sourcePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, retiredOutput := range retiredOutputs {
+			if strings.Contains(string(source), retiredOutput) {
+				t.Fatalf("%s still emits retired output %s", sourcePath, retiredOutput)
+			}
+		}
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
 func TestAssistantGenerationHasNoImperativeLegacyOutputCleanup(t *testing.T) {
 	source, err := os.ReadFile("assistant_codegen.go")
 	if err != nil {
@@ -423,6 +475,11 @@ func TestGeneratedManifestSeparatesCanonicalAndRetirementRoots(t *testing.T) {
 		retiredExact[path] = struct{}{}
 	}
 	expectedRetiredExact := []string{
+		"lib/service/content_service/content/post/adapters/generated/content_post_immersive_wire_keys.g.dart",
+		"lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
+		"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_kind_metadata.g.dart",
+		"lib/service/search_service/search/search_index_view/application/generated/search_contract.g.dart",
+		"lib/service/search_service/search/search_index_view/application/generated/search_registry.g.dart",
 		"lib/cloud/content/generated/content_behaviors.g.dart",
 		"lib/cloud/content/generated/content_errors.g.dart",
 		"lib/cloud/content/generated/content_privacy_policy.g.dart",

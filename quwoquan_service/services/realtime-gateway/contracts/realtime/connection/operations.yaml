@@ -86,7 +86,6 @@ api_routes:
     idempotency: none
   error_codes:
   - REALTIME.USER.unauthorized
-  - REALTIME.USER.rate_limited
   - REALTIME.SYSTEM.account_security_authority_unavailable
   - REALTIME.SYSTEM.internal_error
   privacy:
@@ -611,3 +610,19 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_connection_operation_gateway__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connection_issue_connection_ticket_app_api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: IssueConnectionTicket}
+  runner_source_path: quwoquan_app/test/api_integration/service/realtime_gateway/realtime/connection/connection_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connection_long_poll_app_api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: LongPoll}
+  runner_source_path: quwoquan_app/test/api_integration/service/realtime_gateway/realtime/connection/connection_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

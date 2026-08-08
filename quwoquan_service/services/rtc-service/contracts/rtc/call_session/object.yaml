@@ -129,6 +129,9 @@ lifecycle:
 members:
   CallParticipant:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [userId]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 通话参与者（嵌入 CallSession 文档，≤32人无需独立 collection）

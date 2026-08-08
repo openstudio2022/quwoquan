@@ -91,7 +91,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：群聊四环境端到端证据未闭环（metadata blocked 未解除）
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-001` 的可观察验收在 alpha/beta/gamma/prod 四环境端到端通过，metadata blocked 解除。
 
 <a id="open-003"></a>
 ### OPEN-003 群创建与成员治理能力 SIT

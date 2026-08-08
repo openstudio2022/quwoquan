@@ -41,6 +41,13 @@
 - 任何 query/tab generation 被替换、超时或页面销毁时都必须让旧结果失效，并通过真实 cancellation signal 终止可见网络请求；`Future.timeout` 不作为 transport cancellation。
 - `page_lifecycle_state` 复用 `waitMode`、`durationMs` 与 `phase=slow/timeout/cancelled/partial`，禁止记录原始搜索词。
 
+<a id="req-003"></a>
+### REQ-003 网络结果与一方地点落地必须以 canonical Remote 结果恢复
+
+- 正式结果页每个 generation 只经 canonical result 请求取得 typed hit，并区分 online、empty、partial、timeout 与 failure；已确认分区不得因另一个分区失败而被清空。
+- `entity.homepage` 命中进入该主页；尚未绑定主页的 `location.place` 进入地点落地页，冷启动、深链或进程恢复缺少页面内存参数时必须以 canonical place identity 精确重读。
+- 地点已提升为主页时只跳转 canonical Homepage；地点不存在、过期或 Remote 不可用时显示可重试或可返回终态，不得用 route extra、裸 Map、旧标题或假地址伪造可用地点。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/search-service/contracts/search/search_request_fact/operations.yaml`
@@ -58,8 +65,29 @@
 - THEN 3 秒只在空白阻塞时显示一次提示；6 秒真实取消 transport 并进入可重试终态。
 - THEN empty、partial、timeout、failure 分开映射；旧 completion 不得回写。
 
+<a id="gwt-002"></a>
+### GWT-002 网络结果与 location.place production Remote 落地
+
+- GIVEN 用户提交非空 query 进入网络结果页，结果可能包含 `entity.homepage`、`location.place`、内容和其他可导航 typed hit，App 使用 production Remote composition。
+- WHEN canonical result 请求完成，用户打开地点命中，或地点页在冷启动、深链、进程恢复后缺少页面内存参数而重新读取。
+- THEN 每个 generation 只产生一次 canonical result 请求；partial 保留已确认 hit，empty、timeout 与 failure 分别进入明确终态并允许重试或返回。
+- THEN `entity.homepage` 只进入 canonical 主页；`location.place` 只进入地点落地页并按自身 identity 精确重读，若已提升则转入该主页。
+- THEN 不存在、已过期或不可用的地点与内容不得以 route extra、旧页面缓存或裸 Map 伪装成功；页面保留 query 与仍有效结果，并提供重试、返回或移除失效项的恢复动作。
+
 ## 6. 依赖
 
 - 前置要求：[`cross-domain-search`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 网络结果与地点恢复 production Remote 双真机验收
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：规格已区分主页与一方地点单源以及冷启动恢复，但尚无同一 candidate 的真实设备 CaseResult 证明 typed hit、partial/timeout 恢复和地点精确重读均成立。
+- 完成判定：`GWT-002` 的结果页、地点落地、已提升主页跳转与失败恢复在物理 Android 与物理 iPhone 上通过，且 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
+- 依赖：production Remote 搜索索引与地点读模型、可控的有效/失效/已提升地点样本及真实 `user_acceptance` runner；不得用 route extra fixture 或动态 skip 代替。

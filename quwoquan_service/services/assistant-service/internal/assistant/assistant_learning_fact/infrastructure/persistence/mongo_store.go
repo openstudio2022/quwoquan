@@ -87,20 +87,6 @@ func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().
 				SetName("idx_assistant_learning_fact_owner_sequence"),
 		},
-		{
-			Keys: bson.D{
-				{Key: "assistantTurnId", Value: 1},
-				{Key: "appendSequence", Value: 1},
-			},
-			Options: options.Index().SetName("idx_assistant_learning_fact_turn"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "factType", Value: 1},
-				{Key: "appendSequence", Value: 1},
-			},
-			Options: options.Index().SetName("idx_assistant_learning_fact_type"),
-		},
 	}); err != nil {
 		return unavailable("ensure fact indexes", err)
 	}

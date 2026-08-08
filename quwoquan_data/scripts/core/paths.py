@@ -17,6 +17,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.data_root import DataRoot
+
 # 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
 # 不随运行时 QWQ_DATA_ROOT 漂移；隔离/多环境只覆盖运行时数据根，不应丢失契约。
 _REPO_DATA_ROOT = Path(__file__).resolve().parents[2]
@@ -344,87 +346,6 @@ def publish_meta_path() -> Path:
 
 
 # ─── 同构路径（runtime task 与 publish 共用）─────────────────────
-class DataRoot:
-    """runtime task 或 publish version 下的统一数据根。"""
-
-    def __init__(self, root: Path):
-        self.root = root
-
-    # entities: entities/{domain}/{type}/{name}/
-    def entities_dir(self) -> Path:
-        return self.root / "entities"
-
-    def entity_dir(self, domain: str, etype: str, name: str) -> Path:
-        return self.entities_dir() / domain / etype / name
-
-    def entity_json(self, domain: str, etype: str, name: str) -> Path:
-        return self.entity_dir(domain, etype, name) / "_entity.json"
-
-    def entity_page(self, domain: str, etype: str, name: str) -> Path:
-        return self.entity_dir(domain, etype, name) / "page.md"
-
-    def entity_manifest(self, domain: str, etype: str, name: str) -> Path:
-        return self.entity_dir(domain, etype, name) / "manifest.json"
-
-    # tags: tags/{dim}/{...path}/_definition.json
-    def tags_dir(self) -> Path:
-        return self.root / "tags"
-
-    def taxonomy(self) -> Path:
-        return self.tags_dir() / "_taxonomy.json"
-
-    def tag_dir(self, tag_path: str) -> Path:
-        return self.tags_dir() / tag_path
-
-    def tag_file(self, tag_path: str) -> Path:
-        return self.tag_dir(tag_path) / "_definition.json"
-
-    def tag_dimension_dir(self, dim: str) -> Path:
-        return self.tags_dir() / dim
-
-    # posts: posts/{content_type}/{angle_tag}/{title}/{seq}/
-    def posts_dir(self) -> Path:
-        return self.root / "posts"
-
-    def post_type_dir(self, content_type: str) -> Path:
-        return self.posts_dir() / content_type
-
-    def post_dir(self, content_type: str, angle_tag: str, title: str, seq: int = 1) -> Path:
-        return self.post_type_dir(content_type) / angle_tag / title / str(seq)
-
-    def post_article(self, content_type: str, angle_tag: str, title: str, seq: int = 1) -> Path:
-        return self.post_dir(content_type, angle_tag, title, seq) / "article.md"
-
-    def post_manifest(self, content_type: str, angle_tag: str, title: str, seq: int = 1) -> Path:
-        return self.post_dir(content_type, angle_tag, title, seq) / "manifest.json"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ─── publish 同构（单一主线）─────────────────────────────────────
 
 

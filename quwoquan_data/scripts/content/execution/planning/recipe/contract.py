@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.paths import CONTROL_PLANE_SHARED_ROOT
+from core.paths import CONTROL_PLANE_SHARED_ROOT, REPO_ROOT
 from core.schema import load_schema, validate_strict
 
 from content.execution import store
@@ -54,4 +54,32 @@ def lint_recipe(doc: dict[str, Any], recipe_ref: str) -> list[str]:
     return errors
 
 
-__all__ = ["SELECTION_QUOTA_FIELDS", "lint_recipe"]
+__all__ = ["SELECTION_QUOTA_FIELDS", "gate_recipe_contract", "lint_recipe"]
+
+
+def gate_recipe_contract(recipe: dict[str, Any], execution_id: str) -> None:
+    contract = recipe.get("contract") or {}
+    spec = store.load_spec(execution_id)
+    errors: list[str] = []
+    declared_preset = store.spec_preset_ref(spec)
+    if declared_preset != str(recipe.get("presetRef") or ""):
+        errors.append(
+            f"content.presetRef={declared_preset!r} 与配方 presetRef={recipe.get('presetRef')!r} 不一致"
+        )
+    if (
+        bool(contract.get("requireActiveStatus", True))
+        and str(spec.get("status") or "") != "active"
+    ):
+        errors.append(f"task status 必须 active，实得 {spec.get('status')!r}")
+    # 分支治理（P4）：recipe 禁止声明 executionBranch（临时 feature 分支绑定已废止）；
+    # 商业执行只校验 branch policy（quwoquan_ops/policies/branch_policy.yaml）。
+    if contract.get("executionBranch"):
+        errors.append(
+            "contract.executionBranch 已废止：recipe 不得绑定 Git 分支，"
+            "正式分支由 branch_policy.yaml 治理"
+        )
+    from core.execution_branch import execution_branch_issues
+
+    errors.extend(execution_branch_issues(spec, cwd=REPO_ROOT))
+    if errors:
+        raise SystemExit("[task execute] 契约门 BLOCK: " + "; ".join(errors))

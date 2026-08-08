@@ -96,6 +96,8 @@ def test_acquire_video_reports_typed_missing_probe_dependency() -> None:
         "acquire-videos",
         "--manifest",
         "missing-manifest.json",
+        "--handoff-ref",
+        "missing-handoff.json",
     )
     assert result.returncode != 0
     assert "DATA.SOURCE.VIDEO_PROBE_DEPENDENCY_MISSING" in result.stderr

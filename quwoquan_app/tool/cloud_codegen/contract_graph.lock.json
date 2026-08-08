@@ -28343,13 +28343,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "c584f5b22dcba85c0db1bbdfa954b305cb3da18b8e1fd440f16e50bd2cb5c619"
+    "sha256": "77111acbfd979e9f67300112509962053a1b201413cc9c4c2e36be0c74f4db68"
   },
   "contractGraph": {
-    "compilerHash": "sha256:038a9ca69b8c778376c1fb33c67119a4a5bf4b6ce0b0f9a7d3c9b7ee81183b82",
+    "compilerHash": "sha256:5d75695d2a498578e51f8510f72ea57cf831db26a508c62d6be60ca962abc187",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "b5683d7d096bfb9d5d550bb42fc6069321cdd8d781d57b85d8517db39af2390e",
-    "sourceDigestSetSha256": "6232dcf8f3406994b772975f8df1ca451f08cdfc5ffd7064c532e4f17324d659"
+    "sha256": "9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4",
+    "sourceDigestSetSha256": "e8b2f4c1f46265f22c1999d9b0f1e84929c34a0d74993875447ba9fc5a44f101"
   },
   "generator": "app-cloud-handoff"
 }

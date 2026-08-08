@@ -60,6 +60,19 @@ def _fetch_download_entity(
         entity_count=entity_count,
         message="entity fetch started",
     )
+    from content.source.research.scale_source_pool_runtime import (
+        frozen_scale_source_pool_fetch_result,
+    )
+
+    frozen_result = frozen_scale_source_pool_fetch_result(
+        execution_id,
+        selected_lanes=selected_lanes,
+        entity_id=entity_id,
+        entity_type=entity_type,
+        entity_index=entity_index,
+    )
+    if frozen_result is not None:
+        return frozen_result
     plan = prepare_entity_fetch_plan(
         execution_id=execution_id,
         entity_id=entity_id,

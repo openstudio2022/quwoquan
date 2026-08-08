@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -16,6 +17,8 @@ const (
 	BindingDevice          BindingKind = "device_capability"
 	BindingDomainOperation BindingKind = "domain_operation"
 )
+
+const GrantTTL = 5 * time.Minute
 
 type ProviderBindingState string
 
@@ -64,11 +67,13 @@ var (
 	ErrConnectorRevoked        = errors.New("user connector authorization is revoked")
 	ErrConnectorExpired        = errors.New("user connector authorization is expired")
 	ErrConnectorCapability     = errors.New("user connector capability is not granted")
+	ErrConnectorSurfaceDenied  = errors.New("user connector surface is not allowed")
 	ErrDeviceUnavailable       = errors.New("device capability is unavailable")
 	ErrDevicePermissionDenied  = errors.New("device capability permission is denied")
 	ErrDomainOperationInvalid  = errors.New("domain operation binding is invalid")
 	ErrCapabilityGrantRequired = errors.New("no capability binding can grant the requirement")
 	ErrAmbiguousBinding        = errors.New("capability binding candidates are ambiguous")
+	ErrInvalidResolvedGrant    = errors.New("resolved capability grant is invalid")
 )
 
 // Requirement is assembled by the capability owner. BindingPriority is ordered
@@ -76,16 +81,19 @@ var (
 // revoked or unavailable candidate must not fall through to a lower-priority
 // kind.
 type Requirement struct {
-	ResolutionID    string
-	AccountID       string
-	CapabilityKey   string
-	RegionCode      string
-	BindingPriority []BindingKind
-	Write           bool
-	ConfirmationRef string
-	PermitRef       string
-	IdempotencyKey  string
-	InputDigest     string
+	ResolutionID       string
+	AccountID          string
+	ServiceActorDigest string
+	CapabilityKey      string
+	RegionCode         string
+	SurfaceKind        string
+	ConnectionRefs     []string
+	BindingPriority    []BindingKind
+	Write              bool
+	ConfirmationRef    string
+	PermitRef          string
+	IdempotencyKey     string
+	InputDigest        string
 }
 
 // PublicProviderBinding is environment-owned runtime material. It intentionally
@@ -110,6 +118,7 @@ type UserConnectorConnection struct {
 	AccountID                    string
 	ConnectionID                 string
 	ConnectorID                  string
+	ContractDigest               string
 	GrantedCapabilities          []string
 	GrantState                   ConnectorGrantState
 	ProviderAccountSubjectDigest string
@@ -148,7 +157,9 @@ type Candidates struct {
 type ResolvedCapabilityGrant struct {
 	ResolutionID         string
 	AccountID            string
+	ServiceActorDigest   string
 	CapabilityKey        string
+	SurfaceKind          string
 	BindingKind          BindingKind
 	PublicProvider       *PublicProviderBinding
 	UserConnector        *UserConnectorConnection
@@ -158,6 +169,9 @@ type ResolvedCapabilityGrant struct {
 	RequiresPermit       bool
 	RequiresIdempotency  bool
 	InputDigest          string
+	ConfirmationDigest   string
+	PermitDigest         string
+	IdempotencyDigest    string
 	ResolvedAt           time.Time
 	ExpiresAt            *time.Time
 }
@@ -191,7 +205,7 @@ func ResolveCapabilityGrant(
 			if resolveErr != nil {
 				return ResolvedCapabilityGrant{}, resolveErr
 			}
-			return newGrant(normalized, kind, now, nil, &binding, nil, nil, nil), nil
+			return newGrant(normalized, kind, now, &binding, nil, nil, nil), nil
 		case BindingUserConnector:
 			binding, found, resolveErr := resolveUserConnector(normalized, candidates.UserConnectors, now)
 			if !found {
@@ -200,7 +214,7 @@ func ResolveCapabilityGrant(
 			if resolveErr != nil {
 				return ResolvedCapabilityGrant{}, resolveErr
 			}
-			return newGrant(normalized, kind, now, binding.ExpiresAt, nil, &binding, nil, nil), nil
+			return newGrant(normalized, kind, now, nil, &binding, nil, nil), nil
 		case BindingDevice:
 			binding, found, resolveErr := resolveDevice(normalized, candidates.DeviceBindings)
 			if !found {
@@ -209,7 +223,7 @@ func ResolveCapabilityGrant(
 			if resolveErr != nil {
 				return ResolvedCapabilityGrant{}, resolveErr
 			}
-			return newGrant(normalized, kind, now, nil, nil, nil, &binding, nil), nil
+			return newGrant(normalized, kind, now, nil, nil, &binding, nil), nil
 		case BindingDomainOperation:
 			binding, found, resolveErr := resolveDomainOperation(candidates.DomainOperations)
 			if !found {
@@ -218,7 +232,7 @@ func ResolveCapabilityGrant(
 			if resolveErr != nil {
 				return ResolvedCapabilityGrant{}, resolveErr
 			}
-			return newGrant(normalized, kind, now, nil, nil, nil, nil, &binding), nil
+			return newGrant(normalized, kind, now, nil, nil, nil, &binding), nil
 		default:
 			return ResolvedCapabilityGrant{}, ErrInvalidRequirement
 		}
@@ -232,8 +246,11 @@ func ResolveCapabilityGrant(
 func NormalizeRequirement(requirement Requirement, now time.Time) (Requirement, error) {
 	requirement.ResolutionID = strings.TrimSpace(requirement.ResolutionID)
 	requirement.AccountID = strings.TrimSpace(requirement.AccountID)
+	requirement.ServiceActorDigest = strings.TrimSpace(requirement.ServiceActorDigest)
 	requirement.CapabilityKey = strings.TrimSpace(requirement.CapabilityKey)
 	requirement.RegionCode = strings.ToUpper(strings.TrimSpace(requirement.RegionCode))
+	requirement.SurfaceKind = strings.TrimSpace(requirement.SurfaceKind)
+	requirement.ConnectionRefs = normalizeStrings(requirement.ConnectionRefs)
 	requirement.InputDigest = strings.TrimSpace(requirement.InputDigest)
 	now = now.UTC()
 	if requirement.ResolutionID == "" || requirement.CapabilityKey == "" ||
@@ -252,6 +269,17 @@ func NormalizeRequirement(requirement Requirement, now time.Time) (Requirement, 
 			return Requirement{}, ErrInvalidRequirement
 		}
 		seen[kind] = struct{}{}
+	}
+	if containsBindingKind(requirement.BindingPriority, BindingUserConnector) {
+		if requirement.AccountID == "" {
+			return Requirement{}, ErrInvalidRequirement
+		}
+		if requirement.SurfaceKind != "" || len(requirement.ConnectionRefs) != 0 {
+			if !oneOf(requirement.SurfaceKind, "personal", "conversation", "circle") ||
+				len(requirement.ConnectionRefs) == 0 || len(requirement.ConnectionRefs) > 32 {
+				return Requirement{}, ErrInvalidRequirement
+			}
+		}
 	}
 	if requirement.Write && !validDigest(requirement.InputDigest) {
 		return Requirement{}, ErrInvalidRequirement
@@ -362,6 +390,7 @@ func resolveUserConnector(
 	binding.AccountID = strings.TrimSpace(binding.AccountID)
 	binding.ConnectionID = strings.TrimSpace(binding.ConnectionID)
 	binding.ConnectorID = strings.TrimSpace(binding.ConnectorID)
+	binding.ContractDigest = strings.TrimSpace(binding.ContractDigest)
 	binding.ProviderAccountSubjectDigest = strings.TrimSpace(binding.ProviderAccountSubjectDigest)
 	if binding.AccountID == "" || binding.AccountID != requirement.AccountID ||
 		binding.ConnectionID == "" || binding.ConnectorID == "" ||
@@ -377,7 +406,11 @@ func resolveUserConnector(
 	default:
 		return UserConnectorConnection{}, true, ErrConnectorCapability
 	}
-	if !validDigest(binding.ProviderAccountSubjectDigest) {
+	if !validDigest(binding.ContractDigest) {
+		return UserConnectorConnection{}, true, ErrConnectorCapability
+	}
+	if binding.ProviderAccountSubjectDigest != "" &&
+		!validDigest(binding.ProviderAccountSubjectDigest) {
 		return UserConnectorConnection{}, true, ErrConnectorCapability
 	}
 	if binding.ExpiresAt != nil && !binding.ExpiresAt.After(now.UTC()) {
@@ -444,16 +477,18 @@ func newGrant(
 	requirement Requirement,
 	kind BindingKind,
 	now time.Time,
-	expiresAt *time.Time,
 	publicProvider *PublicProviderBinding,
 	userConnector *UserConnectorConnection,
 	deviceBinding *DeviceCapabilityBinding,
 	domainOperation *DomainOperationBinding,
 ) ResolvedCapabilityGrant {
+	expiresAt := now.UTC().Add(GrantTTL)
 	return ResolvedCapabilityGrant{
 		ResolutionID:         requirement.ResolutionID,
 		AccountID:            requirement.AccountID,
+		ServiceActorDigest:   requirement.ServiceActorDigest,
 		CapabilityKey:        requirement.CapabilityKey,
+		SurfaceKind:          requirement.SurfaceKind,
 		BindingKind:          kind,
 		PublicProvider:       publicProvider,
 		UserConnector:        userConnector,
@@ -463,9 +498,75 @@ func newGrant(
 		RequiresPermit:       requirement.Write,
 		RequiresIdempotency:  requirement.Write,
 		InputDigest:          requirement.InputDigest,
+		ConfirmationDigest:   digestOpaque(requirement.ConfirmationRef),
+		PermitDigest:         digestOpaque(requirement.PermitRef),
+		IdempotencyDigest:    digestOpaque(requirement.IdempotencyKey),
 		ResolvedAt:           now.UTC(),
-		ExpiresAt:            normalizeTimePointer(expiresAt),
+		ExpiresAt:            &expiresAt,
 	}
+}
+
+// OpaqueDigest commits to a protected reference without persisting its value.
+// Empty input intentionally stays empty for read-only grants.
+func OpaqueDigest(value string) string {
+	return digestOpaque(value)
+}
+
+// IsValidDigest validates the canonical digest shape used by persisted
+// capability sessions. Callers must never accept a non-canonical digest as an
+// authorization binding.
+func IsValidDigest(value string) bool {
+	return validDigest(strings.TrimSpace(value))
+}
+
+// IsValidBindingKind keeps the persisted session decoder on the same closed
+// binding-kind set as the domain resolver.
+func IsValidBindingKind(kind BindingKind) bool {
+	return validBindingKind(kind)
+}
+
+func digestOpaque(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(value))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func containsBindingKind(values []BindingKind, expected BindingKind) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if _, duplicate := seen[value]; duplicate {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func oneOf(value string, values ...string) bool {
+	for _, candidate := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func validBindingKind(kind BindingKind) bool {
@@ -500,4 +601,61 @@ func normalizeTimePointer(value *time.Time) *time.Time {
 	}
 	normalized := value.UTC()
 	return &normalized
+}
+
+// BindingDigest is the only binding material persisted with the short-lived
+// session. It commits to the selected typed identity without storing an
+// endpoint, credential, proof, permit, confirmation or raw input.
+func BindingDigest(grant ResolvedCapabilityGrant) (string, error) {
+	var identity string
+	switch grant.BindingKind {
+	case BindingPublicProvider:
+		if grant.PublicProvider == nil || grant.UserConnector != nil ||
+			grant.DeviceBinding != nil || grant.DomainOperation != nil {
+			return "", ErrInvalidResolvedGrant
+		}
+		identity = fmt.Sprintf(
+			"public_provider\x00%s\x00%s\x00%s",
+			grant.PublicProvider.AdapterID,
+			grant.PublicProvider.ContractDigest,
+			grant.PublicProvider.ConfigRef,
+		)
+	case BindingUserConnector:
+		if grant.UserConnector == nil || grant.PublicProvider != nil ||
+			grant.DeviceBinding != nil || grant.DomainOperation != nil {
+			return "", ErrInvalidResolvedGrant
+		}
+		identity = fmt.Sprintf(
+			"user_connector\x00%s\x00%s\x00%s\x00%d\x00%s",
+			grant.UserConnector.ConnectionID,
+			grant.UserConnector.ConnectorID,
+			grant.UserConnector.ContractDigest,
+			grant.UserConnector.Revision,
+			grant.UserConnector.ProviderAccountSubjectDigest,
+		)
+	case BindingDevice:
+		if grant.DeviceBinding == nil || grant.PublicProvider != nil ||
+			grant.UserConnector != nil || grant.DomainOperation != nil {
+			return "", ErrInvalidResolvedGrant
+		}
+		identity = fmt.Sprintf(
+			"device_capability\x00%s\x00%s",
+			grant.DeviceBinding.BridgeCapability,
+			grant.DeviceBinding.AttestationDigest,
+		)
+	case BindingDomainOperation:
+		if grant.DomainOperation == nil || grant.PublicProvider != nil ||
+			grant.UserConnector != nil || grant.DeviceBinding != nil {
+			return "", ErrInvalidResolvedGrant
+		}
+		identity = fmt.Sprintf(
+			"domain_operation\x00%s\x00%s",
+			grant.DomainOperation.OwnerOperationID,
+			grant.DomainOperation.ContractDigest,
+		)
+	default:
+		return "", ErrInvalidResolvedGrant
+	}
+	sum := sha256.Sum256([]byte(identity))
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }

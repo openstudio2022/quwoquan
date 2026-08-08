@@ -50,6 +50,7 @@ lifecycle:
   checkpoint: per_source_event_sequence
   rebuild: replay_profile_search_outbox_account_security_and_experiment_policy
   tombstone: delete_index_document_keep_source_checkpoint
+  idempotency: event_id
   event_consumers:
   - name: ApplySearchExperimentPolicy
     kind: projector

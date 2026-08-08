@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
 // readiness_case: resolve-capability-grant-local
 package capability_grant_test
 
@@ -56,7 +56,8 @@ func TestCapabilityGrantSessionFacadeIsTheSoleTypedRuntimeEntryPoint(t *testing.
 		}),
 		func() time.Time { return now },
 	)
-	facade := grantapp.NewCapabilityGrantSessionFacade(resolver)
+	store := &recordingSessionStore{}
+	facade := grantapp.NewCapabilityGrantSessionFacade(resolver, store)
 	resolved, err := facade.Resolve(
 		context.Background(),
 		grantmodel.Requirement{
@@ -71,6 +72,9 @@ func TestCapabilityGrantSessionFacadeIsTheSoleTypedRuntimeEntryPoint(t *testing.
 	if resolved.BindingKind != grantmodel.BindingDomainOperation ||
 		resolved.DomainOperation == nil || !resolved.ResolvedAt.Equal(now) {
 		t.Fatalf("resolved=%+v", resolved)
+	}
+	if store.count() != 1 {
+		t.Fatalf("persisted sessions=%d want=1", store.count())
 	}
 }
 
@@ -271,6 +275,7 @@ func TestResolutionPrioritySelectsDeviceAndNeverFallsBackAfterDenial(t *testing.
 		AccountID:                    "account-1",
 		ConnectionID:                 "connection-1",
 		ConnectorID:                  "google_calendar",
+		ContractDigest:               digest("google-calendar-contract"),
 		GrantedCapabilities:          []string{"calendar.event.delete"},
 		GrantState:                   grantmodel.ConnectorGrantActive,
 		ProviderAccountSubjectDigest: digest("provider-account-subject"),

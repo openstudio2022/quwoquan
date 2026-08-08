@@ -5,6 +5,7 @@
   "required": [
     "schema",
     "executionId",
+    "campaignScale",
     "scaleClass",
     "approvedQuota",
     "queueBackend",
@@ -18,7 +19,8 @@
   "properties": {
     "schema": {"const": "quwoquan_data.execution_queue_backend_envelope"},
     "executionId": {"type": "string", "minLength": 1},
-    "scaleClass": {"enum": ["BELOW_M100", "M100_PLUS"]},
+    "campaignScale": {"type": "string", "pattern": "^M[1-9][0-9]{0,5}$"},
+    "scaleClass": {"enum": ["BELOW_M100", "M100_PLUS", "M10000_PLUS"]},
     "approvedQuota": {"type": "integer", "minimum": 1},
     "queueBackend": {"enum": ["local_file", "reliabletask"]},
     "queuePolicyDigest": {
@@ -97,7 +99,9 @@
     },
     {
       "if": {
-        "properties": {"scaleClass": {"const": "M100_PLUS"}},
+        "properties": {
+          "scaleClass": {"enum": ["M100_PLUS", "M10000_PLUS"]}
+        },
         "required": ["scaleClass"]
       },
       "then": {

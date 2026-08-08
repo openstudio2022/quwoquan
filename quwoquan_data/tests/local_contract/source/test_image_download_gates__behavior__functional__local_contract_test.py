@@ -207,7 +207,7 @@ def test_source_unit_preserves_professional_acquisition_identity():
     obj = Path(tempfile.mkdtemp(prefix="professional_img_obj_")) / "九寨沟"
     body = _jpeg(23, size=(1280, 960))
     content_sha256 = "sha256:" + hashlib.sha256(body).hexdigest()
-    execution_id = "20260805--travel-image-m100--china--scale-911"
+    execution_id = "20260805--travel-image-acquisition--china--pilot-911"
     build_execution_fixture(execution_id)
     manifest = write_source_unit(
         obj,

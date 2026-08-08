@@ -51,8 +51,38 @@ def test_content_source_registry_is_valid_and_covers_all_lanes():
     assert any(row["platform"] == "今日头条百科" and row["homepageAuthorityRole"] == "primary" for row in homepage)
     assert any(row["platform"] == "Pinterest" for row in image)
     assert any(row["platform"] == "图虫" for row in image)
+    professional = {row["sourceId"]: row for row in image}
+    assert professional["pinterest"]["researchAcquisitionPaths"] == [
+        "supported_api",
+        "manual_file",
+    ]
+    assert professional["tuchong"]["researchAcquisitionPaths"] == [
+        "public_direct",
+        "supported_api",
+        "manual_file",
+    ]
     assert any(row["sourceClass"] == "ugc_longform" for row in article)
     assert not any(row["sourceClass"] in {"official_site", "government_tourism"} for row in homepage)
+
+
+def test_registry_rejects_pinterest_public_direct_acquisition_drift():
+    data = load_content_source_registry()
+    pinterest = next(
+        row for row in data["common"]["image"] if row["sourceId"] == "pinterest"
+    )
+    pinterest["researchAcquisitionPaths"] = [
+        "public_direct",
+        "supported_api",
+        "manual_file",
+    ]
+
+    issues = verify_content_source_registry(data)
+
+    assert any(
+        "common.image.pinterest: professional research acquisition paths must equal"
+        in issue
+        for issue in issues
+    )
 
 
 def test_homepage_role_three_encyclopedia_closed_set_resolution():

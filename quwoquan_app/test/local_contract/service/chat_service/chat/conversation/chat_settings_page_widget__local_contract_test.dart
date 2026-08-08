@@ -8,7 +8,8 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/pu
 import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import 'package:quwoquan_app/runtime/di/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';

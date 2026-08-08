@@ -48,9 +48,18 @@ class ReliableTaskFleetReport:
     total: int
     succeeded: int
     outcomes: tuple[ReliableTaskFleetOutcome, ...]
+    execution_id: str = ""
+    stage: str = ""
+    job_set_envelope_digest: str = ""
+    job_set_digest: str = ""
+    actual_task_digest: str = ""
     passed: bool = True
     accepted_content_throughput_status: str = "MEASURED"
     finalized_object_count: int = 0
+    publish_task_count: int = 0
+    object_transaction_result_count: int = 0
+    research_accepted_count: int = 0
+    commercial_accepted_count: int = 0
     recovery_eligible_count: int = 0
     automatic_recovered_count: int = 0
     manual_recovered_count: int = 0
@@ -61,10 +70,37 @@ class ReliableTaskFleetReport:
     def from_document(cls, value: object) -> "ReliableTaskFleetReport":
         if not isinstance(value, Mapping):
             raise ValueError("ReliableTask fleet report must be an object")
+        execution_id = str(value.get("executionId") or "").strip()
+        stage = str(value.get("stage") or "").strip()
+        digests = tuple(
+            str(value.get(field) or "").strip()
+            for field in (
+                "jobSetEnvelopeDigest",
+                "jobSetDigest",
+                "actualTaskDigest",
+            )
+        )
+        if (
+            not execution_id
+            or stage not in {"author", "publish"}
+            or any(
+                len(digest) != 71
+                or not digest.startswith("sha256:")
+                or any(character not in "0123456789abcdef" for character in digest[7:])
+                for digest in digests
+            )
+        ):
+            raise ValueError("ReliableTask fleet report attempt identity is invalid")
         try:
             total = int(value.get("total"))
             succeeded = int(value.get("succeeded"))
             finalized_object_count = int(value.get("finalizedObjectCount") or 0)
+            publish_task_count = int(value.get("publishTaskCount"))
+            object_transaction_result_count = int(
+                value.get("objectTransactionResultCount")
+            )
+            research_accepted_count = int(value.get("researchAcceptedCount") or 0)
+            commercial_accepted_count = int(value.get("commercialAcceptedCount"))
             recovery_eligible_count = int(value.get("recoveryEligibleCount"))
             automatic_recovered_count = int(value.get("automaticRecoveredCount"))
             manual_recovered_count = int(value.get("manualRecoveredCount"))
@@ -87,8 +123,22 @@ class ReliableTaskFleetReport:
             raise ValueError(
                 "ReliableTask fleet report accepted throughput status is invalid"
             )
-        if finalized_object_count < 0:
-            raise ValueError("ReliableTask fleet report finalizedObjectCount is invalid")
+        canonical_accepted_count = (
+            research_accepted_count + commercial_accepted_count
+        )
+        if (
+            finalized_object_count < 0
+            or succeeded > total
+            or publish_task_count < 0
+            or publish_task_count > total
+            or object_transaction_result_count < 0
+            or object_transaction_result_count > publish_task_count
+            or object_transaction_result_count > succeeded
+            or research_accepted_count < 0
+            or commercial_accepted_count < 0
+            or canonical_accepted_count > object_transaction_result_count
+        ):
+            raise ValueError("ReliableTask fleet publish acceptance counts are invalid")
         if (
             recovery_eligible_count < 0
             or automatic_recovered_count < 0
@@ -132,9 +182,18 @@ class ReliableTaskFleetReport:
             total=total,
             succeeded=succeeded,
             outcomes=outcomes,
+            execution_id=execution_id,
+            stage=stage,
+            job_set_envelope_digest=digests[0],
+            job_set_digest=digests[1],
+            actual_task_digest=digests[2],
             passed=passed,
             accepted_content_throughput_status=accepted_status,
             finalized_object_count=finalized_object_count,
+            publish_task_count=publish_task_count,
+            object_transaction_result_count=object_transaction_result_count,
+            research_accepted_count=research_accepted_count,
+            commercial_accepted_count=commercial_accepted_count,
             recovery_eligible_count=recovery_eligible_count,
             automatic_recovered_count=automatic_recovered_count,
             manual_recovered_count=manual_recovered_count,

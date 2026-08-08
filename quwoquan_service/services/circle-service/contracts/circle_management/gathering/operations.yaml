@@ -39,7 +39,6 @@ api_routes:
     idempotency: required
   error_codes:
   - CIRCLE.USER.gathering_host_authority_invalid
-  - CIRCLE.USER.gathering_policy_denied
   - CIRCLE.USER.gathering_idempotency_conflict
   - CIRCLE.DEPENDENCY.gathering_target_unavailable
   - CIRCLE.SYSTEM.gathering_storage_failed
@@ -101,9 +100,6 @@ api_routes:
   - CIRCLE.USER.gathering_disclosure_invalid
   - CIRCLE.USER.gathering_schedule_invalid
   - CIRCLE.USER.gathering_control_required
-  - CIRCLE.USER.gathering_qualification_required
-  - CIRCLE.USER.gathering_commercial_authority_required
-  - CIRCLE.USER.gathering_policy_denied
   - CIRCLE.USER.gathering_version_conflict
   - CIRCLE.USER.gathering_idempotency_conflict
   - CIRCLE.DEPENDENCY.gathering_room_provision_pending
@@ -2087,13 +2083,27 @@ readiness_cases:
     device: runner
     provider: none
     digest_binding: candidate
-- case_id: create-gathering-api
-  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+- case_id: withdraw-gathering-application-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-014
+  producer: service
+  layer: local_contract
+  target:
+    kind: operation
+    id: WithdrawGatheringApplication
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/gathering_withdraw_application__local_contract_test.go
+  executions:
+  - env: alpha
+    platform: service
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: publish-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-001
   producer: service
   layer: api_integration
   target:
-    kind: object
-    id: circle.gathering
+    kind: operation
+    id: PublishGathering
   runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
   executions:
   - env: beta
@@ -2101,20 +2111,150 @@ readiness_cases:
     device: runner
     provider: mongodb
     digest_binding: candidate
-- case_id: join-gathering-api
+- case_id: apply-to-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ApplyToGathering}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: invite-to-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: InviteToGathering}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: accept-gathering-invitation-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: AcceptGatheringInvitation}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: declare-gathering-arrival-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: DeclareGatheringArrival}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: complete-gathering-self-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: CompleteGatheringSelf}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: update-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: UpdateGathering}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: withdraw-gathering-application-api
   spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
   producer: service
   layer: api_integration
-  target:
-    kind: object
-    id: circle.gathering
+  target: {kind: operation, id: WithdrawGatheringApplication}
   runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
   executions:
-  - env: beta
-    platform: service
-    device: runner
-    provider: mongodb
-    digest_binding: candidate
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: decline-gathering-invitation-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: DeclineGatheringInvitation}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: revoke-gathering-invitation-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-006
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RevokeGatheringInvitation}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: remove-gathering-participant-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: RemoveGatheringParticipant}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: reinstate-gathering-participant-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ReinstateGatheringParticipant}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: pause-gathering-admission-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: PauseGatheringAdmission}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: resume-gathering-admission-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-004
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ResumeGatheringAdmission}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: change-gathering-capacity-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-005
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ChangeGatheringCapacity}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: acknowledge-gathering-revision-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: AcknowledgeGatheringRevision}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: assign-gathering-co-host-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-008
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: AssignGatheringCoHost}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: watch-gathering-availability-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-012
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: WatchGatheringAvailability}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: unwatch-gathering-availability-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-013
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: UnwatchGatheringAvailability}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: get-gathering-local
   spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
   producer: service
@@ -2185,73 +2325,155 @@ readiness_cases:
     device: runner
     provider: none
     digest_binding: candidate
-- case_id: get-gathering-api
-  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
+- case_id: get-public-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-007
   producer: service
   layer: api_integration
-  target:
-    kind: object
-    id: circle.gathering
+  target: {kind: operation, id: GetPublicGathering}
   runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
   executions:
-  - env: beta
-    platform: service
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-gathering-applications-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-007
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListGatheringApplications}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: list-gathering-roster-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-007
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ListGatheringRoster}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: end-gathering-early-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: EndGatheringEarly}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: safety-terminate-gathering-api
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SafetyTerminateGathering}
+  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: gathering_create_gathering_draft_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-004
+  producer: app
+  layer: local_contract
+  target:
+    kind: operation
+    id: CreateGatheringDraft
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
+  executions:
+  - env: alpha
+    platform: app
     device: runner
-    provider: mongodb
+    provider: none
     digest_binding: candidate
-- case_id: approve-gathering-participant-api
-  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
-  producer: service
-  layer: api_integration
+- case_id: gathering_get_gathering_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-005
+  producer: app
+  layer: local_contract
   target:
-    kind: object
-    id: circle.gathering
-  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+    kind: operation
+    id: GetGathering
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
   executions:
-  - env: beta
-    platform: service
+  - env: alpha
+    platform: app
     device: runner
-    provider: mongodb
+    provider: none
     digest_binding: candidate
-- case_id: leave-gathering-api
-  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
-  producer: service
-  layer: api_integration
+- case_id: gathering_join_open_gathering_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-008
+  producer: app
+  layer: local_contract
   target:
-    kind: object
-    id: circle.gathering
-  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+    kind: operation
+    id: JoinOpenGathering
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
   executions:
-  - env: beta
-    platform: service
+  - env: alpha
+    platform: app
     device: runner
-    provider: mongodb
+    provider: none
     digest_binding: candidate
-- case_id: cancel-gathering-api
-  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
-  producer: service
-  layer: api_integration
+- case_id: gathering_review_gathering_application_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-009
+  producer: app
+  layer: local_contract
   target:
-    kind: object
-    id: circle.gathering
-  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+    kind: operation
+    id: ReviewGatheringApplication
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
   executions:
-  - env: beta
-    platform: service
+  - env: alpha
+    platform: app
     device: runner
-    provider: mongodb
+    provider: none
     digest_binding: candidate
-- case_id: complete-gathering-api
-  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
-  producer: service
-  layer: api_integration
+- case_id: gathering_cancel_gathering_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-011
+  producer: app
+  layer: local_contract
   target:
-    kind: object
-    id: circle.gathering
-  runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/gathering/gathering_http_mongo__api_integration_test.go
+    kind: operation
+    id: CancelGathering
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
   executions:
-  - env: beta
-    platform: service
+  - env: alpha
+    platform: app
     device: runner
-    provider: mongodb
+    provider: none
+    digest_binding: candidate
+- case_id: gathering_complete_gathering_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-012
+  producer: app
+  layer: local_contract
+  target:
+    kind: operation
+    id: CompleteGathering
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
+  executions:
+  - env: alpha
+    platform: app
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: gathering_pause_gathering_admission_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-004
+  producer: app
+  layer: local_contract
+  target:
+    kind: operation
+    id: PauseGatheringAdmission
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
+  executions:
+  - env: alpha
+    platform: app
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: gathering_resume_gathering_admission_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-004
+  producer: app
+  layer: local_contract
+  target:
+    kind: operation
+    id: ResumeGatheringAdmission
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_remote__local_contract_test.dart
+  executions:
+  - env: alpha
+    platform: app
+    device: runner
+    provider: none
     digest_binding: candidate

@@ -2,17 +2,19 @@
 // spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
-/// user_acceptance Patrol: 四核心 Remote readback 组合旅程。
+/// user_acceptance Patrol: release-bound 核心 Remote readback 组合旅程。
 ///
-/// 覆盖首页非空卡片、视频书首帧、消息收件箱（先 Remote provision）与我的会话一致。
+/// 覆盖 startup/feed/entity/article/image/video/Creator/avatar/login-user/chat/recovery。
 library;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 
 import '../../../support/runtime/patrol/patrol_core_readback_support.dart';
@@ -31,6 +33,15 @@ const _articleTitle = String.fromEnvironment('DATA_RELEASE_ARTICLE_TITLE');
 const _imageWorkId = String.fromEnvironment('DATA_RELEASE_IMAGE_WORK_ID');
 const _imageTitle = String.fromEnvironment('DATA_RELEASE_IMAGE_TITLE');
 const _creatorName = String.fromEnvironment('DATA_RELEASE_CREATOR_NAME');
+const _creatorUserHandle = String.fromEnvironment(
+  'DATA_RELEASE_CREATOR_USER_HANDLE',
+);
+const _creatorPersonaId = String.fromEnvironment(
+  'DATA_RELEASE_CREATOR_PERSONA_ID',
+);
+const _creatorAvatarAssetId = String.fromEnvironment(
+  'DATA_RELEASE_CREATOR_AVATAR_ASSET_ID',
+);
 const _tagLabel = String.fromEnvironment('DATA_RELEASE_TAG_LABEL');
 const _videoAttribution = String.fromEnvironment(
   'DATA_RELEASE_VIDEO_ATTRIBUTION',
@@ -85,15 +96,15 @@ void main() {
         ),
         _articleTitle,
       );
-      expect(
-        await _waitForAnyFinder($, <Finder>[
-          find.textContaining(_creatorName),
-          find.textContaining(_tagLabel),
-        ]),
-        isTrue,
-        reason:
-            'release-bound article must expose its creator or tag projection',
-      );
+      for (final projection in <String>[_creatorName, _tagLabel]) {
+        expect(
+          await _waitForAnyFinder($, <Finder>[find.textContaining(projection)]),
+          isTrue,
+          reason:
+              'release-bound article must expose creator and tag projections',
+        );
+      }
+      await _expectReleaseCreatorProfile($);
       await _expectReleaseSurface(
         $,
         AppRoutePaths.workBrowser(
@@ -139,6 +150,9 @@ void _expectReleaseInputs() {
     'DATA_RELEASE_IMAGE_WORK_ID': _imageWorkId,
     'DATA_RELEASE_IMAGE_TITLE': _imageTitle,
     'DATA_RELEASE_CREATOR_NAME': _creatorName,
+    'DATA_RELEASE_CREATOR_USER_HANDLE': _creatorUserHandle,
+    'DATA_RELEASE_CREATOR_PERSONA_ID': _creatorPersonaId,
+    'DATA_RELEASE_CREATOR_AVATAR_ASSET_ID': _creatorAvatarAssetId,
     'DATA_RELEASE_TAG_LABEL': _tagLabel,
     'DATA_RELEASE_VIDEO_ATTRIBUTION': _videoAttribution,
   };
@@ -181,6 +195,45 @@ Future<void> _expectHomeFeed(PatrolIntegrationTester $) async {
     visible,
     isTrue,
     reason: 'home feed must render at least one real card, not HTTP 200 alone',
+  );
+}
+
+Future<void> _expectReleaseCreatorProfile(PatrolIntegrationTester $) async {
+  await patrolGoTo(
+    $,
+    AppRoutePaths.userProfile(userHandle: _creatorUserHandle),
+  );
+  expect(
+    await _waitForAnyFinder($, <Finder>[find.textContaining(_creatorName)]),
+    isTrue,
+    reason: 'release $_releaseId creator profile must render its display name',
+  );
+
+  final profile = patrolMountedContainer()
+      .read(profileNotifierProvider(_creatorUserHandle))
+      .profile;
+  expect(
+    profile,
+    isNotNull,
+    reason: 'release $_releaseId creator profile must resolve through Remote',
+  );
+  expect(profile!.personaId, _creatorPersonaId);
+  expect(profile.userHandle, _creatorUserHandle);
+  expect(profile.displayName, _creatorName);
+
+  const avatarKey = ValueKey<String>('profile-header-avatar-image');
+  final avatarFinder = find.byKey(avatarKey);
+  expect(
+    await _waitForAnyFinder($, <Finder>[avatarFinder]),
+    isTrue,
+    reason:
+        'release avatar $_creatorAvatarAssetId must enter the trusted image pipeline',
+  );
+  expect(
+    $.tester.widget<AppAvatarImage>(avatarFinder).imageUrl.trim(),
+    isNotEmpty,
+    reason:
+        'release avatar $_creatorAvatarAssetId must resolve to a public media URL',
   );
 }
 
@@ -251,6 +304,16 @@ Future<void> _expectProfileMatchesSession(PatrolIntegrationTester $) async {
     isNotEmpty,
     reason: 'profile journey requires authenticated persona id',
   );
+  final profile = patrolMountedContainer()
+      .read(profileNotifierProvider(session.activePersonaId))
+      .profile;
+  expect(
+    profile,
+    isNotNull,
+    reason: 'my profile must resolve the authenticated Remote identity',
+  );
+  expect(profile!.personaId, session.activePersonaId);
+  expect(profile.ownerUserId, session.ownerId);
 }
 
 Future<void> _expectVideoPlayback(PatrolIntegrationTester $) async {

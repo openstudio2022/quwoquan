@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_download_cache.dart';
@@ -211,13 +212,22 @@ final realtimeConnectionManagerProvider =
     NotifierProvider<RealtimeConnectionNotifier, TransportState>(
       () => RealtimeConnectionNotifier(
         currentUserIdResolver: (ref) => ref.read(currentUserIdProvider).trim(),
-        operationGatewayResolver: (ref) =>
-            RealtimeProductionComposition.connectionOperations(
-              client: ref.read(generatedCloudOperationClientProvider),
-              invocationContext: (clientPageId) => locationInvocationContext(
-                ref,
-                surface: AppUiSurfaces.appShell,
-                clientPageId: clientPageId,
+        delegateFactory:
+            ({
+              required ref,
+              required onStateChanged,
+              required currentUserIdResolver,
+            }) => RealtimeProductionComposition.connectionDelegate(
+              ref: ref,
+              onStateChanged: onStateChanged,
+              currentUserIdResolver: currentUserIdResolver,
+              operations: RealtimeProductionComposition.connectionOperations(
+                client: ref.read(generatedCloudOperationClientProvider),
+                invocationContext: (clientPageId) => locationInvocationContext(
+                  ref,
+                  surface: AppUiSurfaces.appShell,
+                  clientPageId: clientPageId,
+                ),
               ),
             ),
       ),
@@ -405,11 +415,14 @@ final contactDiscoveryRepositoryProvider = Provider<ContactDiscoveryRepository>(
   (ref) {
     return UserProductionComposition.contactDiscoveryRepository(
       client: ref.watch(generatedCloudOperationClientProvider),
-      invocationContext: (clientPageId) => locationInvocationContext(
-        ref,
-        surface: AppUiSurfaces.addContactPhone,
-        clientPageId: clientPageId,
-      ),
+      invocationContext: (clientPageId, {String? idempotencyKey}) =>
+          locationInvocationContext(
+            ref,
+            surface: AppUiSurfaces.addContactPhone,
+            clientPageId: clientPageId,
+            idempotencyKey: idempotencyKey,
+          ),
+      idempotencyKeyFactory: () => const Uuid().v4(),
     );
   },
 );
@@ -533,13 +546,26 @@ final locationPlaceReadQueryProvider = Provider<LocationPlaceReadQuery>((ref) {
   );
 });
 
-/// RelationshipCapability Repository（关系能力位投影，用户主页五态按钮矩阵 + RTC 门禁）
-final relationshipCapabilityRepositoryProvider =
-    Provider<RelationshipCapabilityRepository>((ref) {
+/// RelationshipCapability Repository（关系能力位投影，按真实物理 surface 绑定）。
+final relationshipCapabilityRepositoryForSurfaceProvider =
+    Provider.family<RelationshipCapabilityRepository, AppUiSurface>((
+      ref,
+      surface,
+    ) {
       return UserProductionComposition.relationshipCapabilityRepository(
         query: ref
-            .watch(personaRelationshipRemoteProvider(AppUiSurfaces.userProfile))
+            .watch(personaRelationshipRemoteProvider(surface))
             .capabilityQuery,
+      );
+    });
+
+/// 用户主页五态按钮矩阵 + RTC 门禁的既有默认绑定。
+final relationshipCapabilityRepositoryProvider =
+    Provider<RelationshipCapabilityRepository>((ref) {
+      return ref.watch(
+        relationshipCapabilityRepositoryForSurfaceProvider(
+          AppUiSurfaces.userProfile,
+        ),
       );
     });
 

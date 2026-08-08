@@ -1,6 +1,7 @@
 events:
 - name: ConversationReadWatermarkAdvanced
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationReadWatermarkAdvanced
   payload_entity: ConversationUserState
   payload_fields:
   - conversationId
@@ -13,6 +14,7 @@ events:
   - updatedAt
 - name: ConversationUserSettingsChanged
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationUserSettingsChanged
   payload_entity: ConversationUserSettingsChangedEventPayload
   payload_fields:
   - conversationId

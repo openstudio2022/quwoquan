@@ -121,7 +121,8 @@
 
 - GIVEN 当前进程捕获启动致命异常，或平台强证据确认同一制品身份上次在安全 Shell 前崩溃。
 - WHEN 恢复页检查版本。
-- THEN Android 在创建 Flutter Engine 和注册插件前由原生 gate 进入恢复页；无确认致命异常时 gate 只进入 Flutter 主 Activity且不显示恢复页。
+- THEN Android 在创建 Flutter Engine 和注册插件前由原生 gate 进入恢复页。
+- THEN 无确认致命异常时 gate 只进入 Flutter 主 Activity 且不显示恢复页。
 - AND iOS 在调用 Flutter AppDelegate 启动生命周期和创建 implicit Flutter Engine 前进入原生恢复 root；恢复分支不初始化 Flutter 或商业插件。
 - AND 缺失 runtime package 的 Android/iOS 构建在安装前失败；恢复页、safeRecovery 或 Flutter 首帧均不得作为构建入口可用性的成功证据。
 - AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchMode` 均与本次入口绑定为 `canonical_launcher` 或 `direct_flutter_run`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。

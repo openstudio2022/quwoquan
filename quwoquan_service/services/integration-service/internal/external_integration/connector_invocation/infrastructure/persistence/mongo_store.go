@@ -172,7 +172,9 @@ func (store *MongoStore) Continue(ctx context.Context, input model.ContinueInput
 		if err != nil {
 			return model.MutationResult{}, err
 		}
-		if current.Revision != input.ExpectedRevision || current.Status != model.StatusAwaitingConfirmation {
+		if current.Revision != input.ExpectedRevision ||
+			(current.Status != model.StatusAwaitingConfirmation &&
+				current.Status != model.StatusAccepted) {
 			return model.MutationResult{}, model.ErrRevisionConflict
 		}
 		next := current
@@ -186,7 +188,11 @@ func (store *MongoStore) Continue(ctx context.Context, input model.ContinueInput
 		next.UpdatedAt = input.OccurredAt
 		updated, err := store.invocations.ReplaceOne(txCtx, bson.M{
 			"accountId": input.AccountID, "invocationId": input.InvocationID,
-			"revision": input.ExpectedRevision, "status": model.StatusAwaitingConfirmation,
+			"revision": input.ExpectedRevision,
+			"status": bson.M{"$in": bson.A{
+				model.StatusAwaitingConfirmation,
+				model.StatusAccepted,
+			}},
 		}, next)
 		if err != nil {
 			return model.MutationResult{}, err
@@ -273,6 +279,9 @@ func (store *MongoStore) Complete(ctx context.Context, input model.CompleteInput
 			"normalizedFailureCode": normalized.NormalizedFailureCode,
 			"recoveryAction":        normalized.RecoveryAction,
 			"completedAt":           normalized.OccurredAt, "updatedAt": normalized.OccurredAt,
+		}
+		if normalized.ContinuationRef != "" {
+			set["continuationRef"] = normalized.ContinuationRef
 		}
 		update := bson.M{
 			"$set":   set,

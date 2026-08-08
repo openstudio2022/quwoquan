@@ -9,7 +9,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
@@ -463,7 +463,7 @@ class IntersectionTargetNavigator {
         IntersectionActionDispatchStatus.missingTarget,
       );
     }
-    StartGatheringNavigationBinding? rawBinding;
+    GatheringCreateNavigationBinding? rawBinding;
     try {
       rawBinding = ProviderScope.containerOf(
         context,
@@ -481,13 +481,6 @@ class IntersectionTargetNavigator {
         IntersectionActionDispatchStatus.unavailable,
         unavailableReason: IntersectionActionUnavailableReason
             .startGatheringNavigationBindingMissing,
-      );
-    }
-    if (rawBinding is! GatheringCreateNavigationBinding) {
-      return const IntersectionActionDispatchResult(
-        IntersectionActionDispatchStatus.unavailable,
-        unavailableReason: IntersectionActionUnavailableReason
-            .startGatheringTypedRequestUnsupported,
       );
     }
     final attributedSourceRef = attribution?.sourceRef.trim().isNotEmpty == true

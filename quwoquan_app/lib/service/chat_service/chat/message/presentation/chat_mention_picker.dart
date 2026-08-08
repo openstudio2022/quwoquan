@@ -3,7 +3,6 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/runtime/transport/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/design_system/chat/chat_mention_text_editing_controller.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -99,7 +98,7 @@ class _ChatMentionPickerState extends State<ChatMentionPicker> {
                   member.memberType != 'assistant' &&
                   member.userId != 'assistant',
             )
-            .take(CloudApiDefaults.chatMemberSearchLimit)
+            .take(ChatListConversationMembersQuery.maximumLimit)
             .toList(growable: false);
         _isLoading = false;
       });

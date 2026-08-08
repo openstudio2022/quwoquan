@@ -57,9 +57,12 @@
     },
     "members": {
       "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Za-z0-9]*$"
+      },
       "additionalProperties": {
-        "type": "object",
-        "additionalProperties": true
+        "$ref": "#/$defs/member"
       }
     },
     "local_identity_reasons": {
@@ -395,6 +398,71 @@
     {
       "if": { "properties": { "kind": { "const": "external_reference" } } },
       "then": { "required": ["external_authority"] }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "aggregate_root" } },
+        "required": ["kind"]
+      },
+      "else": {
+        "not": { "required": ["members"] }
+      }
     }
-  ]
+  ],
+  "$defs": {
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "cardinality", "max_cardinality", "ownership", "description"],
+      "properties": {
+        "kind": { "enum": ["owned_entity", "value_object"] },
+        "identity": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" }
+        },
+        "cardinality": { "enum": ["one", "zero_or_one", "many"] },
+        "max_cardinality": { "type": "integer", "minimum": 1 },
+        "ownership": { "const": "aggregate" },
+        "write_access": { "const": "aggregate_facade_only" },
+        "append_only": { "const": true },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "cardinality": { "enum": ["one", "zero_or_one"] } },
+            "required": ["cardinality"]
+          },
+          "then": { "properties": { "max_cardinality": { "const": 1 } } }
+        },
+        {
+          "if": {
+            "properties": { "cardinality": { "const": "many" } },
+            "required": ["cardinality"]
+          },
+          "then": { "properties": { "max_cardinality": { "minimum": 2 } } }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "owned_entity" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["identity", "write_access"],
+            "not": { "required": ["append_only"] }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["identity"] },
+                { "required": ["write_access"] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
 }

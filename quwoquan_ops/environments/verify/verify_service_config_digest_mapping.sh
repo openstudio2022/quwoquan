@@ -7,9 +7,11 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
 checked=0
+schema_count=0
 for schema in quwoquan_service/services/*/config/schema.yaml \
   quwoquan_service/control-plane/platform-ops/config/schema.yaml; do
   [[ -f "$schema" ]] || continue
+  schema_count=$((schema_count + 1))
   owner="$(dirname "$(dirname "$schema")")"
   service="$(basename "$owner")"
   if [[ "$service" == "platform-ops" ]]; then
@@ -36,5 +38,10 @@ PY
   done
 done
 
-[[ "$checked" -eq 60 ]] || { echo "FAIL: rendered config count=$checked, want 60" >&2; exit 1; }
-echo "OK: 60 autonomous environment configs have digest-derived CONFIG_VERSION"
+[[ "$schema_count" -gt 0 ]] || { echo "FAIL: no runtime config schema found" >&2; exit 1; }
+expected=$((schema_count * 4))
+[[ "$checked" -eq "$expected" ]] || {
+  echo "FAIL: rendered config count=$checked, want $expected from $schema_count owners" >&2
+  exit 1
+}
+echo "OK: $checked autonomous environment configs have digest-derived CONFIG_VERSION"

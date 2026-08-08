@@ -67,15 +67,6 @@ func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
 				SetName("uq_assistant_skill_package_release_identity").
 				SetUnique(true),
 		},
-		{
-			Keys: bson.D{
-				{Key: "packageId", Value: 1},
-				{Key: "status", Value: 1},
-				{Key: "stagedAt", Value: -1},
-			},
-			Options: options.Index().
-				SetName("idx_assistant_skill_package_release_status"),
-		},
 	}); err != nil {
 		return fmt.Errorf("ensure skill package release indexes: %w", err)
 	}

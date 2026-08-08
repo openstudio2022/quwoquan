@@ -452,8 +452,28 @@ func TestDurableWorkerPersistsPerRequirementMissingAndFailedVerdict(t *testing.T
 	if err != nil {
 		t.Fatalf("load run: %v", err)
 	}
+	root := verifierRepairRootTask(t, stored)
+	if stored.State != generated.AssistantRunStateExecuting ||
+		root.Status != generated.AssistantTaskStatusRunning ||
+		root.Attempt != 2 ||
+		!strings.HasPrefix(root.BlockReason, "verification_rejected:") {
+		t.Fatalf("first verifier rejection did not enter bounded repair: run=%#v root=%#v", stored, root)
+	}
+	firstVerdict := verifierItemForAttempt(t, stored, 1)
+	if worked, processErr := worker.ProcessNext(context.Background()); processErr != nil || !worked {
+		t.Fatalf("process repair run: worked=%t err=%v", worked, processErr)
+	}
+	stored, err = repository.Load(context.Background(), run.RunID)
+	if err != nil {
+		t.Fatalf("load repaired run: %v", err)
+	}
+	secondVerdict := verifierItemForAttempt(t, stored, 2)
 	if stored.State != generated.AssistantRunStateFailed {
 		t.Fatalf("unmet Definition of Done completed: %#v", stored)
+	}
+	if stored.TerminalReason != "verification_no_progress" ||
+		firstVerdict.Payload["failureFingerprint"] != secondVerdict.Payload["failureFingerprint"] {
+		t.Fatalf("same verifier gap did not stop after bounded repair: run=%#v", stored)
 	}
 	var verdict map[string]any
 	for _, item := range stored.Items {
@@ -489,7 +509,7 @@ func TestDurableWorkerPersistsPerRequirementMissingAndFailedVerdict(t *testing.T
 	}
 }
 
-func TestDurableWorkerRunsCompletionBlockAndStopHooks(t *testing.T) {
+func TestDurableWorkerRunsCompletionAndBlockHooksWithoutSynchronousStop(t *testing.T) {
 	counts := map[runruntime.HookPhase]int{}
 	registry, err := runruntime.NewHookRegistry(
 		runruntime.RegisteredHook{Hook: hookStub{
@@ -497,7 +517,6 @@ func TestDurableWorkerRunsCompletionBlockAndStopHooks(t *testing.T) {
 			phases: []runruntime.HookPhase{
 				runruntime.HookBeforeComplete,
 				runruntime.HookOnBlocked,
-				runruntime.HookOnStop,
 			},
 			invoke: func(input runruntime.HookInput) runruntime.HookResult {
 				counts[input.Phase]++
@@ -551,7 +570,7 @@ func TestDurableWorkerRunsCompletionBlockAndStopHooks(t *testing.T) {
 	if stored.State != generated.AssistantRunStateFailed ||
 		counts[runruntime.HookBeforeComplete] != 1 ||
 		counts[runruntime.HookOnBlocked] != 1 ||
-		counts[runruntime.HookOnStop] != 1 {
+		counts[runruntime.HookOnStop] != 0 {
 		t.Fatalf("hook lifecycle counts=%#v run=%#v", counts, stored)
 	}
 }

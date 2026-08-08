@@ -1,6 +1,7 @@
 events:
 - name: CircleGroupMembershipRequested
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupMembershipRequested
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -14,6 +15,7 @@ events:
   - createdAt
 - name: CircleGroupMembershipActivated
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupMembershipActivated
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -27,6 +29,7 @@ events:
   - joinedAt
 - name: CircleGroupMembershipRejected
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupMembershipRejected
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -40,6 +43,7 @@ events:
   - decidedAt
 - name: CircleGroupMembershipLeft
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupMembershipLeft
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -52,6 +56,7 @@ events:
   - leftAt
 - name: CircleGroupMembershipRemoved
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupMembershipRemoved
   payload_entity: CircleGroupMembership
   payload_fields:
   - id
@@ -64,6 +69,7 @@ events:
   - leftAt
 - name: CircleGroupMembershipRoleChanged
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupMembershipRoleChanged
   payload_entity: CircleGroupMembership
   payload_fields:
   - id

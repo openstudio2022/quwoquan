@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
@@ -6,8 +5,14 @@ import 'package:quwoquan_app/runtime/di/circle_dependencies.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/generated/circle/circle_request_page_ids.g.dart';
+import 'package:quwoquan_app/runtime/transport/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_group/application/public/circle_group_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_group_membership/application/public/circle_group_membership_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/application/public/circle_file_ports.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'production_cloud_operation_telemetry_evidence.dart';
@@ -29,9 +34,17 @@ final class CircleApiContractHarness {
     required this.telemetry,
     required this._tokenProvider,
     required this.accountSessions,
+    required this._accountLifecycle,
+    required this.behaviorFacts,
     required this.lifecycle,
     required this.query,
     required this.membership,
+    required this.fileWriter,
+    required this.fileReader,
+    required this.groupCommands,
+    required this.groupQueries,
+    required this.groupMembershipCommands,
+    required this.groupMembershipQueries,
   });
 
   static Future<CircleApiContractHarness> create() async {
@@ -80,6 +93,19 @@ final class CircleApiContractHarness {
           ),
         ),
       ),
+      accountLifecycle: RemoteAccountLifecycleCommandWriter(
+        client: client,
+        invocationContext: (clientPageId) =>
+            harness._accountInvocationContext(clientPageId),
+      ),
+      behaviorFacts:
+          CircleProductionComposition.generatedAdapter<
+            CircleBehaviorFactWriter
+          >(
+            CircleProductionAdapter.behaviorFact,
+            client: client,
+            invocationContext: invocationContext,
+          ),
       lifecycle: CircleProductionComposition.generatedAdapter(
         CircleProductionAdapter.lifecycle,
         client: client,
@@ -95,6 +121,46 @@ final class CircleApiContractHarness {
         client: client,
         invocationContext: invocationContext,
       ),
+      fileWriter:
+          CircleProductionComposition.generatedAdapter<CircleFileWriter>(
+            CircleProductionAdapter.file,
+            client: client,
+            invocationContext: invocationContext,
+          ),
+      fileReader:
+          CircleProductionComposition.generatedAdapter<CircleFileReader>(
+            CircleProductionAdapter.file,
+            client: client,
+            invocationContext: invocationContext,
+          ),
+      groupCommands:
+          CircleProductionComposition.generatedAdapter<CircleGroupCommands>(
+            CircleProductionAdapter.group,
+            client: client,
+            invocationContext: invocationContext,
+          ),
+      groupQueries:
+          CircleProductionComposition.generatedAdapter<CircleGroupQueries>(
+            CircleProductionAdapter.group,
+            client: client,
+            invocationContext: invocationContext,
+          ),
+      groupMembershipCommands:
+          CircleProductionComposition.generatedAdapter<
+            CircleGroupMembershipCommands
+          >(
+            CircleProductionAdapter.groupMembership,
+            client: client,
+            invocationContext: invocationContext,
+          ),
+      groupMembershipQueries:
+          CircleProductionComposition.generatedAdapter<
+            CircleGroupMembershipQueries
+          >(
+            CircleProductionAdapter.groupMembership,
+            client: client,
+            invocationContext: invocationContext,
+          ),
     );
     return harness;
   }
@@ -103,10 +169,19 @@ final class CircleApiContractHarness {
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final _MutableAccessTokenProvider _tokenProvider;
   final RemoteAccountSessionCommandWriter accountSessions;
+  final RemoteAccountLifecycleCommandWriter _accountLifecycle;
+  final CircleBehaviorFactWriter behaviorFacts;
   final CircleLifecycleCommandWriter lifecycle;
   final CircleQueryReader query;
   final CircleMembershipCommands membership;
+  final CircleFileWriter fileWriter;
+  final CircleFileReader fileReader;
+  final CircleGroupCommands groupCommands;
+  final CircleGroupQueries groupQueries;
+  final CircleGroupMembershipCommands groupMembershipCommands;
+  final CircleGroupMembershipQueries groupMembershipQueries;
 
+  AuthSessionGrant? _session;
   String? _ownerId;
   String? _personaId;
   String? _activeIdempotencyKey;
@@ -124,6 +199,7 @@ final class CircleApiContractHarness {
         appVersion: 'api-integration',
       ),
     );
+    _session = session;
     _tokenProvider.accessToken = session.accessToken;
     _ownerId = session.ownerId;
     _personaId = session.activePersona?.personaId;
@@ -151,6 +227,14 @@ final class CircleApiContractHarness {
 
   Future<void> close() async {
     try {
+      final session = _session;
+      if (session != null) {
+        await _accountLifecycle.closeAccount(
+          CloseAccountCommand(
+            clientRequestId: 'circle-api-cleanup-${session.ownerId}',
+          ),
+        );
+      }
       await telemetry.waitForEvents(minimumCount: 1);
     } finally {
       _httpClient.close();
@@ -165,11 +249,31 @@ final class CircleApiContractHarness {
     final surface = switch (clientPageId) {
       CircleRequestPageIds.createCircle ||
       CircleRequestPageIds.listCircles => AppUiSurfaces.circlesList,
+      CircleRequestPageIds.reportCircleBehavior ||
       CircleRequestPageIds.updateCircle ||
       CircleRequestPageIds.archiveCircle ||
       CircleRequestPageIds.getCircle ||
       CircleRequestPageIds.joinCircle ||
-      CircleRequestPageIds.leaveCircle => AppUiSurfaces.circleDetail,
+      CircleRequestPageIds.leaveCircle ||
+      CircleRequestPageIds.createCircleGroup ||
+      CircleRequestPageIds.updateCircleGroup ||
+      CircleRequestPageIds.archiveCircleGroup ||
+      CircleRequestPageIds.getCircleGroup ||
+      CircleRequestPageIds.listCircleGroups ||
+      CircleRequestPageIds.searchCircleGroups ||
+      CircleRequestPageIds.applyJoinCircleGroup ||
+      CircleRequestPageIds.leaveCircleGroup ||
+      CircleRequestPageIds.approveCircleGroupMember ||
+      CircleRequestPageIds.rejectCircleGroupMember ||
+      CircleRequestPageIds.removeCircleGroupMember ||
+      CircleRequestPageIds.updateCircleGroupMemberRole ||
+      CircleRequestPageIds.getMyCircleGroupMembership ||
+      CircleRequestPageIds.listCircleGroupMemberships ||
+      CircleRequestPageIds.listCircleFiles ||
+      CircleRequestPageIds.getCircleFile ||
+      CircleRequestPageIds.createCircleFile ||
+      CircleRequestPageIds.updateCircleFile ||
+      CircleRequestPageIds.deleteCircleFile => AppUiSurfaces.circleDetail,
       _ => throw StateError(
         'Unsupported Circle API contract clientPageId: $clientPageId',
       ),
@@ -183,6 +287,27 @@ final class CircleApiContractHarness {
       routeId: surface.routeId,
       clientPageId: clientPageId,
       idempotencyKey: idempotencyKey,
+      actor: CloudOperationActorContext(
+        accountId: _ownerId,
+        personaId: _personaId,
+        deviceActorId: circleApiContractDeviceId,
+      ),
+    );
+  }
+
+  CloudOperationInvocationContext _accountInvocationContext(
+    String clientPageId,
+  ) {
+    if (clientPageId != UserRequestPageIds.closeAccount) {
+      throw StateError(
+        'Unsupported Circle account cleanup clientPageId: $clientPageId',
+      );
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.settingsAccountSecurity.id,
+      routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
+      clientPageId: clientPageId,
+      idempotencyKey: 'circle-api-account-cleanup-$_ownerId',
       actor: CloudOperationActorContext(
         accountId: _ownerId,
         personaId: _personaId,

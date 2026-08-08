@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
@@ -26,7 +27,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/p
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_presentation_renderer.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/regenerate_options_popup.dart';
-import 'package:quwoquan_app/runtime/di/presentation/voice_message_bubble.dart';
+import 'package:quwoquan_app/runtime/di/chat_presentation_slots.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'assistant_message_followup_card.dart';
@@ -88,7 +89,7 @@ const double assistantBubbleMaxWidth = 280.0;
 const double assistantBubbleWidthFactor = 0.84;
 const double assistantBubbleImageSize = 200.0;
 
-class AssistantMessageBubble extends StatelessWidget {
+class AssistantMessageBubble extends ConsumerWidget {
   const AssistantMessageBubble({
     super.key,
     required this.transcriptRow,
@@ -172,7 +173,7 @@ class AssistantMessageBubble extends StatelessWidget {
       PersistedTimelineTurnCodec.encode(transcriptRow);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final row = transcriptRow;
     final type = switch (row) {
       UserTranscriptTimelineRow r => r.type,
@@ -376,7 +377,7 @@ class AssistantMessageBubble extends StatelessWidget {
       );
     } else if (type == 'audio') {
       final envelope = transcriptEnvelope!;
-      contentWidget = VoiceMessageBubble(
+      contentWidget = ref.watch(voiceMessageBubbleBuilderProvider)(
         messageId: envelope.audioMessageId,
         mediaUrl: envelope.audioMediaUrl,
         durationMs: envelope.audioDurationMs,

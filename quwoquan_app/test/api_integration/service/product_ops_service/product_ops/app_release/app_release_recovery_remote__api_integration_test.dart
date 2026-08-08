@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/spec.md#uat-003
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+// readiness_case: app_release_get_app_recovery_version_app_api
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/service/product_ops_service/product_ops/app_release/adapters/remote_app_release_recovery_reader.dart';
@@ -29,7 +30,7 @@ const _effectiveLaunchManifestDigest = String.fromEnvironment(
   'API_CONTRACT_EFFECTIVE_LAUNCH_MANIFEST_DIGEST',
 );
 
-late http.Client _httpClient;
+http.Client? _httpClient;
 late RecoveryRuntimeBinding _binding;
 
 void main() {
@@ -40,8 +41,9 @@ void main() {
       runtimeConfigDigest: _runtimeConfigDigest,
       effectiveLaunchManifestDigest: _effectiveLaunchManifestDigest,
     );
-    _httpClient = http.Client();
-    final probe = await _httpClient
+    final httpClient = http.Client();
+    _httpClient = httpClient;
+    final probe = await httpClient
         .get(_binding.recoveryOrigin.resolve('/healthz'))
         .timeout(const Duration(seconds: 5));
     if (probe.statusCode >= 400) {
@@ -52,7 +54,7 @@ void main() {
     }
   });
 
-  tearDownAll(() => _httpClient.close());
+  tearDownAll(() => _httpClient?.close());
 
   test(
     'candidate-bound public recovery facts round-trip for Android and iOS',
@@ -96,7 +98,7 @@ void main() {
 
 GeneratedCloudOperationClient _generatedClient() {
   return buildGeneratedCloudOperationClient(
-    httpClient: CloudHttpClient(client: _httpClient),
+    httpClient: CloudHttpClient(client: _httpClient!),
     clientContextProvider: const _RecoveryApiClientContext(),
     telemetrySink: const AppCloudOperationTelemetrySink(
       clientContextProvider: _RecoveryApiClientContext(),

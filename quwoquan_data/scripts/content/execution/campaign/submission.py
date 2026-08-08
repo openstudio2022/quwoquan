@@ -22,6 +22,7 @@ from content.execution.campaign.external_inputs import (
     external_inputs_digest,
     verify_external_input_refs,
 )
+from content.execution.campaign.scale import execution_campaign_scale
 from content.execution.identity import parse_execution_id, validate_execution_id
 from content.execution.model_contract import (
     CURSOR_AUTO_SEMANTIC_SELECTION_ID,
@@ -174,6 +175,13 @@ def write_submission(
     identity = parse_execution_id(execution_id)
     if identity.vertical != root_identity.vertical:
         raise ValueError("campaign lanes must use the same vertical")
+    scale = execution_campaign_scale(identity.execution_id, quota=request.quota)
+    root_scale = execution_campaign_scale(
+        root_identity.execution_id,
+        quota=request.quota,
+    )
+    if scale != root_scale:
+        raise ValueError("campaign lanes must use the same immutable scale intent")
     if retry_of:
         predecessor = parse_execution_id(retry_of)
         if predecessor.execution_id == identity.execution_id:
@@ -220,6 +228,7 @@ def write_submission(
             label=f"campaign envelope:{identity.execution_id}",
         )
         expected_envelope = {
+            "scale": scale,
             "rootExecutionId": root_identity.execution_id,
             "executionId": identity.execution_id,
             "operation": _OPERATIONS[identity.content_type.value],
@@ -229,6 +238,20 @@ def write_submission(
             "selector": request.selector.value,
             "quota": request.quota,
             "count": request.count,
+            "requiredWorkers": request.required_workers,
+            "partitionCount": request.partition_count,
+            "capacityPlanDigest": request.capacity_plan_digest,
+            "scaleSourcePool": (
+                dict(request.scale_source_pool)
+                if request.scale_source_pool is not None
+                else None
+            ),
+            "sourcePoolEvidenceRootRef": request.source_pool_evidence_root_ref,
+            "sourcePoolSelection": (
+                dict(request.source_pool_selection)
+                if request.source_pool_selection is not None
+                else None
+            ),
             "topic": request.topic,
             "targetNames": list(request.target_names),
             "sourceProviders": list(request.source_providers),
@@ -378,6 +401,7 @@ def write_submission(
         )
     stable: dict[str, Any] = {
         "schema": SUBMISSION_SCHEMA,
+        "scale": scale,
         "rootExecutionId": root_identity.execution_id,
         "executionId": identity.execution_id,
         "operation": _OPERATIONS[identity.content_type.value],
@@ -387,6 +411,9 @@ def write_submission(
         "selector": request.selector.value,
         "quota": request.quota,
         "count": request.count,
+        "requiredWorkers": request.required_workers,
+        "partitionCount": request.partition_count,
+        "capacityPlanDigest": request.capacity_plan_digest,
         "topic": request.topic,
         "targetNames": list(request.target_names),
         "sourceProviders": list(request.source_providers),
@@ -400,6 +427,10 @@ def write_submission(
         "externalInputRefs": external_refs,
         "externalInputsDigest": external_inputs_digest(external_refs),
     }
+    if request.scale_source_pool is not None:
+        stable["scaleSourcePool"] = dict(request.scale_source_pool)
+        stable["sourcePoolEvidenceRootRef"] = request.source_pool_evidence_root_ref
+        stable["sourcePoolSelection"] = dict(request.source_pool_selection or {})
     if semantic_preflight_binding is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight_binding)
     if (

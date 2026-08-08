@@ -19,12 +19,6 @@ class MongoExperimentPolicyStore:
             raise ValueError("recommendation Experiment policy store requires Mongo")
         self._collection = database[COLLECTION]
 
-    def ensure_indexes(self) -> None:
-        self._collection.create_index(
-            [("revision", -1), ("updatedAt", -1)],
-            name="idx_recommendation_experiment_policy_revision",
-        )
-
     def load(self, experiment_id: str) -> ExperimentPolicy | None:
         document = self._collection.find_one({"_id": experiment_id.strip()})
         return None if document is None else _from_document(document)

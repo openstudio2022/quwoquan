@@ -4,6 +4,7 @@ events:
 
     非 canonical 结构字段迁移注记：recommend_impact="engagement_signal"。'
   delivery_semantics: transactional_outbox
+  wire_event_type: CommentCreated
   payload_entity: CommentCreatedPayload
   payload_shape: exact
   payload_fields:
@@ -22,6 +23,7 @@ events:
 
     非 canonical 结构字段迁移注记：recommend_impact="engagement_signal"。'
   delivery_semantics: transactional_outbox
+  wire_event_type: CommentDeleted
   payload_entity: CommentDeletedPayload
   payload_shape: exact
   payload_fields:
@@ -34,6 +36,7 @@ events:
 - name: CommentPinChanged
   description: Post 作者变更一级 Comment 置顶状态的版本化事实；通知传输由 lifecycle stream 承载。
   delivery_semantics: transactional_outbox
+  wire_event_type: CommentPinChanged
   payload_entity: CommentPinChangedPayload
   payload_shape: exact
   payload_fields:
@@ -59,6 +62,7 @@ events:
 - name: CommentModerated
   description: operator 对 Comment 执行 hide 或 restore 的治理审计事实。
   delivery_semantics: transactional_outbox
+  wire_event_type: CommentModerated
   payload_entity: CommentModeratedPayload
   payload_shape: exact
   payload_fields:
@@ -73,6 +77,7 @@ events:
 - name: CommentsTombstoned
   description: PostDeleted 驱动的 post-scoped 批量级联事实；事件身份和版本继承源 PostDeleted，不能伪装成单条 Comment 聚合版本。
   delivery_semantics: transactional_outbox
+  wire_event_type: CommentsTombstoned
   payload_entity: CommentsTombstonedPayload
   payload_shape: exact
   payload_fields:

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
@@ -45,7 +46,7 @@ class MediaCreationBottomButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: decoration,
           child: isLoading
-              ? CupertinoActivityIndicator(color: foreground)
+              ? AppRequestFeedback.inline(indicatorColor: foreground)
               : Text(
                   label,
                   maxLines: 1,

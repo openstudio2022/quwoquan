@@ -1,6 +1,6 @@
-name: AssistantDeliveryPolicyView
-source:
-  object: UserSettings
+read_model: AssistantDeliveryPolicyView
+source_entities:
+- UserSettings
 description: assistant-service 主动投递前读取的最小策略切片；不暴露其他账号设置。
 fields:
 - name: userId

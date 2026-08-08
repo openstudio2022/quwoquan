@@ -130,7 +130,10 @@ func (s *MongoStore) FindMediaImageReprocessRunReceipt(
 	}
 	if receipt.CommandName != strings.TrimSpace(commandName) ||
 		receipt.CommandDigest != strings.TrimSpace(commandDigest) {
-		return reprocessports.CommitResult{}, false, fmt.Errorf("media image reprocess idempotency key conflicts with prior command")
+		return reprocessports.CommitResult{}, false, fmt.Errorf(
+			"%w: idempotency key conflicts with prior command",
+			reprocessmodel.ErrRunVersionConflict,
+		)
 	}
 	run, err := mediaImageReprocessRunFromDocument(receipt.Result)
 	if err != nil {
@@ -182,7 +185,10 @@ func (s *MongoStore) CommitMediaImageReprocessRun(
 				return nil, err
 			}
 			if replaceResult.MatchedCount != 1 {
-				return nil, fmt.Errorf("media image reprocess run version changed before commit")
+				return nil, fmt.Errorf(
+					"%w: version changed before commit",
+					reprocessmodel.ErrRunVersionConflict,
+				)
 			}
 		}
 		receiptExpiry := commit.ReceiptExpiresAt.UTC()

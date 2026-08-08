@@ -37,6 +37,11 @@ def test_source_digest__execution_release__contract__local_contract() -> None:
         "intersection_reason.yaml"
         in document["inputs"]
     )
+    assert (
+        "quwoquan_service/services/content-service/contracts/content/post/"
+        "ui_config.yaml"
+        in document["inputs"]
+    )
     assert not any(input_path.startswith("quwoquan_ops/") for input_path in document["inputs"])
 
 

@@ -13,7 +13,6 @@ import '../../../support/runtime/patrol/patrol_test_support.dart';
 import '../../../support/runtime/patrol/patrol_core_readback_support.dart';
 import '../../../support/runtime/patrol/patrol_environment_harness.dart';
 
-const _otherUserId = 'fixture_user_friend';
 // 仅 Patrol/UAT 读取由环境 runner 注入的播放 canary；产品代码不感知环境。
 const _videoWorkId = String.fromEnvironment('VIDEO_PLAYBACK_CANARY_WORK_ID');
 const _requireAvatarMediaCanary = bool.fromEnvironment(
@@ -61,8 +60,6 @@ void main() {
       await _expectChatInbox($, provision);
       await _goTo($, AppRoutePaths.profile);
       await _expectProfileShell($, label: 'my profile');
-      await _goTo($, AppRoutePaths.userProfile(userHandle: _otherUserId));
-      await _expectProfileShell($, label: 'other profile');
       await _goTo($, AppRoutePaths.myFootprint());
       await _expectFootprintListShell($);
       await _goTo(

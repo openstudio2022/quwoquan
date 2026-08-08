@@ -32,7 +32,15 @@ func requireControlPlanePrincipal(next http.Handler) http.Handler {
 		if r.Method == http.MethodPost && r.URL.Path == "/control-plane/platform/alerts/ingest" {
 			expected := strings.TrimSpace(os.Getenv("ALERT_INGEST_TOKEN"))
 			if expected == "" {
-				writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", "ALERT_INGEST_TOKEN is not configured")
+				rterr.WriteHTTPError(
+					w,
+					rterr.NewAppError(
+						rterr.NewCode(rterr.ModuleOps, rterr.KindSystem, "internal_error"),
+						"请求处理失败",
+						"ALERT_INGEST_TOKEN is not configured",
+					),
+					rterr.HTTPWriteOptionsFromRequest(r),
+				)
 				return
 			}
 			provided := strings.TrimSpace(r.Header.Get(alertIngestTokenHeader))

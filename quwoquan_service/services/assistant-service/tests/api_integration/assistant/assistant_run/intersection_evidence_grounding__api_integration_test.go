@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -246,6 +247,12 @@ func intersectionEvidencePolicyResolver() runruntime.PolicyResolver {
 	) (runruntime.FrozenPolicySelection, error) {
 		if policyID == "" {
 			policyID = "assistant-default"
+		}
+		if strings.TrimSpace(skillID) == "" {
+			skillID = "fallback_general_search"
+		}
+		if strings.TrimSpace(domainID) == "" {
+			domainID = "assistant"
 		}
 		return runruntime.FrozenPolicySelection{
 			PolicyID:        policyID,

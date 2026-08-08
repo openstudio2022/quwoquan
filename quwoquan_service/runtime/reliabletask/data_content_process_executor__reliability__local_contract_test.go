@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+const (
+	processJobSetEnvelopeDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	processJobSetDigest         = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	processActualTaskDigest     = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+)
+
 func TestMain(m *testing.M) {
 	if mode := os.Getenv("QWQ_DATA_PROCESS_HELPER"); mode != "" {
 		os.Exit(runDataContentProcessExecutorHelper(mode))
@@ -20,17 +26,20 @@ func TestMain(m *testing.M) {
 
 func TestDataContentProcessExecutorRunsTypedWorkerBoundary(t *testing.T) {
 	item := DataContentWorkItem{
-		RuntimeTaskID:  "runtime-task-1",
-		LeaseToken:     "must-not-cross-process-boundary",
-		JobID:          "job-1",
-		ExecutionID:    "20260711--travel-article-cold-start--cn-test--canary-001",
-		Ref:            "posts/article/真实文章",
-		Stage:          "author",
-		PartitionKey:   "entity/真实地点",
-		EntityRef:      "entity/真实地点",
-		Carrier:        "article",
-		SourceRevision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		IdempotencyKey: "entity/真实地点|article|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|author",
+		RuntimeTaskID:        "runtime-task-1",
+		LeaseToken:           "must-not-cross-process-boundary",
+		JobID:                "job-1",
+		ExecutionID:          "20260711--travel-article-cold-start--cn-test--canary-001",
+		Ref:                  "posts/article/真实文章",
+		Stage:                "author",
+		PartitionKey:         "entity/真实地点",
+		EntityRef:            "entity/真实地点",
+		Carrier:              "article",
+		SourceRevision:       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		IdempotencyKey:       "entity/真实地点|article|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|author",
+		JobSetEnvelopeDigest: processJobSetEnvelopeDigest,
+		JobSetDigest:         processJobSetDigest,
+		ActualTaskDigest:     processActualTaskDigest,
 	}
 	result, err := (DataContentProcessExecutor{
 		Command:     []string{os.Args[0], "-test.run=^TestDataContentProcessExecutorHelper$"},
@@ -95,6 +104,12 @@ func runDataContentProcessExecutorHelper(mode string) int {
 	}
 	if _, leaked := item["leaseToken"]; leaked {
 		return 5
+	}
+	if mode == "valid" &&
+		(fmt.Sprint(item["jobSetEnvelopeDigest"]) != processJobSetEnvelopeDigest ||
+			fmt.Sprint(item["jobSetDigest"]) != processJobSetDigest ||
+			fmt.Sprint(item["actualTaskDigest"]) != processActualTaskDigest) {
+		return 8
 	}
 	response := map[string]any{
 		"schema": "quwoquan.data_content_worker_response",

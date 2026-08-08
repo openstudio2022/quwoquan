@@ -45,6 +45,14 @@
 
 - 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 
+<a id="req-004"></a>
+### REQ-004 资料页社交统计、关系列表与私信入口必须由公开对象能力组合
+
+- 关注数、粉丝数、圈子数及其分页列表必须从各 owning object 的具名 reader/public seam 读取，不得在 presentation 或 runtime shell 拼接私有 store、adapter 或派生计数。
+- 列表页必须使用稳定 cursor；重复页、过滤后的空洞与局部失败不得被包装成“没有关系”。
+- 关注、取关等关系动作必须经 `persona_relationship` command；从资料统计页发起私信只能经 `chat.conversation` 的公开 command 创建或复用会话，不得直写聊天投影。
+- 单一区块失败不得清空其他已成功区块；动作失败必须保留动作前关系态与可重试入口。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
@@ -58,6 +66,17 @@
 - WHEN 参与者执行“社交图谱读取”对应的公开行为。
 - THEN 分页主键与排序必须围绕 `FollowEdge.createdAt` 或等价稳定游标。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-002"></a>
+### GWT-002 资料统计页分页读取关系与圈子并从公开命令发起关系动作或私信
+
+- GIVEN 查看者以 production Remote composition 打开真实用户资料统计页，目标具备可读的关注、粉丝和圈子事实。
+- WHEN App 分别经 owning object 的公开 reader 加载计数与分页列表，并按 relationship capability 发起关注或取关。
+- WHEN 查看者从目标资料页发起私信，App 只经 `chat.conversation` 公开 command 创建或复用会话，再导航到 canonical conversation。
+- THEN 各列表使用稳定 cursor、无重复或串页，且 block、visibility 与 persona isolation 过滤在统计和明细中一致。
+- AND 任一区块失败只显示该区块的 canonical recovery，不得把失败包装为空列表或清空其他成功区块。
+- AND 关系命令或私信命令失败时保留动作前状态与重试入口；只有 production Remote 读回收敛后才更新最终关系态或进入会话。
+- AND 只有绑定同一 candidate、真实 Provider 与 production Remote 的 Android 物理设备及 iPhone 物理设备 `ReadinessResultBundle` 均通过时，本验收场景才计通过；Widget、模拟器、动态 skip 或 typed double 不计。
 
 ## 6. 依赖
 
@@ -73,5 +92,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺少能够证明“社交图谱读取”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：尚缺少能够证明 `GWT-001` 的稳定分页语义与 `GWT-002` 的多区块 Remote 组合、关系动作、私信跳转和失败恢复均满足当前规格的真实测试证据。
+- 完成判定：`GWT-001` 与 `GWT-002` 均有职责匹配的真实 production runner 与逐场景 `spec_ref`；`GWT-002` 还必须取得绑定同一 candidate 的 Android 与 iPhone 物理设备 `ReadinessResultBundle`，failed、blocked、skipped、模拟器或测试 double 结果均不计通过。

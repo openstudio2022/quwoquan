@@ -1,9 +1,69 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+// readiness_case: notification_list_app_messages_app_local
+// readiness_case: notification_get_app_message_app_local
+// readiness_case: notification_get_app_message_unread_count_app_local
+// readiness_case: notification_ack_app_message_app_local
+// readiness_case: notification_read_app_message_app_local
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/generated/notification/notification_request_page_ids.g.dart';
+import 'package:quwoquan_app/service/notification_service/notification_delivery/notification/adapters/app_message_facets_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/runtime/remote_api_path_test_harness.dart';
+
+Map<String, Object?> _appMessageWire({
+  bool read = false,
+  bool acknowledged = false,
+}) => <String, Object?>{
+  'messageId': 'message-notification',
+  'userId': 'account-notification',
+  'messageType': 'content',
+  'source': 'comment',
+  'sourceId': 'comment-notification',
+  'destination': <String, Object?>{
+    'type': 'user',
+    'id': 'account-notification',
+  },
+  'title': '新的评论',
+  'summary': '评论了你的作品',
+  'target': <String, Object?>{
+    'targetType': 'post',
+    'targetId': 'post-notification',
+    'query': <String, Object?>{},
+  },
+  'read': read,
+  'createdAt': '2026-08-08T08:00:00Z',
+  'deliveredAt': '2026-08-08T08:00:01Z',
+  if (acknowledged) 'ackedAt': '2026-08-08T08:00:02Z',
+  if (read) 'readAt': '2026-08-08T08:00:03Z',
+};
+
+http.Response _notificationResponseFor(http.Request request) {
+  final path = request.url.path;
+  if (request.method == 'GET' && path == '/app-messages') {
+    return remoteApiPathJsonResponse(<String, Object?>{
+      'items': <Object?>[_appMessageWire()],
+      'nextCursor': 'notification-cursor-2',
+    });
+  }
+  if (request.method == 'GET' && path == '/app-messages/unread-count') {
+    return remoteApiPathJsonResponse(<String, Object?>{'unreadCount': 1});
+  }
+  if (request.method == 'GET' && path == '/app-messages/message-notification') {
+    return remoteApiPathJsonResponse(_appMessageWire());
+  }
+  if (request.method == 'POST' &&
+      path == '/app-messages/message-notification/ack') {
+    return remoteApiPathJsonResponse(_appMessageWire(acknowledged: true));
+  }
+  if (request.method == 'POST' &&
+      path == '/app-messages/message-notification/read') {
+    return remoteApiPathJsonResponse(_appMessageWire(read: true));
+  }
+  throw StateError('unexpected notification request: ${request.method} $path');
+}
 
 void main() {
   group('Notification metadata contract', () {
@@ -233,5 +293,110 @@ void main() {
         NotificationRequestPageIds.readAppMessage,
       );
     });
+
+    test(
+      'production Remote 单轨编码 inbox 五个 operation 并解析 typed result',
+      () async {
+        final log = <CapturedRemoteApiPathRequest>[];
+        final adapter = RemoteAppMessageAdapter(
+          client: buildRemoteApiPathOperationClient(
+            log,
+            responseFor: _notificationResponseFor,
+          ),
+          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.chatList.id,
+            routeId: AppUiSurfaces.chatList.routeId,
+            clientPageId: clientPageId,
+            actor: const CloudOperationActorContext(
+              accountId: 'account-notification',
+              personaId: 'persona-notification',
+            ),
+          ),
+        );
+
+        final listed = await adapter.listAppMessages(
+          ListAppMessagesQuery(
+            messageType: NotificationType.content.wireName,
+            read: false,
+            cursor: 'notification-cursor-1',
+            limit: 7,
+          ),
+        );
+        final unread = await adapter.getUnreadCount(
+          const GetAppMessageUnreadCountQuery(),
+        );
+        final fetched = await adapter.getAppMessage(
+          const GetAppMessageQuery(messageId: 'message-notification'),
+        );
+        final acknowledged = await adapter.acknowledge(
+          const AckAppMessageCommand(messageId: 'message-notification'),
+        );
+        final read = await adapter.markRead(
+          const ReadAppMessageCommand(messageId: 'message-notification'),
+        );
+
+        expect(listed.items.single.messageId, 'message-notification');
+        expect(listed.nextCursor, 'notification-cursor-2');
+        expect(unread.unreadCount, 1);
+        expect(fetched.target.targetId, 'post-notification');
+        expect(acknowledged.ackedAt, DateTime.utc(2026, 8, 8, 8, 0, 2));
+        expect(read.read, isTrue);
+        expect(read.readAt, DateTime.utc(2026, 8, 8, 8, 0, 3));
+
+        expect(log.map((request) => request.method), <String>[
+          'GET',
+          'GET',
+          'GET',
+          'POST',
+          'POST',
+        ]);
+        expect(log.map((request) => request.path), <String>[
+          '/app-messages',
+          '/app-messages/unread-count',
+          '/app-messages/message-notification',
+          '/app-messages/message-notification/ack',
+          '/app-messages/message-notification/read',
+        ]);
+        expect(log.first.query, <String, String>{
+          'type': 'content',
+          'read': 'false',
+          'cursor': 'notification-cursor-1',
+          'limit': '7',
+        });
+        expect(log.skip(1).every((request) => request.query.isEmpty), isTrue);
+        expect(log.every((request) => request.body.isEmpty), isTrue);
+
+        const operationIds = <String>[
+          AppCloudOperationIds.notificationNotificationListAppMessages,
+          AppCloudOperationIds.notificationNotificationGetAppMessageUnreadCount,
+          AppCloudOperationIds.notificationNotificationGetAppMessage,
+          AppCloudOperationIds.notificationNotificationAckAppMessage,
+          AppCloudOperationIds.notificationNotificationReadAppMessage,
+        ];
+        const pageIds = <String>[
+          NotificationRequestPageIds.listAppMessages,
+          NotificationRequestPageIds.getAppMessageUnreadCount,
+          NotificationRequestPageIds.getAppMessage,
+          NotificationRequestPageIds.ackAppMessage,
+          NotificationRequestPageIds.readAppMessage,
+        ];
+        for (var index = 0; index < log.length; index += 1) {
+          expectRemoteApiPathHeaders(
+            log[index].headers,
+            clientPageId: pageIds[index],
+            surfaceId: AppUiSurfaces.chatList.id,
+            operationId: operationIds[index],
+          );
+        }
+
+        expect(
+          operationIds.map(
+            (operationId) =>
+                canonicalRemoteApiOperation(operationId).idempotency,
+          ),
+          <String>['optional', 'none', 'optional', 'none', 'none'],
+        );
+      },
+    );
   });
 }

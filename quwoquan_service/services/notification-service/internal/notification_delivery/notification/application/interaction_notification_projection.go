@@ -395,14 +395,15 @@ func projectGreetingSent(event InteractionStreamEvent) (*CreateAppMessageCommand
 	greetingID := strings.TrimSpace(event.Values["id"])
 	requester := strings.TrimSpace(event.Values["requesterPersonaId"])
 	target := strings.TrimSpace(event.Values["targetPersonaId"])
-	if greetingID == "" || requester == "" || target == "" {
+	recipientAccountID := strings.TrimSpace(event.Values["recipientAccountId"])
+	if greetingID == "" || requester == "" || target == "" || recipientAccountID == "" {
 		return nil, fmt.Errorf("GreetingRequestSent event identity is incomplete")
 	}
 	// side_effects: targetUser.allowStrangerGreeting == true 才投递。
 	if event.Values["targetAllowsStrangerGreeting"] != "true" || requester == target {
 		return nil, nil
 	}
-	return interactionCommand(event, target, "social", "greeting", greetingID,
+	return interactionCommand(event, recipientAccountID, "social", "greeting", greetingID,
 		interactionTitleGreeting, "向你打了个招呼", notification.AppMessageTarget{
 			TargetType: "greeting",
 			TargetID:   greetingID,

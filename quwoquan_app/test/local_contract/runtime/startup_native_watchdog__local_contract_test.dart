@@ -59,7 +59,7 @@ void main() {
 
     test('safe terminal 后才注册启动后插件，启动恢复不提供重试', () {
       final scheduler = _readAppFile('lib/runtime/shell/startup/startup_init_scheduler.dart');
-      final shell = _readAppFile('lib/runtime/di/shell/composition/quwoquan_app_shell.dart');
+      final shell = _readAppFile('lib/runtime/shell/composition/quwoquan_app_shell.dart');
       final activity = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
@@ -83,7 +83,7 @@ void main() {
 
     test('native timing hydration 只向前收紧并重新 arm Flutter deadline', () {
       final runtime = _readAppFile('lib/runtime/shell/startup/app_startup_runtime.dart');
-      final shell = _readAppFile('lib/runtime/di/shell/composition/quwoquan_app_shell.dart');
+      final shell = _readAppFile('lib/runtime/shell/composition/quwoquan_app_shell.dart');
       final welcome = _readAppFile('lib/runtime/shell/welcome/welcome_screen.dart');
 
       expect(runtime, contains('deadlineElapsedSinceProcessStart'));

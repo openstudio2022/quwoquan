@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+// readiness_case: conversation_list_conversations_app_local
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_remote.dart';

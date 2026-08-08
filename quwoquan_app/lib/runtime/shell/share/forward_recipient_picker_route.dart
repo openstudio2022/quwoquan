@@ -9,12 +9,12 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/forward_share_dependencies.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/search/app_search_field.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_confirm_sheet.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_recipient_widgets.dart';
 
 enum ForwardRecipientPickerMode { all, groups, messages }
@@ -53,28 +53,16 @@ class _ForwardRecipientPickerRouteState
   }
 
   Future<_ForwardPickerData> _load() async {
-    final contactRepo = ref.read(chatContactRepositoryProvider);
-    final conversationRepo = ref.read(chatConversationRepositoryProvider);
-    final conversations = await conversationRepo.listConversations(limit: 50);
-    final contacts = await contactRepo.listContactHome(
-      filter: switch (widget.mode) {
-        ForwardRecipientPickerMode.all => 'all',
-        ForwardRecipientPickerMode.groups => 'group',
-        ForwardRecipientPickerMode.messages => 'all',
-      },
+    final dependencies = ref.read(forwardShareDependenciesProvider);
+    final conversations = await dependencies.loadRecentRecipients(limit: 50);
+    final contacts = await dependencies.loadContactRecipients(
+      groupsOnly: widget.mode == ForwardRecipientPickerMode.groups,
       limit: 500,
     );
     final recent = uniqueForwardRecipients(
-      sortForwardRecipientsByRecent(
-        conversations
-            .map(AppForwardRecipient.fromConversation)
-            .where(_matchesMode),
-      ),
+      sortForwardRecipientsByRecent(conversations.where(_matchesMode)),
     );
-    final contactRecipients = contacts
-        .where((row) => row.kind.trim().toLowerCase() != 'circle')
-        .map(AppForwardRecipient.fromContactHome)
-        .where(_matchesMode);
+    final contactRecipients = contacts.where(_matchesMode);
     return _ForwardPickerData(
       recent: recent,
       contacts: uniqueForwardRecipients(

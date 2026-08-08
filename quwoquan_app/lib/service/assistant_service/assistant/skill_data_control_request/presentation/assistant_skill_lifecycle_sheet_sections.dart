@@ -135,7 +135,7 @@ extension _AssistantSkillLifecycleSheetSections
     return _section(
       title: AssistantText.assistantSkillActivityTitle,
       child: switch ((_loadingActivities, _activityError, _activities)) {
-        (true, _, _) => const Center(child: CupertinoActivityIndicator()),
+        (true, _, _) => AppRequestFeedback.section(),
         (false, final Object error, _) => AppSectionErrorCard(
           margin: EdgeInsets.zero,
           semantic: ensureRetryUiErrorSemantic(
@@ -280,7 +280,7 @@ extension _AssistantSkillLifecycleSheetSections
                   ? null
                   : _createDataControl,
               child: flow.isBusy
-                  ? const CupertinoActivityIndicator(color: AppColors.white)
+                  ? AppRequestFeedback.inline(indicatorColor: AppColors.white)
                   : const Text(AssistantText.assistantSkillDataControlCreate),
             ),
         ],

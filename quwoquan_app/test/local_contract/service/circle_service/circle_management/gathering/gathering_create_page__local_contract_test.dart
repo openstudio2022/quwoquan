@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_create_page.dart';
 
 import '../../../../../support/service/circle_service/circle_management/gathering/gathering_test_support.dart';

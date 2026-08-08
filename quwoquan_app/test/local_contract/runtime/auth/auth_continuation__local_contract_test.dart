@@ -9,7 +9,8 @@ import 'package:quwoquan_app/service/content_service/content/comment/presentatio
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -108,8 +109,9 @@ void main() {
         ProviderScope(
           overrides: [
             startGatheringNavigationBindingProvider.overrideWithValue((
-              context,
-            ) async {
+              context, [
+              request,
+            ]) async {
               invocationCount += 1;
             }),
           ],

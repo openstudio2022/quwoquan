@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
 // readiness_case: list-connector-invocations-api
 // readiness_case: get-connector-invocation-api
 // readiness_case: invoke-connector-capability-api
@@ -18,9 +19,15 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	rtredis "quwoquan_service/runtime/redis"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
+	grantcandidate "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/candidate"
+	grantpersistence "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/persistence"
+	grantresolver "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/resolver"
 	authorizationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/application"
 	authorizationmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/domain/model"
 	connectorgrant "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/grantreceipt"
@@ -88,17 +95,23 @@ func TestConnectorInvocationMongoKeepsPayloadProtectedAndCommitsContinuationAtom
 	now := time.Date(2026, time.August, 2, 13, 0, 0, 0, time.UTC)
 	command, err := invocationmodel.NewAcceptCommand(invocationmodel.AcceptInput{
 		InvocationID: "invocation-1", AccountID: "account-1",
+		ResolutionID: "resolution-1",
 		ConnectionID: "connection-1", AssistantRunID: "run-1",
 		Capability:      "calendar.event.create",
+		SurfaceKind:     "personal",
+		BindingDigest:   "sha256:" + strings.Repeat("a", 64),
+		InputDigest:     "sha256:" + strings.Repeat("b", 64),
 		PayloadRef:      "protected://artifact/calendar-payload-1",
+		ConfirmationRef: "protected://confirmation/1",
+		PermitRef:       "protected://permit/1",
 		ContinuationRef: "continuation-1", IdempotencyKey: "invoke-calendar",
-		ConfirmationRequired: true, OccurredAt: now,
+		OccurredAt: now,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	accepted, err := store.Accept(startupCtx, command)
-	if err != nil || accepted.Invocation.Status != invocationmodel.StatusAwaitingConfirmation {
+	if err != nil || accepted.Invocation.Status != invocationmodel.StatusAccepted {
 		t.Fatalf("accept failed: result=%+v err=%v", accepted, err)
 	}
 	replay, err := store.Accept(startupCtx, command)
@@ -293,11 +306,57 @@ func TestConnectorInvocationHTTPUsesRealMongoConnectionAndDefinition(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	redisRuntime, err := testinfra.StartRealRedis(startupCtx)
+	if err != nil {
+		t.Fatalf("start real Redis: %v", err)
+	}
+	t.Cleanup(func() {
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer closeCancel()
+		if closeErr := redisRuntime.Close(closeCtx); closeErr != nil {
+			t.Errorf("close real Redis: %v", closeErr)
+		}
+	})
+	if err := redisRuntime.FlushDBs(startupCtx, 0); err != nil {
+		t.Fatal(err)
+	}
+	redisRouter, err := platformredis.NewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {
+				Mode: "standalone", Addr: redisRuntime.Addr,
+				Password: redisRuntime.Password, DB: 0, TLS: redisRuntime.TLS,
+			},
+		},
+		DefaultScene: "general",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = redisRouter.Close() })
+	grantStore, err := grantpersistence.NewRedisSessionStore(redisRouter.Scene("general"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	unavailable := grantcandidate.NewUnavailableSources("not used by invocation API runner")
+	grantSession := grantapp.NewCapabilityGrantSessionFacade(
+		grantresolver.NewCandidateResolver(
+			unavailable,
+			grantcandidate.NewConnectorReaderSource(
+				connectionStore,
+				definitionStore,
+				func() time.Time { return now },
+			),
+			unavailable,
+			unavailable,
+			func() time.Time { return now },
+		),
+		grantStore,
+		func() time.Time { return now },
+	)
 
 	commands := invocationapp.NewCommandFacade(
 		invocationStore,
-		connectionStore,
-		definitionStore,
+		grantSession,
 		func() time.Time { return now },
 		func() string { return "invocation-http-1" },
 	)
@@ -310,11 +369,15 @@ func TestConnectorInvocationHTTPUsesRealMongoConnectionAndDefinition(t *testing.
 		http.MethodPost,
 		"/internal/integrations/invocations",
 		map[string]any{
-			"accountId":       "account-1",
+			"resolutionId":    "resolution-http-1",
 			"connectionId":    created.Connection.ConnectionID,
 			"assistantRunId":  "assistant-run-1",
 			"capability":      "calendar.event.create",
+			"surfaceKind":     "personal",
+			"inputDigest":     "sha256:" + strings.Repeat("c", 64),
 			"payloadRef":      "protected://artifact/calendar-payload-http-1",
+			"confirmationRef": "protected://confirmation/http-1",
+			"permitRef":       "protected://permit/http-1",
 			"continuationRef": "continuation-http-1",
 		},
 		false,
@@ -322,8 +385,33 @@ func TestConnectorInvocationHTTPUsesRealMongoConnectionAndDefinition(t *testing.
 	)
 	invocationBody, ok := invokeBody["invocation"].(map[string]any)
 	if status != http.StatusAccepted || !ok || invocationBody["invocationId"] != "invocation-http-1" ||
-		invocationBody["status"] != invocationmodel.StatusAwaitingConfirmation {
+		invocationBody["status"] != invocationmodel.StatusAccepted {
 		t.Fatalf("invoke route status=%d body=%#v", status, invokeBody)
+	}
+	grantKey := "integration:capability-grant:resolution-http-1"
+	beforeTTL, err := redisRuntime.TTL(startupCtx, 0, grantKey)
+	if err != nil || beforeTTL <= 0 || beforeTTL > 5*time.Minute {
+		t.Fatalf("initial final-authorization TTL=%s err=%v", beforeTTL, err)
+	}
+	status, spoofedBody := performConnectorInvocationRequest(
+		t,
+		mux,
+		http.MethodPost,
+		"/internal/integrations/invocations",
+		map[string]any{
+			"accountId": "account-spoofed", "resolutionId": "resolution-spoofed",
+			"connectionId":   created.Connection.ConnectionID,
+			"assistantRunId": "assistant-run-1", "capability": "calendar.event.create",
+			"surfaceKind": "personal", "inputDigest": "sha256:" + strings.Repeat("d", 64),
+			"payloadRef":      "protected://artifact/spoofed",
+			"confirmationRef": "protected://confirmation/spoofed",
+			"permitRef":       "protected://permit/spoofed",
+		},
+		false,
+		"invoke-spoofed",
+	)
+	if status != http.StatusBadRequest {
+		t.Fatalf("body accountId was not rejected: status=%d body=%#v", status, spoofedBody)
 	}
 	status, getBody := performConnectorInvocationRequest(
 		t, mux, http.MethodGet, "/integrations/invocations/invocation-http-1",
@@ -345,13 +433,17 @@ func TestConnectorInvocationHTTPUsesRealMongoConnectionAndDefinition(t *testing.
 	if status != http.StatusOK || !ok || len(items) != 1 {
 		t.Fatalf("list route status=%d body=%#v", status, listBody)
 	}
+	time.Sleep(1100 * time.Millisecond)
+	preContinueTTL, err := redisRuntime.TTL(startupCtx, 0, grantKey)
+	if err != nil || preContinueTTL >= beforeTTL {
+		t.Fatalf("final-authorization TTL did not elapse: before=%s current=%s err=%v", beforeTTL, preContinueTTL, err)
+	}
 	status, continueBody := performConnectorInvocationRequest(
 		t,
 		mux,
 		http.MethodPost,
 		"/internal/integrations/invocations/invocation-http-1/continue",
 		map[string]any{
-			"accountId":        "account-1",
 			"confirmationRef":  "protected://confirmation/http-1",
 			"continuationRef":  "continuation-http-1",
 			"expectedRevision": 1,
@@ -361,6 +453,10 @@ func TestConnectorInvocationHTTPUsesRealMongoConnectionAndDefinition(t *testing.
 	)
 	if status != http.StatusAccepted {
 		t.Fatalf("continue route status=%d body=%#v", status, continueBody)
+	}
+	afterTTL, err := redisRuntime.TTL(startupCtx, 0, grantKey)
+	if err != nil || afterTTL > preContinueTTL {
+		t.Fatalf("final-authorization read renewed TTL: before=%s pre_continue=%s after=%s err=%v", beforeTTL, preContinueTTL, afterTTL, err)
 	}
 	readback, err := invocationStore.Get(startupCtx, "account-1", "invocation-http-1")
 	if err != nil || readback.Status != invocationmodel.StatusAccepted || readback.Revision != 2 {
@@ -391,7 +487,16 @@ func performConnectorInvocationRequest(
 	if idempotencyKey != "" {
 		request.Header.Set("Idempotency-Key", idempotencyKey)
 	}
-	if authenticated {
+	if strings.HasPrefix(path, "/internal/") {
+		request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+			Claims: rtauth.Claims{
+				TokenType: rtauth.TokenTypeAccess, Subject: "account-1",
+				ServiceActorID: "assistant-service",
+				Scope:          "integration.connector_invocation.write", Roles: []string{"service"},
+			},
+			Actor: operation.ActorContext{AccountID: "account-1"},
+		}))
+	} else if authenticated {
 		request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
 			Actor: operation.ActorContext{AccountID: "account-1"},
 		}))

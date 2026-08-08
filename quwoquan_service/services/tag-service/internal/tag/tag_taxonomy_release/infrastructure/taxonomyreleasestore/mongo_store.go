@@ -28,10 +28,6 @@ func NewStore(db *mongo.Database) *Store {
 func (s *Store) EnsureIndexes(ctx context.Context) error {
 	_, err := s.releases.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "activatedAt", Value: -1}},
-			Options: options.Index().SetName("idx_tag_taxonomy_release_status_activated"),
-		},
-		{
 			Keys: bson.D{{Key: "status", Value: 1}},
 			Options: options.Index().
 				SetName("uq_tag_taxonomy_release_single_active").

@@ -73,7 +73,7 @@
         "objectRef": {"type": "string", "minLength": 1},
         "receiptRef": {
           "type": "string",
-          "pattern": "^asset_reviews/receipts/asset-review-[0-9a-f]{64}\\.json$"
+          "pattern": "^data/tasks/[^/]+/evidence/asset_reviews/receipts/asset-review-[0-9a-f]{64}\\.json$"
         },
         "receiptDigest": {"$ref": "#/$defs/sha256"},
         "receiptFileSha256": {"$ref": "#/$defs/sha256"},
@@ -82,7 +82,7 @@
         "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
         "acquisitionReceiptRef": {
           "type": "string",
-          "pattern": "^data/local/workspace/source-acquisition/(image|video)/receipts/[0-9a-f]{64}\\.json$"
+          "pattern": "^data/local/workspace/source-acquisition/(video/)?receipts/[0-9a-f]{64}\\.json$"
         },
         "acquisitionReceiptDigest": {"$ref": "#/$defs/sha256"},
         "acquisitionReceiptSha256": {"$ref": "#/$defs/sha256"},
@@ -155,7 +155,7 @@
         },
         "acquisitionReceiptRef": {
           "type": "string",
-          "pattern": "^data/local/workspace/source-acquisition/(image|video)/receipts/[0-9a-f]{64}\\.json$"
+          "pattern": "^data/local/workspace/source-acquisition/(video/)?receipts/[0-9a-f]{64}\\.json$"
         },
         "independentAssetReview": {
           "$ref": "#/$defs/independentAssetReview"

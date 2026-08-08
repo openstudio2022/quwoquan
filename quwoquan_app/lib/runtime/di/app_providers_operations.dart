@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/author_impact_query.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/author_impact_query.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/application/public/content_report_ports.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';

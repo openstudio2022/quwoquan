@@ -267,9 +267,10 @@ def test_image_source_contract_rejects_retired_alias_keys():
             vertical="travel",
         )
     except RuntimeError as exc:
-        assert "sourceCollectionId" in str(exc)
-        assert "collectionPageUrl" in str(exc)
-        assert "rightsAuditStatus" in str(exc)
+        message = str(exc)
+        assert "retired image source aliases" in message
+        assert "collectionId->sourceCollectionId" in message
+        assert "licenseProof->termsUrl/authorizationProof" in message
     else:
         raise AssertionError("retired image source aliases must be rejected")
 

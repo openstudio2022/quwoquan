@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
 // readiness_case: list-connector-connections-api
 // readiness_case: get-connector-connection-api
 // readiness_case: create-connector-connection-api
@@ -18,9 +19,17 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	platformredis "quwoquan_service/internal/platform/redis"
 	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/operation"
+	rtredis "quwoquan_service/runtime/redis"
+	grantadapter "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/adapters/inbound/runtime"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
+	grantmodel "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/domain/model"
+	grantcandidate "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/candidate"
+	grantpersistence "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/persistence"
+	grantresolver "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/resolver"
 	authorizationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/application"
 	authorizationmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/domain/model"
 	connectorgrant "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/grantreceipt"
@@ -49,10 +58,11 @@ func (verifier trustedNativeProofVerifier) VerifyNative(
 	}
 	expiresAt := verifier.now.Add(24 * time.Hour)
 	return authorizationmodel.VerifiedProof{
-		CredentialRef:       "protected://native/calendar/account-1",
-		ProofDigest:         authorizationmodel.Hash(proofRef),
-		GrantedCapabilities: append([]string(nil), authorization.RequestedCapabilities...),
-		CredentialExpiresAt: &expiresAt,
+		CredentialRef:                "protected://native/calendar/account-1",
+		ProviderAccountSubjectDigest: authorizationmodel.Hash("native-calendar-account-1"),
+		ProofDigest:                  authorizationmodel.Hash(proofRef),
+		GrantedCapabilities:          append([]string(nil), authorization.RequestedCapabilities...),
+		CredentialExpiresAt:          &expiresAt,
 	}, nil
 }
 
@@ -81,6 +91,33 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 	})
 
 	now := time.Date(2026, time.August, 2, 12, 0, 0, 0, time.UTC)
+	redisRuntime, err := testinfra.StartRealRedis(startupCtx)
+	if err != nil {
+		t.Fatalf("start real Redis: %v", err)
+	}
+	t.Cleanup(func() {
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer closeCancel()
+		if closeErr := redisRuntime.Close(closeCtx); closeErr != nil {
+			t.Errorf("close real Redis: %v", closeErr)
+		}
+	})
+	if err := redisRuntime.FlushDBs(startupCtx, 0); err != nil {
+		t.Fatalf("flush real Redis: %v", err)
+	}
+	redisRouter, err := platformredis.NewRouter(rtredis.RouterConfig{
+		Scenes: map[string]rtredis.SceneConfig{
+			"general": {
+				Mode: "standalone", Addr: redisRuntime.Addr,
+				Password: redisRuntime.Password, DB: 0, TLS: redisRuntime.TLS,
+			},
+		},
+		DefaultScene: "general",
+	})
+	if err != nil {
+		t.Fatalf("new Redis router: %v", err)
+	}
+	t.Cleanup(func() { _ = redisRouter.Close() })
 	definitionStore := definitionpersistence.NewMongoStore(runtime.Database)
 	authorizationStore := authorizationpersistence.NewMongoStore(runtime.Database)
 	connectionStore := connectionpersistence.NewMongoStore(runtime.Database, authorizationStore)
@@ -143,8 +180,36 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 	commands := connectionapp.NewCommandFacade(
 		connectionStore, definitionStore, grantVerifier, func() time.Time { return now },
 	)
+	grantStore, err := grantpersistence.NewRedisSessionStore(
+		redisRouter.Scene("general"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCapabilityGrantTTLDoesNotRenew(
+		t,
+		startupCtx,
+		redisRuntime,
+		grantStore,
+		now,
+	)
+	unavailable := grantcandidate.NewUnavailableSources("not bound in connector API runner")
+	grantResolver := grantresolver.NewCandidateResolver(
+		unavailable,
+		grantcandidate.NewConnectorReaderSource(
+			connectionStore,
+			definitionStore,
+			func() time.Time { return now },
+		),
+		unavailable,
+		unavailable,
+		func() time.Time { return now },
+	)
 	queries := connectionapp.NewCapabilityQueryFacade(
-		connectionStore, definitionStore, func() time.Time { return now },
+		connectionStore,
+		grantadapter.NewMiddleware(
+			grantapp.NewCapabilityGrantSessionFacade(grantResolver, grantStore),
+		),
 	)
 	mux := http.NewServeMux()
 	connectionhttp.NewHandler(commands, queries).RegisterRoutes(mux)
@@ -206,19 +271,14 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 	if status != http.StatusOK || getBody["connectionId"] != created.Connection.ConnectionID {
 		t.Fatalf("get route status=%d body=%#v", status, getBody)
 	}
-	status, resolveBody := performConnectorConnectionRequest(
+	status, resolveBody := performConnectorGrantResolutionRequest(
 		t,
 		mux,
-		http.MethodPost,
-		"/internal/integrations/connector-capability-grants:resolve",
 		map[string]any{
-			"accountId":      "account-1",
 			"capabilityKey":  "calendar.event.create",
 			"surfaceKind":    "personal",
 			"connectionRefs": []string{created.Connection.ConnectionID},
 		},
-		false,
-		"",
 	)
 	if status != http.StatusOK || resolveBody["allowed"] != true ||
 		resolveBody["connectionId"] != created.Connection.ConnectionID {
@@ -242,6 +302,19 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 	if err != nil || revokedConnection.Status != connectionmodel.StatusRevoked ||
 		revokedConnection.Revision != 2 || revokedConnection.CredentialRef != "" {
 		t.Fatalf("revoke failed closed incorrectly: connection=%+v err=%v", revokedConnection, err)
+	}
+	status, revokedGrantBody := performConnectorGrantResolutionRequest(
+		t,
+		mux,
+		map[string]any{
+			"capabilityKey":  "calendar.event.create",
+			"surfaceKind":    "personal",
+			"connectionRefs": []string{created.Connection.ConnectionID},
+		},
+	)
+	if status != http.StatusOK || revokedGrantBody["allowed"] != false ||
+		revokedGrantBody["reason"] != connectionmodel.CapabilityReasonConnectionInactive {
+		t.Fatalf("revoked grant status=%d body=%#v", status, revokedGrantBody)
 	}
 	authorizationAfterRevoke, err := authorizationStore.Get(
 		startupCtx, "account-1", started.Authorization.AuthorizationID,
@@ -274,6 +347,84 @@ func TestConnectorConnectionMongoCreatesReplaysAndRevokesWithoutLeakingCredentia
 			t.Fatalf("self-retained connection audit event has delivery checkpoint: %#v", event)
 		}
 	}
+}
+
+func assertCapabilityGrantTTLDoesNotRenew(
+	t *testing.T,
+	ctx context.Context,
+	redisRuntime *testinfra.RealRedis,
+	store *grantpersistence.RedisSessionStore,
+	now time.Time,
+) {
+	t.Helper()
+	expiresAt := now.Add(grantmodel.GrantTTL)
+	grant := grantmodel.ResolvedCapabilityGrant{
+		ResolutionID:  "ttl-session-1",
+		CapabilityKey: "calendar.event.create",
+		BindingKind:   grantmodel.BindingDomainOperation,
+		DomainOperation: &grantmodel.DomainOperationBinding{
+			OwnerOperationID: "content.post.CreatePost",
+			ContractDigest:   authorizationmodel.Hash("create-post-contract"),
+		},
+		ResolvedAt: now,
+		ExpiresAt:  &expiresAt,
+	}
+	if err := store.Save(ctx, grant); err != nil {
+		t.Fatalf("save initial capability grant session: %v", err)
+	}
+	key := "integration:capability-grant:ttl-session-1"
+	before, err := redisRuntime.TTL(ctx, 0, key)
+	if err != nil || before <= 0 || before > grantmodel.GrantTTL {
+		t.Fatalf("initial capability grant TTL=%s err=%v", before, err)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	if err := store.Save(ctx, grant); err != nil {
+		t.Fatalf("idempotent capability grant save: %v", err)
+	}
+	after, err := redisRuntime.TTL(ctx, 0, key)
+	if err != nil || after >= before {
+		t.Fatalf("capability grant TTL renewed: before=%s after=%s err=%v", before, after, err)
+	}
+}
+
+func performConnectorGrantResolutionRequest(
+	t *testing.T,
+	handler http.Handler,
+	body any,
+) (int, map[string]any) {
+	t.Helper()
+	payload, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("encode connector grant request: %v", err)
+	}
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/integrations/connector-capability-grants:resolve",
+		bytes.NewReader(payload),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
+		Claims: rtauth.Claims{
+			TokenType:      rtauth.TokenTypeAccess,
+			Subject:        "account-1",
+			ServiceActorID: "assistant-service",
+			Scope:          "integration.connector_grant.read",
+			Roles:          []string{"service"},
+		},
+		Actor: operation.ActorContext{AccountID: "account-1"},
+	}))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	decoded := map[string]any{}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf(
+			"decode connector grant response status=%d body=%q: %v",
+			recorder.Code,
+			recorder.Body.String(),
+			err,
+		)
+	}
+	return recorder.Code, decoded
 }
 
 func performConnectorConnectionRequest(

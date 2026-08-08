@@ -44,7 +44,7 @@ def matrix_disk_scan_paths(repo_root: Path) -> frozenset[str]:
     domain/transport 中名称带 ``page`` 的值对象误当页面。迁移前的
     ``ui``/``components``/``app/shell`` 继续按原规则扫描，确保残留页面仍必须由
     page_object_contract 唯一认领。``runtime/shell`` 承载不依赖业务对象的全局壳页面；
-    ``runtime/di/shell`` 承载需要组装业务对象的 App composition root。两者递归扫描
+    ``runtime/shell`` 承载需要组装业务对象的 App composition root。两者递归扫描
     具名 ``*_page.dart`` / ``*_screen.dart``，composition root 还扫描 helper 文件。
     设计系统只扫描显式 ``*_page.dart``。
     """
@@ -117,7 +117,7 @@ def matrix_disk_scan_paths(repo_root: Path) -> frozenset[str]:
                 continue
             out.add(path.relative_to(app).as_posix())
 
-    composition_shell = lib / "runtime/di/shell"
+    composition_shell = lib / "runtime/shell"
     if composition_shell.is_dir():
         _add_page_files(out, app=app, root=composition_shell)
         _add_suffix_files(

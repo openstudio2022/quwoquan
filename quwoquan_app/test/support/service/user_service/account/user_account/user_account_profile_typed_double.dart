@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/service/content_service/content/post/application/author_impact_query.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/author_impact_query.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/profile_edit_query.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/profile_query.dart';

@@ -1690,6 +1690,7 @@ def write_candidate_manifest(
         "packageDigest": package_content.get("digest"),
         "buildInputDigest": oci.get("buildInputDigest") if oci else None,
         "imageDigest": oci.get("imageDigest") if oci else None,
+        "configurationDigest": oci.get("configurationDigest") if oci else None,
         "runtimeSchemaVersion": runtime_schema_version,
         "runtimeConfigDigest": app_report.get("runtimeConfigDigest"),
         "environmentRuntimeDigest": _sha256_candidate_file(
@@ -1756,6 +1757,7 @@ def validate_candidate_manifest(
         "packageDigest",
         "buildInputDigest",
         "imageDigest",
+        "configurationDigest",
         "runtimeSchemaVersion",
         "runtimeConfigDigest",
         "environmentRuntimeDigest",
@@ -1790,6 +1792,7 @@ def validate_candidate_manifest(
         "workspaceDigest",
         "workspaceStatusDigest",
         "packageDigest",
+        "configurationDigest",
         "runtimeConfigDigest",
         "environmentRuntimeDigest",
     ):
@@ -1814,6 +1817,10 @@ def validate_candidate_manifest(
         expected_target=expected_target,
         candidate_root=candidate_root,
     )
+    _validate_candidate_app_runtime_binding(
+        payload,
+        candidate_root=candidate_root,
+    )
     _validate_candidate_provider_oci_binding(
         payload,
         candidate_root=candidate_root,
@@ -1836,6 +1843,29 @@ def validate_candidate_manifest(
             if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
                 raise ValueError(f"deployment candidate {label} {field} is invalid")
     return payload
+
+
+def _validate_candidate_app_runtime_binding(
+    candidate: Mapping[str, Any],
+    *,
+    candidate_root: Path,
+) -> None:
+    """Cross-bind the App runtime config without conflating service config."""
+
+    try:
+        app_report = _read_candidate_object(
+            candidate_root,
+            "packages/app/report.json",
+            label="App package report",
+        )
+    except _UnsafeCandidatePath as exc:
+        raise ValueError("deployment candidate App package report is unsafe") from exc
+    if (
+        _DIGEST.fullmatch(str(app_report.get("runtimeConfigDigest") or "")) is None
+        or app_report.get("runtimeConfigDigest")
+        != candidate.get("runtimeConfigDigest")
+    ):
+        raise ValueError("deployment candidate App runtime identity drifted")
 
 
 def validate_packaged_provider_runtime(
@@ -2054,7 +2084,7 @@ def _validate_candidate_provider_oci_binding(
         or oci.get("target") != candidate.get("target")
         or oci.get("buildInputDigest") != candidate.get("buildInputDigest")
         or oci.get("imageDigest") != candidate.get("imageDigest")
-        or oci.get("configurationDigest") != candidate.get("runtimeConfigDigest")
+        or oci.get("configurationDigest") != candidate.get("configurationDigest")
     ):
         raise ValueError("deployment candidate OCI identity drifted")
     images = oci.get("images")

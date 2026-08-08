@@ -340,3 +340,27 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/content_reaction/http_mongo_transaction__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: content_reaction_get_content_reaction_state_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetContentReactionState}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_post_reaction_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: content_reaction_like_post_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LikePost}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_post_reaction_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: content_reaction_unlike_post_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UnlikePost}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_post_reaction_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

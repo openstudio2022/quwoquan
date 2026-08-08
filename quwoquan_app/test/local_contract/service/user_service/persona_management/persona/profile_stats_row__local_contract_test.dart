@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_stats_row.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_stats_row.dart';
 
 /// 统计行单行四项（粉丝/关注/获赞/圈子）：值取自 profile；
 /// 四项点击经 onStatTap 分发对应 type。

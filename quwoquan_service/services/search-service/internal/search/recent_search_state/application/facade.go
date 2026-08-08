@@ -107,7 +107,10 @@ func (f *Facade) Upsert(ctx context.Context, command UpsertCommand) (Result, err
 		return Result{}, unauthorized()
 	}
 	if model.NormalizeQuery(command.Query) == "" {
-		return Result{}, invalidArgument("query is required")
+		return Result{}, recentInvalidArgument("query is required")
+	}
+	if strings.TrimSpace(command.IdempotencyKey) == "" {
+		return Result{}, recentInvalidArgument("Idempotency-Key is required")
 	}
 	receiptKey, digest, err := receiptIdentity(personaID, command.IdempotencyKey, "upsert",
 		model.NormalizeScope(command.Scope), strings.TrimSpace(command.Facet), model.NormalizeQuery(command.Query))
@@ -129,7 +132,7 @@ func (f *Facade) Upsert(ctx context.Context, command UpsertCommand) (Result, err
 		expectedVersion := state.Version
 		entry, changed, upsertErr := state.Upsert(command.Query, command.Facet, f.now())
 		if upsertErr != nil {
-			return Result{}, invalidArgument(upsertErr.Error())
+			return Result{}, recentInvalidArgument(upsertErr.Error())
 		}
 		if !changed {
 			return f.recordNoop(
@@ -377,6 +380,18 @@ func unauthorized() error {
 
 func invalidArgument(debug string) error {
 	return rterrors.NewInvalidArgument(moduleSearch, "最近搜索请求参数不正确", debug)
+}
+
+// recentInvalidArgument is intentionally Upsert-specific. Delete and Clear
+// retain the generic SEARCH.USER.invalid_argument declared by their own
+// operation contracts.
+func recentInvalidArgument(debug string) error {
+	return rterrors.NewAppError(
+		rterrors.NewCode(moduleSearch, rterrors.KindUser, "recent_invalid_argument"),
+		"最近搜索请求参数不正确",
+		debug,
+	).WithMetadata("recent_invalid_argument", 400).
+		WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // 以下错误的 code 与 http_status 均以 search/search/recent_search_state/errors.yaml 为真相源。

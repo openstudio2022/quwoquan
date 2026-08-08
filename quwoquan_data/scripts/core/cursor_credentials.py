@@ -27,6 +27,18 @@ CURSOR_API_KEY_ENV = "CURSOR_API_KEY"
 CURSOR_API_KEY_FILE_ENV = "QWQ_CURSOR_API_KEY_FILE"
 CURSOR_API_KEY_FD_ENV = "QWQ_CURSOR_API_KEY_FD"
 DEFAULT_CURSOR_API_KEY_FILE = Path.home() / ".config" / "quwoquan" / "cursor_api_key"
+CURSOR_SENSITIVE_PROCESS_ENV_KEYS = frozenset(
+    {
+        CURSOR_API_KEY_ENV,
+        CURSOR_API_KEY_FD_ENV,
+        "CURSOR_SDK_BRIDGE_TOKEN",
+        "CURSOR_SDK_BRIDGE_AUTH_TOKEN",
+        "CURSOR_SDK_STORE_CALLBACK_AUTH_TOKEN",
+        "CURSOR_SDK_STORE_CALLBACK_URL",
+        "CURSOR_SDK_TOOL_CALLBACK_AUTH_TOKEN",
+        "CURSOR_SDK_TOOL_CALLBACK_URL",
+    }
+)
 
 # 明确的凭据失效信号。刻意避免裸 "auth" 子串，以免误判 bridge 的
 # "tool-callback-auth-token" argv 噪声（那是 retryable bridge 启动问题，不是凭据失效）。
@@ -161,13 +173,24 @@ def cursor_credential_subprocess_env(
     """Return a scrubbed child environment containing only the FD capability."""
     if credential_fd < 0:
         raise ValueError("Cursor credential FD must be non-negative")
-    env = {
-        str(name): str(value)
-        for name, value in base.items()
-        if name not in {CURSOR_API_KEY_ENV, CURSOR_API_KEY_FD_ENV}
-    }
+    env = cursor_safe_subprocess_env(base)
     env[CURSOR_API_KEY_FD_ENV] = str(credential_fd)
     return env
+
+
+def cursor_safe_subprocess_env(base: Mapping[str, str]) -> dict[str, str]:
+    """Copy process configuration while excluding every Cursor secret channel.
+
+    The external key-file *path* remains available so a runtime child can resolve
+    the canonical 0600 file itself. Credential values, inherited FD capabilities,
+    bridge bearer tokens and callback credentials never cross that boundary.
+    """
+
+    return {
+        str(name): str(value)
+        for name, value in base.items()
+        if str(name) not in CURSOR_SENSITIVE_PROCESS_ENV_KEYS
+    }
 
 
 def is_cursor_auth_error(

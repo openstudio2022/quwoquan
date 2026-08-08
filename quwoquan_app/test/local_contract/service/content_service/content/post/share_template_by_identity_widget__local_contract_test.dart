@@ -28,9 +28,10 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/c
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_sheet.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_external_share_service.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 
 class _FakeShareActionHandler implements ContentShareActionHandler {
@@ -247,21 +248,26 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () async {
-                await const DefaultContentShareActionHandler().execute(
-                  context,
-                  template,
-                  const ContentShareAction(
-                    id: 'copy_link',
-                    label: FoundationText.copyLink,
-                  ),
-                );
-              },
-              child: const Text('trigger'),
+      // 默认分享动作处理器已从 context 取 Riverpod container（埋点/剪贴板 port），
+      // 必须挂在 ProviderScope 下；边界先封死，本用例只走本地剪贴板路径。
+      ProviderScope(
+        overrides: sealedCloudBoundaryOverrides(),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () async {
+                  await const DefaultContentShareActionHandler().execute(
+                    context,
+                    template,
+                    const ContentShareAction(
+                      id: 'copy_link',
+                      label: FoundationText.copyLink,
+                    ),
+                  );
+                },
+                child: const Text('trigger'),
+              ),
             ),
           ),
         ),

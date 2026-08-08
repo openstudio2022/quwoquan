@@ -8,7 +8,6 @@ collections:
     indexes:
     - {name: uq_connector_connections_account_connector, keys: {accountId: 1, connectorId: 1}, unique: true}
     - {name: idx_connector_connections_account_status, keys: {accountId: 1, status: 1, updatedAt: -1}}
-    - {name: idx_connector_connections_expiry, keys: {status: 1, expiresAt: 1}}
   connector_connection_command_receipts:
     publication_role: not_published
     entity: ConnectorConnection

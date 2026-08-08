@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/projection.schema.json",
+  "type": "object",
+  "anyOf": [
+    { "required": ["read_model"] },
+    { "required": ["wire_keys_class"] },
+    { "required": ["dart_enum_name"] },
+    { "required": ["realtime_contract"] }
+  ],
+  "allOf": [
+    {
+      "if": { "required": ["read_model"] },
+      "then": { "$ref": "#/$defs/readModelProjection" }
+    },
+    {
+      "if": { "required": ["wire_keys_class"] },
+      "then": { "$ref": "#/$defs/wireKeysDocument" }
+    },
+    {
+      "if": { "required": ["dart_enum_name"] },
+      "then": { "$ref": "#/$defs/dartEnumSurfaceDocument" }
+    },
+    {
+      "if": { "required": ["realtime_contract"] },
+      "then": { "$ref": "#/$defs/realtimeContractDocument" }
+    }
+  ],
+  "$defs": {
+    "readModelProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read_model", "fields"],
+      "properties": {
+        "read_model": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/projectionFieldEntry" }
+        },
+        "dart_class": { "type": "string", "minLength": 1 },
+        "output_path": { "type": "string", "minLength": 1 },
+        "source_entities": { "$ref": "#/$defs/nameList" },
+        "source_events": { "$ref": "#/$defs/nameList" },
+        "source_projections": { "$ref": "#/$defs/nameList" },
+        "consumers": { "$ref": "#/$defs/nameList" },
+        "consumer": { "type": "string", "minLength": 1 },
+        "producers": { "$ref": "#/$defs/nameList" },
+        "readers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "key": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "storage_backend": { "type": "string", "minLength": 1 },
+        "collection": { "type": "string", "minLength": 1 },
+        "collections": { "$ref": "#/$defs/nameList" },
+        "checkpoint_collection": { "type": "string", "minLength": 1 },
+        "indexes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "keys"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "collection": { "type": "string", "minLength": 1 },
+              "unique": { "type": "boolean" },
+              "keys": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": { "type": "integer" }
+              }
+            }
+          }
+        },
+        "projection_mode": { "type": "string", "minLength": 1 },
+        "consistency": { "type": "string", "minLength": 1 },
+        "reply_preview_limit": { "type": "integer", "minimum": 1 },
+        "checkpoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "source": { "type": "string", "minLength": 1 },
+            "resume": { "type": "string", "minLength": 1 },
+            "rebuild": { "type": "string", "minLength": 1 },
+            "tombstone": { "type": "string", "minLength": 1 }
+          }
+        },
+        "rebuild": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "strategy": { "type": "string", "minLength": 1 },
+            "atomic_replace": { "type": "boolean" },
+            "checkpoint": { "type": "string", "minLength": 1 },
+            "source": { "type": "string", "minLength": 1 },
+            "missing_identity": { "type": "string", "minLength": 1 }
+          }
+        },
+        "tombstone": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "strategy": { "type": "string", "minLength": 1 },
+            "triggers": { "$ref": "#/$defs/nameList" },
+            "retain": { "$ref": "#/$defs/nameList" }
+          }
+        },
+        "privacy_lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "on_user_account_closed": { "type": "string", "minLength": 1 },
+            "anti_resurrection_guard": { "type": "string", "minLength": 1 },
+            "owner_field": { "type": "string", "minLength": 1 }
+          }
+        },
+        "privacy": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "allowed_source": { "type": "string", "minLength": 1 },
+            "forbidden_fields": { "$ref": "#/$defs/nameList" }
+          }
+        },
+        "read_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "actor_scope": { "type": "object", "minProperties": 1 },
+            "filters": { "type": "object", "minProperties": 1 },
+            "limit": { "type": "object", "minProperties": 1 },
+            "pagination": { "type": "object", "minProperties": 1 }
+          }
+        }
+      }
+    },
+    "wireKeysDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wire_keys_class", "keys"],
+      "properties": {
+        "wire_keys_class": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["const_name", "json_key"],
+            "properties": {
+              "const_name": { "type": "string", "minLength": 1 },
+              "json_key": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "dartEnumSurfaceDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dart_enum_name", "surfaces"],
+      "properties": {
+        "dart_enum_name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dart_member"],
+            "properties": {
+              "dart_member": { "type": "string", "minLength": 1 },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "realtimeContractDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realtime_contract",
+        "client_ws_type",
+        "payload_entity",
+        "realtime_channel_template",
+        "client_codegen",
+        "patch_types",
+        "reason_codes",
+        "removal_dimensions",
+        "envelope_fields"
+      ],
+      "properties": {
+        "realtime_contract": { "type": "string", "minLength": 1 },
+        "client_ws_type": { "type": "string", "minLength": 1 },
+        "payload_entity": { "type": "string", "minLength": 1 },
+        "realtime_channel_template": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "client_codegen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "patch_type_enum",
+            "reason_code_enum",
+            "removal_dimension_enum",
+            "envelope_class"
+          ],
+          "properties": {
+            "patch_type_enum": { "type": "string", "minLength": 1 },
+            "reason_code_enum": { "type": "string", "minLength": 1 },
+            "removal_dimension_enum": { "type": "string", "minLength": 1 },
+            "envelope_class": { "type": "string", "minLength": 1 }
+          }
+        },
+        "patch_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "disruption"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "disruption": { "type": "string", "minLength": 1 },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "patch_type"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "patch_type": { "type": "string", "minLength": 1 },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "removal_dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "envelope_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/envelopeField" }
+        }
+      }
+    },
+    "nameList": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "projectionFieldEntry": {
+      "if": { "type": "string" },
+      "then": { "type": "string", "minLength": 1 },
+      "else": { "$ref": "#/$defs/projectionField" }
+    },
+    "projectionField": {
+      "unevaluatedProperties": false,
+      "allOf": [{ "$ref": "#/$defs/projectionFieldCore" }]
+    },
+    "envelopeField": {
+      "unevaluatedProperties": false,
+      "allOf": [{ "$ref": "#/$defs/projectionFieldCore" }],
+      "properties": {
+        "required": { "type": "boolean" }
+      }
+    },
+    "projectionFieldCore": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/name"
+        },
+        "type": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/type"
+        },
+        "enum_ref": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/enum_ref"
+        },
+        "max_utf8_bytes": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/max_utf8_bytes"
+        },
+        "max_items": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/max_items"
+        },
+        "format": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/format"
+        },
+        "co_present_with": {
+          "$ref": "https://quwoquan.local/contracts/metadata/fields.schema.json#/$defs/field/properties/co_present_with"
+        },
+        "nullable": { "type": "boolean" },
+        "description": { "type": "string" },
+        "source": { "type": "string", "minLength": 1 },
+        "default": { "type": "string" },
+        "default_wire": { "type": ["string", "boolean", "integer"] },
+        "dart_type": { "type": "string", "minLength": 1 },
+        "wire_key": { "type": "string", "minLength": 1 },
+        "post_base": { "type": "string", "minLength": 1 },
+        "values": { "$ref": "#/$defs/nameList" },
+        "constraints": { "$ref": "#/$defs/nameList" },
+        "classification": { "type": "string", "minLength": 1 },
+        "log_policy": { "type": "string", "minLength": 1 },
+        "api_exposure": { "type": "string", "minLength": 1 },
+        "ops_exposure": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

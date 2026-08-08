@@ -56,6 +56,9 @@ func bindDataJob(job DataContentJob) DataContentJob {
 		panic(err)
 	}
 	job.IdempotencyKey = key
+	job.JobSetEnvelopeDigest = "sha256:" + strings.Repeat("e", 64)
+	job.JobSetDigest = "sha256:" + strings.Repeat("f", 64)
+	job.ActualTaskDigest = job.JobSetDigest
 	return job
 }
 
@@ -663,6 +666,58 @@ func TestDataContentResultRejectsCommercialAcceptanceBeforePublish(t *testing.T)
 	if err := result.validate(item); err == nil ||
 		!strings.Contains(err.Error(), "requires publish stage") {
 		t.Fatalf("author stage commercial acceptance error=%v", err)
+	}
+}
+
+func TestDataContentResultAcceptsResearchCanonicalPublishWithoutCommercialCount(t *testing.T) {
+	job := dataPublishJob(1)
+	item := DataContentWorkItem{
+		JobID:       job.JobID,
+		ExecutionID: job.ExecutionID,
+		Stage:       job.Stage,
+	}
+	completed := time.Now().UTC()
+	result := DataContentExecutionResult{
+		ExecutionID:           job.ExecutionID,
+		JobID:                 job.JobID,
+		CanonicalObjectRef:    job.Ref,
+		CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ObjectTransactionID:   "txn-research-object-001",
+		ResultEnvelopeRef:     "result_envelope.json",
+		AcceptanceClass:       DataContentAcceptanceResearchCanonical,
+		CompletedAt:           completed,
+	}
+	if err := result.validate(item); err != nil {
+		t.Fatalf("research canonical result rejected: %v", err)
+	}
+	key, err := job.ValidateIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	researchTask := ReliableAsyncTask{
+		TaskID:  "research-publish",
+		Status:  TaskStatusSucceeded,
+		Payload: job.payload(key),
+		Result:  result.document(),
+	}
+	report := BuildDataContentFleetReport(
+		[]ReliableAsyncTask{researchTask},
+		completed.Add(-2*time.Hour),
+		completed.Add(-time.Hour),
+		completed,
+		0,
+		0,
+		1,
+		1,
+	)
+	if !report.Passed ||
+		report.Succeeded != 1 ||
+		report.ObjectTransactionResultCount != 1 ||
+		report.ResearchAcceptedCount != 1 ||
+		report.FinalizedObjectCount != 1 ||
+		report.CommercialAcceptedCount != 0 ||
+		report.EndToEndAcceptedThroughputPerHour <= 0 {
+		t.Fatalf("research canonical report drift: %#v", report)
 	}
 }
 

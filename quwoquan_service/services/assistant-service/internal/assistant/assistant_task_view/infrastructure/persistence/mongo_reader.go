@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -18,6 +19,32 @@ func NewMongoReader(database *mongo.Database) *MongoReader {
 		return &MongoReader{}
 	}
 	return &MongoReader{collection: database.Collection("rm_assistant_tasks")}
+}
+
+func (r *MongoReader) EnsureIndexes(ctx context.Context) error {
+	if r == nil || r.collection == nil {
+		return errors.New("assistant task projection store is unavailable")
+	}
+	_, err := r.collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "accountId", Value: 1}, {Key: "taskId", Value: 1}},
+			Options: options.Index().
+				SetName("uq_assistant_task_account_task").
+				SetUnique(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "accountId", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "updatedAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_assistant_task_account_status_updated"),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("ensure assistant task projection indexes: %w", err)
+	}
+	return nil
 }
 
 func (r *MongoReader) List(ctx context.Context, accountID, status string, limit int) ([]taskmodel.Item, error) {

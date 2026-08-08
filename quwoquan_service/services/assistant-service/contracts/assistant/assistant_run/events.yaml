@@ -18,6 +18,7 @@ events:
 
     非 canonical 结构字段迁移注记：recommend_impact="assistant_quality_signal"。'
   delivery_semantics: transactional_outbox
+  wire_event_type: AssistantRunCompleted
   payload_entity: AssistantRun
   payload_fields:
   - _id

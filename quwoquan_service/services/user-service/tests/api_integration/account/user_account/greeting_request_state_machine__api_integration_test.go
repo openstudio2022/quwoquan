@@ -6,7 +6,39 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
+
+	"quwoquan_service/services/user-service/internal/account/user_account/adapters/inbound/mq"
 )
+
+func waitForGreetingStreamEvent(
+	t *testing.T,
+	eventID string,
+) map[string]string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor := "0-0"
+	for ctx.Err() == nil {
+		messages, err := redisClient.XRead(
+			ctx,
+			map[string]string{mq.GreetingEventStream: cursor},
+			100,
+			100*time.Millisecond,
+		)
+		if err != nil {
+			t.Fatalf("read GreetingRequest stream: %v", err)
+		}
+		for _, message := range messages {
+			cursor = message.ID
+			if message.Values["eventId"] == eventID {
+				return message.Values
+			}
+		}
+	}
+	t.Fatalf("GreetingRequest stream event %q was not published", eventID)
+	return nil
+}
 
 func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	requireMongoBackedRuntime(t)
@@ -30,6 +62,15 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	requestID, _ := sendBody["id"].(string)
 	if requestID == "" {
 		t.Fatalf("expected greeting id, got %#v", sendBody)
+	}
+	streamEvent := waitForGreetingStreamEvent(
+		t,
+		"greeting:"+requestID+":GreetingRequestSent",
+	)
+	if streamEvent["targetPersonaId"] != "sa_gr_tgt" ||
+		streamEvent["recipientAccountId"] != "gr_tgt" ||
+		streamEvent["recipientAccountId"] == streamEvent["targetPersonaId"] {
+		t.Fatalf("GreetingRequest recipient identity drifted: %+v", streamEvent)
 	}
 
 	for _, listing := range []struct {

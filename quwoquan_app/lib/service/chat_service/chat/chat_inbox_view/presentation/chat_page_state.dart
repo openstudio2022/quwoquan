@@ -7,16 +7,120 @@ class _ChatPageState extends ConsumerState<ChatPage>
   bool _hideSecondaryTab = false;
   final ScrollController _scrollController = ScrollController();
   double _lastScrollY = 0;
+  bool _visibilityInitialized = false;
+  bool _isChatVisible = true;
+  bool _authoritativeRefreshInFlight = false;
+  bool _authoritativeRefreshPending = false;
   @override
   bool get wantKeepAlive => true;
   @override
   void initState() {
     super.initState();
+    unawaited(_refreshAuthoritativePageState());
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => mounted
           ? recordChatPageVisit(ref, _mainTabIndex, _subTabIndex)
           : null,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (!_visibilityInitialized) {
+      _visibilityInitialized = true;
+      _isChatVisible = visible;
+      return;
+    }
+    final reentered = visible && !_isChatVisible;
+    _isChatVisible = visible;
+    if (reentered) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isChatVisible) {
+          unawaited(_refreshAuthoritativePageState());
+        }
+      });
+    }
+  }
+
+  Future<void> _refreshAuthoritativePageState() async {
+    if (_authoritativeRefreshInFlight) {
+      _authoritativeRefreshPending = true;
+      return;
+    }
+    _authoritativeRefreshInFlight = true;
+    try {
+      final messageFilters = <String>{'all', 'unread'};
+      if (_mainTabIndex == 0) {
+        final active = _messageHomeFilterForSubTab(
+          _messageSubTabs[_subTabIndex],
+        );
+        if (active != 'notification') {
+          messageFilters.add(active);
+        }
+      }
+      final contactFilters = <ChatContactHomeFilter>{ChatContactHomeFilter.all};
+      if (_mainTabIndex == 1) {
+        contactFilters.add(
+          _contactHomeFilterForSubTab(_contactsSubTabs[_subTabIndex]),
+        );
+      }
+
+      for (final filter in messageFilters) {
+        refreshMessageHomeRows(ref, filter);
+      }
+      for (final filter in contactFilters) {
+        ref.invalidate(chatContactsRowsForSubTabProvider(filter));
+      }
+      ref.invalidate(chatGreetingInboxProvider(20));
+      ref.invalidate(notificationInboxProvider);
+      ref.invalidate(appMessageUnreadCountProvider);
+
+      await Future.wait(<Future<void>>[
+        for (final filter in messageFilters)
+          _settleRefresh(ref.read(messageHomeRowsProvider(filter).future)),
+        for (final filter in contactFilters)
+          _settleRefresh(
+            ref.read(chatContactsRowsForSubTabProvider(filter).future),
+          ),
+        _settleRefresh(ref.read(chatGreetingInboxProvider(20).future)),
+        _settleRefresh(ref.read(notificationInboxProvider.future)),
+        _settleRefresh(ref.read(appMessageUnreadCountProvider.future)),
+      ]);
+    } finally {
+      _authoritativeRefreshInFlight = false;
+      final shouldRefreshAgain =
+          _authoritativeRefreshPending && mounted && _isChatVisible;
+      _authoritativeRefreshPending = false;
+      if (shouldRefreshAgain) {
+        unawaited(_refreshAuthoritativePageState());
+      }
+    }
+  }
+
+  Future<void> _settleRefresh<T>(Future<T> refresh) async {
+    try {
+      await refresh;
+    } catch (_) {
+      // Each owning provider retains its typed error for its own section.
+    }
+  }
+
+  Future<void> _retryMessageHome(String filter) async {
+    if (ref.read(messageHomeRowsProvider(filter)).isLoading) {
+      return;
+    }
+    refreshMessageHomeRows(ref, filter);
+    await _settleRefresh(ref.read(messageHomeRowsProvider(filter).future));
+  }
+
+  Future<void> _retryGreetingInbox() async {
+    if (ref.read(chatGreetingInboxProvider(20)).isLoading) {
+      return;
+    }
+    ref.invalidate(chatGreetingInboxProvider(20));
+    await _settleRefresh(ref.read(chatGreetingInboxProvider(20).future));
   }
 
   @override
@@ -313,57 +417,97 @@ class _ChatPageState extends ConsumerState<ChatPage>
       );
     }
     final messageRows = ref.watch(messageHomeRowsProvider(messageFilter));
-    final greetingInbox = ref.watch(chatGreetingInboxProvider(20));
-    final pendingGreetings = greetingInbox.maybeWhen(
-      data: (items) =>
-          items.where((greeting) => greeting.isPending).toList(growable: false),
-      orElse: () => const <GreetingRequestViewData>[],
-    );
+    final greetingInbox = _subTabIndex == 0
+        ? ref.watch(chatGreetingInboxProvider(20))
+        : null;
+    final pendingGreetings =
+        greetingInbox?.value
+            ?.where((greeting) => greeting.isPending)
+            .toList(growable: false) ??
+        const <GreetingRequestViewData>[];
     final shouldShowGreetingInbox =
         _subTabIndex == 0 && pendingGreetings.isNotEmpty;
-    final items = messageRows.maybeWhen(
-      data: (state) => state.rows
-          .map(ChatListItemViewModel.fromMessageHomeDto)
-          .toList(growable: false),
-      orElse: () => const <ChatListItemViewModel>[],
-    );
     final rowsState = messageRows.value;
-    final cacheFallbackError = rowsState?.cacheFallbackError;
-    final shouldShowCacheFallback = cacheFallbackError != null;
+    final items =
+        rowsState?.rows
+            .map(ChatListItemViewModel.fromMessageHomeDto)
+            .toList(growable: false) ??
+        const <ChatListItemViewModel>[];
+    final rowError = messageRows.hasError && !messageRows.isLoading
+        ? messageRows.error
+        : null;
+    final greetingError =
+        greetingInbox != null &&
+            greetingInbox.hasError &&
+            !greetingInbox.isLoading
+        ? greetingInbox.error
+        : null;
+    final messageInitialLoading = messageRows.isLoading && rowsState == null;
+    final greetingInitialLoading =
+        greetingInbox != null &&
+        greetingInbox.isLoading &&
+        greetingInbox.value == null;
 
-    final isLoading = messageRows.maybeWhen(
-      loading: () => true,
-      orElse: () => false,
-    );
-    final rowError = messageRows.maybeWhen(
-      error: (error, _) => error,
-      orElse: () => null,
-    );
-
-    if (isLoading && items.isEmpty && greetingInbox.isLoading) {
+    if (messageInitialLoading && greetingInitialLoading) {
       return AppRequestFeedback.page();
     }
 
-    if (rowError != null && items.isEmpty) {
-      return AppPageErrorState(
-        semantic: _chatListBlockingErrorSemantic(context, rowError),
-        onRecovery: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            refreshMessageHomeRows(ref, messageFilter);
-            return UiRecoveryOutcome.superseded;
-          }
-          return UiRecoveryOutcome.cancelled;
-        },
-      );
-    }
-
-    if (items.isEmpty && !shouldShowGreetingInbox) {
+    if (items.isEmpty &&
+        !shouldShowGreetingInbox &&
+        rowError == null &&
+        greetingError == null &&
+        !messageInitialLoading &&
+        !greetingInitialLoading) {
       return _buildConversationEmptyState(
         fgSecondary: fgSecondary,
         subTab: _messageSubTabs[_subTabIndex],
       );
     }
+
+    final sectionRows = <Widget>[
+      if (rowError != null)
+        AppSectionErrorCard(
+          key: const ValueKey<String>('chat-message-home-error-section'),
+          semantic: _chatListSectionErrorSemantic(context, rowError),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _retryMessageHome(messageFilter);
+            }
+          },
+        )
+      else if (messageInitialLoading)
+        KeyedSubtree(
+          key: const ValueKey<String>('chat-message-home-loading-section'),
+          child: AppRequestFeedback.section(),
+        ),
+      if (greetingError != null)
+        AppSectionErrorCard(
+          key: const ValueKey<String>('chat-greeting-inbox-error-section'),
+          semantic: _chatListSectionErrorSemantic(context, greetingError),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _retryGreetingInbox();
+            }
+          },
+        )
+      else if (greetingInitialLoading)
+        KeyedSubtree(
+          key: const ValueKey<String>('chat-greeting-inbox-loading-section'),
+          child: AppRequestFeedback.section(),
+        ),
+      if (shouldShowGreetingInbox)
+        _GreetingInboxTile(
+          pendingCount: pendingGreetings.length,
+          latest: pendingGreetings.first,
+          fgPrimary: fgPrimary,
+          fgSecondary: fgSecondary,
+          backgroundColor: listItemBackground,
+          dividerColor: listDividerColor,
+          onTap: () => context.push(AppRoutePaths.greetingInbox),
+        ),
+    ];
 
     return ListView.builder(
       controller: _scrollController,
@@ -372,34 +516,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
             MediaQuery.viewPaddingOf(context).bottom +
             AppSpacing.bottomNavBarHeight(context),
       ),
-      itemCount:
-          items.length +
-          (shouldShowGreetingInbox ? 1 : 0) +
-          (shouldShowCacheFallback ? 1 : 0),
+      itemCount: sectionRows.length + items.length,
       itemBuilder: (context, index) {
-        if (shouldShowCacheFallback && index == 0) {
-          return AppTransientErrorNotice(
-            semantic: _chatListCacheFallbackSemantic(
-              context,
-              cacheFallbackError,
-            ),
-          );
+        if (index < sectionRows.length) {
+          return sectionRows[index];
         }
-        final adjustedIndex = shouldShowCacheFallback ? index - 1 : index;
-        if (shouldShowGreetingInbox && adjustedIndex == 0) {
-          return _GreetingInboxTile(
-            pendingCount: pendingGreetings.length,
-            latest: pendingGreetings.first,
-            fgPrimary: fgPrimary,
-            fgSecondary: fgSecondary,
-            backgroundColor: listItemBackground,
-            dividerColor: listDividerColor,
-            onTap: () => context.push(AppRoutePaths.greetingInbox),
-          );
-        }
-        final itemIndex = shouldShowGreetingInbox
-            ? adjustedIndex - 1
-            : adjustedIndex;
+        final itemIndex = index - sectionRows.length;
         final item = items[itemIndex];
         return _InboxConversationTile(
           item: item,
@@ -512,17 +634,16 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  UiErrorSemantic _chatListCacheFallbackSemantic(
+  UiErrorSemantic _chatListSectionErrorSemantic(
     BuildContext context,
     Object error,
   ) {
     return runtimeErrorSemantic(
       context,
       error: error,
-      category: UiErrorCategory.backgroundAction,
+      category: UiErrorCategory.sectionLoad,
       scope: UiErrorScope.section,
-      allowRetry: false,
-      presentation: UiErrorPresentation.transientNotice,
+      presentation: UiErrorPresentation.sectionSoftCard,
     );
   }
 
@@ -595,6 +716,15 @@ class _ChatPageState extends ConsumerState<ChatPage>
     };
   }
 
+  ChatContactHomeFilter _contactHomeFilterForSubTab(String subTab) {
+    return switch (subTab) {
+      ChatText.contactsTabMutualFollow => ChatContactHomeFilter.mutual,
+      ChatText.contactsTabCircles => ChatContactHomeFilter.circle,
+      ChatText.contactsTabGroups => ChatContactHomeFilter.group,
+      _ => ChatContactHomeFilter.all,
+    };
+  }
+
   Widget _buildContactsContent(
     BuildContext context,
     Color fgPrimary,
@@ -604,7 +734,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color listDividerColor,
   ) {
     final sub = _contactsSubTabs[_subTabIndex];
-    final asyncRows = ref.watch(chatContactsRowsForSubTabProvider(sub));
+    final filter = _contactHomeFilterForSubTab(sub);
+    final asyncRows = ref.watch(chatContactsRowsForSubTabProvider(filter));
     return asyncRows.when(
       data: (list) {
         if (list.isEmpty) {
@@ -695,7 +826,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           row.kind == ChatContactsRowKind.group
-                              ? ConversationAvatar(
+                              ? ref.watch(conversationAvatarBuilderProvider)(
                                   conversationId: row.conversationId ?? row.id,
                                   conversationType: 'group',
                                   title: row.displayName,
@@ -778,7 +909,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
         onRecovery: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
-            ref.invalidate(chatContactsRowsForSubTabProvider(sub));
+            ref.invalidate(chatContactsRowsForSubTabProvider(filter));
             return UiRecoveryOutcome.superseded;
           }
           return UiRecoveryOutcome.cancelled;

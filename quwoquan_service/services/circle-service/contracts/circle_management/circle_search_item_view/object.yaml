@@ -61,6 +61,7 @@ lifecycle:
   checkpoint: circle_outbox_sequence
   rebuild: replay_circle_public_events
   tombstone: delete_search_item_keep_checkpoint
+  idempotency: aggregate_version
   event_consumers:
   - name: ProjectCircleSearchItem
     kind: projector

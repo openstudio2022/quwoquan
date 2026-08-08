@@ -26,6 +26,7 @@ const (
 	cliOperationID = "assistant.assistant_run.ApproveAssistantToolUse"
 	cliPageID      = "assistant.personal_session"
 	cliSpecRef     = "specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003"
+	cliSourcePath  = "assistant/assistant/assistant_run/operations.yaml"
 )
 
 func TestCLIRequiresTheSignedSnapshotReceiptAndEvidenceChain(t *testing.T) {
@@ -249,22 +250,29 @@ func cliGraph() *graph.ContractGraph {
 		}
 	}
 	cases := []ast.ReadinessCaseContract{
-		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "service-local", Producer: ast.ReadinessProducerService, Layer: ast.ReadinessLayerLocalContract, Target: operationTarget, RunnerSourcePath: "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/readiness_case_test.go", SourcePath: "assistant/assistant_run/operations.yaml", Executions: []ast.ReadinessExecutionRequirement{execution("alpha", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate)}},
-		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "service-api", Producer: ast.ReadinessProducerService, Layer: ast.ReadinessLayerAPIIntegration, Target: operationTarget, RunnerSourcePath: "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/readiness_case_test.go", SourcePath: "assistant/assistant_run/operations.yaml", Executions: []ast.ReadinessExecutionRequirement{execution("beta", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate)}},
-		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "physical-uat", Producer: ast.ReadinessProducerApp, Layer: ast.ReadinessLayerUserAcceptance, Target: pageTarget, RunnerSourcePath: "quwoquan_app/test/user_acceptance/service/assistant_service/assistant/assistant_run/readiness_case_test.dart", SourcePath: "assistant/assistant_run/operations.yaml", Executions: []ast.ReadinessExecutionRequirement{execution("alpha", "android", "physical", "provider-live", ast.ReadinessDigestCandidate), execution("beta", "ios", "physical", "provider-live", ast.ReadinessDigestCandidate)}},
-		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "environment", Producer: ast.ReadinessProducerOps, Layer: ast.ReadinessLayerEnvironmentAcceptance, Target: objectTarget, RunnerSourcePath: "quwoquan_ops/tests/acceptance/environment_acceptance/assistant/assistant/assistant_run/readiness_case_test.py", SourcePath: "assistant/assistant_run/operations.yaml", Executions: []ast.ReadinessExecutionRequirement{execution("alpha", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("beta", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("gamma", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("prod", "linux", "managed-runner", "provider-live", ast.ReadinessDigestRelease)}},
-		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "rollback", Producer: ast.ReadinessProducerOps, Layer: ast.ReadinessLayerRollback, Target: objectTarget, RunnerSourcePath: "quwoquan_ops/tests/acceptance/rollback/assistant/assistant/assistant_run/readiness_case_test.py", SourcePath: "assistant/assistant_run/operations.yaml", Executions: []ast.ReadinessExecutionRequirement{execution("gamma", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("prod", "linux", "managed-runner", "provider-live", ast.ReadinessDigestRelease)}},
-		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "replay", Producer: ast.ReadinessProducerOps, Layer: ast.ReadinessLayerReplay, Target: objectTarget, RunnerSourcePath: "quwoquan_ops/tests/acceptance/replay/assistant/assistant/assistant_run/readiness_case_test.py", SourcePath: "assistant/assistant_run/operations.yaml", Executions: []ast.ReadinessExecutionRequirement{execution("gamma", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("prod", "linux", "managed-runner", "provider-live", ast.ReadinessDigestRelease)}},
+		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "service-local", Producer: ast.ReadinessProducerService, Layer: ast.ReadinessLayerLocalContract, Target: operationTarget, RunnerSourcePath: "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/readiness_case_test.go", SourcePath: cliSourcePath, Executions: []ast.ReadinessExecutionRequirement{execution("alpha", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate)}},
+		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "service-api", Producer: ast.ReadinessProducerService, Layer: ast.ReadinessLayerAPIIntegration, Target: operationTarget, RunnerSourcePath: "quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/readiness_case_test.go", SourcePath: cliSourcePath, Executions: []ast.ReadinessExecutionRequirement{execution("beta", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate)}},
+		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "physical-uat", Producer: ast.ReadinessProducerApp, Layer: ast.ReadinessLayerUserAcceptance, Target: pageTarget, RunnerSourcePath: "quwoquan_app/test/user_acceptance/service/assistant_service/assistant/assistant_run/readiness_case_test.dart", SourcePath: cliSourcePath, Executions: []ast.ReadinessExecutionRequirement{execution("alpha", "android", "physical", "provider-live", ast.ReadinessDigestCandidate), execution("beta", "ios", "physical", "provider-live", ast.ReadinessDigestCandidate)}},
+		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "environment", Producer: ast.ReadinessProducerOps, Layer: ast.ReadinessLayerEnvironmentAcceptance, Target: objectTarget, RunnerSourcePath: "quwoquan_ops/tests/acceptance/environment_acceptance/assistant/assistant/assistant_run/readiness_case_test.py", SourcePath: cliSourcePath, Executions: []ast.ReadinessExecutionRequirement{execution("alpha", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("beta", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("gamma", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("prod", "linux", "managed-runner", "provider-live", ast.ReadinessDigestRelease)}},
+		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "rollback", Producer: ast.ReadinessProducerOps, Layer: ast.ReadinessLayerRollback, Target: objectTarget, RunnerSourcePath: "quwoquan_ops/tests/acceptance/rollback/assistant/assistant/assistant_run/readiness_case_test.py", SourcePath: cliSourcePath, Executions: []ast.ReadinessExecutionRequirement{execution("gamma", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("prod", "linux", "managed-runner", "provider-live", ast.ReadinessDigestRelease)}},
+		{ObjectID: cliObjectID, SpecRef: cliSpecRef, CaseID: "replay", Producer: ast.ReadinessProducerOps, Layer: ast.ReadinessLayerReplay, Target: objectTarget, RunnerSourcePath: "quwoquan_ops/tests/acceptance/replay/assistant/assistant/assistant_run/readiness_case_test.py", SourcePath: cliSourcePath, Executions: []ast.ReadinessExecutionRequirement{execution("gamma", "linux", "managed-runner", "provider-live", ast.ReadinessDigestCandidate), execution("prod", "linux", "managed-runner", "provider-live", ast.ReadinessDigestRelease)}},
 	}
 	return &graph.ContractGraph{
-		Objects: []ast.Object{{ID: cliObjectID, Domain: "assistant", Name: "assistant_run"}},
+		Objects: []ast.Object{{
+			ID: cliObjectID, Domain: "assistant", Name: "assistant_run",
+			SourcePath: "assistant/assistant/assistant_run/object.yaml",
+		}},
 		Operations: []ast.Operation{{
 			ID: cliOperationID, LocalID: "ApproveAssistantToolUse", ObjectID: cliObjectID,
 			Commercial: ast.CommercialBinding{Status: "ready"},
 		}},
 		ReadinessCases:  cases,
 		ObjectReadiness: []graph.ObjectReadiness{{ObjectID: cliObjectID, Implemented: true}},
-		Sources:         []ast.SourceDigest{{Path: "assistant/assistant_run/operations.yaml", SHA256: strings.Repeat("b", 64)}, {Path: "_shared/page_object_contract.yaml", SHA256: strings.Repeat("8", 64)}},
+		ReadinessEvidence: []ast.ObjectReadinessEvidence{{
+			ObjectID:   cliObjectID,
+			SourcePath: "quwoquan_service/services/assistant-service/internal/assistant/assistant_run",
+		}},
+		Sources: []ast.SourceDigest{{Path: cliSourcePath, SHA256: strings.Repeat("b", 64)}, {Path: "_shared/page_object_contract.yaml", SHA256: strings.Repeat("8", 64)}},
 		Documents: []ast.SourceDocument{{
 			Path: "_shared/page_object_contract.yaml", MediaType: "application/yaml",
 			SHA256:  strings.Repeat("8", 64),

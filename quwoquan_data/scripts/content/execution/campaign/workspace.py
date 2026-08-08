@@ -31,6 +31,12 @@ from content.execution.campaign.source_snapshot import (
     materialize_source_snapshot,
 )
 from content.execution.identity import validate_execution_id
+from content.execution.campaign.source_pool_binding import (
+    capsule_source_pool_fields,
+    load_capsule_source_pool,
+    materialize_bound_scale_source_pool,
+    resolve_capsule_scale_source_pool_identity,
+)
 
 CAPSULE_SCHEMA = "quwoquan_data.content_campaign_source_capsule"
 CAPSULE_FORMAT = SNAPSHOT_FORMAT
@@ -75,6 +81,9 @@ class SourceCapsule:
     lane_external_inputs: dict[str, dict[str, Any]]
     roots: tuple[str, ...]
     read_only: bool
+    scale_source_pool: dict[str, Any] | None = None
+    lane_source_pool_selections: dict[str, dict[str, Any]] | None = None
+    source_pool_snapshot_root_ref: str | None = None
 
     def external_input_root(self, carrier: str) -> Path:
         lane = self.lane_external_inputs.get(carrier)
@@ -84,6 +93,14 @@ class SourceCapsule:
         root = (self.path / relative).resolve()
         if self.path.resolve() not in root.parents:
             raise ValueError("campaign capsule external input root escapes capsule")
+        return root
+
+    def source_pool_snapshot_root(self) -> Path:
+        if not self.source_pool_snapshot_root_ref:
+            raise ValueError("campaign capsule has no scale source pool")
+        root = (self.path / self.source_pool_snapshot_root_ref).resolve()
+        if self.path.resolve() not in root.parents:
+            raise ValueError("campaign capsule source pool escapes capsule")
         return root
 
 
@@ -246,6 +263,7 @@ def _capsule_identity(
     entity_catalog_digest: str,
     lane_external_inputs: dict[str, dict[str, Any]],
     external_inputs_digest: str,
+    source_pool_fields: dict[str, Any],
     roots: tuple[str, ...],
 ) -> tuple[dict[str, Any], str]:
     stable = {
@@ -259,6 +277,7 @@ def _capsule_identity(
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": external_inputs_digest,
     }
+    stable.update(source_pool_fields)
     return stable, _canonical_digest(stable)
 
 
@@ -348,6 +367,9 @@ def _load_capsule(
             source_digest=str(stable["sourceDigest"]),
             entity_catalog_digest=str(stable["entityCatalogDigest"]),
         )
+    pool_binding, lane_pool_selections, snapshot_root_ref = load_capsule_source_pool(
+        stable, capsule_path=path
+    )
     if not _tree_is_read_only(path):
         raise ValueError("campaign capsule must be read-only")
     return SourceCapsule(
@@ -363,6 +385,9 @@ def _load_capsule(
             str(carrier): dict(lane)
             for carrier, lane in stable["laneExternalInputs"].items()
         },
+        scale_source_pool=pool_binding,
+        lane_source_pool_selections=lane_pool_selections,
+        source_pool_snapshot_root_ref=snapshot_root_ref,
         roots=tuple(str(item) for item in stable["roots"]),
         read_only=True,
     )
@@ -377,6 +402,9 @@ def prepare_source_capsule(
     entity_catalog_digest: str,
     lane_external_inputs: dict[str, dict[str, Any]],
     external_inputs_digest: str,
+    scale_source_pool: dict[str, Any] | None = None,
+    source_pool_evidence_root_ref: str | None = None,
+    lane_source_pool_selections: dict[str, dict[str, Any]] | None = None,
 ) -> SourceCapsule:
     """Export one immutable source tree shared by all four lane processes."""
     if set(lane_external_inputs) != {"homepage", "article", "image", "video"}:
@@ -412,6 +440,20 @@ def prepare_source_capsule(
         runtime_paths.repo_root,
         expected_digest=source_digest,
     )
+    source_pool_snapshot_root_ref, source_pool_snapshot_digest = (
+        resolve_capsule_scale_source_pool_identity(
+            scale_source_pool,
+            evidence_root_ref=source_pool_evidence_root_ref,
+            output_root=runtime_paths.output_root,
+            lane_selections=lane_source_pool_selections,
+        )
+    )
+    source_pool_fields = capsule_source_pool_fields(
+        scale_source_pool,
+        lane_source_pool_selections,
+        source_pool_snapshot_root_ref,
+        source_pool_snapshot_digest,
+    )
     stable, capsule_digest = _capsule_identity(
         commit_sha=commit_sha,
         source_revision=source_revision,
@@ -420,6 +462,7 @@ def prepare_source_capsule(
         lane_external_inputs=capsule_lanes,
         external_inputs_digest=external_inputs_digest,
         roots=roots,
+        source_pool_fields=source_pool_fields,
     )
     key = capsule_digest.removeprefix("sha256:")
     capsules_root = runtime_paths.workspaces_root / "content-addressed-capsules"
@@ -458,6 +501,15 @@ def prepare_source_capsule(
                     source_revision=source_revision,
                     source_digest=source_digest,
                     entity_catalog_digest=entity_catalog_digest,
+                )
+            if scale_source_pool is not None:
+                materialize_bound_scale_source_pool(
+                    scale_source_pool,
+                    evidence_root_ref=str(source_pool_evidence_root_ref),
+                    output_root=runtime_paths.output_root,
+                    destination=temp_root / str(source_pool_snapshot_root_ref),
+                    lane_selections=lane_source_pool_selections or {},
+                    expected_snapshot_digest=source_pool_snapshot_digest,
                 )
             write_json(
                 temp_root / ".qwq_campaign_capsule.json",

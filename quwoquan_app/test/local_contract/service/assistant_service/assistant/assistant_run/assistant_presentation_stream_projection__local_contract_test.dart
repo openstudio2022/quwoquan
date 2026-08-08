@@ -45,13 +45,18 @@ void main() {
       _event(
         AssistantStreamEventType.presentationCommit,
         revision: 3,
-        payload: <String, dynamic>{'baseRevision': 2, 'revision': 3},
+        payload: <String, dynamic>{
+          'baseRevision': 2,
+          'revision': 3,
+          'committedAt': '2026-07-31T12:00:03.000Z',
+        },
       ),
     );
 
     expect(projection.committed, isTrue);
     expect(projection.revision, 3);
     expect(projection.document?.revision, 3);
+    expect(projection.document?.committedAt, '2026-07-31T12:00:03.000Z');
     expect(projection.document?.nodes.single.body, '更新后的行程');
   });
 
@@ -102,7 +107,11 @@ void main() {
       _event(
         AssistantStreamEventType.presentationCommit,
         revision: 2,
-        payload: <String, dynamic>{'baseRevision': 1, 'revision': 2},
+        payload: <String, dynamic>{
+          'baseRevision': 1,
+          'revision': 2,
+          'committedAt': '2026-07-31T12:00:02.000Z',
+        },
       ),
     );
     expect(
@@ -119,6 +128,134 @@ void main() {
       ),
       throwsFormatException,
     );
+  });
+
+  test('commit 缺失或伪造时间时不改变尚未提交的投影', () {
+    for (final committedAt in <Object?>[
+      null,
+      '',
+      20260731,
+      '2026-07-31',
+      'not-a-timestamp',
+    ]) {
+      final projection = AssistantPresentationStreamProjection();
+      projection.apply(
+        _event(
+          AssistantStreamEventType.presentationSnapshot,
+          revision: 1,
+          payload: <String, dynamic>{
+            'baseRevision': 0,
+            'revision': 1,
+            'document': _documentJson(revision: 1),
+          },
+        ),
+      );
+      final payload = <String, dynamic>{'baseRevision': 1, 'revision': 2};
+      if (committedAt != null) {
+        payload['committedAt'] = committedAt;
+      }
+
+      expect(
+        () => projection.apply(
+          _event(
+            AssistantStreamEventType.presentationCommit,
+            revision: 2,
+            payload: payload,
+          ),
+        ),
+        throwsFormatException,
+      );
+      expect(projection.committed, isFalse);
+      expect(projection.revision, 1);
+      expect(projection.document?.committedAt, isEmpty);
+    }
+  });
+
+  test('未提交 snapshot 可在恢复后继续 commit，伪造 seed 时间 fail closed', () {
+    final projection = AssistantPresentationStreamProjection();
+    projection.seed(
+      AssistantPresentationDocumentWire.fromJson(_documentJson(revision: 1)),
+    );
+
+    expect(projection.revision, 1);
+    expect(projection.committed, isFalse);
+    projection.apply(
+      _event(
+        AssistantStreamEventType.presentationCommit,
+        revision: 2,
+        payload: <String, dynamic>{
+          'baseRevision': 1,
+          'revision': 2,
+          'committedAt': '2026-07-31T12:00:02Z',
+        },
+      ),
+    );
+    expect(projection.committed, isTrue);
+    expect(projection.document?.committedAt, '2026-07-31T12:00:02Z');
+
+    final invalid = AssistantPresentationStreamProjection();
+    expect(
+      () => invalid.seed(
+        AssistantPresentationDocumentWire.fromJson(
+          _documentJson(revision: 1, committedAt: 'not-a-timestamp'),
+        ),
+      ),
+      throwsFormatException,
+    );
+    expect(invalid.document, isNull);
+    expect(invalid.revision, 0);
+  });
+
+  test('小数 presentation revision 不得截断后进入投影', () {
+    for (final payload in <Map<String, dynamic>>[
+      <String, dynamic>{
+        'baseRevision': 0.5,
+        'revision': 1,
+        'document': _documentJson(revision: 1),
+      },
+      <String, dynamic>{
+        'baseRevision': 0,
+        'revision': 1.5,
+        'document': _documentJson(revision: 1),
+      },
+    ]) {
+      final projection = AssistantPresentationStreamProjection();
+      expect(
+        () => projection.apply(
+          _event(
+            AssistantStreamEventType.presentationSnapshot,
+            revision: 1,
+            payload: payload,
+          ),
+        ),
+        throwsFormatException,
+      );
+      expect(projection.document, isNull);
+      expect(projection.revision, 0);
+    }
+  });
+
+  test('snapshot 不得伪造已提交时间', () {
+    final projection = AssistantPresentationStreamProjection();
+    expect(
+      () => projection.apply(
+        _event(
+          AssistantStreamEventType.presentationSnapshot,
+          revision: 1,
+          payload: <String, dynamic>{
+            'baseRevision': 0,
+            'revision': 1,
+            'document': _documentJson(
+              revision: 1,
+              committedAt: '2026-07-31T12:00:00Z',
+            ),
+          },
+        ),
+      ),
+      throwsFormatException,
+    );
+    expect(projection.document, isNull);
+    expect(projection.revision, 0);
   });
 }
 
@@ -142,6 +279,7 @@ AssistantStreamEventWire _event(
 Map<String, dynamic> _documentJson({
   required int revision,
   String body = '原始行程',
+  String committedAt = '',
 }) {
   const digest =
       'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -169,6 +307,6 @@ Map<String, dynamic> _documentJson({
     'selectedVariant': 'compact',
     'fallbackMarkdown': '## 旅行行程\n完整降级内容',
     'fallbackPlainText': '旅行行程 完整降级内容',
-    'committedAt': '2026-07-31T12:00:00.000Z',
+    'committedAt': committedAt,
   };
 }

@@ -73,7 +73,9 @@ def _content_capacity_gate_for_entity(
     """
     from content.post.article.base_draft import base_draft_readiness, load_base_draft_text
     from content.post.article.base_draft_source import extract_source_title
-    from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
+    from content.execution.controller.content_plan_asset_semantics import (
+        article_asset_semantic_issue,
+    )
     from content.source.source_unit import iter_source_units, resolve_entity_object_dir
     spec = active_spec or _active_spec(ctx)
     quotas = (spec.get("content") or {}).get("quotas") or {}
@@ -162,6 +164,14 @@ def _content_capacity_gate_for_entity(
         for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
         if str(target.get("name") or "").strip()
     )
+    entity_aliases = tuple(
+        str(alias).strip()
+        for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
+        if isinstance(target, Mapping)
+        and str(target.get("name") or "").strip() == entity_id
+        for alias in target.get("aliases") or []
+        if str(alias).strip()
+    )
     for source_dir in source_units:
         meta_path = source_dir / "meta.json"
         quality_path = source_dir / "source.quality.json"
@@ -236,8 +246,22 @@ def _content_capacity_gate_for_entity(
             if not extract_source_title(ctx.execution_id, source_ref):
                 article_rejects["no_source_title"] += 1
                 continue
-            if not rows:
-                article_image_soft_warnings["no_source_assets"] += 1
+            admitted_rows: list[dict[str, Any]] = []
+            for row in rows:
+                semantic_issue = article_asset_semantic_issue(
+                    row,
+                    entity_id=entity_id,
+                    entity_aliases=entity_aliases,
+                    article_text=base_body,
+                )
+                if semantic_issue:
+                    article_image_soft_warnings["asset_semantic_mismatch"] += 1
+                    continue
+                admitted_rows.append(row)
+            if len(admitted_rows) < 2:
+                article_rejects["same_source_cover_body_missing"] += 1
+                article_image_soft_warnings["no_publishable_source_asset"] += 1
+                continue
             article_source_closure.append(
                 {
                     "sourceId": source_id,
@@ -268,7 +292,7 @@ def _content_capacity_gate_for_entity(
                         or ((meta.get("siteTemplate") or {}).get("freshnessTier") if isinstance(meta.get("siteTemplate"), Mapping) else "")
                         or ""
                     ),
-                    "rows": rows,
+                    "rows": admitted_rows,
                 }
             )
         elif lane == "image":

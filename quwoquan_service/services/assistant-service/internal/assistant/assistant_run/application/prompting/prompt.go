@@ -82,49 +82,6 @@ func FormatModelPreferencesForPrompt(
 	return strings.Join(lines, "\n")
 }
 
-func FormatConfirmedPreferencesForPrompt(
-	longTerm []preferencemodel.AssistantPreferenceSnapshot,
-) string {
-	lines := []string{
-		"\n用户已确认的私人长期记忆（仅在当前渠道允许 private_long_term 时注入；不得扩大含义或暴露来源标识）：",
-	}
-	for _, preference := range longTerm {
-		if !preferencemodel.RequiresExplicitConfirmation(preference.Kind) {
-			continue
-		}
-		value := strings.TrimSpace(preference.Value)
-		if value == "" {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf(
-			"- %s: %s（scope=%s, source=%s）",
-			confirmedPreferenceLabel(preference.Kind),
-			value,
-			preference.Scope,
-			preference.SourceType,
-		))
-	}
-	if len(lines) == 1 {
-		return ""
-	}
-	return strings.Join(lines, "\n")
-}
-
-func confirmedPreferenceLabel(kind preferencemodel.Kind) string {
-	switch kind {
-	case preferencemodel.KindFrequentLocations:
-		return "常用地点"
-	case preferencemodel.KindFamilyTerms:
-		return "家庭成员称谓"
-	case preferencemodel.KindDietaryRestrictions:
-		return "饮食禁忌"
-	case preferencemodel.KindTravelPreferences:
-		return "出行偏好"
-	default:
-		return string(kind)
-	}
-}
-
 // FormatAuthorizedIntersectionEvidenceForPrompt 只序列化 content Reader 已回查的
 // 当前事实；禁止把客户端交集卡标题、标签、URL 或样本透传给模型。
 func FormatAuthorizedIntersectionEvidenceForPrompt(

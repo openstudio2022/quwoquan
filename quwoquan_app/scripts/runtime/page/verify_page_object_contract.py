@@ -270,13 +270,30 @@ def _declared_parent_mount_closures(
     for candidate in page.get("additional_parent_page_ids", []) or []:
         if _nonempty_string(candidate):
             parent_ids.append(str(candidate).strip())
-    return {
-        parent_id: _direct_app_dart_closure(
-            str(pages_by_id[parent_id].get("source_path", "")).strip()
+    closures: dict[str, set[str]] = {}
+    for parent_id in parent_ids:
+        parent_page = pages_by_id.get(parent_id)
+        if parent_page is None:
+            continue
+        seeds: list[str] = []
+        source = parent_page.get("source_path")
+        if _nonempty_string(source):
+            seeds.append(str(source).strip())
+        # A routed parent may inject an embedded child through a typed DI slot
+        # instead of importing the child from its presentation source.  The
+        # route-registration evidence is already an authored, fail-closed page
+        # binding, so accept only its direct library/import/part closure; never
+        # walk arbitrary transitive imports or scan the whole runtime/di tree.
+        route_evidence = _string_list(
+            parent_page.get("route_registration_evidence")
         )
-        for parent_id in parent_ids
-        if parent_id in pages_by_id
-    }
+        if route_evidence is not None:
+            seeds.extend(route_evidence)
+        closure: set[str] = set()
+        for seed in seeds:
+            closure.update(_direct_app_dart_closure(seed))
+        closures[parent_id] = closure
+    return closures
 
 
 def _direct_constructor_sites(entry_widget: str, *, source: str) -> set[str]:
@@ -348,7 +365,7 @@ def _parent_mount_evidence_errors(
         ):
             errors.append(
                 f"{page_id}: mount evidence {evidence} 不属于任何声明 parent "
-                "的 canonical source/direct import/part closure"
+                "的 canonical source/route registration direct import/part closure"
             )
     for parent_id, closure in parent_closures.items():
         if not any(evidence in closure for evidence in evidence_paths):

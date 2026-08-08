@@ -7,10 +7,7 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
-
-from core.control_types import QueueBackend
-
-from content.execution.queue.core import _load_jobs
+from content.execution.queue.backend import load_reliabletask_job_set_envelopes
 from content.execution.queue.reliabletask.transport import (
     ReliableTaskFleetTransport,
     resolve_reliabletask_fleet_transport,
@@ -23,8 +20,16 @@ from content.execution.runtime_evidence.contract import (
 from content.execution.runtime_evidence.reliabletask_contract import (
     ExecutionTarget as _ExecutionTarget,
     ExpectedTask as _ExpectedTask,
+    JobSetTarget as _JobSetTarget,
+    LEASE_STATES as _LEASE_STATES,
+    OBSERVATION_FIELDS as _OBSERVATION_FIELDS,
+    TASK_OPTIONAL_FIELDS as _TASK_OPTIONAL_FIELDS,
+    TASK_REQUIRED_FIELDS as _TASK_REQUIRED_FIELDS,
+    TASK_STATUSES as _TASK_STATUSES,
     campaign_binding as _campaign_binding,
     canonical_digest_any as _canonical_digest_any,
+    fault_event_time as _fault_event_time,
+    job_set_targets as _job_set_targets_from_envelopes,
     sha256_digest as _sha256,
 )
 from content.execution.runtime_evidence.reliabletask_process import (
@@ -41,58 +46,8 @@ from content.execution.runtime_evidence.sampling import (
     QueueObservation,
 )
 
-_OBSERVATION_FIELDS = frozenset(
-    {
-        "schema",
-        "version",
-        "executionId",
-        "carrier",
-        "requestBindingDigest",
-        "executionEnvelopeDigest",
-        "campaignBinding",
-        "observedAt",
-        "tasks",
-        "pendingJobTimestamps",
-        "readyJobTimestamps",
-        "successfulJobCount",
-        "terminalJobCount",
-        "observationWindowSeconds",
-        "latencyMilliseconds",
-        "providerThrottleCount",
-        "stuckJobCount",
-        "redisEntryCount",
-        "redisPendingCount",
-        "activeLeaseCount",
-        "expiredLeaseCount",
-        "leaseEvidenceDigest",
-        "observationDigest",
-    }
-)
-_TASK_REQUIRED_FIELDS = frozenset(
-    {
-        "jobId",
-        "entityRef",
-        "stage",
-        "sourceRevision",
-        "status",
-        "attempts",
-        "createdAt",
-        "updatedAt",
-        "leaseState",
-    }
-)
-_TASK_OPTIONAL_FIELDS = frozenset(
-    {"nextAttemptAt", "leaseUntil", "failureCode"}
-)
-_TASK_STATUSES = frozenset(
-    {"ready", "processing", "retry_wait", "succeeded", "dead"}
-)
-_LEASE_STATES = frozenset({"none", "active", "expired"})
-
-
 def _typed(suffix: str, message: str) -> ReliableTaskObserverError:
     return observer_error(suffix, message)
-
 
 def _parse_time(value: object, *, label: str) -> datetime:
     text = str(value or "").strip().replace("Z", "+00:00")
@@ -105,60 +60,24 @@ def _parse_time(value: object, *, label: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _expected_tasks(carrier: str, execution_id: str) -> tuple[_ExpectedTask, ...]:
-    rows: list[_ExpectedTask] = []
-    for job in _load_jobs(execution_id):
-        if job.backend is not QueueBackend.RELIABLE_TASK:
-            continue
-        reliable_ref = job.reliable_task_ref_document()
-        payload = (
-            reliable_ref.get("payload")
-            if isinstance(reliable_ref, Mapping)
-            else None
+def _job_set_targets(
+    carrier: str,
+    execution_id: str,
+    backend_envelope: Mapping[str, Any],
+) -> tuple[_JobSetTarget, ...]:
+    try:
+        envelopes = load_reliabletask_job_set_envelopes(execution_id)
+        return _job_set_targets_from_envelopes(
+            carrier,
+            execution_id,
+            backend_envelope,
+            envelopes,
         )
-        if not isinstance(payload, Mapping):
-            raise _typed(
-                "FROZEN_TARGET_INVALID",
-                f"{carrier}/{execution_id} has no typed ReliableTask payload",
-            )
-        fields = {
-            name: str(payload.get(name) or "").strip()
-            for name in (
-                "jobId",
-                "executionId",
-                "carrier",
-                "entityRef",
-                "stage",
-                "sourceRevision",
-            )
-        }
-        if (
-            not all(fields.values())
-            or fields["jobId"] != job.job_id
-            or fields["executionId"] != execution_id
-            or fields["carrier"] != carrier
-            or fields["stage"] not in {"author", "publish"}
-        ):
-            raise _typed(
-                "FROZEN_TARGET_INVALID",
-                f"{carrier}/{execution_id}/{job.job_id} identity drift",
-            )
-        _sha256(fields["sourceRevision"])
-        rows.append(
-            _ExpectedTask(
-                job_id=fields["jobId"],
-                entity_ref=fields["entityRef"],
-                stage=fields["stage"],
-                source_revision=fields["sourceRevision"],
-            )
-        )
-    rows.sort(key=lambda row: row.job_id)
-    if not rows or len({row.job_id for row in rows}) != len(rows):
+    except (OSError, TypeError, ValueError) as exc:
         raise _typed(
             "FROZEN_TARGET_INVALID",
-            f"{carrier}/{execution_id} requires unique materialized ReliableTask jobs",
-        )
-    return tuple(rows)
+            f"{carrier}/{execution_id} immutable job-set invalid",
+        ) from exc
 
 
 def _count(value: object, *, label: str) -> int:
@@ -179,6 +98,7 @@ def _task_rows(
     document: Mapping[str, Any],
     *,
     target: _ExecutionTarget,
+    job_set: _JobSetTarget,
 ) -> tuple[dict[str, Any], ...]:
     raw_tasks = document.get("tasks")
     if not isinstance(raw_tasks, list):
@@ -220,7 +140,7 @@ def _task_rows(
             }
         )
         rows.append(row)
-    expected = [row.as_document() for row in target.expected_tasks]
+    expected = [row.as_document() for row in job_set.expected_tasks]
     identities.sort(key=lambda row: row["jobId"])
     if identities != expected:
         raise _typed(
@@ -235,6 +155,7 @@ def _parse_observation(
     raw: str,
     *,
     target: _ExecutionTarget,
+    job_set: _JobSetTarget,
     request_binding_digest: str,
 ) -> tuple[QueueObservation, tuple[dict[str, Any], ...], str]:
     try:
@@ -245,12 +166,16 @@ def _parse_observation(
         raise _typed("RESPONSE_INVALID", "observer document fields are invalid")
     if (
         document.get("schema") != "quwoquan.reliabletask_execution_observation"
-        or document.get("version") != 2
+        or document.get("version") != 3
         or document.get("executionId") != target.execution_id
         or document.get("carrier") != target.carrier
+        or document.get("stage") != job_set.stage
         or document.get("requestBindingDigest") != request_binding_digest
         or document.get("executionEnvelopeDigest")
         != target.execution_envelope_digest
+        or document.get("jobSetEnvelopeDigest") != job_set.envelope_digest
+        or document.get("jobSetDigest") != job_set.job_set_digest
+        or document.get("actualTaskDigest") != job_set.actual_task_digest
         or document.get("campaignBinding") != target.campaign_binding
     ):
         raise _typed(
@@ -261,7 +186,7 @@ def _parse_observation(
     digest = _sha256(document.get("observationDigest"))
     if digest != canonical_digest(document, excluded="observationDigest"):
         raise _typed("DIGEST_DRIFT", "observer observationDigest drift")
-    tasks = _task_rows(document, target=target)
+    tasks = _task_rows(document, target=target, job_set=job_set)
     pending = _string_array(
         document.get("pendingJobTimestamps"),
         label="pendingJobTimestamps",
@@ -372,9 +297,10 @@ class ReliableTaskQueueEvidenceProvider:
                 execution_envelope_digest=_sha256(
                     by_carrier[carrier].get("envelopeDigest")
                 ),
-                expected_tasks=_expected_tasks(
+                job_sets=_job_set_targets(
                     carrier,
                     str(by_carrier[carrier].get("executionId") or ""),
+                    by_carrier[carrier],
                 ),
                 campaign_binding=_campaign_binding(by_carrier[carrier]),
             )
@@ -397,17 +323,27 @@ class ReliableTaskQueueEvidenceProvider:
         self._targets = targets
         self._observer_binary = observer_binary
         self._binding = ProviderBinding(
-            provider_id="reliabletask_mongo_redis_observer_v2",
+            provider_id="reliabletask_mongo_redis_observer_v3",
             configuration_digest=canonical_digest(
                 {
                     "schema": "quwoquan_data.reliabletask_queue_evidence_binding",
-                    "version": 2,
-                    "backend": QueueBackend.RELIABLE_TASK.value,
+                    "version": 3,
+                    "backend": "reliabletask",
                     "executionEnvelopes": [by_carrier[item] for item in CARRIERS],
-                    "expectedTasks": {
+                    "jobSets": {
                         carrier: [
-                            row.as_document()
-                            for row in targets[carrier].expected_tasks
+                            {
+                                "stage": job_set.stage,
+                                "attemptOrdinal": job_set.attempt_ordinal,
+                                "envelopeDigest": job_set.envelope_digest,
+                                "jobSetDigest": job_set.job_set_digest,
+                                "actualTaskDigest": job_set.actual_task_digest,
+                                "expectedTasks": [
+                                    row.as_document()
+                                    for row in job_set.expected_tasks
+                                ],
+                            }
+                            for job_set in targets[carrier].job_sets
                         ]
                         for carrier in CARRIERS
                     },
@@ -429,12 +365,13 @@ class ReliableTaskQueueEvidenceProvider:
                 f"Ops-owned fleet transport unavailable ({type(exc).__name__})",
             ) from exc
 
-    def _observe(
+    def _observe_job_set(
         self,
         target: _ExecutionTarget,
+        job_set: _JobSetTarget,
         *,
         transport: ReliableTaskFleetTransport,
-    ) -> QueueObservation:
+    ) -> tuple[QueueObservation, tuple[dict[str, Any], ...]]:
         command, cwd = observer_command(self._observer_binary)
         raw = run_observer_command(
             [
@@ -443,10 +380,18 @@ class ReliableTaskQueueEvidenceProvider:
                 target.execution_id,
                 "--observe-carrier",
                 target.carrier,
+                "--observe-stage",
+                job_set.stage,
                 "--observe-binding-digest",
                 self.binding.configuration_digest,
                 "--observe-execution-envelope-digest",
                 target.execution_envelope_digest,
+                "--observe-job-set-envelope-digest",
+                job_set.envelope_digest,
+                "--observe-job-set-digest",
+                job_set.job_set_digest,
+                "--observe-actual-task-digest",
+                job_set.actual_task_digest,
                 "--observe-campaign-binding",
                 json.dumps(
                     target.campaign_binding,
@@ -462,10 +407,85 @@ class ReliableTaskQueueEvidenceProvider:
         observation, tasks, _ = _parse_observation(
             raw,
             target=target,
+            job_set=job_set,
             request_binding_digest=self.binding.configuration_digest,
         )
-        self._last_tasks[target.execution_id] = tasks
-        return observation
+        return observation, tasks
+
+    def _observe(
+        self,
+        target: _ExecutionTarget,
+        *,
+        transport: ReliableTaskFleetTransport,
+    ) -> QueueObservation:
+        observations: list[QueueObservation] = []
+        tasks: list[dict[str, Any]] = []
+        for job_set in target.job_sets:
+            observation, stage_tasks = self._observe_job_set(
+                target,
+                job_set,
+                transport=transport,
+            )
+            observations.append(observation)
+            tasks.extend(
+                {
+                    **row,
+                    "_jobSetEnvelopeDigest": job_set.envelope_digest,
+                }
+                for row in stage_tasks
+            )
+        tasks.sort(
+            key=lambda row: (
+                str(row["stage"]),
+                str(row["jobId"]),
+                str(row["sourceRevision"]),
+                str(row["_jobSetEnvelopeDigest"]),
+            )
+        )
+        identities = {
+            (
+                str(row["jobId"]),
+                str(row["sourceRevision"]),
+                str(row["_jobSetEnvelopeDigest"]),
+            )
+            for row in tasks
+        }
+        if len(identities) != len(tasks):
+            raise _typed("FROZEN_TARGET_DRIFT", "attempt task identity repeats")
+        self._last_tasks[target.execution_id] = tuple(tasks)
+        return QueueObservation(
+            carrier=target.carrier,
+            execution_id=target.execution_id,
+            pending_job_timestamps=tuple(
+                item
+                for row in observations
+                for item in row.pending_job_timestamps
+            ),
+            ready_job_timestamps=tuple(
+                item
+                for row in observations
+                for item in row.ready_job_timestamps
+            ),
+            evidence_digest=_canonical_digest_any(
+                [row.evidence_digest for row in observations]
+            ),
+            successful_job_count=sum(
+                row.successful_job_count for row in observations
+            ),
+            terminal_job_count=sum(row.terminal_job_count for row in observations),
+            observation_window_seconds=max(
+                row.observation_window_seconds for row in observations
+            ),
+            latency_milliseconds=tuple(
+                value
+                for row in observations
+                for value in row.latency_milliseconds
+            ),
+            provider_throttle_count=sum(
+                row.provider_throttle_count for row in observations
+            ),
+            stuck_job_count=sum(row.stuck_job_count for row in observations),
+        )
 
     def sample(
         self,
@@ -549,43 +569,6 @@ class ReliableTaskQueueEvidenceProvider:
             "FAULT_EVENT_NOT_OBSERVED",
             f"no typed queue event for {execution_id}/{job_id}",
         )
-
-
-def _fault_event_time(
-    row: Mapping[str, Any],
-    *,
-    fault_type: str,
-    after: datetime,
-) -> datetime | None:
-    updated = _parse_time(row.get("updatedAt"), label="fault task updatedAt")
-    failure = str(row.get("failureCode") or "").upper()
-    if fault_type == "provider_timeout":
-        return updated if updated >= after and "TIMEOUT" in failure else None
-    if fault_type == "provider_rate_limit":
-        return (
-            updated
-            if updated >= after
-            and ("RATE_LIMIT" in failure or "THROTTL" in failure)
-            else None
-        )
-    if fault_type not in {
-        "worker_termination",
-        "lease_expiry",
-        "redis_restart",
-        "mongo_reconnect",
-    }:
-        raise _typed("FAULT_REQUEST_INVALID", f"unsupported faultType={fault_type}")
-    if row.get("leaseState") == "expired" and row.get("leaseUntil"):
-        lease_until = _parse_time(row["leaseUntil"], label="fault leaseUntil")
-        if lease_until >= after:
-            return lease_until
-    if (
-        updated >= after
-        and _count(row.get("attempts"), label="fault task attempts") > 0
-        and row.get("status") in {"retry_wait", "succeeded", "dead"}
-    ):
-        return updated
-    return None
 
 
 __all__ = [

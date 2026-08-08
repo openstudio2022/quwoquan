@@ -62,7 +62,7 @@ void main() {
       });
       expect(
         requestedHeaders['X-Client-Surface-Id'],
-        AppUiSurfaces.appShell.id,
+        AppUiSurfaces.welcome.id,
       );
       expect(
         requestedHeaders['X-Client-Page-Id'],
@@ -189,7 +189,8 @@ RecoveryOperationGateway _httpGateway(http.Client client) {
       RemoteAppReleaseRecoveryReader(
         client: generatedClient,
         invocationContext: () => CloudOperationInvocationContext(
-          surfaceId: AppUiSurfaces.appShell.id,
+          // 恢复版本读面在 canonical 契约里只绑定 `welcome`。
+          surfaceId: AppUiSurfaces.welcome.id,
           clientPageId: OpsRequestPageIds.getAppRecoveryVersion,
           actor: const CloudOperationActorContext(
             deviceActorId: 'recovery-device-actor',

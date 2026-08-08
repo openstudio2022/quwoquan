@@ -212,6 +212,16 @@ def load_source_records(
         if row is not None:
             records.append(row)
             seen_source_dirs.add(source_path.parent.resolve())
+        # A single-entity article freezes one baseSourceRef per work.  Once
+        # that authority is declared, neighbouring discovery units must not
+        # leak into the writing pack/sourceUrls: canonical publication can
+        # only attest the one frozen source unit carried by source_refs.json.
+        # Multi-entity routes still need one governed source unit per entity.
+        declared_entities = {
+            str(name).strip() for name in entity_names if str(name).strip()
+        }
+        if len(declared_entities) <= 1:
+            return records
     ref_by_name: dict[str, str] = {}
     for raw_ref in entity_refs or []:
         ref = str(raw_ref or "").strip()

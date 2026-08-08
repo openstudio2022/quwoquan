@@ -49,13 +49,21 @@ GENERATED_TABLE = (
     REPO_ROOT
     / "quwoquan_service/services/content-service/generated/content/post/intersection_kind_table.go"
 )
-SERVICE_GO = (
-    REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/content/post/application/intersection/intersection_service.go"
-)
 HYDRATION_PACKAGE = (
     REPO_ROOT
-    / "quwoquan_service/services/content-service/internal/content/post/application/intersection"
+    / "quwoquan_service/services/content-service/internal/content"
+    / "intersection_visit_state/application/intersection"
+)
+SERVICE_GO = HYDRATION_PACKAGE / "intersection_service.go"
+# 影响力语言与推荐投影仍归 content/post 对象；它们不是 intersection_visit_state
+# 的下级目录，所以必须显式声明，不能由 HYDRATION_PACKAGE 相对推导。
+AUTHOR_IMPACT_PACKAGE = (
+    REPO_ROOT
+    / "quwoquan_service/services/content-service/internal/content/post/application/authorimpact"
+)
+RECOMMENDATION_INFRA_PACKAGE = (
+    REPO_ROOT
+    / "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 OBJECT_TYPES_GO = (
     REPO_ROOT
@@ -749,8 +757,8 @@ def check_statements_template_driven(problems: list[str]) -> None:
     # 只扫 production Go，测试与 fixture 文案仍由各自 contract fixture 管理。
     producer_roots = (
         HYDRATION_PACKAGE,
-        HYDRATION_PACKAGE.parent / "authorimpact",
-        HYDRATION_PACKAGE.parent.parent / "infrastructure" / "recommendation",
+        AUTHOR_IMPACT_PACKAGE,
+        RECOMMENDATION_INFRA_PACKAGE,
     )
     for root in producer_roots:
         if not root.exists():

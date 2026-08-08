@@ -33,17 +33,23 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show chatConversationRepositoryProvider, journeyEventTrackerProvider;
+    show
+        chatConversationRepositoryProvider,
+        journeyEventTrackerProvider,
+        relationshipCapabilityRepositoryForSurfaceProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_circle_facets.dart'
     show userProfileCircleMembershipQueryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
-    show personaRelationshipQueryProvider, profileQueryProvider;
+    show
+        personaRelationshipCommandWriterProvider,
+        personaRelationshipQueryProvider,
+        profileQueryProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
-import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 
 part 'profile_stats_page_widgets.dart';
+part 'profile_stats_page_actions.dart';
 
 /// 主页统计详情页（粉丝 / 关注 / 圈子）。
 ///
@@ -95,17 +101,20 @@ class _ProfileStatsTabMemory {
   String? nextCursor;
   int? totalCount;
   Object? loadError;
+  Object? refreshError;
   Object? appendError;
   bool hasLoaded = false;
   bool isLoading = false;
   bool isRefreshing = false;
   bool isAppending = false;
   String lastSubmittedQuery = '';
+  int requestGeneration = 0;
 
   String get query => searchController.text.trim();
   bool get hasMore => (nextCursor ?? '').trim().isNotEmpty;
 
   void reset({bool clearQuery = false}) {
+    requestGeneration += 1;
     searchDebounce?.cancel();
     if (clearQuery) {
       searchController.clear();
@@ -115,6 +124,7 @@ class _ProfileStatsTabMemory {
     nextCursor = null;
     totalCount = null;
     loadError = null;
+    refreshError = null;
     appendError = null;
     hasLoaded = false;
     isLoading = false;
@@ -145,6 +155,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   bool _suspendSearchCallbacks = false;
   bool _didTrackExposure = false;
   bool _didTrackPrivacyIntercept = false;
+  int _bundleRequestGeneration = 0;
+  int _relationshipAttemptGeneration = 0;
+  final Set<String> _pendingRelationshipTargets = <String>{};
+  final Set<String> _pendingConversationTargets = <String>{};
 
   String get _userId => widget.userId.trim();
   _ProfileStatsTabMemory get _activeMemory => _tabMemories[_activeTab]!;
@@ -223,7 +237,15 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     _suspendSearchCallbacks = false;
   }
 
+  void _commitState(VoidCallback mutation) {
+    if (mounted) {
+      setState(mutation);
+    }
+  }
+
   Future<void> _loadBundleAndActiveTab() async {
+    final request = ++_bundleRequestGeneration;
+    final requestedUserId = _userId;
     if (_userId.isEmpty) {
       if (!mounted) {
         return;
@@ -249,8 +271,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     try {
       final bundle = await ref
           .read(profileQueryProvider(AppUiSurfaces.profileStats))
-          .getUserHomepageBundle(_userId);
-      if (!mounted) {
+          .getUserHomepageBundle(requestedUserId);
+      if (!mounted ||
+          request != _bundleRequestGeneration ||
+          requestedUserId != _userId) {
         return;
       }
       setState(() {
@@ -270,7 +294,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       }
       await _ensureTabLoaded(_activeTab, forceReload: true);
     } catch (error) {
-      if (!mounted) {
+      if (!mounted ||
+          request != _bundleRequestGeneration ||
+          requestedUserId != _userId) {
         return;
       }
       setState(() {
@@ -326,12 +352,15 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
 
   Future<void> _loadTab(_ProfileStatsTab tab) async {
     final memory = _tabMemories[tab]!;
+    final request = ++memory.requestGeneration;
+    final requestedUserId = _userId;
     final hadItems = memory.items.isNotEmpty;
     setState(() {
       memory.isLoading = true;
       memory.isRefreshing = false;
       memory.isAppending = false;
       memory.loadError = null;
+      memory.refreshError = null;
       memory.appendError = null;
       memory.nextCursor = null;
       if (!hadItems) {
@@ -344,7 +373,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         tab,
         query: query.isEmpty ? null : query,
       );
-      if (!mounted) {
+      if (!mounted ||
+          request != memory.requestGeneration ||
+          requestedUserId != _userId ||
+          query != memory.query) {
         return;
       }
       setState(() {
@@ -363,7 +395,10 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         itemCount: page.items.length,
       );
     } catch (error) {
-      if (!mounted) {
+      if (!mounted ||
+          request != memory.requestGeneration ||
+          requestedUserId != _userId ||
+          query != memory.query) {
         return;
       }
       setState(() {
@@ -381,21 +416,30 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   }
 
   Future<void> _refreshActiveTab() async {
+    final tab = _activeTab;
     final memory = _activeMemory;
     if (_bundle == null || !_bundle!.viewerContext.canViewFullProfile) {
       return;
     }
+    final request = ++memory.requestGeneration;
+    final requestedUserId = _userId;
+    final query = memory.query;
     setState(() {
       memory.isRefreshing = true;
+      memory.isAppending = false;
       memory.appendError = null;
       memory.loadError = null;
+      memory.refreshError = null;
     });
     try {
       final page = await _fetchTabPage(
-        _activeTab,
-        query: memory.query.isEmpty ? null : memory.query,
+        tab,
+        query: query.isEmpty ? null : query,
       );
-      if (!mounted) {
+      if (!mounted ||
+          request != memory.requestGeneration ||
+          requestedUserId != _userId ||
+          query != memory.query) {
         return;
       }
       setState(() {
@@ -408,20 +452,26 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       ref
           .read(pageLifecycleObservabilityProvider)
           .recordRefresh(
-            pageName: _activeTab.analyticsPageName,
+            pageName: tab.analyticsPageName,
             result: 'success',
             retained: false,
             itemCount: page.items.length,
           );
     } catch (error) {
-      if (!mounted) {
+      if (!mounted ||
+          request != memory.requestGeneration ||
+          requestedUserId != _userId ||
+          query != memory.query) {
         return;
       }
-      setState(() => memory.isRefreshing = false);
+      setState(() {
+        memory.isRefreshing = false;
+        memory.refreshError = error;
+      });
       ref
           .read(pageLifecycleObservabilityProvider)
           .recordRefresh(
-            pageName: _activeTab.analyticsPageName,
+            pageName: tab.analyticsPageName,
             result: 'failed',
             retained: memory.items.isNotEmpty,
             error: error,
@@ -454,6 +504,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     if ((cursor ?? '').trim().isEmpty) {
       return;
     }
+    final request = ++memory.requestGeneration;
+    final requestedUserId = _userId;
+    final query = memory.query;
     final itemCountBefore = memory.items.length;
     setState(() {
       memory.isAppending = true;
@@ -462,11 +515,19 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     try {
       final page = await _fetchTabPage(
         tab,
-        query: memory.query.isEmpty ? null : memory.query,
+        query: query.isEmpty ? null : query,
         cursor: cursor,
       );
-      if (!mounted) {
+      if (!mounted ||
+          request != memory.requestGeneration ||
+          requestedUserId != _userId ||
+          query != memory.query ||
+          cursor != memory.nextCursor) {
         return;
+      }
+      if ((page.nextCursor ?? '').trim().isNotEmpty &&
+          page.nextCursor!.trim() == cursor!.trim()) {
+        throw StateError('Profile stats cursor did not advance');
       }
       final merged = _mergeItems(tab, memory.items, page.items);
       setState(() {
@@ -497,7 +558,11 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         },
       );
     } catch (error) {
-      if (!mounted) {
+      if (!mounted ||
+          request != memory.requestGeneration ||
+          requestedUserId != _userId ||
+          query != memory.query ||
+          cursor != memory.nextCursor) {
         return;
       }
       setState(() {
@@ -740,158 +805,6 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           itemCount: itemCount,
           hasCache: hasCache,
         );
-  }
-
-  RelationshipCapabilityViewData? _resolvedCapability(
-    ProfileSocialRelationRowViewData row,
-  ) => row.relationshipCapability;
-
-  Future<void> _handleFollowAction(ProfileSocialRelationRowViewData row) async {
-    final capability = _resolvedCapability(row);
-    if (capability == null) {
-      return;
-    }
-    if (capability.isSelf || capability.isBlocked || capability.isBlockedBy) {
-      return;
-    }
-    _trackAction(
-      'follow_click',
-      targetType: 'profile',
-      targetKey: row.personaId,
-      payload: <String, Object?>{
-        'tab': _activeTab.routeValue,
-        'surfaceId': 'profile_stats',
-        'relationState': capability.relationState,
-      },
-    );
-    if (!await requireLogin(ref, context, AuthGateReason.follow)) {
-      return;
-    }
-    final currentFollowing = capability.viewerFollowsTarget;
-    await ref
-        .read(userRelationshipStateProvider.notifier)
-        .setFollowingWithSync(
-          row.personaId,
-          currentFollowing: currentFollowing,
-          shouldFollow: true,
-          sourceSurface: AppUiSurfaces.profileStats,
-          flushImmediately: false,
-        );
-  }
-
-  Future<void> _showFollowingActionSheet(
-    ProfileSocialRelationRowViewData row,
-  ) async {
-    final capability = _resolvedCapability(row);
-    if (capability == null) {
-      return;
-    }
-    final canMessage =
-        capability.canSendMessage ||
-        capability.canOpenConversation ||
-        capability.hasFormalConversation ||
-        capability.canCreateDirectConversation;
-    final result = await showAppActionSheet<String>(
-      context,
-      title: row.displayName,
-      message: '@${row.userHandle}',
-      sections: <AppActionSheetSection<String>>[
-        AppActionSheetSection<String>(
-          items: <AppActionSheetItem<String>>[
-            AppActionSheetItem<String>(
-              label: ProfileText.profileStatsUnfollow,
-              value: 'unfollow',
-              isDestructive: true,
-            ),
-            AppActionSheetItem<String>(
-              label: ProfileText.profileDirectMessage,
-              value: 'message',
-              description: canMessage
-                  ? null
-                  : ProfileText.profileStatsMessageUnavailable,
-              enabled: canMessage,
-            ),
-          ],
-        ),
-      ],
-    );
-    if (!mounted || result == null) {
-      return;
-    }
-    if (result == 'unfollow') {
-      _trackAction(
-        'unfollow_confirm',
-        targetType: 'profile',
-        targetKey: row.personaId,
-        payload: <String, Object?>{
-          'tab': _activeTab.routeValue,
-          'surfaceId': 'profile_stats',
-        },
-      );
-      await ref
-          .read(userRelationshipStateProvider.notifier)
-          .setFollowingWithSync(
-            row.personaId,
-            currentFollowing: true,
-            shouldFollow: false,
-            sourceSurface: AppUiSurfaces.profileStats,
-            flushImmediately: false,
-          );
-      if ((_bundle?.viewerContext.isOwner ?? false) &&
-          _activeTab == _ProfileStatsTab.following) {
-        setState(() {
-          _activeMemory.items = _activeMemory.items
-              .where(
-                (item) =>
-                    (item as ProfileSocialRelationRowViewData).personaId !=
-                    row.personaId,
-              )
-              .toList(growable: false);
-        });
-      }
-      return;
-    }
-    await _openDirectConversation(row);
-  }
-
-  Future<void> _openDirectConversation(
-    ProfileSocialRelationRowViewData row,
-  ) async {
-    if (!await requireLogin(ref, context, AuthGateReason.sendMessage)) {
-      return;
-    }
-    try {
-      final created = await ref
-          .read(chatConversationRepositoryProvider)
-          .createConversation(
-            type: 'direct',
-            initialMemberIds: <String>[row.personaId],
-          );
-      if (!mounted || created.conversationId.trim().isEmpty) {
-        return;
-      }
-      _trackAction(
-        'message_open',
-        targetType: 'profile',
-        targetKey: row.personaId,
-        payload: <String, Object?>{
-          'tab': _activeTab.routeValue,
-          'surfaceId': 'profile_stats',
-        },
-      );
-      context.push(AppRoutePaths.chatDetail(id: created.conversationId));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      final semantic = runtimeErrorSemantic(
-        context,
-        error: error,
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-      );
-      await AppActionErrorFeedback.show(context, semantic: semantic);
-    }
   }
 
   void _openUserProfile(ProfileSocialRelationRowViewData row) {

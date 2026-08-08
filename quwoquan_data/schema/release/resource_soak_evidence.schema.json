@@ -190,6 +190,7 @@
         "semanticJobIds",
         "semanticJobSucceededIds",
         "semanticJobTerminalIds",
+        "perSlotThroughputSamples",
         "activeDurationSeconds",
         "activeIntervals"
       ],
@@ -214,6 +215,10 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}
         },
+        "perSlotThroughputSamples": {
+          "type": "array",
+          "items": {"type": "number", "exclusiveMinimum": 0}
+        },
         "activeDurationSeconds": {"type": "integer", "minimum": 0},
         "activeIntervals": {
           "type": "array",
@@ -228,7 +233,8 @@
         "semanticJobTerminalCount": {"minimum": 10},
         "semanticJobIds": {"minItems": 10},
         "semanticJobSucceededIds": {"minItems": 10},
-        "semanticJobTerminalIds": {"minItems": 10}
+        "semanticJobTerminalIds": {"minItems": 10},
+        "perSlotThroughputSamples": {"minItems": 10}
       }
     },
     "activeInterval": {

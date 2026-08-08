@@ -6,13 +6,14 @@ allowlist 冻结基线，之后任何文件超过其登记上限、或新出现�
 
 扫描范围：
   - quwoquan_app/lib/**/*.dart
-  - quwoquan_service/**/*.go
+  - quwoquan_service/{cmd,control-plane,internal,services,tools}/**/*.go
   - quwoquan_data/scripts/**/*.py
 
 排除（生成物 / l10n / 测试 / mock / vendor）：
   - *.g.dart / *.g.go / *_test.go / __pycache__
   - quwoquan_app/lib/l10n/app_localizations*.dart
   - 任意 mock / generated / vendor / test / tests / runtime / runs 目录段
+  - 任意 .qwq_output / .cache 可重建缓存目录段
 
 allowlist：quwoquan_ops/policies/gates/file_line_budget_allowlist.yaml
   block_threshold: 1000
@@ -51,11 +52,19 @@ ROOT = REPO_ROOT
 ALLOWLIST_PATH = ROOT / "quwoquan_ops" / "policies" / "gates" / "file_line_budget_allowlist.yaml"
 DEFAULT_BLOCK_THRESHOLD = 1000
 
-SCAN_ROOTS = [
-    (ROOT / "quwoquan_app" / "lib", "*.dart"),
-    (ROOT / "quwoquan_service", "*.go"),
-    (ROOT / "quwoquan_data" / "scripts", "*.py"),
-]
+# 只从受版本管理的物理 source roots 开始扫描。Service 不得以仓库根
+# 为起点，否则 `.qwq_output/go-mod` 这类可重建依赖缓存会被当成一方
+# 源码。相对路径也让契约测试能在临时仓库中验证边界，不需要为缓存
+# 增加 allowlist。
+SOURCE_ROOT_SPECS = (
+    ("quwoquan_app/lib", "*.dart"),
+    ("quwoquan_service/cmd", "*.go"),
+    ("quwoquan_service/control-plane", "*.go"),
+    ("quwoquan_service/internal", "*.go"),
+    ("quwoquan_service/services", "*.go"),
+    ("quwoquan_service/tools", "*.go"),
+    ("quwoquan_data/scripts", "*.py"),
+)
 
 # 排除的目录段（任意一段命中即排除）。
 EXCLUDE_DIR_SEGMENTS = {
@@ -65,6 +74,8 @@ EXCLUDE_DIR_SEGMENTS = {
     "test",
     "tests",
     ".dart_tool",
+    ".qwq_output",
+    ".cache",
     "__pycache__",
     ".pytest_cache",
     ".venv",
@@ -88,20 +99,22 @@ def is_excluded(rel: str, name: str) -> bool:
     return False
 
 
-def scan() -> dict[str, int]:
+def scan(root: Path = ROOT) -> dict[str, int]:
     """返回受管文件 -> 行数（仅记录 > block_threshold 的，减少噪声）。"""
     result: dict[str, int] = {}
-    for base, pattern in SCAN_ROOTS:
+    for relative_root, pattern in SOURCE_ROOT_SPECS:
+        base = root / relative_root
         if not base.is_dir():
             continue
         for path in base.rglob(pattern):
             if not path.is_file():
                 continue
-            rel = path.relative_to(ROOT).as_posix()
+            rel = path.relative_to(root).as_posix()
             if is_excluded(rel, path.name):
                 continue
             try:
-                n = sum(1 for _ in path.open("r", encoding="utf-8", errors="replace"))
+                with path.open("r", encoding="utf-8", errors="replace") as source:
+                    n = sum(1 for _ in source)
             except OSError:
                 continue
             result[rel] = n

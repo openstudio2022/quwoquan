@@ -6,7 +6,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_cont
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/runtime/di/presentation/assistant_skill_lifecycle_sheet.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_control_request/presentation/assistant_skill_lifecycle_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _skillId = 'travel_companion';

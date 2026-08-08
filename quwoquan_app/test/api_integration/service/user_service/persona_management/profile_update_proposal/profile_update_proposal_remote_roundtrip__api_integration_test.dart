@@ -1,8 +1,18 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
 // spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+// readiness_case: profile_update_proposal_create_profile_update_proposal_app_api
+// readiness_case: profile_update_proposal_confirm_proposal_app_api
+// readiness_case: profile_update_proposal_apply_proposal_app_api
+// readiness_case: profile_update_proposal_get_profile_update_proposal_app_api
+// readiness_case: profile_update_proposal_list_profile_update_proposals_app_api
+// readiness_case: profile_update_proposal_reject_proposal_app_api
+// readiness_case: profile_update_proposal_rollback_proposal_app_api
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/profile_update_proposal/adapters/profile_update_proposal_remote.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
@@ -51,10 +61,13 @@ final class _GammaProfileProposalClientContext
 
 void main() {
   setUpAll(() {
-    if (_accessToken.isEmpty || _personaId.trim().isEmpty) {
+    if (_gatewayUrl.trim().isEmpty ||
+        _accessToken.isEmpty ||
+        _personaId.trim().isEmpty) {
       fail(
         'Profile proposal Remote API verification requires '
-        'TEST_AUTH_TOKEN and TEST_PERSONA_ID from the local Gamma '
+        'CLOUD_GATEWAY_BASE_URL, TEST_AUTH_TOKEN and TEST_PERSONA_ID '
+        'from the local Gamma '
         'candidate-bound nonprod phone identity pool.',
       );
     }
@@ -80,25 +93,7 @@ void main() {
       );
       final identity = const Uuid().v4();
       final proposalId = 'proposal-$identity';
-      final remote = RemoteProfileUpdateProposalFacet(
-        client: generatedClient,
-        invocationContext: (clientPageId, {required command}) {
-          final surface =
-              clientPageId == UserRequestPageIds.createProfileUpdateProposal
-              ? AppUiSurfaces.personalAssistantDialog
-              : AppUiSurfaces.profileEdit;
-          return CloudOperationInvocationContext(
-            surfaceId: surface.id,
-            routeId: surface.routeId,
-            clientPageId: clientPageId,
-            actor: const CloudOperationActorContext(
-              personaId: _personaId,
-              deviceActorId: 'gamma-profile-proposal-device',
-            ),
-            idempotencyKey: command ? '$proposalId:$clientPageId' : null,
-          );
-        },
-      );
+      final remote = _remoteFor(client: generatedClient, intentId: proposalId);
       final createCommand = CreateProfileUpdateProposalCommand(
         personaId: _personaId,
         proposalId: proposalId,
@@ -129,6 +124,31 @@ void main() {
       final rolledBackView = await remote.get(
         ProfileUpdateProposalQuery(proposalId: proposalId),
       );
+      final rejectedProposalId = 'proposal-reject-$identity';
+      final rejectionRemote = _remoteFor(
+        client: generatedClient,
+        intentId: rejectedProposalId,
+      );
+      final rejectedCreated = await rejectionRemote.create(
+        CreateProfileUpdateProposalCommand(
+          personaId: _personaId,
+          proposalId: rejectedProposalId,
+          source: ProposalSource.assistant,
+          reason: 'Gamma rejected profile proposal verification',
+          evidenceRefs: <String>['assistant-run:reject-$identity'],
+          impactScope: const <String>['bio'],
+          bio: 'Rejected Gamma proposal $identity',
+        ),
+      );
+      final proposals = await rejectionRemote.list(
+        ProfileUpdateProposalListQuery(personaId: _personaId, limit: 100),
+      );
+      final rejected = await rejectionRemote.reject(
+        RejectProfileUpdateProposalCommand(proposalId: rejectedProposalId),
+      );
+      final rejectedView = await rejectionRemote.get(
+        ProfileUpdateProposalQuery(proposalId: rejectedProposalId),
+      );
 
       expect(created.status, ProposalStatus.pending);
       expect(createReplay.replayed, isTrue);
@@ -140,8 +160,36 @@ void main() {
       expect(rollbackReplay.replayed, isTrue);
       expect(rolledBackView.status, ProposalStatus.rolledBack);
       expect(rolledBackView.rollbackAuditId, isNotEmpty);
-      final telemetryEvents = await telemetry.waitForEvents(minimumCount: 8);
+      expect(rejectedCreated.status, ProposalStatus.pending);
+      expect(
+        proposals.items.map((item) => item.id),
+        contains(rejectedProposalId),
+      );
+      expect(rejected.status, ProposalStatus.rejected);
+      expect(rejectedView.status, ProposalStatus.rejected);
+      expect(
+        rejectedView.reason,
+        'Gamma rejected profile proposal verification',
+      );
+      final telemetryEvents = await telemetry.waitForEvents(minimumCount: 12);
       expect(telemetryEvents.every((event) => event.succeeded), isTrue);
+      for (final operationId in <String>[
+        AppCloudOperationIds
+            .userProfileUpdateProposalListProfileUpdateProposals,
+        AppCloudOperationIds.userProfileUpdateProposalRejectProposal,
+      ]) {
+        final matching = telemetryEvents.where(
+          (event) => event.canonicalOperationId == operationId,
+        );
+        expect(matching, isNotEmpty, reason: operationId);
+        expect(
+          matching.every(
+            (event) => event.requestId.isNotEmpty && event.traceId.isNotEmpty,
+          ),
+          isTrue,
+          reason: operationId,
+        );
+      }
 
       await _writeRemoteEvidence(<String, Object?>{
         'schema': 'profile-proposal-remote-api-evidence',
@@ -163,9 +211,87 @@ void main() {
             )
             .toList(growable: false),
       });
+
+      final invalidHttpClient = CloudHttpClient(
+        authTokenProvider: const _StaticTokenProvider(
+          'invalid-profile-proposal-api-token',
+        ),
+      );
+      addTearDown(invalidHttpClient.close);
+      final invalidRemote = _remoteFor(
+        client: buildGeneratedCloudOperationClient(
+          httpClient: invalidHttpClient,
+          clientContextProvider: const _GammaProfileProposalClientContext(),
+          telemetrySink: telemetry.sink,
+          environment: CloudRuntimeEnvironment(
+            environment: CloudEnvironment.gamma,
+            gatewayBaseUri: Uri.parse(_gatewayUrl),
+          ),
+        ),
+        intentId: 'unauthorized-$identity',
+      );
+      await _expectCanonicalAuthFailure(
+        invalidRemote.list(
+          ProfileUpdateProposalListQuery(personaId: _personaId, limit: 1),
+        ),
+        AppCloudOperationIds
+            .userProfileUpdateProposalListProfileUpdateProposals,
+      );
+      await _expectCanonicalAuthFailure(
+        invalidRemote.reject(
+          RejectProfileUpdateProposalCommand(proposalId: rejectedProposalId),
+        ),
+        AppCloudOperationIds.userProfileUpdateProposalRejectProposal,
+      );
     },
   );
 }
+
+Future<void> _expectCanonicalAuthFailure(
+  Future<Object?> request,
+  String operationId,
+) => expectLater(
+  request,
+  throwsA(
+    isA<CloudException>()
+        .having(
+          (error) => error.sourceOperationId,
+          'sourceOperationId',
+          operationId,
+        )
+        .having((error) => error.statusCode, 'statusCode', anyOf(401, 403))
+        .having(
+          (error) => error.code,
+          'canonical code',
+          matches(
+            RegExp(r'^[A-Z0-9_]+\.(USER|SYSTEM|MIDDLEWARE)\.[a-z0-9_]+$'),
+          ),
+        ),
+  ),
+);
+
+RemoteProfileUpdateProposalFacet _remoteFor({
+  required GeneratedCloudOperationClient client,
+  required String intentId,
+}) => RemoteProfileUpdateProposalFacet(
+  client: client,
+  invocationContext: (clientPageId, {required command}) {
+    final surface =
+        clientPageId == UserRequestPageIds.createProfileUpdateProposal
+        ? AppUiSurfaces.personalAssistantDialog
+        : AppUiSurfaces.profileEdit;
+    return CloudOperationInvocationContext(
+      surfaceId: surface.id,
+      routeId: surface.routeId,
+      clientPageId: clientPageId,
+      actor: const CloudOperationActorContext(
+        personaId: _personaId,
+        deviceActorId: 'gamma-profile-proposal-device',
+      ),
+      idempotencyKey: command ? '$intentId:$clientPageId' : null,
+    );
+  },
+);
 
 Future<void> _writeRemoteEvidence(Map<String, Object?> evidence) async {
   if (_evidencePath.isEmpty) return;

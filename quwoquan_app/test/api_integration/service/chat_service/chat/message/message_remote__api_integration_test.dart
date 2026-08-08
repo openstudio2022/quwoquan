@@ -1,6 +1,13 @@
 // spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-002
+// spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+// readiness_case: message_send_message_app_api
+// readiness_case: message_recall_message_app_api
+// readiness_case: message_list_messages_app_api
+// readiness_case: message_sync_messages_app_api
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/generated/chat/chat_errors.g.dart';
 
 import '../../../../../support/runtime/api_contract/chat_api_contract_harness.dart';
 
@@ -80,5 +87,37 @@ void main() {
 
     expect(stopwatch.elapsedMilliseconds, lessThan(800));
     expect(result.messages.length, greaterThanOrEqualTo(5));
+  });
+
+  test('canonical recall failure 不产生伪成功或改写既有消息', () async {
+    final before = await harness.repository.listMessages(
+      conversationId: conversationId,
+      limit: 100,
+    );
+
+    await expectLater(
+      harness.repository.recallMessage(
+        conversationId: conversationId,
+        messageId: 'missing-message-${DateTime.now().microsecondsSinceEpoch}',
+      ),
+      throwsA(
+        isA<CloudException>()
+            .having((error) => error.statusCode, 'statusCode', 404)
+            .having(
+              (error) => error.code,
+              'code',
+              ChatErrorCode.messageNotFound.code,
+            ),
+      ),
+    );
+
+    final after = await harness.repository.listMessages(
+      conversationId: conversationId,
+      limit: 100,
+    );
+    expect(
+      after.map((message) => message.id).toList(growable: false),
+      before.map((message) => message.id).toList(growable: false),
+    );
   });
 }

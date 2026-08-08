@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_kind_metadata.g.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_action_keys.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
@@ -207,11 +207,15 @@ void main() {
       expect(hints, isNotEmpty);
 
       for (final hint in hints) {
-        final meta = IntersectionActionKeyMeta.of(hint.actionKey);
+        final meta = IntersectionActionKeys.policyFor(hint.actionKey);
         expect(meta, isNotNull, reason: hint.actionKey);
-        expect(hint.actionTier, meta!.tier, reason: hint.actionKey);
-        expect(hint.requiredGates, meta.requiredGates, reason: hint.actionKey);
-        expect(hint.dispatch, meta.dispatch, reason: hint.actionKey);
+        expect(hint.actionTier, meta!.tier.wireName, reason: hint.actionKey);
+        expect(
+          hint.requiredGates,
+          meta.requiredGates.map((gate) => gate.wireName),
+          reason: hint.actionKey,
+        );
+        expect(hint.dispatch, meta.dispatch.wireName, reason: hint.actionKey);
       }
     });
   });

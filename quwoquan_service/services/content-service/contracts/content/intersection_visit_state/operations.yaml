@@ -287,3 +287,67 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/intersection_visit_state/intersection_visit_http_contract__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: intersection_visit_state_get_my_intersection_summary_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetMyIntersectionSummary}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/intersection_visit_state/intersection_response_body_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: intersection_visit_state_get_object_intersections_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetObjectIntersections}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/intersection_visit_state/intersection_response_body_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: intersection_visit_state_list_my_intersections_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListMyIntersections}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/intersection_visit_state/intersection_response_body_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: intersection_visit_state_mark_intersections_visited_app_local
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: MarkIntersectionsVisited}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/intersection_visit_state/intersection_response_body_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: intersection_visit_state_get_my_intersection_summary_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetMyIntersectionSummary}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/intersection_visit_state/intersection_remote_smoke__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: intersection_visit_state_get_object_intersections_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetObjectIntersections}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/intersection_visit_state/intersection_remote_smoke__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: intersection_visit_state_list_my_intersections_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListMyIntersections}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/intersection_visit_state/intersection_remote_smoke__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: intersection_visit_state_mark_intersections_visited_app_api
+    spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: MarkIntersectionsVisited}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/intersection_visit_state/intersection_remote_smoke__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

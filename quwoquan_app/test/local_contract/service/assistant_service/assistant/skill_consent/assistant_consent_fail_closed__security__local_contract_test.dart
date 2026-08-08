@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
 // readiness_case: skill_consent_grant_skill_consent_app_local
+// readiness_case: skill_consent_list_consents_app_local
+// readiness_case: skill_consent_revoke_skill_consent_app_local
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -142,6 +144,50 @@ void main() {
     },
   );
 
+  test(
+    'list/revoke use exact generated operations and typed responses',
+    () async {
+      final executor = _SkillConsentExecutor();
+      final adapter = RemoteAssistantSkillConsentAdapter(
+        client: GeneratedCloudOperationClient(executor),
+        invocationContext: _invocationContext,
+      );
+
+      final consents = await adapter.listConsents();
+      await adapter.revokeSkillConsent(
+        skillId: _travelCompanionSkillId,
+        clientRequestId: 'revoke-consent-1',
+      );
+
+      expect(executor.operationIds, <String>[
+        AppCloudOperationIds.assistantSkillConsentListConsents,
+        AppCloudOperationIds.assistantSkillConsentRevokeSkillConsent,
+      ]);
+      expect(executor.operations[0].method, 'GET');
+      expect(executor.operations[0].pathTemplate, '/assistant/consents');
+      expect(executor.payloads[0].pathParameters, isEmpty);
+      expect(executor.payloads[0].queryParameters, isEmpty);
+      expect(executor.payloads[0].body, isNull);
+      expect(executor.contexts[0].idempotencyKey, isNull);
+      expect(executor.operations[1].method, 'DELETE');
+      expect(
+        executor.operations[1].pathTemplate,
+        '/assistant/skills/{skillId}/consent',
+      );
+      expect(executor.payloads[1].pathParameters, <String, String>{
+        'skillId': _travelCompanionSkillId,
+      });
+      expect(executor.payloads[1].queryParameters, isEmpty);
+      expect(executor.payloads[1].body, isNull);
+      expect(executor.contexts[1].idempotencyKey, 'revoke-consent-1');
+      expect(consents, hasLength(1));
+      expect(consents.single.accountId, 'assistant-test-account');
+      expect(consents.single.skillId, _travelCompanionSkillId);
+      expect(consents.single.grantedScopes, _travelCompanionRequiredScopes);
+      expect(executor.decodedResponses[1], isA<RevokeSkillConsentReceipt>());
+    },
+  );
+
   test('successful matching grant updates only its account snapshot', () async {
     final remoteConsent = _consent(
       accountId: 'account-a',
@@ -277,6 +323,57 @@ final class _ConsentAuthTokenProvider implements CloudAuthTokenProvider {
 
   @override
   Future<String?> getAccessToken() async => 'assistant-consent-test-token';
+}
+
+final class _SkillConsentExecutor implements CloudOperationExecutor {
+  final operations = <CloudOperationContract>[];
+  final contexts = <CloudOperationInvocationContext>[];
+  final payloads = <CloudOperationRequestPayload>[];
+  final decodedResponses = <Object?>[];
+
+  List<String> get operationIds => operations
+      .map((operation) => operation.canonicalOperationId)
+      .toList(growable: false);
+
+  @override
+  Future<TResponse> send<TResponse>(
+    CloudOperationContract operation, {
+    required CloudOperationInvocationContext context,
+    required CloudOperationResponseDecoder<TResponse> responseDecoder,
+    required CloudOperationRequestEncoder requestEncoder,
+  }) async {
+    operations.add(operation);
+    contexts.add(context);
+    payloads.add(requestEncoder());
+    final response = switch (operation.canonicalOperationId) {
+      AppCloudOperationIds.assistantSkillConsentListConsents =>
+        <String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'id': 'consent:$_travelCompanionSkillId',
+              'accountId': 'assistant-test-account',
+              'skillId': _travelCompanionSkillId,
+              'grantedScopes': _travelCompanionRequiredScopes,
+              'grantedAt': '2026-07-13T00:00:00Z',
+              'revokedAt': null,
+              'granted': true,
+            },
+          ],
+        },
+      AppCloudOperationIds.assistantSkillConsentRevokeSkillConsent =>
+        <String, Object?>{
+          'status': 'revoked',
+          'skillId': _travelCompanionSkillId,
+          'replayed': false,
+        },
+      _ => throw StateError(
+        'unexpected operation ${operation.canonicalOperationId}',
+      ),
+    };
+    final decoded = responseDecoder(response);
+    decodedResponses.add(decoded);
+    return decoded;
+  }
 }
 
 final class _ScriptedConsentFacet implements AssistantSkillConsentFacet {

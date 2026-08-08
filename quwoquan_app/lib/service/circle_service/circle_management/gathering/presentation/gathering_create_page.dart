@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_page_copy.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_widgets.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -23,24 +24,6 @@ enum GatheringCreateSubmissionStep {
   roomReady,
   publishing,
   published,
-}
-
-final class GatheringCreateInitialValue {
-  const GatheringCreateInitialValue({
-    required this.host,
-    required this.creatorParticipates,
-    required this.purpose,
-    required this.schedule,
-    required this.place,
-    required this.policy,
-  });
-
-  final GatheringHostInput host;
-  final bool creatorParticipates;
-  final GatheringPurposeDraft purpose;
-  final GatheringScheduleDraft schedule;
-  final GatheringPlaceDraft place;
-  final GatheringPolicyDraft policy;
 }
 
 class GatheringCreatePage extends ConsumerStatefulWidget {

@@ -42,9 +42,13 @@ class ContactConfirmPage extends ConsumerStatefulWidget {
 }
 
 class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
+  static const Duration _followReadbackTimeout = Duration(seconds: 10);
+
   late Future<_ConfirmData> _future;
   bool _adding = false;
   ContactAddState? _localAddState;
+  int _followAttemptSequence = 0;
+  int? _activeFollowAttempt;
 
   @override
   void initState() {
@@ -57,33 +61,70 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
         .read(personaQueryProvider(AppUiSurfaces.addContactConfirm))
         .getPersonaProfile(widget.targetUserId);
     final capability = await ref
-        .read(relationshipCapabilityRepositoryProvider)
+        .read(
+          relationshipCapabilityRepositoryForSurfaceProvider(
+            AppUiSurfaces.addContactConfirm,
+          ),
+        )
         .getCapability(widget.targetUserId);
+    if (capability.targetPersonaId.trim() != widget.targetUserId.trim()) {
+      throw StateError(
+        'GetRelationshipCapability returned a mismatched target persona',
+      );
+    }
     return _ConfirmData(profile: profile, capability: capability);
   }
 
   void _reload() {
     setState(() {
+      _activeFollowAttempt = null;
+      _followAttemptSequence += 1;
+      _adding = false;
       _localAddState = null;
       _future = _load();
     });
   }
 
-  Future<void> _add(ContactAddState addState) async {
-    if (_adding || !addState.canTriggerAdd) {
+  Future<void> _add(_ConfirmData data, ContactAddState addState) async {
+    if (_adding || !_canSubmitFollow(data, addState)) {
       return;
     }
+    final attempt = ++_followAttemptSequence;
+    Object? failure;
     setState(() => _adding = true);
+    _activeFollowAttempt = attempt;
     try {
       await ref
-          .read(userRelationshipStateProvider.notifier)
-          .setFollowingWithSync(
+          .read(
+            personaRelationshipCommandWriterProvider(
+              AppUiSurfaces.addContactConfirm,
+            ),
+          )
+          .follow(
             widget.targetUserId,
-            currentFollowing: false,
-            shouldFollow: true,
-            sourceSurface: AppUiSurfaces.addContactConfirm,
+            sourceSurfaceId: AppUiSurfaces.addContactConfirm.id,
           );
-      if (!mounted) {
+      if (!mounted || _activeFollowAttempt != attempt) {
+        return;
+      }
+      final confirmedCapability = await ref
+          .read(
+            relationshipCapabilityRepositoryForSurfaceProvider(
+              AppUiSurfaces.addContactConfirm,
+            ),
+          )
+          .getCapability(widget.targetUserId)
+          .timeout(_followReadbackTimeout);
+      if (confirmedCapability.targetPersonaId.trim() !=
+              widget.targetUserId.trim() ||
+          !confirmedCapability.viewerFollowsTarget ||
+          confirmedCapability.isBlocked ||
+          confirmedCapability.isBlockedBy) {
+        throw StateError(
+          'FollowUser did not converge in authoritative relationship state',
+        );
+      }
+      if (!mounted || _activeFollowAttempt != attempt) {
         return;
       }
       setState(() => _localAddState = ContactAddState.added);
@@ -101,29 +142,48 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
             ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
+      if (_isCurrentFollowAttempt(attempt)) {
+        failure = error;
       }
-      await AppActionErrorFeedback.show(
-        context,
-        semantic: runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.dialog,
-        ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _add(addState);
-          }
-        },
-      );
     } finally {
-      if (mounted) {
+      if (_isCurrentFollowAttempt(attempt)) {
         setState(() => _adding = false);
       }
     }
+    if (failure == null || !mounted || _activeFollowAttempt != attempt) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: ensureRetryUiErrorSemantic(
+        runtimeErrorSemantic(
+          context,
+          error: failure,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+      ),
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await _add(data, addState);
+        }
+      },
+    );
+  }
+
+  bool _isCurrentFollowAttempt(int attempt) =>
+      mounted && _activeFollowAttempt == attempt;
+
+  bool _canSubmitFollow(_ConfirmData data, ContactAddState addState) {
+    final capability = data.capability;
+    return addState.canTriggerAdd &&
+        capability.targetPersonaId.trim() == widget.targetUserId.trim() &&
+        capability.canFollow &&
+        !capability.viewerFollowsTarget &&
+        !capability.isBlocked &&
+        !capability.isBlockedBy &&
+        !capability.isSelf;
   }
 
   String get _sourceLabel {
@@ -250,7 +310,8 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
             _PrimaryButton(
               addState: addState,
               pending: _adding,
-              onAdd: () => _add(addState),
+              enabled: _canSubmitFollow(data, addState),
+              onAdd: () => _add(data, addState),
             ),
             SizedBox(height: AppSpacing.containerMd),
           ],
@@ -320,11 +381,13 @@ class _PrimaryButton extends StatelessWidget {
   const _PrimaryButton({
     required this.addState,
     required this.pending,
+    required this.enabled,
     required this.onAdd,
   });
 
   final ContactAddState addState;
   final bool pending;
+  final bool enabled;
   final VoidCallback onAdd;
 
   @override
@@ -341,10 +404,10 @@ class _PrimaryButton extends StatelessWidget {
       width: double.infinity,
       child: CupertinoButton(
         borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-        color: (isAdded || isSelf)
+        color: (isAdded || isSelf || !enabled)
             ? AppColors.iosSeparator(context)
             : AppColors.iosAccent(context),
-        onPressed: (isAdded || isSelf || pending) ? null : onAdd,
+        onPressed: (isAdded || isSelf || pending || !enabled) ? null : onAdd,
         child: pending
             ? AppRequestFeedback.inline()
             : Text(
@@ -352,7 +415,7 @@ class _PrimaryButton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: AppTypography.iosBody,
                   fontWeight: AppTypography.semiBold,
-                  color: (isAdded || isSelf)
+                  color: (isAdded || isSelf || !enabled)
                       ? AppColors.iosSecondaryLabel(context)
                       : AppColors.white,
                 ),

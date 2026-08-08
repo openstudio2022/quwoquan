@@ -6,6 +6,7 @@ import json
 import shutil
 import sys
 from argparse import Namespace
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.release.canonical import (
+    aggregate_release,
     handler,
     integrity,
 )
@@ -25,11 +27,13 @@ from content.release.canonical.aggregate_release import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from core import paths as core_paths
 from core.release_layout import payload_digest, payload_file
 from core.source_digest import (
     content_source_revision,
     current_source_digest,
 )
+from governance.coverage import distribution
 from tests.support.release_admission_fixture import (
     article_render_profile,
     bind_publishable_video_review,
@@ -39,6 +43,25 @@ EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--scale-901"
 RELEASE_ID = "20260713--travel-homepage-coverage--test-release-a--scale-901"
 TAG_REF = "Topic/旅行"
 ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
+
+
+@pytest.fixture(autouse=True)
+def _use_research_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    policy = distribution.load_content_distribution_policy()
+    research_policy = replace(
+        policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
+        release_class=distribution.ReleaseClass.RESEARCH,
+    )
+    monkeypatch.setattr(
+        aggregate_release,
+        "load_content_distribution_policy",
+        lambda: research_policy,
+    )
+    monkeypatch.setattr(core_paths, "OUTPUT_ROOT", tmp_path / "output")
 
 
 def _release_source_identity(source_digest: str | None = None) -> dict[str, str]:
@@ -618,6 +641,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             )
             bind_publishable_video_review(
                 object_root=post_root,
+                output_root=core_paths.OUTPUT_ROOT,
                 asset_id=str(video_asset["assetId"]),
                 content_sha256=str(video_asset["sha256"]),
                 object_ref=post_ref,

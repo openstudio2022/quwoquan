@@ -68,7 +68,7 @@ def _canonical_ui_roots(app_lib: Path) -> tuple[Path, ...]:
     return (
         *sorted(app_lib.glob("service/*/*/*/presentation")),
         app_lib / "runtime/shell",
-        app_lib / "runtime/di/shell",
+        app_lib / "runtime/shell",
         app_lib / "design_system",
     )
 

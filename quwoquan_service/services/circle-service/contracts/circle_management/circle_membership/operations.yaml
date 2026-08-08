@@ -665,3 +665,75 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: circle_membership_approve_circle_member_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ApproveCircleMember}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_get_my_circle_membership_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetMyCircleMembership}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_join_circle_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: JoinCircle}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_leave_circle_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LeaveCircle}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_list_circle_memberships_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCircleMemberships}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_list_pending_circle_memberships_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListPendingCircleMemberships}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_list_persona_circles_app_local
+    spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/spec.md#sit-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListPersonaCircles}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_reject_circle_member_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RejectCircleMember}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_update_circle_membership_role_app_local
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateCircleMembershipRole}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

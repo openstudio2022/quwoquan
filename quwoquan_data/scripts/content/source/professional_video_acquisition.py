@@ -25,6 +25,10 @@ from governance.coverage.distribution import (
 from content.execution.controller.execute.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
+from content.source.professional_video_catalog_binding import (
+    POPULAR_BINDING_FIELDS,
+    resolve_popular_candidate_binding,
+)
 from content.source.professional_video_popularity import (
     apply_popularity_percentiles,
     initial_popularity_signals,
@@ -156,6 +160,11 @@ def _validate_item(
             raise ValueError(
                 f"{asset_id}: popularitySignals.{field} must be null or non-negative integer"
             )
+    popular_binding = [str(item.get(field) or "").strip() for field in POPULAR_BINDING_FIELDS]
+    if any(popular_binding) and not all(popular_binding):
+        raise ValueError(
+            f"{asset_id}: popular candidate/catalog ref/digest/file SHA must be supplied together"
+        )
     return rights, publication
 
 
@@ -283,6 +292,10 @@ def _empty_row(item: Mapping[str, Any], *, rights: RightsStatus) -> dict[str, An
         "failure": "",
         "popularitySignals": initial_popularity_signals(dict(item["popularitySignals"])),
         "planVideoSpec": None,
+        "popularCandidateId": str(item.get("popularCandidateId") or ""),
+        "popularCatalogRef": str(item.get("popularCatalogRef") or ""),
+        "popularCatalogDigest": str(item.get("popularCatalogDigest") or ""),
+        "popularCatalogFileSha256": str(item.get("popularCatalogFileSha256") or ""),
     }
     for field in ("sourceUrl", "assetUrl", "apiEvidence", "termsUrl", "authorizationProof"):
         row[field] = redact_sensitive_video_url(str(row[field]))
@@ -444,6 +457,8 @@ def acquire_professional_videos(
         raise ValueError("professional video acquisition assetId values must be unique")
     provider_labels: dict[str, tuple[str, str]] = {}
     validated: list[tuple[dict[str, Any], RightsStatus, str]] = []
+    popular_bindings: dict[str, dict[str, Any]] = {}
+    catalog_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
     registry = load_content_source_registry()
     lifecycle = load_content_distribution_policy().product_lifecycle_state
     for raw in manifest["items"]:
@@ -453,6 +468,15 @@ def acquire_professional_videos(
             registry=registry,
             lifecycle=lifecycle,
         )
+        popular = resolve_popular_candidate_binding(
+            item,
+            catalog_root=root,
+            manual_root=manual_root,
+            expected_identity=_source_identity(manifest),
+            catalog_cache=catalog_cache,
+        )
+        if popular is not None:
+            popular_bindings[str(item["assetId"])] = popular
         label = (str(item["displayName"]), str(item["platform"]))
         if str(item["provider"]) in provider_labels and provider_labels[str(item["provider"])] != label:
             raise ValueError(f"{item['assetId']}: provider displayName/platform are inconsistent")
@@ -511,6 +535,26 @@ def acquire_professional_videos(
                 seen[digest] = str(row["assetId"])
             rows.append(row)
     apply_popularity_percentiles(rows)
+    for row in rows:
+        popular = popular_bindings.get(str(row["assetId"]))
+        if popular is None:
+            continue
+        if row.get("contentSha256") != popular.get("manualFileSha256"):
+            row.update(
+                distributionDecision=DistributionDecision.BLOCKED.value,
+                failureCode="DATA.SOURCE.POPULAR_CATALOG_BYTES_DRIFT",
+                failure="acquired bytes do not match popular-video catalog",
+            )
+            continue
+        row["popularitySignals"] = {
+            **dict(popular["popularity"]),
+            "observedAt": str(popular["observedAt"]),
+            "provider": str(popular["provider"]),
+            "topic": str(popular["topic"]),
+            "timeBucket": str(popular["timeBucket"]),
+            "rankingEligible": True,
+            "ineligibleReason": "",
+        }
     publication = validated[0][2]
     for row in rows:
         if row["distributionDecision"] in ACCEPTED_DECISIONS:

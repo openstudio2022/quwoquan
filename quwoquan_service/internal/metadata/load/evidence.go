@@ -94,16 +94,6 @@ var pageObjectContractPath = filepath.Join(
 	serviceTreeRoot, "contracts", "metadata", "_shared", "page_object_contract.yaml",
 )
 
-// 拥有 `domain` 层的 kind，镜像 object_path_map.py 的
-// REQUIRED_CLOUD_LAYERS_BY_KIND：projection 与 external_reference 不声明 domain 层，
-// 它们的对象行为落在 application（projector / 出向 port 编排）。
-var kindsWithDomainLayer = map[ast.ObjectKind]struct{}{
-	ast.ObjectKindAggregateRoot:  {},
-	ast.ObjectKindAppendOnlyFact: {},
-	ast.ObjectKindProcessManager: {},
-	ast.ObjectKindRuntimeSession: {},
-}
-
 var cloudSourceSuffixes = map[string]struct{}{".go": {}, ".py": {}}
 
 var appSourceSuffixes = map[string]struct{}{".dart": {}}
@@ -244,10 +234,6 @@ func deriveObjectEvidence(
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
-	behaviorLayer := cloudLayerApplication
-	if _, ok := kindsWithDomainLayer[object.Kind]; ok {
-		behaviorLayer = cloudLayerDomain
-	}
 	appProduction, err := collectAppProduction(
 		repoRoot, appServiceSegment(serviceRoot), context, objectSegment,
 	)
@@ -258,7 +244,10 @@ func deriveObjectEvidence(
 		ObjectID:     object.ID,
 		OperationIDs: sortedCopy(operationIDs),
 		Service: ast.ServiceStructureEvidence{
-			Domain:    production.layers[behaviorLayer],
+			// Domain and Reader remain distinct physical producer slots.
+			// Projection/external-reference application artifacts must not be
+			// relabeled as domain evidence.
+			Domain:    production.layers[cloudLayerDomain],
 			Store:     production.layers[cloudLayerInfrastructure],
 			Outbox:    publicationEvidence.artifacts,
 			Reader:    production.layers[cloudLayerApplication],

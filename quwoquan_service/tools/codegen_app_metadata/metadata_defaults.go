@@ -20,10 +20,17 @@ func buildPostDefaults(fields []fieldDef) map[string]string {
 	return defaults
 }
 
+// buildPostSnapshotFieldByteLimits derives the per-field canonical UTF-8 byte
+// admission table for the App-consumed projection of one aggregate. The exposed
+// wire keys come from the projection's canonical client field set; the limit
+// value comes from canonical `max_utf8_bytes`, declared either on the projection
+// field itself or on the aggregate field it projects. Declaring both for the
+// same wire key with different values would make one key carry two truth
+// sources, so that combination fails closed instead of silently picking one.
 func buildPostSnapshotFieldByteLimits(
 	fields []fieldDef,
-	projectionFields []projectionFieldDef,
-) map[string]int {
+	projection *projectionFile,
+) (map[string]int, error) {
 	limitsByCanonicalName := map[string]int{}
 	for _, field := range fields {
 		if field.MaxUTF8Bytes <= 0 {
@@ -35,16 +42,32 @@ func buildPostSnapshotFieldByteLimits(
 		}
 	}
 	limits := map[string]int{}
-	for _, field := range projectionFields {
+	for _, field := range projection.canonicalClientFields() {
 		canonicalName := field.Source
 		if canonicalName == "" {
 			canonicalName = field.Name
 		}
-		if limit := limitsByCanonicalName[canonicalName]; limit > 0 {
-			limits[field.Name] = limit
+		aggregateLimit := limitsByCanonicalName[canonicalName]
+		projectionLimit := field.MaxUTF8Bytes
+		if aggregateLimit > 0 && projectionLimit > 0 &&
+			aggregateLimit != projectionLimit {
+			return nil, fmt.Errorf(
+				"projection field %s declares max_utf8_bytes %d while canonical field %s declares %d",
+				field.Name,
+				projectionLimit,
+				canonicalName,
+				aggregateLimit,
+			)
+		}
+		if projectionLimit > 0 {
+			limits[field.Name] = projectionLimit
+			continue
+		}
+		if aggregateLimit > 0 {
+			limits[field.Name] = aggregateLimit
 		}
 	}
-	return limits
+	return limits, nil
 }
 
 func dartEmptyListExpr(t string) string {

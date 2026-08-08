@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 )
 
-func TestAssistantRunAppliesExplicitSkillSettingBeforeFreezingPackage(t *testing.T) {
+func TestAssistantRunAppliesExplicitSkillSettingAgainstFrozenPackage(t *testing.T) {
 	t.Parallel()
 	repository := newMemoryRunRepository()
 	packages := &rotatingSkillPackageResolver{
@@ -26,10 +27,15 @@ func TestAssistantRunAppliesExplicitSkillSettingBeforeFreezingPackage(t *testing
 		}),
 		packages,
 		runruntime.StartAccessPolicyFunc(func(
-			_ context.Context,
+			ctx context.Context,
 			request runruntime.StartAccessRequest,
 		) error {
 			policyCalls++
+			identity, frozen := skillpkg.PackageReleaseFromContext(ctx)
+			if !frozen || identity.PackageID != packages.packageID ||
+				identity.ReleaseDigest != packages.releaseDigest {
+				t.Fatalf("setting gate did not receive frozen package: %+v frozen=%v", identity, frozen)
+			}
 			if request.AccountID != "user-1" || request.SkillID != "travel_companion" {
 				t.Fatalf("policy identity=%s/%s", request.AccountID, request.SkillID)
 			}
@@ -52,8 +58,12 @@ func TestAssistantRunAppliesExplicitSkillSettingBeforeFreezingPackage(t *testing
 	if _, err := service.Start(context.Background(), command); !errors.Is(err, runruntime.ErrSkillDisabled) {
 		t.Fatalf("disabled Skill start error=%v", err)
 	}
-	if packages.calls != 0 {
-		t.Fatalf("disabled Skill resolved package %d time(s)", packages.calls)
+	if packages.calls != 1 || packages.membershipCalls != 1 {
+		t.Fatalf(
+			"disabled Skill package reads=%d membership=%d, want 1/1",
+			packages.calls,
+			packages.membershipCalls,
+		)
 	}
 	disabled = false
 	run, err := service.Start(context.Background(), command)
@@ -65,7 +75,18 @@ func TestAssistantRunAppliesExplicitSkillSettingBeforeFreezingPackage(t *testing
 	if err != nil || replayed.RunID != run.RunID {
 		t.Fatalf("idempotent replay run=%+v error=%v", replayed, err)
 	}
-	if policyCalls != 2 || packages.calls != 1 {
-		t.Fatalf("policy/package calls=%d/%d, want 2/1", policyCalls, packages.calls)
+	if policyCalls != 2 || packages.calls != 2 || packages.membershipCalls != 2 {
+		t.Fatalf(
+			"policy/package/membership calls=%d/%d/%d, want 2/2/2",
+			policyCalls,
+			packages.calls,
+			packages.membershipCalls,
+		)
+	}
+	for _, identity := range packages.membershipRelease {
+		if identity.PackageID != packages.packageID ||
+			identity.ReleaseDigest != packages.releaseDigest {
+			t.Fatalf("membership escaped frozen package: %+v", identity)
+		}
 	}
 }

@@ -394,3 +394,67 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_file/file_http_mongo__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: circle_file_list_circle_files_app_local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCircleFiles}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_file/circle_file_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_file_get_circle_file_app_local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetCircleFile}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_file/circle_file_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_file_create_circle_file_app_local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateCircleFile}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_file/circle_file_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_file_update_circle_file_app_local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-004
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateCircleFile}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_file/circle_file_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_file_delete_circle_file_app_local
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-005
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: DeleteCircleFile}
+    runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_file/circle_file_generated_remote_readiness__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_file_list_circle_files_app_api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListCircleFiles}
+    runner_source_path: quwoquan_app/test/api_integration/service/circle_service/circle_management/circle_file/circle_file_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: circle_file_get_circle_file_app_api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetCircleFile}
+    runner_source_path: quwoquan_app/test/api_integration/service/circle_service/circle_management/circle_file/circle_file_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: circle_file_update_circle_file_app_api
+    spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-file-collaboration/spec.md#gwt-004
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpdateCircleFile}
+    runner_source_path: quwoquan_app/test/api_integration/service/circle_service/circle_management/circle_file/circle_file_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

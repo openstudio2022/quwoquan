@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/codegen/eventconstants"
 )
 
 type DomainGeneratorOption func(*domainGeneratorConfig)
@@ -118,6 +119,25 @@ func (generator *DomainGenerator) GenerateDomainEvents(
 	)
 }
 
+// GenerateObjectEvents is the repository-wide orchestrator entrypoint. Unlike
+// the legacy aggregate-name method, it resolves one exact canonical object and
+// cannot select a same-named aggregate from another domain.
+func (generator *DomainGenerator) GenerateObjectEvents(objectID string) error {
+	object, err := generator.findObjectByID(objectID)
+	if err != nil {
+		return err
+	}
+	data, err := generator.buildObjectTemplateData(object)
+	if err != nil {
+		return err
+	}
+	return renderDomainFile(
+		goEventsTemplate,
+		data,
+		filepath.Join(generator.outputDir, path.Dir(data.DomainModelPath), "event", "events.go"),
+	)
+}
+
 type fieldsDocument struct {
 	Entity       string                          `yaml:"entity"`
 	Fields       []domainField                   `yaml:"fields"`
@@ -149,11 +169,13 @@ type eventsDocument struct {
 }
 
 type domainEvent struct {
-	Name          string   `yaml:"name"`
-	ClientWsType  string   `yaml:"client_ws_type"`
-	Description   string   `yaml:"description"`
-	PayloadEntity string   `yaml:"payload_entity"`
-	PayloadFields []string `yaml:"payload_fields"`
+	Name              string   `yaml:"name"`
+	DeliverySemantics string   `yaml:"delivery_semantics"`
+	WireEventType     string   `yaml:"wire_event_type"`
+	ClientWsType      string   `yaml:"client_ws_type"`
+	Description       string   `yaml:"description"`
+	PayloadEntity     string   `yaml:"payload_entity"`
+	PayloadFields     []string `yaml:"payload_fields"`
 }
 
 type sharedTypesDocument struct {
@@ -196,6 +218,7 @@ type domainFieldData struct {
 
 type domainEventData struct {
 	Name         string
+	WireValue    string
 	ClientWsType string
 }
 
@@ -206,6 +229,13 @@ func (generator *DomainGenerator) buildTemplateData(
 	if err != nil {
 		return domainTemplateData{}, err
 	}
+	return generator.buildObjectTemplateData(object)
+}
+
+func (generator *DomainGenerator) buildObjectTemplateData(
+	object ast.Object,
+) (domainTemplateData, error) {
+	aggregateName := object.Name
 	objectDir := path.Dir(object.SourcePath)
 	var fields fieldsDocument
 	if err := generator.source.Decode(
@@ -313,16 +343,29 @@ func (generator *DomainGenerator) buildTemplateData(
 			return domainTemplateData{}, err
 		}
 		for _, event := range events.Events {
+			wireValue, wireErr := domainEventWireValue(event)
+			if wireErr != nil {
+				return domainTemplateData{}, fmt.Errorf("%s: %w", eventsPath, wireErr)
+			}
 			data.Events = append(
 				data.Events,
 				domainEventData{
 					Name:         event.Name,
+					WireValue:    wireValue,
 					ClientWsType: strings.TrimSpace(event.ClientWsType),
 				},
 			)
 		}
 	}
 	return data, nil
+}
+
+func domainEventWireValue(event domainEvent) (string, error) {
+	return eventconstants.WireValue(
+		event.Name,
+		event.DeliverySemantics,
+		event.WireEventType,
+	)
 }
 
 // includeReferencedOwnedTypes promotes only named owned values reachable from
@@ -435,6 +478,15 @@ func (generator *DomainGenerator) findObject(name string) (ast.Object, error) {
 		}
 	}
 	return ast.Object{}, fmt.Errorf("business object %q not found", name)
+}
+
+func (generator *DomainGenerator) findObjectByID(objectID string) (ast.Object, error) {
+	for _, object := range generator.source.Graph().Objects {
+		if object.ID == objectID {
+			return object, nil
+		}
+	}
+	return ast.Object{}, fmt.Errorf("business object %q not found", objectID)
 }
 
 func (generator *DomainGenerator) collectEnumTypes(
@@ -655,7 +707,7 @@ package event
 // Event type constants for {{.AggregateRoot}}.
 const (
 {{- range .Events}}
-	{{.Name}} = "{{.Name}}"
+	{{.Name}} = "{{.WireValue}}"
 {{- end}}
 )
 {{end}}

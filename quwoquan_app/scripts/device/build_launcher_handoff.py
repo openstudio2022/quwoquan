@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,11 @@ from launch_manifest_metadata import (
 
 
 APP_DIR = Path(__file__).resolve().parents[2]
+TEST_LIVE_LAUNCH_POLICY = "test_live"
+PROD_RELEASE_LAUNCH_POLICY = "prod_release"
+
+DefineLoader = Callable[[argparse.Namespace], dict[str, Any]]
+RuntimeConfigDigestLoader = Callable[..., str]
 
 
 def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
@@ -34,6 +40,11 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
         "--target", choices=tuple(contract["target_environment"]), required=True
     )
     parser.add_argument("--launch-mode", required=True)
+    parser.add_argument(
+        "--launch-policy",
+        choices=(TEST_LIVE_LAUNCH_POLICY, PROD_RELEASE_LAUNCH_POLICY),
+        default="",
+    )
     parser.add_argument("--app-instance-id", default="")
     parser.add_argument("--app-instance-namespace", default="")
     parser.add_argument("--rollout-mode", default="")
@@ -56,14 +67,7 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
     return parser
 
 
-def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
-    contract = load_launch_manifest_contract()
-    expected_environment = contract["target_environment"][args.target]
-    local_targets = set(contract["local_transport_targets"])
-    if args.env != expected_environment:
-        raise ValueError(
-            f"target {args.target} requires --env {expected_environment}, got {args.env}"
-        )
+def _load_canonical_defines(args: argparse.Namespace) -> dict[str, Any]:
     define_command = [
         "python3",
         "scripts/env/print_app_env_dart_defines.py",
@@ -75,6 +79,8 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
         "json",
         "--launch-mode",
         args.launch_mode,
+        "--launch-policy",
+        args.launch_policy,
     ]
     for option, value in (
         ("--app-instance-id", args.app_instance_id),
@@ -103,16 +109,49 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
     defines = json.loads(result.stdout)
     if not isinstance(defines, dict):
         raise ValueError("canonical Dart defines output must be an object")
+    return defines
+
+
+def build_handoff(
+    args: argparse.Namespace,
+    *,
+    define_loader: DefineLoader = _load_canonical_defines,
+    runtime_config_digest_loader: RuntimeConfigDigestLoader = runtime_config_digest,
+) -> dict[str, Any]:
+    contract = load_launch_manifest_contract()
+    expected_environment = contract["target_environment"][args.target]
+    local_targets = set(contract["local_transport_targets"])
+    if args.env != expected_environment:
+        raise ValueError(
+            f"target {args.target} requires --env {expected_environment}, got {args.env}"
+        )
+    args.launch_policy = args.launch_policy or (
+        PROD_RELEASE_LAUNCH_POLICY if args.env == "prod" else TEST_LIVE_LAUNCH_POLICY
+    )
+    defines = define_loader(args)
     if defines.get("APP_RUNTIME_ENV") != args.env:
         raise ValueError("canonical Dart defines environment does not match metadata")
     effective_schema = contract["schemas"]["app_effective_launch_manifest"]
     handoff_schema = contract["schemas"]["app_launcher_handoff"]
     entrypoint = effective_schema["fields"]["entrypoint"]["const"]
+    content_release_id = args.content_release_id.strip()
+    content_manifest_digest = args.content_manifest_digest.strip()
+    content_readiness_digest = args.content_readiness_receipt_digest.strip()
+    content_binding_state = (
+        "bound"
+        if all((content_release_id, content_manifest_digest, content_readiness_digest))
+        else "unbound"
+    )
+    defines = {
+        **defines,
+        "APP_LAUNCH_POLICY": args.launch_policy,
+        "CONTENT_BINDING_STATE": content_binding_state,
+    }
     defines_digest = dart_defines_digest(defines, contract)
-    config_digest = runtime_config_digest(
-        args.env,
-        contract,
-        target=args.target,
+    config_digest = (
+        defines_digest
+        if args.launch_policy == TEST_LIVE_LAUNCH_POLICY
+        else runtime_config_digest_loader(args.env, contract, target=args.target)
     )
     transport_values = {
         "reverseExpectedPorts": args.reverse_expected_ports.strip(),
@@ -145,13 +184,13 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
         "target": args.target,
         "entrypoint": entrypoint,
         "launchMode": args.launch_mode,
+        "launchPolicy": args.launch_policy,
+        "contentBindingState": content_binding_state,
         "dartDefinesDigest": defines_digest,
         "runtimeConfigDigest": config_digest,
-        "contentReleaseId": args.content_release_id.strip(),
-        "contentManifestDigest": args.content_manifest_digest.strip(),
-        "contentReadinessReceiptDigest": (
-            args.content_readiness_receipt_digest.strip()
-        ),
+        "contentReleaseId": content_release_id,
+        "contentManifestDigest": content_manifest_digest,
+        "contentReadinessReceiptDigest": content_readiness_digest,
         "recoveryBaseUrl": defines["CLOUD_GATEWAY_BASE_URL"],
         "publicWebBaseUrl": defines["PUBLIC_WEB_BASE_URL"],
         "appDownloadBaseUrl": defines["APP_DOWNLOAD_BASE_URL"],

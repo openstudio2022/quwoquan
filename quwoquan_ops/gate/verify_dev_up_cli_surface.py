@@ -515,15 +515,27 @@ def main() -> int:
     gamma_discovered_services = {
         compose_path.parents[1].name for compose_path in gamma_service_compose_files
     }
+    # Full-workload packaging must use the same active-service roster as the
+    # immutable image composition.  A raw ``find`` used to include retired
+    # service directories and made Gamma depend on stale Compose fragments;
+    # the launcher now derives the intersection explicitly through
+    # ``first_party_service_names``.
     for scanner_marker in (
-        "find \"$ROOT/quwoquan_service/services\" -mindepth 3 -maxdepth 3",
-        "-path '*/deploy/compose.yaml' -type f | sort",
+        "from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names",
+        "active = set(first_party_service_names(root))",
+        'services_root.glob("*/deploy/compose.yaml")',
+        "if path.parents[1].name in active",
     ):
         if scanner_marker not in gamma_script:
             issues.append(
                 "gamma full workload must derive first-party services from canonical "
                 f"service compose files: missing {scanner_marker}"
             )
+    if 'find "$ROOT/quwoquan_service/services"' in gamma_script:
+        issues.append(
+            "gamma full workload must not scan retired service Compose fragments "
+            "outside the canonical active-service roster"
+        )
     if "notification-service" not in gamma_discovered_services:
         issues.append(
             "gamma canonical service compose scan must derive notification-service"

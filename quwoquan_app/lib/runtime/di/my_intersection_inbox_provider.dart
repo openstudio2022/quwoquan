@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/cache/provider_cache.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_state.dart';
 
 /// runtime/di 我的主页交集预览短时缓存窗口：卡片被长列表回收或 push 进入详情再返回会重建消费方，
 /// 在窗口内复用已取结果，避免 `initState` 重打 `listMyIntersections`
@@ -19,35 +19,6 @@ final _myIntersectionPreviewCacheProvider =
     Provider<TtlCache<List<IntersectionReason>>>(
       (ref) => TtlCache<List<IntersectionReason>>(),
     );
-
-/// 「我的交集」聚合摘要状态：总数 + 各维度计数 / 未读新增。
-class MyIntersectionSummaryState {
-  final IntersectionInboxSummary? summary;
-  final bool isLoading;
-  final Object? rawError;
-
-  const MyIntersectionSummaryState({
-    this.summary,
-    this.isLoading = false,
-    this.rawError,
-  });
-
-  bool get hasNew => (summary?.totalNewCount ?? 0) > 0;
-  String? get error =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
-
-  MyIntersectionSummaryState copyWith({
-    IntersectionInboxSummary? summary,
-    bool? isLoading,
-    Object? Function()? rawError,
-  }) {
-    return MyIntersectionSummaryState(
-      summary: summary ?? this.summary,
-      isLoading: isLoading ?? this.isLoading,
-      rawError: rawError != null ? rawError() : this.rawError,
-    );
-  }
-}
 
 class MyIntersectionSummaryNotifier
     extends Notifier<MyIntersectionSummaryState> {
@@ -66,34 +37,6 @@ class MyIntersectionSummaryNotifier
       if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, rawError: () => e);
     }
-  }
-}
-
-/// 我的主页「我的交集」预览：只消费真实 fact 交集 item，不展示 affinity 推荐。
-class MyIntersectionPreviewState {
-  const MyIntersectionPreviewState({
-    this.items = const <IntersectionReason>[],
-    this.isLoading = false,
-    this.rawError,
-  });
-
-  final List<IntersectionReason> items;
-  final bool isLoading;
-  final Object? rawError;
-
-  String? get error =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
-
-  MyIntersectionPreviewState copyWith({
-    List<IntersectionReason>? items,
-    bool? isLoading,
-    Object? Function()? rawError,
-  }) {
-    return MyIntersectionPreviewState(
-      items: items ?? this.items,
-      isLoading: isLoading ?? this.isLoading,
-      rawError: rawError != null ? rawError() : this.rawError,
-    );
   }
 }
 
@@ -145,50 +88,6 @@ class MyIntersectionPreviewNotifier
   }
 }
 
-/// 「我的交集」分维度列表状态：自上次查看新增在前；打开即推进已读水位清零。
-class MyIntersectionListState {
-  const MyIntersectionListState({
-    this.dimension = '',
-    this.filter = '',
-    this.sourceRef = '',
-    this.timeBucket = '',
-    this.items = const <IntersectionReason>[],
-    this.isLoading = false,
-    this.rawError,
-  });
-
-  final String dimension;
-  final String filter;
-  final String sourceRef;
-  final String timeBucket;
-  final List<IntersectionReason> items;
-  final bool isLoading;
-  final Object? rawError;
-
-  String? get error =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
-
-  MyIntersectionListState copyWith({
-    String? dimension,
-    String? filter,
-    String? sourceRef,
-    String? timeBucket,
-    List<IntersectionReason>? items,
-    bool? isLoading,
-    Object? Function()? rawError,
-  }) {
-    return MyIntersectionListState(
-      dimension: dimension ?? this.dimension,
-      filter: filter ?? this.filter,
-      sourceRef: sourceRef ?? this.sourceRef,
-      timeBucket: timeBucket ?? this.timeBucket,
-      items: items ?? this.items,
-      isLoading: isLoading ?? this.isLoading,
-      rawError: rawError != null ? rawError() : this.rawError,
-    );
-  }
-}
-
 class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
   @override
   MyIntersectionListState build() => const MyIntersectionListState();
@@ -235,11 +134,13 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
         ref.read(myIntersectionSummaryProvider.notifier).load();
       } catch (visitError, stackTrace) {
         unawaited(
-          ref.read(exceptionTelemetryPortProvider).recordGlobalException(
-            source: 'my_intersection_inbox.mark_visited',
-            exceptionText: visitError.toString(),
-            stackText: stackTrace.toString(),
-          ),
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordGlobalException(
+                source: 'my_intersection_inbox.mark_visited',
+                exceptionText: visitError.toString(),
+                stackText: stackTrace.toString(),
+              ),
         );
       }
     } catch (e) {

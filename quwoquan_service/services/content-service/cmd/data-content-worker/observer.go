@@ -29,8 +29,12 @@ import (
 func observeExecutionState(
 	executionID string,
 	carrier string,
+	stage string,
 	requestBindingDigest string,
 	executionEnvelopeDigest string,
+	jobSetEnvelopeDigest string,
+	jobSetDigest string,
+	actualTaskDigest string,
 	rawCampaignBinding string,
 ) error {
 	var campaignBinding reliabletask.DataContentCampaignBinding
@@ -48,8 +52,12 @@ func observeExecutionState(
 	request := reliabletask.DataContentExecutionObservationRequest{
 		ExecutionID:             executionID,
 		Carrier:                 carrier,
+		Stage:                   stage,
 		RequestBindingDigest:    requestBindingDigest,
 		ExecutionEnvelopeDigest: executionEnvelopeDigest,
+		JobSetEnvelopeDigest:    jobSetEnvelopeDigest,
+		JobSetDigest:            jobSetDigest,
+		ActualTaskDigest:        actualTaskDigest,
 		Campaign:                campaignBinding,
 	}
 	cfg, err := importer.LoadFleetStoreConfig(

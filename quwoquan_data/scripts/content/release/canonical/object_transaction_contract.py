@@ -10,9 +10,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical.object_transaction_bindings import (
+    collect_object_keys,
+    verify_entity_manifest_asset_binding,
+)
 from core.control_types import SourcePolicyRevision
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
+
+_collect_object_keys = collect_object_keys
 
 PACKAGE_SCHEMA = "quwoquan_data.object_transaction_package"
 DRY_RUN_SCHEMA = "quwoquan_data.object_transaction_dry_run"
@@ -235,23 +241,11 @@ def refresh_canonical_tag_snapshots(canonical_root: Path) -> list[str]:
             current = current.parent
     return refs
 
-def _collect_object_keys(value: Any) -> set[str]:
-    result: set[str] = set()
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if key == "objectKey" and isinstance(child, str) and child:
-                result.add(child)
-            result.update(_collect_object_keys(child))
-    elif isinstance(value, list):
-        for child in value:
-            result.update(_collect_object_keys(child))
-    return result
-
 def _object_json_keys(root: Path) -> set[str]:
     result: set[str] = set()
     for path in _files(root):
         if path.suffix == ".json":
-            result.update(_collect_object_keys(_read_json(path)))
+            result.update(collect_object_keys(_read_json(path)))
     return result
 
 def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, Any]:
@@ -340,6 +334,7 @@ def _rights_binding(
                 "snapshotSha256": str(snapshot["sha256"]),
                 "assetRef": asset_ref.as_posix(),
                 "assetSha256": str(asset["sha256"]),
+                "assetBytes": int(asset["bytes"]),
                 "author": str(item["author"]),
                 "licenseName": str(item["licenseName"]),
                 "licenseUrl": str(item["licenseUrl"]),
@@ -355,6 +350,7 @@ def _rights_binding(
         "rightsSha256": _digest_file(rights_path),
         "assets": bindings,
     }
+
 
 def _closure_digest(
     *,
@@ -554,6 +550,14 @@ def _verify_package(
         rights_ref=local_refs["rightsRef"],
         cas_rows=cas_rows,
     )
+    if object_kind == "entities":
+        try:
+            verify_entity_manifest_asset_binding(
+                _read_json(object_root / "manifest.json"),
+                rights,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ObjectTransactionError(str(exc)) from exc
     referenced_keys = _object_json_keys(object_root)
     if referenced_keys != seen_keys:
         raise ObjectTransactionError(

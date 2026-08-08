@@ -27,6 +27,11 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
+	grantadapter "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/adapters/inbound/runtime"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
+	grantcandidate "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/candidate"
+	grantpersistence "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/persistence"
+	grantresolver "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/resolver"
 	connectorauthorizationhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/adapters/inbound/http"
 	connectorauthorizationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/application"
 	connectorgrantreceipt "quwoquan_service/services/integration-service/internal/external_integration/connector_authorization/infrastructure/grantreceipt"
@@ -41,6 +46,8 @@ import (
 	connectordefinitionpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/infrastructure/persistence"
 	connectorinvocationhttp "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/adapters/inbound/http"
 	connectorinvocationapp "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/application"
+	connectorinvocationauthority "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/infrastructure/authority"
+	connectorinvocationexecutor "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/infrastructure/executor"
 	connectorinvocationpersistence "quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/infrastructure/persistence"
 	externalhttp "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/http"
 	streamadapter "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/adapters/inbound/stream"
@@ -447,10 +454,35 @@ func run() error {
 		connectorGrantVerifier,
 		nil,
 	)
+	grantRedis, ok := redisRouter.LookupScene("general")
+	if !ok {
+		return errors.New("capability grant session requires Redis scene general")
+	}
+	grantSessionStore, err := grantpersistence.NewRedisSessionStore(grantRedis)
+	if err != nil {
+		return fmt.Errorf("capability grant session store init failed: %w", err)
+	}
+	unavailableGrantSources := grantcandidate.NewUnavailableSources(
+		"public provider, device, and domain-operation owners are not bound to this HTTP process",
+	)
+	grantCandidateResolver := grantresolver.NewCandidateResolver(
+		unavailableGrantSources,
+		grantcandidate.NewConnectorReaderSource(
+			connectorConnectionStore,
+			connectorDefinitionStore,
+			nil,
+		),
+		unavailableGrantSources,
+		unavailableGrantSources,
+		func() time.Time { return time.Now().UTC() },
+	)
+	grantSession := grantapp.NewCapabilityGrantSessionFacade(
+		grantCandidateResolver,
+		grantSessionStore,
+	)
 	connectorConnectionQueries := connectorconnectionapp.NewCapabilityQueryFacade(
 		connectorConnectionStore,
-		connectorDefinitionStore,
-		nil,
+		grantadapter.NewMiddleware(grantSession),
 	)
 	connectorInvocationStore := connectorinvocationpersistence.NewMongoStore(
 		mongoClient.Database(cfg.MongoDB.Database),
@@ -463,14 +495,29 @@ func run() error {
 	cancelConnectorInvocationIndexes()
 	connectorInvocationCommands := connectorinvocationapp.NewCommandFacade(
 		connectorInvocationStore,
-		connectorConnectionStore,
-		connectorDefinitionStore,
+		grantSession,
 		nil,
 		nil,
 	)
 	connectorInvocationQueries := connectorinvocationapp.NewQueryFacade(
 		connectorInvocationStore,
 	)
+	connectorInvocationWorker := connectorinvocationapp.NewInvocationWorker(
+		connectorInvocationStore,
+		grantSession,
+		connectorConnectionStore,
+		connectorDefinitionStore,
+		connectorinvocationauthority.UnavailableExecutionAuthority{},
+		connectorinvocationexecutor.UnavailableCapabilityExecutor{},
+		"integration-service-connector-invocation",
+		30*time.Second,
+		nil,
+	)
+	connectorInvocationLoopDone := make(chan struct{})
+	go func() {
+		defer close(connectorInvocationLoopDone)
+		runConnectorInvocationLoop(ctx, connectorInvocationWorker)
+	}()
 	reliableStore := reliabletaskmongo.NewExternalInteraction(mongoClient.Database(cfg.MongoDB.Database))
 	attemptRuntimeStore := attemptadapter.NewRuntimeStore(reliableStore)
 	deadLetterRepository := deadletterpersistence.NewMongoRepository(
@@ -702,15 +749,40 @@ func run() error {
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		cancelRuntime()
 		waitForWorkerShutdown(externalLoopDone, "external interaction")
+		waitForWorkerShutdown(connectorInvocationLoopDone, "connector invocation")
 		waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
 		waitForWorkerShutdown(accountClosureDone, "account closure consumer")
 		return err
 	}
 	cancelRuntime()
 	waitForWorkerShutdown(externalLoopDone, "external interaction")
+	waitForWorkerShutdown(connectorInvocationLoopDone, "connector invocation")
 	waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
 	waitForWorkerShutdown(accountClosureDone, "account closure consumer")
 	return nil
+}
+
+func runConnectorInvocationLoop(
+	ctx context.Context,
+	worker *connectorinvocationapp.InvocationWorker,
+) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			processed, err := worker.RunOnce(ctx)
+			if err != nil {
+				log.Printf("connector invocation worker failed: %v", err)
+				continue
+			}
+			if !processed {
+				continue
+			}
+		}
+	}
 }
 
 func runExternalInteractionLoop(ctx context.Context, service *application.ExternalInteractionService) {

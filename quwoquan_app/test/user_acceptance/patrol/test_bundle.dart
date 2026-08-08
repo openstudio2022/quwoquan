@@ -9,7 +9,7 @@ import 'package:patrol/src/platform/contracts/contracts.dart';
 import 'package:test_api/src/backend/invoker.dart';
 
 // START: GENERATED TEST IMPORTS
-import '../journeys/event_ingestion/event_ingestion_journey__user_acceptance_test.dart' as ops__event_ingestion_journey__user_acceptance_test;
+import '../journeys/app_startup/app_core_readback__user_acceptance_test.dart' as app_startup__app_core_readback__user_acceptance_test;
 // END: GENERATED TEST IMPORTS
 
 Future<void> main() async {
@@ -72,7 +72,7 @@ Future<void> main() async {
   });
 
 // START: GENERATED TEST GROUPS
-  group('ops.event_ingestion_journey.user_acceptance_test', ops__event_ingestion_journey__user_acceptance_test.main);
+  group('app_startup.app_core_readback.user_acceptance_test', app_startup__app_core_readback__user_acceptance_test.main);
 // END: GENERATED TEST GROUPS
 
   final dartTestGroup = await testExplorationCompleter.future;

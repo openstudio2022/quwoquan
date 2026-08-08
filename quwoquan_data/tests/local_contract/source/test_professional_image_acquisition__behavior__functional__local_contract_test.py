@@ -237,25 +237,25 @@ def test_public_and_supported_api_paths_use_anonymous_asset_transport(
 
     monkeypatch.setattr(acquisition, "_network_payload", fake_network)
     pin = _item(
-        "pin-public",
+        "pin-api",
         "pinterest",
-        "",
-        "unverified",
-        acquisition_path="public_direct",
-    )
-    pin.update(
-        assetUrl="https://cdn.example.invalid/pin.jpg",
-    )
-    tuchong = _item(
-        "tuchong-api",
-        "tuchong",
         "",
         "unverified",
         acquisition_path="supported_api",
     )
+    pin.update(
+        assetUrl="https://cdn.example.invalid/pin.jpg",
+        apiEvidence="https://api.example.invalid/responses/pinterest-123",
+    )
+    tuchong = _item(
+        "tuchong-public",
+        "tuchong",
+        "",
+        "unverified",
+        acquisition_path="public_direct",
+    )
     tuchong.update(
         assetUrl="https://cdn.example.invalid/tuchong.jpg",
-        apiEvidence="https://api.example.invalid/responses/123",
     )
     manifest_path = tmp_path / "manifest.json"
     write_json(manifest_path, _manifest([pin, tuchong], tmp_path))
@@ -266,7 +266,7 @@ def test_public_and_supported_api_paths_use_anonymous_asset_transport(
         output_root=tmp_path / "acquisition",
     )
 
-    assert observed == [f"{pin['assetUrl']}:False", f"{tuchong['assetUrl']}:True"]
+    assert observed == [f"{pin['assetUrl']}:True", f"{tuchong['assetUrl']}:False"]
     assert receipt["acceptedAssetCount"] == 2
 
 
@@ -279,7 +279,7 @@ def test_safety_entity_and_access_failures_block_before_download(
     def public_item(asset_id: str, **kwargs: object) -> dict:
         item = _item(
             asset_id,
-            "pinterest",
+            "tuchong",
             "",
             "unverified",
             acquisition_path="public_direct",
@@ -425,13 +425,13 @@ def test_acquisition_rejects_discovery_candidate_drift_before_download(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     item = _item(
-        "pin-drift",
-        "pinterest",
+        "tuchong-drift",
+        "tuchong",
         "",
         "unverified",
         acquisition_path="public_direct",
     )
-    item["assetUrl"] = "https://cdn.example.invalid/pin-drift.jpg"
+    item["assetUrl"] = "https://cdn.example.invalid/tuchong-drift.jpg"
     manifest = _manifest([item], tmp_path)
     manifest["items"][0]["discoveryUrl"] = "https://example.invalid/drift"
     manifest_path = tmp_path / "manifest.json"

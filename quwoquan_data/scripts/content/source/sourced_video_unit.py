@@ -308,7 +308,7 @@ def write_admitted_sourced_video_unit(
                         f"{rights_basis} recorded by sourced-video admission"
                     ),
                     "usageScope": (
-                        "research_internal" if research_release else "app_publish"
+                        "internal_reference" if research_release else "app_publish"
                     ),
                     "collectionPageUrl": source_post_url,
                     "authorizationProof": authorization_proof_url or "",

@@ -1,11 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart';
 import 'package:quwoquan_app/design_system/media/media_reorderable_view.dart';
 import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/content_service/media/filter_catalog_release/image_editor_filter_catalog_typed_double.dart';
 
 /// 图片编辑器缩略图条接入统一拖拽组件后的回归守卫。
 ///
@@ -17,6 +22,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 void main() {
   Widget buildEditor({required void Function(Object?) onDone}) {
     return ProviderScope(
+      overrides: _imageEditorOverrides(),
       child: MaterialApp(
         home: ImageEditorPage(
           initialPath: '/tmp/a.jpg',
@@ -44,6 +50,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: '/tmp/0.jpg',
@@ -148,3 +155,12 @@ void main() {
     expect(find.text('1/3'), findsNothing);
   });
 }
+
+/// 图片编辑页只依赖滤镜目录读面：先封死 App↔Cloud 边界，再注入对象级 typed
+/// double，保证 widget 测试不会构造真实 generated operation client。
+List<Override> _imageEditorOverrides() => <Override>[
+  ...sealedCloudBoundaryOverrides(),
+  imageEditorFilterRepositoryProvider.overrideWithValue(
+    InMemoryImageEditorFilterCatalog(),
+  ),
+];

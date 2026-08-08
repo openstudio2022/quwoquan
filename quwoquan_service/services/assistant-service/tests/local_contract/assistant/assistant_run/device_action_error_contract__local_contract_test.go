@@ -18,30 +18,58 @@ var canonicalDeviceActionFailureCodes = map[string]struct {
 	disruptionLevel string
 	dartConst       string
 	goConst         string
+	emitter         string
 }{
 	"ASSISTANT.SYSTEM.device_action_unavailable": {
 		reason:          "device_action_unavailable",
-		httpStatus:      503,
 		recoveryAction:  "fallback",
 		disruptionLevel: "inlineCard",
 		dartConst:       "deviceActionUnavailable",
 		goConst:         "ErrDeviceActionUnavailable",
+		emitter:         "app",
 	},
 	"ASSISTANT.USER.device_action_permission_denied": {
 		reason:          "device_action_permission_denied",
-		httpStatus:      403,
 		recoveryAction:  "surface",
 		disruptionLevel: "permissionCard",
 		dartConst:       "deviceActionPermissionDenied",
 		goConst:         "ErrDeviceActionPermissionDenied",
+		emitter:         "app",
 	},
 	"ASSISTANT.SYSTEM.device_action_failed": {
 		reason:          "device_action_failed",
-		httpStatus:      500,
 		recoveryAction:  "retry",
 		disruptionLevel: "snackbar",
 		dartConst:       "deviceActionFailed",
 		goConst:         "ErrDeviceActionFailed",
+		emitter:         "app",
+	},
+	"ASSISTANT.USER.device_action_permit_invalid": {
+		reason:          "device_action_permit_invalid",
+		httpStatus:      403,
+		recoveryAction:  "surface",
+		disruptionLevel: "inlineCard",
+		dartConst:       "deviceActionPermitInvalid",
+		goConst:         "ErrDeviceActionPermitInvalid",
+		emitter:         "SubmitDeviceActionReceipt",
+	},
+	"ASSISTANT.USER.device_action_permit_expired": {
+		reason:          "device_action_permit_expired",
+		httpStatus:      410,
+		recoveryAction:  "surface",
+		disruptionLevel: "inlineCard",
+		dartConst:       "deviceActionPermitExpired",
+		goConst:         "ErrDeviceActionPermitExpired",
+		emitter:         "SubmitDeviceActionReceipt",
+	},
+	"ASSISTANT.USER.device_action_permit_replayed": {
+		reason:          "device_action_permit_replayed",
+		httpStatus:      409,
+		recoveryAction:  "surface",
+		disruptionLevel: "inlineCard",
+		dartConst:       "deviceActionPermitReplayed",
+		goConst:         "ErrDeviceActionPermitReplayed",
+		emitter:         "SubmitDeviceActionReceipt",
 	},
 }
 
@@ -57,10 +85,7 @@ type deviceActionErrorDefinition struct {
 		ZH string `yaml:"zh"`
 		EN string `yaml:"en"`
 	} `yaml:"user_message"`
-	EmittedBy []struct {
-		Surface    string   `yaml:"surface"`
-		Operations []string `yaml:"operations"`
-	} `yaml:"emitted_by"`
+	EmittedBy yaml.Node `yaml:"emitted_by"`
 }
 
 type deviceActionOperationDefinition struct {
@@ -103,11 +128,8 @@ func TestDeviceActionFailuresHaveOneCanonicalOperationOwner(t *testing.T) {
 			strings.TrimSpace(definition.UserMessage.EN) == "" {
 			t.Fatalf("canonical device action error %s lacks generated App semantics", code)
 		}
-		if len(definition.EmittedBy) != 1 ||
-			definition.EmittedBy[0].Surface != "http" ||
-			len(definition.EmittedBy[0].Operations) != 1 ||
-			definition.EmittedBy[0].Operations[0] != "SubmitDeviceActionReceipt" {
-			t.Fatalf("canonical device action error %s is not owned only by SubmitDeviceActionReceipt: %#v", code, definition.EmittedBy)
+		if !deviceActionEmitterMatches(definition.EmittedBy, expected.emitter) {
+			t.Fatalf("canonical device action error %s has the wrong emitter: %#v", code, definition.EmittedBy)
 		}
 	}
 
@@ -132,15 +154,45 @@ func TestDeviceActionFailuresHaveOneCanonicalOperationOwner(t *testing.T) {
 			continue
 		}
 		foundSubmitReceipt = true
-		for code := range canonicalDeviceActionFailureCodes {
-			if counts[code] != 1 {
-				t.Fatalf("SubmitDeviceActionReceipt binds %s %d times", code, counts[code])
+		for code, expected := range canonicalDeviceActionFailureCodes {
+			want := 0
+			if expected.emitter == "SubmitDeviceActionReceipt" {
+				want = 1
+			}
+			if counts[code] != want {
+				t.Fatalf("SubmitDeviceActionReceipt binds %s %d times, want %d", code, counts[code], want)
 			}
 		}
 	}
 	if !foundSubmitReceipt {
 		t.Fatal("SubmitDeviceActionReceipt operation is missing")
 	}
+}
+
+func deviceActionEmitterMatches(node yaml.Node, expected string) bool {
+	if node.Kind != yaml.SequenceNode || len(node.Content) != 1 {
+		return false
+	}
+	emitter := node.Content[0]
+	if expected == "app" {
+		return emitter.Kind == yaml.ScalarNode && emitter.Value == "app"
+	}
+	if emitter.Kind != yaml.MappingNode {
+		return false
+	}
+	var surface string
+	var operations []string
+	for index := 0; index+1 < len(emitter.Content); index += 2 {
+		switch emitter.Content[index].Value {
+		case "surface":
+			surface = emitter.Content[index+1].Value
+		case "operations":
+			for _, operation := range emitter.Content[index+1].Content {
+				operations = append(operations, operation.Value)
+			}
+		}
+	}
+	return surface == "http" && len(operations) == 1 && operations[0] == expected
 }
 
 func TestDeviceActionFailureCodeKeepsErrorsYAMLAsSingleTypedOwner(t *testing.T) {

@@ -24,6 +24,9 @@ for _path in (DATA_ROOT, DATA_ROOT / "tests", DATA_ROOT / "scripts"):
 from content.post.content_plan_video_validation import (  # noqa: E402
     _validate_sourced_video,
 )
+from content.execution.controller.content_plan_video import (  # noqa: E402
+    sourced_video_object_title,
+)
 from content.post.video.source_video import (  # noqa: E402
     SourcedVideoAsset,
     SourcedVideoEvidence,
@@ -263,6 +266,15 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr(
+        sourced_video_unit,
+        "load_content_distribution_policy",
+        lambda: type(
+            "CommercialPolicy",
+            (),
+            {"product_lifecycle_state": ProductLifecycleState.COMMERCIAL},
+        )(),
+    )
     _patch_output_root(monkeypatch, tmp_path)
     build_execution_fixture(EXECUTION_ID)
     source = _video(tmp_path / "source.mp4")
@@ -415,7 +427,7 @@ def test_professional_video_source_unit_preserves_receipt_and_popularity(
             {"product_lifecycle_state": ProductLifecycleState.RESEARCH},
         )(),
     )
-    execution_id = "20260805--travel-video-m100--china--scale-912"
+    execution_id = "20260805--travel-video-acquisition--china--pilot-912"
     _patch_output_root(monkeypatch, tmp_path)
     build_execution_fixture(execution_id)
     source = _video(tmp_path / "professional.mp4", motion_step=12)
@@ -482,6 +494,7 @@ def test_professional_video_source_unit_preserves_receipt_and_popularity(
     assert asset["professionalMediaProbe"] == professional_probe
     assert asset["popularitySignals"] == popularity
     assert asset["premiumPlayableEligible"] is True
+    assert asset["usageScope"] == "internal_reference"
 
 
 def test_risk_only_sourced_video_cannot_claim_licensed_adaptation() -> None:
@@ -502,3 +515,16 @@ def test_unknown_video_rights_basis_cannot_claim_licensed_adaptation() -> None:
             rights_basis="unknown",
             authorization_proof_url="https://rights.example/video",
         )
+
+
+def test_sourced_video_object_title_preserves_specific_source_identity() -> None:
+    assert sourced_video_object_title(
+        target="杭州西湖",
+        source_title="西湖游船视角下的柳岸与湖面",
+    ) == "杭州西湖｜西湖游船视角下的柳岸与湖面"
+    assert sourced_video_object_title(
+        target="杭州西湖",
+        source_title="杭州西湖四季实拍",
+    ) == "杭州西湖四季实拍"
+    with pytest.raises(ValueError, match="sourced video title"):
+        sourced_video_object_title(target="杭州西湖", source_title="")

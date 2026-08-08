@@ -3,8 +3,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 交集共同实例数解析（point.count 真相源）。
 ///
 /// §23 去桥接后，kind → iconKey / objectKind / routeId / tone / actionHints 的闭集映射
-/// 一律查 codegen 下发的 `IntersectionKindMetadata`
-/// （`cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart`），
+/// 一律查 codegen 下发的 typed `IntersectionActionPolicy`
+/// （`application/generated/intersection_client_policy.g.dart`），
 /// 端不再维护第二份 switch。本文件只保留与 kind 元数据无关的共同数解析。
 int intersectionMutualCountOf(IntersectionReason reason) {
   if (reason.mutualCount > 0) return reason.mutualCount;

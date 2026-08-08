@@ -219,9 +219,11 @@ func (p *EventPublisher) PublishGreetingEvent(
 	}
 	switch event.EventName {
 	case "GreetingRequestSent":
-		if event.Source == "" || event.ExpireAt == "" {
+		if event.Source == "" || event.ExpireAt == "" ||
+			strings.TrimSpace(event.RecipientAccountID) == "" {
 			return fmt.Errorf("invalid GreetingRequestSent payload")
 		}
+		values["recipientAccountId"] = strings.TrimSpace(event.RecipientAccountID)
 		values["source"] = event.Source
 		values["expireAt"] = event.ExpireAt
 		values["targetAllowsStrangerGreeting"] = strconv.FormatBool(event.TargetAllowsStrangerGreeting)

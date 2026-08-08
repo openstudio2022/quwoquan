@@ -79,6 +79,9 @@ def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
         target_entity_count=2,
         approved_quota=2,
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
     )
     store.save_spec(spec)
     return spec["executionId"]

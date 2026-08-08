@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: b5683d7d096bfb9d5d550bb42fc6069321cdd8d781d57b85d8517db39af2390e
+// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
 
 library;
 
@@ -241,7 +241,7 @@ final class AppMessageGatheringInvitation {
       place: AppMessageGatheringInvitationPlace.fromWire(_requiredObject(map["place"], '$path.place'), '$path.place'),
       participationVersion: _requiredInt(map["participationVersion"], '$path.participationVersion'),
       status: AppMessageGatheringInvitationStatus.fromWire(map["status"], '$path.status'),
-      actionIntents: List<AppMessageGatheringInvitationActionIntent>.unmodifiable(_requiredList(map["actionIntents"], '$path.actionIntents').asMap().entries.map((entry) => AppMessageGatheringInvitationActionIntent.fromWire(_requiredObject(entry.value, '$path.actionIntents' + '[${entry.key}]'), '$path.actionIntents' + '[${entry.key}]'))),
+      actionIntents: List<AppMessageGatheringInvitationActionIntent>.unmodifiable(_requiredBoundedList(map["actionIntents"], '$path.actionIntents', max: 2).asMap().entries.map((entry) => AppMessageGatheringInvitationActionIntent.fromWire(_requiredObject(entry.value, '$path.actionIntents' + '[${entry.key}]'), '$path.actionIntents' + '[${entry.key}]'))),
       expiresAt: map["expiresAt"] == null ? null : _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
     );
   }
@@ -525,4 +525,16 @@ List<Object?> _requiredList(Object? value, String path) {
     throw FormatException('$path must be a list');
   }
   return value;
+}
+
+List<Object?> _requiredBoundedList(
+  Object? value,
+  String path, {
+  required int max,
+}) {
+  final result = _requiredList(value, path);
+  if (result.length > max) {
+    throw FormatException('$path must not contain more than $max items');
+  }
+  return result;
 }

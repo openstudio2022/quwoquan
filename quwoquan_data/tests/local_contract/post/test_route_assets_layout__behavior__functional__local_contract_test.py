@@ -152,12 +152,8 @@ def test_layouts_not_uniformly_degraded():
     assert cover["imageLayout"] == "fullWidth", cover
 
 
-def test_article_auto_selects_from_base_source_ignoring_asset_refs():
-    """图文同源底稿：article 选图按 baseSourceRef 来源自动选 cover/node/closing，
-
-    不受 brief 声明的 assetRefs 收窄——assetRefs 严格约束只对 image/gallery 图片作品
-    生效；article 的图与文字同源于底稿来源，跨底稿引用相同图片属正常现象，不去重降级。
-    """
+def test_article_uses_only_semantically_frozen_source_assets():
+    """Article compose不得越过content_plan的同源视觉相关性选择重新扩张素材池。"""
     _seed_images()
     entity = ENTITIES[0]
     candidates = RW._entity_image_candidates(EXECUTION_ID, entity, f"/entity/地点/景区/{entity}")
@@ -176,9 +172,52 @@ def test_article_auto_selects_from_base_source_ignoring_asset_refs():
     assets = _build_route_assets(EXECUTION_ID, "声明源图文章", brief, evidence_bundle)
 
     selected = [asset["sourceAssetRef"] for asset in assets]
-    assert selected, "article 应从底稿来源选出图片"
-    source_unit_ref = Path(declared["sourceRef"]).parent.as_posix()
-    assert all(ref.startswith(f"{source_unit_ref}/assets/") for ref in selected), selected
+    assert selected == [declared["sourceAssetRef"]]
+
+
+def test_article_skips_frozen_image_already_present_in_canonical_publish():
+    """A canonical image collision selects the next frozen source asset."""
+    _seed_images()
+    entity = ENTITIES[0]
+    candidates = RW._entity_image_candidates(
+        EXECUTION_ID,
+        entity,
+        f"/entity/地点/景区/{entity}",
+    )
+    assert len(candidates) >= 2
+    duplicate, unique = candidates[:2]
+    brief = {
+        "carrier": "article",
+        "baseSourceRef": duplicate["sourceRef"],
+        "assetRefs": [duplicate["sourceAssetRef"], unique["sourceAssetRef"]],
+        "imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}],
+    }
+    evidence_bundle = {
+        "routeNodes": [
+            {"entityName": entity, "entityRef": f"/entity/地点/景区/{entity}"}
+        ]
+    }
+    original = RW._canonical_image_conflict
+    RW._canonical_image_conflict = lambda candidate: (
+        "canonical image identity duplicated by sha256: fixture"
+        if candidate["sourceAssetRef"] == duplicate["sourceAssetRef"]
+        else ""
+    )
+    try:
+        assets = _build_route_assets(
+            EXECUTION_ID,
+            "canonical去重文章",
+            brief,
+            evidence_bundle,
+        )
+    finally:
+        RW._canonical_image_conflict = original
+
+    assert assets[0]["role"] == "cover"
+    assert assets[0]["sourceAssetRef"] == unique["sourceAssetRef"]
+    assert duplicate["sourceAssetRef"] not in {
+        asset["sourceAssetRef"] for asset in assets
+    }
 
 
 def test_article_without_base_source_cannot_fan_in_route_node_sources():

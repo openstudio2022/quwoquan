@@ -1,6 +1,7 @@
 events:
 - name: PersonaFollowStateChanged
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaFollowStateChanged
   payload_entity: PersonaRelationship
   payload_fields:
   - eventId
@@ -12,6 +13,7 @@ events:
   - occurredAt
 - name: PersonaBlocked
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaBlocked
   payload_entity: PersonaRelationship
   payload_fields:
   - eventId
@@ -25,6 +27,7 @@ events:
   - occurredAt
 - name: PersonaUnblocked
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaUnblocked
   payload_entity: PersonaRelationship
   payload_fields:
   - eventId

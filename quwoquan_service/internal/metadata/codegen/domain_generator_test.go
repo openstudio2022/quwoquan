@@ -1,8 +1,14 @@
 package codegen
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/graph"
 )
 
 // spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-003
@@ -46,6 +52,97 @@ func TestFieldGoTypeRequiresTypedEnumReference(t *testing.T) {
 	if _, err := generator.fieldGoType(domainField{Type: "enum"}, nil); err == nil ||
 		!strings.Contains(err.Error(), "requires enum_ref") {
 		t.Fatalf("typed enum without enum_ref error = %v", err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-003
+func TestDomainEventWireValueUsesAuthoredOutboxWireIdentity(t *testing.T) {
+	t.Parallel()
+
+	got, err := domainEventWireValue(domainEvent{
+		Name:              "ReportCreated",
+		DeliverySemantics: "transactional_outbox",
+		WireEventType:     "content.report.ReportCreated",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "content.report.ReportCreated" {
+		t.Fatalf("wire value = %q, want authored wire_event_type", got)
+	}
+}
+
+func TestDomainEventWireValueFailsClosedForMissingOutboxWireIdentity(t *testing.T) {
+	t.Parallel()
+
+	if _, err := domainEventWireValue(domainEvent{
+		Name:              "ReportCreated",
+		DeliverySemantics: "transactional_outbox",
+	}); err == nil || !strings.Contains(err.Error(), "requires wire_event_type") {
+		t.Fatalf("missing wire_event_type error = %v", err)
+	}
+	got, err := domainEventWireValue(domainEvent{
+		Name:              "LocalAuditRecorded",
+		DeliverySemantics: "transactional_event_log",
+	})
+	if err != nil || got != "LocalAuditRecorded" {
+		t.Fatalf("non-outbox wire value = %q, err=%v", got, err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-003
+func TestGenerateDomainEventsEmitsAuthoredWireIdentity(t *testing.T) {
+	t.Parallel()
+
+	const objectDir = "content/trust_safety/report"
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "content.report", Name: "Report",
+			SourcePath: objectDir + "/object.yaml",
+		}},
+		Documents: []ast.SourceDocument{
+			{
+				Path: objectDir + "/fields.yaml",
+				Content: json.RawMessage(`{
+					"entity":"Report",
+					"fields":[{"name":"reportId","type":"string"}]
+				}`),
+			},
+			{
+				Path: objectDir + "/events.yaml",
+				Content: json.RawMessage(`{
+					"events":[{
+						"name":"ReportCreated",
+						"delivery_semantics":"transactional_outbox",
+						"wire_event_type":"content.report.ReportCreated"
+					}]
+				}`),
+			},
+		},
+	}
+	outputDir := t.TempDir()
+	generator := NewDomainGenerator(
+		NewSourceFromGraph("metadata", contractGraph),
+		outputDir,
+	)
+	if err := generator.GenerateDomainEvents("Report"); err != nil {
+		t.Fatal(err)
+	}
+	generated, err := os.ReadFile(filepath.Join(
+		outputDir,
+		"domain",
+		"report",
+		"event",
+		"events.go",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(
+		string(generated),
+		`ReportCreated = "content.report.ReportCreated"`,
+	) {
+		t.Fatalf("generated event constant did not preserve wire_event_type:\n%s", generated)
 	}
 }
 

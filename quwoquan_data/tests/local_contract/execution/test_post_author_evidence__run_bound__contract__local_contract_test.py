@@ -21,6 +21,7 @@ for path in (DATA_ROOT / "scripts", DATA_ROOT / "tests"):
 from content.execution.agent.outcome import AgentRunOutcome  # noqa: E402
 from content.execution.context import ExecutionContext  # noqa: E402
 from content.execution.controller.post_author_evidence import (  # noqa: E402
+    refresh_post_author_evidence_from_durable_meta,
     write_post_author_evidence,
 )
 from content.execution.controller.execute.handoff import build_author_job_packet  # noqa: E402
@@ -31,11 +32,15 @@ from content.execution.production_contracts import (  # noqa: E402
 from content.execution.queue.core import _read_job, stable_job_id  # noqa: E402
 from content.execution.queue.jobs import enqueue_ref_job  # noqa: E402
 from content.execution.queue.reliabletask import worker as worker_module  # noqa: E402
+from content.execution.queue.reliabletask.jobs import (  # noqa: E402
+    post_author_job_definition,
+)
 from content.execution.queue.reliabletask.worker import (  # noqa: E402
     DataContentWorkItem,
     execute_work_item,
 )
 from content.execution.queue.reliabletask.fleet import build_fleet_request  # noqa: E402
+from content.execution.queue.partition import partition_key  # noqa: E402
 from content.post import object_index as content_object  # noqa: E402
 from content.post.article.draft_io import (  # noqa: E402
     draft_article_path,
@@ -73,6 +78,9 @@ def test_process_worker_keeps_stdout_protocol_clean(
         "carrier": "article",
         "sourceRevision": "sha256:" + "a" * 64,
         "idempotencyKey": "entity/真实地点|article|source|author",
+        "jobSetEnvelopeDigest": "sha256:" + "b" * 64,
+        "jobSetDigest": "sha256:" + "c" * 64,
+        "actualTaskDigest": "sha256:" + "c" * 64,
     }
     monkeypatch.setattr(
         sys,
@@ -129,7 +137,11 @@ def test_fleet_request_rejects_carrier_different_from_execution_identity() -> No
         )
 
         with pytest.raises(ValueError, match="carrier 必须与 executionId 一致"):
-            build_fleet_request(execution_id, QueueJobStage.AUTHOR)
+            build_fleet_request(
+                execution_id,
+                QueueJobStage.AUTHOR,
+                required_workers=1,
+            )
     finally:
         shutil.rmtree(execution_root(execution_id), ignore_errors=True)
 
@@ -194,11 +206,15 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     write_json(
         draft_meta_path(EXECUTION_ID, ref),
         {
+            "executionId": EXECUTION_ID,
+            "objectRef": ref,
             "ref": ref,
             "generator": "agent",
             "status": "completed",
-            "model": "composer-2.5",
+            "provider": "cursor_sdk",
+            "model": "Composer",
             "agentRunId": "cursor-run-post-001",
+            "agentId": "agent-post-001",
             "promptSha256": sha256_file(prompt),
             "draftSha256": sha256_file(article),
         },
@@ -213,6 +229,26 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
         model="composer-2.5",
         agent_provider="cursor_sdk",
     )
+    mutex_key, retry_metadata = post_author_job_definition(ctx, ref)
+    assert mutex_key == "source-unit-001"
+    assert retry_metadata["carrier"] == "article"
+    assert retry_metadata["entityRef"] == "/entity/地点/景区/都江堰"
+    assert str(retry_metadata["sourceRevision"]).startswith("sha256:")
+    initial_source_revision = retry_metadata["sourceRevision"]
+    repair_report = (
+        draft_package_dir(EXECUTION_ID, ref).parent
+        / "5.review"
+        / "repair_report.json"
+    )
+    write_json(repair_report, {"issues": ["修复图文锚点"]})
+    _, repaired_metadata = post_author_job_definition(ctx, ref)
+    assert repaired_metadata["sourceRevision"] != initial_source_revision
+    prompt.write_text(
+        prompt.read_text(encoding="utf-8") + "\n补充修订后的图文锚点。",
+        encoding="utf-8",
+    )
+    _, reprompted_metadata = post_author_job_definition(ctx, ref)
+    assert reprompted_metadata["sourceRevision"] != repaired_metadata["sourceRevision"]
     envelope_path = write_post_author_evidence(
         ctx,
         ref=ref,
@@ -227,8 +263,24 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     assert envelope["ref"] == ref
     assert envelope["stage"] == "author"
     assert envelope["agent"]["runId"] == "cursor-run-post-001"
+    assert envelope["agent"]["model"] == "composer-2.5"
     assert validate_agent_result_envelope(
         envelope,
+        workspace_root=envelope_path.parent,
+    ) == []
+    article.write_text(
+        article.read_text(encoding="utf-8") + "\n\n出发前再核对当日公告。",
+        encoding="utf-8",
+    )
+    durable_meta = read_json(draft_meta_path(EXECUTION_ID, ref))
+    durable_meta["draftSha256"] = sha256_file(article)
+    durable_meta["model"] = "composer-2.5"
+    write_json(draft_meta_path(EXECUTION_ID, ref), durable_meta)
+    refresh_post_author_evidence_from_durable_meta(ctx, ref=ref)
+    refreshed = read_json(envelope_path)
+    assert refreshed["files"][0]["sha256"] == sha256_file(article)
+    assert validate_agent_result_envelope(
+        refreshed,
         workspace_root=envelope_path.parent,
     ) == []
     job = enqueue_ref_job(
@@ -271,8 +323,10 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     author_request = build_fleet_request(
         EXECUTION_ID,
         QueueJobStage.AUTHOR,
+        required_workers=1,
     )
     assert author_request["requireCommercial"] is False
+    assert payload["partitionKey"] == "source-unit-001"
     assert author_request["jobs"] == [
         {
             "entityRef": "/entity/地点/景区/都江堰",
@@ -283,14 +337,17 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
             "executionId": EXECUTION_ID,
             "ref": ref,
             "stage": "author",
-            "partitionKey": "source-unit-001",
+            "partitionKey": partition_key("article", ref, 16),
         }
     ]
     result = execute_work_item(
         DataContentWorkItem.from_document(
             {
                 "runtimeTaskId": "reliabletask-runtime-001",
-                **payload,
+                "jobSetEnvelopeDigest": author_request["jobSetEnvelopeDigest"],
+                "jobSetDigest": author_request["jobSetDigest"],
+                "actualTaskDigest": author_request["actualTaskDigest"],
+                **author_request["jobs"][0],
             }
         )
     )
@@ -362,8 +419,10 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     publish_request = build_fleet_request(
         EXECUTION_ID,
         QueueJobStage.PUBLISH,
+        required_workers=1,
     )
-    assert publish_request["requireCommercial"] is True
+    assert publish_request["requireCommercial"] is False
+    assert publish_payload["partitionKey"] == "canonical-publish"
     assert publish_request["jobs"] == [
         {
             "entityRef": "/entity/地点/景区/都江堰",
@@ -374,20 +433,23 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
             "executionId": EXECUTION_ID,
             "ref": ref,
             "stage": "publish",
-            "partitionKey": "canonical-publish",
+            "partitionKey": partition_key("article", ref, 16),
         }
     ]
     publish_result = execute_work_item(
         DataContentWorkItem.from_document(
             {
                 "runtimeTaskId": "reliabletask-runtime-publish-001",
-                **publish_payload,
+                "jobSetEnvelopeDigest": publish_request["jobSetEnvelopeDigest"],
+                "jobSetDigest": publish_request["jobSetDigest"],
+                "actualTaskDigest": publish_request["actualTaskDigest"],
+                **publish_request["jobs"][0],
             }
         )
     )
     completed_publish = _read_job(EXECUTION_ID, publish_job.job_id)
     assert completed_publish.state is QueueJobState.SUCCEEDED
-    assert publish_result["acceptanceClass"] == "commercial_canonical"
+    assert publish_result["acceptanceClass"] == "research_canonical"
     assert publish_result["objectTransactionId"] == "post-worker-transaction-001"
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
     shutil.rmtree(apply_report.parents[0], ignore_errors=True)

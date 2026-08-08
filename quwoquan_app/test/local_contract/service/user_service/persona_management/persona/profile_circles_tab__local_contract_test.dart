@@ -6,6 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
@@ -52,6 +56,8 @@ Widget _scopedApp() {
     child: MaterialApp(
       theme: ThemeData.light(),
       home: const ProfileShell(
+        recommendationSlots: profileRecommendationSlots,
+        participantSlots: profileParticipantSlots,
         mode: ProfileMode.mine,
         userId: 'nature_photographer',
       ),

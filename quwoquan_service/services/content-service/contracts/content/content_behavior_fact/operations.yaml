@@ -78,3 +78,19 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/content_behavior_fact/http_mongo_append__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: content_behavior_fact_report_behaviors_app_local
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportBehaviors}
+  runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/content_behavior_fact/content_behavior_command_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: content_behavior_fact_report_behaviors_app_api
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ReportBehaviors}
+  runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/content_behavior_fact/content_behavior_fact_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

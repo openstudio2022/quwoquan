@@ -82,6 +82,9 @@ def _spec() -> dict:
         target_entity_count=1,
         approved_quota=1,
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
     )
 
 
@@ -774,6 +777,9 @@ def test_execution_spec_derives_entity_types_from_selected_targets():
         target_entity_count=3,
         approved_quota=3,
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
     )
 
     assert spec["scope"]["entityTypes"] == [
@@ -799,6 +805,9 @@ def test_execution_spec_supports_strict_full_delivery():
         target_entity_count=1,
         approved_quota=1,
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
     )
 
     assert spec["executionPolicy"]["selectionPolicy"] == "frozen"
@@ -862,6 +871,9 @@ def test_execution_spec_requires_readable_execution_id():
             video_works_per_target=0,
             approved_quota=1,
             oversample_factor=1.0,
+            required_workers=1,
+            partition_count=16,
+            capacity_plan_digest="sha256:" + "1" * 64,
         )
     except ValueError as exc:
         assert "executionId" in str(exc)
@@ -980,6 +992,9 @@ def test_execution_spec_binds_acceptance_to_the_quota_not_the_pool() -> None:
         target_entity_count=5,
         approved_quota=3,
         oversample_factor=1.8,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
     )
 
     assert spec["executionPolicy"]["targetEntityCount"] == 5

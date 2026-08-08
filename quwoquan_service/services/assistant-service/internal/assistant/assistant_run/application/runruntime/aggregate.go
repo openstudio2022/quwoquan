@@ -449,7 +449,15 @@ func (r *Run) Transition(next generated.AssistantRunState, reason string, now ti
 }
 
 func (r *Run) RequestPause(reason string, now time.Time) error {
-	if r == nil || terminalState(r.State) || r.State == generated.AssistantRunStatePaused {
+	if r == nil {
+		return ErrInvalidTransition
+	}
+	acceptedCompletion, err := acceptedCompletionPersisted(*r)
+	if err != nil {
+		return err
+	}
+	if acceptedCompletion || terminalState(r.State) ||
+		r.State == generated.AssistantRunStatePaused {
 		return ErrInvalidTransition
 	}
 	r.PauseRequested = true
@@ -465,6 +473,13 @@ func (r *Run) Resume(now time.Time) error {
 	if r == nil || r.State != generated.AssistantRunStatePaused {
 		return ErrInvalidTransition
 	}
+	acceptedCompletion, err := acceptedCompletionPersisted(*r)
+	if err != nil {
+		return err
+	}
+	if acceptedCompletion {
+		return ErrJournalCorrupt
+	}
 	next := r.SuspendedFrom
 	if !allowedTransitions[generated.AssistantRunStatePaused][next] {
 		next = generated.AssistantRunStateOrienting
@@ -476,7 +491,17 @@ func (r *Run) Resume(now time.Time) error {
 
 func (r *Run) RequestSteer(instruction string, now time.Time) error {
 	instruction = strings.TrimSpace(instruction)
-	if r == nil || terminalState(r.State) || instruction == "" {
+	if r == nil || instruction == "" {
+		return ErrInvalidRun
+	}
+	acceptedCompletion, err := acceptedCompletionPersisted(*r)
+	if err != nil {
+		return err
+	}
+	if acceptedCompletion {
+		return ErrInvalidTransition
+	}
+	if terminalState(r.State) {
 		return ErrInvalidRun
 	}
 	r.PendingSteer = append(r.PendingSteer, instruction)

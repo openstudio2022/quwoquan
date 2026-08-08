@@ -34,6 +34,8 @@ business_rules:
 - DomainOperationBinding 只含 owner operationId 与 contract digest，不复制 owner payload、invariant、provider 或 credential。
 - 解析按 bindingPriority 选择；优先候选一旦 unavailable/denied/revoked，不得静默回退到次优 binding。
 - 任意写能力必须同时绑定用户确认、短期 permit、typed input digest 与 idempotency key。
+- 写 session 必须绑定验签真实账号 subject 与独立 assistant-service actor digest；service subject、body accountId 或任意其他 service actor 都不能获得账号授权。
+- integration-service worker 只能重验既有 assistant-service 写 session 的账号、actor、四类 digest 与当前 binding；读取、幂等 Save 或 worker claim 均不得刷新 300 秒期限。
 lifecycle:
   ttl_seconds: 300
   expiry_semantics: fixed_five_minute_resolution_expiry

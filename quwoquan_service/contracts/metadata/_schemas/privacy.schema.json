@@ -164,6 +164,7 @@
               "app",
               "self",
               "platform-ops",
+              "first_party_service_internal",
               "content-service-internal",
               "user-service-internal"
             ]

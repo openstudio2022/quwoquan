@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	invocationerrors "quwoquan_service/services/integration-service/generated/external_integration/connector_invocation"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/domain/model"
 )
@@ -79,13 +81,21 @@ func (handler *Handler) handleGet(writer http.ResponseWriter, request *http.Requ
 }
 
 func (handler *Handler) handleInvoke(writer http.ResponseWriter, request *http.Request) {
+	authorization, err := trustedInvocationAuthorization(request)
+	if err != nil {
+		writeHTTPError(writer, request, err)
+		return
+	}
 	var body struct {
-		AccountID       string `json:"accountId"`
+		ResolutionID    string `json:"resolutionId"`
 		ConnectionID    string `json:"connectionId"`
 		AssistantRunID  string `json:"assistantRunId"`
 		Capability      string `json:"capability"`
+		SurfaceKind     string `json:"surfaceKind"`
+		InputDigest     string `json:"inputDigest"`
 		PayloadRef      string `json:"payloadRef"`
 		ConfirmationRef string `json:"confirmationRef"`
+		PermitRef       string `json:"permitRef"`
 		ContinuationRef string `json:"continuationRef"`
 	}
 	decoder := json.NewDecoder(http.MaxBytesReader(writer, request.Body, 96<<10))
@@ -94,10 +104,18 @@ func (handler *Handler) handleInvoke(writer http.ResponseWriter, request *http.R
 		writeHTTPError(writer, request, invocationerrors.AppErrorFromConnectorInvocationInvalidArgument(err.Error()))
 		return
 	}
-	result, err := handler.commands.Accept(request.Context(), model.AcceptInput{
-		AccountID: body.AccountID, ConnectionID: body.ConnectionID,
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeHTTPError(writer, request, invocationerrors.AppErrorFromConnectorInvocationInvalidArgument(
+			"connector invocation request must contain one JSON object",
+		))
+		return
+	}
+	result, err := handler.commands.Accept(request.Context(), authorization, model.AcceptInput{
+		ResolutionID: body.ResolutionID, ConnectionID: body.ConnectionID,
 		AssistantRunID: body.AssistantRunID, Capability: body.Capability,
+		SurfaceKind: body.SurfaceKind, InputDigest: body.InputDigest,
 		PayloadRef: body.PayloadRef, ConfirmationRef: body.ConfirmationRef,
+		PermitRef:       body.PermitRef,
 		ContinuationRef: body.ContinuationRef,
 		IdempotencyKey:  strings.TrimSpace(request.Header.Get("Idempotency-Key")),
 	})
@@ -111,8 +129,12 @@ func (handler *Handler) handleInvoke(writer http.ResponseWriter, request *http.R
 }
 
 func (handler *Handler) handleContinue(writer http.ResponseWriter, request *http.Request) {
+	authorization, err := trustedInvocationAuthorization(request)
+	if err != nil {
+		writeHTTPError(writer, request, err)
+		return
+	}
 	var body struct {
-		AccountID        string `json:"accountId"`
 		ConfirmationRef  string `json:"confirmationRef"`
 		ContinuationRef  string `json:"continuationRef"`
 		ExpectedRevision int64  `json:"expectedRevision"`
@@ -123,8 +145,14 @@ func (handler *Handler) handleContinue(writer http.ResponseWriter, request *http
 		writeHTTPError(writer, request, invocationerrors.AppErrorFromConnectorInvocationInvalidArgument(err.Error()))
 		return
 	}
-	result, err := handler.commands.Continue(request.Context(), model.ContinueInput{
-		InvocationID: request.PathValue("invocationId"), AccountID: body.AccountID,
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeHTTPError(writer, request, invocationerrors.AppErrorFromConnectorInvocationInvalidArgument(
+			"connector invocation continuation must contain one JSON object",
+		))
+		return
+	}
+	result, err := handler.commands.Continue(request.Context(), authorization, model.ContinueInput{
+		InvocationID:    request.PathValue("invocationId"),
 		ConfirmationRef: body.ConfirmationRef, ContinuationRef: body.ContinuationRef,
 		ExpectedRevision: body.ExpectedRevision,
 		IdempotencyKey:   strings.TrimSpace(request.Header.Get("Idempotency-Key")),
@@ -136,6 +164,41 @@ func (handler *Handler) handleContinue(writer http.ResponseWriter, request *http
 	writeJSON(writer, http.StatusAccepted, map[string]any{
 		"invocation": result.Invocation, "replayed": result.Replayed,
 	})
+}
+
+func trustedInvocationAuthorization(
+	request *http.Request,
+) (grantapp.TrustedRuntimeAuthorization, error) {
+	principal, ok := rtauth.PrincipalFromContext(request.Context())
+	if !ok || principal.TokenType != rtauth.TokenTypeAccess ||
+		strings.TrimSpace(principal.Subject) == "" ||
+		strings.TrimSpace(principal.Subject) != strings.TrimSpace(principal.Actor.AccountID) ||
+		strings.TrimSpace(principal.ServiceActorID) != "assistant-service" ||
+		!containsString(principal.Roles, "service") ||
+		!containsString(strings.Fields(principal.Scope), "integration.connector_invocation.write") {
+		return grantapp.TrustedRuntimeAuthorization{},
+			invocationerrors.AppErrorFromConnectorInvocationUnauthorized(
+				"connector invocation requires a signed account subject and allowed service actor",
+			)
+	}
+	authorization, err := grantapp.NewTrustedRuntimeAuthorization(
+		principal.Subject,
+		principal.ServiceActorID,
+	)
+	if err != nil {
+		return grantapp.TrustedRuntimeAuthorization{},
+			invocationerrors.AppErrorFromConnectorInvocationUnauthorized(err.Error())
+	}
+	return authorization, nil
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func requireAccount(request *http.Request) (string, error) {

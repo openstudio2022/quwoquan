@@ -61,26 +61,35 @@ lifecycle:
 members:
   SkillPackageAsset:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [assetId]
+    cardinality: many
     max_cardinality: 512
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 发布内按 assetId 唯一、以 digest 固定的不可变资产。
   SkillCapabilityGrant:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [capabilityId]
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 发布可请求的最小能力集合；平台策略与用户 Consent 仍可进一步收紧。
   SkillRuntimeCompatibility:
     kind: value_object
-    cardinality: 1:1
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: Skill runtime API 与最低/最高运行时版本边界。
   SkillPackageProvenance:
     kind: value_object
-    cardinality: 1:1
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: 可追溯到源码 revision 与构建身份的发布来源。
   SkillPackageSignature:
     kind: value_object
-    cardinality: 1:1
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: 由受信 key 对 releaseDigest 签名的发布证明。

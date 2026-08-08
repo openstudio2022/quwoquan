@@ -31,7 +31,12 @@
         "objectTransactionId": {"type": "string", "minLength": 1},
         "resultEnvelopeRef": {"type": "string", "minLength": 1},
         "acceptanceClass": {
-          "enum": ["stage_completed", "commercial_canonical", "contract_fixture"]
+          "enum": [
+            "stage_completed",
+            "research_canonical",
+            "commercial_canonical",
+            "contract_fixture"
+          ]
         },
         "completedAt": {"type": "string", "format": "date-time"}
       },
@@ -39,7 +44,9 @@
         {
           "if": {
             "properties": {
-              "acceptanceClass": {"const": "commercial_canonical"}
+              "acceptanceClass": {
+                "enum": ["research_canonical", "commercial_canonical"]
+              }
             }
           },
           "then": {

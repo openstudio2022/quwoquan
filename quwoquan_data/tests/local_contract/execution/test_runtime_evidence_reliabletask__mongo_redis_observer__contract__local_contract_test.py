@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 from content.execution.queue.reliabletask.transport import ReliableTaskFleetTransport
 from content.execution.runtime_evidence import reliabletask as observer
+from content.execution.runtime_evidence import (
+    reliabletask_observer_build as observer_build,
+)
 from content.execution.runtime_evidence import reliabletask_process as process_port
 from content.execution.runtime_evidence.contract import CARRIERS, canonical_digest
 
@@ -73,14 +76,59 @@ def _task(carrier: str) -> observer._ExpectedTask:
     )
 
 
+def _job_set_envelope(carrier: str) -> dict[str, object]:
+    task = _task(carrier)
+    execution_id = f"execution-{carrier}"
+    source_revision = task.source_revision
+    return {
+        "schema": "quwoquan_data.reliabletask_job_set_envelope",
+        "version": 3,
+        "executionId": execution_id,
+        "carrier": carrier,
+        "stage": "author",
+        "attemptOrdinal": 1,
+        "previousJobSetEnvelopeDigest": None,
+        "queueBackendEnvelopeDigest": (
+            "sha256:" + f"{CARRIERS.index(carrier) + 1:x}" * 64
+        ),
+        "campaignBinding": {
+            "rootExecutionId": "execution-homepage",
+            "campaignRunId": "campaign-run-001",
+            "campaignGeneration": 3,
+            "campaignFencingToken": "sha256:" + "b" * 64,
+            "campaignPlanDigest": "sha256:" + "c" * 64,
+            "campaignSourceRevision": "sha256:" + "d" * 64,
+            "campaignSourceDigest": "sha256:" + "a" * 64,
+            "campaignEntityCatalogDigest": "sha256:" + "e" * 64,
+        },
+        "expectedTasks": [
+            {
+                **task.as_document(),
+                "executionId": execution_id,
+                "carrier": carrier,
+                "idempotencyKey": (
+                    f"{execution_id}|{task.entity_ref}|{carrier}|"
+                    f"{source_revision}|author"
+                ),
+                "ref": f"ref-{carrier}",
+                "partitionKey": f"partition-{carrier}",
+            }
+        ],
+        "jobSetDigest": "sha256:" + "9" * 64,
+        "envelopeDigest": "sha256:" + "8" * 64,
+    }
+
+
 def _provider(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> observer.ReliableTaskQueueEvidenceProvider:
     monkeypatch.setattr(
         observer,
-        "_expected_tasks",
-        lambda carrier, execution_id: (_task(carrier),),
+        "load_reliabletask_job_set_envelopes",
+        lambda execution_id: (
+            _job_set_envelope(execution_id.removeprefix("execution-")),
+        ),
     )
     return observer.ReliableTaskQueueEvidenceProvider(
         envelopes=_envelopes(_binary_binding(tmp_path, monkeypatch))
@@ -92,6 +140,7 @@ def _observation_document(
     carrier: str,
 ) -> dict[str, object]:
     expected = _task(carrier)
+    job_set = provider._targets[carrier].job_sets[0]
     task = {
         **expected.as_document(),
         "status": "ready",
@@ -111,13 +160,17 @@ def _observation_document(
     ]
     document: dict[str, object] = {
         "schema": "quwoquan.reliabletask_execution_observation",
-        "version": 2,
+        "version": 3,
         "executionId": f"execution-{carrier}",
         "carrier": carrier,
+        "stage": job_set.stage,
         "requestBindingDigest": provider.binding.configuration_digest,
         "executionEnvelopeDigest": provider._targets[
             carrier
         ].execution_envelope_digest,
+        "jobSetEnvelopeDigest": job_set.envelope_digest,
+        "jobSetDigest": job_set.job_set_digest,
+        "actualTaskDigest": job_set.actual_task_digest,
         "campaignBinding": dict(provider._targets[carrier].campaign_binding),
         "observedAt": "2026-08-06T08:00:02Z",
         "tasks": [task],
@@ -147,6 +200,14 @@ def test_reliabletask_observer_samples_exact_four_frozen_executions_in_parallel(
     tmp_path: Path,
 ) -> None:
     provider = _provider(monkeypatch, tmp_path)
+    assert not hasattr(observer, "_load_jobs")
+    monkeypatch.setattr(
+        observer,
+        "load_reliabletask_job_set_envelopes",
+        lambda _execution_id: pytest.fail(
+            "sampling must not reread a mutable local queue or job-set mirror"
+        ),
+    )
     transport = ReliableTaskFleetTransport(
         target="local",
         mongo_uri="mongodb://127.0.0.1:27017",
@@ -165,6 +226,7 @@ def test_reliabletask_observer_samples_exact_four_frozen_executions_in_parallel(
         calls.append(tuple(command))
         carrier = command[command.index("--observe-carrier") + 1]
         assert "--observe-execution" in command
+        assert "--observe-stage" in command
         assert "--observe-binding-digest" in command
         envelope_index = command.index(
             "--observe-execution-envelope-digest"
@@ -172,6 +234,16 @@ def test_reliabletask_observer_samples_exact_four_frozen_executions_in_parallel(
         assert command[envelope_index] == provider._targets[
             carrier
         ].execution_envelope_digest
+        job_set = provider._targets[carrier].job_sets[0]
+        assert command[command.index("--observe-job-set-envelope-digest") + 1] == (
+            job_set.envelope_digest
+        )
+        assert command[command.index("--observe-job-set-digest") + 1] == (
+            job_set.job_set_digest
+        )
+        assert command[command.index("--observe-actual-task-digest") + 1] == (
+            job_set.actual_task_digest
+        )
         binding_index = command.index("--observe-campaign-binding") + 1
         assert json.loads(command[binding_index]) == provider._targets[
             carrier
@@ -214,6 +286,7 @@ def test_reliabletask_observer_rejects_source_job_set_and_digest_drift(
         observer._parse_observation(
             json.dumps(document),
             target=provider._targets["image"],
+            job_set=provider._targets["image"].job_sets[0],
             request_binding_digest=provider.binding.configuration_digest,
         )
     assert captured.value.code.endswith("FROZEN_TARGET_DRIFT")
@@ -224,6 +297,7 @@ def test_reliabletask_observer_rejects_source_job_set_and_digest_drift(
         observer._parse_observation(
             json.dumps(valid),
             target=provider._targets["image"],
+            job_set=provider._targets["image"].job_sets[0],
             request_binding_digest=provider.binding.configuration_digest,
         )
     assert captured.value.code.endswith("DIGEST_DRIFT")
@@ -240,6 +314,7 @@ def test_reliabletask_observer_rejects_source_job_set_and_digest_drift(
         observer._parse_observation(
             json.dumps(campaign_drift),
             target=provider._targets["image"],
+            job_set=provider._targets["image"].job_sets[0],
             request_binding_digest=provider.binding.configuration_digest,
         )
     assert captured.value.code.endswith("CAMPAIGN_IDENTITY_DRIFT")
@@ -509,6 +584,70 @@ def test_observer_command_rejects_digest_mode_and_symlink_drift(
     assert captured.value.code.endswith("BINARY_UNSAFE")
 
 
+def test_observer_binary_prepare_builds_under_source_bound_binary_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    source_digest = "sha256:" + "a" * 64
+    fake_go = tmp_path / "bin" / "go"
+    fake_go.parent.mkdir(parents=True)
+    fake_go.write_text("#!/bin/sh\n", encoding="utf-8")
+    fake_go.chmod(0o755)
+    module_cache = tmp_path / "module-cache"
+    module_cache.mkdir()
+    invocations: list[tuple[list[str], Path, dict[str, str]]] = []
+
+    def run(
+        command: list[str],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        invocations.append((command, cwd, env))
+        if command[1:] == ["env", "GOMODCACHE"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=f"{module_cache}\n",
+            )
+        staged = Path(command[command.index("-o") + 1])
+        staged.write_bytes(b"built-observer")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(process_port, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(observer_build, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(
+        observer_build,
+        "_observer_source_digest",
+        lambda: source_digest,
+    )
+    monkeypatch.setattr(observer_build, "which", lambda _executable: str(fake_go))
+    monkeypatch.setattr(observer_build.subprocess, "run", run)
+
+    prepared = observer_build.prepare_controller_observer_binary()
+
+    expected_ref = observer_build._binary_cache_ref(source_digest)
+    expected_binary = output_root / expected_ref
+    expected_cache_root = expected_binary.parent / "build"
+    assert prepared.binding.ref == expected_ref
+    assert prepared.source_digest == source_digest
+    assert expected_binary.is_file()
+    assert len(invocations) == 2
+    build_command, build_cwd, build_environment = invocations[1]
+    assert build_cwd == observer_build.REPO_ROOT / "quwoquan_service"
+    assert build_command[-1] == "./services/content-service/cmd/data-content-worker"
+    assert Path(build_command[build_command.index("-o") + 1]).parent.parent == (
+        expected_cache_root
+    )
+    assert build_environment["GOCACHE"] == str(expected_cache_root / "go-build")
+    assert build_environment["HOME"] == str(expected_cache_root / "home")
+    assert build_environment["GOMODCACHE"] == str(module_cache)
+    assert (expected_cache_root / "go-build").is_dir()
+    assert (expected_cache_root / "home").is_dir()
+
+
 def test_observer_binary_prepare_reuses_one_content_addressed_binding(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -516,24 +655,26 @@ def test_observer_binary_prepare_reuses_one_content_addressed_binding(
     output_root = tmp_path / "output"
     source_digest = "sha256:" + "a" * 64
     monkeypatch.setattr(process_port, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(observer_build, "OUTPUT_ROOT", output_root)
     monkeypatch.setattr(
-        process_port,
+        observer_build,
         "_observer_source_digest",
         lambda: source_digest,
     )
-    ref = process_port._binary_cache_ref(source_digest)
+    ref = observer_build._binary_cache_ref(source_digest)
     binary = output_root / ref
+    cache_root = observer_build._observer_build_cache_root(source_digest)
     binary.parent.mkdir(parents=True)
     binary.write_bytes(b"deterministic-observer")
     binary.chmod(0o755)
     monkeypatch.setattr(
-        process_port,
+        observer_build,
         "which",
         lambda executable: pytest.fail("existing binding must not invoke Go"),
     )
 
-    first = process_port.prepare_controller_observer_binary()
-    second = process_port.prepare_controller_observer_binary()
+    first = observer_build.prepare_controller_observer_binary()
+    second = observer_build.prepare_controller_observer_binary()
 
     assert first == second
     assert first.binding.ref == ref
@@ -542,6 +683,7 @@ def test_observer_binary_prepare_reuses_one_content_addressed_binding(
     )
     assert first.source_digest == source_digest
     assert first.build_attestation_digest.startswith("sha256:")
+    assert not cache_root.exists()
 
 
 def test_observer_binary_prepare_accepts_controller_prebound_binding(
@@ -556,12 +698,6 @@ def test_observer_binary_prepare_accepts_controller_prebound_binding(
         "load_frozen_campaign_observer_context",
         lambda: object(),
     )
-    monkeypatch.setattr(
-        process_port,
-        "_observer_source_digest",
-        lambda: pytest.fail("frozen capsule must not scan Service source"),
-    )
-
     assert process_port.load_frozen_observer_binary_binding() == binding
 
 

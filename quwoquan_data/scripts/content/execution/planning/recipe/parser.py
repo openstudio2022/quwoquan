@@ -100,6 +100,38 @@ def register_recipe_parser(
         help="候选池上限；省略时由 runtime policy oversampleFactor 推导",
     )
     parser.add_argument(
+        "--required-workers",
+        type=int,
+        help="capacityPlan 为本 lane 冻结的 worker 数",
+    )
+    parser.add_argument(
+        "--partition-count",
+        type=int,
+        choices=(16, 32, 64, 128, 256),
+        help="capacityPlan 为本 lane 冻结的 ReliableTask 分区数",
+    )
+    parser.add_argument(
+        "--capacity-plan-digest",
+        help="四 lane 共用的 governed capacityPlan digest",
+    )
+    parser.add_argument("--scale-source-pool-id")
+    parser.add_argument("--scale-source-pool-target-scale")
+    parser.add_argument("--scale-source-pool-plan-ref")
+    parser.add_argument("--scale-source-pool-plan-digest")
+    parser.add_argument("--scale-source-pool-plan-file-sha256")
+    parser.add_argument("--source-pool-source-revision")
+    parser.add_argument("--source-pool-source-digest")
+    parser.add_argument("--source-pool-entity-catalog-digest")
+    parser.add_argument("--source-pool-evidence-root-ref")
+    parser.add_argument("--source-pool-carrier")
+    parser.add_argument(
+        "--source-pool-candidate-id",
+        dest="source_pool_candidate_ids",
+        action="append",
+        default=[],
+    )
+    parser.add_argument("--source-pool-selection-digest")
+    parser.add_argument(
         "--target",
         dest="target_names",
         action="append",
@@ -135,11 +167,6 @@ def register_recipe_parser(
         "--submission-timeout-seconds",
         type=int,
         help="campaign-run/campaign-freeze 等待四份 submission 的有限超时；默认取 runtime policy",
-    )
-    parser.add_argument(
-        "--campaign-lane-timeout-seconds",
-        type=int,
-        help="campaign-run/campaign-lane-run 每个 review/publish lane 的有限超时；默认取 runtime policy",
     )
     from content.execution.controller.dag import STAGE_NAMES
 

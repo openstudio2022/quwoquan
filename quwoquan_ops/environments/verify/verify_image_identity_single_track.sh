@@ -75,7 +75,7 @@ ruby -ryaml -e '
     checked += 1
   end
 
-  package_builder = File.read(File.join(root, "quwoquan_service", "scripts", "runtime", "build_service_env_package.sh"))
+  package_builder = File.read(File.join(root, "quwoquan_service", "scripts", "runtime", "packaging", "build_service_env_package.sh"))
   fail("package builder must bind the image digest annotation") unless package_builder.include?(%q{annotations["quwoquan.io/image-version"] = image_digest})
   fail("package builder must bind an OCI digest ref") unless package_builder.include?(%q{container["image"] = f"quwoquan/{service}@{image_digest}"})
 

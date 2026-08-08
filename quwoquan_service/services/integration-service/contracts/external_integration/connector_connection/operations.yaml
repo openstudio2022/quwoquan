@@ -86,7 +86,7 @@ api_routes:
   telemetry: {metric: integration_connector_capability_resolution, trace: true, attributes: [operation, surface_kind, outcome, reason, error_code]}
   slo: {latency_p95_ms: 300, availability_percent: 99.9}
   application: {kind: query, facet: ConnectorConnectionQueryFacade, method: resolveCapabilityGrant, reader: ConnectorConnectionReader, slice: ConnectorCapabilityGrantDecision}
-  description: 受信服务按账号、surface、capability 与调用方已授权 connection refs 动态求交；只返回脱敏决定，撤权或过期立即 allowed=false。
+  description: 受信服务使用验签 account subject 与独立 service actor，委托唯一 CapabilityGrantSessionFacade 按 surface、capability 与已授权 connection refs 动态求交；只返回脱敏决定，撤权或过期立即 allowed=false。
 consumers:
 - name: app
   capabilities: [list_connector_connections, create_connector_connection, revoke_connector_connection]
@@ -158,7 +158,7 @@ readiness_cases:
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: resolve-connector-capability-grant-local
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: local_contract
   target: {kind: operation, id: ResolveConnectorCapabilityGrant}
@@ -166,10 +166,74 @@ readiness_cases:
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
 - case_id: resolve-connector-capability-grant-api
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: api_integration
   target: {kind: operation, id: ResolveConnectorCapabilityGrant}
   runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/connector_connection/connector_connection_mongo__api_integration_test.go
   executions:
-  - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: connector_connection_list_connector_connections_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListConnectorConnections}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_connection/connector_connection_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_connection_get_connector_connection_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GetConnectorConnection}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_connection/connector_connection_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_connection_create_connector_connection_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: CreateConnectorConnection}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_connection/connector_connection_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_connection_revoke_connector_connection_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: RevokeConnectorConnection}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_connection/connector_connection_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_connection_list_connector_connections_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListConnectorConnections}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_connection/connector_connection_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connector_connection_get_connector_connection_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetConnectorConnection}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_connection/connector_connection_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connector_connection_create_connector_connection_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: CreateConnectorConnection}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_connection/connector_connection_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connector_connection_revoke_connector_connection_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: RevokeConnectorConnection}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_connection/connector_connection_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

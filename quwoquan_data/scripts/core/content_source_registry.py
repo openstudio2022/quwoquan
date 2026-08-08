@@ -345,14 +345,14 @@ def verify_content_source_registry(
             issues.append(
                 f"{prefix}: unknown researchAcquisitionPaths {unknown_acquisition_paths}"
             )
-        if source_id in {"pinterest", "tuchong"} and acquisition_paths != {
-            "public_direct",
-            "supported_api",
-            "manual_file",
-        }:
+        professional_paths = {
+            "pinterest": {"supported_api", "manual_file"},
+            "tuchong": {"public_direct", "supported_api", "manual_file"},
+        }
+        if source_id in professional_paths and acquisition_paths != professional_paths[source_id]:
             issues.append(
-                f"{prefix}: professional research source must declare public_direct, "
-                "supported_api and manual_file acquisition paths"
+                f"{prefix}: professional research acquisition paths must equal "
+                f"{sorted(professional_paths[source_id])}"
             )
         prompt_facts = row.get("promptFacts")
         if not isinstance(prompt_facts, list) or not all(str(item).strip() for item in prompt_facts):

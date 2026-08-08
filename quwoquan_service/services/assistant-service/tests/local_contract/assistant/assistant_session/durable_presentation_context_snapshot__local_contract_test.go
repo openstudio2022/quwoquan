@@ -206,6 +206,26 @@ func TestDurablePresentationKeepsTemplateBoundFallbackForLegacySurface(
 	}
 }
 
+func TestDurablePresentationExecutorHandsOffUncommittedSnapshot(t *testing.T) {
+	resolver := &durablePresentationContextResolver{}
+	executor, _, _ := durablePresentationExecutor(t, resolver)
+	result, err := executor.Execute(
+		t.Context(),
+		durablePresentationRequest(t),
+		func(runruntime.ExecutionItemUpdate) error { return nil },
+	)
+	if err != nil {
+		t.Fatalf("Execute() error=%v", err)
+	}
+	committedAt, ok := result.Presentation["committedAt"].(string)
+	if !ok || committedAt != "" {
+		t.Fatalf(
+			"executor handed RunRuntime a pre-committed presentation: %#v",
+			result.Presentation,
+		)
+	}
+}
+
 func TestDurablePresentationModelSelectsOnlyAResolvedFrozenCandidate(t *testing.T) {
 	resolver := &durablePresentationContextResolver{}
 	executor, catalog, model := durablePresentationExecutor(t, resolver)

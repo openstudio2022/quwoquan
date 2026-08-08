@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show WidgetRef;
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
@@ -222,7 +222,3 @@ final class RtcCallEntryPresenter {
     );
   }
 }
-
-final rtcCallEntryPresenterProvider = Provider<RtcCallEntryPresenter>(
-  (ref) => const RtcCallEntryPresenter(),
-);

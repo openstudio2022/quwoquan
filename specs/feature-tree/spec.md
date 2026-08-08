@@ -121,7 +121,7 @@
 - command 经过该事实唯一 write owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- alpha/beta/gamma/prod 均使用同一个 production Remote composition；内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release，用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效。Alpha/Beta/Gamma 可创建候选绑定的真实非生产验收数据，Prod 只接受真实用户或正式运营行为。
+- alpha/beta/gamma/prod 均使用同一个 production Remote composition。Alpha/Beta/Gamma test-live 允许在无 active content release 时编译启动并只呈现 canonical `no_active_release`/typed unavailable，不注入 Mock、fixture 或 seed。凡宣称内容、Creator、实体或发布媒体可用的验收仍必须来自 canonical immutable release。Prod 只接受 immutable release、真实用户或正式运营行为。
 - 环境名不再隐含内容分发成熟度；`productLifecycleState=research|commercial` 必须由受治理配置、immutable release、activation receipt 与 App readback 同源显式声明。
 - `research` 可在内部四环境消费权利尚未验证但可合法取得的素材，前提是身份白名单、匿名访问关闭、私有短签媒体、禁止分享/导出/索引与审计日志全部有证据。
 - `commercial` 只接受逐资产商业分发授权闭合的独立新 release。
@@ -144,6 +144,7 @@
   - `runtime_session` 是会话生命周期内的运行态。
   - `process_manager` 编排跨对象长流程（saga）。
 - 六类均已入仓；`process_manager` 的对象层、写入口与禁止层由架构门禁按真实对象树派生和验证，不得用其他 kind 顶替。
+- `owned_entity` 与 `value_object` 只允许作为 `aggregate_root` 的成员，不得独立成为 object root：owned entity 的 identity、version 与生命周期由聚合继承，禁止独立 Facade、Store 或 operation；value object 无 identity、不可变且按结构相等，由所属聚合的唯一 factory 规范化。
 - 任何状态变更必须经该事实唯一 write owner 的 `aggregate_root` 或 `process_manager`；跨对象写只经目标 owner 的公开 command，不得绕过 owner 直写其存储或投影。
 - `append_only_fact` 只能经其自身 append sink 追加，不得有 update 或 mutate 语义；纠正只能追加新事实，不得就地改写或删除历史。
 - `projection` 与 `external_reference` 不得有任何写操作：projection 只由源事实重建，external_reference 只随外部系统同步刷新，二者均不作为写入口或真相源。
@@ -153,7 +154,7 @@
 - App 只访问统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL。
 - 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
 - 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
-- alpha/beta/gamma/prod 的内容对象均绑定 release/import receipt，非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
+- Alpha/Beta/Gamma test-live 的编译与启动不要求内容 release/import receipt；一旦验证内容对象或形成环境 Green 结论，仍必须绑定 release/import receipt。非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
 - 测试 double 只存在于 local_contract 测试树，四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
 
 <a id="req-011"></a>

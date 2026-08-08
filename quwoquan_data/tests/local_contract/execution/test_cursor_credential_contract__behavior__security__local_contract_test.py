@@ -76,3 +76,55 @@ def test_credential_gate_rejects_sdk_managed_bridge_with_callback_token_argv(
 
     assert len(issues) == 1
     assert "forbidden Cursor SDK callback-token argv transport" in issues[0]
+
+
+def test_credential_gate_rejects_runtime_child_environment_passthrough(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    scripts = tmp_path / "quwoquan_data" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "bad.py").write_text(
+        "child_env = os.environ." + "copy()\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "quwoquan_data/scripts/bad.py"], cwd=tmp_path, check=True
+    )
+
+    issues = cursor_credential_contract_issues(repo_root=tmp_path)
+
+    assert len(issues) == 1
+    assert "forbidden Cursor runtime child environment passthrough" in issues[0]
+
+
+def test_credential_gate_requires_canonical_runtime_child_sanitizer(
+    tmp_path: Path,
+) -> None:
+    _init_repo(tmp_path)
+    handler = (
+        tmp_path
+        / "quwoquan_data"
+        / "scripts"
+        / "content"
+        / "execution"
+        / "preflight"
+        / "handler.py"
+    )
+    handler.parent.mkdir(parents=True)
+    handler.write_text(
+        "def _preflight_in_python():\n    child_env = dict(os.environ)\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", handler.relative_to(tmp_path).as_posix()],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    issues = cursor_credential_contract_issues(repo_root=tmp_path)
+
+    assert issues == [
+        "forbidden Cursor runtime child sanitizer missing: "
+        "quwoquan_data/scripts/content/execution/preflight/handler.py"
+    ]

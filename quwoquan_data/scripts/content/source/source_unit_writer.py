@@ -113,6 +113,7 @@ def write_source_unit(
     execution_id: str = "",
     build_variants: bool = True,
     source: Mapping[str, Any] | None = None,
+    frozen_source_unit_id: str = "",
 ) -> dict[str, Any]:
     """写一个来源单元，返回其 manifest（含 assets.index 摘要）。
 
@@ -163,13 +164,18 @@ def write_source_unit(
         source_use_mode = SOURCE_USE_MODES[resolved_source_kind]
     # 可读命名契约（spec §3）：目录名 = {实体名}__{sourceKind}__{hash8}；
     # 实体名取对象目录名（entities/{d}/{t}/{name}），sourceKind 与 manifest 同源。
-    source_unit_id = og.source_unit_id(
-        canonical_url=canonical_url,
-        snapshot_hash=snapshot_hash,
-        source_ref=f"{ordinal:02d}.{source_id}",
-        entity_name=object_dir.name,
-        source_kind=resolved_source_kind,
-    )
+    source_unit_id = str(frozen_source_unit_id or "").strip()
+    if source_unit_id:
+        if "/" in source_unit_id or source_unit_id in {".", ".."}:
+            raise ValueError("frozen sourceUnitId must be one safe path segment")
+    else:
+        source_unit_id = og.source_unit_id(
+            canonical_url=canonical_url,
+            snapshot_hash=snapshot_hash,
+            source_ref=f"{ordinal:02d}.{source_id}",
+            entity_name=object_dir.name,
+            source_kind=resolved_source_kind,
+        )
     inferred_execution_root = _execution_root_for_object_dir(object_dir) if not execution_id else None
     # 组件调用只传 object_dir 时，目录本身已经处于唯一 execution 工作包内。
     if inferred_execution_root is not None:
@@ -334,6 +340,13 @@ def write_source_unit(
             ),
             # 视觉主体描述 = 原图注（仅原图注，无则空，禁止伪造）。
             "visualSubject": str(img.get("caption") or ""),
+            # Commons category -> Wikidata 多语言标签，是视觉主体别名的唯一
+            # provider 证据；下游只能消费这些冻结行，不能自行翻译文件名。
+            "visualSubjectEvidence": [
+                dict(item)
+                for item in img.get("visualSubjectEvidence") or []
+                if isinstance(item, Mapping)
+            ],
         }
         asset_index.append(entry)
         placeholder_id = str(img.get("placeholderId") or "").strip()

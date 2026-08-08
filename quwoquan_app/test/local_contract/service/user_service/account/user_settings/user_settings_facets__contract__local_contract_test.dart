@@ -1,3 +1,15 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/settings-audit/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/appearance-accessibility-settings/spec.md#gwt-001
+// readiness_case: user_settings_get_notification_settings_app_local
+// readiness_case: user_settings_get_privacy_settings_app_local
+// readiness_case: user_settings_get_call_settings_app_local
+// readiness_case: user_settings_get_appearance_settings_app_local
+// readiness_case: user_settings_update_notification_settings_app_local
+// readiness_case: user_settings_update_privacy_settings_app_local
+// readiness_case: user_settings_update_call_settings_app_local
+// readiness_case: user_settings_update_appearance_settings_app_local
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/adapters/user_settings_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:test/test.dart';
@@ -160,22 +172,22 @@ void main() {
         invocationContext: _context,
       );
 
-      await query.getNotificationSettings();
-      await query.getPrivacySettings();
-      await query.getCallSettings();
-      await query.getAppearanceSettings();
-      await commands.updateNotificationSettings(
+      final notification = await query.getNotificationSettings();
+      final privacy = await query.getPrivacySettings();
+      final call = await query.getCallSettings();
+      final appearance = await query.getAppearanceSettings();
+      final notificationResult = await commands.updateNotificationSettings(
         UpdateNotificationSettingsCommand(enablePush: false),
       );
-      await commands.updatePrivacySettings(
+      final privacyResult = await commands.updatePrivacySettings(
         UpdatePrivacySettingsCommand(
           profileVisibility: ProfileVisibility.friends,
         ),
       );
-      await commands.updateCallSettings(
+      final callResult = await commands.updateCallSettings(
         UpdateCallSettingsCommand(enableCallVibration: false),
       );
-      await commands.updateAppearanceSettings(
+      final appearanceResult = await commands.updateAppearanceSettings(
         UpdateAppearanceSettingsCommand(
           themeMode: ThemeModeSetting.light,
           fontSizePreset: FontSizePreset.md,
@@ -183,6 +195,14 @@ void main() {
         ),
       );
 
+      expect(notification.enablePush, isTrue);
+      expect(privacy.profileVisibility, ProfileVisibility.public);
+      expect(call.enableCallVibration, isTrue);
+      expect(appearance.themeMode, ThemeModeSetting.system);
+      expect(notificationResult.idempotentReplay, isFalse);
+      expect(privacyResult.idempotentReplay, isFalse);
+      expect(callResult.idempotentReplay, isFalse);
+      expect(appearanceResult.themeMode, ThemeModeSetting.system);
       expect(executor.operationIds, <String>[
         AppCloudOperationIds.userUserSettingsGetNotificationSettings,
         AppCloudOperationIds.userUserSettingsGetPrivacySettings,
@@ -193,6 +213,36 @@ void main() {
         AppCloudOperationIds.userUserSettingsUpdateCallSettings,
         AppCloudOperationIds.userUserSettingsUpdateAppearanceSettings,
       ]);
+      expect(executor.methods, <String>[
+        'GET',
+        'GET',
+        'GET',
+        'GET',
+        'PATCH',
+        'PATCH',
+        'PATCH',
+        'PATCH',
+      ]);
+      expect(executor.paths, <String>[
+        '/user/settings/notifications',
+        '/user/settings/privacy',
+        '/user/settings/calls',
+        '/user/settings/appearance',
+        '/user/settings/notifications',
+        '/user/settings/privacy',
+        '/user/settings/calls',
+        '/user/settings/appearance',
+      ]);
+      expect(
+        executor.contexts,
+        everyElement(
+          isA<CloudOperationInvocationContext>().having(
+            (context) => context.actor.accountId,
+            'actor.accountId',
+            'account-1',
+          ),
+        ),
+      );
       expect(executor.bodies.take(4), everyElement(isNull));
       expect(executor.bodies[4], <String, Object?>{'enablePush': false});
       expect(executor.bodies[5], <String, Object?>{
@@ -208,6 +258,50 @@ void main() {
       });
     },
   );
+
+  test('UserSettings 八个 Remote operation 均原样透传 canonical failure', () async {
+    final failure = CloudErrorMapper.fromStatusCode(
+      401,
+      requestPath: '/user/settings',
+    );
+    final client = GeneratedCloudOperationClient(_FailingExecutor(failure));
+    final query = RemoteUserSettingsQueryReader(
+      client: client,
+      invocationContext: _context,
+    );
+    final commands = RemoteUserSettingsCommandWriter(
+      client: client,
+      invocationContext: _context,
+    );
+    final operations = <Future<Object?> Function()>[
+      query.getNotificationSettings,
+      query.getPrivacySettings,
+      query.getCallSettings,
+      query.getAppearanceSettings,
+      () => commands.updateNotificationSettings(
+        UpdateNotificationSettingsCommand(enablePush: false),
+      ),
+      () => commands.updatePrivacySettings(
+        UpdatePrivacySettingsCommand(
+          profileVisibility: ProfileVisibility.friends,
+        ),
+      ),
+      () => commands.updateCallSettings(
+        UpdateCallSettingsCommand(enableCallVibration: false),
+      ),
+      () => commands.updateAppearanceSettings(
+        UpdateAppearanceSettingsCommand(
+          themeMode: ThemeModeSetting.light,
+          fontSizePreset: FontSizePreset.md,
+          applyScope: AppearanceApplyScope.allAccounts,
+        ),
+      ),
+    ];
+
+    for (final operation in operations) {
+      await expectLater(operation(), throwsA(same(failure)));
+    }
+  });
 
   test('UserSettings decoders fail closed on drifted fields and enums', () {
     expect(
@@ -245,7 +339,10 @@ CloudOperationInvocationContext _context(String clientPageId) =>
     CloudOperationInvocationContext(
       surfaceId: 'settingsHome',
       clientPageId: clientPageId,
-      actor: const CloudOperationActorContext(personaId: 'persona-1'),
+      actor: const CloudOperationActorContext(
+        accountId: 'account-1',
+        personaId: 'persona-1',
+      ),
     );
 
 Map<String, Object?> _notificationResponse() => <String, Object?>{
@@ -310,6 +407,10 @@ final class _RecordingExecutor implements CloudOperationExecutor {
 
   final Map<String, Object?> responses;
   final List<String> operationIds = <String>[];
+  final List<String> methods = <String>[];
+  final List<String> paths = <String>[];
+  final List<CloudOperationInvocationContext> contexts =
+      <CloudOperationInvocationContext>[];
   final List<Object?> bodies = <Object?>[];
 
   @override
@@ -321,7 +422,24 @@ final class _RecordingExecutor implements CloudOperationExecutor {
   }) async {
     final payload = requestEncoder();
     operationIds.add(operation.canonicalOperationId);
+    methods.add(operation.method);
+    paths.add(operation.pathTemplate);
+    contexts.add(context);
     bodies.add(payload.body);
     return responseDecoder(responses[operation.canonicalOperationId]);
   }
+}
+
+final class _FailingExecutor implements CloudOperationExecutor {
+  const _FailingExecutor(this.failure);
+
+  final Object failure;
+
+  @override
+  Future<TResponse> send<TResponse>(
+    CloudOperationContract operation, {
+    required CloudOperationInvocationContext context,
+    required CloudOperationResponseDecoder<TResponse> responseDecoder,
+    required CloudOperationRequestEncoder requestEncoder,
+  }) => Future<TResponse>.error(failure);
 }

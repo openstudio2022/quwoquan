@@ -65,10 +65,49 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
         }
         for carrier in CARRIERS
     }
+    pool_stable = {
+        "schema": "quwoquan_data.scale_source_pool",
+        "poolId": "publish-receipt-m100-pool",
+        "targetScale": "M100",
+        "sourceRevision": "sha256:" + "b" * 64,
+        "sourceDigest": "sha256:" + "c" * 64,
+        "entityCatalogDigest": "sha256:" + "d" * 64,
+        "candidates": [
+            {"candidateId": f"{carrier}-candidate-001", "carrier": carrier}
+            for carrier in CARRIERS
+        ],
+    }
+    pool = {**pool_stable, "planDigest": payload_digest(pool_stable)}
+    pool_path = output / "data/local/workspace/scale-source-pool/plan.json"
+    write_json(pool_path, pool)
+    evidence_root = output / "data/local/workspace/scale-source-pool/evidence"
+    evidence_root.mkdir(parents=True)
+    pool_binding = {
+        "poolId": pool["poolId"],
+        "targetScale": pool["targetScale"],
+        "sourceRevision": pool["sourceRevision"],
+        "sourceDigest": pool["sourceDigest"],
+        "entityCatalogDigest": pool["entityCatalogDigest"],
+        "planRef": pool_path.relative_to(output).as_posix(),
+        "planDigest": pool["planDigest"],
+        "planFileSha256": _digest(pool_path),
+    }
+    pool_selections = {}
+    for carrier in CARRIERS:
+        selection = {
+            "carrier": carrier,
+            "candidateIds": [f"{carrier}-candidate-001"],
+            "candidateCount": 1,
+        }
+        pool_selections[carrier] = {
+            **selection,
+            "selectionDigest": payload_digest(selection),
+        }
     plan_stable = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
+        "scale": "M100",
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": "sha256:" + "b" * 64,
@@ -76,6 +115,9 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
         "entityCatalogDigest": "sha256:" + "d" * 64,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "scaleSourcePool": pool_binding,
+        "sourcePoolEvidenceRootRef": evidence_root.relative_to(output).as_posix(),
+        "laneSourcePoolSelections": pool_selections,
         "laneExternalInputs": lane_inputs,
         "externalInputsDigest": payload_digest(
             {

@@ -1,6 +1,7 @@
 events:
 - name: SubjectFollowStateChanged
   delivery_semantics: transactional_outbox
+  wire_event_type: SubjectFollowStateChanged
   payload_entity: SubjectFollow
   payload_fields:
   - id

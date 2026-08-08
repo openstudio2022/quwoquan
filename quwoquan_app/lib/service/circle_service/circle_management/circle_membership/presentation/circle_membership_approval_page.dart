@@ -11,13 +11,15 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
+        CircleMembershipCommandResult,
         CircleMembershipSlice,
+        CircleMembershipState,
         DecideCircleMembershipCommand,
         PendingCircleMembershipListQuery;
 
@@ -50,10 +52,14 @@ class _CircleMembershipApprovalPageState
 
   final List<CircleMembershipSlice> _pendingItems = <CircleMembershipSlice>[];
   final Set<String> _decidingPersonaIds = <String>{};
+  int _loadEpoch = 0;
   String? _nextCursor;
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _hasConfirmedSnapshot = false;
   UiErrorSemantic? _pageErrorSemantic;
+  UiErrorSemantic? _refreshErrorSemantic;
+  UiErrorSemantic? _loadMoreErrorSemantic;
 
   // R20：管理工具页曝光/停留走 product_action journey 通道。
   late final DateTime _pageEnteredAt;
@@ -80,6 +86,26 @@ class _CircleMembershipApprovalPageState
   }
 
   @override
+  void didUpdateWidget(covariant CircleMembershipApprovalPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.circleId == widget.circleId &&
+        identical(oldWidget.pendingMemberships, widget.pendingMemberships)) {
+      return;
+    }
+    _loadEpoch++;
+    _pendingItems.clear();
+    _decidingPersonaIds.clear();
+    _nextCursor = null;
+    _isLoading = true;
+    _isLoadingMore = false;
+    _hasConfirmedSnapshot = false;
+    _pageErrorSemantic = null;
+    _refreshErrorSemantic = null;
+    _loadMoreErrorSemantic = null;
+    unawaited(_loadPending(reset: true));
+  }
+
+  @override
   void dispose() {
     unawaited(
       widget.journeyEventTracker.trackAction(
@@ -99,53 +125,78 @@ class _CircleMembershipApprovalPageState
   }
 
   Future<void> _loadPending({required bool reset}) async {
+    late final int requestEpoch;
+    late final String? requestCursor;
     if (reset) {
+      requestEpoch = ++_loadEpoch;
+      requestCursor = null;
       setState(() {
-        _isLoading = true;
+        _isLoading = !_hasConfirmedSnapshot;
+        _isLoadingMore = false;
         _pageErrorSemantic = null;
+        _refreshErrorSemantic = null;
+        _loadMoreErrorSemantic = null;
       });
     } else {
       if (_isLoadingMore || _nextCursor == null) {
         return;
       }
-      setState(() => _isLoadingMore = true);
+      requestEpoch = _loadEpoch;
+      requestCursor = _nextCursor;
+      setState(() {
+        _isLoadingMore = true;
+        _loadMoreErrorSemantic = null;
+      });
     }
     try {
       final page = await widget.pendingMemberships.listPendingMemberships(
         PendingCircleMembershipListQuery(
           circleId: widget.circleId,
-          cursor: reset ? null : _nextCursor,
+          cursor: requestCursor,
           limit: _pageLimit,
         ),
       );
-      if (!mounted) {
+      if (!mounted || requestEpoch != _loadEpoch) {
         return;
       }
+      final confirmedItems = reset
+          ? _dedupePending(page.items)
+          : _dedupePending(<CircleMembershipSlice>[
+              ..._pendingItems,
+              ...page.items,
+            ]);
       setState(() {
-        if (reset) {
-          _pendingItems
-            ..clear()
-            ..addAll(page.items);
-        } else {
-          _pendingItems.addAll(page.items);
-        }
-        _nextCursor = page.cursor;
+        _pendingItems
+          ..clear()
+          ..addAll(confirmedItems);
+        _nextCursor = _normalizedCursor(page.cursor);
         _isLoading = false;
         _isLoadingMore = false;
+        _hasConfirmedSnapshot = true;
+        _pageErrorSemantic = null;
+        _refreshErrorSemantic = null;
+        _loadMoreErrorSemantic = null;
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestEpoch != _loadEpoch) {
         return;
       }
+      final semantic = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      );
       setState(() {
         _isLoading = false;
         _isLoadingMore = false;
-        _pageErrorSemantic = runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.pageLoad,
-          scope: UiErrorScope.page,
-        );
+        if (!reset) {
+          _loadMoreErrorSemantic = semantic;
+        } else if (_hasConfirmedSnapshot) {
+          _refreshErrorSemantic = semantic;
+        } else {
+          _pageErrorSemantic = semantic;
+        }
       });
     }
   }
@@ -157,34 +208,70 @@ class _CircleMembershipApprovalPageState
     if (_decidingPersonaIds.contains(item.personaId)) {
       return;
     }
-    setState(() => _decidingPersonaIds.add(item.personaId));
-    final command = DecideCircleMembershipCommand(
+    final attempt = _CircleMembershipDecisionAttempt(
       circleId: widget.circleId,
-      personaId: item.personaId,
+      item: item,
+      approved: approved,
+      clientRequestId: AppTraceContextStore.instance.newRequestId(),
+    );
+    setState(() => _decidingPersonaIds.add(item.personaId));
+    await _runDecisionAttempt(attempt);
+  }
+
+  Future<void> _runDecisionAttempt(
+    _CircleMembershipDecisionAttempt attempt,
+  ) async {
+    final command = DecideCircleMembershipCommand(
+      circleId: attempt.circleId,
+      personaId: attempt.item.personaId,
     );
     try {
-      final result = approved
-          ? await widget.moderationWriter.approve(command)
-          : await widget.moderationWriter.reject(command);
-      if (!mounted) {
+      final writer = widget.moderationWriter;
+      if (writer is! ClientRequestBoundCircleMembershipModeration) {
+        throw StateError(
+          'Circle membership moderation writer does not accept clientRequestId',
+        );
+      }
+      final result = attempt.approved
+          ? await writer.approveWithClientRequestId(
+              command,
+              clientRequestId: attempt.clientRequestId,
+            )
+          : await writer.rejectWithClientRequestId(
+              command,
+              clientRequestId: attempt.clientRequestId,
+            );
+      if (!mounted || attempt.circleId != widget.circleId) {
+        return;
+      }
+      _verifyDecisionAck(attempt, result);
+      final snapshot = await _readBackPendingAfterDecision(attempt);
+      if (!mounted || attempt.circleId != widget.circleId) {
         return;
       }
       setState(() {
-        _pendingItems.removeWhere(
-          (pending) => pending.personaId == item.personaId,
-        );
-        _decidingPersonaIds.remove(item.personaId);
+        _pendingItems
+          ..clear()
+          ..addAll(snapshot);
+        _nextCursor = null;
+        _isLoading = false;
+        _isLoadingMore = false;
+        _hasConfirmedSnapshot = true;
+        _pageErrorSemantic = null;
+        _refreshErrorSemantic = null;
+        _loadMoreErrorSemantic = null;
+        _decidingPersonaIds.remove(attempt.item.personaId);
       });
       AppToast.show(
         context,
-        approved
+        attempt.approved
             ? CommunityText.circleApprovalApproved
             : CommunityText.circleApprovalRejected,
       );
       unawaited(
         widget.journeyEventTracker.trackAction(
           journey: 'circle_manage',
-          action: approved ? 'approve_member' : 'reject_member',
+          action: attempt.approved ? 'approve_member' : 'reject_member',
           pageName: 'circle_membership_approval',
           targetType: 'circle',
           targetKey: widget.circleId,
@@ -195,22 +282,148 @@ class _CircleMembershipApprovalPageState
         ),
       );
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || attempt.circleId != widget.circleId) {
         return;
       }
-      setState(() => _decidingPersonaIds.remove(item.personaId));
-      // 状态冲突（已被其他管理员处理）时刷新队列，保持与云侧一致。
-      if (error is CloudException) {
-        unawaited(_loadPending(reset: true));
+      await _showDecisionFailure(attempt, error);
+    }
+  }
+
+  void _verifyDecisionAck(
+    _CircleMembershipDecisionAttempt attempt,
+    CircleMembershipCommandResult result,
+  ) {
+    final expectedState = attempt.approved
+        ? CircleMembershipState.active
+        : CircleMembershipState.rejected;
+    if (result.membershipId != attempt.item.membershipId ||
+        result.state != expectedState ||
+        result.version <= attempt.item.version) {
+      throw _CircleMembershipDecisionNotConverged(
+        'typed ACK does not advance the target membership to the expected state',
+      );
+    }
+  }
+
+  Future<List<CircleMembershipSlice>> _readBackPendingAfterDecision(
+    _CircleMembershipDecisionAttempt attempt,
+  ) async {
+    final readbackEpoch = ++_loadEpoch;
+    if (mounted) {
+      setState(() {
+        _isLoadingMore = false;
+        _loadMoreErrorSemantic = null;
+      });
+    }
+    final collected = <CircleMembershipSlice>[];
+    final seenCursors = <String>{};
+    String? cursor;
+    while (true) {
+      final page = await widget.pendingMemberships.listPendingMemberships(
+        PendingCircleMembershipListQuery(
+          circleId: attempt.circleId,
+          cursor: cursor,
+          limit: _pageLimit,
+        ),
+      );
+      if (!mounted ||
+          attempt.circleId != widget.circleId ||
+          readbackEpoch != _loadEpoch) {
+        throw const _CircleMembershipDecisionNotConverged(
+          'authoritative readback was superseded',
+        );
       }
-      final resolved = runtimeErrorSemantic(
+      collected.addAll(page.items);
+      final nextCursor = _normalizedCursor(page.cursor);
+      if (nextCursor == null) {
+        break;
+      }
+      if (!seenCursors.add(nextCursor)) {
+        throw const _CircleMembershipDecisionNotConverged(
+          'authoritative readback returned a cursor loop',
+        );
+      }
+      cursor = nextCursor;
+    }
+    final snapshot = _dedupePending(collected);
+    final targetStillPending = snapshot.any(
+      (pending) =>
+          pending.membershipId == attempt.item.membershipId ||
+          pending.personaId == attempt.item.personaId,
+    );
+    if (targetStillPending) {
+      throw const _CircleMembershipDecisionNotConverged(
+        'authoritative pending queue still contains the decision target',
+      );
+    }
+    return snapshot;
+  }
+
+  Future<void> _showDecisionFailure(
+    _CircleMembershipDecisionAttempt attempt,
+    Object error,
+  ) async {
+    final resolved = ensureRetryUiErrorSemantic(
+      runtimeErrorSemantic(
         context,
         error: error,
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-      );
-      await AppActionErrorFeedback.show(context, semantic: resolved);
+      ),
+    );
+    var retryStarted = false;
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: resolved,
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          retryStarted = true;
+          await _runDecisionAttempt(attempt);
+          return;
+        }
+        _finishDecisionAttempt(attempt);
+      },
+    );
+    if (!retryStarted) {
+      _finishDecisionAttempt(attempt);
     }
+  }
+
+  void _finishDecisionAttempt(_CircleMembershipDecisionAttempt attempt) {
+    if (!mounted || attempt.circleId != widget.circleId) {
+      return;
+    }
+    setState(() => _decidingPersonaIds.remove(attempt.item.personaId));
+  }
+
+  List<CircleMembershipSlice> _dedupePending(
+    Iterable<CircleMembershipSlice> source,
+  ) {
+    final result = <CircleMembershipSlice>[];
+    final indexByMembershipId = <String, int>{};
+    final seenMembershipVersions = <String>{};
+    for (final item in source) {
+      final versionKey = '${item.membershipId}\u0000${item.version}';
+      if (!seenMembershipVersions.add(versionKey)) {
+        continue;
+      }
+      final existingIndex = indexByMembershipId[item.membershipId];
+      if (existingIndex == null) {
+        indexByMembershipId[item.membershipId] = result.length;
+        result.add(item);
+        continue;
+      }
+      if (item.version > result[existingIndex].version) {
+        result[existingIndex] = item;
+      }
+    }
+    return result;
+  }
+
+  String? _normalizedCursor(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   @override
@@ -237,7 +450,7 @@ class _CircleMembershipApprovalPageState
       return AppRequestFeedback.section();
     }
     final semantic = _pageErrorSemantic;
-    if (semantic != null) {
+    if (!_hasConfirmedSnapshot && semantic != null) {
       return AppPageErrorState(
         semantic: ensureRetryUiErrorSemantic(semantic),
         onRecovery: (action) async {
@@ -252,35 +465,85 @@ class _CircleMembershipApprovalPageState
         },
       );
     }
-    if (_pendingItems.isEmpty) {
-      return _buildEmpty(context);
-    }
     return CustomScrollView(
       slivers: [
         CupertinoSliverRefreshControl(
           onRefresh: () => _loadPending(reset: true),
         ),
-        SliverPadding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppSpacing.containerMd,
-            vertical: AppSpacing.containerSm,
+        if (_refreshErrorSemantic case final refreshError?)
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.containerSm,
+              AppSpacing.containerMd,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: AppSectionErrorState(
+                key: const ValueKey<String>('circle-approval-refresh-error'),
+                semantic: ensureRetryUiErrorSemantic(refreshError),
+                padding: EdgeInsets.all(AppSpacing.containerSm),
+                onAction: (action) async {
+                  if (_isRetryAction(action)) {
+                    await _loadPending(reset: true);
+                  }
+                },
+              ),
+            ),
           ),
-          sliver: SliverList.separated(
-            itemCount: _pendingItems.length + (_nextCursor != null ? 1 : 0),
-            separatorBuilder: (_, _) =>
-                SizedBox(height: AppSpacing.intraGroupXs),
-            itemBuilder: (context, index) {
-              if (index >= _pendingItems.length) {
-                unawaited(_loadPending(reset: false));
-                return AppRequestFeedback.section();
-              }
-              return _buildPendingRow(context, _pendingItems[index]);
-            },
+        if (_pendingItems.isEmpty)
+          SliverFillRemaining(hasScrollBody: false, child: _buildEmpty(context))
+        else
+          SliverPadding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerMd,
+              vertical: AppSpacing.containerSm,
+            ),
+            sliver: SliverList.separated(
+              itemCount: _pendingItems.length + (_nextCursor != null ? 1 : 0),
+              separatorBuilder: (_, _) =>
+                  SizedBox(height: AppSpacing.intraGroupXs),
+              itemBuilder: (context, index) {
+                if (index >= _pendingItems.length) {
+                  return _buildLoadMoreFooter();
+                }
+                return _buildPendingRow(context, _pendingItems[index]);
+              },
+            ),
           ),
-        ),
       ],
     );
   }
+
+  Widget _buildLoadMoreFooter() {
+    final semantic = _loadMoreErrorSemantic;
+    if (semantic != null) {
+      return AppSectionErrorState(
+        key: const ValueKey<String>('circle-approval-load-more-error'),
+        semantic: ensureRetryUiErrorSemantic(semantic),
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        onAction: (action) async {
+          if (_isRetryAction(action)) {
+            await _loadPending(reset: false);
+          }
+        },
+      );
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _isLoadingMore ||
+          _loadMoreErrorSemantic != null ||
+          _nextCursor == null) {
+        return;
+      }
+      unawaited(_loadPending(reset: false));
+    });
+    return AppRequestFeedback.section();
+  }
+
+  bool _isRetryAction(UiErrorAction action) =>
+      action.type == UiErrorActionType.retry ||
+      action.type == UiErrorActionType.resubmit;
 
   Widget _buildEmpty(BuildContext context) {
     return Center(
@@ -392,4 +655,27 @@ class _CircleMembershipApprovalPageState
       ),
     );
   }
+}
+
+final class _CircleMembershipDecisionAttempt {
+  const _CircleMembershipDecisionAttempt({
+    required this.circleId,
+    required this.item,
+    required this.approved,
+    required this.clientRequestId,
+  });
+
+  final String circleId;
+  final CircleMembershipSlice item;
+  final bool approved;
+  final String clientRequestId;
+}
+
+final class _CircleMembershipDecisionNotConverged implements Exception {
+  const _CircleMembershipDecisionNotConverged(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'CircleMembershipDecisionNotConverged: $reason';
 }

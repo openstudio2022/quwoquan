@@ -17,6 +17,20 @@ func TestCanonicalPrivacyGovernanceConsumesEveryTypedPolicy(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+func TestPrivacyGovernanceAcceptsFirstPartyServiceInternalVisibility(t *testing.T) {
+	t.Parallel()
+
+	contractGraph := canonicalPrivacyGraph()
+	privacyDefinition(contractGraph).Document.FieldVisibility[0].Visibility = []string{
+		"platform-ops",
+		"first_party_service_internal",
+	}
+	if issues := validatePrivacyGovernance(contractGraph); len(issues) != 0 {
+		t.Fatalf("canonical first-party service visibility rejected: %+v", issues)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestPrivacyAppLogPolicyFailsClosedAgainstFieldBaseline(t *testing.T) {
 	t.Parallel()
 

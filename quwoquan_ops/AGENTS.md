@@ -22,6 +22,7 @@
 - 远端唯一托管目标为 `prod-hosted`（ssh-hosted；远端 gamma 已退役，仅保留 `gamma-local`）。prod 远端访问按 `edge/media/service/data` 四平面去 root 隔离，凭据为按平面 SSH 私钥 `PROD_<PLANE>_SSH_KEY`，单一真相源 `quwoquan_ops/environments/prod/access-isolation.yaml`；已退役单一全权 `PROD_KUBECONFIG`，禁止任何 prod 路径再依赖它或 `kubectl`。
 - `repair` 只允许白名单修复；涉及 prod-hosted 放量、回滚版本、密钥、hosted URL 或破坏性动作时必须停下请求人工确认。
 - 门禁脚本应可重复、可解释、失败信息能指向修复路径；禁止用 allowlist 掩盖新债。
+- ContractGraph 的输入不只是契约声明：编译期还按 `--repo-root` 扫描 `internal/**`、`tests/**` 与端侧 `lib/service/**`，把每个文件的确切字节绑进 `readinessEvidence`。`sourceDigestSetSha256` 只覆盖声明侧，`compilerHash` 只覆盖 `internal/metadata/**`，两者都看不到实现/测试输入漂移，因此「摘要不变而 graph sha256 变化」是合法现象，不是生成器非确定性。重建 graph/lock/manifest 必须在这些被扫描的实现与测试文件静止时一次做完，中途被并行会话改动会得到一份自洽但已过期的锁；用 `make verify-app-contract-handoff-inputs` 判定 graph 相对自身输入是否仍成立。
 - 可再生产 Python 输出和缓存只进入 `.qwq_output/env/repo/**` 或仓外受管缓存；源码树禁止 `__pycache__`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、编辑器备份与 scratch 文件。
 
 ## 证据要求

@@ -79,16 +79,23 @@ lifecycle:
 members:
   FilterCategoryDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [categoryId]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内有界分类定义，不允许独立 Store/Facade。
   FilterPresetDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [presetId]
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内有界预设定义，不允许独立 Store/Facade。
   FilterAdjustmentValues:
     kind: value_object
-    cardinality: 1:N
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
     description: 预设的强类型 15 项调整参数，不允许任意键 Map。

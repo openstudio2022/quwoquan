@@ -48,14 +48,6 @@ func (s *MongoCallStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("idx_cs_status"),
 		},
 		{
-			Keys:    bson.D{{Key: "conversationId", Value: 1}, {Key: "createdAt", Value: -1}},
-			Options: options.Index().SetName("idx_cs_conv_created").SetSparse(true),
-		},
-		{
-			Keys:    bson.D{{Key: "circleId", Value: 1}, {Key: "createdAt", Value: -1}},
-			Options: options.Index().SetName("idx_cs_circle_created").SetSparse(true),
-		},
-		{
 			Keys:    bson.D{{Key: "roomId", Value: 1}},
 			Options: options.Index().SetName("idx_cs_room").SetUnique(true),
 		},

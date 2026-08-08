@@ -5,8 +5,14 @@ import 'package:quwoquan_app/runtime/di/chat_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/runtime/transport/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/adapters/chat_inbox_remote.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_user_state/adapters/conversation_user_state_remote.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_user_state/application/public/conversation_user_state_command_writer.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message_receipt_fact/application/public/message_receipt_fact_query.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'production_cloud_operation_telemetry_evidence.dart';
@@ -27,6 +33,10 @@ final class ChatApiContractHarness {
     required this.telemetry,
     required this.repository,
     required this.messageCommands,
+    required this.inbox,
+    required this.userStateCommands,
+    required this.receipts,
+    required this._accountLifecycle,
     required this.session,
   });
 
@@ -106,6 +116,36 @@ final class ChatApiContractHarness {
           client: client,
           invocationContext: invocationContext,
         ),
+        inbox: RemoteChatInboxQuery(
+          client: client,
+          invocationContext: (clientPageId) =>
+              invocationContext(AppUiSurfaces.chatList, clientPageId),
+        ),
+        userStateCommands: RemoteChatConversationUserStateCommandWriter(
+          client: client,
+          invocationContext: (clientPageId, idempotencyKey) {
+            final surface = clientPageId == ChatRequestPageIds.markAsRead
+                ? AppUiSurfaces.chatDetail
+                : AppUiSurfaces.chatSettings;
+            return invocationContext(
+              surface,
+              clientPageId,
+              idempotencyKey: idempotencyKey,
+            );
+          },
+        ),
+        receipts: ChatProductionComposition.messageReceiptFactQuery(
+          client: client,
+          invocationContext: invocationContext,
+        ),
+        accountLifecycle: RemoteAccountLifecycleCommandWriter(
+          client: client,
+          invocationContext: (clientPageId) => invocationContext(
+            AppUiSurfaces.settingsAccountSecurity,
+            clientPageId,
+            idempotencyKey: 'chat-api-cleanup-${session.ownerId}',
+          ),
+        ),
         session: session,
       );
     } catch (_) {
@@ -119,13 +159,17 @@ final class ChatApiContractHarness {
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final ChatRepository repository;
   final ChatMessageCommandWriter messageCommands;
+  final ChatInboxQuery inbox;
+  final ConversationUserStateCommandWriter userStateCommands;
+  final MessageReceiptFactQuery receipts;
+  final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   final AuthSessionGrant session;
 
-  Future<String> seedConversation() async {
+  Future<String> seedConversation({int maxGroupSize = 500}) async {
     final created = await repository.createConversation(
       type: 'group',
       title: 'L3 contract seed conversation',
-      maxGroupSize: 500,
+      maxGroupSize: maxGroupSize,
       idempotencyKey: 'chat-contract-${DateTime.now().microsecondsSinceEpoch}',
     );
     if (created.conversationId.trim().isEmpty) {
@@ -151,6 +195,11 @@ final class ChatApiContractHarness {
 
   Future<void> close() async {
     try {
+      await _accountLifecycle.closeAccount(
+        CloseAccountCommand(
+          clientRequestId: 'chat-api-cleanup-${session.ownerId}',
+        ),
+      );
       await telemetry.waitForEvents(minimumCount: 1);
     } finally {
       _httpClient.close();

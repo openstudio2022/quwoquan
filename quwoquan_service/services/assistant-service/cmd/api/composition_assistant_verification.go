@@ -41,6 +41,12 @@ func buildProductionRunHooks(
 		if err != nil {
 			return runruntime.ConstrainedVerificationResponse{}, err
 		}
+		if err := runorchestration.ConsumeExecutionModelResponse(
+			ctx,
+			response,
+		); err != nil {
+			return runruntime.ConstrainedVerificationResponse{}, err
+		}
 		return decodeConstrainedVerification(response.StructuredDelta)
 	})
 	return runruntime.NewProductionHookRegistry(

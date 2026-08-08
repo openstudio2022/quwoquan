@@ -630,12 +630,6 @@ collections:
       keys:
         userId: 1
       unique: true
-    - name: idx_upv_activity
-      keys:
-        activityLevel: 1
-    - name: idx_upv_interest
-      keys:
-        interestTags: 1
     - name: idx_upv_segments
       keys:
         segments: 1

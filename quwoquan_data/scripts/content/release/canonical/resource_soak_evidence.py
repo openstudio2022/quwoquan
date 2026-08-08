@@ -152,14 +152,16 @@ def _lane_timeline_rows(
     terminal_instants: list[datetime] = []
     for carrier in CARRIERS:
         succeeded_ids: list[str] = []
+        per_slot_throughput_samples: list[float] = []
         terminal_ids: list[str] = []
         intervals: list[_Interval] = []
         for job_id, row in jobs[carrier].items():
             job = row["job"]
             timings = row["timings"]
-            intervals.extend(
-                _active_intervals(timings, label=f"semantic job:{job_id}")
+            job_intervals = _active_intervals(
+                timings, label=f"semantic job:{job_id}"
             )
+            intervals.extend(job_intervals)
             state = str(job.get("state") or "")
             expected_terminal = _TERMINAL_EVENT_BY_STATE.get(state)
             if (
@@ -170,7 +172,18 @@ def _lane_timeline_rows(
                 terminal_ids.append(job_id)
                 terminal_instants.append(timings[-1][1])
                 if state == "succeeded":
+                    active_seconds = sum(
+                        (ended_at - started_at).total_seconds()
+                        for started_at, ended_at in job_intervals
+                    )
+                    if active_seconds <= 0:
+                        raise CampaignScaleEvidenceError(
+                            f"semantic job:{job_id} has no positive active duration"
+                        )
                     succeeded_ids.append(job_id)
+                    per_slot_throughput_samples.append(
+                        round(1.0 / active_seconds, 12)
+                    )
         merged = _merge_intervals(intervals)
         lane_intervals[carrier] = merged
         all_ids = sorted(jobs[carrier])
@@ -184,6 +197,9 @@ def _lane_timeline_rows(
                 "semanticJobIds": all_ids,
                 "semanticJobSucceededIds": sorted(succeeded_ids),
                 "semanticJobTerminalIds": sorted(terminal_ids),
+                "perSlotThroughputSamples": sorted(
+                    per_slot_throughput_samples
+                ),
                 "activeDurationSeconds": sum(
                     int((ended_at - started_at).total_seconds())
                     for started_at, ended_at in merged

@@ -89,11 +89,6 @@ func (projector *MongoProjector) EnsureIndexes(ctx context.Context) error {
 				Options: options.Index().
 					SetName("idx_assistant_learning_projection_owner_updated"),
 			},
-			{
-				Keys: bson.D{{Key: "watermarkSequence", Value: 1}},
-				Options: options.Index().
-					SetName("idx_assistant_learning_projection_watermark"),
-			},
 		},
 	); err != nil {
 		return fmt.Errorf("ensure learning projection indexes: %w", err)

@@ -344,8 +344,9 @@ final class RemoteGatheringFacet
   }
 
   Future<cloud.GatheringPrivateDetailSlice?> _loadPrivateDetailWire(
-    String gatheringId,
-  ) {
+    String gatheringId, {
+    required bool allowPublicFallback,
+  }) {
     return client
         .circleGatheringGetGathering(
           cloud.GatheringIDQuery(gatheringId: gatheringId),
@@ -354,7 +355,8 @@ final class RemoteGatheringFacet
         .then<cloud.GatheringPrivateDetailSlice?>(
           (wire) => wire,
           onError: (Object error, StackTrace stackTrace) {
-            if (error is CloudException &&
+            if (allowPublicFallback &&
+                error is CloudException &&
                 (error.type == CloudErrorType.notFound ||
                     error.type == CloudErrorType.forbidden)) {
               return null;
@@ -373,7 +375,10 @@ final class RemoteGatheringFacet
     if (normalized.isEmpty) {
       throw ArgumentError.value(gatheringId, 'gatheringId', 'must not be blank');
     }
-    final wire = await _loadPrivateDetailWire(normalized);
+    final wire = await _loadPrivateDetailWire(
+      normalized,
+      allowPublicFallback: false,
+    );
     if (wire == null) {
       throw StateError('gathering board circle detail unavailable');
     }
@@ -396,7 +401,10 @@ final class RemoteGatheringFacet
     if (publicSlice == null) {
       return null;
     }
-    final privateWire = await _loadPrivateDetailWire(gatheringId);
+    final privateWire = await _loadPrivateDetailWire(
+      gatheringId,
+      allowPublicFallback: true,
+    );
     if (privateWire == null) {
       return publicSlice;
     }

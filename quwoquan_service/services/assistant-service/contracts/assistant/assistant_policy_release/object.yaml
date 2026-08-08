@@ -62,16 +62,23 @@ lifecycle:
 members:
   AssistantPolicyTemplateDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [templateId]
+    cardinality: many
     max_cardinality: 128
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内不可变的执行模板。
   AssistantPolicyRoutingRule:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [ruleId]
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内按优先级求值的强类型路由规则。
   AssistantPolicyLearningContextDefinition:
-    kind: owned_entity
-    cardinality: 1:1
+    kind: value_object
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: release 内不可变的聚合反馈注入边界。

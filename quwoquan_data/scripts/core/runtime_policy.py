@@ -19,20 +19,12 @@ from core.runtime_policy_types import (
     SemanticAgentBinding,
     SemanticCalibrationPolicy,
     SemanticCapacityPolicy,
-)
-from core.runtime_policy_types import (
+    campaign_lane_timeout_map as _campaign_lane_timeout_map,
+    campaign_lane_timeout_seconds_for_scale as _campaign_lane_timeout_seconds_for_scale,
     explicit_semantic_selections as _explicit_semantic_selections,
-)
-from core.runtime_policy_types import (
     mapping as _mapping,
-)
-from core.runtime_policy_types import (
     non_empty_string as _non_empty_string,
-)
-from core.runtime_policy_types import (
     non_empty_string_tuple as _non_empty_string_tuple,
-)
-from core.runtime_policy_types import (
     semantic_binding as _semantic_binding,
 )
 
@@ -55,6 +47,7 @@ class RuntimePolicy:
     research_workers: int
     research_wave_size: int
     campaign_lane_workers: int
+    partitions_per_worker: int
     research_max_waves_per_run: int
     source_plan_recovery_passes: int
     source_plan_recovery_workers: int
@@ -63,7 +56,7 @@ class RuntimePolicy:
     oversample_factor: float
     startup_timeout_seconds: int
     campaign_submission_timeout_seconds: int
-    campaign_lane_timeout_seconds: int
+    campaign_lane_timeout_seconds_by_scale: tuple[tuple[str, int], ...]
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
     auth_retry_limit: int
@@ -127,6 +120,11 @@ class RuntimePolicy:
     coverage_overpass_query_timeout_seconds: int
     curl_retries: int
     curl_retry_delay_seconds: int
+
+    def campaign_lane_timeout_seconds_for_scale(self, scale: str) -> int:
+        return _campaign_lane_timeout_seconds_for_scale(
+            self.campaign_lane_timeout_seconds_by_scale, scale
+        )
     provider_timeouts: ProviderTimeouts
     coverage_discovery: CoverageDiscoveryPolicy
 
@@ -365,6 +363,7 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             workers.get("campaignLaneWorkers"),
             label="workers.campaignLaneWorkers",
         ),
+        partitions_per_worker=_positive_int(workers.get("partitionsPerWorker"), label="workers.partitionsPerWorker"),
         research_wave_size=_positive_int(budgets.get("researchWaveSize"), label="budgets.researchWaveSize"),
         research_max_waves_per_run=_non_negative_int(
             budgets.get("researchMaxWavesPerRun"),
@@ -392,9 +391,8 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             budgets.get("campaignSubmissionTimeoutSeconds"),
             label="budgets.campaignSubmissionTimeoutSeconds",
         ),
-        campaign_lane_timeout_seconds=_positive_int(
-            budgets.get("campaignLaneTimeoutSeconds"),
-            label="budgets.campaignLaneTimeoutSeconds",
+        campaign_lane_timeout_seconds_by_scale=_campaign_lane_timeout_map(
+            budgets.get("campaignLaneTimeoutSeconds")
         ),
         preflight_network_timeout_seconds=_positive_int(
             budgets.get("preflightNetworkTimeoutSeconds"),
@@ -575,11 +573,9 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
 def active_runtime_policy() -> RuntimePolicy:
     return load_runtime_policy(DEFAULT_RUNTIME_PROFILE_ID)
 
-
 def apply_runtime_policy(policy: RuntimePolicy) -> None:
     for key, value in policy.process_environment().items():
         os.environ[key] = value
-
 
 __all__ = [
     "DEFAULT_RUNTIME_PROFILE_ID",

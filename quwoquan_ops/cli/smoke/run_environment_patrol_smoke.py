@@ -105,6 +105,12 @@ RELEASE_APP_UAT_DEFINES = (
     ("data_release_image_work_id", "DATA_RELEASE_IMAGE_WORK_ID"),
     ("data_release_image_title", "DATA_RELEASE_IMAGE_TITLE"),
     ("data_release_creator_name", "DATA_RELEASE_CREATOR_NAME"),
+    ("data_release_creator_user_handle", "DATA_RELEASE_CREATOR_USER_HANDLE"),
+    ("data_release_creator_persona_id", "DATA_RELEASE_CREATOR_PERSONA_ID"),
+    (
+        "data_release_creator_avatar_asset_id",
+        "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
+    ),
     ("data_release_tag_label", "DATA_RELEASE_TAG_LABEL"),
     ("data_release_video_attribution", "DATA_RELEASE_VIDEO_ATTRIBUTION"),
 )

@@ -21,7 +21,7 @@ from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.scale import (
     CampaignScaleError,
     resolve_campaign_scale,
@@ -44,7 +44,10 @@ from content.execution.planning.semantic_preflight_admission import (
     validate_semantic_preflight_binding_at,
 )
 from content.execution.request import resolve_candidate_pool
-from content.execution.runtime_contract import file_sha256
+from content.release.canonical.research_scale_predecessor import (
+    ResearchScalePredecessorError,
+    load_predecessor_promotion,
+)
 from content.execution.workspace import entity_catalog_digest
 
 ENVELOPE_SCHEMA = "quwoquan_data.content_campaign_request_envelope"
@@ -213,256 +216,38 @@ def _execution_ids(
     }
 
 
-def _research_m100_promotion_ref(
+def _research_scale_promotion_ref(
     receipt_path: Path | None,
     *,
+    next_scale: str,
     source_digest: dict[str, Any],
     entity_catalog_digest: str,
     source_revision: str,
+    output_root: Path,
 ) -> dict[str, Any]:
-    if receipt_path is None:
-        raise ValueError("M1000 requires one canonical four-carrier M100 receipt")
-    path = receipt_path.resolve()
-    promotion = read_json(path)
-    assert_valid(
-        promotion,
-        "release",
-        "research_scale_promotion",
-        label=f"research M100 promotion:{path}",
-    )
-    if (
-        promotion.get("targetScale") != "M100"
-        or promotion.get("releaseClass") != "research"
-        or promotion.get("productLifecycleState") != "research"
-        or promotion.get("m1000Eligible") is not True
-    ):
-        raise ValueError("M1000 requires an eligible research M100 receipt")
-    if (
-        promotion.get("sourceDigest") != source_digest.get("digest")
-        or promotion.get("entityCatalogDigest") != entity_catalog_digest
-        or promotion.get("sourceRevision") != source_revision
-    ):
-        raise ValueError("M1000 M100 receipt source/catalog identity drift")
-    return {
-        "promotionId": str(promotion["promotionId"]),
-        "releaseId": str(promotion["releaseId"]),
-        "manifestDigest": str(promotion["manifestDigest"]),
-        "sourceRevision": str(promotion["sourceRevision"]),
-        "sourceDigest": str(promotion["sourceDigest"]),
-        "entityCatalogDigest": str(promotion["entityCatalogDigest"]),
-        "receiptRef": path.as_posix(),
-        "receiptDigest": file_sha256(path),
-    }
-
-
-def build_envelope(
-    *,
-    scale: str | None = None,
-    quota: int | None = None,
-    carrier: str,
-    region_ref: str,
-    vertical: str = "travel",
-    topic: str | None = None,
-    target_names: Iterable[str] | None = None,
-    source_providers: Iterable[str] | None = None,
-    family_ref: str | None = None,
-    repo_root: Path | None = None,
-    day: str | None = None,
-    sequence: int = 1,
-    predecessor_execution_id: str | None = None,
-    semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
-    semantic_preflight_receipt: Path | None = None,
-    semantic_preflight_output_root: Path | None = None,
-    predecessor_reconciliation: Mapping[str, Any] | None = None,
-    promotion_receipt: Path | None = None,
-    pre_acquisition_handoff: Path | None = None,
-    pre_acquisition_handoff_output_root: Path | None = None,
-    external_input_refs: Iterable[Mapping[str, Any]] = (),
-    acquisition_root: Path | None = None,
-) -> dict[str, Any]:
-    if carrier not in _OPERATIONS:
-        raise ValueError(f"unsupported carrier: {carrier}")
-    resolved = resolve_campaign_scale(scale=scale, quota=quota)
-    vertical_id = _normalize_vertical(vertical)
-    source_repo = (repo_root or paths.REPO_ROOT).resolve()
-    policy = load_content_distribution_policy()
-    governed_quota = (
-        policy.scale_target(resolved.scale, carrier)
-        if resolved.scale in {"M100", "M1000"}
-        else resolved.quota
-    )
     try:
-        quota_value, count = resolve_candidate_pool(quota=governed_quota, count=None)
-    except SystemExit as exc:
-        raise CampaignScaleError(str(exc)) from exc
-    source = current_source_digest(repo_root=source_repo).to_document()
-    _require_stable_source_inputs(source, repo_root=source_repo)
-    discovery = (
-        source_repo
-        / "quwoquan_data"
-        / "reference"
-        / vertical_id
-        / "entities"
-        / region_ref
-    )
-    if not discovery.is_dir():
-        raise ValueError(f"region reference does not exist: {region_ref}")
-    catalog_digest = entity_catalog_digest(
-        discovery.relative_to(source_repo).as_posix()
-    )
-    source_revision = content_source_revision(
-        source_digest=str(source["digest"]),
-        entity_catalog_digest=catalog_digest,
-    )
-    stamp = day or datetime.now(timezone.utc).strftime("%Y%m%d")
-    scope = normalize_execution_scope(region_ref, topic)
-    frozen_external_refs, handoff_binding = freeze_carrier_pre_acquisition_inputs(
-        carrier,
-        external_input_refs,
-        acquisition_root=(
-            acquisition_root or paths.SOURCE_ACQUISITION_ROOT
-        ).resolve(),
-        handoff_ref=pre_acquisition_handoff,
-        scale=resolved.scale,
-        vertical=vertical_id,
-        scope=scope,
-        region_ref=region_ref,
-        topic=topic,
-        run_date=stamp,
-        campaign_sequence=sequence,
-        source_revision=source_revision,
-        source_digest=str(source["digest"]),
-        entity_catalog_digest=catalog_digest,
-        handoff_output_root=pre_acquisition_handoff_output_root,
-    )
-    ids = _execution_ids(
-        scale=resolved.scale,
-        vertical=vertical_id,
-        scope=scope,
-        day=stamp,
-        sequence=sequence,
-    )
-    retry_of = str(predecessor_execution_id or "").strip() or None
-    if sequence == 1 and retry_of is not None:
-        raise ValueError("campaign envelope sequence=1 forbids a retry predecessor")
-    if sequence > 1 and retry_of is None:
-        raise ValueError("campaign envelope sequence>1 requires a retry predecessor")
-    if retry_of is not None:
-        current, predecessor = map(parse_execution_id, (ids[carrier], retry_of))
-        comparable = ("vertical", "content_type", "intent", "scope", "phase")
-        if any(getattr(current, key) != getattr(predecessor, key) for key in comparable):
-            raise ValueError("campaign envelope retry predecessor must preserve execution scope")
-        if predecessor.sequence >= current.sequence:
-            raise ValueError("campaign envelope retry predecessor must use an earlier sequence")
-    frozen_semantic_selection_id = normalize_semantic_selection_id(
-        semantic_selection_id
-    )
-    semantic_preflight_binding = (
-        bind_semantic_preflight_receipt(
-            semantic_preflight_receipt,
-            semantic_selection_id=frozen_semantic_selection_id,
-            output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
-        )
-        if semantic_preflight_receipt is not None
-        else None
-    )
-    if frozen_semantic_selection_id == CURSOR_AUTO_SEMANTIC_SELECTION_ID:
-        if semantic_preflight_binding is None:
-            raise ValueError(
-                "campaign cursor_auto selection requires a fresh semantic preflight receipt"
-            )
-    reconciliation = (
-        dict(predecessor_reconciliation)
-        if predecessor_reconciliation is not None
-        else None
-    )
-    if reconciliation is not None:
-        if retry_of is None:
-            raise ValueError(
-                "campaign envelope predecessor reconciliation requires retryOf"
-            )
-        assert_valid(
-            reconciliation,
-            "execution",
-            "campaign_submission_reconciliation_ref",
-            label=f"campaign predecessor reconciliation:{carrier}",
-        )
-    names = sorted({str(item).strip() for item in (target_names or []) if str(item).strip()})
-    if names and len(names) < quota_value:
-        raise ValueError(
-            "campaign targetNames must contain at least the governed quota "
-            f"({quota_value}); got {len(names)}"
-        )
-    providers = sorted(
-        {str(item).strip() for item in (source_providers or []) if str(item).strip()}
-    )
-    topic_value = str(topic).strip() if topic is not None and str(topic).strip() else None
-    git_branch = _git_branch(source_repo)
-    git_commit_sha = _git_commit(source_repo)
-    promotion_reference = (
-        _research_m100_promotion_ref(
-            promotion_receipt,
-            source_digest=source,
-            entity_catalog_digest=catalog_digest,
+        reference, carried = load_predecessor_promotion(
+            receipt_path,
+            target_scale=next_scale,
             source_revision=source_revision,
+            source_digest=str(source_digest.get("digest") or ""),
+            entity_catalog_digest=entity_catalog_digest,
+            output_root=output_root,
         )
-        if resolved.scale == "M1000"
-        else None
-    )
-    stable: dict[str, Any] = {
-        "schema": ENVELOPE_SCHEMA,
-        "scale": resolved.scale,
-        "carrier": carrier,
-        "operation": _OPERATIONS[carrier],
-        "vertical": vertical_id,
-        "familyRef": family_ref or default_family_ref(
-            vertical=vertical_id,
-            carrier=carrier,
-        ),
-        "regionRef": region_ref,
-        "selector": _SELECTORS[carrier],
-        "quota": quota_value,
-        "count": count,
-        "topic": topic_value,
-        "targetNames": names,
-        "sourceProviders": providers,
-        "semanticSelectionId": frozen_semantic_selection_id,
-        "retryOf": retry_of,
-        "rootExecutionId": ids["homepage"],
-        "executionId": ids[carrier],
-        "gitBranch": git_branch,
-        "gitCommitSha": git_commit_sha,
-        "sourceRevision": source_revision,
-        "sourceDigest": source,
-        "entityCatalogDigest": catalog_digest,
-        "preAcquisitionHandoff": handoff_binding,
-        "externalInputRefs": frozen_external_refs,
-        "externalInputsDigest": external_inputs_digest(frozen_external_refs),
-        "allowedStage": "submit-only",
-        "operatorPrompt": _OPERATOR_PROMPTS[carrier],
+    except ResearchScalePredecessorError as exc:
+        raise ValueError(str(exc)) from exc
+    if reference is None:
+        raise ValueError(f"{next_scale} requires a predecessor promotion")
+    return {
+        **reference,
+        "carrierCounts": [
+            {"carrier": carrier, "totalUniqueFinalizedCount": carried[carrier]}
+            for carrier in CAMPAIGN_CARRIERS
+        ],
     }
-    if promotion_reference is not None:
-        stable["researchScalePromotion"] = promotion_reference
-    if semantic_preflight_binding is not None:
-        stable["semanticPreflightReceipt"] = semantic_preflight_binding
-    if reconciliation is not None:
-        stable["predecessorReconciliation"] = reconciliation
-    frozen_at = _utc_now()
-    if semantic_preflight_binding is not None:
-        validate_semantic_preflight_binding_at(
-            semantic_preflight_binding,
-            semantic_selection_id=frozen_semantic_selection_id,
-            admitted_at=frozen_at,
-            output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
-        )
-    envelope = {
-        **stable,
-        "requestDigest": _sha256(stable),
-        "frozenAt": frozen_at,
-    }
-    _require_stable_source_inputs(source, repo_root=source_repo)
-    return envelope
 
+
+from content.execution.campaign.request_envelope_build import build_envelope
 
 def load_campaign_envelope(
     path: Path,
@@ -501,10 +286,13 @@ def write_scale_envelopes(
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
+    promotion_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
+    scale_source_pool: Path | None = None,
+    source_pool_evidence_root: Path | None = None,
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
     from content.execution.campaign.request_envelope_writer import (
@@ -532,10 +320,13 @@ def write_scale_envelopes(
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
+        promotion_output_root=promotion_output_root,
         pre_acquisition_handoff=pre_acquisition_handoff,
         pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
         acquisition_root=acquisition_root,
+        scale_source_pool=scale_source_pool,
+        source_pool_evidence_root=source_pool_evidence_root,
     )
 
 
@@ -561,10 +352,13 @@ def write_campaign_envelopes(
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
+    promotion_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
+    scale_source_pool: Path | None = None,
+    source_pool_evidence_root: Path | None = None,
 ) -> dict[str, dict[str, Path]]:
     from content.execution.campaign.request_envelope_writer import (
         write_campaign_envelopes as write_atomic_campaign_envelopes,
@@ -591,10 +385,13 @@ def write_campaign_envelopes(
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
+        promotion_output_root=promotion_output_root,
         pre_acquisition_handoff=pre_acquisition_handoff,
         pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
         acquisition_root=acquisition_root,
+        scale_source_pool=scale_source_pool,
+        source_pool_evidence_root=source_pool_evidence_root,
     )
 
 

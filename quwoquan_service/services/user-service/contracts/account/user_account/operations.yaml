@@ -1726,3 +1726,195 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_sync_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_list_personas_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListPersonas}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_persona_management_summary_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetPersonaManagementSummary}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_persona_lifecycle_guard_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetPersonaLifecycleGuard}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_persona_profile_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetPersonaProfile}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_user_homepage_bundle_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetUserHomepageBundle}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_me_profile_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetMeProfile}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_search_social_relations_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SearchSocialRelations}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_profile_edit_snapshot_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetProfileEditSnapshot}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_get_profile_qr_card_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetProfileQrCard}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_resolve_profile_qr_token_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ResolveProfileQrToken}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_close_account_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CloseAccount}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/user_account/account_lifecycle_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: user_account_list_personas_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListPersonas}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_persona_management_summary_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetPersonaManagementSummary}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_active_persona_context_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetActivePersonaContext}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_persona_lifecycle_guard_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetPersonaLifecycleGuard}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_persona_profile_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetPersonaProfile}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_user_homepage_bundle_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetUserHomepageBundle}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_me_profile_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetMeProfile}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_search_social_relations_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: SearchSocialRelations}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_pull_user_sync_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/user-service-cloud-delivery/remote-profile-delivery/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: PullUserSync}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_profile_edit_snapshot_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetProfileEditSnapshot}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_get_profile_qr_card_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetProfileQrCard}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_resolve_profile_qr_token_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ResolveProfileQrToken}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/user_account_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_close_account_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: CloseAccount}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/account_closure_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

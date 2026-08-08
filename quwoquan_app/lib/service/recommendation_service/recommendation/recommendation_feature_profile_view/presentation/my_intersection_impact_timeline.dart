@@ -15,7 +15,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/author_impact_evidence.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_evidence.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_timeline.dart';
 
 /// 「打动」时间线：与交集 tab 同款最近时间桶脚手架（[IntersectionBucketTimeline]），

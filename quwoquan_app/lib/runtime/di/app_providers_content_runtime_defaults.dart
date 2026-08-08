@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
-import 'package:quwoquan_app/service/content_service/content/comment/application/comment_remote_config.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/application/public/comment_remote_config.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 

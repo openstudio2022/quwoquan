@@ -2,6 +2,7 @@ events:
 - name: ProfileInteractionReadFactAppended
   description: owner persona 对 received activity 的 seen/read 不可变事实已追加。
   delivery_semantics: transactional_outbox
+  wire_event_type: ProfileInteractionReadFactAppended
   payload_entity: ProfileInteractionReadFact
   payload_fields:
   - factId

@@ -29,11 +29,6 @@ def handle_distributed_campaign_stage(args: Any, identity: Any) -> bool:
             result_path = run_campaign_lane(
                 root_execution_id,
                 identity.content_type.value,
-                lane_timeout_seconds=getattr(
-                    args,
-                    "campaign_lane_timeout_seconds",
-                    None,
-                ),
             )
         else:
             if (

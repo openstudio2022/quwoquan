@@ -99,7 +99,7 @@ class PageObjectMountContractTest(unittest.TestCase):
         expected_mounts = {
             "lib/runtime/shell/recovery/bootstrap_recovery.dart",
             "lib/runtime/shell/recovery/runtime_recovery_host.dart",
-            "lib/runtime/di/shell/composition/quwoquan_app_shell.dart",
+            "lib/runtime/shell/composition/quwoquan_app_shell.dart",
             "lib/runtime/di/navigation/app_router_recovery_page.dart",
         }
         self.assertEqual(expected_mounts, set(page["mount_evidence"]))
@@ -291,6 +291,51 @@ class PageObjectMountContractTest(unittest.TestCase):
             ],
         )
         self.assertTrue(any("lib/transitive.dart" in error for error in extraneous))
+
+    # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md#gwt-001
+    def test_parent_route_registration_may_inject_a_direct_typed_slot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            app = Path(directory)
+            lib = app / "lib"
+            lib.mkdir()
+            (lib / "parent.dart").write_text(
+                "class ParentPage {}\n",
+                encoding="utf-8",
+            )
+            (lib / "router.dart").write_text(
+                "import 'slot.dart';\n",
+                encoding="utf-8",
+            )
+            (lib / "slot.dart").write_text(
+                "import 'transitive.dart';\nChildPage buildChild() => ChildPage();\n",
+                encoding="utf-8",
+            )
+            (lib / "transitive.dart").write_text(
+                "class TransitiveHelper {}\n",
+                encoding="utf-8",
+            )
+            pages = {
+                "parent": {
+                    "source_path": "lib/parent.dart",
+                    "route_registration_evidence": ["lib/router.dart"],
+                }
+            }
+            with mock.patch.object(self.subject, "APP", app):
+                closures = self.subject._declared_parent_mount_closures(
+                    {"parent_page_id": "parent"},
+                    pages,
+                )
+            self.assertIn("lib/router.dart", closures["parent"])
+            self.assertIn("lib/slot.dart", closures["parent"])
+            self.assertNotIn("lib/transitive.dart", closures["parent"])
+            self.assertEqual(
+                [],
+                self.subject._parent_mount_evidence_errors(
+                    "child",
+                    parent_closures=closures,
+                    evidence_paths=["lib/slot.dart"],
+                ),
+            )
 
     # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md#gwt-001
     def test_mount_token_is_checked_per_evidence_file(self) -> None:

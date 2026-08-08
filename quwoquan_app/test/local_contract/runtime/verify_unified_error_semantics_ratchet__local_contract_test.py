@@ -54,7 +54,7 @@ class VerifyUnifiedErrorSemanticsRatchetTest(unittest.TestCase):
         )
         self.assertTrue(
             self.verifier.is_page_like(
-                "quwoquan_app/lib/runtime/di/shell/composition.dart"
+                "quwoquan_app/lib/runtime/shell/composition.dart"
             )
         )
         self.assertFalse(

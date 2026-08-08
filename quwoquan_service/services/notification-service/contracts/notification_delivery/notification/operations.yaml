@@ -612,6 +612,94 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification/app_message_lifecycle__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: project-gathering-invitation-api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: object, id: notification.notification}
+    runner_source_path: quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification/gathering_invitation_stream__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+  - case_id: notification_list_app_messages_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListAppMessages}
+    runner_source_path: quwoquan_app/test/api_integration/service/notification_service/notification_delivery/notification/app_message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: notification_get_app_message_unread_count_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetAppMessageUnreadCount}
+    runner_source_path: quwoquan_app/test/api_integration/service/notification_service/notification_delivery/notification/app_message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: notification_get_app_message_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetAppMessage}
+    runner_source_path: quwoquan_app/test/api_integration/service/notification_service/notification_delivery/notification/app_message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: notification_ack_app_message_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: AckAppMessage}
+    runner_source_path: quwoquan_app/test/api_integration/service/notification_service/notification_delivery/notification/app_message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: notification_read_app_message_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ReadAppMessage}
+    runner_source_path: quwoquan_app/test/api_integration/service/notification_service/notification_delivery/notification/app_message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: notification_list_app_messages_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListAppMessages}
+    runner_source_path: quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_metadata_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: notification_get_app_message_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetAppMessage}
+    runner_source_path: quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_metadata_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: notification_get_app_message_unread_count_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetAppMessageUnreadCount}
+    runner_source_path: quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_metadata_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: notification_ack_app_message_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: AckAppMessage}
+    runner_source_path: quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_metadata_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: notification_read_app_message_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/interaction-notification-inbox/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ReadAppMessage}
+    runner_source_path: quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_metadata_contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
   - case_id: recover-notification-account-closure-dead-letter-local
     spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
     producer: service

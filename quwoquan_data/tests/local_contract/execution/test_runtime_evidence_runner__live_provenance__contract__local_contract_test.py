@@ -235,6 +235,7 @@ def _fixture(tmp_path: Path) -> Fixture:
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
+        "scale": "M100",
         "gitBranch": "dev1.0",
         "gitCommitSha": "1" * 40,
         "sourceRevision": source_revision,

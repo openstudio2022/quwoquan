@@ -33,6 +33,7 @@ part 'personal_assistant_stream_controller_projection.dart';
 part 'personal_assistant_stream_controller_models.dart';
 part 'personal_assistant_stream_controller_telemetry.dart';
 part 'personal_assistant_stream_controller_actions.dart';
+part 'personal_assistant_stream_controller_run_lifecycle.dart';
 
 class PersonalAssistantStreamController
     extends Notifier<PersonalAssistantStreamState> {
@@ -49,9 +50,14 @@ class PersonalAssistantStreamController
   final AssistantActionIntentConsumer _actionIntentConsumer =
       AssistantActionIntentConsumer();
   final Set<String> _claimedDeviceActionKeys = <String>{};
+  int _runStreamGenerationSequence = 0;
+  _AssistantRunStreamGeneration? _activeRunStreamGeneration;
+  StreamIterator<AssistantStreamEventWire>? _activeRunStreamIterator;
+  _PendingAssistantSteerCommand? _pendingSteerCommand;
 
   @override
   PersonalAssistantStreamState build() {
+    ref.onDispose(_disposeRunStreamLifecycle);
     return const PersonalAssistantStreamState();
   }
 
@@ -59,6 +65,9 @@ class PersonalAssistantStreamController
   Ref get _actionsRef => ref;
   PersonalAssistantStreamState get _actionsState => state;
   set _actionsState(PersonalAssistantStreamState value) => state = value;
+  Ref get _lifecycleRef => ref;
+  PersonalAssistantStreamState get _lifecycleState => state;
+  set _lifecycleState(PersonalAssistantStreamState value) => state = value;
 
   /// 页面入口设置的交集引用只消费给下一次 StartAssistantRun，避免后续手工对话继续
   /// 携带已经过期的页面证据。所有带页面上下文的完整会话入口也必须在首个
@@ -330,81 +339,8 @@ class PersonalAssistantStreamController
     return ref.read(currentUserIdProvider).trim();
   }
 
-  Future<void> openRunFromAppMessage(String runId) async {
-    final trimmed = runId.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
-    await ensureHistoryInitialized();
-    if (!state.historyInitialized) {
-      return;
-    }
-    state = state.copyWith(
-      running: true,
-      errorMessage: '',
-      errorFailure: null,
-      retryAvailable: false,
-    );
-    try {
-      final run = await ref
-          .read(assistantSessionRunFacetProvider)
-          .getAssistantRun(runId: trimmed);
-      state = state.copyWith(
-        sessionId: run.sessionId,
-        runId: run.runId,
-        runStatus: run.status,
-        answer: _openedRunAnswer(run),
-        transcript: _appendOpenedRunTranscript(state.transcript, run),
-        running: false,
-        errorMessage: '',
-        errorFailure: null,
-        retryAvailable: false,
-      );
-      _clearRetry();
-    } catch (error) {
-      developer.log(
-        'open proactive run failed runId=$trimmed',
-        name: 'personal_assistant',
-        error: error,
-      );
-      state = state.copyWith(
-        running: false,
-        errorMessage: runtimeErrorDisplayMessage(error),
-        errorFailure: runtimeFailureFromError(error),
-        retryAvailable: true,
-      );
-      _rememberRetry(_PersonalAssistantRetryKind.openRun, trimmed);
-    }
-  }
-
   Future<void> send(String text) {
     return _send(text);
-  }
-
-  Future<void> _ensureOpenPageContextReported() {
-    final context = _openContext;
-    if (context == null) {
-      return Future<void>.value();
-    }
-    final inFlight = _pageContextReportFuture;
-    if (inFlight != null) {
-      return inFlight;
-    }
-    final report = () async {
-      try {
-        await ref
-            .read(assistantPersonalizationFacetProvider)
-            .reportPageContext(
-              context: context,
-              userAction: 'open_assistant_session',
-            );
-      } catch (_) {
-        _pageContextReportFuture = null;
-        rethrow;
-      }
-    }();
-    _pageContextReportFuture = report;
-    return report;
   }
 
   Future<void> _send(
@@ -420,6 +356,7 @@ class PersonalAssistantStreamController
     if (!state.historyInitialized) {
       return;
     }
+    final streamGeneration = _beginRunStreamGeneration();
     final resolvedRunClientRequestId = _assistantClientRequestId(
       runClientRequestId,
       scope: 'run',
@@ -448,12 +385,18 @@ class PersonalAssistantStreamController
     var runStarted = false;
     try {
       await _ensureOpenPageContextReported();
+      if (!_isRunStreamGenerationCurrent(streamGeneration)) {
+        return;
+      }
       var sessionId = state.sessionId;
       if (sessionId.isEmpty) {
         final session = await repository.createAssistantSession(
           summary: AssistantText.assistantCloudSessionSummary,
           clientRequestId: resolvedSessionClientRequestId,
         );
+        if (!_isRunStreamGenerationCurrent(streamGeneration)) {
+          return;
+        }
         sessionId = session.sessionId.trim();
         if (sessionId.isEmpty) {
           throw const FormatException(
@@ -482,6 +425,18 @@ class PersonalAssistantStreamController
         clientRequestId: resolvedRunClientRequestId,
         intersectionEvidenceRefs: _pendingIntersectionEvidenceRefs,
       );
+      if (!_isRunStreamGenerationCurrent(streamGeneration)) {
+        return;
+      }
+      final startedRunId = run.runId.trim();
+      if (startedRunId.isEmpty || run.sessionId.trim() != sessionId) {
+        throw const FormatException(
+          'StartAssistantRun returned a mismatched run identity',
+        );
+      }
+      if (!_bindRunStreamGeneration(streamGeneration, startedRunId)) {
+        return;
+      }
       _pendingIntersectionEvidenceRefs =
           const <AssistantIntersectionEvidenceRef>[];
       runStarted = true;
@@ -530,169 +485,189 @@ class PersonalAssistantStreamController
         ),
       );
       _reportPendingSuggestedAction(run.runId);
-      await for (final event in repository.watchAssistantRunEvents(
-        runId: run.runId,
-      )) {
-        if (event.seq <= lastSeq) {
-          continue;
-        }
-        lastSeq = event.seq;
-        events.add(event);
-        final streamEvent = AssistantRunStreamEvent.fromWire(event);
-        if (streamEvent.type == AssistantRunStreamEventType.unknown) {
-          throw FormatException(
-            'Unsupported assistant stream event type ${event.eventType}',
-          );
-        }
-        if (streamEvent.type == AssistantRunStreamEventType.runStarted &&
-            streamEvent.restarted) {
-          answer = '';
-          processSummary = const PersonalAssistantProcessSummary();
-          presentationProjection.reset();
-          presentationDocument = null;
-        }
-        if (streamEvent.type ==
-                AssistantRunStreamEventType.presentationSnapshot ||
-            streamEvent.type == AssistantRunStreamEventType.presentationPatch ||
-            streamEvent.type ==
-                AssistantRunStreamEventType.presentationCommit) {
-          try {
-            presentationDocument = presentationProjection.apply(event);
-          } on FormatException catch (error, stackTrace) {
-            developer.log(
-              'assistant presentation stream degraded',
-              name: 'assistant.presentation',
-              error: error,
-              stackTrace: stackTrace,
+      final streamRemainedCurrent = await _consumeRunStream(
+        generation: streamGeneration,
+        stream: repository.watchAssistantRunEvents(runId: startedRunId),
+        onEvent: (event) {
+          if (event.runId.trim() != startedRunId) {
+            throw const FormatException(
+              'AssistantRun stream returned a mismatched run identity',
             );
           }
-        }
-        if (streamEvent.type == AssistantRunStreamEventType.cancelled) {
-          cancelled = true;
-        }
-        if (streamEvent.runStatus.isNotEmpty) {
-          runStatus = streamEvent.runStatus;
-        } else if (streamEvent.type.isTerminal) {
-          runStatus = switch (streamEvent.type) {
-            AssistantRunStreamEventType.completed => 'completed',
-            AssistantRunStreamEventType.failed => 'failed',
-            AssistantRunStreamEventType.cancelled => 'cancelled',
-            _ => runStatus,
-          };
-        } else {
-          runStatus = state.runStatus.isEmpty ? runStatus : state.runStatus;
-        }
-        if (streamEvent.type == AssistantRunStreamEventType.answerDelta &&
-            !firstAnswerObserved) {
-          firstAnswerObserved = true;
-          _recordAssistantTurnQuality(
-            ref,
-            turnAction: _assistantTurnActionFirstAnswer,
-            result: _assistantTurnResultSuccess,
-            startedAt: startedAt,
-            operationId: AppCloudOperationIds
-                .assistantAssistantRunStreamAssistantRunEvents,
+          if (event.seq <= lastSeq) {
+            return;
+          }
+          lastSeq = event.seq;
+          events.add(event);
+          final streamEvent = AssistantRunStreamEvent.fromWire(event);
+          if (streamEvent.type == AssistantRunStreamEventType.unknown) {
+            throw FormatException(
+              'Unsupported assistant stream event type ${event.eventType}',
+            );
+          }
+          if (streamEvent.type == AssistantRunStreamEventType.runStarted &&
+              streamEvent.restarted) {
+            answer = '';
+            processSummary = const PersonalAssistantProcessSummary();
+            presentationProjection.reset();
+            presentationDocument = null;
+          }
+          if (streamEvent.type ==
+                  AssistantRunStreamEventType.presentationSnapshot ||
+              streamEvent.type ==
+                  AssistantRunStreamEventType.presentationPatch ||
+              streamEvent.type ==
+                  AssistantRunStreamEventType.presentationCommit) {
+            try {
+              presentationDocument = presentationProjection.apply(event);
+            } on FormatException catch (error, stackTrace) {
+              developer.log(
+                'assistant presentation stream degraded',
+                name: 'assistant.presentation',
+                error: error,
+                stackTrace: stackTrace,
+              );
+              recordPresentationFallback(
+                _assistantPresentationInvalidStreamFallback,
+              );
+            }
+          }
+          if (streamEvent.type == AssistantRunStreamEventType.cancelled) {
+            cancelled = true;
+          }
+          if (streamEvent.runStatus.isNotEmpty) {
+            runStatus = streamEvent.runStatus;
+          } else if (streamEvent.type.isTerminal) {
+            runStatus = switch (streamEvent.type) {
+              AssistantRunStreamEventType.completed => 'completed',
+              AssistantRunStreamEventType.failed => 'failed',
+              AssistantRunStreamEventType.cancelled => 'cancelled',
+              _ => runStatus,
+            };
+          } else {
+            runStatus = state.runStatus.isEmpty ? runStatus : state.runStatus;
+          }
+          if (streamEvent.type == AssistantRunStreamEventType.answerDelta &&
+              !firstAnswerObserved) {
+            firstAnswerObserved = true;
+            _recordAssistantTurnQuality(
+              ref,
+              turnAction: _assistantTurnActionFirstAnswer,
+              result: _assistantTurnResultSuccess,
+              startedAt: startedAt,
+              operationId: AppCloudOperationIds
+                  .assistantAssistantRunStreamAssistantRunEvents,
+            );
+          }
+          if (streamEvent.type.isTerminal) {
+            terminalEventObserved = true;
+            _recordAssistantTurnQuality(
+              ref,
+              turnAction: switch (streamEvent.type) {
+                AssistantRunStreamEventType.completed =>
+                  _assistantTurnActionCompleted,
+                AssistantRunStreamEventType.failed =>
+                  _assistantTurnActionFailed,
+                AssistantRunStreamEventType.cancelled =>
+                  _assistantTurnActionCancelled,
+                _ => _assistantTurnActionStreamFailure,
+              },
+              result: switch (streamEvent.type) {
+                AssistantRunStreamEventType.completed =>
+                  _assistantTurnResultSuccess,
+                AssistantRunStreamEventType.cancelled =>
+                  _assistantTurnResultCancelled,
+                _ => _assistantTurnResultFailure,
+              },
+              startedAt: startedAt,
+              failReasonCode: streamEvent.wire.runtimeFailure?.code,
+              operationId: AppCloudOperationIds
+                  .assistantAssistantRunStreamAssistantRunEvents,
+            );
+          }
+          _debugPersonalAssistant(
+            'stream event type=${event.eventType} seq=${event.seq} runId=${run.runId} '
+            'process=${streamEvent.process?.stage ?? ''} '
+            'status=${streamEvent.process?.status ?? ''}',
           );
-        }
-        if (streamEvent.type.isTerminal) {
-          terminalEventObserved = true;
-          _recordAssistantTurnQuality(
-            ref,
-            turnAction: switch (streamEvent.type) {
-              AssistantRunStreamEventType.completed =>
-                _assistantTurnActionCompleted,
-              AssistantRunStreamEventType.failed => _assistantTurnActionFailed,
-              AssistantRunStreamEventType.cancelled =>
-                _assistantTurnActionCancelled,
-              _ => _assistantTurnActionStreamFailure,
-            },
-            result: switch (streamEvent.type) {
-              AssistantRunStreamEventType.completed =>
-                _assistantTurnResultSuccess,
-              AssistantRunStreamEventType.cancelled =>
-                _assistantTurnResultCancelled,
-              _ => _assistantTurnResultFailure,
-            },
-            startedAt: startedAt,
-            failReasonCode: streamEvent.wire.runtimeFailure?.code,
-            operationId: AppCloudOperationIds
-                .assistantAssistantRunStreamAssistantRunEvents,
+          processSummary = _projectProcessSummary(
+            processSummary,
+            streamEvent,
+            elapsedMs: DateTime.now().difference(startedAt).inMilliseconds,
           );
-        }
-        _debugPersonalAssistant(
-          'stream event type=${event.eventType} seq=${event.seq} runId=${run.runId} '
-          'process=${streamEvent.process?.stage ?? ''} '
-          'status=${streamEvent.process?.status ?? ''}',
-        );
-        processSummary = _projectProcessSummary(
-          processSummary,
-          streamEvent,
-          elapsedMs: DateTime.now().difference(startedAt).inMilliseconds,
-        );
-        final failureMessage = _failureMessageForEvent(streamEvent);
-        if (failureMessage.isNotEmpty) {
-          failed = true;
-          transcript = _upsertAssistantTranscript(
-            transcript,
-            assistantItemId,
-            text: failureMessage,
-            runId: run.runId,
-            traceId: run.traceId,
-            sourceQuery: trimmed,
-            eventType: event.eventType.wireName,
-            streaming: false,
-            processSummary: processSummary,
-            presentationDocument: presentationDocument,
-          );
+          final failureMessage = _failureMessageForEvent(streamEvent);
+          if (failureMessage.isNotEmpty) {
+            failed = true;
+            transcript = _upsertAssistantTranscript(
+              transcript,
+              assistantItemId,
+              text: failureMessage,
+              runId: run.runId,
+              traceId: run.traceId,
+              sourceQuery: trimmed,
+              eventType: event.eventType.wireName,
+              streaming: false,
+              processSummary: processSummary,
+              presentationDocument: presentationDocument,
+            );
+            state = state.copyWith(
+              sessionId: sessionId,
+              runId: run.runId,
+              runStatus: 'failed',
+              answer: answer,
+              transcript: transcript,
+              processSummary: processSummary,
+              events: List<AssistantStreamEventWire>.unmodifiable(events),
+              errorMessage: failureMessage,
+            );
+            return;
+          }
+          answer = _projectAnswer(answer, streamEvent);
+          final answerGateOpen =
+              state.answerGateOpen ||
+              _isAnswerEvent(streamEvent) ||
+              answer.isNotEmpty;
+          if (_isAnswerEvent(streamEvent)) {
+            _debugPersonalAssistant(
+              'answer event type=${event.eventType} answerLength=${answer.length}',
+            );
+          }
+          if (answer.isNotEmpty || processSummary.hasContent) {
+            transcript = _upsertAssistantTranscript(
+              transcript,
+              assistantItemId,
+              text: answer,
+              runId: run.runId,
+              traceId: run.traceId,
+              sourceQuery: trimmed,
+              eventType: event.eventType.wireName,
+              streaming:
+                  streamEvent.type != AssistantRunStreamEventType.completed,
+              processSummary: processSummary,
+              presentationDocument: presentationDocument,
+            );
+          }
           state = state.copyWith(
             sessionId: sessionId,
             runId: run.runId,
-            runStatus: 'failed',
+            runStatus: runStatus,
             answer: answer,
-            transcript: transcript,
+            transcript: List<AssistantTranscriptTimelineRow>.unmodifiable(
+              transcript,
+            ),
             processSummary: processSummary,
             events: List<AssistantStreamEventWire>.unmodifiable(events),
-            errorMessage: failureMessage,
+            answerGateOpen: answerGateOpen,
           );
-          continue;
-        }
-        answer = _projectAnswer(answer, streamEvent);
-        final answerGateOpen =
-            state.answerGateOpen ||
-            _isAnswerEvent(streamEvent) ||
-            answer.isNotEmpty;
-        if (_isAnswerEvent(streamEvent)) {
-          _debugPersonalAssistant(
-            'answer event type=${event.eventType} answerLength=${answer.length}',
-          );
-        }
-        if (answer.isNotEmpty || processSummary.hasContent) {
-          transcript = _upsertAssistantTranscript(
-            transcript,
-            assistantItemId,
-            text: answer,
-            runId: run.runId,
-            traceId: run.traceId,
-            sourceQuery: trimmed,
-            eventType: event.eventType.wireName,
-            streaming:
-                streamEvent.type != AssistantRunStreamEventType.completed,
-            processSummary: processSummary,
-            presentationDocument: presentationDocument,
-          );
-        }
-        state = state.copyWith(
-          sessionId: sessionId,
-          runId: run.runId,
-          runStatus: runStatus,
-          answer: answer,
-          transcript: List<AssistantTranscriptTimelineRow>.unmodifiable(
-            transcript,
-          ),
-          processSummary: processSummary,
-          events: List<AssistantStreamEventWire>.unmodifiable(events),
-          answerGateOpen: answerGateOpen,
-        );
+        },
+        stopRequested: () => terminalEventObserved,
+      );
+      if (!streamRemainedCurrent ||
+          !_isRunStreamGenerationCurrent(
+            streamGeneration,
+            runId: startedRunId,
+          )) {
+        return;
       }
       if (!terminalEventObserved) {
         throw const FormatException(
@@ -747,9 +722,19 @@ class PersonalAssistantStreamController
         unawaited(refreshManagementSummary());
         // turn 完成时补发上一轮保存在 actor-scoped outbox 中的学习事实。
         await ref.read(assistantLearningFactOutboxProvider.notifier).flush();
+        if (!_isRunStreamGenerationCurrent(
+          streamGeneration,
+          runId: startedRunId,
+        )) {
+          return;
+        }
       }
       _clearRetry();
+      _finishRunStreamGeneration(streamGeneration);
     } catch (error, stackTrace) {
+      if (!_isRunStreamGenerationCurrent(streamGeneration)) {
+        return;
+      }
       developer.log(
         'personal assistant stream failed',
         name: 'personal_assistant',
@@ -780,6 +765,7 @@ class PersonalAssistantStreamController
         runClientRequestId: resolvedRunClientRequestId,
         sessionClientRequestId: resolvedSessionClientRequestId,
       );
+      _finishRunStreamGeneration(streamGeneration);
     }
   }
 

@@ -203,6 +203,9 @@ def _homepage_pending_entities(ctx: ExecutionContext) -> list[str]:
 
 def _content_plan_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
     """content_plan checkpoint：篇目包+注册+brief 是否就绪。"""
+    from content.execution.controller.content_plan_items import (
+        bind_article_plan_source_unit_freezes,
+    )
     from content.execution.controller.content_plan_prep import _clean_content_plan_outputs
     from content.post.content_plan_validation import validate_content_plan
     if _is_homepage_only_execution(ctx):
@@ -213,10 +216,11 @@ def _content_plan_done(ctx: ExecutionContext) -> tuple[bool, list[str]]:
     from content.execution.planning.source_ready_scope import source_ready_runtime_spec
 
     _prune_content_plan_extra_briefs(ctx)
-    issues = validate_content_plan(
+    issues = bind_article_plan_source_unit_freezes(ctx)
+    issues.extend(validate_content_plan(
         ctx.execution_id,
         source_ready_runtime_spec(ctx.execution_id, _active_spec(ctx)),
-    )
+    ))
     return (not issues), issues
 
 def _prune_content_plan_extra_briefs(ctx: ExecutionContext) -> list[str]:

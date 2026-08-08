@@ -67,6 +67,3 @@ indexes:
     userId: 1
     personaId: 1
     updatedAt: -1
-- name: idx_assistant_learning_projection_watermark
-  keys:
-    watermarkSequence: 1

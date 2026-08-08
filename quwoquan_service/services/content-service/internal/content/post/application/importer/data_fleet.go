@@ -1,12 +1,14 @@
 package importer
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,14 +31,78 @@ const (
 type FleetRequest struct {
 	Schema                  string                                   `json:"schema"`
 	ExecutionID             string                                   `json:"executionId"`
+	CampaignScale           string                                   `json:"campaignScale"`
 	ScaleClass              string                                   `json:"scaleClass"`
 	ExecutionEnvelopeDigest string                                   `json:"executionEnvelopeDigest"`
+	JobSetEnvelopeDigest    string                                   `json:"jobSetEnvelopeDigest"`
+	JobSetDigest            string                                   `json:"jobSetDigest"`
+	ActualTaskDigest        string                                   `json:"actualTaskDigest"`
+	RequiredWorkers         int                                      `json:"requiredWorkers"`
+	PartitionCount          int                                      `json:"partitionCount"`
+	PartitionAlgorithm      string                                   `json:"partitionAlgorithm"`
+	CheckpointPolicy        DataContentCheckpointPolicy              `json:"checkpointPolicy"`
 	RequireCommercial       bool                                     `json:"requireCommercial"`
 	RecoverDeadTasks        *bool                                    `json:"recoverDeadTasks"`
 	ObjectTimeoutMS         int                                      `json:"objectTimeoutMilliseconds"`
 	RequiredQuota           int                                      `json:"requiredQuota"`
 	CampaignBinding         *reliabletask.DataContentCampaignBinding `json:"campaignBinding,omitempty"`
 	Jobs                    []reliabletask.DataContentJob            `json:"jobs"`
+}
+
+// DataContentCheckpointPolicy freezes partition-local restart semantics.
+// Runtime checkpoint persistence can evolve behind this create-once contract;
+// a request cannot silently change cursor, store, or fence ownership.
+type DataContentCheckpointPolicy struct {
+	Mode                  string `json:"mode"`
+	Scope                 string `json:"scope"`
+	Cursor                string `json:"cursor"`
+	Resume                string `json:"resume"`
+	Store                 string `json:"store"`
+	Fencing               string `json:"fencing"`
+	EveryFinalizedObjects int    `json:"everyFinalizedObjects"`
+	EverySeconds          int    `json:"everySeconds"`
+	TriggerMode           string `json:"triggerMode"`
+}
+
+const dataContentPartitionAlgorithm = "sha256_carrier_object_ref_mod_v1"
+
+func dataContentPartitionCount(requiredWorkers int) int {
+	if requiredWorkers >= 64 {
+		return 256
+	}
+	requested := 4 * requiredWorkers
+	if requested < 16 {
+		requested = 16
+	}
+	count := 16
+	for count < requested {
+		count *= 2
+	}
+	return count
+}
+
+func dataContentPartitionKey(carrier string, objectRef string, partitionCount int) string {
+	digest := sha256.Sum256([]byte(strings.TrimSpace(carrier) + strings.TrimSpace(objectRef)))
+	remainder := 0
+	for _, value := range digest {
+		remainder = (remainder*256 + int(value)) % partitionCount
+	}
+	return strconv.Itoa(remainder)
+}
+
+func (p DataContentCheckpointPolicy) validate() error {
+	if strings.TrimSpace(p.Mode) != "partition_watermark" ||
+		strings.TrimSpace(p.Scope) != "execution_stage_partition" ||
+		strings.TrimSpace(p.Cursor) != "last_succeeded_job_id" ||
+		strings.TrimSpace(p.Resume) != "strictly_after_cursor" ||
+		strings.TrimSpace(p.Store) != "MongoStore" ||
+		strings.TrimSpace(p.Fencing) != "execution_job_set_digest" ||
+		p.EveryFinalizedObjects != 100 ||
+		p.EverySeconds != 900 ||
+		strings.TrimSpace(p.TriggerMode) != "first_reached" {
+		return errors.New("fleet request checkpointPolicy is invalid")
+	}
+	return nil
 }
 
 // FleetConfig holds the runtime configuration required to execute a frozen
@@ -92,23 +158,45 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 		return FleetRequest{}, fmt.Errorf("fleet request schema=%q", request.Schema)
 	}
 	request.ExecutionID = strings.TrimSpace(request.ExecutionID)
+	request.CampaignScale = strings.TrimSpace(request.CampaignScale)
 	request.ScaleClass = strings.TrimSpace(request.ScaleClass)
 	request.ExecutionEnvelopeDigest = strings.TrimSpace(request.ExecutionEnvelopeDigest)
+	request.JobSetEnvelopeDigest = strings.TrimSpace(request.JobSetEnvelopeDigest)
+	request.JobSetDigest = strings.TrimSpace(request.JobSetDigest)
+	request.ActualTaskDigest = strings.TrimSpace(request.ActualTaskDigest)
+	request.PartitionAlgorithm = strings.TrimSpace(request.PartitionAlgorithm)
 	if request.ExecutionID == "" || request.RecoverDeadTasks == nil ||
 		request.ObjectTimeoutMS < 1 || len(request.Jobs) == 0 {
 		return FleetRequest{}, errors.New(
 			"fleet request requires executionId, recoverDeadTasks, objectTimeoutMilliseconds and at least one job",
 		)
 	}
-	if (request.ScaleClass != "BELOW_M100" && request.ScaleClass != "M100_PLUS") ||
-		!reliabletask.ValidSHA256Digest(request.ExecutionEnvelopeDigest) {
+	if !validCampaignScale(request.CampaignScale) ||
+		(request.ScaleClass != "BELOW_M100" &&
+			request.ScaleClass != "M100_PLUS" &&
+			request.ScaleClass != "M10000_PLUS") ||
+		!reliabletask.ValidSHA256Digest(request.ExecutionEnvelopeDigest) ||
+		!reliabletask.ValidSHA256Digest(request.JobSetEnvelopeDigest) ||
+		!reliabletask.ValidSHA256Digest(request.JobSetDigest) ||
+		!reliabletask.ValidSHA256Digest(request.ActualTaskDigest) {
 		return FleetRequest{}, errors.New(
-			"fleet request requires scaleClass and executionEnvelopeDigest",
+			"fleet request requires scaleClass and execution/job-set digests",
 		)
 	}
-	if request.ScaleClass == "M100_PLUS" && request.CampaignBinding == nil {
+	if request.RequiredWorkers < 1 ||
+		request.PartitionCount != dataContentPartitionCount(request.RequiredWorkers) ||
+		request.PartitionAlgorithm != dataContentPartitionAlgorithm {
 		return FleetRequest{}, errors.New(
-			"M100_PLUS fleet request requires campaign binding",
+			"fleet request partition contract does not match requiredWorkers",
+		)
+	}
+	if err := request.CheckpointPolicy.validate(); err != nil {
+		return FleetRequest{}, err
+	}
+	if (request.ScaleClass == "M100_PLUS" || request.ScaleClass == "M10000_PLUS") &&
+		request.CampaignBinding == nil {
+		return FleetRequest{}, errors.New(
+			request.ScaleClass + " fleet request requires campaign binding",
 		)
 	}
 	if request.RequiredQuota < 1 || request.RequiredQuota > len(request.Jobs) {
@@ -138,13 +226,35 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 				job.JobID,
 			)
 		}
+		if strings.TrimSpace(job.JobSetEnvelopeDigest) != "" ||
+			strings.TrimSpace(job.JobSetDigest) != "" ||
+			strings.TrimSpace(job.ActualTaskDigest) != "" {
+			return FleetRequest{}, fmt.Errorf(
+				"fleet job %q cannot override frozen job-set digests",
+				job.JobID,
+			)
+		}
 		job.ExecutionEnvelopeDigest = request.ExecutionEnvelopeDigest
+		job.JobSetEnvelopeDigest = request.JobSetEnvelopeDigest
+		job.JobSetDigest = request.JobSetDigest
+		job.ActualTaskDigest = request.ActualTaskDigest
 		if request.CampaignBinding != nil {
 			job.Campaign = *request.CampaignBinding
 		}
 		if strings.TrimSpace(job.ExecutionID) != request.ExecutionID {
 			return FleetRequest{}, fmt.Errorf(
 				"fleet job %q execution binding mismatch",
+				job.JobID,
+			)
+		}
+		expectedPartitionKey := dataContentPartitionKey(
+			job.Carrier,
+			job.Ref,
+			request.PartitionCount,
+		)
+		if strings.TrimSpace(job.PartitionKey) != expectedPartitionKey {
+			return FleetRequest{}, fmt.Errorf(
+				"fleet job %q partitionKey does not match carrier+objectRef partition",
 				job.JobID,
 			)
 		}
@@ -169,7 +279,25 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 	if _, err := request.Stage(); err != nil {
 		return FleetRequest{}, err
 	}
+	actualTaskDigest, err := reliabletask.DataContentTaskDigest(request.Jobs)
+	if err != nil {
+		return FleetRequest{}, err
+	}
+	if actualTaskDigest != request.ActualTaskDigest ||
+		request.ActualTaskDigest != request.JobSetDigest {
+		return FleetRequest{}, errors.New(
+			"fleet request actualTaskDigest does not match its exact job set",
+		)
+	}
 	return request, nil
+}
+
+func validCampaignScale(value string) bool {
+	if !strings.HasPrefix(value, "M") || len(value) < 2 {
+		return false
+	}
+	count, err := strconv.Atoi(value[1:])
+	return err == nil && count >= 1 && count <= 100000 && strconv.Itoa(count) == value[1:]
 }
 
 // ObjectTimeout returns the frozen maximum runtime of one content object.
@@ -372,26 +500,37 @@ func DataWorkerEnvironment(
 	return result
 }
 
-// SelectExecutionTasks returns only the frozen jobs named by request. It
-// rejects non-unique or mismatched remote tasks instead of guessing a result.
+// SelectExecutionTasks returns only the exact frozen task identities named by
+// request. jobId is stable across repair revisions, so it must not be used as
+// the remote selection key.
 func SelectExecutionTasks(
 	executionTasks []reliabletask.ReliableAsyncTask,
 	request FleetRequest,
 ) ([]reliabletask.ReliableAsyncTask, error) {
-	byJobID := make(map[string][]reliabletask.ReliableAsyncTask, len(executionTasks))
+	byIdempotencyKey := make(
+		map[string][]reliabletask.ReliableAsyncTask,
+		len(executionTasks),
+	)
 	for _, task := range executionTasks {
-		jobID := strings.TrimSpace(task.Payload["jobId"])
-		if jobID != "" {
-			byJobID[jobID] = append(byJobID[jobID], task)
+		idempotencyKey := strings.TrimSpace(task.IdempotencyKey)
+		if idempotencyKey != "" {
+			byIdempotencyKey[idempotencyKey] = append(
+				byIdempotencyKey[idempotencyKey],
+				task,
+			)
 		}
 	}
 	selected := make([]reliabletask.ReliableAsyncTask, 0, len(request.Jobs))
 	for _, job := range request.Jobs {
 		jobID := strings.TrimSpace(job.JobID)
-		matches := byJobID[jobID]
+		expectedKey, err := job.ValidateIdentity()
+		if err != nil {
+			return nil, err
+		}
+		matches := byIdempotencyKey[expectedKey]
 		if len(matches) > 1 {
 			return nil, fmt.Errorf(
-				"data content request job %q has %d remote tasks; refusing ambiguous result projection",
+				"data content request idempotency key for job %q has %d remote tasks; refusing ambiguous result projection",
 				jobID,
 				len(matches),
 			)
@@ -400,13 +539,12 @@ func SelectExecutionTasks(
 			continue
 		}
 		task := matches[0]
-		expectedKey, err := job.ValidateIdentity()
-		if err != nil {
-			return nil, err
-		}
 		if task.IdempotencyKey != expectedKey ||
 			task.DedupeKey != expectedKey ||
 			task.PartitionKey != job.PartitionKey ||
+			task.Payload["jobSetEnvelopeDigest"] != job.JobSetEnvelopeDigest ||
+			task.Payload["jobSetDigest"] != job.JobSetDigest ||
+			task.Payload["actualTaskDigest"] != job.ActualTaskDigest ||
 			task.Payload["idempotencyKey"] != expectedKey ||
 			task.Payload["executionId"] != request.ExecutionID ||
 			task.Payload["jobId"] != jobID {

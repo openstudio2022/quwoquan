@@ -14,7 +14,7 @@
 
 ### In Scope
 
-- production 源码到 domain/context/object 覆盖单元的反向归属。
+- production 源码到 service/context/object 覆盖单元的反向归属。
 - App line/branch、服务 statement 与语义 decision table 的对象级结果和不回退棘轮。
 - 覆盖结构入口、runner 结果与三层 CaseResult 的证据边界。
 
@@ -29,7 +29,7 @@
 <a id="req-001"></a>
 ### REQ-001 覆盖单元由 canonical 对象路径实时派生
 
-- 每个计量单元必须由 production 的 domain/context/object 身份反向派生，不能按服务、domain 总量或人工名单合并掉对象差异。
+- 每个计量单元必须由 production 的 service/context/object 身份反向派生，不能按服务、domain 总量或人工名单合并掉对象差异。
 - 无法归属、同优先级多 owner、目标对象无计量单元或测试触达非 production 替身时必须 GATE_BLOCK。
 - App 对象报告 line 与 branch 结果。
 - Go 对象报告 statement 结果，并用状态机、权限、错误恢复、幂等与边界条件的 decision table 证明语义分支；其他 runtime 使用其原生可判定覆盖能力。
@@ -37,6 +37,8 @@
 <a id="req-002"></a>
 ### REQ-002 覆盖棘轮只接受可复核的绿测试结果
 
+- Coverage 只存在一个 `canonical coverage receipt schema`、一个 `canonical coverage rule` 与一个 canonical baseline；App、Cloud、Python 与 Ops collector 必须使用相同 object-unit identity、toolchain digest 与 receipt provenance。
+- 旧 receipt schema、旧 rule 与旧 baseline 必须硬切退休；禁止 alias、fallback、dual-read、dual-write、多版本 baseline 或把旧格式重命名成 canonical。
 - baseline 只能由测试成功且绑定 commit、配置与工具链摘要的 runner 结果形成；失败、跳过、未采集或只有结构入口的对象不得写成已测基线。
 - 同一对象的可比结果不得回退；新增 production 分支必须由职责匹配的测试触达，或保持明确未准出状态。
 - 快速反馈可以只验证受影响对象，完整准出必须使用相同归属与计算口径覆盖全部受影响对象，不得以仓库总百分比抵消单个对象缺口。
@@ -90,13 +92,11 @@
 - 影响或价值：当前覆盖计量仍以较粗粒度聚合，App 与服务并非全部对象都有来自绿测试的可比结果，且无 owner 源码与未采集对象尚不能稳定阻断，因此不能证明对象级分支风险已闭环。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
 - 依赖：对象 source owner、三层 runner 结果和覆盖 producer 的单轨接线完成。
-- 门禁接线现状：`verify_coverage_ratchet.py --scope cloud|service` 在对象 source
-  owner 单轨闭合前 fail-closed，会在 `go test -coverprofile` 采集之前返回
-  `GATE_BLOCK`，因此不产出任何覆盖数据。`quwoquan_ops/gate/gate_repo.sh` 的
-  `run_service` 曾无条件调用它，使该阶段恒为红且零证据；该调用已移除，工具侧
-  fail-closed 行为保留。当 OPEN 关闭且云侧具备 canonical object source owner、
-  `-coverpkg` 能按对象产出数据时，必须同时把调用按 `--scope cloud` 重新接回
-  `run_service`。
-- App scope 现状：`discover_app_units()` 对 `quwoquan_app/lib/l10n/**` 等无 owner
-  的横切目录 fail-closed，导致 baseline 中没有任何 `app:` 单元；该项归属
-  `object_path_map` 对象归属工作，与本 OPEN 的云侧缺口分属两条链路。
+- 门禁接线现状：collector 已按 production 物理树派生
+  `app|cloud:<service>/<context>/<object>`，Cloud `cmd` 与共享 runtime 进入独立
+  cross-cutting 单元；Go coverprofile 在逐文件/基本块层分桶，不再以 domain 合并。
+  `quwoquan_ops/gate/gate_repo.sh` 的 `run_service` 已恢复 `--scope cloud` 真采集。
+- tracked baseline 仍是已退休旧格式且缺可复核 receipt，不能由 source 改造、兼容读取或
+  局部采集自动迁移。旧 baseline 必须删除；只有 App/Cloud/Python 同一 source checkpoint
+  下测试全绿、全部单元真实采集并绑定 canonical coverage receipt 后，唯一 baseline owner
+  才能一次性写入 canonical baseline。在此之前 Delivery Gate 保持 GATE_BLOCK，本 OPEN 不关闭。

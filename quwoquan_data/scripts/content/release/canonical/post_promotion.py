@@ -166,16 +166,15 @@ def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
     promoted: list[str] = []
     failures: list[str] = []
     for post_ref in refs:
-        canonical_post = PUBLISH_ROOT / "posts" / post_ref
         try:
             promote_post_object(execution_id, post_ref)
             promoted.append(post_ref)
         except ObjectTransactionError as exc:
-            # A single non-promotable qualified ref must not unwind peers that
-            # already landed in canonical publish and already satisfy quota.
-            if (canonical_post / "manifest.json").is_file():
-                promoted.append(post_ref)
-                continue
+            # Canonical existence is not success evidence.  promote_post_object
+            # only returns for an existing object when its complete Merkle root
+            # equals this execution's transaction package.  Any error here is
+            # therefore a non-promoted ref (including execution/source drift)
+            # and must never count toward quota or enter publish_ref.
             failures.append(f"{post_ref}: {exc}")
     required = approved_quota(execution_id)
     if len(promoted) < required:

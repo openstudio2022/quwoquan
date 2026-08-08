@@ -313,6 +313,48 @@ def _qualified_entity_names(verdict: Any) -> tuple[str, ...]:
     return tuple(names)
 
 
+def _write_homepage_independent_review_repairs(ctx: ExecutionContext) -> None:
+    """Turn failed independent reviews into object-bound author retry input."""
+    from governance.coverage.entity_extract import entity_ref, require_domain_etype
+
+    from content.execution.controller.homepage_author_finalization import (
+        _write_homepage_repair_report,
+    )
+    from content.homepage.homepage_review import _entity_draft_dir
+    from core.io import read_json
+
+    for target in ctx.spec.scope.coverage_targets:
+        domain, entity_type = require_domain_etype(
+            target.entity_type,
+            context=target.name,
+        )
+        draft_dir = _entity_draft_dir(
+            ctx.execution_id,
+            domain,
+            entity_type,
+            target.name,
+        )
+        result_path = draft_dir.parent / "5.review" / "reviewer_result.json"
+        if not result_path.is_file():
+            continue
+        result = read_json(result_path)
+        if not isinstance(result, Mapping) or result.get("verdict") != "failed":
+            continue
+        issues = tuple(
+            str(item).strip()
+            for item in (result.get("issues") or [])
+            if str(item).strip()
+        )
+        if not issues:
+            continue
+        _write_homepage_repair_report(
+            ctx,
+            object_dir=draft_dir.parent,
+            ref=entity_ref(domain, entity_type, target.name),
+            materialization_messages=issues,
+        )
+
+
 def _run_build_validate(ctx: ExecutionContext) -> StageResult:
     from content.execution.controller.homepage_review_stage import (
         independent_reviewer_precondition_issues,
@@ -399,6 +441,7 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
         issues = reviewed.blocking_issues() or [
             "homepage independent review produced no qualified objects"
         ]
+        _write_homepage_independent_review_repairs(ctx)
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
@@ -425,6 +468,6 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
         ExecutionStage.BUILD_VALIDATE,
         AUTO,
         StageStatus.DONE,
-        "主页采纳门与独立审阅达标 "
-        f"{reviewed.qualified_count}/{reviewed.approved_quota}",
+        "主页采纳门与独立审阅部分通过（合格 "
+        f"{reviewed.qualified_count}/{reviewed.approved_quota}）",
     )

@@ -41,6 +41,14 @@ func observedExecutionEnvelopeDigest() string {
 	return "sha256:" + strings.Repeat("6", 64)
 }
 
+func observedJobSetEnvelopeDigest() string {
+	return "sha256:" + strings.Repeat("7", 64)
+}
+
+func observedJobSetDigest() string {
+	return "sha256:" + strings.Repeat("8", 64)
+}
+
 func (s readyObservationStub) Observe(
 	_ context.Context,
 	_ int64,
@@ -87,7 +95,56 @@ func observedTask(
 		task.Payload[key] = value
 	}
 	task.Payload["executionEnvelopeDigest"] = observedExecutionEnvelopeDigest()
+	task.Payload["jobSetEnvelopeDigest"] = observedJobSetEnvelopeDigest()
+	task.Payload["jobSetDigest"] = observedJobSetDigest()
+	task.Payload["actualTaskDigest"] = observedJobSetDigest()
 	return task
+}
+
+func observedRequest(
+	t *testing.T,
+	executionID string,
+	carrier string,
+	tasks ...*ReliableAsyncTask,
+) DataContentExecutionObservationRequest {
+	t.Helper()
+	values := make([]ReliableAsyncTask, 0, len(tasks))
+	envelopeDigest := ""
+	for _, task := range tasks {
+		if envelopeDigest == "" {
+			envelopeDigest = task.Payload["jobSetEnvelopeDigest"]
+		} else if task.Payload["jobSetEnvelopeDigest"] != envelopeDigest {
+			t.Fatal("observer request tasks span job-set envelopes")
+		}
+		values = append(values, *task)
+	}
+	digest, err := DataContentAsyncTaskDigest(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range tasks {
+		task.Payload["jobSetDigest"] = digest
+		task.Payload["actualTaskDigest"] = digest
+	}
+	return DataContentExecutionObservationRequest{
+		ExecutionID:             executionID,
+		Carrier:                 carrier,
+		Stage:                   "author",
+		RequestBindingDigest:    "sha256:" + strings.Repeat("b", 64),
+		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
+		JobSetEnvelopeDigest:    envelopeDigest,
+		JobSetDigest:            digest,
+		ActualTaskDigest:        digest,
+		Campaign:                observedCampaignBinding(),
+	}
+}
+
+func bindObservedTaskToRequest(
+	task *ReliableAsyncTask,
+	request DataContentExecutionObservationRequest,
+) {
+	task.Payload["jobSetDigest"] = request.JobSetDigest
+	task.Payload["actualTaskDigest"] = request.ActualTaskDigest
 }
 
 func TestDataContentObserverBindsMongoAndRedisToOneExecution(t *testing.T) {
@@ -109,6 +166,9 @@ func TestDataContentObserverBindsMongoAndRedisToOneExecution(t *testing.T) {
 		now.Add(-3*time.Minute),
 		now.Add(-30*time.Second),
 	)
+	request := observedRequest(
+		t, executionID, "homepage", &readyTask, &succeededTask,
+	)
 	observer := DataContentExecutionObserver{
 		Store: observationStoreStub{tasks: []ReliableAsyncTask{
 			readyTask,
@@ -122,13 +182,6 @@ func TestDataContentObserverBindsMongoAndRedisToOneExecution(t *testing.T) {
 			PendingCount: 0,
 		}},
 		Now: func() time.Time { return now },
-	}
-	request := DataContentExecutionObservationRequest{
-		ExecutionID:             executionID,
-		Carrier:                 "homepage",
-		RequestBindingDigest:    "sha256:" + strings.Repeat("b", 64),
-		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
-		Campaign:                observedCampaignBinding(),
 	}
 	observation, err := observer.ObserveExecution(context.Background(), request)
 	if err != nil {
@@ -170,6 +223,7 @@ func TestDataContentObserverRejectsCrossExecutionRedisEntry(t *testing.T) {
 	now := time.Now().UTC()
 	executionID := "20260806--travel-image-m3--china--scale-001"
 	task := observedTask(executionID, "image", "job-image", TaskStatusReady, now, now)
+	request := observedRequest(t, executionID, "image", &task)
 	observer := DataContentExecutionObserver{
 		Store: observationStoreStub{tasks: []ReliableAsyncTask{task}},
 		Ready: readyObservationStub{snapshot: ReadyIndexObservation{
@@ -182,16 +236,49 @@ func TestDataContentObserverRejectsCrossExecutionRedisEntry(t *testing.T) {
 	}
 	_, err := observer.ObserveExecution(
 		context.Background(),
-		DataContentExecutionObservationRequest{
-			ExecutionID:             executionID,
-			Carrier:                 "image",
-			RequestBindingDigest:    "sha256:" + strings.Repeat("c", 64),
-			ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
-			Campaign:                observedCampaignBinding(),
-		},
+		request,
 	)
 	if err == nil || !strings.Contains(err.Error(), "crossed executionId") {
 		t.Fatalf("cross execution Redis row was not rejected: %v", err)
+	}
+}
+
+func TestDataContentObserverDoesNotMixSameStageAttempts(t *testing.T) {
+	now := time.Now().UTC()
+	executionID := "20260806--travel-image-m3--china--scale-001"
+	prior := observedTask(
+		executionID, "image", "job-image", TaskStatusSucceeded, now, now,
+	)
+	prior.TaskID = "runtime-prior-attempt"
+	_ = observedRequest(t, executionID, "image", &prior)
+	current := observedTask(
+		executionID, "image", "job-image", TaskStatusReady, now, now,
+	)
+	current.TaskID = "runtime-current-attempt"
+	current.Payload["jobSetEnvelopeDigest"] = "sha256:" + strings.Repeat("6", 64)
+	current.Payload["sourceRevision"] = "sha256:" + strings.Repeat("d", 64)
+	current.IdempotencyKey = executionID + "|" + current.Payload["entityRef"] +
+		"|image|" + current.Payload["sourceRevision"] + "|author"
+	current.Payload["idempotencyKey"] = current.IdempotencyKey
+	request := observedRequest(t, executionID, "image", &current)
+	observer := DataContentExecutionObserver{
+		Store: observationStoreStub{tasks: []ReliableAsyncTask{prior, current}},
+		Ready: readyObservationStub{snapshot: ReadyIndexObservation{
+			Entries: []ReadyIndexObservationEntry{
+				{TaskID: prior.TaskID, EnqueuedAt: now},
+				{TaskID: current.TaskID, EnqueuedAt: now},
+			},
+		}},
+		Now: func() time.Time { return now },
+	}
+
+	observation, err := observer.ObserveExecution(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(observation.Tasks) != 1 || observation.RedisEntryCount != 1 ||
+		observation.Tasks[0].SourceRevision != current.Payload["sourceRevision"] {
+		t.Fatalf("observer mixed stage attempts: %#v", observation)
 	}
 }
 
@@ -199,17 +286,11 @@ func TestDataContentObserverRejectsMongoCarrierAndSourceIdentityDrift(t *testing
 	now := time.Now().UTC()
 	executionID := "20260806--travel-video-m3--china--scale-001"
 	task := observedTask(executionID, "image", "job-video", TaskStatusReady, now, now)
+	request := observedRequest(t, executionID, "video", &task)
 	observer := DataContentExecutionObserver{
 		Store: observationStoreStub{tasks: []ReliableAsyncTask{task}},
 		Ready: readyObservationStub{},
 		Now:   func() time.Time { return now },
-	}
-	request := DataContentExecutionObservationRequest{
-		ExecutionID:             executionID,
-		Carrier:                 "video",
-		RequestBindingDigest:    "sha256:" + strings.Repeat("d", 64),
-		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
-		Campaign:                observedCampaignBinding(),
 	}
 	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
 		!strings.Contains(err.Error(), "identity drift") {
@@ -218,9 +299,10 @@ func TestDataContentObserverRejectsMongoCarrierAndSourceIdentityDrift(t *testing
 
 	task = observedTask(executionID, "video", "job-video", TaskStatusReady, now, now)
 	task.Payload["sourceRevision"] = "sha256:" + strings.Repeat("e", 64)
+	bindObservedTaskToRequest(&task, request)
 	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
 	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
-		!strings.Contains(err.Error(), "source identity drift") {
+		!strings.Contains(err.Error(), "actual task digest drift") {
 		t.Fatalf("source drift was not rejected: %v", err)
 	}
 }
@@ -228,13 +310,6 @@ func TestDataContentObserverRejectsMongoCarrierAndSourceIdentityDrift(t *testing
 func TestDataContentObserverRejectsMongoCampaignGenerationAndSourceDrift(t *testing.T) {
 	now := time.Now().UTC()
 	executionID := "20260806--travel-article-m100--china--scale-001"
-	request := DataContentExecutionObservationRequest{
-		ExecutionID:             executionID,
-		Carrier:                 "article",
-		RequestBindingDigest:    "sha256:" + strings.Repeat("6", 64),
-		ExecutionEnvelopeDigest: observedExecutionEnvelopeDigest(),
-		Campaign:                observedCampaignBinding(),
-	}
 	task := observedTask(
 		executionID,
 		"article",
@@ -243,6 +318,7 @@ func TestDataContentObserverRejectsMongoCampaignGenerationAndSourceDrift(t *test
 		now.Add(-time.Minute),
 		now,
 	)
+	request := observedRequest(t, executionID, "article", &task)
 	observer := DataContentExecutionObserver{
 		Store: observationStoreStub{tasks: []ReliableAsyncTask{task}},
 		Ready: readyObservationStub{},
@@ -263,6 +339,23 @@ func TestDataContentObserverRejectsMongoCampaignGenerationAndSourceDrift(t *test
 		now.Add(-time.Minute),
 		now,
 	)
+	bindObservedTaskToRequest(&task, request)
+	task.Payload["jobSetDigest"] = "sha256:" + strings.Repeat("9", 64)
+	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
+	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
+		!strings.Contains(err.Error(), "job-set identity drift") {
+		t.Fatalf("job-set drift was not rejected: %v", err)
+	}
+
+	task = observedTask(
+		executionID,
+		"article",
+		"job-article",
+		TaskStatusSucceeded,
+		now.Add(-time.Minute),
+		now,
+	)
+	bindObservedTaskToRequest(&task, request)
 	task.Payload["campaignGeneration"] = "8"
 	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
 	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||
@@ -278,6 +371,7 @@ func TestDataContentObserverRejectsMongoCampaignGenerationAndSourceDrift(t *test
 		now.Add(-time.Minute),
 		now,
 	)
+	bindObservedTaskToRequest(&task, request)
 	task.Payload["campaignSourceDigest"] = "sha256:" + strings.Repeat("9", 64)
 	observer.Store = observationStoreStub{tasks: []ReliableAsyncTask{task}}
 	if _, err := observer.ObserveExecution(context.Background(), request); err == nil ||

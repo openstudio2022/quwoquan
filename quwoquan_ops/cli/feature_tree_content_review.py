@@ -412,9 +412,14 @@ def validate_acceptance(review: Review, text: str, node: feature_tree.Node, refs
         review.issues.append(f"验收锚点必须只使用 {expected_kind}")
     pending = feature_tree.acceptance_refs_in_open(node.spec)
     all_refs = {ref for values in refs.values() for ref in values}
+    clause_counts = feature_tree.acceptance_clause_counts(node.spec)
     for acceptance_id in review.acceptance:
         canonical = feature_tree.canonical_spec_ref(node.spec, acceptance_id)
-        if canonical in all_refs:
+        clause_refs = {
+            f"{canonical}.t{index}"
+            for index in range(1, clause_counts.get(acceptance_id, 0) + 1)
+        }
+        if canonical in all_refs or bool(clause_refs & all_refs):
             review.evidence.append(canonical)
         elif acceptance_id not in pending:
             review.issues.append(f"{acceptance_id} 既无真实 spec_ref，也未由同节点 OPEN 声明未完成")

@@ -81,3 +81,11 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_turn_view/terminal_history__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: assistant_turn_view_list_session_turns_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListSessionTurns}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_query_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

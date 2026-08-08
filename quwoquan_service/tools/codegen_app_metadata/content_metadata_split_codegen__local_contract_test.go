@@ -176,10 +176,13 @@ func TestCanonicalContentMetadataIsDerivedFromContractSource(t *testing.T) {
 		t.Fatal("canonical Content UI config is empty")
 	}
 	feedCategoryToType := uiDef.FeedRequestTypeByCategory
-	snapshotLimits := buildPostSnapshotFieldByteLimits(
+	snapshotLimits, err := buildPostSnapshotFieldByteLimits(
 		post.Fields,
-		projection.ClientProjection.Fields,
+		projection,
 	)
+	if err != nil {
+		t.Fatalf("derive Post snapshot field byte limits: %v", err)
+	}
 
 	appDir := t.TempDir()
 	beginGeneratedManifestForTest(t, appDir, "source-content-graph")
@@ -214,8 +217,41 @@ func TestCanonicalContentMetadataIsDerivedFromContractSource(t *testing.T) {
 		"lib/service/content_service/content/post/domain/generated/"+
 			"content_post_snapshot_policy.g.dart",
 	))
-	if want := renderContentPostSnapshotPolicyDart(snapshotLimits); snapshot != want {
-		t.Fatal("source-derived Content snapshot policy differs from canonical render")
+	// 逐字段 UTF-8 byte admission 是 App 本地 QuerySnapshot 写盘前的 fail-closed
+	// 依据。空限额表等于该准入完全失效，因此这里断言真实字节数，不与自身 render
+	// 互比。
+	if len(snapshotLimits) == 0 {
+		t.Fatal("source-derived Post snapshot field byte limits are empty")
+	}
+	t.Logf("source-derived Post snapshot field byte limits: %#v", snapshotLimits)
+	// projection 自己声明的限额与聚合字段声明的限额都必须落进同一张准入表。
+	for field, limit := range projectionDeclaredByteLimitsForTest(projection) {
+		if snapshotLimits[field] != limit {
+			t.Fatalf(
+				"projection-declared max_utf8_bytes %d for %s is missing from the snapshot policy (got %d)",
+				limit,
+				field,
+				snapshotLimits[field],
+			)
+		}
+	}
+	for field, limit := range canonicalPostFieldByteLimitsForTest(t, post.Fields) {
+		want := "'" + field + "': " + fmt.Sprint(limit)
+		if !strings.Contains(snapshot, want) {
+			t.Fatalf(
+				"source-derived Content snapshot policy misses %q; got:\n%s",
+				want,
+				snapshot,
+			)
+		}
+		if snapshotLimits[field] != limit {
+			t.Fatalf(
+				"source-derived Post snapshot limit for %s is %d, canonical fields.yaml declares %d",
+				field,
+				snapshotLimits[field],
+				limit,
+			)
+		}
 	}
 	for field, limit := range snapshotLimits {
 		want := "'" + field + "': " + fmt.Sprint(limit)
@@ -223,6 +259,45 @@ func TestCanonicalContentMetadataIsDerivedFromContractSource(t *testing.T) {
 			t.Fatalf("source-derived Content snapshot policy misses %q", want)
 		}
 	}
+}
+
+func projectionDeclaredByteLimitsForTest(
+	projection *projectionFile,
+) map[string]int {
+	declared := map[string]int{}
+	for _, field := range projection.canonicalClientFields() {
+		if field.MaxUTF8Bytes > 0 {
+			declared[field.Name] = field.MaxUTF8Bytes
+		}
+	}
+	return declared
+}
+
+// canonicalPostFieldByteLimitsForTest 从 canonical Post fields.yaml 读出声明了
+// max_utf8_bytes 的字段，并把当前契约事实 pin 成精确字节数。契约值变化时这里先
+// 失败，避免生成链退化成「与自身比较」的空断言。
+func canonicalPostFieldByteLimitsForTest(
+	t *testing.T,
+	fields []fieldDef,
+) map[string]int {
+	t.Helper()
+	declared := map[string]int{}
+	for _, field := range fields {
+		if field.MaxUTF8Bytes > 0 {
+			declared[field.Name] = field.MaxUTF8Bytes
+		}
+	}
+	for field, limit := range map[string]int{"authorId": 128, "title": 320} {
+		if declared[field] != limit {
+			t.Fatalf(
+				"canonical Post fields.yaml declares max_utf8_bytes %d for %s, expected %d",
+				declared[field],
+				field,
+				limit,
+			)
+		}
+	}
+	return declared
 }
 
 func readCanonicalContentGeneratedTestFile(t *testing.T, path string) string {

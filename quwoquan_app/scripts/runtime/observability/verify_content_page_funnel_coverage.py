@@ -15,20 +15,16 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
 from dataclasses import dataclass
 import json
-from pathlib import Path
 import re
-import sys
 from typing import Any
 
 import yaml
 
+from _common.paths import APP_ROOT, REPO_ROOT
+from _common.storage_contract_view import load_storage_contract_view
 
-REPO_ROOT = _PATHS.REPO_ROOT
-APP_ROOT = REPO_ROOT / "quwoquan_app"
 PAGE_CONTRACT = (
     REPO_ROOT
     / "quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml"
@@ -232,7 +228,7 @@ def _elasticsearch_parts(
     issues: list[str],
 ) -> tuple[set[str], dict[str, str], dict[str, str]]:
     storage = _mapping(
-        yaml.safe_load(storage_path.read_text(encoding="utf-8")),
+        load_storage_contract_view(storage_path),
         str(storage_path),
         issues,
     )

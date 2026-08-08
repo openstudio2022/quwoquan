@@ -132,3 +132,65 @@ def test_status__reports_unsafe_active_candidate_without_traceback__local_contra
         }
     ]
     assert report["candidateWorkspace"]["status"] == "unavailable"
+
+
+def test_status__reports_stale_provider_runtime_identity_without_traceback__local_contract(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    report_dir = tmp_path / "status"
+    topology = {"targets": {"beta-local": {"env": "beta"}}}
+
+    monkeypatch.setattr(stackctl, "load_environment_topology", lambda: topology)
+    monkeypatch.setattr(
+        stackctl,
+        "get_target",
+        lambda _topology, _target: {"env": "beta"},
+    )
+    monkeypatch.setattr(stackctl, "resolve_report_dir", lambda *_args: report_dir)
+    monkeypatch.setattr(stackctl, "_current_runtime_health_scope", lambda _target: "full")
+    monkeypatch.setattr(
+        stackctl,
+        "_health_checks_for_target",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("GATE_BLOCK: beta-local startup Provider runtime identity is not current")
+        ),
+    )
+    monkeypatch.setattr(stackctl, "_script_probe_plan_for_target", lambda *_args: [])
+    monkeypatch.setattr(
+        stackctl,
+        "_candidate_workspace_report",
+        lambda _target: {"status": "stale", "drifted": True, "issues": []},
+    )
+
+    result = stackctl.command_status(
+        argparse.Namespace(
+            target="beta-local",
+            output_format="json",
+            report_dir=str(report_dir),
+        )
+    )
+
+    assert result["exitCode"] == 1
+    assert result["details"] == [
+        "config/active-candidate failed: ERR candidate://beta-local: "
+        "health check resolution blocked: GATE_BLOCK: beta-local startup Provider "
+        "runtime identity is not current"
+    ]
+    report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["readOnly"] is True
+    assert report["checks"] == [
+        {
+            "name": "active-candidate",
+            "scope": "config",
+            "type": "candidate",
+            "url": "candidate://beta-local",
+            "ok": False,
+            "statusCode": None,
+            "bodyPreview": (
+                "health check resolution blocked: GATE_BLOCK: beta-local startup "
+                "Provider runtime identity is not current"
+            ),
+            "skipped": False,
+        }
+    ]

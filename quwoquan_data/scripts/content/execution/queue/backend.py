@@ -15,11 +15,20 @@ from core.schema import assert_valid
 
 from content.execution import store
 from content.execution.identity import parse_execution_id, validate_execution_id
+from content.execution.queue.reliabletask.job_set import (
+    RELIABLETASK_JOB_SET_ENVELOPE_DIR,
+    ReliableTaskJobSetCollisionError,
+    freeze_job_set as freeze_reliabletask_job_set,
+    job_set_envelope_path as reliabletask_job_set_envelope_path,
+    load_job_sets as load_reliabletask_job_set_envelopes,
+)
+from content.execution.runtime_evidence.reliabletask_observer_build import (
+    prepare_controller_observer_binary,
+)
 from content.execution.runtime_evidence.reliabletask_process import (
     load_frozen_campaign_observer_context,
     load_frozen_campaign_worker_binary_binding,
     load_frozen_observer_binary_binding,
-    prepare_controller_observer_binary,
 )
 from content.execution.workspace import (
     execution_root,
@@ -37,8 +46,12 @@ def queue_backend_envelope_path(execution_id: str) -> Path:
 
 
 def _digest(payload: Mapping[str, Any]) -> str:
+    return _digest_any(dict(payload))
+
+
+def _digest_any(payload: object) -> str:
     encoded = json.dumps(
-        dict(payload),
+        payload,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -55,11 +68,29 @@ def _approved_quota(spec: Mapping[str, Any]) -> int:
     return value
 
 
-def _m100_plus(execution_id: str, spec: Mapping[str, Any]) -> bool:
+def _scale_class(execution_id: str, spec: Mapping[str, Any]) -> str:
     identity = parse_execution_id(execution_id)
     match = _M_SCALE_RE.fullmatch(identity.intent)
     intent_scale = int(match.group("count")) if match else 0
-    return max(intent_scale, _approved_quota(spec)) >= 100
+    scale = max(intent_scale, _approved_quota(spec))
+    if scale >= 10_000:
+        return "M10000_PLUS"
+    if scale >= 100:
+        return "M100_PLUS"
+    return "BELOW_M100"
+
+
+def _campaign_scale(execution_id: str, spec: Mapping[str, Any]) -> str:
+    identity = parse_execution_id(execution_id)
+    match = _M_SCALE_RE.fullmatch(identity.intent)
+    count = int(match.group("count")) if match else _approved_quota(spec)
+    if count < 1 or count > 100_000:
+        raise ValueError("execution campaign scale is outside the governed range")
+    return f"M{count}"
+
+
+def _requires_governed_observer(scale_class: object) -> bool:
+    return scale_class in {"M100_PLUS", "M10000_PLUS"}
 
 
 def _queue_policy(spec: Mapping[str, Any]) -> dict[str, Any]:
@@ -93,10 +124,10 @@ def freeze_execution_queue_backend(
     policy = _queue_policy(effective_spec)
     backend = QueueBackend(str(policy["backend"]))
     approved_quota = _approved_quota(effective_spec)
-    scale_class = "M100_PLUS" if _m100_plus(normalized, effective_spec) else "BELOW_M100"
-    if scale_class == "M100_PLUS" and backend is not QueueBackend.RELIABLE_TASK:
+    scale_class = _scale_class(normalized, effective_spec)
+    if _requires_governed_observer(scale_class) and backend is not QueueBackend.RELIABLE_TASK:
         raise ValueError(
-            "M100+ immutable queue backend must be reliabletask; "
+            f"{scale_class} immutable queue backend must be reliabletask; "
             f"observed {backend.value}"
         )
     observer_binding: dict[str, object] = {}
@@ -104,7 +135,7 @@ def freeze_execution_queue_backend(
         campaign_bound = bool(
             str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip()
         )
-        if scale_class == "M100_PLUS":
+        if _requires_governed_observer(scale_class):
             binding = load_frozen_observer_binary_binding()
             context = load_frozen_campaign_observer_context()
             source_digest = frozen_manifest.get("sourceDigest")
@@ -128,6 +159,7 @@ def freeze_execution_queue_backend(
     stable = {
         "schema": QUEUE_BACKEND_ENVELOPE_SCHEMA,
         "executionId": normalized,
+        "campaignScale": _campaign_scale(normalized, effective_spec),
         "scaleClass": scale_class,
         "approvedQuota": approved_quota,
         "queueBackend": backend.value,
@@ -188,14 +220,15 @@ def load_execution_queue_backend(
         backend = QueueBackend(str(payload.get("queueBackend") or ""))
     except ValueError as exc:
         raise ValueError("queue backend envelope backend is invalid") from exc
-    if payload.get("scaleClass") == "M100_PLUS" and backend is not QueueBackend.RELIABLE_TASK:
+    if _requires_governed_observer(payload.get("scaleClass")) and backend is not QueueBackend.RELIABLE_TASK:
         raise ValueError("M100+ queue backend envelope must bind reliabletask")
     if verify_inputs:
         spec = store.load_spec(normalized)
         manifest = load_frozen_execution_manifest(normalized)
         policy = _queue_policy(spec)
         expected = {
-            "scaleClass": "M100_PLUS" if _m100_plus(normalized, spec) else "BELOW_M100",
+            "campaignScale": _campaign_scale(normalized, spec),
+            "scaleClass": _scale_class(normalized, spec),
             "approvedQuota": _approved_quota(spec),
             "queueBackend": str(policy["backend"]),
             "queuePolicyDigest": _digest(policy),
@@ -256,8 +289,12 @@ def resolve_execution_queue_backend(
 
 __all__ = [
     "QUEUE_BACKEND_ENVELOPE_REF",
+    "RELIABLETASK_JOB_SET_ENVELOPE_DIR",
     "freeze_execution_queue_backend",
+    "freeze_reliabletask_job_set",
     "load_execution_queue_backend",
+    "load_reliabletask_job_set_envelopes",
     "queue_backend_envelope_path",
+    "reliabletask_job_set_envelope_path",
     "resolve_execution_queue_backend",
 ]

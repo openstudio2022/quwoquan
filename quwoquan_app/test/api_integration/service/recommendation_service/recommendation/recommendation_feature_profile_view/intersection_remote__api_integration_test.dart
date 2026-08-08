@@ -6,14 +6,16 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/runtime/api_contract/recommendation_api_contract_harness.dart';
 
 void main() {
-  late RecommendationApiContractHarness harness;
+  RecommendationApiContractHarness? harness;
 
   setUpAll(() async => harness = await RecommendationApiContractHarness.create());
-  tearDownAll(() => harness.close());
+  tearDownAll(() async {
+    await harness?.close();
+  });
 
   test('generated Remote 读取 my intersection summary', () async {
     final stopwatch = Stopwatch()..start();
-    final summary = await harness.intersections.getMyIntersectionSummary();
+    final summary = await harness!.intersections.getMyIntersectionSummary();
     stopwatch.stop();
 
     expect(stopwatch.elapsedMilliseconds, lessThan(1500));
@@ -22,7 +24,7 @@ void main() {
   });
 
   test('generated Remote 列出 my intersections inbox', () async {
-    final inbox = await harness.intersections.listMyIntersections(limit: 10);
+    final inbox = await harness!.intersections.listMyIntersections(limit: 10);
 
     expect(inbox, isA<List<IntersectionReason>>());
   });

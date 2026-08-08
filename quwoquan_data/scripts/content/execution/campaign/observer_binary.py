@@ -14,11 +14,13 @@ from core.schema import assert_valid
 from content.execution.campaign.submission import campaign_root
 from content.execution.campaign.workspace import CampaignRuntimePaths
 from content.execution.identity import validate_execution_id
+from content.execution.runtime_evidence.reliabletask_observer_build import (
+    observer_build_attestation_digest,
+    prepare_controller_observer_binary,
+)
 from content.execution.runtime_evidence.reliabletask_process import (
     PreparedReliableTaskObserverBinary,
     ReliableTaskObserverBinaryBinding,
-    observer_build_attestation_digest,
-    prepare_controller_observer_binary,
     validate_frozen_observer_binary,
 )
 

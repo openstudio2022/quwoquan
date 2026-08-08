@@ -22,6 +22,8 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/social_relation_search_item_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show editProfileParticipantSlots;
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/edit_profile_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
@@ -226,9 +228,7 @@ class _EmptyProfileProposalQuery implements ProfileUpdateProposalReader {
   Future<ProfileUpdateProposalSlice> list(
     ProfileUpdateProposalListQuery query,
   ) async {
-    return ProfileUpdateProposalSlice(
-      items: <ProfileUpdateProposalView>[],
-    );
+    return ProfileUpdateProposalSlice(items: <ProfileUpdateProposalView>[]);
   }
 }
 
@@ -421,7 +421,9 @@ void main() {
                 routes: [
                   GoRoute(
                     path: 'edit',
-                    builder: (context, state) => EditProfilePage(),
+                    builder: (context, state) => const EditProfilePage(
+                      participantSlots: editProfileParticipantSlots,
+                    ),
                   ),
                 ],
               ),

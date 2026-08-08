@@ -66,7 +66,7 @@ void main() {
         commentCount: 2,
         shareCount: 1,
         createdAt: DateTime.utc(2026),
-        contentVertical: 'retired-travel-bucket',
+        contentVertical: 'photography',
         recallPath: 'circle_feed',
         supplySource: 'creator',
         pinned: true,

@@ -10,13 +10,40 @@ from types import SimpleNamespace
 import content.execution.campaign.request_envelope as envelopes
 import pytest
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.scale.capacity_plan import throughput_basis_digest
 from content.execution.scale import promotion as scale_promotion
+from core.paths import research_scale_promotions_root
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
+def _capacity_throughput_row(
+    *,
+    carrier: str,
+    measured_scale: str,
+    source_revision: str,
+    source_digest: str,
+    entity_catalog_digest: str,
+) -> dict[str, object]:
+    row: dict[str, object] = {
+        "carrier": carrier,
+        "measuredScale": measured_scale,
+        "sourceRevision": source_revision,
+        "sourceDigest": source_digest,
+        "entityCatalogDigest": entity_catalog_digest,
+        "throughputUnit": "objects_per_second_per_slot",
+        "perSlotThroughputSamples": [0.01] * 10,
+        "evidenceRef": "data/local/campaign/resource-soak.json",
+        "evidenceDigest": "sha256:" + "2" * 64,
+    }
+    row["throughputBasisDigest"] = throughput_basis_digest(row)
+    return row
+
+
 def _patch_envelope_deps(monkeypatch) -> None:
+    from content.execution.campaign import request_envelope_build
+
     monkeypatch.setattr(
         envelopes,
         "_require_stable_source_inputs",
@@ -67,6 +94,35 @@ def _patch_envelope_deps(monkeypatch) -> None:
             },
         ),
     )
+    def bind_pool(_path: Path, **kwargs: object):
+        carrier = str(kwargs["carrier"])
+        count = int(kwargs["count"])
+        binding = {
+            "poolId": "pool-local-contract",
+            "targetScale": str(kwargs["target_scale"]),
+            "sourceRevision": str(kwargs["source_revision"]),
+            "sourceDigest": str(kwargs["source_digest"]),
+            "entityCatalogDigest": str(kwargs["entity_catalog_digest"]),
+            "planRef": "data/local/workspace/source-pool/plan.json",
+            "planDigest": "sha256:" + "4" * 64,
+            "planFileSha256": "sha256:" + "5" * 64,
+        }
+        selection = {
+            "carrier": carrier,
+            "candidateIds": [f"{carrier}-{index:05d}" for index in range(count)],
+            "candidateCount": count,
+            "selectionDigest": "sha256:" + "6" * 64,
+        }
+        return binding, "data/local/workspace/source-pool/evidence", selection
+
+    monkeypatch.setattr(request_envelope_build, "bind_scale_source_pool", bind_pool)
+
+
+def _pool_kwargs(tmp_path: Path) -> dict[str, Path]:
+    return {
+        "scale_source_pool": tmp_path / "pool.json",
+        "source_pool_evidence_root": tmp_path / "evidence",
+    }
 
 
 def _expected_count(quota: int) -> int:
@@ -187,6 +243,13 @@ def _approved_image_promotion() -> dict[str, object]:
 
 
 def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> Path:
+    output_root = path
+    path = (
+        research_scale_promotions_root(output_root=output_root)
+        / "research-release-1"
+        / "research-m100-1"
+        / "research-m100.json"
+    )
     semantic_jobs = [
         {
             "carrier": carrier,
@@ -203,6 +266,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "semanticJobTerminalIds": [
                 f"{carrier}-job-{index:02d}" for index in range(10)
             ],
+            "perSlotThroughputSamples": [0.01] * 10,
             "activeDurationSeconds": 3600,
             "activeIntervals": [
                 {
@@ -282,12 +346,34 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "sourceDigest": source_digest or ("sha256:" + ("a" * 64)),
             "entityCatalogDigest": "sha256:" + ("b" * 64),
             "targetScale": "M100",
+            "sourcePoolDigest": "sha256:" + "4" * 64,
+            "predecessorSourcePoolDigests": [],
+            "scaleStartedAt": "2026-08-05T00:00:00Z",
+            "scaleCompletedAt": "2026-08-05T01:01:00Z",
+            "wallClockBudgetSeconds": None,
+            "wallClockSeconds": 3660,
+            "capacityThroughputByCarrier": [
+                _capacity_throughput_row(
+                    carrier=carrier,
+                    measured_scale="M100",
+                    source_revision=envelopes.content_source_revision(
+                        source_digest=source_digest or ("sha256:" + ("a" * 64)),
+                        entity_catalog_digest="sha256:" + ("b" * 64),
+                    ),
+                    source_digest=source_digest or ("sha256:" + ("a" * 64)),
+                    entity_catalog_digest="sha256:" + ("b" * 64),
+                )
+                for carrier in ("homepage", "article", "image", "video")
+            ],
             "carrierCounts": [
                 {
                     "carrier": carrier,
                     "targetCount": 10 if carrier == "video" else 100,
                     "qualifiedCount": 10 if carrier == "video" else 100,
                     "finalizedCount": 10 if carrier == "video" else 100,
+                    "predecessorCarriedCount": 0,
+                    "newFinalizedCount": 10 if carrier == "video" else 100,
+                    "totalUniqueFinalizedCount": 10 if carrier == "video" else 100,
                     "selectedCount": 10 if carrier == "video" else 100,
                     "discardedCount": 0,
                     "shortfallCount": 0,
@@ -308,7 +394,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 },
                 "videoPopularity": {
                     "statistical": True,
-                    "nonBlocking": True,
+                    "nonBlocking": False,
                     "signalAvailability": [
                         {
                             "signal": signal,
@@ -348,7 +434,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 },
                 "automaticRecoveryRate": {
                     "statistical": True,
-                    "nonBlocking": True,
+                    "nonBlocking": False,
                     "status": "MEASURED",
                     "eligibleCount": 20,
                     "automaticCount": 19,
@@ -375,6 +461,21 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     for carrier in ("homepage", "article", "image", "video")
                 ],
             },
+            "professionalImageSourceMix": {
+                "acceptedImageAssetCount": 100,
+                "originalAssetClosureCount": 100,
+                "pinterestAcceptedAssetCount": 60,
+                "tuchongAcceptedAssetCount": 20,
+                "pinterestTuchongAcceptedAssetCount": 80,
+                "pinterestTuchongAcceptedAssetRatio": 0.8,
+                "largestProvider": "pinterest",
+                "maxProviderAcceptedAssetRatio": 0.6,
+                "providerAssetCounts": [
+                    {"provider": "pinterest", "acceptedAssetCount": 60, "acceptedAssetRatio": 0.6},
+                    {"provider": "tuchong", "acceptedAssetCount": 20, "acceptedAssetRatio": 0.2},
+                    {"provider": "wikimedia commons", "acceptedAssetCount": 20, "acceptedAssetRatio": 0.2},
+                ],
+            },
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,
             "resourceIsolationPassed": True,
@@ -392,11 +493,109 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "resourceSoakEvidenceDigest": "sha256:" + "2" * 64,
             "faultInjectionEvidenceRef": "data/local/campaign/fault-injection.json",
             "faultInjectionEvidenceDigest": "sha256:" + "3" * 64,
-            "m1000Eligible": True,
+            "nextScaleEligible": "M1000",
             "recordedAt": "2026-08-05T00:00:00Z",
         },
     )
     return path
+
+
+def _promotion_output_root(path: Path) -> Path:
+    suffix = Path("data/local/workspace/research-scale/promotions")
+    parts = path.resolve().parts
+    marker = suffix.parts
+    for index in range(len(parts) - len(marker) + 1):
+        if parts[index : index + len(marker)] == marker:
+            return Path(*parts[:index])
+    raise AssertionError(f"promotion fixture is not canonical: {path}")
+
+
+def _research_m1000_receipt(path: Path) -> Path:
+    m100 = _research_m100_receipt(path)
+    document = read_json(m100)
+    document.update(
+        {
+            "promotionId": "research-m1000-1",
+            "releaseId": "research-release-m1000-1",
+            "targetScale": "M1000",
+            "sourcePoolDigest": "sha256:" + "5" * 64,
+            "predecessorSourcePoolDigests": ["sha256:" + "4" * 64],
+            "scaleStartedAt": "2026-08-05T00:00:00Z",
+            "scaleCompletedAt": "2026-08-08T00:00:00Z",
+            "wallClockBudgetSeconds": 259200,
+            "wallClockSeconds": 259200,
+            "nextScaleEligible": "M10000",
+            "campaignEvidenceRef": "data/local/campaign/m1000-evidence.json",
+            "campaignEvidenceDigest": "sha256:" + "6" * 64,
+            "predecessorPromotion": {
+                "promotionId": "research-m100-1",
+                "releaseId": "research-release-1",
+                "manifestDigest": "sha256:" + "c" * 64,
+                "sourceRevision": document["sourceRevision"],
+                "sourceDigest": document["sourceDigest"],
+                "entityCatalogDigest": document["entityCatalogDigest"],
+                "targetScale": "M100",
+                "receiptRef": "data/promotions/research-m100.json",
+                "receiptDigest": "sha256:" + "9" * 64,
+            },
+        }
+    )
+    for row in document["carrierCounts"]:
+        target = 100 if row["carrier"] == "video" else 1000
+        carried = 10 if row["carrier"] == "video" else 100
+        delta = target - carried
+        row.update(
+            {
+                "targetCount": target,
+                "qualifiedCount": delta,
+                "finalizedCount": delta,
+                "predecessorCarriedCount": carried,
+                "newFinalizedCount": delta,
+                "totalUniqueFinalizedCount": target,
+                "selectedCount": delta,
+                "researchAcceptedCount": target,
+            }
+        )
+    document["statistics"]["automaticRecoveryRate"].update(
+        {"eligibleCount": 50, "automaticCount": 48, "rate": 0.96}
+    )
+    for row in document["capacityThroughputByCarrier"]:
+        row["measuredScale"] = "M1000"
+        row["throughputBasisDigest"] = throughput_basis_digest(row)
+    document["statistics"]["quotaAttainmentByCarrier"] = [
+        {
+            "carrier": carrier,
+            "numerator": 100 if carrier == "video" else 1000,
+            "denominator": 100 if carrier == "video" else 1000,
+            "rate": 1.0,
+        }
+        for carrier in ("homepage", "article", "image", "video")
+    ]
+    document["professionalImageSourceMix"].update(
+        {
+            "acceptedImageAssetCount": 1000,
+            "originalAssetClosureCount": 1000,
+            "pinterestAcceptedAssetCount": 600,
+            "tuchongAcceptedAssetCount": 200,
+            "pinterestTuchongAcceptedAssetCount": 800,
+        }
+    )
+    document["professionalImageSourceMix"]["providerAssetCounts"] = [
+        {
+            "provider": row["provider"],
+            "acceptedAssetCount": row["acceptedAssetCount"] * 10,
+            "acceptedAssetRatio": row["acceptedAssetRatio"],
+        }
+        for row in document["professionalImageSourceMix"]["providerAssetCounts"]
+    ]
+    m1000_path = (
+        research_scale_promotions_root(output_root=path)
+        / "research-release-m1000-1"
+        / "research-m1000-1"
+        / "research-m1000.json"
+    )
+    write_json(m1000_path, document)
+    return m1000_path
 
 
 def test_campaign_request_envelope_freeze__contract__local_contract_test(
@@ -413,6 +612,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
+        **_pool_kwargs(tmp_path),
     )
     assert set(first) == {"homepage", "article", "image", "video"}
     homepage = first["homepage"]
@@ -433,6 +633,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
+        **_pool_kwargs(tmp_path),
     )
     assert second["homepage"] == homepage
 
@@ -560,6 +761,7 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
             repo_root=repo,
             output_root=tmp_path,
             day="20260731",
+            **_pool_kwargs(tmp_path),
         )
     assert not tuple(tmp_path.rglob("*.json"))
 
@@ -876,7 +1078,7 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
     repo = Path(__file__).resolve().parents[4]
     _patch_envelope_deps(monkeypatch)
 
-    with pytest.raises(ValueError, match="canonical four-carrier M100 receipt"):
+    with pytest.raises(ValueError, match="M1000 requires M100 promotion"):
         envelopes.build_envelope(
             scale="M1000",
             carrier="video",
@@ -886,6 +1088,10 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
         )
 
     approved = _research_m100_receipt(tmp_path / "m100.json")
+    preflight_root = tmp_path / "semantic-output"
+    preflight_path, _binding = ready_semantic_preflight(
+        "cursor_auto", output_root=preflight_root, effective_concurrency=8
+    )
     envelope = envelopes.build_envelope(
         scale="M1000",
         carrier="video",
@@ -893,9 +1099,14 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
         repo_root=repo,
         day="20260731",
         promotion_receipt=approved,
+        promotion_output_root=_promotion_output_root(approved),
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_output_root=preflight_root,
+        **_pool_kwargs(tmp_path),
     )
-    assert envelope["quota"] == 100
-    assert envelope["count"] == _expected_count(100)
+    assert envelope["quota"] == 90
+    assert envelope["count"] == _expected_count(90)
     assert envelope["researchScalePromotion"]["promotionId"] == "research-m100-1"
 
     drifted = _research_m100_receipt(
@@ -910,6 +1121,38 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
             repo_root=repo,
             day="20260731",
             promotion_receipt=drifted,
+            promotion_output_root=_promotion_output_root(drifted),
+        )
+
+
+def test_predecessor_loader_rejects_noncanonical_path_and_count_arithmetic(
+    tmp_path: Path,
+) -> None:
+    approved = _research_m100_receipt(tmp_path / "canonical")
+    document = read_json(approved)
+    identity = {
+        "next_scale": "M1000",
+        "source_digest": {"digest": document["sourceDigest"]},
+        "entity_catalog_digest": document["entityCatalogDigest"],
+        "source_revision": document["sourceRevision"],
+    }
+
+    noncanonical = tmp_path / "research-m100.json"
+    write_json(noncanonical, document)
+    with pytest.raises(ValueError, match="canonical promotion path"):
+        envelopes._research_scale_promotion_ref(
+            noncanonical,
+            output_root=tmp_path,
+            **identity,
+        )
+
+    document["carrierCounts"][0]["predecessorCarriedCount"] = 1
+    write_json(approved, document)
+    with pytest.raises(ValueError, match="DATA.SCALE.ATTAINMENT_SHORTFALL"):
+        envelopes._research_scale_promotion_ref(
+            approved,
+            output_root=_promotion_output_root(approved),
+            **identity,
         )
 
 
@@ -920,7 +1163,7 @@ def test_travel_image_m1000_requires_matching_m100_promotion(
     repo = Path(__file__).resolve().parents[4]
     _patch_envelope_deps(monkeypatch)
 
-    with pytest.raises(ValueError, match="canonical four-carrier M100 receipt"):
+    with pytest.raises(ValueError, match="M1000 requires M100 promotion"):
         envelopes.build_envelope(
             scale="M1000",
             carrier="image",
@@ -930,6 +1173,10 @@ def test_travel_image_m1000_requires_matching_m100_promotion(
         )
 
     approved = _research_m100_receipt(tmp_path / "m100.json")
+    preflight_root = tmp_path / "semantic-output"
+    preflight_path, _binding = ready_semantic_preflight(
+        "cursor_auto", output_root=preflight_root
+    )
     envelope = envelopes.build_envelope(
         scale="M1000",
         carrier="image",
@@ -937,10 +1184,15 @@ def test_travel_image_m1000_requires_matching_m100_promotion(
         repo_root=repo,
         day="20260731",
         promotion_receipt=approved,
+        promotion_output_root=_promotion_output_root(approved),
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_output_root=preflight_root,
+        **_pool_kwargs(tmp_path),
     )
 
-    assert envelope["count"] == _expected_count(1000)
-    assert envelope["quota"] == 1000
+    assert envelope["count"] == _expected_count(900)
+    assert envelope["quota"] == 900
     assert envelope["researchScalePromotion"]["releaseId"] == "research-release-1"
 
     drifted = _research_m100_receipt(tmp_path / "m100-drifted.json")
@@ -955,7 +1207,58 @@ def test_travel_image_m1000_requires_matching_m100_promotion(
             repo_root=repo,
             day="20260731",
             promotion_receipt=drifted,
+            promotion_output_root=_promotion_output_root(drifted),
         )
+
+
+def test_m10000_consumes_m1000_cumulative_counts_as_delta(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    repo = Path(__file__).resolve().parents[4]
+    _patch_envelope_deps(monkeypatch)
+    approved = _research_m1000_receipt(tmp_path / "m1000.json")
+    preflight_root = tmp_path / "semantic-output"
+    preflight_path, _binding = ready_semantic_preflight(
+        "cursor_auto", output_root=preflight_root, effective_concurrency=8
+    )
+
+    homepage = envelopes.build_envelope(
+        scale="M10000",
+        carrier="homepage",
+        region_ref="china",
+        repo_root=repo,
+        day="20260731",
+        promotion_receipt=approved,
+        promotion_output_root=_promotion_output_root(approved),
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_output_root=preflight_root,
+        **_pool_kwargs(tmp_path),
+    )
+    video = envelopes.build_envelope(
+        scale="M10000",
+        carrier="video",
+        region_ref="china",
+        repo_root=repo,
+        day="20260731",
+        promotion_receipt=approved,
+        promotion_output_root=_promotion_output_root(approved),
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight_path,
+        semantic_preflight_output_root=preflight_root,
+        **_pool_kwargs(tmp_path),
+    )
+
+    assert homepage["quota"] == 9000
+    assert homepage["count"] == _expected_count(9000)
+    assert video["quota"] == 900
+    assert video["count"] == _expected_count(900)
+    assert homepage["researchScalePromotion"]["targetScale"] == "M1000"
+    assert homepage["researchScalePromotion"]["carrierCounts"][0] == {
+        "carrier": "homepage",
+        "totalUniqueFinalizedCount": 1000,
+    }
 
 
 def test_scale_promotion_uses_frozen_digest_without_live_git_cleanliness() -> None:
@@ -1100,6 +1403,29 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "selector": "priority",
             "quota": 10,
             "count": _expected_count(10),
+            "requiredWorkers": 1,
+            "partitionCount": 16,
+            "capacityPlanDigest": "sha256:" + "7" * 64,
+            "scaleSourcePool": {
+                "poolId": "pool-local-contract",
+                "targetScale": "M100",
+                "sourceRevision": envelopes.content_source_revision(
+                    source_digest=str(approved["sourceDigest"]["digest"]),
+                    entity_catalog_digest=str(approved["entityCatalogDigest"]),
+                ),
+                "sourceDigest": approved["sourceDigest"]["digest"],
+                "entityCatalogDigest": approved["entityCatalogDigest"],
+                "planRef": "data/local/workspace/source-pool/plan.json",
+                "planDigest": "sha256:" + "4" * 64,
+                "planFileSha256": "sha256:" + "5" * 64,
+            },
+            "sourcePoolEvidenceRootRef": "data/local/workspace/source-pool/evidence",
+            "sourcePoolSelection": {
+                "carrier": "video",
+                "candidateIds": [f"video-{index:02d}" for index in range(18)],
+                "candidateCount": 18,
+                "selectionDigest": "sha256:" + "6" * 64,
+            },
             "topic": None,
             "targetNames": [],
             "sourceProviders": [],
@@ -1156,6 +1482,29 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "selector": "priority",
                 "quota": 10,
                 "count": _expected_count(10),
+                "requiredWorkers": 1,
+                "partitionCount": 16,
+                "capacityPlanDigest": "sha256:" + "7" * 64,
+                "scaleSourcePool": {
+                    "poolId": "pool-local-contract",
+                    "targetScale": "M100",
+                    "sourceRevision": envelopes.content_source_revision(
+                        source_digest=str(approved["sourceDigest"]["digest"]),
+                        entity_catalog_digest=str(approved["entityCatalogDigest"]),
+                    ),
+                    "sourceDigest": approved["sourceDigest"]["digest"],
+                    "entityCatalogDigest": approved["entityCatalogDigest"],
+                    "planRef": "data/local/workspace/source-pool/plan.json",
+                    "planDigest": "sha256:" + "4" * 64,
+                    "planFileSha256": "sha256:" + "5" * 64,
+                },
+                "sourcePoolEvidenceRootRef": "data/local/workspace/source-pool/evidence",
+                "sourcePoolSelection": {
+                    "carrier": "video",
+                    "candidateIds": [f"video-{index:02d}" for index in range(18)],
+                    "candidateCount": 18,
+                    "selectionDigest": "sha256:" + "6" * 64,
+                },
                 "topic": None,
                 "targetNames": [],
                 "sourceProviders": [],

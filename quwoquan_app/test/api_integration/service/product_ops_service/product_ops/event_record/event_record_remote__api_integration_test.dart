@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+// readiness_case: event_record_report_event_batch_app_api
 // readiness_case: event_record_report_startup_event_batch_app_api
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;

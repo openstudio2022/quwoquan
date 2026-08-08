@@ -194,6 +194,16 @@ func TestDeletePostContract(t *testing.T) {
 		t.Fatal("published post missing _id")
 	}
 
+	forbiddenReq := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
+	forbiddenReq.Header.Set("X-Client-User-Id", "delete_intruder")
+	forbiddenReq.Header.Set("Idempotency-Key", "delete-post-forbidden")
+	forbiddenRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(forbiddenRec, forbiddenReq)
+	if forbiddenRec.Code != http.StatusForbidden ||
+		!strings.Contains(forbiddenRec.Body.String(), "CONTENT.USER.forbidden_delete") {
+		t.Fatalf("non-owner delete status=%d body=%s", forbiddenRec.Code, forbiddenRec.Body.String())
+	}
+
 	req := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	req.Header.Set("X-Client-User-Id", "delete_author")
 	req.Header.Set("Idempotency-Key", "delete-post-stable")

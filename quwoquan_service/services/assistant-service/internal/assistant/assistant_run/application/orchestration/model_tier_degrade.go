@@ -3,6 +3,8 @@ package orchestration
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 )
@@ -17,7 +19,11 @@ type TierDegradingModelProvider struct {
 func (p TierDegradingModelProvider) Complete(
 	ctx context.Context,
 	request ports.ModelCompletionRequest,
-) (ports.ModelCompletionResult, error) {
+) (result ports.ModelCompletionResult, err error) {
+	startedAt := time.Now()
+	defer func() {
+		observeModelProviderCompletion(request, result, startedAt, err)
+	}()
 	if p.Backend == nil {
 		return ports.ModelCompletionResult{}, ports.ProviderFailure{
 			Capability: "model",
@@ -28,13 +34,17 @@ func (p TierDegradingModelProvider) Complete(
 	for _, tier := range ModelTierDegradeOrder(request.Tier) {
 		attempt := request
 		attempt.Tier = tier
-		result, err := p.Backend.Complete(ctx, attempt)
-		if err == nil {
-			return result, nil
+		attemptResult, attemptErr := p.Backend.Complete(ctx, attempt)
+		if attemptErr == nil {
+			if !validModelCompletionReceipt(attemptResult) {
+				return ports.ModelCompletionResult{}, invalidModelCompletionReceipt()
+			}
+			attemptResult.ModelID = strings.TrimSpace(attemptResult.ModelID)
+			return attemptResult, nil
 		}
-		lastErr = err
-		if !modelTierDegradable(err) {
-			return ports.ModelCompletionResult{}, err
+		lastErr = attemptErr
+		if !modelTierDegradable(attemptErr) {
+			return ports.ModelCompletionResult{}, attemptErr
 		}
 	}
 	return ports.ModelCompletionResult{}, lastErr
@@ -45,7 +55,11 @@ func (p TierDegradingModelProvider) Stream(
 	ctx context.Context,
 	request ports.ModelCompletionRequest,
 	emit func(ports.ModelTextDelta) error,
-) (ports.ModelCompletionResult, error) {
+) (result ports.ModelCompletionResult, err error) {
+	startedAt := time.Now()
+	defer func() {
+		observeModelProviderCompletion(request, result, startedAt, err)
+	}()
 	if p.Backend == nil {
 		return ports.ModelCompletionResult{}, ports.ProviderFailure{
 			Capability: "model",
@@ -57,7 +71,7 @@ func (p TierDegradingModelProvider) Stream(
 		attempt := request
 		attempt.Tier = tier
 		emitted := false
-		result, err := p.Backend.Stream(
+		attemptResult, attemptErr := p.Backend.Stream(
 			ctx,
 			attempt,
 			func(delta ports.ModelTextDelta) error {
@@ -68,12 +82,16 @@ func (p TierDegradingModelProvider) Stream(
 				return emit(delta)
 			},
 		)
-		if err == nil {
-			return result, nil
+		if attemptErr == nil {
+			if !validModelCompletionReceipt(attemptResult) {
+				return ports.ModelCompletionResult{}, invalidModelCompletionReceipt()
+			}
+			attemptResult.ModelID = strings.TrimSpace(attemptResult.ModelID)
+			return attemptResult, nil
 		}
-		lastErr = err
-		if emitted || !modelTierDegradable(err) {
-			return ports.ModelCompletionResult{}, err
+		lastErr = attemptErr
+		if emitted || !modelTierDegradable(attemptErr) {
+			return ports.ModelCompletionResult{}, attemptErr
 		}
 	}
 	return ports.ModelCompletionResult{}, lastErr
@@ -102,5 +120,37 @@ func modelTierDegradable(err error) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// validModelCompletionReceipt enforces the provider-neutral success boundary.
+// Every adapter must prove which configured tier actually served the request
+// and return internally consistent usage; HTTP-specific validation alone is
+// insufficient because new adapters can implement the same domain port.
+func validModelCompletionReceipt(result ports.ModelCompletionResult) bool {
+	if strings.TrimSpace(result.ModelID) == "" || !canonicalModelTier(result.TierServed) {
+		return false
+	}
+	usage := result.Usage
+	if usage.PromptTokens < 0 || usage.CompletionTokens < 0 || usage.TotalTokens <= 0 ||
+		usage.Latency < 0 {
+		return false
+	}
+	return usage.TotalTokens >= usage.PromptTokens+usage.CompletionTokens
+}
+
+func canonicalModelTier(tier ports.ModelTier) bool {
+	switch tier {
+	case ports.ModelTierFast, ports.ModelTierBalanced, ports.ModelTierReasoning:
+		return true
+	default:
+		return false
+	}
+}
+
+func invalidModelCompletionReceipt() ports.ProviderFailure {
+	return ports.ProviderFailure{
+		Capability: "model",
+		Reason:     ports.ProviderFailureInvalidResponse,
 	}
 }

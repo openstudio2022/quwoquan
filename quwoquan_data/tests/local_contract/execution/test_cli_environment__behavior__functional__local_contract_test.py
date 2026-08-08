@@ -71,6 +71,7 @@ def test_cli_exposes_only_durable_task_facades():
         "acquire-videos",
         "review-asset",
         "reconcile-stale",
+        "reconcile-failed-campaign",
         "reconcile-submissions",
         "runtime-evidence",
     ]

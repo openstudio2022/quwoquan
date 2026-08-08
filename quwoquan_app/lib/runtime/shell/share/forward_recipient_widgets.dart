@@ -5,7 +5,7 @@ import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
 
 class ForwardRecipientListCard extends StatelessWidget {
   const ForwardRecipientListCard({

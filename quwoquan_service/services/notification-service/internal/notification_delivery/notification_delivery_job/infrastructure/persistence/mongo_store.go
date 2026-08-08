@@ -84,6 +84,13 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIndexes(ctx context.Context) e
 	if _, err := s.jobs.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
+				{Key: "notificationId", Value: 1},
+				{Key: "createdAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_notification_delivery_jobs_notification"),
+		},
+		{
+			Keys: bson.D{
 				{Key: "deliveryKey", Value: 1},
 				{Key: "destinationRef", Value: 1},
 			},

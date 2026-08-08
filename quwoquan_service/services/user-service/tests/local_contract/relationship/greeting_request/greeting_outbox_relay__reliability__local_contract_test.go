@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/user-relationship/greeting-request/spec.md
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
 package local_contract
 
 import (
@@ -45,10 +45,22 @@ func (fixture *greetingOutboxFixture) ScheduleOutboxRetry(
 	return nil
 }
 
-type greetingUserEventsFixture struct{ publishes int }
+type greetingUserEventsFixture struct {
+	publishes int
+	userID    string
+	payload   map[string]any
+}
 
-func (fixture *greetingUserEventsFixture) PublishUserEvent(context.Context, string, string, string, map[string]any) error {
+func (fixture *greetingUserEventsFixture) PublishUserEvent(
+	_ context.Context,
+	_ string,
+	userID string,
+	_ string,
+	payload map[string]any,
+) error {
 	fixture.publishes++
+	fixture.userID = userID
+	fixture.payload = payload
 	return nil
 }
 
@@ -74,7 +86,8 @@ func TestGreetingOutboxRelayAcknowledgesOnlyAfterAllPublicationChannelsSucceed(t
 		Payload: map[string]any{
 			"id":                 "greeting-1",
 			"requesterPersonaId": "persona-a", "targetPersonaId": "persona-b",
-			"source": "profile", "expireAt": "2026-09-04T12:00:00Z",
+			"recipientAccountId": "account-b",
+			"source":             "profile", "expireAt": "2026-09-04T12:00:00Z",
 			"targetAllowsStrangerGreeting": true,
 		},
 		OccurredAt: now,
@@ -95,7 +108,10 @@ func TestGreetingOutboxRelayAcknowledgesOnlyAfterAllPublicationChannelsSucceed(t
 		t.Fatalf("recovered Drain() = (%d, %v), want (1, nil)", count, err)
 	}
 	if outbox.marked != 1 || stream.event.EventID != outbox.event.EventID ||
-		stream.event.GreetingID != outbox.event.AggregateID || userEvents.publishes != 2 {
+		stream.event.GreetingID != outbox.event.AggregateID ||
+		stream.event.RecipientAccountID != "account-b" ||
+		userEvents.publishes != 2 || userEvents.userID != "account-b" ||
+		userEvents.payload["recipientAccountId"] != "account-b" {
 		t.Fatalf("greeting delivery mismatch: marked=%d event=%+v realtimePublishes=%d", outbox.marked, stream.event, userEvents.publishes)
 	}
 }

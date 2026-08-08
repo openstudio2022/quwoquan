@@ -2,7 +2,6 @@ package runruntime
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
@@ -97,7 +96,7 @@ func executionRequest(
 			run.LongTermPreferences...,
 		),
 		FeedbackContextSnapshot: run.FeedbackContextSnapshot.Clone(),
-		IdempotencyPrefix:       "run:" + run.RunID + ":goal:" + fmt.Sprint(run.GoalRevision),
+		IdempotencyPrefix:       executionAttemptScope(run),
 		CreatedAt:               run.CreatedAt,
 	}
 }

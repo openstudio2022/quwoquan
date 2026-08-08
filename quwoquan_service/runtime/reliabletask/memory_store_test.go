@@ -84,7 +84,7 @@ func TestMemoryStoreLeaseAckRetryAndDLQ(t *testing.T) {
 	if err := store.CompleteTask(context.Background(), task.TaskID, "bad-token"); !errors.Is(err, ErrLeaseMismatch) {
 		t.Fatalf("bad ack err = %v, want lease mismatch", err)
 	}
-	if err := store.FailTask(context.Background(), task.TaskID, task.LeaseToken, RuntimeFailure{Code: "CHAT.GROUP_AVATAR.transient"}, RetryPolicy{MaxAttempts: 1}, now); err != nil {
+	if err := store.FailTask(context.Background(), task.TaskID, task.LeaseToken, RuntimeFailure{Code: "CHAT.GROUPAVATAR.transient"}, RetryPolicy{MaxAttempts: 1}, now); err != nil {
 		t.Fatalf("fail task: %v", err)
 	}
 	claimed, err := store.ClaimReadyTask(context.Background(), []string{"chat.group_avatar.recompute"}, "worker-b", time.Second, now.Add(time.Hour))

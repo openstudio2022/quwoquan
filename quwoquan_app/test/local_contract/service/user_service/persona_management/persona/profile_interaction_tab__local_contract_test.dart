@@ -15,12 +15,16 @@ import 'package:quwoquan_app/service/user_service/relationship/persona_relations
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/comment_observability.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
-import 'package:quwoquan_app/runtime/di/profile_interaction_tab_composition.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_interaction_tab_host.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart'
     show InteractionSubTab;
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
@@ -184,7 +188,8 @@ Widget _interactionTabActionsApp(
       theme: ThemeData.light(),
       home: const SizedBox(
         height: 720,
-        child: ProfileInteractionTabComposition(
+        child: ProfileInteractionTabHost(
+          participantSlots: profileParticipantSlots,
           mode: ProfileMode.mine,
           userId: 'profile_owner',
           isDark: false,
@@ -222,6 +227,8 @@ Widget _scopedApp() {
     child: MaterialApp(
       theme: ThemeData.light(),
       home: const ProfileShell(
+        recommendationSlots: profileRecommendationSlots,
+        participantSlots: profileParticipantSlots,
         mode: ProfileMode.mine,
         userId: 'nature_photographer',
       ),
@@ -250,7 +257,8 @@ Widget _interactionTabApp(
       theme: ThemeData.light(),
       home: SizedBox(
         height: 720,
-        child: ProfileInteractionTabComposition(
+        child: ProfileInteractionTabHost(
+          participantSlots: profileParticipantSlots,
           mode: mode,
           userId: 'profile_owner',
           isDark: false,
@@ -270,7 +278,8 @@ Widget _interactionTabRouterApp(
         path: '/',
         builder: (context, state) => const SizedBox(
           height: 720,
-          child: ProfileInteractionTabComposition(
+          child: ProfileInteractionTabHost(
+            participantSlots: profileParticipantSlots,
             mode: ProfileMode.mine,
             userId: 'profile_owner',
             isDark: false,
@@ -509,7 +518,7 @@ Future<void> _showInteractionSubTab(
   WidgetTester tester,
   InteractionSubTab subTab,
 ) async {
-  final tab = find.byType(ProfileInteractionTabComposition);
+  final tab = find.byType(ProfileInteractionTabHost);
   final container = ProviderScope.containerOf(tester.element(tab));
   container
       .read(profileNotifierProvider('profile_owner').notifier)
@@ -540,7 +549,7 @@ void main() {
     await tapProfilePrimaryTab(tester, '互动');
     await _pumpFrames(tester);
 
-    expect(find.byType(ProfileInteractionTabComposition), findsOneWidget);
+    expect(find.byType(ProfileInteractionTabHost), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(

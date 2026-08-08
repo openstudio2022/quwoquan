@@ -165,6 +165,16 @@ unique_constraints:
     where: status = 'pending'
     description: 同一发起方对同一接收方，同时只能有一条 pending 请求（频控幂等）
 types:
+  GreetingRequestSentPayload:
+    description: 打招呼已提交事件；接收账号在 User producer 事务前经 Persona owner reader 解析并固化。
+    fields:
+      - {name: id, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: requesterPersonaId, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: targetPersonaId, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: recipientAccountId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: source, type: enum, enum_ref: GreetingRequestSource, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: expireAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: targetAllowsStrangerGreeting, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
   GreetingIntersectionRef:
     description: 客户端可提交的最小交集引用；不包含标题、结论、URL 或标签
     fields:

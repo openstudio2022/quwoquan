@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode"
 
-	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
@@ -100,24 +99,6 @@ func (authorizedTurnRecallSource) Recall(
 			Score:       recallScore(queryTerms, text, 0.90),
 			Source:      "intersection",
 			EvidenceIDs: []string{evidence.EvidenceID},
-		})
-	}
-	for _, memory := range turn.LongTermPreferences {
-		if !preferencemodel.RequiresExplicitConfirmation(memory.Kind) {
-			continue
-		}
-		text := strings.TrimSpace(memory.Value)
-		if text == "" {
-			continue
-		}
-		hints = append(hints, RecallHint{
-			HintID:      memory.PreferenceID,
-			DomainID:    request.DomainID,
-			Text:        text,
-			Score:       recallScore(queryTerms, text, 0.84),
-			Source:      "longterm_memory",
-			Kind:        string(memory.Kind),
-			EvidenceIDs: []string{memory.PreferenceID},
 		})
 	}
 	if turn.ContextSummary != nil && strings.TrimSpace(turn.ContextSummary.Text) != "" {

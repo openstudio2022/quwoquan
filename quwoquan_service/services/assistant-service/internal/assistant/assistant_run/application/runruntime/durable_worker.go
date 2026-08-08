@@ -43,6 +43,26 @@ type ExecutionRequest struct {
 	FeedbackContextSnapshot   assistantmodel.AssistantFeedbackContextSnapshot
 	IdempotencyPrefix         string
 	CreatedAt                 time.Time
+	verifyCompletion          executionCompletionVerifier
+}
+
+type executionCompletionVerifier func(
+	context.Context,
+	ExecutionResult,
+) (bool, error)
+
+// VerifyCompletionWithinExecutionBudget invokes the worker-owned verifier
+// while the production executor's request-scoped model policy and durable
+// usage sink are still active. Callers can invoke but cannot replace the
+// callback because the authority remains private to runruntime.
+func (request ExecutionRequest) VerifyCompletionWithinExecutionBudget(
+	ctx context.Context,
+	result ExecutionResult,
+) (bool, error) {
+	if request.verifyCompletion == nil {
+		return false, nil
+	}
+	return request.verifyCompletion(ctx, result)
 }
 
 // ExecutionTaskUpdate binds one public execution process to a durable task.
@@ -105,6 +125,95 @@ type RunExecutor interface {
 	) (ExecutionResult, error)
 }
 
+// InExecutionCompletionVerifier is implemented by production executors that
+// promise to invoke the worker-owned completion verifier before their durable
+// model budget context leaves scope. The worker fails closed if such an
+// executor returns a terminal result without the bound verification capture.
+type InExecutionCompletionVerifier interface {
+	VerifiesCompletionWithinExecutionBudget() bool
+}
+
+type executionCompletionVerificationCapture struct {
+	mu           sync.Mutex
+	runDigest    string
+	resultDigest string
+	verdict      VerificationVerdict
+	found        bool
+}
+
+func (capture *executionCompletionVerificationCapture) verify(
+	result ExecutionResult,
+	verify func() (VerificationVerdict, string, bool, error),
+) (bool, error) {
+	digest, err := commandDigest(
+		"assistant_run_completion_verification_result",
+		result,
+	)
+	if err != nil {
+		return false, err
+	}
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	if capture.found {
+		if capture.resultDigest != digest {
+			return false, ErrJournalCorrupt
+		}
+		return true, nil
+	}
+	verdict, runDigest, found, err := verify()
+	if err != nil || !found {
+		return found, err
+	}
+	if strings.TrimSpace(runDigest) == "" {
+		return false, ErrJournalCorrupt
+	}
+	capture.runDigest = strings.TrimSpace(runDigest)
+	capture.resultDigest = digest
+	capture.verdict = cloneExecutionVerificationVerdict(verdict)
+	capture.found = true
+	return true, nil
+}
+
+func (capture *executionCompletionVerificationCapture) load(
+	run Run,
+	result ExecutionResult,
+) (VerificationVerdict, bool, error) {
+	digest, err := commandDigest(
+		"assistant_run_completion_verification_result",
+		result,
+	)
+	if err != nil {
+		return VerificationVerdict{}, false, err
+	}
+	capture.mu.Lock()
+	defer capture.mu.Unlock()
+	if !capture.found {
+		return VerificationVerdict{}, false, nil
+	}
+	if capture.runDigest != ProtectedRunFactsDigest(run) ||
+		capture.resultDigest != digest {
+		return VerificationVerdict{}, false, ErrJournalCorrupt
+	}
+	return cloneExecutionVerificationVerdict(capture.verdict), true, nil
+}
+
+func cloneExecutionVerificationVerdict(
+	verdict VerificationVerdict,
+) VerificationVerdict {
+	cloned := verdict
+	cloned.Missing = append([]string{}, verdict.Missing...)
+	cloned.Failed = append([]string{}, verdict.Failed...)
+	cloned.Evidence = make([]VerificationEvidence, len(verdict.Evidence))
+	for index, row := range verdict.Evidence {
+		cloned.Evidence[index] = row
+		cloned.Evidence[index].ArtifactRefs = append(
+			[]string{},
+			row.ArtifactRefs...,
+		)
+	}
+	return cloned
+}
+
 type DurableWorker struct {
 	repository        WorkerRepository
 	queue             WorkQueue
@@ -121,6 +230,21 @@ type DurableWorker struct {
 	healthMu           sync.RWMutex
 	lastSuccessfulPoll time.Time
 	lastFailure        error
+}
+
+type workClaimContextKey struct{}
+
+func withWorkClaim(ctx context.Context, claim WorkClaim) context.Context {
+	return context.WithValue(ctx, workClaimContextKey{}, claim)
+}
+
+func workClaimFromContext(ctx context.Context, runID string) (WorkClaim, error) {
+	claim, ok := ctx.Value(workClaimContextKey{}).(WorkClaim)
+	if !ok || strings.TrimSpace(claim.RunID) != strings.TrimSpace(runID) ||
+		strings.TrimSpace(claim.WorkerID) == "" || claim.FencingToken <= 0 {
+		return WorkClaim{}, ErrExecutionFenced
+	}
+	return claim, nil
 }
 
 func NewDurableWorker(
@@ -269,7 +393,7 @@ func (w *DurableWorker) ProcessNext(
 		}
 	}()
 
-	processErr := w.processClaim(processCtx, claim.RunID)
+	processErr := w.processClaim(processCtx, claim)
 	if errors.Is(processErr, ErrExecutionFenced) {
 		observeLeaseContention("fenced")
 	}
@@ -289,8 +413,21 @@ func (w *DurableWorker) ProcessNext(
 	if loadErr != nil && processErr == nil {
 		processErr = loadErr
 	}
-	reschedule := loadErr == nil && queueRunnableRun(run)
-	if processErr != nil && !errors.Is(processErr, context.Canceled) {
+	reschedule := false
+	switch {
+	case loadErr == nil:
+		reschedule = queueRunnableRun(run)
+	case errors.Is(loadErr, ErrRunNotFound):
+		// The aggregate no longer exists, so retaining its work document would
+		// create a permanently unclaimable poison item.
+		reschedule = false
+	default:
+		// A failed snapshot read cannot prove terminality. Preserve the work
+		// claim so a later worker can recover the authoritative Run.
+		reschedule = true
+	}
+	if loadErr == nil && processErr != nil &&
+		!errors.Is(processErr, context.Canceled) {
 		reschedule = reschedule && !terminalRunState(run.State)
 	}
 	completeErr := w.queue.CompleteClaim(
@@ -308,7 +445,13 @@ func (w *DurableWorker) ProcessNext(
 	return true, processErr
 }
 
-func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
+func (w *DurableWorker) processClaim(ctx context.Context, claim WorkClaim) error {
+	runID := strings.TrimSpace(claim.RunID)
+	if runID == "" || strings.TrimSpace(claim.WorkerID) == "" ||
+		claim.FencingToken <= 0 {
+		return ErrExecutionFenced
+	}
+	ctx = withWorkClaim(ctx, claim)
 	run, err := w.repository.Load(ctx, runID)
 	if err != nil {
 		return err
@@ -431,8 +574,19 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 			return err
 		}
 	}
+	switch run.State {
+	case generated.AssistantRunStateExecuting,
+		generated.AssistantRunStateObserving,
+		generated.AssistantRunStateReflecting,
+		generated.AssistantRunStateSynthesizing,
+		generated.AssistantRunStateVerifying:
+		handled, recoveryErr := w.recoverPersistedCompletion(ctx, run)
+		if handled || recoveryErr != nil {
+			return recoveryErr
+		}
+	}
 	if run.State != generated.AssistantRunStateExecuting {
-		return nil
+		return w.failRun(ctx, run, "runnable_state_unhandled", ErrJournalCorrupt)
 	}
 
 	executionDeadline := run.CreatedAt.UTC().Add(reasoningPolicy.Budget.MaxDuration)
@@ -444,8 +598,10 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 			context.DeadlineExceeded,
 		)
 	}
-	executionCtx, cancelExecution := context.WithDeadline(ctx, executionDeadline)
-	defer cancelExecution()
+	deadlineCtx, cancelDeadline := context.WithDeadline(ctx, executionDeadline)
+	defer cancelDeadline()
+	executionCtx, cancelExecution := context.WithCancelCause(deadlineCtx)
+	defer cancelExecution(nil)
 	executionCtx = WithExecutionHooks(executionCtx, w.hooks, run)
 	initialContextState := ContextExecutionState{}
 	var initialContextCompaction *ContextCompactionCheckpoint
@@ -496,16 +652,87 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 			err,
 		)
 	}
+	completionVerification := &executionCompletionVerificationCapture{}
+	request := executionRequest(run, reasoningPolicy)
+	request.verifyCompletion = func(
+		verificationCtx context.Context,
+		result ExecutionResult,
+	) (bool, error) {
+		return completionVerification.verify(
+			result,
+			func() (VerificationVerdict, string, bool, error) {
+				activeClaim, claimErr := workClaimFromContext(
+					verificationCtx,
+					run.RunID,
+				)
+				if claimErr != nil || activeClaim.WorkerID != claim.WorkerID ||
+					activeClaim.FencingToken != claim.FencingToken {
+					return VerificationVerdict{}, "", false, ErrExecutionFenced
+				}
+				current, loadErr := w.repository.Load(
+					verificationCtx,
+					run.RunID,
+				)
+				if loadErr != nil {
+					return VerificationVerdict{}, "", false, loadErr
+				}
+				if terminalRunState(current.State) || current.PauseRequested ||
+					result.WaitingState != "" {
+					return VerificationVerdict{}, "", false, nil
+				}
+				availableArtifactRefs := uniqueSorted(append(
+					append([]string{}, result.ArtifactRefs...),
+					result.EvidenceRefs...,
+				))
+				return w.hooks.VerifyCompletion(
+					verificationCtx,
+					current.DefinitionOfDone,
+					VerificationInput{
+						Run:                   current,
+						Result:                result,
+						AvailableArtifactRefs: availableArtifactRefs,
+					},
+				), ProtectedRunFactsDigest(current), true, nil
+			},
+		)
+	}
 	controlDone := make(chan struct{})
-	go w.monitorRunControl(executionCtx, run.RunID, cancelExecution, controlDone)
+	controlStopped := make(chan struct{})
+	go func() {
+		defer close(controlStopped)
+		w.monitorRunControl(
+			executionCtx,
+			run.RunID,
+			cancelExecution,
+			controlDone,
+		)
+	}()
 	result, executionErr := w.executor.Execute(
 		executionCtx,
-		executionRequest(run, reasoningPolicy),
+		request,
 		func(update ExecutionItemUpdate) error {
-			return w.persistExecutionUpdate(executionCtx, run.RunID, update)
+			return w.persistExecutionUpdateWithBudgetReadback(
+				executionCtx,
+				run.RunID,
+				update,
+			)
 		},
 	)
 	close(controlDone)
+	// Cancel an in-flight control read and join the monitor before classifying
+	// the execution result. The first cancel cause wins, so a repository error
+	// observed by the monitor cannot be overwritten by this normal shutdown.
+	cancelExecution(nil)
+	<-controlStopped
+	var controlObservation *runControlObservationError
+	controlObservationFailed := errors.As(
+		context.Cause(executionCtx),
+		&controlObservation,
+	)
+	var controlObservationErr error
+	if controlObservationFailed {
+		controlObservationErr = controlObservation
+	}
 	if executionErr != nil {
 		if errors.Is(executionErr, ErrExecutionCancelled) {
 			return w.awaitCoordinatedCancellation(
@@ -515,7 +742,7 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 		}
 		current, loadErr := w.repository.Load(context.WithoutCancel(ctx), run.RunID)
 		if loadErr != nil {
-			return errors.Join(executionErr, loadErr)
+			return errors.Join(executionErr, controlObservationErr, loadErr)
 		}
 		if terminalRunState(current.State) {
 			return nil
@@ -526,6 +753,9 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 				current,
 				result,
 			)
+		}
+		if controlObservationFailed {
+			return controlObservation
 		}
 		if errors.Is(executionErr, ErrExecutionReplanned) {
 			// A completed Item is the safe boundary: the revised goal and its
@@ -543,6 +773,26 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 			executionErr,
 		)
 	}
+	if controlObservationFailed {
+		current, loadErr := w.repository.Load(
+			context.WithoutCancel(ctx),
+			run.RunID,
+		)
+		if loadErr != nil {
+			return errors.Join(controlObservation, loadErr)
+		}
+		if terminalRunState(current.State) {
+			return nil
+		}
+		if current.PauseRequested {
+			return w.checkpointAndPause(
+				context.WithoutCancel(ctx),
+				current,
+				result,
+			)
+		}
+		return controlObservation
+	}
 	current, err := w.repository.Load(ctx, run.RunID)
 	if err != nil {
 		return err
@@ -556,5 +806,49 @@ func (w *DurableWorker) processClaim(ctx context.Context, runID string) error {
 	if result.WaitingState != "" {
 		return w.waitRun(ctx, current, result)
 	}
-	return w.completeRun(ctx, current, result)
+	verdict, found, captureErr := completionVerification.load(current, result)
+	if captureErr != nil {
+		return w.failRun(
+			ctx,
+			current,
+			"completion_verification_capture_invalid",
+			captureErr,
+		)
+	}
+	if executor, required := w.executor.(InExecutionCompletionVerifier); required && executor.VerifiesCompletionWithinExecutionBudget() && !found {
+		return w.failRun(
+			ctx,
+			current,
+			"completion_verification_budget_ledger_missing",
+			ErrCompletionRejected,
+		)
+	}
+	return w.completeRun(ctx, current, result, verdict, found)
+}
+
+func (w *DurableWorker) persistExecutionUpdateWithBudgetReadback(
+	ctx context.Context,
+	runID string,
+	update ExecutionItemUpdate,
+) error {
+	err := w.persistExecutionUpdate(ctx, runID, update)
+	if err == nil || update.Budget == nil {
+		return err
+	}
+	current, loadErr := w.repository.Load(context.WithoutCancel(ctx), runID)
+	if loadErr == nil && budgetReceiptMatchesCheckpoint(current, *update.Budget) {
+		return nil
+	}
+	return err
+}
+
+func budgetReceiptMatchesCheckpoint(
+	run Run,
+	receipt BudgetConsumptionReceipt,
+) bool {
+	return run.Checkpoint != nil &&
+		strings.TrimSpace(run.Checkpoint.BudgetReceiptScope) ==
+			strings.TrimSpace(receipt.Scope) &&
+		run.Checkpoint.BudgetReceiptSeq == receipt.Sequence &&
+		run.Checkpoint.BudgetConsumption == receipt.Consumption
 }

@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,6 +22,10 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.output_paths import (
     app_deployment_package_dir,
     deployment_target_for_env,
+)
+from quwoquan_ops.cli.lib.environment_topology import (  # noqa: E402
+    get_target,
+    load_environment_topology,
 )
 
 
@@ -41,7 +46,43 @@ DEFINE_KEYS = {
     "appInstanceId": "APP_INSTANCE_ID",
     "appInstanceNamespace": "APP_INSTANCE_NAMESPACE",
     "launchMode": "QWQ_APP_LAUNCH_MODE",
+    "launchPolicy": "APP_LAUNCH_POLICY",
+    "contentBindingState": "CONTENT_BINDING_STATE",
 }
+
+
+def test_live_runtime_values(environment: str, target_name: str) -> dict[str, str]:
+    target = get_target(load_environment_topology(), target_name)
+    if target.get("env") != environment or environment not in {"alpha", "beta", "gamma"}:
+        raise SystemExit("test_live target/environment selection is invalid")
+    public_bases = target.get("publicBases")
+    if not isinstance(public_bases, dict):
+        raise SystemExit("test_live target has no canonical publicBases")
+    mapping = {
+        "gatewayBaseUrl": "api",
+        "legalBaseUrl": "legal",
+        "publicWebBaseUrl": "publicWeb",
+        "appDownloadBaseUrl": "appDownload",
+        "realtimeBaseUrl": "realtime",
+        "mediaAvatarCdnBaseUrl": "mediaAvatar",
+        "mediaImageCdnBaseUrl": "mediaImage",
+        "mediaVideoCdnBaseUrl": "mediaVideo",
+        "mediaUploadBaseUrl": "mediaUpload",
+        "rtcMediaConnectionUrl": "rtc",
+    }
+    values = {
+        "appRuntimeEnv": environment,
+        **{key: str(public_bases.get(source) or "") for key, source in mapping.items()},
+    }
+    expected_host = f"{environment}.quwoquan.com"
+    for key in mapping:
+        value = values[key]
+        hostname = (urlparse(value).hostname or "").lower()
+        if hostname != expected_host and not hostname.endswith(f".{expected_host}"):
+            raise SystemExit(
+                f"test_live {key} must remain inside {environment} topology"
+            )
+    return values
 
 
 def parse_runtime_yaml(path: Path) -> dict[str, str]:
@@ -82,6 +123,8 @@ def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[st
         "appInstanceId": args.app_instance_id,
         "appInstanceNamespace": args.app_instance_namespace,
         "launchMode": args.launch_mode or os.environ.get("QWQ_APP_LAUNCH_MODE", ""),
+        "launchPolicy": args.launch_policy,
+        "contentBindingState": "unbound" if args.launch_policy == "test_live" else "bound",
         "appRolloutMode": args.rollout_mode or os.environ.get("APP_ROLLOUT_MODE", ""),
     }
     url_keys = {
@@ -123,30 +166,38 @@ def main() -> int:
     parser.add_argument("--app-instance-id", default="")
     parser.add_argument("--app-instance-namespace", default="")
     parser.add_argument("--launch-mode", default="")
+    parser.add_argument(
+        "--launch-policy",
+        choices=("test_live", "prod_release"),
+        default="prod_release",
+    )
     parser.add_argument("--rollout-mode", default="")
     args = parser.parse_args()
 
     target_name = args.target or deployment_target_for_env(args.env)
-    package_dir = app_deployment_package_dir(args.env, target=target_name)
-    cfg = package_dir / "app_runtime.yaml"
-    if not cfg.exists():
-        raise SystemExit(
-            "packaged app runtime config not found; run stackctl package first: "
-            f"{cfg}"
-        )
-    package_report_path = package_dir / "report.json"
-    if not package_report_path.is_file():
-        raise SystemExit(f"packaged app runtime report not found: {package_report_path}")
-    package_report = json.loads(package_report_path.read_text(encoding="utf-8"))
-    if (
-        package_report.get("status") != "packaged"
-        or package_report.get("env") != args.env
-        or package_report.get("target") != target_name
-    ):
-        raise SystemExit(
-            f"packaged app runtime identity mismatch: {args.env}/{target_name}"
-        )
-    values = parse_runtime_yaml(cfg)
+    if args.launch_policy == "test_live":
+        values = test_live_runtime_values(args.env, target_name)
+    else:
+        package_dir = app_deployment_package_dir(args.env, target=target_name)
+        cfg = package_dir / "app_runtime.yaml"
+        if not cfg.exists():
+            raise SystemExit(
+                "packaged app runtime config not found; run stackctl package first: "
+                f"{cfg}"
+            )
+        package_report_path = package_dir / "report.json"
+        if not package_report_path.is_file():
+            raise SystemExit(f"packaged app runtime report not found: {package_report_path}")
+        package_report = json.loads(package_report_path.read_text(encoding="utf-8"))
+        if (
+            package_report.get("status") != "packaged"
+            or package_report.get("env") != args.env
+            or package_report.get("target") != target_name
+        ):
+            raise SystemExit(
+                f"packaged app runtime identity mismatch: {args.env}/{target_name}"
+            )
+        values = parse_runtime_yaml(cfg)
     values = apply_overrides(values, args)
     required_endpoint_keys = (
         "gatewayBaseUrl",

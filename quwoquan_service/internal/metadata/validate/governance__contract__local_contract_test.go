@@ -246,7 +246,7 @@ func TestErrorEventAndProjectionGovernanceUseSurfaceAwareRules(t *testing.T) {
 					{Code: "CONTENT.SYSTEM.unbound", SourcePath: "content/content/post/errors.yaml"},
 				},
 				Events: []ast.EventDefinition{
-					{Name: "PostChanged", DeliverySemantics: "transactional_outbox", SourcePath: "content/content/post/events.yaml"},
+					{Name: "PostChanged", DeliverySemantics: "transactional_outbox", WireEventType: "PostChanged", SourcePath: "content/content/post/events.yaml"},
 					{Name: "PostObserved", DeliverySemantics: "synchronous_call", PayloadEntity: "Post", NoConsumerReason: "retired", SourcePath: "content/content/post/events.yaml"},
 				},
 			}},
@@ -435,7 +435,7 @@ func TestEventPayloadFieldsMustExactlyMatchObjectLocalPayloadType(t *testing.T) 
 			Objects: []ast.ObjectGovernance{{
 				ObjectID: "content.post",
 				Events: []ast.EventDefinition{{
-					Name: "PostChanged", DeliverySemantics: "transactional_outbox",
+					Name: "PostChanged", DeliverySemantics: "transactional_outbox", WireEventType: "PostChanged",
 					PayloadEntity: "PostChangedPayload",
 					PayloadShape:  "exact",
 					PayloadFields: []string{"postId", "postId", "unknown"},
@@ -583,14 +583,14 @@ func TestCanonicalEventIdentityIncludesProducingObject(t *testing.T) {
 			{
 				ObjectID: "content.post",
 				Events: []ast.EventDefinition{{
-					Name: "Changed", DeliverySemantics: "transactional_outbox",
+					Name: "Changed", DeliverySemantics: "transactional_outbox", WireEventType: "PostChanged",
 					PayloadEntity: "Post", SourcePath: "content/content/post/events.yaml",
 				}},
 			},
 			{
 				ObjectID: "content.comment",
 				Events: []ast.EventDefinition{{
-					Name: "Changed", DeliverySemantics: "transactional_outbox",
+					Name: "Changed", DeliverySemantics: "transactional_outbox", WireEventType: "CommentChanged",
 					PayloadEntity: "Comment", SourcePath: "content/content/comment/events.yaml",
 				}},
 			},
@@ -657,7 +657,7 @@ func TestEventReverseIndexRejectsDuplicateAndStaleConsumerDeclarations(t *testin
 		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{{
 			ObjectID: "content.post",
 			Events: []ast.EventDefinition{{
-				Name: "PostPublished", DeliverySemantics: "transactional_outbox",
+				Name: "PostPublished", DeliverySemantics: "transactional_outbox", WireEventType: "PostPublished",
 				PayloadEntity:    "Post",
 				NoConsumerReason: "stale producer-side declaration",
 				SourcePath:       "content/content/post/events.yaml",

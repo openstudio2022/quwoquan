@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 DATA_ROOT = next(
@@ -34,10 +35,18 @@ from core.control_types import (  # noqa: E402
     ContentType,
     ExecutionStage,
     QueueBackend,
+    QueueJobStage,
     QueueJobState,
     QueueTimelineEvent,
     ReliableTaskDispatchStatus,
     RuntimeEnvironment,
+)
+from core.data_issue import (  # noqa: E402
+    DataIssueCode,
+    DataIssueLane,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
 )
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 
@@ -205,6 +214,44 @@ def test_quota_met__resume_does_not_redispatch_discards__functional__local_contr
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 
+def test_final_job_completion_race_is_not_reported_as_fleet_unavailable(
+    monkeypatch,
+) -> None:
+    """The last job can become durable after the outer quota check."""
+    ctx, _jobs = _build(quota=1)
+    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
+
+    checks = iter((False, True))
+    monkeypatch.setattr(
+        reliabletask_dispatch,
+        "_quota_reached",
+        lambda *_args: next(checks),
+    )
+    monkeypatch.setattr(
+        reliabletask_dispatch,
+        "_delivered_count",
+        lambda *_args: 1,
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "run_reliabletask_fleet",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("durable quota must be re-read before fleet dispatch")
+        ),
+    )
+
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.BUILD_HOMEPAGE,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.attempted_count == 0
+    assert result.completed_count == 1
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
 def test_quota_short__candidate_pool_exhausted__publishes_partial__functional__local_contract(
     monkeypatch,
 ) -> None:
@@ -261,8 +308,53 @@ def test_candidate_pool_exhausted__zero_qualified__blocks__functional__local_con
     assert result is not None
     assert result.status is ReliableTaskDispatchStatus.BLOCKED
     assert result.completed_count == 0
-    assert any("无合格对象" in str(issue) for issue in result.issues)
+    assert result.issues
+    assert all(issue.code is DataIssueCode.QUEUE_EXECUTION_FAILED for issue in result.issues)
+    assert not any("候选池耗尽" in str(issue) for issue in result.issues)
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_terminal_article_repair_preserves_original_typed_cause(
+    monkeypatch,
+) -> None:
+    original = data_issue(
+        DataIssueCode.QUALITY_FAILED,
+        stage=DataIssueStage.REVIEW,
+        lane=DataIssueLane.ARTICLE,
+        recovery=DataRecoveryAction.REWIND_COMPOSE,
+        ref="杭州西湖__article_frontier",
+        message="closing figure cannot anchor the article entity",
+    )
+    terminal_job = SimpleNamespace(
+        state=QueueJobState.DEAD,
+        last_issue=original,
+        job_id="article-author-job",
+    )
+    ctx = SimpleNamespace(execution_id="article-repair-test", max_workers=1)
+    monkeypatch.setattr(reliabletask_dispatch, "_quota_reached", lambda *_args: False)
+    monkeypatch.setattr(
+        reliabletask_dispatch,
+        "_terminal_partial_closure_ready",
+        lambda *_args: False,
+    )
+    monkeypatch.setattr(
+        reliabletask_dispatch,
+        "_remaining_jobs",
+        lambda *_args: (terminal_job,),
+    )
+    monkeypatch.setattr(reliabletask_dispatch, "_delivered_count", lambda *_args: 0)
+
+    result = reliabletask_dispatch._dispatch_fleet(
+        ctx,
+        ExecutionStage.POST_AUTHOR,
+        QueueJobStage.AUTHOR,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.BLOCKED
+    assert result.issues[0] == original
+    assert result.issues[0].recovery is DataRecoveryAction.REWIND_COMPOSE
+    assert "candidate pool" not in result.issues[0].message
 
 
 def test_acceptance_gate_outranks_queue_ledger__functional__local_contract(

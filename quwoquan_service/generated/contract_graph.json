@@ -49104,6 +49104,25 @@
       "sourcePath": "user/account/user_settings/projections/appearance_settings_view.yaml"
     },
     {
+      "id": "user.user_settings.AssistantDeliveryPolicyView",
+      "domain": "user",
+      "objectId": "user.user_settings",
+      "readModel": "AssistantDeliveryPolicyView",
+      "readModelExplicit": true,
+      "fieldNames": [
+        "assistantEnabled",
+        "quietHoursEnd",
+        "quietHoursStart",
+        "updatedAt",
+        "userId",
+        "version"
+      ],
+      "sourceEntities": [
+        "UserSettings"
+      ],
+      "sourcePath": "user/account/user_settings/projections/assistant_delivery_policy_view.yaml"
+    },
+    {
       "id": "user.user_settings.CallSettingsView",
       "domain": "user",
       "objectId": "user.user_settings",
@@ -92430,7 +92449,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/media_viewer_result_absorb__local_contract_test.dart",
-            "sha256": "39d165f4c428c4b2d1fe4b0861efd775d7e205e2fb341dc6bc7dfc0197b8ea8d"
+            "sha256": "ec1da3b884055d9ff125c233a0983b1b84806c6424b4b319643ec666b6f30362"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/persona_circle_slice__contract__local_contract_test.dart",
@@ -95358,7 +95377,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_discard_confirm__functional__local_contract_test.dart",
-            "sha256": "d17e9d62e50fcc799145374aecb891cd572f797413acf375c484891ac66619d7"
+            "sha256": "64e99847999aefc488780223b2477871d59ddfe73a74a7f36a3c81e57c8f4d65"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_export_pipeline__functional__local_contract_test.dart",
@@ -95390,7 +95409,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_thumbnail_reorder_widget__local_contract_test.dart",
-            "sha256": "360e259d22d62d57636186daafeb97d4e9c8c396e788a42a7bd80bbc6fc7bb02"
+            "sha256": "23e6bece4a223a933af525e46ec05df3d1239083a18e47179ab658cec0cc24c3"
           }
         ],
         "apiIntegration": [
@@ -95974,11 +95993,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_display_imported_uploaded_parity__local_contract_test.dart",
-            "sha256": "e0cfdecc355e35a634e7740b887f9f7c9f0c6b6926c29619aea0c54d9da87a01"
+            "sha256": "abeecbc6aa3b5589b41c5d24da68d42d556a4da245d8ed097f0973f92ab1489e"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_display_state_sync__local_contract_test.dart",
-            "sha256": "4c89d746cd788a6fcd00b2abdd842318cbce328a05922a6542ba55ee9788bf62"
+            "sha256": "3c4ad75ee905b72404a538734ca8aaea881812f4d9f5cb9ca0f8bd7b563fb46d"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_playback_center_glyph__local_contract_test.dart",
@@ -97901,7 +97920,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/generated/content_post_snapshot_policy.g.dart",
-            "sha256": "59d6b49535cff341953a80f645820382db2215e8989b3f96cf0e74b830bce463"
+            "sha256": "3ddddb0039b54e01581432716cf86147be70d4603d7cdd4c06b401b4bc7b0880"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/generated/content_publication_policy.g.dart",
@@ -98003,7 +98022,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
-            "sha256": "e25cf3ccdaa6472c81607e25ab3652467b6923462ad4dce19137cf45a7d59d64"
+            "sha256": "fd7ad7aa61f66da46f656f2d7f689671353802c8808a9228466414cf64803f8e"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/geo_tag_ref_resolver.dart",
@@ -98205,7 +98224,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/create_page_remote_helpers.dart",
-            "sha256": "d35783bbf5bcc58025322de76aaa21b3fd85839b9fff73e8c62aea08e82872e8"
+            "sha256": "f770097e5f9be5e0e1fd8a135259f6662f4d931f9c02c2407482971591f9ebd7"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/footprint_query_remote.dart",
@@ -98541,7 +98560,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/draft_recovery_widget__local_contract_test.dart",
-            "sha256": "31ef543574d22c6dd0104d2580f134d9af715fde33136f5b1d1078af580b24e2"
+            "sha256": "2576782531f7c729b7f3c6ccf06df153a0e44a3e1c0a5b249dc3bed42d2b66b0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/following_subject_strip__local_contract_test.dart",
@@ -98601,7 +98620,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_page_widget__local_contract_test.dart",
-            "sha256": "c1212b6f5e4ebedf7cd850890dc487afd7a8d31dda41bee4644da0ee3f31f190"
+            "sha256": "ff3019f38396602a7c14491e2ffb89a8e7cb9b32dff4c111b7961488d9e612f7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/homepage_reference_draft_codec__local_contract_test.dart",
@@ -98621,7 +98640,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/more_action_popup__functional__local_contract_test.dart",
-            "sha256": "34f6357ca87ddcbebb0a77ac771f436d2d9f807a904eda16a59010750ddabb31"
+            "sha256": "e22c73e11113aafec74ed7a2c38134b4f045d6ec396893ffc2914c092ca6b059"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/my_footprint_page__local_contract_test.dart",
@@ -98753,7 +98772,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_template_by_identity_widget__local_contract_test.dart",
-            "sha256": "b11427bd4e34bfa6cf580b6949d0dd4488f58fccbcd826b9546891db07876a4f"
+            "sha256": "7d0050f12ed5115c8a94f04a0172f61b83a514a057b4269d83078a3b783d0815"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/share_unified_surface_parity__local_contract_test.dart",
@@ -98773,7 +98792,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/video_editor_error_state_widget__local_contract_test.dart",
-            "sha256": "d7ecba61a18a2492c2f8c8f5dd4fcffdf3e10b4ba4e1fe5d03cfaa63f0446276"
+            "sha256": "129794852d43d5df06632c0acfc488b049ea840a0173ca4f7a1038fa193a15e0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/video_publish_payload_cover_contract__local_contract_test.dart",
@@ -98781,7 +98800,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/video_publish_payload_media_refs__local_contract_test.dart",
-            "sha256": "0fc25f6d781f81ccef84af3d1414e4d62fb3a24365c1082dcbc6b25ff15dce18"
+            "sha256": "1eac48bc83969fbdf70c0353a010c3cf318b13d9b2cca882af57a5c005976520"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/widgets/article_wrap_alignment__local_contract_test.dart",
@@ -102284,7 +102303,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/product_ops_service/product_ops/app_release/app_release_recovery__local_contract_test.dart",
-            "sha256": "0a63e5cd19fbdfce8d129a37af009f32305528a11c663f5ff04f4e2b3aa8db4b"
+            "sha256": "33ac7c2233549e7184a11acedb7611373f4bf3a1fd995cf126a3712e8f8232fc"
           }
         ],
         "apiIntegration": [
@@ -103143,7 +103162,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/product_ops_service/product_ops/recovery_failure/recovery_failure_reporting__local_contract_test.dart",
-            "sha256": "1a4afbd025728a6201e9c60ae67f7413e42734d778f40dde74b008f7bf6c0a64"
+            "sha256": "78e02f713398fc95cd6dbcbb00c86b28d1e376e454410c64313ac41f915c4b0e"
           }
         ],
         "apiIntegration": [
@@ -103432,7 +103451,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_avatar_sync_handler__local_contract_test.dart",
-            "sha256": "e2facb1d9549985c8a54d0debd8a589792c3cfaae07ac242f1a572a4e37f9446"
+            "sha256": "808fb9d4cf7fbba250a73bedb92c7c8ae12ef65da53d7a9880bbc8e58b179b4b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_composition_isolation__local_contract_test.dart",
@@ -103444,7 +103463,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_connection_typed_double__local_contract_test.dart",
-            "sha256": "a88efb2cc77920ff894c79aa07aef0875a726e9ae4b1bd2e16f0babfba99aa85"
+            "sha256": "fb5be1dda6625e8f7760a3490b0b8fd5bcec863021e81d4903038ac160fcfff4"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_conversation_member_added_handler__functional__local_contract_test.dart",
@@ -103460,7 +103479,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_message_sent_handler__local_contract_test.dart",
-            "sha256": "69c887fa51b78cfc6bebc191857aac4658e9b42a70420aa1e400fe645a4d0dc4"
+            "sha256": "58f7fbf489c61f670b4e4e5be36096eb51c7b35da559be36a8b4f5a9889a7aa8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_root_startup__local_contract_test.dart",
@@ -104651,7 +104670,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/intersection_kind_registry__producer_shape__local_contract_test.py",
-            "sha256": "3b835902523d97b0d1be8710e3e6ea2442c1ad248343b6ab427d570f2baa051a"
+            "sha256": "50e2d63ebf22b6ae838b3160cc6dad90330c93cd972a2c45f2010bb0dc885698"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_account_closure_privacy__contract__local_contract_test.py",
@@ -104663,7 +104682,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_feature_registry_projection__contract__local_contract_test.py",
-            "sha256": "b8e3dc1e1e03a36c895e60dc269bc10320612d1d3d62c753065cb8a792262bf7"
+            "sha256": "5e6e74100eb1a26a7447fa21a9cee200591402e11ca5472ca25a26b0f6d564a6"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_gate_contract__gate_decision__contract__local_contract_test.py",
@@ -104671,7 +104690,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_intersection_features__feature_vector__contract__local_contract_test.py",
-            "sha256": "176c30295e38eb1e5b61b06c306d1537cc7f70b0333f3a014139e2eb46e306f8"
+            "sha256": "9f78375be143db272705c63a71b6f318adeb6ce2991e199fcf8fd15306d69013"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_model_release_single_track__contract__local_contract_test.py",
@@ -104696,6 +104715,10 @@
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/performance/test_inference_capacity__capacity_budget__performance__local_contract_test.py",
             "sha256": "386dffcb96fa1d5275ea26bdf08e0e73cd8a08d48d873e7c4589b75909437e54"
+          },
+          {
+            "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/source_tree_isolation__local_contract_test.py",
+            "sha256": "8929acce7acc5c3ddec15ea9f87c2bfe2707e35b42cb050480b29597ae3069c5"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/test_model_release_runtime_consumer__local_contract_test.py",
@@ -108569,11 +108592,11 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/relationship/persona_relationship/relationship_capability_contract__ownership__local_contract_test.go",
-            "sha256": "39ba77b83379505abf240aafb2f3fff2557749000b3dbabf40e4adb576fac1b0"
+            "sha256": "7803c9740f5915aa275fd0dad1edb6bcdd12020c86495ccce66ccf769793e335"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/relationship/persona_relationship/relationship_capability_policy__local_contract_test.go",
-            "sha256": "6e05c9509fd34df142243faf607cacd9062775816d88f0d2c97f37485e09bedf"
+            "sha256": "805ede4f73b10acc3856b6153e66cc7aa5f2a284ba2fe19eb668ef88411e6dbe"
           }
         ],
         "apiIntegration": [
@@ -109564,7 +109587,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/user_account_lifecycle_single_track__contract__local_contract_test.go",
-            "sha256": "8df4e0b3f5adbef27995ad104ad563db8b0b49e6a879378af89eca595bb896df"
+            "sha256": "16046aa54ae340e94e980045ea59b6204445157c11d9f7f22595f92c68518f43"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/user_identity_single_track__contract__local_contract_test.go",
@@ -111617,7 +111640,7 @@
     },
     {
       "path": "_schemas/fields.schema.json",
-      "sha256": "203dc45c04d76a0194e692c190ad95c2e98ed62a462bf1181f808970398ac10a"
+      "sha256": "6df73624e0c82243ebab6954b78bfbe67b64273f840e345ae62beacdd22699ff"
     },
     {
       "path": "_schemas/journey_readiness_receipt.schema.json",
@@ -111638,6 +111661,10 @@
     {
       "path": "_schemas/privacy.schema.json",
       "sha256": "8e30de1a972315b9b377f64f604843b43a3645517498bbda4695a3826a8061a6"
+    },
+    {
+      "path": "_schemas/projection.schema.json",
+      "sha256": "a0d1838fd812fedd8b5b888d387c22ec7f9b7807d8b37395a6b46e3b261d6b42"
     },
     {
       "path": "_schemas/readiness_current_snapshot.schema.json",
@@ -111701,7 +111728,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "f2051a12856be7295804d268e9c26a8e8b8aa49a481bd4035ae69bbc52620aa8"
+      "sha256": "e0e35f084ef04b2898d77d035f085188bcb33edbc52b9ee48b29009233ce2e52"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -114469,7 +114496,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_candidate_index_view/projections/premium_candidate_projection.yaml",
-      "sha256": "ef48443027298908fc2e0be4893feb2bdc36a399611e5c68704c221d79e763a5"
+      "sha256": "fb2f158bf75e63c23b687d3cf92182dfd9c29042057073b45abdce5a682d842a"
     },
     {
       "path": "recommendation/recommendation/recommendation_candidate_index_view/storage.yaml",
@@ -114621,7 +114648,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_model_release/projections/training_samples.yaml",
-      "sha256": "1ddadb23a381b39f22ceae3d8a139fad1dff6255d36ecddc491a608e35a2e538"
+      "sha256": "f8aa8a671008ee98f4ab1700917b55cc8ee2f7e1d4bff2b77e28ccae962bd6a4"
     },
     {
       "path": "recommendation/recommendation/recommendation_model_release/storage.yaml",
@@ -115137,7 +115164,7 @@
     },
     {
       "path": "user/account/user_settings/projections/assistant_delivery_policy_view.yaml",
-      "sha256": "77196c629bea3788f92fa1b1696b640ea3bb364bf8827a687e77a23c0c45316a"
+      "sha256": "94d06f15bf4d6b56ede9ebc0e4a9755b74842b4d8e95aef9fe044b2307fc75df"
     },
     {
       "path": "user/account/user_settings/projections/call_settings_view.yaml",
@@ -119627,7 +119654,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "f2051a12856be7295804d268e9c26a8e8b8aa49a481bd4035ae69bbc52620aa8",
+      "sha256": "e0e35f084ef04b2898d77d035f085188bcb33edbc52b9ee48b29009233ce2e52",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -123892,7 +123919,7 @@
                 "path": "lib/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart",
                 "symbols": [
                   "IncomingCallCoordinator",
-                  "incomingCallPresentationAcknowledgerProvider"
+                  "notificationDeliveryJobProcessCommandWriterProvider"
                 ]
               }
             ]
@@ -329200,7 +329227,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_candidate_index_view/projections/premium_candidate_projection.yaml",
-      "sha256": "ef48443027298908fc2e0be4893feb2bdc36a399611e5c68704c221d79e763a5",
+      "sha256": "fb2f158bf75e63c23b687d3cf92182dfd9c29042057073b45abdce5a682d842a",
       "mediaType": "application/yaml",
       "content": {
         "checkpoint": {
@@ -329227,10 +329254,8 @@
             "type": "string"
           },
           {
-            "description": "active",
+            "description": "active, rolled_back, takedown_ejected or expired.",
             "name": "status",
-            "rolled_back": null,
-            "takedown_ejected or expired.": null,
             "type": "string"
           },
           {
@@ -336897,7 +336922,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_model_release/projections/training_samples.yaml",
-      "sha256": "1ddadb23a381b39f22ceae3d8a139fad1dff6255d36ecddc491a608e35a2e538",
+      "sha256": "f8aa8a671008ee98f4ab1700917b55cc8ee2f7e1d4bff2b77e28ccae962bd6a4",
       "mediaType": "application/yaml",
       "content": {
         "collection": "rec_training_samples",
@@ -336940,9 +336965,7 @@
             "type": "object"
           },
           {
-            "description": "多目标标签如 click",
-            "dwell_s": null,
-            "like": null,
+            "description": "多目标标签如 click、like、dwell_s",
             "name": "labels",
             "type": "object"
           },
@@ -374450,7 +374473,7 @@
     },
     {
       "path": "user/account/user_settings/projections/assistant_delivery_policy_view.yaml",
-      "sha256": "77196c629bea3788f92fa1b1696b640ea3bb364bf8827a687e77a23c0c45316a",
+      "sha256": "94d06f15bf4d6b56ede9ebc0e4a9755b74842b4d8e95aef9fe044b2307fc75df",
       "mediaType": "application/yaml",
       "content": {
         "description": "assistant-service 主动投递前读取的最小策略切片；不暴露其他账号设置。",
@@ -374482,10 +374505,10 @@
             "type": "timestamp"
           }
         ],
-        "name": "AssistantDeliveryPolicyView",
-        "source": {
-          "object": "UserSettings"
-        }
+        "read_model": "AssistantDeliveryPolicyView",
+        "source_entities": [
+          "UserSettings"
+        ]
       }
     },
     {

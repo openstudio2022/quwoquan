@@ -4,6 +4,7 @@
   "type": "object",
   "required": [
     "schema",
+    "scale",
     "rootExecutionId",
     "executionId",
     "operation",
@@ -30,6 +31,10 @@
   "additionalProperties": false,
   "properties": {
     "schema": { "const": "quwoquan_data.content_execution_submission" },
+    "scale": {
+      "type": "string",
+      "pattern": "^M[1-9][0-9]{0,5}$"
+    },
     "rootExecutionId": { "type": "string", "minLength": 1 },
     "executionId": { "type": "string", "minLength": 1 },
     "operation": {
@@ -50,6 +55,15 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1 },
     "count": { "type": "integer", "minimum": 1 },
+    "requiredWorkers": { "type": "integer", "minimum": 1 },
+    "partitionCount": { "enum": [16, 32, 64, 128, 256] },
+    "capacityPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+    "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
     "topic": { "type": ["string", "null"] },
     "targetNames": {
       "type": "array",
@@ -122,6 +136,11 @@
         "required": ["operation"]
       },
       "then": {
+        "required": [
+          "requiredWorkers",
+          "partitionCount",
+          "capacityPlanDigest"
+        ],
         "properties": {
           "semanticSelectionId": { "enum": ["default", "cursor_auto"] }
         }
@@ -141,6 +160,35 @@
       },
       "then": {
         "required": ["semanticPreflightReceipt"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "executionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(?:homepage|article|image|video)-m(?:100|1000|10000)--"
+          },
+          "operation": {
+            "enum": [
+              "homepage.generate", "article.generate", "image.generate", "video.generate"
+            ]
+          }
+        },
+        "required": ["executionId", "operation"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["scaleSourcePool"]},
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
       }
     }
   ]

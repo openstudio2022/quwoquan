@@ -152,6 +152,12 @@ def main() -> int:
     feedback_collection = db["recommendation_feedback_facts"]
     samples_collection = db["rec_training_samples"]
 
+    samples_collection.create_index(
+        [("sourceSampleId", 1)],
+        unique=True,
+        name="uq_recommendation_training_sample_source",
+    )
+
     if args.clean:
         result = samples_collection.delete_many({"scenario": args.scenario})
         print(

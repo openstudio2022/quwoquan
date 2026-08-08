@@ -1,4 +1,4 @@
-"""ReliableTask 商业吞吐必须覆盖旧的批次文件时间估算，并按配额而非全量判定。"""
+"""ReliableTask lifecycle-accepted 吞吐按 canonical 配额而非全量判定。"""
 from __future__ import annotations
 
 import sys
@@ -17,6 +17,7 @@ if str(DATA_ROOT / "scripts") not in sys.path:
 from content.execution.controller.metrics import (  # noqa: E402
     _reliabletask_accepted_throughput,
 )
+from content.execution.controller import metrics as metrics_module  # noqa: E402
 from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 from content.execution.queue.reliabletask.report import ReliableTaskFleetReport  # noqa: E402
 from content.execution.queue.reliabletask.transport import (  # noqa: E402
@@ -26,18 +27,53 @@ from core.control_types import QueueJobStage  # noqa: E402
 from core.io import write_json  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _bind_attempt_report_fixture(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        metrics_module,
+        "latest_attempt_report_path_from_root",
+        lambda root, _stage: (
+            root / "evidence/reliabletask/publish_fleet_report.json"
+            if (root / "evidence/reliabletask/publish_fleet_report.json").is_file()
+            else None
+        ),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "attempt_evidence_dir",
+        lambda _execution_id, attempt: (
+            tmp_path
+            / "evidence/reliabletask"
+            / str(attempt["stage"])
+            / str(attempt["jobSetDigest"])[7:]
+        ),
+    )
+
+
 def _report(
     *,
     passed: bool = True,
     required_quota: int = 10,
+    research_accepted: int = 0,
     commercial_accepted: int | None = None,
+    execution_id: str = "20260720--travel-image-m100--china--scale-001",
+    stage: str = "publish",
 ) -> dict[str, object]:
     total = 10
-    accepted = commercial_accepted if commercial_accepted is not None else (
+    commercial = commercial_accepted if commercial_accepted is not None else (
         total if passed else total - 1
     )
+    accepted = research_accepted + commercial
     return {
         "schema": "quwoquan.reliabletask_fleet_report",
+        "executionId": execution_id,
+        "stage": stage,
+        "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+        "jobSetDigest": "sha256:" + "b" * 64,
+        "actualTaskDigest": "sha256:" + "b" * 64,
         "passed": passed,
         "backend": "mongodb+redis",
         "total": total,
@@ -45,7 +81,8 @@ def _report(
         "stageCompletedCount": 0,
         "publishTaskCount": total,
         "objectTransactionResultCount": total,
-        "commercialAcceptedCount": accepted,
+        "researchAcceptedCount": research_accepted,
+        "commercialAcceptedCount": commercial,
         "fleetControlPlaneThroughputPerHour": 600.0,
         "fleetAcceptedThroughputPerHour": float(accepted * 60),
         "endToEndAcceptedThroughputPerHour": float(accepted / 2),
@@ -79,7 +116,7 @@ def _report(
     }
 
 
-def test_metrics_use_only_commercially_accepted_fleet_report(
+def test_metrics_use_canonical_lifecycle_accepted_fleet_report(
     tmp_path: Path,
 ) -> None:
     report_path = (
@@ -92,16 +129,70 @@ def test_metrics_use_only_commercially_accepted_fleet_report(
 
     assert measured is not None
     assert measured["measurementMode"] == (
-        "reliabletask_commercial_accepted_end_to_end"
+        "reliabletask_canonical_accepted_end_to_end"
     )
     assert measured["objectsPerHour"] == 5.0
     assert measured["fleetAcceptedObjectsPerHour"] == 600.0
     assert measured["elapsedSeconds"] == 7200.0
     assert measured["fleetWallClockSeconds"] == 60.0
     assert measured["publishedObjectCount"] == 10
+    assert measured["researchAcceptedCount"] == 0
+    assert measured["commercialAcceptedCount"] == 10
+    assert measured["objectTransactionResultCount"] == 10
     assert measured["reportRef"] == (
         "evidence/reliabletask/publish_fleet_report.json"
     )
+
+
+def test_metrics_accept_research_only_canonical_fleet_report(tmp_path: Path) -> None:
+    write_json(
+        tmp_path / "evidence/reliabletask/publish_fleet_report.json",
+        _report(research_accepted=10, commercial_accepted=0),
+    )
+
+    measured = _reliabletask_accepted_throughput(tmp_path)
+
+    assert measured is not None
+    assert measured["publishedObjectCount"] == 10
+    assert measured["researchAcceptedCount"] == 10
+    assert measured["commercialAcceptedCount"] == 0
+
+
+def test_loader_preserves_historical_report_without_research_count(
+    tmp_path: Path,
+) -> None:
+    report = _report()
+    report.pop("researchAcceptedCount")
+    write_json(
+        tmp_path / "evidence/reliabletask/publish_fleet_report.json",
+        report,
+    )
+
+    decoded = ReliableTaskFleetReport.from_document(report)
+    measured = _reliabletask_accepted_throughput(tmp_path)
+
+    assert decoded.research_accepted_count == 0
+    assert decoded.commercial_accepted_count == 10
+    assert measured is not None
+    assert measured["publishedObjectCount"] == 10
+
+
+@pytest.mark.parametrize(
+    "updates",
+    (
+        {"researchAcceptedCount": 6, "commercialAcceptedCount": 5},
+        {"succeeded": 5, "objectTransactionResultCount": 6},
+        {"publishTaskCount": 5, "objectTransactionResultCount": 6},
+    ),
+)
+def test_loader_rejects_impossible_publish_acceptance_counts(
+    updates: dict[str, int],
+) -> None:
+    report = _report()
+    report.update(updates)
+
+    with pytest.raises(ValueError, match="publish acceptance counts are invalid"):
+        ReliableTaskFleetReport.from_document(report)
 
 
 def test_metrics_reject_incomplete_commercial_fleet_report(
@@ -219,7 +310,10 @@ def test_failed_publish_fleet_report_remains_projectable(
     tmp_path: Path,
 ) -> None:
     """A valid failed receipt is business evidence, not environment unavailability."""
-    report = _report(passed=False)
+    report = _report(
+        passed=False,
+        execution_id="20260728--travel-video-supply--test-region-a--pilot-001",
+    )
     report["taskOutcomes"] = [
         {
             "jobId": f"job-{index}",
@@ -245,8 +339,13 @@ def test_failed_publish_fleet_report_remains_projectable(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage: {
+        lambda _execution_id, _stage, *, required_workers: {
+            "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
+            "requiredWorkers": required_workers,
+            "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+            "jobSetDigest": "sha256:" + "b" * 64,
+            "actualTaskDigest": "sha256:" + "b" * 64,
             "jobs": [{} for _index in range(10)],
         },
     )
@@ -290,6 +389,8 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
         passed=False,
         required_quota=1,
         commercial_accepted=0,
+        execution_id="20260728--travel-homepage-supply--test-region-a--pilot-001",
+        stage="author",
     )
     interrupted.update(
         {
@@ -312,6 +413,8 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
         passed=True,
         required_quota=1,
         commercial_accepted=10,
+        execution_id="20260728--travel-homepage-supply--test-region-a--pilot-001",
+        stage="author",
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -325,8 +428,13 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage: {
+        lambda _execution_id, _stage, *, required_workers: {
+            "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
+            "requiredWorkers": required_workers,
+            "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+            "jobSetDigest": "sha256:" + "b" * 64,
+            "actualTaskDigest": "sha256:" + "b" * 64,
             "jobs": [{} for _index in range(10)],
         },
     )
@@ -366,7 +474,11 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     assert invocations == [1, 2]
     assert recovery_waits == ["test"]
     assert decoded.passed is True
-    archived = tmp_path / "evidence/reliabletask/author_fleet_report.attempt-001.json"
+    archived = (
+        tmp_path
+        / ("evidence/reliabletask/author/" + "b" * 64)
+        / "runtime-report-001.json"
+    )
     assert archived.is_file()
 
 
@@ -378,6 +490,8 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
         passed=False,
         required_quota=1,
         commercial_accepted=0,
+        execution_id="20260728--travel-homepage-supply--test-region-a--pilot-001",
+        stage="author",
     )
     interrupted.update(
         {
@@ -400,6 +514,8 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
         passed=True,
         required_quota=1,
         commercial_accepted=10,
+        execution_id="20260728--travel-homepage-supply--test-region-a--pilot-001",
+        stage="author",
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -413,8 +529,13 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage: {
+        lambda _execution_id, _stage, *, required_workers: {
+            "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
+            "requiredWorkers": required_workers,
+            "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+            "jobSetDigest": "sha256:" + "b" * 64,
+            "actualTaskDigest": "sha256:" + "b" * 64,
             "jobs": [{} for _index in range(10)],
         },
     )
@@ -463,7 +584,8 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
     for attempt in range(1, 4):
         assert (
             tmp_path
-            / f"evidence/reliabletask/author_fleet_report.attempt-{attempt:03d}.json"
+            / ("evidence/reliabletask/author/" + "b" * 64)
+            / f"runtime-report-{attempt:03d}.json"
         ).is_file()
 
 
@@ -475,6 +597,8 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
         passed=False,
         required_quota=1,
         commercial_accepted=0,
+        execution_id="20260728--travel-homepage-supply--test-region-a--pilot-001",
+        stage="author",
     )
     interrupted["taskOutcomes"] = [
         {
@@ -484,7 +608,13 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
         }
         for index in range(10)
     ]
-    resumed = _report(passed=True, required_quota=1, commercial_accepted=10)
+    resumed = _report(
+        passed=True,
+        required_quota=1,
+        commercial_accepted=10,
+        execution_id="20260728--travel-homepage-supply--test-region-a--pilot-001",
+        stage="author",
+    )
     monkeypatch.setattr(
         reliabletask_fleet,
         "resolve_reliabletask_fleet_transport",
@@ -497,8 +627,13 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage: {
+        lambda _execution_id, _stage, *, required_workers: {
+            "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
+            "requiredWorkers": required_workers,
+            "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+            "jobSetDigest": "sha256:" + "b" * 64,
+            "actualTaskDigest": "sha256:" + "b" * 64,
             "jobs": [{} for _index in range(10)],
         },
     )

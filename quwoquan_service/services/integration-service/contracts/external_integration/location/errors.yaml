@@ -2,19 +2,6 @@ description: 'integration/external_integration/location 结构化错误码声明
 
   '
 errors:
-- code: INTEGRATION.USER.location_unavailable
-  reason: unavailable
-  http_status: 400
-  emitted_by:
-  - {surface: http, operations: [GetNearbyLocations, SearchLocations]}
-  recovery_action: retry
-  disruption_level: snackbar
-  recovery_after_seconds: 3
-  dart_const: locationUnavailable
-  go_const: ErrLocationUnavailable
-  user_message:
-    zh: 暂时无法获取当前位置，请稍后重试
-    en: Current location is unavailable, please retry shortly
 - code: INTEGRATION.USER.invalid_argument
   reason: invalid_argument
   http_status: 400

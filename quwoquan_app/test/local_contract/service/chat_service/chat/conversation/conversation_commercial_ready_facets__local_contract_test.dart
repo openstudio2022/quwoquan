@@ -1,6 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-006
-// readiness_case: conversation_batch_get_conversations_app_local
 // readiness_case: conversation_list_contact_home_app_local
 // readiness_case: conversation_list_contacts_app_local
 // readiness_case: conversation_list_group_candidates_app_local

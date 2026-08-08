@@ -172,7 +172,7 @@ def test_review_only_keeps_lane_alive_across_managed_agent_yield(
         recipe_checkpoint,
         "active_runtime_policy",
         lambda: SimpleNamespace(
-            campaign_lane_timeout_seconds=30,
+            campaign_lane_timeout_seconds_for_scale=lambda _scale: 30,
             agent_future_poll_timeout_seconds=0.2,
         ),
     )
@@ -289,6 +289,21 @@ def test_preflight_evidence_belongs_to_execution_work_package() -> None:
     assert argv[:2] == ["task", "preflight"]
     assert argv[argv.index("--semantic-selection-id") + 1] == "cursor_auto"
     assert report_path == recipe.execution_root(EXECUTION_ID) / "evidence" / "runtime_preflight.json"
+
+
+def test_campaign_publish_resume_does_not_recheck_cursor_network() -> None:
+    assert recipe._requires_runtime_preflight(
+        campaign_bound=True,
+        stage="run",
+    ) is False
+    assert recipe._requires_runtime_preflight(
+        campaign_bound=True,
+        stage="review-only",
+    ) is True
+    assert recipe._requires_runtime_preflight(
+        campaign_bound=False,
+        stage="run",
+    ) is True
 
 
 def test_execute_freezes_generic_runtime_request(monkeypatch, tmp_path: Path) -> None:
@@ -492,6 +507,9 @@ def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) 
         selector="source-ready-priority",
         count=1,
         quota=1,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
         topic=None,
         source_providers=(),
         stage="plan-only",
@@ -601,6 +619,9 @@ def test_frozen_runtime_request_rejects_unknown_or_unordered_fields() -> None:
         "selector": "all",
         "count": 1,
         "quota": 1,
+        "requiredWorkers": 1,
+        "partitionCount": 16,
+        "capacityPlanDigest": "sha256:" + "1" * 64,
         "topic": None,
         "sourceProviders": ["provider-b", "provider-a"],
         "targetNames": [],
@@ -638,6 +659,9 @@ def test_execute_rejects_a_provider_outside_the_vertical_policy(monkeypatch, tmp
         selector="source-ready-priority",
         count=1,
         quota=1,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
         topic=None,
         source_providers=["provider-a"],
         stage="plan-only",
@@ -674,6 +698,7 @@ def test_task_facade_exposes_only_durable_commands() -> None:
         "acquire-videos",
         "review-asset",
         "reconcile-stale",
+        "reconcile-failed-campaign",
         "reconcile-submissions",
         "runtime-evidence",
     ]

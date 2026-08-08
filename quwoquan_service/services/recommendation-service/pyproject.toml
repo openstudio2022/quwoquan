@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-markers"
+addopts = "--strict-markers -p support.bytecode_isolation"
 python_files = ["test_*.py", "*_test.py"]
 testpaths = ["tests"]
 pythonpath = [

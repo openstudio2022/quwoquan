@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260808--travel-homepage-m1--china-beta-bootstrap-not-m100--scale-015",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/杭州西湖",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-d5c43b43-07d1-4539-a883-0dfdeff539c7",
+    "resultHash": "sha256:627bf1f586d7cc7f3b94f0503dde6a3198a2cb709591147561f0ec7135feb6b3"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

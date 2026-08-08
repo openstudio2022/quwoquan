@@ -20,6 +20,15 @@ import (
 type DeterministicModelProvider struct{}
 
 var _ orchestration.ModelProvider = DeterministicModelProvider{}
+var _ orchestration.ModelExecutionCapabilityProvider = DeterministicModelProvider{}
+
+func (DeterministicModelProvider) ModelExecutionCapabilities() orchestration.ModelExecutionCapabilities {
+	return orchestration.ModelExecutionCapabilities{
+		ToolCalling:     true,
+		ParallelTools:   true,
+		ReasoningEffort: true,
+	}
+}
 
 func (DeterministicModelProvider) Complete(
 	_ context.Context,
@@ -141,7 +150,7 @@ func finalAnswer(skillID, question, summary string) string {
 
 func clientTrace(req orchestration.ModelRequest, responseText string) map[string]any {
 	prompt := fmt.Sprintf(
-		"%s%s%s%s%s%s%s%s\n用户问题：%s",
+		"%s%s%s%s%s%s%s\n用户问题：%s",
 		req.Prompt,
 		prompting.FormatModelContextForPrompt(req.ContextTurns),
 		prompting.FormatModelContextSummaryForPrompt(req.ContextSummary),
@@ -149,9 +158,8 @@ func clientTrace(req orchestration.ModelRequest, responseText string) map[string
 		prompting.FormatAuthorizedIntersectionEvidenceForPrompt(req.IntersectionEvidence),
 		prompting.FormatModelPreferencesForPrompt(
 			req.SessionPreferences,
-			req.LongTermPreferences,
+			nil,
 		),
-		prompting.FormatConfirmedPreferencesForPrompt(req.LongTermPreferences),
 		prompting.FormatFeedbackContextForPrompt(req.FeedbackContext),
 		req.UserQuestion,
 	)

@@ -672,11 +672,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
     var settings = state.settings;
     if (state.imagePaths.isNotEmpty) {
       final firstImagePath = state.imagePaths.first.trim();
+      // 只有本地文件才需要抽取拍摄元数据。已上传的 MediaAsset 引用
+      // （`asset://` / `media://`）与交付 URL 走同一条 canonical 判定，
+      // 否则会对每一次「草稿恢复后再发布」都做一次注定失败的本地读盘。
       if (firstImagePath.isNotEmpty &&
           ref.read(platformCapabilitiesProvider).hasLocalFileSystem &&
-          !firstImagePath.startsWith('http://') &&
-          !firstImagePath.startsWith('https://') &&
-          !firstImagePath.startsWith('media:')) {
+          !isRemoteMediaReference(firstImagePath)) {
         try {
           final bytes = Uint8List.fromList(
             await ref

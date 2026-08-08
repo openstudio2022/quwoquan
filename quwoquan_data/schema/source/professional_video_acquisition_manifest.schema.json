@@ -21,6 +21,11 @@
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
     "nullableCount": {
       "anyOf": [
         {"type": "integer", "minimum": 0},
@@ -84,6 +89,20 @@
     },
     "item": {
       "type": "object",
+      "dependentRequired": {
+        "popularCandidateId": [
+          "popularCatalogRef", "popularCatalogDigest", "popularCatalogFileSha256"
+        ],
+        "popularCatalogRef": [
+          "popularCandidateId", "popularCatalogDigest", "popularCatalogFileSha256"
+        ],
+        "popularCatalogDigest": [
+          "popularCandidateId", "popularCatalogRef", "popularCatalogFileSha256"
+        ],
+        "popularCatalogFileSha256": [
+          "popularCandidateId", "popularCatalogRef", "popularCatalogDigest"
+        ]
+      },
       "required": [
         "assetId", "entityId", "observedEntityId", "entityAliases",
         "provider", "platform", "displayName", "sourceKind",
@@ -103,6 +122,13 @@
           "items": {"type": "string", "minLength": 1}
         },
         "provider": {"type": "string", "minLength": 1},
+        "popularCandidateId": {
+          "type": "string",
+          "pattern": "^popular-video:[a-z0-9_-]+:[0-9a-f]{16}$"
+        },
+        "popularCatalogRef": {"$ref": "#/$defs/safeRef"},
+        "popularCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "popularCatalogFileSha256": {"$ref": "#/$defs/sha256"},
         "platform": {"type": "string", "minLength": 1},
         "displayName": {"type": "string", "minLength": 1},
         "sourceKind": {"type": "string", "minLength": 1},

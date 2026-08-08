@@ -56,11 +56,17 @@ lifecycle:
 members:
   AssistantPolicyBucketDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [cohort]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: runtime/experiments 使用的稳定 cohort 权重。
   AssistantPolicyCohortAssignment:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [cohort]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: cohort 到 immutable releaseDigest 的映射；revision 只表示 rollout 状态序列。

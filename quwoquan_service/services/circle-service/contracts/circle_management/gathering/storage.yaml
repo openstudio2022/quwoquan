@@ -12,16 +12,12 @@ collections:
       keys: {conversationId: 1}
       sparse: true
       unique: true
-    - name: idx_gathering_lifecycle_schedule
-      keys: {lifecycleStatus: 1, schedule.startAt: 1, schedule.endAt: 1}
     - name: idx_gathering_host_page
       keys: {hostBinding.hostSubjectKind: 1, hostBinding.hostSubjectId: 1, lifecycleStatus: 1, schedule.startAt: 1}
     - name: idx_gathering_source_page
       keys: {purpose.sourceObjectRefs.objectRef.objectTypeRef: 1, purpose.sourceObjectRefs.objectRef.objectId: 1, lifecycleStatus: 1, schedule.startAt: 1}
     - name: idx_gathering_participation_identity
       keys: {participations.personaId: 1, participations.state: 1}
-    - name: idx_gathering_availability_watch
-      keys: {availabilityWatches.personaId: 1, availabilityWatches.status: 1, schedule.startAt: 1}
   gathering_command_receipts:
     publication_role: not_published
     entity: GatheringCommandReceipt

@@ -10,10 +10,14 @@ from typing import Any
 
 import yaml
 
+from content.execution.identity import parse_execution_id
 from core.paths import REPO_DATA_ROOT
 
 SCALE_CATALOG_PATH = REPO_DATA_ROOT / "control_plane" / "campaigns" / "scale_catalog.yaml"
 _SCALE_RE = re.compile(r"^M([1-9][0-9]{0,5})$")
+_CAMPAIGN_CARRIERS = ("homepage", "article", "image", "video")
+_GOVERNED_RESEARCH_SCALES = frozenset({"M100", "M1000", "M10000"})
+_EXECUTION_SCALE_INTENT_RE = re.compile(r"^m(?P<count>[1-9][0-9]{0,5})$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,11 +134,50 @@ def resolve_campaign_scale(
     return ResolvedCampaignScale(scale=f"M{explicit}", quota=explicit)
 
 
+def campaign_workload_targets(scale: str) -> dict[str, int]:
+    """Resolve the canonical per-carrier workload for one campaign scale.
+
+    Governed research milestones deliberately do not use the numeric scale as
+    the video workload.  Keeping this decision here prevents M10000 from
+    silently expanding video from the policy target of 1000 to 10000.
+    """
+
+    resolved = resolve_campaign_scale(scale=scale)
+    if resolved.scale not in _GOVERNED_RESEARCH_SCALES:
+        return {carrier: resolved.quota for carrier in _CAMPAIGN_CARRIERS}
+
+    # Imported lazily so the low-level scale parser remains usable while the
+    # governance package imports execution helpers during verifier startup.
+    from governance.coverage.distribution import load_content_distribution_policy
+
+    policy = load_content_distribution_policy()
+    return {
+        carrier: policy.scale_target(resolved.scale, carrier)
+        for carrier in _CAMPAIGN_CARRIERS
+    }
+
+
+def execution_campaign_scale(execution_id: str, *, quota: int) -> str:
+    """Derive one campaign scale from immutable intent or non-milestone quota.
+
+    Milestone video quotas deliberately differ from their campaign scale, so
+    quota is authoritative only when the execution intent is not ``m<N>``.
+    """
+
+    identity = parse_execution_id(execution_id)
+    match = _EXECUTION_SCALE_INTENT_RE.fullmatch(identity.intent)
+    if match is not None:
+        return resolve_campaign_scale(scale=f"M{match.group('count')}").scale
+    return resolve_campaign_scale(quota=quota).scale
+
+
 __all__ = [
     "CampaignScaleError",
     "ResolvedCampaignScale",
     "SCALE_CATALOG_PATH",
     "clear_scale_catalog_cache",
+    "campaign_workload_targets",
+    "execution_campaign_scale",
     "load_scale_catalog",
     "resolve_campaign_scale",
 ]

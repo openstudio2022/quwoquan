@@ -9,7 +9,8 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/object_intersection_section.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_section.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
@@ -155,7 +156,9 @@ Widget _host({
     overrides: [
       ..._intersectionBoundaryOverrides(),
       ...overrides,
-      behaviorReporterProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorReporterProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       objectSharedReasonsProvider(_query).overrideWith((_) => reasons()),
     ],
     child: const CupertinoApp(
@@ -201,7 +204,9 @@ Widget _routerHost({
   return ProviderScope(
     overrides: [
       ..._intersectionBoundaryOverrides(),
-      behaviorReporterProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorReporterProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       objectSharedReasonsProvider(_query).overrideWith((_) async => reasons),
     ],
     child: CupertinoApp.router(routerConfig: router),
@@ -242,7 +247,9 @@ Widget _companionHost({required List<IntersectionReason> reasons}) {
   return ProviderScope(
     overrides: [
       ..._intersectionBoundaryOverrides(),
-      behaviorReporterProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorReporterProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       objectSharedReasonsProvider(_query).overrideWith((_) async => reasons),
     ],
     child: CupertinoApp.router(routerConfig: router),

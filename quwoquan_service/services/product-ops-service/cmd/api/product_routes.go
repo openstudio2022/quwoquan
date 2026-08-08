@@ -22,8 +22,8 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	service.assignmentHTTP.Register(mux)
 	visithttp.NewHandler(service.visits).Register(mux)
 	appreleasehttp.NewHandler(service.appRelease).Register(mux)
-	recoveryfailurehttp.NewHandler(service.recoveryFailures, writeRuntimeError).Register(mux)
-	premiumpoolhttp.NewHandler(service.premiumPool, writeRuntimeError).Register(mux)
+	recoveryfailurehttp.NewHandler(service.recoveryFailures, writeRuntimeNotFound).Register(mux)
+	premiumpoolhttp.NewHandler(service.premiumPool, writeRuntimeNotFound).Register(mux)
 	eventrecordhttp.NewHandler(
 		service.telemetry,
 		recordTelemetryIngestMetrics,

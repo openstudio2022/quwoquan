@@ -4,6 +4,7 @@ package local_contract
 import (
 	"context"
 	"testing"
+	"time"
 
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
@@ -29,7 +30,14 @@ func (b *recordingTierBackend) Complete(
 	}
 	return ports.ModelCompletionResult{
 		Content:    "ok",
+		ModelID:    "fixture-" + string(request.Tier),
 		TierServed: request.Tier,
+		Usage: ports.ModelUsage{
+			PromptTokens:     1,
+			CompletionTokens: 1,
+			TotalTokens:      2,
+			Latency:          time.Millisecond,
+		},
 	}, nil
 }
 
@@ -52,7 +60,14 @@ func (b *recordingTierBackend) Stream(
 	}
 	return ports.ModelCompletionResult{
 		Content:    "ok",
+		ModelID:    "fixture-" + string(request.Tier),
 		TierServed: request.Tier,
+		Usage: ports.ModelUsage{
+			PromptTokens:     1,
+			CompletionTokens: 1,
+			TotalTokens:      2,
+			Latency:          time.Millisecond,
+		},
 	}, nil
 }
 

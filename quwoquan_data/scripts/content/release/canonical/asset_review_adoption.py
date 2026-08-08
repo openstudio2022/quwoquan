@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -103,15 +102,14 @@ def _professional_identity(
         if asset_kind == "image"
         else "professionalAcquisitionReceiptRef"
     )
-    receipt_values = [row.get(receipt_field) for row in rows]
-    asset_values = [row.get("professionalAssetId") for row in rows]
-    digest_values = [row.get("professionalContentSha256") for row in rows]
-    has_any = any(
-        str(value or "").strip()
-        for value in (*receipt_values, *asset_values, *digest_values)
+    professional_rows = tuple(
+        row for row in rows if str(row.get(receipt_field) or "").strip()
     )
-    if not has_any:
+    if not professional_rows:
         return None
+    receipt_values = [row.get(receipt_field) for row in professional_rows]
+    asset_values = [row.get("professionalAssetId") for row in professional_rows]
+    digest_values = [row.get("professionalContentSha256") for row in professional_rows]
     receipt_ref = _one_value(receipt_values, label="acquisitionReceiptRef")
     asset_id = _one_value(asset_values, label="professionalAssetId")
     content_sha256 = _one_value(digest_values, label="professionalContentSha256")
@@ -129,7 +127,7 @@ def _professional_identity(
     return receipt_ref, asset_id, content_sha256
 
 
-def _binding(
+def build_independent_asset_review_binding(
     receipt: Mapping[str, Any],
     *,
     receipt_ref: str,
@@ -181,17 +179,20 @@ def adopt_independent_asset_review(
     object_root: Path,
     source_digest: str,
 ) -> dict[str, Any] | None:
-    """Copy one exact accepted receipt; acquisition-only assets GATE_BLOCK."""
+    """Bind one exact execution receipt without copying it into publish content."""
 
     identity = _professional_identity(raw_asset, related_sources, asset_kind=asset_kind)
     if identity is None:
         return None
     receipt_ref, acquisition_asset_id, acquired_sha256 = identity
-    if acquired_sha256 != content_sha256:
+    if asset_kind == "image" and acquired_sha256 != content_sha256:
         raise ObjectTransactionError("professional asset bytes drift from acquisition CAS")
     output_root = _output_root(execution_root)
+    acquisition_root_ref = "data/local/workspace/source-acquisition"
     expected_acquisition_ref = (
-        f"data/local/workspace/source-acquisition/{asset_kind}/{receipt_ref}"
+        f"{acquisition_root_ref}/video/{receipt_ref}"
+        if asset_kind == "video"
+        else f"{acquisition_root_ref}/{receipt_ref}"
     )
     expected_source_identity = _execution_source_identity(
         execution_root,
@@ -209,7 +210,7 @@ def adopt_independent_asset_review(
             and payload.get("objectRef") == object_ref
             and payload.get("acquisitionReceiptRef") == expected_acquisition_ref
             and snapshot.get("assetId") == acquisition_asset_id
-            and snapshot.get("contentSha256") == content_sha256
+            and snapshot.get("contentSha256") == acquired_sha256
         ):
             candidates.append(path)
     if len(candidates) != 1:
@@ -225,7 +226,7 @@ def adopt_independent_asset_review(
         )
         assert_asset_review_accepted(
             receipt,
-            content_sha256=content_sha256,
+            content_sha256=acquired_sha256,
             source_digest=source_digest,
             asset_id=acquisition_asset_id,
         )
@@ -256,29 +257,26 @@ def adopt_independent_asset_review(
             raise ObjectTransactionError(
                 "professional video source-unit evidence drifts from independent review"
             )
-    destination_ref = Path("asset_reviews/receipts") / source_path.name
-    destination = object_root / destination_ref
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        if destination.read_bytes() != source_path.read_bytes():
-            raise ObjectTransactionError("professional asset review copy collision")
-    else:
-        shutil.copy2(source_path, destination)
-    return _binding(
+    if (object_root / "asset_reviews").exists():
+        raise ObjectTransactionError(
+            "professional asset review evidence must not enter canonical object"
+        )
+    receipt_ref = source_path.relative_to(output_root).as_posix()
+    return build_independent_asset_review_binding(
         receipt,
-        receipt_ref=destination_ref.as_posix(),
-        receipt_file_sha256=file_digest(destination),
+        receipt_ref=receipt_ref,
+        receipt_file_sha256=file_digest(source_path),
     )
 
 
 def validate_frozen_asset_review_binding(
     *,
-    object_root: Path,
+    output_root: Path,
     object_ref: str,
     rights_asset: Mapping[str, Any],
     source_digest: str,
 ) -> dict[str, Any] | None:
-    """Recheck the copied receipt and every projected identity at release time."""
+    """Recheck the digest-bound execution receipt at release time."""
 
     acquisition_ref = str(rights_asset.get("acquisitionReceiptRef") or "").strip()
     raw_binding = rights_asset.get("independentAssetReview")
@@ -289,26 +287,48 @@ def validate_frozen_asset_review_binding(
             f"{object_ref}: professional asset review binding is incomplete"
         )
     receipt_ref = Path(str(raw_binding.get("receiptRef") or ""))
-    if receipt_ref.is_absolute() or ".." in receipt_ref.parts:
-        raise ObjectTransactionError(f"{object_ref}: asset review receiptRef is unsafe")
-    receipt_path = object_root / receipt_ref
-    if not receipt_path.is_file():
-        raise ObjectTransactionError(f"{object_ref}: copied asset review receipt is missing")
+    if (
+        receipt_ref.is_absolute()
+        or ".." in receipt_ref.parts
+        or len(receipt_ref.parts) != 7
+        or receipt_ref.parts[:2] != ("data", "tasks")
+        or receipt_ref.parts[3:6] != ("evidence", "asset_reviews", "receipts")
+        or receipt_ref.suffix != ".json"
+    ):
+        raise ObjectTransactionError(
+            f"{object_ref}: asset review receiptRef must name execution evidence"
+        )
+    receipt_path = output_root.resolve() / receipt_ref
+    if not receipt_path.is_file() or receipt_path.is_symlink():
+        raise ObjectTransactionError(
+            f"{object_ref}: execution asset review receipt is missing"
+        )
+    if file_digest(receipt_path) != raw_binding.get("receiptFileSha256"):
+        raise ObjectTransactionError(
+            f"{object_ref}: execution asset review receipt bytes drift"
+        )
     receipt = read_json(receipt_path)
     if not isinstance(receipt, dict):
-        raise ObjectTransactionError(f"{object_ref}: copied asset review receipt is invalid")
+        raise ObjectTransactionError(
+            f"{object_ref}: execution asset review receipt is invalid"
+        )
     physical = rights_asset.get("asset")
     physical = physical if isinstance(physical, Mapping) else {}
+    reviewed_content_sha256 = (
+        str(raw_binding.get("contentSha256") or "")
+        if raw_binding.get("assetKind") == "video"
+        else str(physical.get("sha256") or "")
+    )
     try:
         assert_asset_review_accepted(
             receipt,
-            content_sha256=str(physical.get("sha256") or ""),
+            content_sha256=reviewed_content_sha256,
             source_digest=source_digest,
             asset_id=str(raw_binding.get("acquisitionAssetId") or ""),
         )
     except (IndependentAssetReviewError, ValueError) as exc:
         raise ObjectTransactionError(str(exc)) from exc
-    expected = _binding(
+    expected = build_independent_asset_review_binding(
         receipt,
         receipt_ref=receipt_ref.as_posix(),
         receipt_file_sha256=file_digest(receipt_path),
@@ -331,5 +351,6 @@ def validate_frozen_asset_review_binding(
 
 __all__ = [
     "adopt_independent_asset_review",
+    "build_independent_asset_review_binding",
     "validate_frozen_asset_review_binding",
 ]

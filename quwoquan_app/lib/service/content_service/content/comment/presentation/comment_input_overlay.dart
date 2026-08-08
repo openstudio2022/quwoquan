@@ -7,7 +7,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/content_media_upload_service.dart';
-import 'package:quwoquan_app/service/content_service/content/comment/application/comment_remote_config.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/application/public/comment_remote_config.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/domain/comment_composer_models.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/adapters/comment_draft_store.dart';

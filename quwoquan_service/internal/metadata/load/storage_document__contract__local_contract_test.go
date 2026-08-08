@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"quwoquan_service/internal/metadata/storagecontract"
 )
 
 func TestAllServiceStorageDocumentsUseTheSingleStrictTypedReader(t *testing.T) {
@@ -29,7 +31,7 @@ func TestAllServiceStorageDocumentsUseTheSingleStrictTypedReader(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		if _, decodeErr := decodeStorageYAML(data); decodeErr != nil {
+		if _, decodeErr := storagecontract.DecodeYAML(data); decodeErr != nil {
 			t.Errorf("%s does not match ast.StorageDocument: %v", path, decodeErr)
 		}
 		count++
@@ -81,7 +83,7 @@ tables:
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := decodeStorageYAML([]byte(source)); err == nil {
+			if _, err := storagecontract.DecodeYAML([]byte(source)); err == nil {
 				t.Fatal("strict StorageDocument reader accepted non-canonical field")
 			}
 		})

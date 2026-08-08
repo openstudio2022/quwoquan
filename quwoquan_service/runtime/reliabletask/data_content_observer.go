@@ -15,15 +15,19 @@ import (
 
 const (
 	DataContentExecutionObservationSchema  = "quwoquan.reliabletask_execution_observation"
-	dataContentExecutionObservationVersion = 2
+	dataContentExecutionObservationVersion = 3
 	dataContentObserverTaskLimit           = int64(100_000)
 )
 
 type DataContentExecutionObservationRequest struct {
 	ExecutionID             string
 	Carrier                 string
+	Stage                   string
 	RequestBindingDigest    string
 	ExecutionEnvelopeDigest string
+	JobSetEnvelopeDigest    string
+	JobSetDigest            string
+	ActualTaskDigest        string
 	Campaign                DataContentCampaignBinding
 }
 
@@ -47,8 +51,12 @@ type DataContentExecutionObservation struct {
 	Version                  int                                   `json:"version"`
 	ExecutionID              string                                `json:"executionId"`
 	Carrier                  string                                `json:"carrier"`
+	Stage                    string                                `json:"stage"`
 	RequestBindingDigest     string                                `json:"requestBindingDigest"`
 	ExecutionEnvelopeDigest  string                                `json:"executionEnvelopeDigest"`
+	JobSetEnvelopeDigest     string                                `json:"jobSetEnvelopeDigest"`
+	JobSetDigest             string                                `json:"jobSetDigest"`
+	ActualTaskDigest         string                                `json:"actualTaskDigest"`
 	CampaignBinding          DataContentCampaignBinding            `json:"campaignBinding"`
 	ObservedAt               string                                `json:"observedAt"`
 	Tasks                    []DataContentExecutionObservationTask `json:"tasks"`
@@ -88,8 +96,12 @@ type DataContentExecutionObserver struct {
 func (r DataContentExecutionObservationRequest) validate() error {
 	r.ExecutionID = strings.TrimSpace(r.ExecutionID)
 	r.Carrier = strings.TrimSpace(r.Carrier)
+	r.Stage = strings.TrimSpace(r.Stage)
 	r.RequestBindingDigest = strings.TrimSpace(r.RequestBindingDigest)
 	r.ExecutionEnvelopeDigest = strings.TrimSpace(r.ExecutionEnvelopeDigest)
+	r.JobSetEnvelopeDigest = strings.TrimSpace(r.JobSetEnvelopeDigest)
+	r.JobSetDigest = strings.TrimSpace(r.JobSetDigest)
+	r.ActualTaskDigest = strings.TrimSpace(r.ActualTaskDigest)
 	if r.ExecutionID == "" || r.RequestBindingDigest == "" {
 		return errors.New("reliabletask observer requires executionId and request binding digest")
 	}
@@ -97,11 +109,19 @@ func (r DataContentExecutionObservationRequest) validate() error {
 		r.Carrier != "image" && r.Carrier != "video" {
 		return fmt.Errorf("reliabletask observer carrier=%q is invalid", r.Carrier)
 	}
+	if r.Stage != "author" && r.Stage != "publish" {
+		return fmt.Errorf("reliabletask observer stage=%q is invalid", r.Stage)
+	}
 	if !validSHA256Digest(r.RequestBindingDigest) {
 		return errors.New("reliabletask observer request binding must be sha256")
 	}
 	if !validSHA256Digest(r.ExecutionEnvelopeDigest) {
 		return errors.New("reliabletask observer execution envelope digest must be sha256")
+	}
+	if !validSHA256Digest(r.JobSetEnvelopeDigest) ||
+		!validSHA256Digest(r.JobSetDigest) ||
+		!validSHA256Digest(r.ActualTaskDigest) {
+		return errors.New("reliabletask observer job-set bindings must be sha256")
 	}
 	if err := r.Campaign.Validate(); err != nil {
 		return fmt.Errorf("reliabletask observer campaign binding is invalid: %w", err)
@@ -150,11 +170,51 @@ func buildDataContentExecutionObservation(
 	readySnapshot ReadyIndexObservation,
 	now time.Time,
 ) (DataContentExecutionObservation, error) {
+	selected := make([]ReliableAsyncTask, 0, len(tasks))
+	stageTaskCount := 0
+	for _, task := range tasks {
+		stage := strings.TrimSpace(task.Payload["stage"])
+		if stage != "author" && stage != "publish" {
+			return DataContentExecutionObservation{}, errors.New(
+				"reliabletask observer Mongo task stage is invalid",
+			)
+		}
+		if stage == strings.TrimSpace(request.Stage) {
+			stageTaskCount++
+		}
+		if stage == strings.TrimSpace(request.Stage) &&
+			strings.TrimSpace(task.Payload["jobSetEnvelopeDigest"]) == strings.TrimSpace(request.JobSetEnvelopeDigest) &&
+			strings.TrimSpace(task.Payload["jobSetDigest"]) == strings.TrimSpace(request.JobSetDigest) &&
+			strings.TrimSpace(task.Payload["actualTaskDigest"]) == strings.TrimSpace(request.ActualTaskDigest) {
+			selected = append(selected, task)
+		}
+	}
+	if len(selected) == 0 {
+		if stageTaskCount > 0 {
+			return DataContentExecutionObservation{}, errors.New(
+				"reliabletask observer stage task job-set identity drift",
+			)
+		}
+		return DataContentExecutionObservation{}, errors.New(
+			"reliabletask observer found no stage-scoped Mongo tasks",
+		)
+	}
 	sort.Slice(tasks, func(i, j int) bool {
 		return strings.TrimSpace(tasks[i].Payload["jobId"]) <
 			strings.TrimSpace(tasks[j].Payload["jobId"])
 	})
+	sort.Slice(selected, func(i, j int) bool {
+		return strings.TrimSpace(selected[i].Payload["jobId"]) <
+			strings.TrimSpace(selected[j].Payload["jobId"])
+	})
+	actualTaskDigest, err := DataContentAsyncTaskDigest(selected)
+	if err != nil || actualTaskDigest != strings.TrimSpace(request.ActualTaskDigest) {
+		return DataContentExecutionObservation{}, errors.New(
+			"reliabletask observer actual task digest drift",
+		)
+	}
 	taskIDs := make(map[string]struct{}, len(tasks))
+	selectedTaskIDs := make(map[string]struct{}, len(selected))
 	jobIDs := make(map[string]struct{}, len(tasks))
 	latestReadyEntry := make(map[string]time.Time, len(readySnapshot.Entries))
 	for _, entry := range readySnapshot.Entries {
@@ -166,19 +226,26 @@ func buildDataContentExecutionObservation(
 	for _, task := range tasks {
 		taskIDs[strings.TrimSpace(task.TaskID)] = struct{}{}
 	}
+	for _, task := range selected {
+		selectedTaskIDs[strings.TrimSpace(task.TaskID)] = struct{}{}
+	}
+	selectedRedisEntries := 0
 	for taskID := range latestReadyEntry {
 		if _, exists := taskIDs[taskID]; !exists {
 			return DataContentExecutionObservation{}, errors.New(
 				"reliabletask observer Redis stream crossed executionId",
 			)
 		}
+		if _, exists := selectedTaskIDs[taskID]; exists {
+			selectedRedisEntries++
+		}
 	}
 
-	rows := make([]DataContentExecutionObservationTask, 0, len(tasks))
-	pendingTimestamps := make([]string, 0, len(tasks))
-	readyTimestamps := make([]string, 0, len(tasks))
-	latencies := make([]int64, 0, len(tasks))
-	leaseEvidence := make([]map[string]any, 0, len(tasks))
+	rows := make([]DataContentExecutionObservationTask, 0, len(selected))
+	pendingTimestamps := make([]string, 0, len(selected))
+	readyTimestamps := make([]string, 0, len(selected))
+	latencies := make([]int64, 0, len(selected))
+	leaseEvidence := make([]map[string]any, 0, len(selected))
 	successful := 0
 	terminal := 0
 	throttled := 0
@@ -186,7 +253,7 @@ func buildDataContentExecutionObservation(
 	activeLeases := 0
 	expiredLeases := 0
 	oldestCreatedAt := now
-	for _, task := range tasks {
+	for _, task := range selected {
 		row, ready, pending, err := observeDataContentTask(
 			task,
 			request,
@@ -273,8 +340,12 @@ func buildDataContentExecutionObservation(
 		Version:                  dataContentExecutionObservationVersion,
 		ExecutionID:              strings.TrimSpace(request.ExecutionID),
 		Carrier:                  strings.TrimSpace(request.Carrier),
+		Stage:                    strings.TrimSpace(request.Stage),
 		RequestBindingDigest:     strings.TrimSpace(request.RequestBindingDigest),
 		ExecutionEnvelopeDigest:  strings.TrimSpace(request.ExecutionEnvelopeDigest),
+		JobSetEnvelopeDigest:     strings.TrimSpace(request.JobSetEnvelopeDigest),
+		JobSetDigest:             strings.TrimSpace(request.JobSetDigest),
+		ActualTaskDigest:         actualTaskDigest,
 		CampaignBinding:          request.Campaign,
 		ObservedAt:               timestamp(now),
 		Tasks:                    rows,
@@ -286,8 +357,8 @@ func buildDataContentExecutionObservation(
 		LatencyMilliseconds:      latencies,
 		ProviderThrottleCount:    throttled,
 		StuckJobCount:            stuck,
-		RedisEntryCount:          len(readySnapshot.Entries),
-		RedisPendingCount:        readySnapshot.PendingCount,
+		RedisEntryCount:          selectedRedisEntries,
+		RedisPendingCount:        int64(activeLeases),
 		ActiveLeaseCount:         activeLeases,
 		ExpiredLeaseCount:        expiredLeases,
 		LeaseEvidenceDigest:      leaseDigest,
@@ -319,6 +390,16 @@ func observeDataContentTask(
 			"reliabletask observer Mongo task execution envelope identity drift",
 		)
 	}
+	if strings.TrimSpace(task.Payload["jobSetEnvelopeDigest"]) !=
+		strings.TrimSpace(request.JobSetEnvelopeDigest) ||
+		strings.TrimSpace(task.Payload["jobSetDigest"]) !=
+			strings.TrimSpace(request.JobSetDigest) ||
+		strings.TrimSpace(task.Payload["actualTaskDigest"]) !=
+			strings.TrimSpace(request.ActualTaskDigest) {
+		return DataContentExecutionObservationTask{}, false, false, errors.New(
+			"reliabletask observer Mongo task job-set identity drift",
+		)
+	}
 	generation, generationErr := strconv.Atoi(
 		strings.TrimSpace(task.Payload["campaignGeneration"]),
 	)
@@ -340,15 +421,18 @@ func observeDataContentTask(
 		)
 	}
 	job := DataContentJob{
-		EntityRef:      task.Payload["entityRef"],
-		Carrier:        task.Payload["carrier"],
-		SourceRevision: task.Payload["sourceRevision"],
-		JobID:          task.Payload["jobId"],
-		ExecutionID:    task.Payload["executionId"],
-		Ref:            task.Payload["ref"],
-		Stage:          task.Payload["stage"],
-		PartitionKey:   task.Payload["partitionKey"],
-		IdempotencyKey: task.Payload["idempotencyKey"],
+		EntityRef:            task.Payload["entityRef"],
+		Carrier:              task.Payload["carrier"],
+		SourceRevision:       task.Payload["sourceRevision"],
+		JobID:                task.Payload["jobId"],
+		ExecutionID:          task.Payload["executionId"],
+		Ref:                  task.Payload["ref"],
+		Stage:                task.Payload["stage"],
+		PartitionKey:         task.Payload["partitionKey"],
+		IdempotencyKey:       task.Payload["idempotencyKey"],
+		JobSetEnvelopeDigest: task.Payload["jobSetEnvelopeDigest"],
+		JobSetDigest:         task.Payload["jobSetDigest"],
+		ActualTaskDigest:     task.Payload["actualTaskDigest"],
 	}
 	expectedKey, err := job.ValidateIdentity()
 	if err != nil || strings.TrimSpace(task.IdempotencyKey) != expectedKey {

@@ -29,6 +29,7 @@ type GreetingStreamEvent struct {
 	GreetingID                   string
 	RequesterPersonaID           string
 	TargetPersonaID              string
+	RecipientAccountID           string
 	Source                       string
 	PromotedConversationID       string
 	ExpireAt                     string
@@ -80,48 +81,36 @@ type ConversationGateway interface {
 	HasDirectBetween(ctx context.Context, personaA, personaB string) (bool, error)
 }
 
-// greetingNotifyPolicyReader 只读取影响打招呼通知的隐私设置位。
+// greetingNotifyPolicyReader 只按 canonical AccountID 读取影响打招呼通知的
+// 隐私设置位；不再接受 PersonaID 并二次解析 owner。
 type greetingNotifyPolicyReader interface {
-	AllowsStrangerGreeting(ctx context.Context, personaID string) (bool, error)
+	AllowsStrangerGreeting(ctx context.Context, accountID string) (bool, error)
 }
 
 // SettingsGreetingNotifyPolicy 从 UserSettings 派生打招呼通知条件
 // （side_effects: targetUser.allowStrangerGreeting）。缺省设置视为允许。
 type SettingsGreetingNotifyPolicy struct {
 	settings settingsports.SnapshotReader
-	personas accountports.PersonaReader
 }
 
 func NewSettingsGreetingNotifyPolicy(
 	settings settingsports.SnapshotReader,
-	personas accountports.PersonaReader,
 ) *SettingsGreetingNotifyPolicy {
-	if settings == nil || personas == nil {
-		panic("greeting notify policy requires UserSettings and Persona readers")
+	if settings == nil {
+		panic("greeting notify policy requires UserSettings reader")
 	}
 	return &SettingsGreetingNotifyPolicy{
 		settings: settings,
-		personas: personas,
 	}
 }
 
 func (p *SettingsGreetingNotifyPolicy) AllowsStrangerGreeting(
 	ctx context.Context,
-	personaID string,
+	accountID string,
 ) (bool, error) {
-	persona, err := p.personas.FindByPersonaID(
-		ctx,
-		strings.TrimSpace(personaID),
-	)
-	if err != nil {
-		return false, err
-	}
-	if persona == nil {
-		return true, nil
-	}
 	setting, found, err := p.settings.ReadUserSettingsSnapshot(
 		ctx,
-		strings.TrimSpace(persona.UserID),
+		strings.TrimSpace(accountID),
 	)
 	if err != nil {
 		return false, err
@@ -143,6 +132,7 @@ type GreetingService struct {
 	conversations ConversationGateway
 	events        UserEventPublisher
 	stream        GreetingEventStream
+	recipients    accountports.PersonaOwnerAccountReader
 	notifyPolicy  greetingNotifyPolicyReader
 	intersections GreetingIntersectionResolver
 }
@@ -154,11 +144,13 @@ func NewGreetingService(
 	conversations ConversationGateway,
 	events UserEventPublisher,
 	stream GreetingEventStream,
+	recipients accountports.PersonaOwnerAccountReader,
 	notifyPolicy greetingNotifyPolicyReader,
 	intersectionResolvers ...GreetingIntersectionResolver,
 ) *GreetingService {
 	if greetings == nil || commands == nil || relationships == nil ||
-		conversations == nil || events == nil || stream == nil || notifyPolicy == nil {
+		conversations == nil || events == nil || stream == nil || recipients == nil ||
+		notifyPolicy == nil {
 		panic("greeting application requires all declared ports")
 	}
 	var intersections GreetingIntersectionResolver = ordinaryGreetingIntersectionResolver{}
@@ -172,6 +164,7 @@ func NewGreetingService(
 		conversations: conversations,
 		events:        events,
 		stream:        stream,
+		recipients:    recipients,
 		notifyPolicy:  notifyPolicy,
 		intersections: intersections,
 	}
@@ -236,6 +229,16 @@ func (s *GreetingService) Send(ctx context.Context, req SendGreetingRequest) (*u
 	} else if pending != nil {
 		return nil, greetinggenerated.AppErrorFromGreetingDuplicatePending("pending greeting already exists")
 	}
+	recipientAccountID, found, err := s.recipients.ResolveOwnerAccountID(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+	recipientAccountID = strings.TrimSpace(recipientAccountID)
+	if !found || recipientAccountID == "" {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"target persona does not resolve to an active account",
+		)
+	}
 
 	now := time.Now().UTC()
 	expireAt := now.Add(greetingDefaultTTL)
@@ -269,7 +272,10 @@ func (s *GreetingService) Send(ctx context.Context, req SendGreetingRequest) (*u
 		}
 	}
 
-	allowsGreeting, policyErr := s.notifyPolicy.AllowsStrangerGreeting(ctx, targetID)
+	allowsGreeting, policyErr := s.notifyPolicy.AllowsStrangerGreeting(
+		ctx,
+		recipientAccountID,
+	)
 	if policyErr != nil {
 		slog.ErrorContext(ctx, "greeting notify policy read failed; defaulting to notify",
 			slog.String("greetingId", greeting.ID),
@@ -289,6 +295,7 @@ func (s *GreetingService) Send(ctx context.Context, req SendGreetingRequest) (*u
 			"id":                           greeting.ID,
 			"requesterPersonaId":           requesterID,
 			"targetPersonaId":              targetID,
+			"recipientAccountId":           recipientAccountID,
 			"source":                       source,
 			"expireAt":                     expireAt.Format(time.RFC3339),
 			"targetAllowsStrangerGreeting": allowsGreeting,

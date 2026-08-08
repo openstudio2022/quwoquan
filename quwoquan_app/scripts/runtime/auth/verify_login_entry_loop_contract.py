@@ -61,12 +61,12 @@ def main() -> int:
         "quwoquan_app/lib/service/content_service/content/post/presentation/create_action_sheet.dart"
     )
     quick_actions = read(
-        "quwoquan_app/lib/runtime/di/shell/actions/global_surface_actions.dart"
+        "quwoquan_app/lib/runtime/shell/actions/global_surface_actions.dart"
     )
     create_entry_route = read(
         "quwoquan_app/lib/runtime/di/navigation/app_router_create_entry_route.dart"
     )
-    main_shell = read("quwoquan_app/lib/runtime/di/shell/main_app_shell.dart")
+    main_shell = read("quwoquan_app/lib/runtime/shell/main_app_shell.dart")
     shell_test = read("quwoquan_app/test/local_contract/runtime/shell/main_app_shell_widget__local_contract_test.dart")
     continuation_test = read(
         "quwoquan_app/test/local_contract/runtime/auth/auth_continuation__local_contract_test.dart"

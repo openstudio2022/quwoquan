@@ -37,10 +37,10 @@ func generateMigrationSQL(ctx *genContext, tableName string, table TableDef) err
 	for i, col := range table.Columns {
 		b.WriteString(fmt.Sprintf("    %-24s %s", col.Name, col.Type))
 
-		if col.IsPK() {
+		if col.IsPrimaryKey() {
 			b.WriteString(" PRIMARY KEY")
 		}
-		if col.IsNotNull() && !col.IsPK() {
+		if col.IsNotNull() && !col.IsPrimaryKey() {
 			b.WriteString(" NOT NULL")
 		}
 		if col.IsUnique() {
@@ -56,16 +56,25 @@ func generateMigrationSQL(ctx *genContext, tableName string, table TableDef) err
 		b.WriteString("\n")
 	}
 
-	if table.FK != nil {
-		parts := strings.SplitN(table.FK.References, ".", 2)
-		if len(parts) == 2 {
-			onDelete := "CASCADE"
-			if table.FK.OnDelete != "" {
-				onDelete = strings.ToUpper(table.FK.OnDelete)
-			}
-			b.WriteString(fmt.Sprintf("    ,CONSTRAINT fk_%s_%s FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE %s\n",
-				tableName, table.FK.Column, table.FK.Column, parts[0], parts[1], onDelete))
+	for index, foreignKey := range table.ForeignKeys {
+		if len(foreignKey.Columns) == 0 {
+			continue
 		}
+		onDelete := "CASCADE"
+		if foreignKey.OnDelete != "" {
+			onDelete = strings.ToUpper(foreignKey.OnDelete)
+		}
+		constraintName := fmt.Sprintf("fk_%s_%d", tableName, index+1)
+		if len(foreignKey.Columns) == 1 {
+			constraintName = fmt.Sprintf("fk_%s_%s", tableName, foreignKey.Columns[0])
+		}
+		b.WriteString(fmt.Sprintf(
+			"    ,CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s ON DELETE %s\n",
+			constraintName,
+			strings.Join(foreignKey.Columns, ", "),
+			foreignKey.References,
+			onDelete,
+		))
 	}
 
 	b.WriteString(");\n")

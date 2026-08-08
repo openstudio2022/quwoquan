@@ -1,1 +1,8 @@
-{"axisRole":"contentAngle","createdAt":"2026-05-15T00:00:00+08:00","description":"旅行或行动路线推荐","label":"路线推荐","labelEn":"Route Recommendation","updatedAt":"2026-05-15T00:00:00+08:00"}
+{
+  "label": "路线推荐",
+  "labelEn": "Route Recommendation",
+  "description": "旅行或行动路线推荐",
+  "axisRole": "contentAngle",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

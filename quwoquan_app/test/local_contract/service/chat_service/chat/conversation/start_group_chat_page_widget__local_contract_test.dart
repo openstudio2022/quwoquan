@@ -720,7 +720,7 @@ void main() {
         .map((item) => item.id)
         .toSet();
     final beforeFunGroups = await container.read(
-      chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups).future,
+      chatContactsRowsForSubTabProvider(ChatContactHomeFilter.group).future,
     );
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
@@ -751,7 +751,7 @@ void main() {
           '${inboxItems.map((item) => item.id).join(',')}',
     );
     final afterFunGroups = await container.read(
-      chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups).future,
+      chatContactsRowsForSubTabProvider(ChatContactHomeFilter.group).future,
     );
     expect(afterFunGroups.length, greaterThanOrEqualTo(beforeFunGroups.length));
     expect(

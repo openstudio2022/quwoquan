@@ -176,3 +176,19 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_learning_fact/append_outbox__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: assistant_learning_fact_append_assistant_learning_fact_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: AppendAssistantLearningFact}
+    runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_learning_fact/assistant_learning_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: assistant_learning_fact_append_assistant_learning_fact_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: AppendAssistantLearningFact}
+    runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_learning_fact/assistant_learning_fact_command_identity__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

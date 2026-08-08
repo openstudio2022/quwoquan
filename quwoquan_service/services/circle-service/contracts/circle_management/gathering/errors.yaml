@@ -301,33 +301,6 @@ errors:
   dart_const: gatheringSafetyAuthorityUnavailable
   go_const: ErrGatheringSafetyAuthorityUnavailable
   user_message: {zh: 安全授权服务暂时不可用，请稍后重试, en: Safety authorization is temporarily unavailable}
-- code: CIRCLE.USER.gathering_qualification_required
-  reason: gathering_qualification_required
-  emitted_by: [{surface: http, operations: [PublishGathering]}]
-  http_status: 422
-  recovery_action: surface
-  disruption_level: inlineCard
-  dart_const: gatheringQualificationRequired
-  go_const: ErrGatheringQualificationRequired
-  user_message: {zh: 发布此活动需要补充有效资质, en: A valid qualification is required to publish this Gathering}
-- code: CIRCLE.USER.gathering_commercial_authority_required
-  reason: gathering_commercial_authority_required
-  emitted_by: [{surface: http, operations: [PublishGathering]}]
-  http_status: 422
-  recovery_action: surface
-  disruption_level: inlineCard
-  dart_const: gatheringCommercialAuthorityRequired
-  go_const: ErrGatheringCommercialAuthorityRequired
-  user_message: {zh: 该活动需要有效的商业主体授权, en: Valid commercial authority is required for this Gathering}
-- code: CIRCLE.USER.gathering_policy_denied
-  reason: gathering_policy_denied
-  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering]}]
-  http_status: 403
-  recovery_action: surface
-  disruption_level: inlineCard
-  dart_const: gatheringPolicyDenied
-  go_const: ErrGatheringPolicyDenied
-  user_message: {zh: 当前政策不允许创建或发布此活动, en: Current policy does not allow this Gathering}
 - code: CIRCLE.DEPENDENCY.gathering_target_unavailable
   reason: gathering_target_unavailable
   emitted_by: [{surface: http, operations: [CreateGatheringDraft, ListGatheringsBySource]}]

@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_public_candidate_catalog.schema.json",
+  "title": "Anonymous professional-image public candidate catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "catalogId",
+    "catalogRevision",
+    "catalogDigest",
+    "discoveryPlanId",
+    "discoveryPlanDigest",
+    "observedAt",
+    "sourceResponses",
+    "providerCounts",
+    "candidateCount",
+    "rejectedAssetCount",
+    "candidates",
+    "rejections"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_public_candidate_catalog"},
+    "catalogId": {"type": "string", "pattern": "^professional-image-public-[0-9a-f]{16}$"},
+    "catalogRevision": {"const": "public-professional-image-candidates-v1"},
+    "catalogDigest": {"$ref": "#/$defs/digest"},
+    "discoveryPlanId": {"type": "string", "pattern": "^professional-image-discovery-[0-9a-f]{16}$"},
+    "discoveryPlanDigest": {"$ref": "#/$defs/digest"},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "sourceResponses": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/sourceResponse"}
+    },
+    "providerCounts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/providerCount"}, {"properties": {"provider": {"const": "pinterest"}, "displayName": {"const": "Pinterest"}, "priority": {"const": 0}}}]},
+        {"allOf": [{"$ref": "#/$defs/providerCount"}, {"properties": {"provider": {"const": "tuchong"}, "displayName": {"const": "图虫"}, "priority": {"const": 1}}}]}
+      ],
+      "items": false
+    },
+    "candidateCount": {"type": "integer", "minimum": 2},
+    "rejectedAssetCount": {"type": "integer", "minimum": 0},
+    "candidates": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "rejections": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rejection"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "httpsUrl": {"type": "string", "pattern": "^https://"},
+    "sourceResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "sourcePageUrl", "contentType", "robotsEvidenceDigest", "responseDigest"],
+      "properties": {
+        "provider": {"enum": ["pinterest", "tuchong"]},
+        "sourcePageUrl": {"$ref": "#/$defs/httpsUrl"},
+        "contentType": {"enum": ["text/html", "application/json"]},
+        "robotsEvidenceDigest": {"$ref": "#/$defs/digest"},
+        "responseDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "providerCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "displayName",
+        "priority",
+        "plannedAssetCount",
+        "responseCount",
+        "discoveredAssetCount",
+        "acceptedAssetCount",
+        "rejectedAssetCount",
+        "duplicateAssetCount"
+      ],
+      "properties": {
+        "provider": {"enum": ["pinterest", "tuchong"]},
+        "displayName": {"type": "string", "minLength": 1},
+        "priority": {"enum": [0, 1]},
+        "plannedAssetCount": {"type": "integer", "minimum": 1},
+        "responseCount": {"type": "integer", "minimum": 1},
+        "discoveredAssetCount": {"type": "integer", "minimum": 1},
+        "acceptedAssetCount": {"type": "integer", "minimum": 1},
+        "rejectedAssetCount": {"type": "integer", "minimum": 0},
+        "duplicateAssetCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "provider",
+        "sourcePageUrl",
+        "assetUrl",
+        "creator",
+        "title",
+        "observedAt",
+        "originalAssetCandidate",
+        "responseDigest"
+      ],
+      "properties": {
+        "candidateId": {"type": "string", "pattern": "^(pinterest|tuchong):public:[0-9a-f]{16}$"},
+        "provider": {"enum": ["pinterest", "tuchong"]},
+        "sourcePageUrl": {"$ref": "#/$defs/httpsUrl"},
+        "assetUrl": {"$ref": "#/$defs/httpsUrl"},
+        "creator": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "observedAt": {"type": "string", "format": "date-time"},
+        "originalAssetCandidate": {"const": true},
+        "responseDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "rejection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "sourcePageUrl",
+        "candidateAssetUrl",
+        "reasonCode",
+        "reason",
+        "responseDigest"
+      ],
+      "properties": {
+        "provider": {"enum": ["pinterest", "tuchong"]},
+        "sourcePageUrl": {"$ref": "#/$defs/httpsUrl"},
+        "candidateAssetUrl": {"type": "string"},
+        "reasonCode": {
+          "enum": [
+            "DATA.SOURCE.CREATOR_MISSING",
+            "DATA.SOURCE.TITLE_MISSING",
+            "DATA.SOURCE.NON_HTTPS_OR_FOREIGN_ASSET",
+            "DATA.SOURCE.THUMBNAIL_NOT_ORIGINAL",
+            "DATA.SOURCE.DUPLICATE_CANDIDATE"
+          ]
+        },
+        "reason": {"type": "string", "minLength": 1},
+        "responseDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

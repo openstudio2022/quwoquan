@@ -92,7 +92,7 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
-        hasLoaded: true,
+        hasLoaded: false,
         lastError: error,
       );
     }

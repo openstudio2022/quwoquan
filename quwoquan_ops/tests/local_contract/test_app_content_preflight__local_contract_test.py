@@ -63,6 +63,9 @@ class AppContentPreflightTest(unittest.TestCase):
                 "imageTitle": "图片 A",
                 "videoWorkId": "video-a",
                 "creatorName": "创作者 A",
+                "creatorUserHandle": "creator-a",
+                "creatorPersonaId": "persona-a",
+                "creatorAvatarAssetId": "avatar-a",
                 "tagLabel": "标签 A",
                 "videoAttribution": "来源 A",
             },
@@ -73,6 +76,9 @@ class AppContentPreflightTest(unittest.TestCase):
         readiness["feedQueries"][-1]["matchedPostIds"] = ["video-a"]
         envelope = stackctl._app_content_uat_envelope(readiness)
         self.assertEqual(envelope["videoWorkId"], "video-a")
+        self.assertEqual(envelope["creatorUserHandle"], "creator-a")
+        self.assertEqual(envelope["creatorPersonaId"], "persona-a")
+        self.assertEqual(envelope["creatorAvatarAssetId"], "avatar-a")
 
     def test_live_uat_holds_runtime_use_lock_while_preflighting(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -117,7 +123,7 @@ class AppContentPreflightTest(unittest.TestCase):
             )
             lock_handle.close.assert_called_once_with()
 
-    def test_debug_preflight_requires_running_full_runtime_and_debug_sms_readback(
+    def test_debug_preflight_warns_for_runtime_content_and_provider_unavailability(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -225,30 +231,13 @@ class AppContentPreflightTest(unittest.TestCase):
                 passed["provider"]["adapterId"],
                 "ext.sms.local_capture",
             )
-            self.assertEqual(passed["packageBaseline"], "sha256:" + "2" * 64)
-            self.assertEqual(passed["sourceRevision"], "a" * 40)
-            self.assertEqual(
-                passed["readinessReceiptRef"],
-                "receipt:readiness:release-a",
-            )
-            self.assertEqual(
-                passed["lifecycleExitRef"],
-                "receipt:lifecycle:release-a",
-            )
-            self.assertEqual(
-                passed["appUatEnvelope"]["releaseId"],
-                "release-a",
-            )
-            self.assertEqual(
-                passed["contentReadback"]["homepagePostIds"],
-                ["post-a"],
-            )
-            self.assertEqual(
-                passed["contentReadinessReportRef"],
-                "receipt:content-readiness:release-a",
-            )
-            self.assertEqual(mismatched["exitCode"], 2)
-            self.assertIn("mismatch", " ".join(mismatched["details"]))
+            self.assertEqual(passed["launchPolicy"], "test_live")
+            self.assertEqual(passed["contentBindingState"], "unbound")
+            self.assertEqual(passed["packageBaseline"], "")
+            self.assertEqual(passed["releaseId"], "")
+            self.assertEqual(mismatched["exitCode"], 0)
+            self.assertEqual(mismatched["status"], "warning")
+            self.assertIn("mismatch", " ".join(mismatched["warnings"]))
 
             with patch.object(
                 stackctl,
@@ -280,8 +269,9 @@ class AppContentPreflightTest(unittest.TestCase):
                         report_dir=str(report_dir / "stopped"),
                     )
                 )
-            self.assertEqual(stopped["exitCode"], 2)
-            self.assertIn("not running", " ".join(stopped["details"]))
+            self.assertEqual(stopped["exitCode"], 0)
+            self.assertEqual(stopped["status"], "warning")
+            self.assertIn("not running", " ".join(stopped["warnings"]))
 
             with patch.object(
                 stackctl,
@@ -315,10 +305,11 @@ class AppContentPreflightTest(unittest.TestCase):
                         report_dir=str(report_dir / "missing-candidate"),
                     )
                 )
-            self.assertEqual(missing_candidate["exitCode"], 2)
+            self.assertEqual(missing_candidate["exitCode"], 0)
+            self.assertEqual(missing_candidate["status"], "warning")
             self.assertIn(
                 "no active immutable candidate",
-                " ".join(missing_candidate["details"]),
+                " ".join(missing_candidate["warnings"]),
             )
 
     def test_active_candidate_resolves_only_commercial_release_and_lifecycle(self) -> None:
@@ -394,6 +385,9 @@ class AppContentPreflightTest(unittest.TestCase):
                     "imageTitle": "图片 A",
                     "videoWorkId": "video-a",
                     "creatorName": "创作者 A",
+                    "creatorUserHandle": "creator-a",
+                    "creatorPersonaId": "persona-a",
+                    "creatorAvatarAssetId": "avatar-a",
                     "tagLabel": "标签 A",
                     "videoAttribution": "来源 A",
                 },
@@ -473,6 +467,9 @@ class AppContentPreflightTest(unittest.TestCase):
                     "imageTitle": "图片 A",
                     "videoWorkId": "video-a",
                     "creatorName": "创作者 A",
+                    "creatorUserHandle": "creator-a",
+                    "creatorPersonaId": "persona-a",
+                    "creatorAvatarAssetId": "avatar-a",
                     "tagLabel": "标签 A",
                     "videoAttribution": "来源 A",
                 },
@@ -553,6 +550,9 @@ class AppContentPreflightTest(unittest.TestCase):
                         "imageTitle": "图片 A",
                         "videoWorkId": "video-a",
                         "creatorName": "创作者 A",
+                        "creatorUserHandle": "creator-a",
+                        "creatorPersonaId": "persona-a",
+                        "creatorAvatarAssetId": "avatar-a",
                         "tagLabel": "标签 A",
                         "videoAttribution": "来源 A",
                     },
@@ -648,6 +648,15 @@ class AppContentPreflightTest(unittest.TestCase):
             for call in core_calls:
                 self.assertIn("--data-release-id", call.args[0])
                 self.assertIn("release-a", call.args[0])
+                self.assertIn("--data-release-creator-user-handle", call.args[0])
+                self.assertIn("creator-a", call.args[0])
+                self.assertIn("--data-release-creator-persona-id", call.args[0])
+                self.assertIn("persona-a", call.args[0])
+                self.assertIn(
+                    "--data-release-creator-avatar-asset-id",
+                    call.args[0],
+                )
+                self.assertIn("avatar-a", call.args[0])
             fault_calls = [
                 call
                 for call in patrol_calls

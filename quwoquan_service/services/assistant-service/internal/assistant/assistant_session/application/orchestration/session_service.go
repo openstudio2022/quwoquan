@@ -60,9 +60,15 @@ func (service *AssistantService) CreateSession(
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
-	stored, _, err := store.InsertSession(ctx, session)
+	stored, replayed, err := store.InsertSession(ctx, session)
 	if err != nil {
 		return assistant.AssistantSession{}, assistantSessionStorageUnavailable(err.Error())
+	}
+	if replayed && stored.Summary != session.Summary {
+		return assistant.AssistantSession{},
+			sessiongenerated.AppErrorFromSessionIdempotencyConflict(
+				"clientRequestId is already bound to a different normalized session summary",
+			)
 	}
 	return stored, nil
 }

@@ -234,6 +234,30 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/contact_discovery_record/http_postgres_lifecycle__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: contact_discovery_record_initiate_contact_discovery_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: InitiateContactDiscovery}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/add_contact_phone_page__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: contact_discovery_record_get_latest_contact_discovery_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetLatestContactDiscovery}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/contact_discovery_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: contact_discovery_record_dismiss_contact_discovery_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: DismissContactDiscovery}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/contact_discovery_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
 contract_test:
   scenarios:
     - name: discovery_result_isolation

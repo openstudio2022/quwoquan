@@ -24,7 +24,7 @@ checkpoint:
 fields:
 - {name: contentId, type: string, description: Post identity and unique premium admission key.}
 - {name: scope, type: string, description: Must be global.}
-- {name: status, type: string, description: active, rolled_back, takedown_ejected or expired.}
+- {name: status, type: string, description: 'active, rolled_back, takedown_ejected or expired.'}
 - {name: eligibilityState, type: string, description: eligible or ineligible; ranked reads fail closed.}
 - {name: ineligibleReasons, type: '[]string', description: Deterministic rejection reasons for replay and audit.}
 - {name: qualityAdmission, type: string, description: Must be approved before premium eligibility.}

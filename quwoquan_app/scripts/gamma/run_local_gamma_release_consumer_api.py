@@ -83,6 +83,7 @@ def run_release_consumer(
     )
     return {
         "command": command,
+        "mutationPolicy": "read_only",
         "exitCode": result.returncode,
         "status": "passed" if result.returncode == 0 else "failed",
         "outputTail": (result.stdout or "")[-8000:],
@@ -145,6 +146,19 @@ def main() -> int:
 
     consumer = run_release_consumer(identity=identity)
     ended_at = utc_now()
+    if consumer.get("mutationPolicy") != "read_only":
+        write_blocked_case_result(
+            report_path=report_path,
+            phase="release_consumer",
+            reason="Gamma release-consumer did not prove a read-only mutation policy",
+            identity=execution_identity,
+            executed=1,
+        )
+        print(
+            f"Gamma release-consumer GATE_BLOCK report written: {report_path}",
+            file=sys.stderr,
+        )
+        return 2
     if consumer["status"] != "passed":
         write_blocked_case_result(
             report_path=report_path,

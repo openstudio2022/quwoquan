@@ -129,6 +129,7 @@ const (
 	ModelStageEvidenceProcessing ModelStage = "evidence_processing"
 	ModelStageCompaction         ModelStage = "compaction"
 	ModelStagePresentation       ModelStage = "presentation"
+	ModelStageVerification       ModelStage = "verification"
 	ModelStageFinal              ModelStage = "final"
 )
 

@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/operation"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
 	sessionmessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/messaging"
@@ -27,7 +28,13 @@ func TestAssistantSessionCommitsAggregateAndOutboxAtomically(t *testing.T) {
 	resetIntegrationState(t)
 	handler := assistantingress.Routes(newIntegrationAssistantService())
 
-	first := createAssistantSessionRequest(t, handler, "user-session-outbox", "request-session-outbox")
+	first := createAssistantSessionRequest(
+		t,
+		handler,
+		"user-session-outbox",
+		"request-session-outbox",
+		"  西湖同行计划  ",
+	)
 	if first.Code != http.StatusOK && first.Code != http.StatusCreated {
 		t.Fatalf("create session status=%d body=%s", first.Code, first.Body.String())
 	}
@@ -43,7 +50,13 @@ func TestAssistantSessionCommitsAggregateAndOutboxAtomically(t *testing.T) {
 		"publishedAt": bson.M{"$exists": false},
 	}, 1)
 
-	replayed := createAssistantSessionRequest(t, handler, "user-session-outbox", "request-session-outbox")
+	replayed := createAssistantSessionRequest(
+		t,
+		handler,
+		"user-session-outbox",
+		"request-session-outbox",
+		"\n西湖同行计划\t",
+	)
 	if replayed.Code != http.StatusOK && replayed.Code != http.StatusCreated {
 		t.Fatalf("replay session status=%d body=%s", replayed.Code, replayed.Body.String())
 	}
@@ -53,6 +66,23 @@ func TestAssistantSessionCommitsAggregateAndOutboxAtomically(t *testing.T) {
 	}
 	if replay.SessionID != created.SessionID {
 		t.Fatalf("replay created another aggregate: %s != %s", replay.SessionID, created.SessionID)
+	}
+	conflict := createAssistantSessionRequest(
+		t,
+		handler,
+		"user-session-outbox",
+		"request-session-outbox",
+		"灵隐寺同行计划",
+	)
+	if conflict.Code != http.StatusConflict {
+		t.Fatalf("conflicting replay status=%d body=%s", conflict.Code, conflict.Body.String())
+	}
+	var conflictResponse rterr.ErrorResponse
+	if err := json.Unmarshal(conflict.Body.Bytes(), &conflictResponse); err != nil {
+		t.Fatalf("decode conflicting replay: %v", err)
+	}
+	if conflictResponse.Code != "ASSISTANT.USER.session_idempotency_conflict" {
+		t.Fatalf("conflicting replay error=%+v", conflictResponse)
 	}
 	assertSessionCollectionCount(t, "assistant_sessions", bson.M{}, 1)
 	assertSessionCollectionCount(t, "assistant_session_outbox", bson.M{}, 1)
@@ -88,10 +118,12 @@ func createAssistantSessionRequest(
 	handler http.Handler,
 	accountID string,
 	clientRequestID string,
+	summary string,
 ) *httptest.ResponseRecorder {
 	t.Helper()
 	payload, err := json.Marshal(map[string]any{
 		"clientRequestId": clientRequestID,
+		"summary":         summary,
 	})
 	if err != nil {
 		t.Fatalf("marshal create session request: %v", err)

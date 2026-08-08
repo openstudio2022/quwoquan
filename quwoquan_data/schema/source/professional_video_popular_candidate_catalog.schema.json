@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_video_popular_candidate_catalog.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "catalogId", "catalogRevision", "sourceRevision", "sourceDigest",
+    "entityCatalogDigest", "providerPolicyRef",
+    "providerPolicyDigest", "providerPolicies", "sourceResponses",
+    "providerCounts", "candidateCount", "candidates", "catalogDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_video_popular_candidate_catalog"},
+    "catalogId": {"type": "string", "pattern": "^popular-video-candidates-[0-9a-f]{16}$"},
+    "catalogRevision": {"const": "popular-video-candidates-v1"},
+    "sourceRevision": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+    "providerPolicyRef": {"type": "string", "minLength": 1},
+    "providerPolicyDigest": {"$ref": "#/$defs/digest"},
+    "providerPolicies": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/policy"}},
+    "sourceResponses": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/response"}},
+    "providerCounts": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/count"}},
+    "candidateCount": {"type": "integer", "minimum": 2},
+    "candidates": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/candidate"}},
+    "catalogDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "displayName", "priority", "manualFileRequired", "automaticStreamParsing", "automaticVideoDownload"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1}, "displayName": {"type": "string", "minLength": 1},
+        "priority": {"type": "integer", "minimum": 0}, "manualFileRequired": {"const": true},
+        "automaticStreamParsing": {"const": false}, "automaticVideoDownload": {"const": false}
+      }
+    },
+    "response": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "sourcePageUrl", "apiEvidenceUrl", "responseDigest", "candidateCount"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1}, "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+        "apiEvidenceUrl": {"type": "string", "pattern": "^https://"}, "responseDigest": {"$ref": "#/$defs/digest"},
+        "candidateCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "count": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "displayName", "candidateCount", "manualFileProvidedCount"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1}, "displayName": {"type": "string", "minLength": 1},
+        "candidateCount": {"type": "integer", "minimum": 1}, "manualFileProvidedCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "popularity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["playCount", "likeCount", "commentCount", "shareCount", "favoriteCount", "popularityScore", "popularityPercentile", "comparisonCandidateCount"],
+      "properties": {
+        "playCount": {"type": "integer", "minimum": 0}, "likeCount": {"type": "integer", "minimum": 0},
+        "commentCount": {"type": "integer", "minimum": 0}, "shareCount": {"type": "integer", "minimum": 0},
+        "favoriteCount": {"type": "integer", "minimum": 0}, "popularityScore": {"type": "integer", "minimum": 0},
+        "popularityPercentile": {"type": "number", "minimum": 0, "maximum": 1},
+        "comparisonCandidateCount": {"type": "integer", "minimum": 2}
+      }
+    },
+    "probe": {
+      "type": "object", "additionalProperties": true,
+      "required": ["playable", "motionVideo", "staticImageSequence", "premiumPlayableEligible"],
+      "properties": {
+        "playable": {"const": true}, "motionVideo": {"const": true},
+        "staticImageSequence": {"const": false}, "premiumPlayableEligible": {"const": true}
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "candidateId", "provider", "sourceId", "entityId", "observedEntityId",
+        "sourcePageUrl", "creator", "title", "observedAt",
+        "topic", "timeBucket", "popularity", "metadataResponseDigest", "manualFileRequired",
+        "manualFileProvided", "manualFileRef", "manualFileSha256", "manualFileBytes", "mediaProbe", "acquisitionStatus"
+      ],
+      "properties": {
+        "candidateId": {"type": "string", "pattern": "^popular-video:[a-z0-9_-]+:[0-9a-f]{16}$"},
+        "provider": {"type": "string", "minLength": 1}, "sourceId": {"type": "string", "minLength": 1},
+        "entityId": {"type": "string", "minLength": 1},
+        "observedEntityId": {"type": "string", "minLength": 1},
+        "sourcePageUrl": {"type": "string", "pattern": "^https://"}, "creator": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1}, "observedAt": {"type": "string", "format": "date-time"},
+        "topic": {"type": "string", "minLength": 1}, "timeBucket": {"type": "string", "minLength": 1},
+        "popularity": {"$ref": "#/$defs/popularity"}, "metadataResponseDigest": {"$ref": "#/$defs/digest"},
+        "manualFileRequired": {"const": true}, "manualFileProvided": {"type": "boolean"},
+        "manualFileRef": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/safeRef"}]},
+        "manualFileSha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]},
+        "manualFileBytes": {"anyOf": [{"type": "null"}, {"type": "integer", "minimum": 1}]},
+        "mediaProbe": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/probe"}]},
+        "acquisitionStatus": {"const": "not_acquired"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"manualFileProvided": {"const": true}},
+            "required": ["manualFileProvided"]
+          },
+          "then": {
+            "properties": {
+              "manualFileRef": {"$ref": "#/$defs/safeRef"},
+              "manualFileSha256": {"$ref": "#/$defs/digest"},
+              "manualFileBytes": {"type": "integer", "minimum": 1},
+              "mediaProbe": {"$ref": "#/$defs/probe"}
+            }
+          },
+          "else": {
+            "properties": {
+              "manualFileRef": {"type": "null"},
+              "manualFileSha256": {"type": "null"},
+              "manualFileBytes": {"type": "null"},
+              "mediaProbe": {"type": "null"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

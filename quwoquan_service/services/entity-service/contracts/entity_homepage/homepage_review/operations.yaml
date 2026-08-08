@@ -387,3 +387,83 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_review/http_mongo_transaction__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: homepage_review_create_homepage_review_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateHomepageReview}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_review_update_homepage_review_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateHomepageReview}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_review_delete_homepage_review_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: DeleteHomepageReview}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_review_list_homepage_reviews_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListHomepageReviews}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_review_get_my_homepage_review_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetMyHomepageReview}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_review_create_homepage_review_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: CreateHomepageReview}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_review_update_homepage_review_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpdateHomepageReview}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_review_delete_homepage_review_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: DeleteHomepageReview}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_review_list_homepage_reviews_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListHomepageReviews}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_review_get_my_homepage_review_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetMyHomepageReview}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_review/homepage_review_generated_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

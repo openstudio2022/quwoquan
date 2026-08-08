@@ -1136,7 +1136,7 @@ def load_candidate_oci_image_composition(
     )
     if (
         candidate.get("baselineId") != baseline_id
-        or candidate.get("runtimeConfigDigest")
+        or candidate.get("configurationDigest")
         != composition["configurationDigest"]
         or candidate.get("buildInputDigest") != composition["buildInputDigest"]
         or candidate.get("imageDigest") != composition["imageDigest"]

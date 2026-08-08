@@ -2,6 +2,7 @@ events:
 - name: ExperimentPolicyActivated
   description: Experiment 聚合的确定性分桶策略完成一次带版本的原子激活；Recommendation 与 Search 只消费本事实，不维护私有策略副本。
   delivery_semantics: transactional_outbox
+  wire_event_type: ExperimentPolicyActivated
   payload_entity: Experiment
   payload_fields:
   - id

@@ -856,3 +856,35 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_follow_facets__contract__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_relationship_block_user_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: BlockUser}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_relationship_get_relationship_capability_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetRelationshipCapability}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_relationship_list_blocked_users_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListBlockedUsers}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_relationship_unblock_user_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UnblockUser}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

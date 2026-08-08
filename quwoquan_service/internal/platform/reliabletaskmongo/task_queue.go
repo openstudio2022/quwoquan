@@ -379,23 +379,40 @@ func (s *Store) PurgeDataContentExecution(
 	return result, nil
 }
 
-// CountDataContentOutboxes returns the declared objects for one immutable
-// execution stage without exposing the underlying Mongo collection to the
-// Content composition root.
-func (s *Store) CountDataContentOutboxes(
+// CountDataContentOutboxesByIdempotencyKeys returns only the frozen task
+// revisions requested by a worker, excluding superseded same-job revisions.
+func (s *Store) CountDataContentOutboxesByIdempotencyKeys(
 	ctx context.Context,
 	executionID string,
 	stage string,
+	idempotencyKeys []string,
 ) (int64, error) {
 	executionID = strings.TrimSpace(executionID)
 	stage = strings.TrimSpace(stage)
 	if executionID == "" || (stage != "author" && stage != "publish") {
 		return 0, errors.New("data content executionId and stage are required")
 	}
+	keys := make([]string, 0, len(idempotencyKeys))
+	seen := make(map[string]struct{}, len(idempotencyKeys))
+	for _, raw := range idempotencyKeys {
+		key := strings.TrimSpace(raw)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	if len(keys) == 0 {
+		return 0, errors.New("data content idempotency keys are required")
+	}
 	return s.outboxes.CountDocuments(ctx, bson.M{
 		"taskType":            reliabletask.DataContentTaskType,
 		"payload.executionId": executionID,
 		"payload.stage":       stage,
+		"idempotencyKey":      bson.M{"$in": keys},
 	})
 }
 

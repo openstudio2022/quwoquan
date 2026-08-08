@@ -17,7 +17,7 @@ from typing import Any
 from core.io import read_json, write_json
 from core.schema import assert_valid
 
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.runtime_process import (
     controller_signal_guard,
     terminate_lane_process,
@@ -27,6 +27,10 @@ from core.runtime_policy import active_runtime_policy
 from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
     CampaignRuntimePaths,
+)
+from content.execution.campaign.source_pool_binding import (
+    validate_capsule_scale_source_pool,
+    validate_lane_source_pool_selection,
 )
 
 
@@ -277,6 +281,31 @@ def campaign_lane_claim_session(
     ):
         raise ValueError("distributed campaign lane identity drift")
     run_id, generation, token = _distributed_identity(plan)
+    plan_pool = plan.get("scaleSourcePool")
+    plan_selection = (plan.get("laneSourcePoolSelections") or {}).get(carrier)
+    if plan_pool is not None:
+        if (
+            not isinstance(plan_pool, Mapping)
+            or not isinstance(plan_selection, Mapping)
+            or workspace.capsule.scale_source_pool != dict(plan_pool)
+            or (workspace.capsule.lane_source_pool_selections or {}).get(carrier)
+            != dict(plan_selection)
+        ):
+            raise ValueError("DATA.SOURCE.POOL_SHORTFALL: lane claim pool binding drift")
+        validate_capsule_scale_source_pool(
+            plan_pool,
+            snapshot_root=workspace.capsule.source_pool_snapshot_root(),
+            lane_selections=workspace.capsule.lane_source_pool_selections or {},
+        )
+        validate_lane_source_pool_selection(
+            plan_selection,
+            carrier=carrier,
+            count=int(plan_selection.get("candidateCount") or 0),
+        )
+    elif workspace.capsule.scale_source_pool is not None:
+        raise ValueError(
+            "DATA.SOURCE.POOL_SHORTFALL: below-M100 lane received source pool"
+        )
     path = lane_claim_path(runtime, root_execution_id, carrier)
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.parent / f".{carrier}.lock"

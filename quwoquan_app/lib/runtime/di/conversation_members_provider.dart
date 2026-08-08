@@ -3,59 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/conversation_members_state.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
-
-/// runtime/di 会话成员及设置的共享组合状态。
-class ConversationMembersState {
-  final List<ConversationMemberListRow> members;
-  final ChatGroupSettingsViewData groupSettings;
-  final bool isLoading;
-  final String? error;
-
-  static final ChatGroupSettingsViewData _defaultGroupSettings =
-      ChatGroupSettingsViewData(
-        nameEditableByAdminOnly: false,
-        conversationType: 'group',
-      );
-
-  ConversationMembersState({
-    this.members = const [],
-    ChatGroupSettingsViewData? groupSettings,
-    this.isLoading = false,
-    this.error,
-  }) : groupSettings = groupSettings ?? _defaultGroupSettings;
-
-  /// 当前登录用户的角色（'owner' | 'admin' | 'member'）
-  String get currentUserRole {
-    for (final m in members) {
-      if (m.isCurrentUser) {
-        return m.role;
-      }
-    }
-    return 'member';
-  }
-
-  bool get isAdminOrOwner =>
-      currentUserRole == 'owner' || currentUserRole == 'admin';
-
-  bool get isOwner => currentUserRole == 'owner';
-
-  ConversationMembersState copyWith({
-    List<ConversationMemberListRow>? members,
-    ChatGroupSettingsViewData? groupSettings,
-    bool? isLoading,
-    String? error,
-  }) {
-    return ConversationMembersState(
-      members: members ?? this.members,
-      groupSettings: groupSettings ?? this.groupSettings,
-      isLoading: isLoading ?? this.isLoading,
-      error: error,
-    );
-  }
-}
 
 /// 会话成员及设置的 Notifier（family by conversationId）
 /// 提供乐观更新写操作，失败时自动回滚

@@ -41,6 +41,7 @@
 ### REQ-003 跨域最终清理并回到游客安全态
 
 - Gamma/Prod 真机 UAT、旧 token 拒绝、下游清理探针、DLQ 与排空演练均有制品。
+- authenticated owner 只能从 canonical `settings.account_security` 的明确确认动作经 production Remote 提交注销；取消确认不得发出命令，canonical failure 必须保留当前会话、页面与可重试入口，只有 typed `closed` 终态才可启动本地终态清理并返回游客安全首页。
 - App 必须在清除凭据前持久化加密本地清理回执，读回确认本地凭据、队列、草稿、账号关联缓存与 push/来电秘密状态无残留后才删除回执；进程崩溃或其他设备注销后收到 canonical `account_deleted` 时必须在启动链路幂等恢复清理。
 - 本地清理异常不能恢复已关闭会话；失败回执必须保留并重试，禁止以仅记录日志代替最终清理。
 
@@ -87,8 +88,10 @@
 <a id="gwt-003"></a>
 ### GWT-003 跨域最终清理并回到游客安全态
 
-- GIVEN CloseAccount 已提交 UserAccountClosed durable fact。
-- WHEN Content、Chat、Circle、Notification 与 Search 消费该事实，Content-owned recommendation cleanup 完成 residual probe，用户完成 App 注销流程。
+- GIVEN authenticated owner 从 canonical `settings.account_security` 进入 production Remote 注销旅程，账号仍处于 active 终态。
+- WHEN 用户取消确认、确认后收到 canonical failure，或确认成功并使 CloseAccount 提交 `UserAccountClosed` durable fact。
+- THEN 取消确认不发出注销命令；canonical failure 保留当前会话、账号安全页与可重试入口，不启动本地终态清理也不展示成功。
+- THEN typed `closed` 结果到达后，Content、Chat、Circle、Notification 与 Search 消费 durable fact，Content-owned recommendation cleanup 完成 residual probe，App 执行本地注销流程。
 - THEN 每个消费者幂等清理或匿名化所属数据，Recommendation residual probe 为零，失败进入重试/DLQ；旧 token 不能继续访问。
 - THEN App 仅在云侧成功后写入加密清理回执，清理本地凭证、待投递队列、当前 actor 草稿、账号关联缓存与 push/来电秘密状态，并进入不会再次触发登录门的安全首页。
 - THEN 清理全部读回为零后删除回执；进程崩溃或其他设备注销触发 `account_deleted` 时由启动绑定恢复同一幂等清理，失败保留回执继续重试且不能恢复已关闭会话。
@@ -114,7 +117,7 @@
 
 - 类型：`external_blocker`
 - 优先级：`P1`
-- 准出影响：`track`
+- 准出影响：`block`
 - 影响或价值：实现、local_contract、API integration 与直接 `spec_ref` 已齐。Gamma 真机执行仍依赖可用设备、gamma-local Provider substitute 与同候选观测回执；Prod 执行另需经批准注入的真实 Provider 和 managed observability 凭据。禁止用 Mock 或跳过门禁代替。
 - 目标：环境材料与设备到位后通过 `stackctl` 启动 full workload，执行一次性 install identity 的账号注销 Patrol、旧 refresh/access 拒绝、下游 residual probe、DLQ 恢复与排空演练并保留制品。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`GWT-003` 的 production journey 绑定同一 commit、ContractGraph、candidate、环境与真实 Provider，且 Android 物理设备和 iPhone 物理设备 `ReadinessResultBundle` 均为 passed；旧 refresh/access 拒绝、下游 residual probe、DLQ 恢复与排空证据同属该 candidate。failed、blocked、skipped、模拟器或测试 double 均不计通过。

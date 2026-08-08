@@ -602,3 +602,115 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/persona_management/profile_update_proposal/postgres_proposal__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: profile_update_proposal_create_profile_update_proposal_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: CreateProfileUpdateProposal}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_update_proposal_confirm_proposal_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ConfirmProposal}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_update_proposal_apply_proposal_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ApplyProposal}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_update_proposal_get_profile_update_proposal_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetProfileUpdateProposal}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_update_proposal_rollback_proposal_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: RollbackProposal}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_update_proposal_create_profile_update_proposal_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateProfileUpdateProposal}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_confirm_proposal_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ConfirmProposal}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_apply_proposal_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ApplyProposal}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_reject_proposal_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RejectProposal}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_rollback_proposal_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RollbackProposal}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_get_profile_update_proposal_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetProfileUpdateProposal}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_list_profile_update_proposals_app_local
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListProfileUpdateProposals}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_update_proposal_list_profile_update_proposals_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListProfileUpdateProposals}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_update_proposal_reject_proposal_app_api
+    spec_ref: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: RejectProposal}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_remote_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

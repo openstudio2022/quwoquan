@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+// readiness_case: location_get_nearby_locations_app_local
+// readiness_case: location_search_locations_app_local
 /// 对象级端云契约：Remote adapter 的 HTTP path 与 generated metadata 对齐。
 library;
 
@@ -20,13 +23,21 @@ http.Response _responseFor(http.Request request) {
               canonicalRemoteApiPath(
                 AppCloudOperationIds.integrationLocationSearchLocations,
               ))) {
-    return remoteApiPathJsonResponse('{"items":[]}');
+    final isNearby = path.endsWith('/nearby');
+    return remoteApiPathJsonResponse(<String, Object?>{
+      'items': <Object?>[
+        <String, Object?>{
+          'id': isNearby ? 'poi-nearby-west-lake' : 'poi-search-west-lake',
+          'name': '西湖风景名胜区',
+          'latitude': 30.2431,
+          'longitude': 120.15,
+          'address': '杭州市西湖区',
+          'distanceMeters': isNearby ? 320 : 640,
+        },
+      ],
+    });
   }
-  return remoteApiPathJsonResponse({
-    'items': <dynamic>[],
-    'data': <String, dynamic>{'id': 'mock_id', 'type': 'mock'},
-    'cursor': null,
-  });
+  throw StateError('unexpected location request: ${request.method} $path');
 }
 
 void main() {
@@ -52,69 +63,82 @@ void main() {
       );
     });
 
-    test(
-      'getNearbyLocations → GET /integration/external_integration/location/nearby',
-      () async {
-        await adapter.getNearbyLocations(
-          const NearbyLocationQueryParams(
-            latitude: 30.2431,
-            longitude: 120.1500,
-            radiusMeters: 2000,
-            limit: 8,
-          ),
-        );
-        expect(log.last.method, 'GET');
-        expect(
-          log.last.path,
-          canonicalRemoteApiPath(
-            AppCloudOperationIds.integrationLocationGetNearbyLocations,
-          ),
-        );
-        expect(log.last.query['lat'], '30.2431');
-        expect(log.last.query['lng'], '120.15');
-        expect(log.last.query['radiusMeters'], '2000');
-        expect(log.last.query['limit'], '8');
-        expectRemoteApiPathHeaders(
-          log.last.headers,
-          clientPageId: IntegrationRequestPageIds.getNearbyLocations,
-          surfaceId: AppUiSurfaces.createWorkspace.id,
-          operationId:
-              AppCloudOperationIds.integrationLocationGetNearbyLocations,
-        );
-      },
-    );
+    test('getNearbyLocations → GET /integration/location/nearby', () async {
+      final result = await adapter.getNearbyLocations(
+        const NearbyLocationQueryParams(
+          latitude: 30.2431,
+          longitude: 120.1500,
+          radiusMeters: 2000,
+          limit: 8,
+        ),
+      );
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        canonicalRemoteApiPath(
+          AppCloudOperationIds.integrationLocationGetNearbyLocations,
+        ),
+      );
+      expect(log.last.query['lat'], '30.2431');
+      expect(log.last.query['lng'], '120.15');
+      expect(log.last.query['radiusMeters'], '2000');
+      expect(log.last.query['limit'], '8');
+      expectRemoteApiPathHeaders(
+        log.last.headers,
+        clientPageId: IntegrationRequestPageIds.getNearbyLocations,
+        surfaceId: AppUiSurfaces.createWorkspace.id,
+        operationId: AppCloudOperationIds.integrationLocationGetNearbyLocations,
+      );
+      expect(result.items, hasLength(1));
+      expect(result.items.single.id, 'poi-nearby-west-lake');
+      expect(result.items.single.name, '西湖风景名胜区');
+      expect(result.items.single.distanceMeters, 320);
+      expect(
+        canonicalRemoteApiOperation(
+          AppCloudOperationIds.integrationLocationGetNearbyLocations,
+        ).idempotency,
+        'none',
+      );
+    });
 
-    test(
-      'searchLocations → GET /integration/external_integration/location/search',
-      () async {
-        await adapter.searchLocations(
-          const LocationSearchQueryParams(
-            query: '西湖',
-            cityCode: '330100',
-            latitude: 30.2431,
-            longitude: 120.1500,
-            limit: 12,
-          ),
-        );
-        expect(log.last.method, 'GET');
-        expect(
-          log.last.path,
-          canonicalRemoteApiPath(
-            AppCloudOperationIds.integrationLocationSearchLocations,
-          ),
-        );
-        expect(log.last.query['q'], '西湖');
-        expect(log.last.query['cityCode'], '330100');
-        expect(log.last.query['lat'], '30.2431');
-        expect(log.last.query['lng'], '120.15');
-        expect(log.last.query['limit'], '12');
-        expectRemoteApiPathHeaders(
-          log.last.headers,
-          clientPageId: IntegrationRequestPageIds.searchLocations,
-          surfaceId: AppUiSurfaces.createWorkspace.id,
-          operationId: AppCloudOperationIds.integrationLocationSearchLocations,
-        );
-      },
-    );
+    test('searchLocations → GET /integration/location/search', () async {
+      final result = await adapter.searchLocations(
+        const LocationSearchQueryParams(
+          query: '西湖',
+          cityCode: '330100',
+          latitude: 30.2431,
+          longitude: 120.1500,
+          limit: 12,
+        ),
+      );
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        canonicalRemoteApiPath(
+          AppCloudOperationIds.integrationLocationSearchLocations,
+        ),
+      );
+      expect(log.last.query['q'], '西湖');
+      expect(log.last.query['cityCode'], '330100');
+      expect(log.last.query['lat'], '30.2431');
+      expect(log.last.query['lng'], '120.15');
+      expect(log.last.query['limit'], '12');
+      expectRemoteApiPathHeaders(
+        log.last.headers,
+        clientPageId: IntegrationRequestPageIds.searchLocations,
+        surfaceId: AppUiSurfaces.createWorkspace.id,
+        operationId: AppCloudOperationIds.integrationLocationSearchLocations,
+      );
+      expect(result.items, hasLength(1));
+      expect(result.items.single.id, 'poi-search-west-lake');
+      expect(result.items.single.address, '杭州市西湖区');
+      expect(result.items.single.distanceMeters, 640);
+      expect(
+        canonicalRemoteApiOperation(
+          AppCloudOperationIds.integrationLocationSearchLocations,
+        ).idempotency,
+        'none',
+      );
+    });
   });
 }

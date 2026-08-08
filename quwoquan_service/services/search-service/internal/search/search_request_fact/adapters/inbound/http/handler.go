@@ -42,20 +42,14 @@ type hotQueryWire struct {
 func (h *Handler) handleHotQueries(w http.ResponseWriter, r *http.Request) {
 	requestID := requestIDFrom(r)
 	if h.hotQueries == nil {
-		writeErr(w, requestID, rterrors.NewUnavailable(
-			rterrors.ModuleSearch,
-			"热词暂时不可用，请稍后再试。",
-			"term-heat reader is not configured",
-		))
+		writeErr(w, requestID, hotQueryUnavailable("term-heat reader is not configured"))
 		return
 	}
 	limit := 10
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed <= 0 || parsed > 20 {
-			writeErr(w, requestID, rterrors.NewInvalidArgument(
-				rterrors.ModuleSearch,
-				"热词数量参数不正确。",
+			writeErr(w, requestID, hotQueryInvalidArgument(
 				"hot query limit must be between 1 and 20",
 			))
 			return
@@ -64,11 +58,7 @@ func (h *Handler) handleHotQueries(w http.ResponseWriter, r *http.Request) {
 	}
 	heats, err := h.hotQueries.RelatedTerms(r.Context(), "", limit)
 	if err != nil {
-		writeErr(w, requestID, rterrors.NewUnavailable(
-			rterrors.ModuleSearch,
-			"热词暂时不可用，请稍后再试。",
-			"list hot queries: "+err.Error(),
-		))
+		writeErr(w, requestID, hotQueryUnavailable("list hot queries: "+err.Error()))
 		return
 	}
 	items := make([]hotQueryWire, 0, len(heats))
@@ -107,4 +97,22 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeErr(w http.ResponseWriter, requestID string, err error) {
 	rterrors.WriteHTTPError(w, err, rterrors.HTTPWriteOptions{RequestID: requestID})
+}
+
+func hotQueryInvalidArgument(debug string) error {
+	return rterrors.NewAppError(
+		rterrors.NewCode(rterrors.ModuleSearch, rterrors.KindUser, "hot_query_invalid_argument"),
+		"热词数量参数不正确。",
+		debug,
+	).WithMetadata("hot_query_invalid_argument", http.StatusBadRequest).
+		WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+func hotQueryUnavailable(debug string) error {
+	return rterrors.NewAppError(
+		rterrors.NewCode(rterrors.ModuleSearch, rterrors.KindMiddleware, "hot_query_unavailable"),
+		"热词暂时不可用，请稍后再试。",
+		debug,
+	).WithMetadata("hot_query_unavailable", http.StatusServiceUnavailable).
+		WithRecoveryDirective("retry", "snackbar", 5)
 }

@@ -153,7 +153,10 @@ def create_professional_image_discovery_plan(
         provider_id = str(provider["provider"])
         search_template = str(provider["searchUrlTemplate"])
         public_urls = [str(value) for value in provider["publicDiscoveryUrls"]]
-        manual = provider["discoveryMode"] == "public_explore_manual_query"
+        manual = provider["discoveryMode"] in {
+            "manual_or_supported_api",
+            "public_explore_manual_query",
+        }
         for entity in normalized_entities:
             for query_template in provider["queryTemplates"]:
                 query = _render_query(str(query_template), dimensions, entity=entity)

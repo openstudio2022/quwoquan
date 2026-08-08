@@ -145,7 +145,7 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
-- case_id: get-author-impact-local
+- case_id: recommendation-feature-profile-view-get-recommendation-author-impact-local
   spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
   producer: service
   layer: local_contract
@@ -153,7 +153,7 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
-- case_id: get-author-impact-api
+- case_id: recommendation-feature-profile-view-get-recommendation-author-impact-api
   spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
   producer: service
   layer: api_integration
@@ -161,7 +161,7 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
-- case_id: list-author-impact-evidence-local
+- case_id: recommendation-feature-profile-view-list-recommendation-author-impact-evidence-local
   spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
   producer: service
   layer: local_contract
@@ -169,7 +169,7 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_author_impact_http__local_contract_test.py
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
-- case_id: list-author-impact-evidence-api
+- case_id: recommendation-feature-profile-view-list-recommendation-author-impact-evidence-api
   spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-003
   producer: service
   layer: api_integration

@@ -1,7 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/generated/intersection_client_policy.g.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_display_metadata.g.dart';
-import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_action_keys.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_fact_items.dart';
@@ -389,8 +388,8 @@ class InMemoryIntersectionRepository
                   objectId: objectId,
                   objectKind: objectKind,
                   routeId: intersectionRouteIdForObjectKind(
-          _intersectionKindFromWireOrPerson(objectKind),
-        ),
+                    _intersectionKindFromWireOrPerson(objectKind),
+                  ),
                 ),
         ),
       );
@@ -493,17 +492,19 @@ class InMemoryIntersectionRepository
               ),
         isPrimary: true,
         priority: 1,
-        actionTier: _metaFor(key).tier,
-        requiredGates: _metaFor(key).requiredGates,
-        dispatch: _metaFor(key).dispatch,
+        actionTier: _metaFor(key).tier.wireName,
+        requiredGates: _metaFor(
+          key,
+        ).requiredGates.map((gate) => gate.wireName).toList(growable: false),
+        dispatch: _metaFor(key).dispatch.wireName,
       ),
     ];
   }
 
   /// 行动阶梯语义（tier / requiredGates / dispatch）的真相源是 canonical
   /// registry codegen；替身只回放它，不在测试树里再写一份判定。
-  static IntersectionActionKeyMeta _metaFor(String key) {
-    final meta = IntersectionActionKeyMeta.of(key);
+  static IntersectionActionPolicy _metaFor(String key) {
+    final meta = IntersectionActionKeys.policyFor(key);
     if (meta == null) {
       throw StateError('unknown intersection actionKey: $key');
     }
@@ -520,9 +521,11 @@ class InMemoryIntersectionRepository
       target: hint.target,
       isPrimary: hint.isPrimary,
       priority: hint.priority,
-      actionTier: meta.tier,
-      requiredGates: meta.requiredGates,
-      dispatch: meta.dispatch,
+      actionTier: meta.tier.wireName,
+      requiredGates: meta.requiredGates
+          .map((gate) => gate.wireName)
+          .toList(growable: false),
+      dispatch: meta.dispatch.wireName,
     );
   }
 }

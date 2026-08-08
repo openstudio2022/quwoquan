@@ -10,7 +10,7 @@ import 'package:quwoquan_app/design_system/typography/app_font_families.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_mention_text.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_bubble.dart';
-import 'package:quwoquan_app/runtime/di/presentation/voice_message_bubble.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/presentation/voice_message_bubble.dart';
 
 Widget _wrapBubble({
   required ChatMessageDisplayItem message,

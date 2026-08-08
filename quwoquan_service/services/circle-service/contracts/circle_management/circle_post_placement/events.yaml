@@ -1,6 +1,7 @@
 events:
 - name: CirclePostPlaced
   delivery_semantics: transactional_outbox
+  wire_event_type: CirclePostPlaced
   payload_entity: CirclePostPlacement
   payload_fields:
   - _id
@@ -13,6 +14,7 @@ events:
   - createdAt
 - name: CirclePostPlacementRemoved
   delivery_semantics: transactional_outbox
+  wire_event_type: CirclePostPlacementRemoved
   payload_entity: CirclePostPlacement
   payload_fields:
   - _id
@@ -24,6 +26,7 @@ events:
   - updatedAt
 - name: CirclePostPlacementPresentationChanged
   delivery_semantics: transactional_outbox
+  wire_event_type: CirclePostPlacementPresentationChanged
   payload_entity: CirclePostPlacement
   payload_fields:
   - _id

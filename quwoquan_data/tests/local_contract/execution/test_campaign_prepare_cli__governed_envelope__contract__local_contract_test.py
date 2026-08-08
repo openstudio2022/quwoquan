@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from content.execution.campaign import prepare as prepare_campaign
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from core.io import write_json
 
 
@@ -58,6 +58,9 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
                 "selector": "all",
                 "quota": 3,
                 "count": 6,
+                "requiredWorkers": 1,
+                "partitionCount": 16,
+                "capacityPlanDigest": "sha256:" + "9" * 64,
                 "topic": "川西",
                 "targetNames": ["九寨沟", "四姑娘山"],
                 "sourceProviders": ["manual_file", "pinterest"],

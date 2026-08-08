@@ -24,11 +24,11 @@
 
 <a id="dec-001"></a>
 ### DEC-001 物理测试层只保留三层 canonical 目录
-- 决策：物理测试层只保留 local_contract、api_integration、user_acceptance 三层；App 路径与 production 同构为 `<layer>/<domain>/<context>/<object>`，服务 local_contract/api_integration 同构为 `<layer>/<context>/<object>`。
+- 决策：物理测试层只保留 local_contract、api_integration、user_acceptance 三层；App 路径与 production 同构为 `test/<layer>/service/<service>/<context>/<object>`，服务 local_contract/api_integration 同构为 `tests/<layer>/<context>/<object>`。
 - 决策：App 跨对象 Journey 按依赖真实度单轨归档。使用测试树 typed double、Provider 或 Widget 的本地契约只进入 `test/local_contract/journeys/<journey>/` 并使用 `__local_contract_test.*` 后缀。
 - 决策：使用 production Remote composition 的真实 Journey 只进入 `test/user_acceptance/journeys/<journey>/` 并使用 `__user_acceptance_test.*` 后缀；禁止 `api_integration/journeys`。
 - 约束与影响：`<journey>` 必须为 `snake_case`，测试文件是 journey 目录的直接子文件，复用 helper 只进入 `test/support`；路径只证明结构归属，不证明 Remote Journey 已执行或通过。
-- 决策：support 只存放共享 harness、fixture factory 与 typed double 定义，不能承载测试用例、业务断言或可被 production composition 引用的实现；对象 support 与 production 同构为 `<domain>/<context>/<object>`，真正横切的 runner、platform 与 boundary harness 只进入 `runtime`。
+- 决策：support 只存放共享 harness、fixture factory 与 typed double 定义，不能承载测试用例、业务断言或可被 production composition 引用的实现；对象 support 与 production 同构为 `test/support/service/<service>/<context>/<object>`，真正横切的 runner、platform 与 boundary harness 只进入 `test/support/runtime`。
 - 决策：support 消费者直接 import 唯一 owner，禁止 `repository_mock_reexports` 或按 `fakes/fixtures/cloud_services` 聚合的跨对象 barrel；普通 fixture/double/golden 使用对象或行为语义命名，部署环境名称只允许出现在真实环境验收 runner 与可信结果回执中。
 - 理由：对象同构路径可直接反查 owner 和验收锚点，依赖真实度决定测试层则能阻止 fake HTTP、Memory 集成或 path-UAT 把未验证边界伪装成高层证据。
 - 被否决方案：按 `ui/cloud/core/pages/quality` 建测试大桶、按测试框架或运行速度另建层级、让 support 成为不受约束的共享测试包、以集中映射表关联对象。
@@ -41,7 +41,7 @@
 <a id="dec-002"></a>
 ### DEC-002 覆盖率按 canonical 对象归属并只从绿测试结果建立棘轮
 
-- 决策：覆盖率计量单元由 production 的 canonical domain/context/object 路径实时派生，不维护人工对象清单；无法归属的生产源码、没有计量单元的受测对象或归属冲突均先阻断。
+- 决策：覆盖率计量单元由 production 的 canonical service/context/object 路径实时派生，不维护人工对象清单；无法归属的生产源码、没有计量单元的受测对象或归属冲突均先阻断。
 - 决策：App 使用对象级 line 与 branch 结果；Go 使用对象级 statement 结果并以对象状态机、权限、错误恢复和幂等 decision table 覆盖语义分支，其他 runtime 使用其原生 line/branch 能力。
 - 决策：baseline 只能从测试成功且可绑定 commit/config/toolchain 摘要的结果建立；对象覆盖不得回退，新增可判定分支必须被触达或保留明确未准出状态。
 - 理由：domain 级总数会让高覆盖对象掩盖零覆盖对象，红测试或静态文件扫描生成的 baseline 又会把“有代码”误报为“已执行”；对象级绿结果才能成为可比较的质量棘轮。

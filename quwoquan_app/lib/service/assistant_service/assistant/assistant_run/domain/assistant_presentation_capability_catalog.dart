@@ -109,13 +109,13 @@ final class AssistantPresentationCapabilitySnapshot {
   );
 
   List<String> get supportedActionIntents => List<String>.unmodifiable(
-    !offline && actionsEnabled
-        ? const <String>[
-            'Navigate',
-            'ApproveTool',
-            'ExecuteDeviceAction',
-            'ProvideInput',
-          ]
+    surfacePolicy == AssistantPresentationSurfacePolicy.personal &&
+            !offline &&
+            actionsEnabled
+        // Only advertise actions with a production handler. Navigate,
+        // ExecuteDeviceAction and ProvideInput remain fail-closed until their
+        // concrete composition owners replace the unavailable providers.
+        ? const <String>['ApproveTool']
         : const <String>[],
   );
 }

@@ -66,5 +66,9 @@ lifecycle:
 members:
   RelationshipDirection:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [sourcePersonaId, targetPersonaId]
+    cardinality: many
     max_cardinality: 2
+    ownership: aggregate
+    write_access: aggregate_facade_only
+    description: 双向 Persona 关系中的单个有向状态，只能经 PersonaRelationship 聚合更新。

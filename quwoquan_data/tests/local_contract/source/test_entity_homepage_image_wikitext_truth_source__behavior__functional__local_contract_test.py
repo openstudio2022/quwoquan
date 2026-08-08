@@ -11,12 +11,16 @@ from __future__ import annotations
 
 import sys
 
-from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
-from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
-
-from content.source.research.wiki_media import _file_match_key, _mediawiki_page_images
+from content.source.research.auto_plan_public import write_auto_research_plans
+from content.source.research.image_search_providers import commons_images_for_titles
 from content.source.research.wiki_common import _strip_html
-
+from content.source.research.wiki_media import _file_match_key, _mediawiki_page_images
+from content.source.research.wiki_media_subjects import (
+    wikimedia_subject_evidence_by_file,
+)
+from content.source.source_unit import resolve_entity_object_dir
+from core.io import read_json
+from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 # 模拟单一 query bundle 返回的页面正文：信息框(非 [[File:]]) + 正文真实图位
 # (含一个 .webm 视频)；panoramio 类页面外图不出现在 bundle 的 rendered image inventory，
@@ -143,7 +147,7 @@ def _fake_wiki_api(host, params):
 
 
 def _run_with_fake_wiki_api(callable_):
-    import content.source.research.network_io as network_io
+    from content.source.research import network_io
 
     original = network_io.wiki_api
     try:
@@ -223,6 +227,147 @@ def test_mediawiki_caption_normalization_removes_invisible_format_controls():
 
     assert normalized == "中国四川测试实体丙冰川森林公园"
     assert all(ord(char) not in {0x200B, 0x200E, 0x2068, 0x2069} for char in normalized)
+
+
+def test_commons_category_wikidata_alias_is_frozen_as_subject_evidence(
+    monkeypatch,
+) -> None:
+    from content.source.research import network_io
+
+    responses = iter(
+        [
+            {
+                "query": {
+                    "pages": {
+                        "1": {
+                            "title": "Category:Three Pools Mirroring the Moon",
+                            "pageprops": {"wikibase_item": "Q10866444"},
+                        }
+                    }
+                }
+            },
+            {
+                "entities": {
+                    "Q10866444": {
+                        "labels": {
+                            "zh": {"language": "zh", "value": "三潭印月"},
+                            "en": {
+                                "language": "en",
+                                "value": "Three Pools Mirroring the Moon",
+                            },
+                        },
+                        "aliases": {
+                            "zh": [{"language": "zh", "value": "三潭映月"}]
+                        },
+                    }
+                }
+            },
+        ]
+    )
+    monkeypatch.setattr(network_io, "wiki_api", lambda *_args, **_kwargs: next(responses))
+    evidence = wikimedia_subject_evidence_by_file(
+        {
+            "three pools.jpg": {
+                "imageinfo": [
+                    {
+                        "extmetadata": {
+                            "Categories": {
+                                "value": "GFDL|Three Pools Mirroring the Moon"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    )
+
+    assert [row["value"] for row in evidence["three pools.jpg"]][:3] == [
+        "三潭印月",
+        "三潭映月",
+        "Three Pools Mirroring the Moon",
+    ]
+    assert all(row["wikidataItem"] == "Q10866444" for row in evidence["three pools.jpg"])
+
+
+def test_commons_title_download_projects_multilingual_subject_evidence(
+    monkeypatch,
+) -> None:
+    from content.source.research import network_io
+
+    responses = iter(
+        [
+            {
+                "query": {
+                    "pages": {
+                        "1": {
+                            "title": "File:Three Pools.jpg",
+                            "imageinfo": [
+                                {
+                                    "url": "https://upload.wikimedia.org/three-pools.jpg",
+                                    "descriptionurl": (
+                                        "https://commons.wikimedia.org/wiki/"
+                                        "File:Three_Pools.jpg"
+                                    ),
+                                    "width": 1600,
+                                    "height": 1200,
+                                    "extmetadata": {
+                                        "LicenseShortName": {"value": "CC BY 4.0"},
+                                        "LicenseUrl": {
+                                            "value": (
+                                                "https://creativecommons.org/licenses/by/4.0"
+                                            )
+                                        },
+                                        "Artist": {"value": "Example creator"},
+                                        "ImageDescription": {
+                                            "value": "Three Pools Mirroring the Moon"
+                                        },
+                                        "Categories": {
+                                            "value": "Three Pools Mirroring the Moon"
+                                        },
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                }
+            },
+            {
+                "query": {
+                    "pages": {
+                        "1": {
+                            "title": "Category:Three Pools Mirroring the Moon",
+                            "pageprops": {"wikibase_item": "Q10866444"},
+                        }
+                    }
+                }
+            },
+            {
+                "entities": {
+                    "Q10866444": {
+                        "labels": {
+                            "zh": {"language": "zh", "value": "三潭印月"}
+                        },
+                        "aliases": {
+                            "zh": [{"language": "zh", "value": "三潭映月"}]
+                        },
+                    }
+                }
+            },
+        ]
+    )
+    monkeypatch.setattr(network_io, "wiki_api", lambda *_args, **_kwargs: next(responses))
+
+    rows = commons_images_for_titles(
+        ["File:Three Pools.jpg"],
+        entity_id="杭州西湖",
+        collection_page_url="https://zh.wikivoyage.org/wiki/杭州",
+        require_metadata_entity_match=False,
+    )
+
+    assert [item["value"] for item in rows[0]["visualSubjectEvidence"]] == [
+        "三潭印月",
+        "三潭映月",
+    ]
 
 
 def test_mediawiki_page_image_uses_sanitized_commons_caption_when_placement_has_none(monkeypatch):

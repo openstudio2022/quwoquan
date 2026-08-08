@@ -174,6 +174,15 @@ def ensure_execution_spec(
         )
     if store.spec_exists(execution_id):
         return execution_id
+    source_pool_targets: tuple[dict[str, Any], ...] = ()
+    if isinstance(selection.get("scaleSourcePool"), dict):
+        from content.source.research.scale_source_pool_runtime import (
+            frozen_scale_source_pool_targets,
+        )
+
+        source_pool_targets = frozen_scale_source_pool_targets(
+            execution_id, content_type
+        )
     source_qualifier = None
     qualification_source_key = "qualifiedHomepageSource"
     persist_qualified_source = True
@@ -202,6 +211,25 @@ def ensure_execution_spec(
             limit=int(selection.get("limit")),
             quota=int(selection["approvedQuota"]),
             oversample_factor=active_runtime_policy().oversample_factor,
+            required_workers=int(selection["requiredWorkers"]),
+            partition_count=int(selection["partitionCount"]),
+            capacity_plan_digest=str(selection["capacityPlanDigest"]),
+            scale_source_pool=(
+                dict(selection["scaleSourcePool"])
+                if isinstance(selection.get("scaleSourcePool"), dict)
+                else None
+            ),
+            source_pool_evidence_root_ref=(
+                str(selection["sourcePoolEvidenceRootRef"])
+                if selection.get("sourcePoolEvidenceRootRef") is not None
+                else None
+            ),
+            source_pool_selection=(
+                dict(selection["sourcePoolSelection"])
+                if isinstance(selection.get("sourcePoolSelection"), dict)
+                else None
+            ),
+            source_pool_targets=source_pool_targets,
             region=str(selection["region"]),
             category=str(selection["category"]),
             name=str(selection["name"]),

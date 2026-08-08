@@ -122,18 +122,25 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
         runtime=RuntimeEnvironment.LOCAL,
     )
     root = execution_root(EXECUTION_ID)
+    report_path = root / "evidence/reliabletask/publish_fleet_report.json"
     write_json(
-        root / "evidence/reliabletask/publish_fleet_report.json",
+        report_path,
         {
             "schema": "quwoquan.reliabletask_fleet_report",
+            "executionId": EXECUTION_ID,
+            "stage": "publish",
+            "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+            "jobSetDigest": "sha256:" + "b" * 64,
+            "actualTaskDigest": "sha256:" + "b" * 64,
             "passed": True,
             "backend": "mongodb+redis",
             "total": 3,
-            "succeeded": 2,
+            "succeeded": 3,
             "stageCompletedCount": 0,
             "publishTaskCount": 3,
-            "objectTransactionResultCount": 2,
-            "commercialAcceptedCount": 3,
+            "objectTransactionResultCount": 3,
+            "researchAcceptedCount": 3,
+            "commercialAcceptedCount": 0,
             "fleetControlPlaneThroughputPerHour": 1.0,
             "fleetAcceptedThroughputPerHour": 1.0,
             "endToEndAcceptedThroughputPerHour": 1.0,
@@ -143,14 +150,17 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
             "manualRecoveredCount": 0,
             "automaticRecoveryStatus": "NOT_EXERCISED",
             "automaticRecoveryRate": 0.0,
-            "firstAttemptSuccessRate": 2 / 3,
+            "firstAttemptSuccessRate": 1.0,
             "finalizedWithinStageBudgetRate": 1.0,
             "duplicatePublishCount": 0,
             "missingObjectCount": 0,
             "requiredQuota": 3,
             "finalizedObjectCount": 0,
             "idempotencyKey": "test",
-            "taskOutcomes": [],
+            "taskOutcomes": [
+                {"jobId": f"job-{index}", "status": "succeeded", "attempts": 1}
+                for index in range(3)
+            ],
             "executionCreatedAt": "2026-07-31T00:00:00Z",
             "fleetStartedAt": "2026-07-31T00:00:00Z",
             "canonicalFinalizedAt": "2026-07-31T00:00:00Z",
@@ -173,6 +183,11 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
         )
         for name in _NAMES[1:]
     ]
+    monkeypatch.setattr(
+        publish_module,
+        "latest_attempt_report_path",
+        lambda _execution_id, _stage: report_path,
+    )
     monkeypatch.setattr(
         publish_module,
         "_is_homepage_only_execution",

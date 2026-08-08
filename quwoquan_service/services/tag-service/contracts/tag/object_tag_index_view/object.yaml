@@ -47,6 +47,7 @@ lifecycle:
   checkpoint: taxonomy_release_and_object_event_sequence
   rebuild: load_active_taxonomy_then_replay_user_profile_tag_events
   tombstone: delete_object_tag_bindings_keep_checkpoint
+  idempotency: aggregate_version
   event_consumers:
   - name: ProjectObjectTagIndex
     kind: projector

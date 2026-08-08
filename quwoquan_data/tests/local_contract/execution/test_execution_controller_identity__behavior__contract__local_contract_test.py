@@ -60,12 +60,23 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
         execution_id,
         targets=({"name": "测试实体甲", "entityType": "地点/景区"},),
     )
-    fixture.build()
+    manifest = fixture.build()
+    frozen_spec = fixture.spec_payload()
+    frozen_spec["executionPolicy"]["requiredWorkers"] = 3
+    frozen_spec["executionPolicy"]["partitionCount"] = 16
+    from content.execution import workspace
+    from core.source_digest import SourceDigest
+
+    monkeypatch.setattr(
+        workspace,
+        "current_source_digest",
+        lambda: SourceDigest.from_document(manifest["sourceDigest"]),
+    )
 
     monkeypatch.setattr(
         controller_entrypoint.store,
         "load_spec",
-        lambda _execution_id: fixture.spec_payload(),
+        lambda _execution_id: frozen_spec,
     )
     monkeypatch.setattr(
         controller_entrypoint,
@@ -84,7 +95,13 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
     monkeypatch.setattr(
         orchestrator,
         "run_controller",
-        lambda ctx: observed.setdefault("entityIds", list(ctx.entity_ids)) and 0,
+        lambda ctx: (
+            observed.update(
+                entityIds=list(ctx.entity_ids),
+                maxWorkers=ctx.max_workers,
+            )
+            or 0
+        ),
     )
 
     controller_entrypoint.run_controlled_execution(
@@ -100,6 +117,7 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
     )
 
     assert observed["entityIds"] == ["测试实体甲"]
+    assert observed["maxWorkers"] == 3
 
 
 def test_execution_guards_are_real_context_managers():

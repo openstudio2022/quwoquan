@@ -1,6 +1,7 @@
 events:
 - name: ConversationMemberAdded
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationMemberAdded
   payload_entity: ConversationMembership
   payload_fields:
   - conversationId
@@ -18,6 +19,7 @@ events:
 
     后者据此清除本地 ChatInbox / 离线搜索副本，不能继续保留私有会话数据。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationMemberRemoved
   payload_entity: ConversationMemberRemovedEventPayload
   payload_fields:
   - conversationId
@@ -33,6 +35,7 @@ events:
 
     活跃成员及主动退出的 userId 各投递一次，令当事人可清除本地会话与离线搜索副本。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationMemberLeft
   payload_entity: ConversationMemberLeftEventPayload
   payload_fields:
   - conversationId
@@ -44,6 +47,7 @@ events:
   client_ws_type: ConversationMemberLeft
 - name: ConversationMemberRoleChanged
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationMemberRoleChanged
   payload_entity: ConversationMembership
   payload_fields:
   - conversationId

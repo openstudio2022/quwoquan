@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import pytest
 from content.execution.campaign import controller as campaign_controller
 from content.execution.campaign import distributed as campaign_distributed
+from content.execution.campaign import lane_execution as campaign_lane_execution
 from content.execution.campaign import orchestrator as campaign_orchestrator
-from content.execution.campaign import process as campaign_process
 from content.execution.campaign import submission as campaign_submission
 from content.execution.campaign.external_input_runtime import (
     execution_external_input_envelope_path,
@@ -49,7 +49,7 @@ from core.execution_branch import current_git_branch, stamp_execution_branch
 from core.io import read_json, write_json
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
-ROOT_ID = "20260728--travel-homepage-scale--china--scale-001"
+ROOT_ID = "20260728--travel-homepage-m1--china--scale-001"
 CARRIERS = ("homepage", "article", "image", "video")
 
 
@@ -66,7 +66,7 @@ def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
             "controllerYield": None,
         },
     )
-    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is True
+    assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is True
     write_json(
         state,
         {
@@ -78,13 +78,13 @@ def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
             },
         },
     )
-    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is False
+    assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is False
 
     write_json(
         state,
         {"status": "manual_required", "waitingCheckpoint": None},
     )
-    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is False
+    assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is False
 
     write_json(
         state,
@@ -97,7 +97,7 @@ def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
             },
         },
     )
-    assert campaign_process._execution_has_resumable_checkpoint(tmp_path) is True
+    assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is True
 
 
 def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
@@ -138,20 +138,20 @@ def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
             "controllerYield": None,
         },
     )
-    monkeypatch.setattr(campaign_process.subprocess, "Popen", FakeProcess)
-    monkeypatch.setattr(campaign_process.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(campaign_lane_execution.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(campaign_lane_execution.os, "getpgid", lambda pid: pid)
     monkeypatch.setattr(
-        campaign_process,
+        campaign_lane_execution,
         "_process_group_rss_bytes",
         lambda _pgid: 64 * 1024**2,
     )
     monkeypatch.setattr(
-        campaign_process,
+        campaign_lane_execution,
         "_execution_heartbeat_at",
         lambda _root: "2026-08-07T08:00:00+00:00",
     )
 
-    code = campaign_process._default_lane_runner(
+    code = campaign_lane_execution._default_lane_runner(
         ["python", "cli.py"],
         tmp_path,
         {},
@@ -168,7 +168,7 @@ def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
     yield_checkpoint = next(
         checkpoint
         for checkpoint in checkpoints
-        if checkpoint.get("return_code") == campaign_process._LANE_SLICE_YIELD_CODE
+        if checkpoint.get("return_code") == campaign_lane_execution._LANE_SLICE_YIELD_CODE
     )
     assert yield_checkpoint["process_evidence"]["terminationOwner"] == "controller_yield"
     evidence = checkpoints[-1]["process_evidence"]
@@ -179,6 +179,78 @@ def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
     assert "resuming create-once lane checkpoint" in (
         tmp_path / "lane.log"
     ).read_text(encoding="utf-8")
+
+
+def test_lane_runner_stops_identical_checkpoint_resume_loop(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    return_codes = iter((10, 10, 10, 0))
+    spawned: list[int] = []
+
+    class FakeProcess:
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.pid = 8500 + len(spawned)
+            self.return_code = next(return_codes)
+            spawned.append(self.pid)
+
+        def wait(self, timeout=None):
+            del timeout
+            return self.return_code
+
+    session = SimpleNamespace(
+        process_termination_timeout_seconds=1,
+        lane_checkpoint=lambda **_kwargs: None,
+    )
+    workspace = SimpleNamespace(
+        carrier="homepage",
+        ref="data/local/cache/capsule/homepage",
+        execution_root=tmp_path / "execution",
+    )
+    state = workspace.execution_root / "_shared/execution_state.json"
+    state.parent.mkdir(parents=True)
+    write_json(
+        state,
+        {
+            "status": "waiting_agent",
+            "waitingCheckpoint": "build_homepage",
+            "completed": ["download_plan", "download_fetch", "build_prepare"],
+            "retryCounts": {},
+            "reactRewinds": {"build_validate": 1},
+            "controllerYield": None,
+        },
+    )
+    monkeypatch.setattr(campaign_lane_execution.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(campaign_lane_execution.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        campaign_lane_execution,
+        "_process_group_rss_bytes",
+        lambda _pgid: 0,
+    )
+    monkeypatch.setattr(
+        campaign_lane_execution,
+        "_execution_heartbeat_at",
+        lambda _root: "2026-08-07T08:00:00+00:00",
+    )
+
+    log_path = tmp_path / "lane.log"
+    code = campaign_lane_execution._default_lane_runner(
+        ["python", "cli.py"],
+        tmp_path,
+        {},
+        log_path,
+        30,
+        run_session=session,
+        workspace=workspace,
+        execution_id="20260807--travel-homepage-m1--china--scale-013",
+        stage="review-only",
+    )
+
+    assert code == 1
+    assert len(spawned) == 3
+    assert "terminal no-progress checkpoint loop checkpoint=build_homepage" in (
+        log_path.read_text(encoding="utf-8")
+    )
 
 
 def test_lane_runner_does_not_resume_non_yield_from_stale_waiting_state(
@@ -218,21 +290,21 @@ def test_lane_runner_does_not_resume_non_yield_from_stale_waiting_state(
             "controllerYield": None,
         },
     )
-    monkeypatch.setattr(campaign_process.subprocess, "Popen", FakeProcess)
-    monkeypatch.setattr(campaign_process.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(campaign_lane_execution.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(campaign_lane_execution.os, "getpgid", lambda pid: pid)
     monkeypatch.setattr(
-        campaign_process,
+        campaign_lane_execution,
         "_process_group_rss_bytes",
         lambda _pgid: 32 * 1024**2,
     )
     monkeypatch.setattr(
-        campaign_process,
+        campaign_lane_execution,
         "_execution_heartbeat_at",
         lambda _root: "2026-08-07T08:00:00+00:00",
     )
 
     log_path = tmp_path / "lane.log"
-    code = campaign_process._default_lane_runner(
+    code = campaign_lane_execution._default_lane_runner(
         ["python", "cli.py"],
         tmp_path,
         {},
@@ -257,7 +329,7 @@ def test_lane_runner_does_not_resume_non_yield_from_stale_waiting_state(
 
 
 def test_sigkill_termination_evidence_does_not_falsely_claim_oom() -> None:
-    owner, signal_name = campaign_process._termination_owner(-signal.SIGKILL)
+    owner, signal_name = campaign_lane_execution._termination_owner(-signal.SIGKILL)
 
     assert owner == "external_or_kernel"
     assert signal_name == "SIGKILL"
@@ -353,11 +425,11 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
         return 1
 
     monkeypatch.setattr(
-        campaign_process,
+        campaign_lane_execution,
         "_verify_workspace_external_inputs",
         lambda _workspace: None,
     )
-    code, error = campaign_process._run_lane(
+    code, error = campaign_lane_execution.run_lane(
         workspace,
         {
             "executionId": execution_id,
@@ -371,8 +443,11 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
             "familyRef": "content/travel/video/video",
             "regionRef": "china",
             "selector": "source-ready-priority",
-            "quota": 1,
-            "count": 1,
+                "quota": 1,
+                "count": 1,
+                "requiredWorkers": 1,
+                "partitionCount": 16,
+                "capacityPlanDigest": "sha256:" + "6" * 64,
         },
         stage="review-only",
         runtime=runtime,
@@ -747,6 +822,26 @@ def _create_repo(tmp_path: Path) -> Path:
         directory = repo / relative
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "source.txt").write_text(relative, encoding="utf-8")
+    intersection_reason = (
+        repo
+        / "quwoquan_service/services/recommendation-service/contracts"
+        / "recommendation/recommendation_feature_profile_view/projections"
+        / "intersection_reason.yaml"
+    )
+    intersection_reason.parent.mkdir(parents=True, exist_ok=True)
+    intersection_reason.write_text(
+        "schema: quwoquan.contract.test_projection\n",
+        encoding="utf-8",
+    )
+    ui_config = (
+        repo
+        / "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml"
+    )
+    ui_config.parent.mkdir(parents=True, exist_ok=True)
+    ui_config.write_text(
+        "schema: quwoquan.contract.ui_config\n",
+        encoding="utf-8",
+    )
     scripts = repo / "quwoquan_data/scripts"
     scripts.mkdir(parents=True)
     (scripts / "cli.py").write_text(FAKE_CLI, encoding="utf-8")
@@ -812,6 +907,9 @@ def _request(
         ),
         count=count,
         quota=quota,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "6" * 64,
         topic=None,
         source_providers=(),
         target_names=(),
@@ -821,7 +919,7 @@ def _request(
 def _execution_id(carrier: str, *, sequence: str = "001") -> str:
     if carrier == "homepage" and sequence == "001":
         return ROOT_ID
-    return f"20260728--travel-{carrier}-scale--china--scale-{sequence}"
+    return f"20260728--travel-{carrier}-m1--china--scale-{sequence}"
 
 
 def _semantic_preflight_kwargs(
@@ -1879,7 +1977,7 @@ def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
     submission = read_json(path)
     assert submission["semanticSelectionId"] == "cursor_auto"
     assert submission["semanticPreflightReceipt"] == preflight_binding
-    argv = campaign_process._lane_argv(submission, stage="plan-only")
+    argv = campaign_lane_execution._lane_argv(submission, stage="plan-only")
     selection_index = argv.index("--semantic-selection-id")
     assert argv[selection_index + 1] == "cursor_auto"
     receipt_index = argv.index("--semantic-preflight-receipt")

@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+// readiness_case: content_behavior_fact_report_behaviors_app_api
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
@@ -8,9 +10,17 @@ import '../../../../../support/runtime/api_contract/content_api_contract_harness
 
 void main() {
   late ContentApiContractHarness harness;
+  var harnessCreated = false;
 
-  setUpAll(() async => harness = await ContentApiContractHarness.create());
-  tearDownAll(() => harness.close());
+  setUpAll(() async {
+    harness = await ContentApiContractHarness.create();
+    harnessCreated = true;
+  });
+  tearDownAll(() async {
+    if (harnessCreated) {
+      await harness.close();
+    }
+  });
 
   ContentBehaviorEventWire event(
     BehaviorEventType action,

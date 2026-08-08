@@ -15,11 +15,13 @@ import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileQrSharePresenter;
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_sheet.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_confirm_sheet.dart';
-import 'package:quwoquan_app/runtime/di/presentation/my_qr_card.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_confirm_sheet.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
@@ -53,7 +55,10 @@ Widget _wrap(_ForwardJourneyChatRepository repository) {
     child: const CupertinoApp(
       home: SizedBox(
         width: AppSpacing.webPcLoginSurfaceWidth,
-        child: MyQrCardView(card: _qrCard),
+        child: MyQrCardView(
+          card: _qrCard,
+          sharePresenter: profileQrSharePresenter,
+        ),
       ),
     ),
   );

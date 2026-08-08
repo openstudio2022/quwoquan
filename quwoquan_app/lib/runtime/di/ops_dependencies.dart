@@ -58,10 +58,12 @@ void configureRecoveryRuntimeOperations() {
   });
 }
 
+/// 恢复通道两个 operation 在 canonical 契约里都只绑定 `welcome`（启动/恢复面）。
+/// 用 `appShell` 会在 header 工厂 fail-closed，恢复上报永远发不出去。
 CloudOperationInvocationContext _recoveryInvocationContext(
   String clientPageId,
 ) => CloudOperationInvocationContext(
-  surfaceId: AppUiSurfaces.appShell.id,
+  surfaceId: AppUiSurfaces.welcome.id,
   clientPageId: clientPageId,
   actor: const CloudOperationActorContext(),
 );

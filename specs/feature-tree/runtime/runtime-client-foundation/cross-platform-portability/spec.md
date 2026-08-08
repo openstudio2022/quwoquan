@@ -32,7 +32,8 @@
 <a id="req-001"></a>
 ### REQ-001 跨平台能力防腐层成立
 
-- 业务层不新增直接平台分支。
+- 业务层不出现直接平台分支：裸平台判断、裸原生通道与文件系统直连只允许存在于平台能力防腐层，业务层存量为零且不接受豁免名单。
+- 业务层读取文件、相册、相机、RTC、宽屏与安装提示等能力时，只消费 PlatformCapabilities、AppPlatform、FileStorageGateway 或 NativeBridge。
 - 不支持的能力通过统一 RuntimeFailure 或能力不可用语义降级。
 
 <a id="req-002"></a>
@@ -60,12 +61,3 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 跨平台能力防腐层成立
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：业务层不新增直接平台分支。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效

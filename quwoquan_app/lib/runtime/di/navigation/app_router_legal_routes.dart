@@ -1,16 +1,13 @@
 part of 'app_router.dart';
 
-List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
+List<GoRoute> _legalDocumentRoutes(Ref ref) => <GoRoute>[
   GoRoute(
     path: AppRoutePaths.legalUserAgreement,
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
-      child: Consumer(
-        builder: (context, ref, _) => LegalDocumentPage(
-          title: FoundationText.userAgreement,
-          url: AuthLegalConfig.userAgreementUrl,
-          journeyEventTracker: ref.read(journeyEventTrackerProvider),
-        ),
+      child: LegalDocumentPageRouteHost(
+        kind: LegalDocumentRouteKind.userAgreement,
+        journeyEventTracker: ref.read(journeyEventTrackerProvider),
       ),
     ),
   ),
@@ -18,12 +15,9 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     path: AppRoutePaths.legalPrivacyPolicy,
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
-      child: Consumer(
-        builder: (context, ref, _) => LegalDocumentPage(
-          title: FoundationText.privacyPolicy,
-          url: AuthLegalConfig.privacyPolicyUrl,
-          journeyEventTracker: ref.read(journeyEventTrackerProvider),
-        ),
+      child: LegalDocumentPageRouteHost(
+        kind: LegalDocumentRouteKind.privacyPolicy,
+        journeyEventTracker: ref.read(journeyEventTrackerProvider),
       ),
     ),
   ),
@@ -31,12 +25,9 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     path: AppRoutePaths.legalPermissions,
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
-      child: Consumer(
-        builder: (context, ref, _) => LegalDocumentPage(
-          title: FoundationText.permissionsStatement,
-          url: AuthLegalConfig.permissionsUrl,
-          journeyEventTracker: ref.read(journeyEventTrackerProvider),
-        ),
+      child: LegalDocumentPageRouteHost(
+        kind: LegalDocumentRouteKind.permissions,
+        journeyEventTracker: ref.read(journeyEventTrackerProvider),
       ),
     ),
   ),
@@ -44,12 +35,9 @@ List<GoRoute> _legalDocumentRoutes() => <GoRoute>[
     path: AppRoutePaths.legalThirdPartySdkList,
     pageBuilder: (context, state) => CupertinoPage<void>(
       key: state.pageKey,
-      child: Consumer(
-        builder: (context, ref, _) => LegalDocumentPage(
-          title: FoundationText.thirdPartySdkList,
-          url: AuthLegalConfig.thirdPartySdkListUrl,
-          journeyEventTracker: ref.read(journeyEventTrackerProvider),
-        ),
+      child: LegalDocumentPageRouteHost(
+        kind: LegalDocumentRouteKind.thirdPartySdkList,
+        journeyEventTracker: ref.read(journeyEventTrackerProvider),
       ),
     ),
   ),

@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// readiness_case: assistant_session_list_assistant_sessions_app_local
+// readiness_case: assistant_session_get_assistant_session_app_local
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -61,6 +64,10 @@ void main() {
       expect(
         requests[1].headers['X-Client-Operation-Id'],
         'assistant.assistant_session.GetAssistantSession',
+      );
+      expect(
+        requests.map((request) => request.headers['Authorization']),
+        everyElement('Bearer assistant-query-test-token'),
       );
     },
   );

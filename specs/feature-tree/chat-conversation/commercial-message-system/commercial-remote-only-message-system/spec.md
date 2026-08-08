@@ -34,6 +34,7 @@
 ### REQ-002 商用消息体系 Remote-only 契约保持单一真相源
 
 - 商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
+- 正式渲染不依赖 Mock、prototype 与退役字段：production composition 无 `AppDataSourceMode` 之类运行时数据源开关，由 `verify_ui_mock_isolation.py` 在 `make gate` 中持续强制。
 
 ## 4. 契约引用
 
@@ -59,19 +60,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 商用消息体系主路径只消费 Remote 与真实持久化事实
+### OPEN-001 商用远端单轨消息系统失败语义尚无直接证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：商用消息体系主路径的正式渲染不再依赖 Mock、prototype 和退役字段。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 商用消息体系 Remote-only 契约保持单一真相源
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
-- 完成判定：商用主路径的消息、通知和交集消费继续由 metadata 与真实服务契约驱动。
+- 影响或价值：缺 `GWT-001.t2` 的直接证据。t1 的契约驱动主路径已由 `verify_ui_mock_isolation.py` 与 16 条 remote contract 测试证明，但没有任何绑定测试断言失败时返回 canonical failure 且不产生伪成功事实。
+- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。

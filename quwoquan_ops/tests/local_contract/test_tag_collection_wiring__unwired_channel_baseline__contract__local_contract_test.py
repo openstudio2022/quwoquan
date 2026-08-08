@@ -1,8 +1,11 @@
 """标签采集通道接线门禁的判定契约。
 
 核心是「只减不增」的三个方向：新通道无登记要阻断、基线外未接通要阻断、基线内已接通
-也要阻断（否则基线会退化成永久豁免）。另外锁住真实仓库的现状：poi / exif / creator_chip
-三条通道确实未接通，且注释里提到符号不算接通。
+也要阻断（否则基线会退化成永久豁免）。另外锁住真实仓库的现状：poi / creator_chip 两条
+通道确实未接通、exif 已由创作页真实消费，且注释里提到符号不算接通。
+
+定义点排除是接通判定的前提：抽象声明与实现都不能证明通道被消费，只有定义点之外的调用
+才算。登记的定义点一旦陈旧，排除就会失效并把定义点误算成生产引用，因此必须 fail-closed。
 """
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ def _producer(channel: str, symbol: str | None = "Producer") -> verifier.Channel
     return verifier.ChannelProducer(
         channel=channel,
         symbol=symbol,
-        defined_in=None if symbol is None else f"lib/{channel}.dart",
+        defined_in=() if symbol is None else (f"lib/{channel}.dart",),
         note=f"{channel} 需要生产写入点",
     )
 
@@ -125,6 +128,29 @@ def test_repository_channels_are_all_registered() -> None:
 
     assert used, "taxonomy 必须至少声明一条采集通道"
     assert set(used) <= registered
+
+
+def test_stale_definition_path_is_blocked() -> None:
+    issues = verifier.stale_definition_paths(
+        (_producer("exif"),),
+    )
+
+    assert any("定义点不存在" in issue and "lib/exif.dart" in issue for issue in issues)
+
+
+def test_repository_definition_paths_all_exist() -> None:
+    assert verifier.stale_definition_paths(verifier.PRODUCERS) == []
+
+
+def test_every_definition_site_is_excluded_from_wiring_evidence() -> None:
+    exif = next(p for p in verifier.PRODUCERS if p.channel == "exif")
+    references = verifier.production_references(exif.symbol, exif.defined_in)
+
+    assert references, "exif 已不在未接通基线内，必须能举出真实消费点"
+    for declared in exif.defined_in:
+        assert declared not in references, (
+            f"定义点 {declared} 被算成生产引用，接通判定会被自身定义顶替"
+        )
 
 
 def test_repository_baseline_channels_are_still_unwired() -> None:

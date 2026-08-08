@@ -127,6 +127,7 @@ func TestGreetingRequestFacadeLifecycleAndQueries(t *testing.T) {
 		failOpenConversationGateway{},
 		failOpenEventPublisher{},
 		failOpenGreetingStream{},
+		staticGreetingRecipientAccounts{"target": "target-account"},
 		allowGreetingPolicy{},
 	)
 	send := func(key string) *greetingmodel.GreetingRequest {

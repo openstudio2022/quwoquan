@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -120,6 +121,56 @@ class AppExperienceObservabilityContractLocalContractTest(unittest.TestCase):
             any("uses high-cardinality dimensions ['sessionId']" in error for error in errors),
             errors,
         )
+
+    def test_storage_contract_key_drift_is_rejected_by_canonical_view(self) -> None:
+        storage = self.verifier.load_storage_contract_view(
+            self.verifier.EVENT_STORAGE
+        )
+        raw = storage["logstores"]["raw"]
+        raw["retention_days"] = raw.pop("ttl_days")
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "storage.yaml"
+            path.write_text(
+                yaml.safe_dump(storage, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "storage-contract-view failed"):
+                self.verifier.event_storage_logstore_retentions(path)
+
+    def test_storage_contract_bridge_exit_is_fail_closed(self) -> None:
+        def failed(*_args, **_kwargs):
+            return subprocess.CompletedProcess(
+                args=[], returncode=2, stdout="", stderr="decode failed"
+            )
+
+        with self.assertRaisesRegex(ValueError, "failed with exit 2"):
+            self.verifier.load_storage_contract_view(
+                self.verifier.EVENT_STORAGE,
+                _run=failed,
+            )
+
+    def test_storage_contract_bridge_timeout_is_fail_closed(self) -> None:
+        def timed_out(*args, **kwargs):
+            raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+        with self.assertRaisesRegex(ValueError, "timed out"):
+            self.verifier.load_storage_contract_view(
+                self.verifier.EVENT_STORAGE,
+                _run=timed_out,
+            )
+
+    def test_storage_contract_bridge_non_json_is_fail_closed(self) -> None:
+        def non_json(*_args, **_kwargs):
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="not-json", stderr=""
+            )
+
+        with self.assertRaisesRegex(ValueError, "non-JSON"):
+            self.verifier.load_storage_contract_view(
+                self.verifier.EVENT_STORAGE,
+                _run=non_json,
+            )
 
 
 if __name__ == "__main__":

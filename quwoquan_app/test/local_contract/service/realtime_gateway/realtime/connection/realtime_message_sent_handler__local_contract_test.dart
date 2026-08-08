@@ -10,12 +10,19 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
 
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
+
 void main() {
+  // 会话/离线缓存清理会落到本地 sqflite 索引，VM 测试需先装配 ffi factory。
+  setUpAll(ensureSqfliteFfiInitialized);
+
   testWidgets('MessageSent 只接受 canonical event 并生成 typed card', (tester) async {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
           chatRepositoryCompositionProvider.overrideWithValue(
             MockChatRepository(),
           ),
@@ -71,6 +78,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
           chatRepositoryCompositionProvider.overrideWithValue(repository),
           activePersonaContextLoaderProvider.overrideWithValue(
             _activePersonaContext,
@@ -143,6 +151,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
           chatRepositoryCompositionProvider.overrideWithValue(
             MockChatRepository(),
           ),

@@ -7,7 +7,10 @@ from urllib.parse import quote
 
 from content.execution.contracts import ExecutionState, ExecutionStateTransition
 from content.execution.identity import parse_execution_id
-from content.execution.queue.backend import freeze_execution_queue_backend
+from content.execution.queue.backend import (
+    freeze_execution_queue_backend,
+    queue_backend_envelope_path,
+)
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import save_spec
 from content.execution.workspace import (
@@ -99,11 +102,15 @@ class ExecutionFixtureBuilder:
             semantic_selection_id=self.semantic_selection_id,
             semantic_preflight_binding=self.semantic_preflight_binding,
         )
-        freeze_execution_queue_backend(
-            identity.execution_id,
-            spec=self.spec_payload(),
-            manifest=manifest,
-        )
+        # A fixture execution is create-once and intentionally reused across
+        # cases.  Once its immutable queue envelope exists, do not rebind it to
+        # unrelated live Service-source changes elsewhere in the shared tree.
+        if not queue_backend_envelope_path(identity.execution_id).is_file():
+            freeze_execution_queue_backend(
+                identity.execution_id,
+                spec=self.spec_payload(),
+                manifest=manifest,
+            )
         return manifest
 
     def spec_payload(self) -> dict[str, object]:
@@ -169,6 +176,9 @@ class ExecutionFixtureBuilder:
                 "targetObjectCount": len(targets),
                 "approvedQuota": quota,
                 "oversampleFactor": len(targets) / quota,
+                "requiredWorkers": 1,
+                "partitionCount": 16,
+                "capacityPlanDigest": "sha256:" + "1" * 64,
                 "articleCommercialClosure": (
                     identity.content_type is ContentType.ARTICLE
                 ),

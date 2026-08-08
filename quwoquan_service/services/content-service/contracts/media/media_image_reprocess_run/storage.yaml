@@ -5,17 +5,13 @@ collections:
     entity: MediaImageReprocessRun
     description: 显式图片重处理 run、处理 cursor 与 activation audit；不存储独立 variant 资产。
     indexes:
-    - name: idx_media_image_reprocess_run_id
-      keys:
-        runId: 1
-      unique: true
     - name: idx_media_image_reprocess_run_status_updated
       keys:
         status: 1
         updatedAt: 1
     - name: idx_media_image_reprocess_run_version
       keys:
-        runId: 1
+        _id: 1
         version: 1
       unique: true
   media_image_reprocess_run_receipts:

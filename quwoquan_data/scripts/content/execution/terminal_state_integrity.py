@@ -16,12 +16,13 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from content.execution.execution_state_journal import ExecutionStateJournalError
 from core.schema import assert_valid
 
 _ABSENT = "absent"
 
 
-class TerminalStateIntegrityError(ValueError):
+class TerminalStateIntegrityError(ExecutionStateJournalError):
     """Historical terminal state or its journal is not byte-consistent."""
 
 

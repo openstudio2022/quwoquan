@@ -13,8 +13,8 @@
 ### In Scope
 
 - service-local contracts 与 context/object/layer 物理路径唯一反向映射
-- 从服务本地契约扫描发现全部 context、独立对象根、聚合成员及五类 object kind，不维护冻结数量清单
-- 服务与 App 源码、metadata 和三层测试按同一 domain/context/object 身份反向映射
+- 从服务本地契约扫描发现全部 context、独立对象根、聚合成员及六类 object kind，不维护冻结数量清单
+- 服务与 App 源码、metadata 和三层测试按同一 service/context/object 身份反向映射；L1 domain 只由 service `domain.yaml` 与特性树工程 owner 派生，不进入第二份路径 registry
 - App 业务纵切、页面 source owner/participants、层间依赖和唯一 composition root
 - 服务自治 config/resources/deploy、四环境差异、secret reference 与 release package 边界
 - 服务四环境 Kustomize 入口与 Ops 可执行装配闭环
@@ -77,10 +77,13 @@
 - 每个独立对象的 kind 必须取自 [AppRoot REQ-010](../../spec.md#req-010) 声明的六类闭集，六类均已入仓且各自有真实对象；实际分布由门禁报告计算，规格不登记快照数量
 - `process_manager` 的写入口是专用 `process_facade`，`identity.version_source` 恒为 `checkpoint`，并必须声明状态机的 `state_field` 与 `states`；它的云侧必需层是 domain、application 与 infrastructure 三层，缺任一层即阻断
 - 任意 object root 只有一个 object.yaml.kind，domain/context/object 不在文件中重复声明
-- owned_entity/value_object 只作为聚合成员，不存在独立对象根
+- owned_entity/value_object 只作为 aggregate_root 的聚合成员，不存在独立对象根；owned_entity 必须声明聚合内 identity、有界 cardinality 且只能经 aggregate facade 写入，不得拥有独立 Facade/Store/operation
+- value_object 无独立 identity 与写入口，保持不可变和结构相等；聚合可保留有界 append-only revision 值序列，但不得把该序列提升为第二对象根或独立存储 owner
 - business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
 - ContractGraph、OpenAPI 和派生对象索引可由受版本控制的 metadata 重建
 - stateful object 的 `lifecycle.state_field` 必须引用同对象 enum field 且 states 与 enum wire value 精确一致；append_only_fact 必须声明 immutable，其他 kind 禁止借用 immutable 逃逸生命周期校验
+- append_only_fact 的每个公开 command 必须由对象自己的 `lifecycle.append_command_admission` 正向声明后才准入，声明必须逐条列出 command 并给出评估理由，且要求 `instance_invariant: none`
+- 该判据只接受对象契约内的正向声明，不接受集中 allowlist；对象非不可变、存在实例级可变不变式或 command 未登记时一律阻断，该 command 属于聚合根写入口，应改挂对应 aggregate_root
 - enum 仅允许 global/service/object 三级最近 owner 解析，同名 shadow、同 owner 重复、跨对象私有重复、悬空引用和 dead definition 均 fail-closed
 - fields 中所有 type/semantic_type 必须能解析且语义兼容；projection 必须显式声明 `read_model` 与非空字段 shape，客户端 `dart_class + output_path` 成对且全图唯一
 
@@ -90,7 +93,10 @@
 - 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
 - 任意 App 业务文件符合 `quwoquan_app/lib/service/<service>/<context>/<object>/<layer>/file`，其中 layer 只允许 domain、application、adapters、presentation；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 必须来自 canonical ContractGraph 与所属 L1 工程归属，禁止由文件名启发式、人工 registry 或旧目录别名决定 owner。
 - App 的 `runtime`、`design_system` 与 `l10n` 是唯一横切根；业务对象不得落入旧 `ui/cloud/core/app/application/infrastructure` 大桶，横切根也不得成为无 owner 业务文件的 fallback。
-- App 层义务按 canonical 端侧能力事实派生：App-exposed operation 要求 application/adapters，页面认领要求 application/presentation，端侧不变式或状态机才要求 domain；未被 App 消费的纯云对象不要求 App 空目录或占位实现，append-only fact 不直接拥有 presentation。
+- App 层义务按 canonical 端侧能力事实派生：App-exposed operation 要求 application/adapters，页面认领要求 application/presentation，端侧不变式或状态机才要求 domain；未被 App 消费的纯云对象不要求 App 空目录或占位实现。
+- App 必需层由端侧能力事实决定，端侧禁止层与写面形态则由云侧 kind 唯一决定，两者是互补的两组义务，不得互相顶替。
+- 由 kind 派生的端侧禁止层是：`append_only_fact` 与 `runtime_session` 不得拥有 presentation，`external_reference` 不得拥有 domain 与 presentation。`projection` 与 `process_manager` 不进禁止层表，二者合法拥有页面，是否 PageOwned 只由页面对象契约的 source owner 决定。
+- 由 kind 派生的端侧写面形态是：`projection` 与 `external_reference` 端侧没有写面也不得有本地可变 patch 路径，`external_reference` 不得绑定本地权威持久化；`append_only_fact` 与 `process_manager` 的端侧写面必须与聚合写面在类型上可区分，不得共用聚合的 command writer 命名族。
 - 每个页面必须声明唯一 source owner，并保留全部 participant object；页面物理文件位于 source owner 的 presentation，其他 participant 只经公开 application port/facade 参与，移动文件不得删除语义参与关系。
 - 任意声明 api_routes 的对象必须有同 context/object 源码 owner，禁止将实现集中到同服务“主对象”目录或用空占位冒充实现
 - 每个源码对象有唯一 service owner，不存在跨服务 internal import
@@ -175,7 +181,7 @@
 - GIVEN 执行“metadata 对象单轨与反向映射”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“metadata 对象单轨与反向映射”对应动作。
 - THEN context、独立对象根和 aggregate member 数量全部由服务本地契约扫描派生，不存在冻结数量注册
-- THEN 每个独立对象的 kind 均属于五类合法治理语义，实际分布由门禁报告计算
+- THEN 每个独立对象的 kind 均属于六类合法治理语义，实际分布由门禁报告计算
 - THEN 任意 object root 只有一个 object.yaml.kind，domain/context/object 不在文件中重复声明
 - THEN owned_entity/value_object 只作为聚合成员，不存在独立对象根
 - THEN business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
@@ -188,7 +194,7 @@
 - GIVEN 执行“服务目录、DDD 依赖与 CQRS 规则”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“服务目录、DDD 依赖与 CQRS 规则”对应动作。
 - THEN 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
-- THEN 任意 App 业务文件都能按 domain/context/object/layer 精确反向定位到 canonical 对象和唯一 L1 owner，旧业务大桶、人工 owner registry、无 owner 文件与占位层均不存在
+- THEN 任意 App 业务文件都能按 service/context/object/layer 精确反向定位到 canonical 对象和唯一 L1 owner，旧业务大桶、人工 owner registry、无 owner 文件与占位层均不存在
 - THEN App 必需层由 operation、页面认领与端侧不变式等 canonical 能力事实派生，纯云对象不会为目录完整性生成空 App 实现，append-only fact 不直接拥有 presentation
 - THEN 每个页面有唯一 source owner 且保留全部 participant object，多对象页面只经 participant 的公开 application 边界组合
 - THEN 任意声明 api_routes 的对象均有同 context/object 源码 owner，且不存在借住主对象目录或空占位的实现
@@ -267,8 +273,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：对象身份、kind 与聚合成员从服务本地契约唯一发现且可反向映射
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：当前证据只覆盖 `SIT-001` 7 条结果子句中的一部分。现有证据为 Ops 服务架构治理测试、metadata lifecycle owner 契约测试与 search 事件源绑定契约测试，集中在对象根扫描派生、kind 合法性与 lifecycle/enum owner 漂移硬失败；`business_object_map` 与全局对象 catalog 清零、`owned_entity`/`value_object` 不独立成根、ContractGraph 与 OpenAPI 可从受版本控制 metadata 重建，以及 field type/semantic_type 与 projection shape 的跨文档漂移无 warn-only 逃逸，均无独立断言证据。
+- 完成判定：`SIT-001` 的 7 条 THEN 组全部具备子句级 `spec_ref`（`sit-001.t1..t7`）绑定的真实测试或可执行门证据。
 
 <a id="open-002"></a>
 ### OPEN-002 服务目录、DDD 依赖与 CQRS 规则
@@ -285,8 +291,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：每个服务的配置键只在本服务 config/schema.yaml 定义，四环境文件只保存 override、secret reference 与 external binding
-- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：当前证据只覆盖 `SIT-003` 8 条结果子句中的一部分。现有证据为 Ops 服务架构治理测试、非生产业务数据供给门与环境 fixture 切除测试，集中在环境集合与非生产数据来源；配置键单一定义、14×4 服务环境入口与 4 个 Ops 装配可独立构建、删除 `.qwq_output` 后可从版本控制真相源完整重建，以及 `QWQ_DEPLOY_WORK_ROOT` 的符号链接逃逸与 destructive cleanup fail-closed，均无独立断言证据。已实测到反例：推荐服务 local_contract 测试会在服务根写出 `.qwq_output`，说明运行输出收口尚未真正成立。
+- 完成判定：`SIT-003` 的 8 条 THEN 组全部具备子句级 `spec_ref`（`sit-003.t1..t8`）绑定的真实测试或可执行门证据。
 
 <a id="open-004"></a>
 ### OPEN-004 外部 capability 与特殊资产归位
@@ -294,8 +300,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：每个真实外部调用形成 operations capability 到 environment binding、adapter/workload 和 conformance evidence 的闭环
-- 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：当前证据只覆盖 `SIT-004` 8 条结果子句中的一部分。现有证据为 Ops 服务架构治理测试与 integration-service 的事件源绑定、事件归属契约测试，集中在 `ExternalInteraction` 账本归属；capability 到环境 Binding 与 conformance evidence 的闭环、alpha/beta/gamma 只选受管非生产租户 Provider、prod 不含 mock 与明文 secret、`external_reference` 全部 typed payload，以及 coturn/livekit/legal/rec-model 等特殊资产不被扫描为业务对象 owner，均无独立断言证据。
+- 完成判定：`SIT-004` 的 8 条 THEN 组全部具备子句级 `spec_ref`（`sit-004.t1..t8`）绑定的真实测试或可执行门证据。
 
 <a id="open-005"></a>
 ### OPEN-005 唯一脚手架与治理门面
@@ -303,8 +309,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：new-service 只接受已存在且无 source owner 的 metadata object
-- 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：当前证据只覆盖 `SIT-005` 6 条结果子句中的一条。唯一证据是 Ops 服务架构治理测试，只覆盖 `make verify-service-architecture` 作为唯一人工入口；new-service 只接受无 source owner 的既有 metadata object、脚手架生成物的正向与负向清单、旧验证入口不再被 Make/stackctl/CI 调用，以及源码树缓存与手工生成物清零，均无独立断言证据。
+- 完成判定：`SIT-005` 的 6 条 THEN 组全部具备子句级 `spec_ref`（`sit-005.t1..t6`）绑定的真实测试或可执行门证据。
 
 <a id="open-006"></a>
 ### OPEN-006 三层证据与 readiness 计算

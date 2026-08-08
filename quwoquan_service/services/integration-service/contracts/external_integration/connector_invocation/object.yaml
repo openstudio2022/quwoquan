@@ -1,7 +1,8 @@
 kind: process_manager
 description: >-
-  Assistant 或受信服务对账号 Connector capability 的单次调用聚合。只保存脱敏 digest、
-  confirmation/continuation 引用和标准化终态，不保存原始请求、凭证或 Provider 响应正文。
+  Assistant 对账号 Connector capability 的单次调用聚合。只保存脱敏 digest、受保护的
+  confirmation/permit/result/continuation 引用、私有幂等键和标准化终态，不保存原始请求、
+  凭证、permit 正文或 Provider 响应正文。
 identity:
   fields: [invocationId]
   version_field: revision
@@ -34,8 +35,10 @@ assistant_access:
 business_rules:
 - 可用 capability 必须同时命中 active definition、active connection grant、调用方 policy、用户 Consent 与 runtime availability
 - 创建和每次继续执行前必须重新读取 Connection；撤权、过期或账号不匹配立即 fail-closed
+- 仅接受真实账号 subject + assistant-service 独立 actor 创建的 CapabilityGrant session；worker 只能续用该不可续期 session，不能把任意 service subject 当账号或另行解析授权
 - user_confirmation capability 在确认回执存在前只能停在 awaiting_confirmation，不得调用 Provider 或设备
-- request/result 只保存不可逆 digest 和受保护 resultRef；凭证、原始 payload、Provider 错误或个人日历正文不得进入对象、日志或共享消息
+- invocation 必须绑定 resolution、surface、binding、final input、confirmation、permit 与 idempotency digest；执行前逐项重验且不得刷新固定 300 秒 session
+- request/result 只保存不可逆 digest、受保护 reference 与私有幂等键；凭证、原始 payload、permit/confirmation 正文、Provider 错误或个人日历正文不得进入对象、日志或共享消息
 - 同一 accountId + idempotencyKey + requestDigest 只产生一个 invocation；不同 digest 必须冲突
 - 终态、脱敏 receipt、幂等回执、审计事件和 continuation 状态必须原子提交
 - worker 只能通过 lease + CAS claim accepted invocation；执行前再次读取 Connection，完成时以 leaseOwner/revision CAS 提交唯一终态

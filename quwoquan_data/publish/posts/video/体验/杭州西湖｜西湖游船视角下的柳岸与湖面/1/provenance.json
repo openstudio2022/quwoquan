@@ -1,0 +1,42 @@
+{
+  "executionId": "20260808--travel-video-m1--china-beta-bootstrap-not-m100--scale-028",
+  "agentRunId": "run-82ad1a30-4b3a-48ef-843a-6cf265b78576",
+  "agentModel": "composer",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "none",
+  "sources": [
+    {
+      "assetRef": "sources/杭州西湖__tourism_video_site__7ae6b687/assets/source.mp4",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:Walking_China,_Hang_Zhou,_Exploring_the_beautiful_West_Lake_in_Hangzhou_by_Boat.webm",
+      "rightsRef": "sources/杭州西湖__tourism_video_site__7ae6b687/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/杭州西湖__tourism_video_site__7ae6b687/media/probe.json",
+      "watermarkEvidenceRef": "sources/杭州西湖__tourism_video_site__7ae6b687/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/杭州西湖__tourism_video_site__7ae6b687/rights/audio_rights_evidence.json",
+      "sha256": "sha256:62103213196af0cbaf2335f7e80cd239c099dc78af25aae273c2c6f4b579bfbb",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "Walking China",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Walking_China,_Hang_Zhou,_Exploring_the_beautiful_West_Lake_in_Hangzhou_by_Boat.webm",
+      "originalAssetUrl": "https://commons.wikimedia.org/wiki/File:Walking_China,_Hang_Zhou,_Exploring_the_beautiful_West_Lake_in_Hangzhou_by_Boat.webm",
+      "attributionText": "西湖游船视角下的柳岸与湖面 — Walking China — Creative Commons Attribution 3.0 Unported — https://commons.wikimedia.org/wiki/File:Walking_China,_Hang_Zhou,_Exploring_the_beautiful_West_Lake_in_Hangzhou_by_Boat.webm",
+      "rightsBasis": "Creative Commons Attribution 3.0 Unported",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "research_release",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:Walking_China,_Hang_Zhou,_Exploring_the_beautiful_West_Lake_in_Hangzhou_by_Boat.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by/3.0",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "no_audio",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-08T15:53:10.709029+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "Creative Commons Attribution 3.0 Unported"
+    }
+  ]
+}

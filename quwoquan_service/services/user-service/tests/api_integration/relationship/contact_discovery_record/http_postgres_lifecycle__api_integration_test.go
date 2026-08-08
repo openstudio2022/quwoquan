@@ -16,6 +16,7 @@ import (
 
 	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/phonematch"
+	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
 	contacthttp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/adapters/inbound/http"
 	contactapp "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/application"
 	contactpersistence "quwoquan_service/services/user-service/internal/relationship/contact_discovery_record/infrastructure/persistence"
@@ -70,6 +71,7 @@ func TestContactDiscoveryProductionHTTPCompletesReadsAndDismissesInRealPostgres(
 			contactHTTPConversationGateway{},
 			contactHTTPEventPublisher{},
 			contactHTTPGreetingStream{},
+			personapersistence.NewOwnerReader(pool),
 			contactHTTPNotifyPolicy{},
 		)
 		handler, err := contacthttp.NewHandler(

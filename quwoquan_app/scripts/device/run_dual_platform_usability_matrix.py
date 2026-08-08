@@ -87,6 +87,12 @@ RELEASE_DEFINE_ARGUMENTS = (
     ("DATA_RELEASE_IMAGE_WORK_ID", "--data-release-image-work-id"),
     ("DATA_RELEASE_IMAGE_TITLE", "--data-release-image-title"),
     ("DATA_RELEASE_CREATOR_NAME", "--data-release-creator-name"),
+    ("DATA_RELEASE_CREATOR_USER_HANDLE", "--data-release-creator-user-handle"),
+    ("DATA_RELEASE_CREATOR_PERSONA_ID", "--data-release-creator-persona-id"),
+    (
+        "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
+        "--data-release-creator-avatar-asset-id",
+    ),
     ("DATA_RELEASE_TAG_LABEL", "--data-release-tag-label"),
     ("DATA_RELEASE_VIDEO_ATTRIBUTION", "--data-release-video-attribution"),
 )

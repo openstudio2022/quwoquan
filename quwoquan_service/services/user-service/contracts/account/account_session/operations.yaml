@@ -45,7 +45,6 @@ api_routes:
       - USER.AUTH.otp_expired
       - USER.AUTH.otp_mismatch
       - USER.AUTH.otp_attempts_exceeded
-      - USER.AUTH.login_locked
       - USER.AUTH.consent_required
       - USER.AUTH.credential_conflict
       - USER.AUTH.account_suspended
@@ -324,7 +323,6 @@ api_routes:
       - USER.AUTH.carrier_unavailable
       - USER.AUTH.carrier_token_invalid
       - USER.AUTH.carrier_provider_timeout
-      - USER.AUTH.carrier_phone_mismatch
       - USER.AUTH.consent_required
       - USER.AUTH.credential_conflict
       - USER.AUTH.account_suspended
@@ -658,3 +656,83 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/account_session/login_operations__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: account_session_login_anonymous_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/spec.md#sit-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: LoginAnonymous}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/account_session/account_session_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: account_session_logout_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/spec.md#sit-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: Logout}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/account_session/account_session_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: account_session_login_with_phone_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LoginWithPhone}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_login_with_wechat_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LoginWithWechat}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_login_with_alipay_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LoginWithAlipay}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_login_with_qq_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LoginWithQq}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_login_one_tap_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LoginOneTap}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_login_anonymous_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: LoginAnonymous}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_refresh_token_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RefreshToken}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_logout_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: Logout}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

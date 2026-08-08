@@ -13,9 +13,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_action_sheet.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/object_page/object_action_bar.dart';
-import 'package:quwoquan_app/runtime/di/presentation/object_impact_preview_card.dart';
-import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/object_intersection_section.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 import 'package:quwoquan_app/design_system/object_page/object_meta_chip.dart';
 import 'package:quwoquan_app/design_system/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/design_system/object_page/object_page_shell.dart';
@@ -28,7 +26,7 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/pre
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/design_system/formatters/compact_count_formatter.dart';
 import 'package:quwoquan_app/service/tag_service/tag/tag_node_view/application/public/tag_ref_label.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
@@ -36,11 +34,11 @@ import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
-import 'package:quwoquan_app/runtime/di/presentation/intersection_reason_chip.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/domain/homepage_tab.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_type_labels.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_review_section.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_recommendation_slots.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';
@@ -49,6 +47,7 @@ part 'homepage_detail_shell_builders.dart';
 class HomepageDetailShell extends StatefulWidget {
   const HomepageDetailShell({
     super.key,
+    required this.recommendationSlots,
     required this.selectionMode,
     required this.initialSummary,
     required this.isLoading,
@@ -77,6 +76,7 @@ class HomepageDetailShell extends StatefulWidget {
     this.reviewContinuationResumeToken = 0,
   });
 
+  final HomepageRecommendationSlots recommendationSlots;
   final bool selectionMode;
   final HomepageSummary? initialSummary;
   final bool isLoading;
@@ -471,7 +471,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     return AppSpacing.threeHundredTwenty + AppSpacing.buttonHeight * 2;
   }
 
-  /// 实体记录卡：封面 + 卡内唯一交集句（[IntersectionReasonChip]）+ 标题 + 类型角标。
+  /// 实体记录卡：封面 + 卡内唯一交集句 + 标题 + 类型角标。
   /// 与用户/圈子记录卡同范式；无交集来源不展示、不占位（G2）。
   Widget _buildEntityRecordCard(HomepageContentPreview item, bool isDark) {
     final contentType = (item.contentType ?? '').trim();
@@ -502,7 +502,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
           ),
         ),
       ),
-      header: IntersectionReasonChip.fromReasons(
+      header: widget.recommendationSlots.buildIntersectionReason(
         item.intersectionReasons,
         isDark: isDark,
         // N5：实体主页记录卡 → 交集句对象片段点击精确归因为实体主页（非推荐流）。

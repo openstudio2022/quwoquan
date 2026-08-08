@@ -31,6 +31,7 @@ type ReasoningStopRules struct {
 	RequireEvidence         bool
 	RequireVerifier         bool
 	StopOnBudgetExhaustion  bool
+	MaxVerificationRepairs  int
 }
 
 type ReasoningProfileConfig struct {
@@ -75,6 +76,7 @@ func DefaultReasoningProfileCatalog() (*ReasoningProfileCatalog, error) {
 				RequireDefinitionOfDone: true,
 				RequireVerifier:         true,
 				StopOnBudgetExhaustion:  true,
+				MaxVerificationRepairs:  0,
 			},
 		},
 		{
@@ -100,6 +102,7 @@ func DefaultReasoningProfileCatalog() (*ReasoningProfileCatalog, error) {
 				RequireDefinitionOfDone: true,
 				RequireVerifier:         true,
 				StopOnBudgetExhaustion:  true,
+				MaxVerificationRepairs:  1,
 			},
 		},
 		{
@@ -127,6 +130,7 @@ func DefaultReasoningProfileCatalog() (*ReasoningProfileCatalog, error) {
 				RequireEvidence:         true,
 				RequireVerifier:         true,
 				StopOnBudgetExhaustion:  true,
+				MaxVerificationRepairs:  2,
 			},
 		},
 		{
@@ -155,6 +159,7 @@ func DefaultReasoningProfileCatalog() (*ReasoningProfileCatalog, error) {
 				RequireEvidence:         true,
 				RequireVerifier:         true,
 				StopOnBudgetExhaustion:  true,
+				MaxVerificationRepairs:  3,
 			},
 		},
 	})
@@ -208,7 +213,8 @@ func validateReasoningProfile(config ReasoningProfileConfig) error {
 		config.Budget.MaxToolCalls < 0 || config.Budget.MaxSubagents < 0 ||
 		config.Budget.MaxSources <= 0 || config.ReflectionEverySteps <= 0 ||
 		config.SourceBreadth <= 0 || config.SourceDepth <= 0 ||
-		config.CheckpointEvery <= 0 {
+		config.CheckpointEvery <= 0 ||
+		config.StopRules.MaxVerificationRepairs < 0 {
 		return fmt.Errorf("invalid reasoning profile %s", config.Profile)
 	}
 	if (config.Profile == generated.AssistantReasoningProfileDeep ||

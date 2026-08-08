@@ -4,6 +4,7 @@ events:
 
     非 canonical 结构字段迁移注记：recommend_impact="circle_index_refresh"。'
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleCreated
   payload_entity: Circle
   payload_fields:
   - id
@@ -18,6 +19,7 @@ events:
 - name: CircleUpdated
   description: 圈子信息更新
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleUpdated
   payload_entity: Circle
   payload_fields:
   - id
@@ -32,6 +34,7 @@ events:
 - name: CircleArchived
   description: 圈子归档
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleArchived
   payload_entity: Circle
   payload_fields:
   - id

@@ -29,6 +29,7 @@ type executionBudgetConsumptionState struct {
 	consumption      ExecutionBudgetConsumption
 	pendingToolCalls int64
 	sink             executionBudgetConsumptionSink
+	persistenceErr   error
 }
 
 type executionToolCallReservation struct {
@@ -81,6 +82,16 @@ func AgentExecutionBudgetConsumptionFromContext(
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	return state.consumption, true
+}
+
+func executionBudgetConsumptionPersistenceError(ctx context.Context) error {
+	state, ok := executionBudgetConsumptionStateFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	return state.persistenceErr
 }
 
 func (state *executionBudgetConsumptionState) consumeModel(
@@ -178,6 +189,9 @@ func (state *executionBudgetConsumptionState) persistNext(
 	}
 	if state.sink != nil {
 		if err := state.sink(snapshot); err != nil {
+			if state.persistenceErr == nil {
+				state.persistenceErr = err
+			}
 			return err
 		}
 	}

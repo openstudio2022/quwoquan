@@ -178,3 +178,19 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation_user_state/conversation_user_state_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_user_state_mark_as_read_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-006
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: MarkAsRead}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation_user_state/conversation_user_state_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_user_state_update_conversation_settings_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-006
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpdateConversationSettings}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation_user_state/conversation_user_state_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

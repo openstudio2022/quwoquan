@@ -8,6 +8,10 @@ import 'package:quwoquan_app/runtime/models/visit_models.dart';
 import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 他人主页入口；壳内档案统一为 [PersonaProfileViewData]。
@@ -70,6 +74,8 @@ class _OtherProfilePageState extends State<OtherProfilePage> {
   @override
   Widget build(BuildContext context) {
     return ProfileShell(
+      recommendationSlots: profileRecommendationSlots,
+      participantSlots: profileParticipantSlots,
       mode: ProfileMode.other,
       userId: widget.personaId?.isNotEmpty == true
           ? widget.personaId!

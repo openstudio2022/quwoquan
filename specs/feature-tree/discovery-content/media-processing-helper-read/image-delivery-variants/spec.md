@@ -43,6 +43,9 @@
 
 - 授权服务经 Post named visibility reader，不以 ViewerID 伪装 owner 查询。
 - grant/rejection/ratelimit 仅追加 MediaOriginalAccessFact 与安全指标，不泄露原图 URL 或图片字节。
+- 限流额度与 grant 到期是实例级可变不变式，由 `content.original_access_quota` 聚合独占承载；额度只能由该聚合的 Facade 在单次原子提交中变更，兄弟对象与 HTTP adapter 不得直写额度存储。
+- grant 的绝对到期时间在预留成功那一刻确定，重放同一幂等键只返回原到期时间，禁止续期或刷新；窗口过期只允许由存储 TTL 自然清理，不得通过重置计数、缩短窗口或重算窗口起点变相扩大额度。
+- MediaOriginalAccessFact 退回为纯审计事实，只记录已作出的授权决定，不持有额度、TTL 或任何实例级可变状态。
 
 <a id="req-004"></a>
 ### REQ-004 策略升级与历史资产重处理可停止、恢复和回滚

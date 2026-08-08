@@ -26,6 +26,7 @@ from content.execution.preflight.selection import (
     resolve_semantic_preflight_selection,
 )
 from core.control_types import AgentProvider
+from core.cursor_credentials import CURSOR_SENSITIVE_PROCESS_ENV_KEYS
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from support.semantic_preflight_fixture import ready_semantic_preflight
@@ -107,7 +108,7 @@ def test_selector_resolves_default_sol_and_cursor_auto_without_fallback() -> Non
     assert calibration.requires_new_retry_of is False
     assert cursor.provider is AgentProvider.CURSOR_SDK
     assert cursor.model_selection.model_id == "auto"
-    assert cursor.requires_new_retry_of is True
+    assert cursor.requires_new_retry_of is False
     assert len(
         {
             default.selection_digest,
@@ -339,6 +340,7 @@ def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
         "executionMode": "central",
+        "scale": "M1",
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": "sha256:" + "b" * 64,
@@ -667,3 +669,50 @@ def test_runtime_child_command_preserves_semantic_selection(
     assert report["provider"] == "cursor_sdk"
     assert report["ready"] is False
     assert "omitted governed semantic identity" in report["issues"][0]
+
+
+def test_runtime_child_scrubs_cursor_secrets_from_environment_and_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    secrets = {
+        name: f"opaque-secret-{index}"
+        for index, name in enumerate(
+            sorted(CURSOR_SENSITIVE_PROCESS_ENV_KEYS), start=1
+        )
+    }
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("QWQ_CURSOR_API_KEY_FILE", str(tmp_path / "missing-key"))
+    observed: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(
+            cmd,
+            1,
+            stdout=json.dumps(
+                {
+                    "provider": "cursor_sdk",
+                    "ready": False,
+                    "issues": [" ".join(secrets.values())],
+                }
+            ),
+            stderr=" ".join(secrets.values()),
+        )
+
+    monkeypatch.setattr(preflight_handler.subprocess, "run", fake_run)
+    python = tmp_path / "python"
+    python.touch()
+
+    report = preflight_handler._preflight_in_python(_args(tmp_path), python)
+
+    child_environment = observed["env"]
+    assert isinstance(child_environment, dict)
+    assert not CURSOR_SENSITIVE_PROCESS_ENV_KEYS.intersection(child_environment)
+    assert child_environment["QWQ_CURSOR_API_KEY_FILE"] == str(
+        tmp_path / "missing-key"
+    )
+    serialized = json.dumps(report, ensure_ascii=False)
+    assert all(secret not in serialized for secret in secrets.values())
+    assert "<redacted-cursor-process-secret>" in serialized

@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -85,7 +86,11 @@ func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
 		Limit:        limit,
 	})
 	if serviceErr != nil {
-		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptionsFromRequest(r))
+		rerrors.WriteHTTPError(
+			w,
+			normalizeLocationHTTPError(serviceErr),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{locationgenerated.ResponseListKey: poiToClientItems(items)})
@@ -138,7 +143,11 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Limit:     limit,
 	})
 	if serviceErr != nil {
-		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptionsFromRequest(r))
+		rerrors.WriteHTTPError(
+			w,
+			normalizeLocationHTTPError(serviceErr),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{locationgenerated.ResponseListKey: poiToClientItems(items)})
@@ -170,12 +179,29 @@ func (h *Handler) handleRoute(w http.ResponseWriter, r *http.Request) {
 	if serviceErr != nil {
 		rerrors.WriteHTTPError(
 			w,
-			serviceErr,
+			normalizeLocationHTTPError(serviceErr),
 			rerrors.HTTPWriteOptionsFromRequest(r),
 		)
 		return
 	}
 	writeJSON(w, http.StatusOK, routeToClientItem(route))
+}
+
+// normalizeLocationHTTPError preserves the typed provider failures produced by
+// registered adapters. Any unstructured application failure is an internal
+// Location boundary failure; vendor diagnostics and arbitrary error text must
+// not cross the public HTTP boundary.
+func normalizeLocationHTTPError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var appError *rerrors.AppError
+	if errors.As(err, &appError) {
+		return err
+	}
+	return locationgenerated.AppErrorFromLocationInternalError(
+		"location application returned an unstructured failure",
+	)
 }
 
 func parseRouteQuery(r *http.Request) (model.RouteQuery, error) {

@@ -11,20 +11,26 @@ members:
   PlanRevision:
     kind: value_object
     cardinality: many
+    max_cardinality: 2048
     ownership: aggregate
     append_only: true
+    description: GatheringPlan 内有界、不可变的 revision 历史。
   GatheringPlanProposal:
     kind: owned_entity
     identity: [proposalId]
     cardinality: many
+    max_cardinality: 256
     ownership: aggregate
     write_access: aggregate_facade_only
+    description: GatheringPlan 内按 proposalId 唯一的提案状态。
   PlanRevisionAcknowledgement:
     kind: owned_entity
-    identity: [revisionId, participationPersonaId]
+    identity: [revisionId, participationRef]
     cardinality: many
+    max_cardinality: 10000
     ownership: aggregate
     write_access: aggregate_facade_only
+    description: GatheringPlan 内按 revision/persona 唯一的确认状态。
 relationships:
 - name: gathering
   kind: reference

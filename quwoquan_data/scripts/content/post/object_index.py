@@ -15,13 +15,13 @@ ref→对象的**唯一路由真相**，供 draft_io / stage 写入 / materializ
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from datetime import datetime, timezone
-
-from core.io import read_json, write_json
+from core import paths as core_paths
 from core.control_types import ContentType
+from core.io import read_json, write_json
 from core.paths import (
     OBJECT_STAGES,
     STAGE_COMPOSE,
@@ -36,6 +36,33 @@ CONTENT_OBJECT_INDEX = "content_object_index.json"
 INDEX_SCHEMA = "quwoquan_data.content_object_index"
 OBJECT_INDEX_SCHEMA = "quwoquan.object.index"
 BRIEF_FILE = "brief.json"
+
+
+def _canonical_group_sequences(
+    *,
+    content_type: str,
+    angle: str,
+    title: str,
+) -> tuple[int, ...]:
+    """Return already materialized canonical versions for one post identity.
+
+    A campaign can publish some lanes before another lane fails.  A later
+    execution must then freeze the next immutable post version before authoring
+    instead of rebuilding ``.../<title>/1`` and colliding only at transaction
+    time.  Directory names are not inferred as evidence unless the version has
+    a canonical manifest.
+    """
+    group = core_paths.PUBLISH_ROOT / "posts" / content_type / angle / title
+    if not group.is_dir():
+        return ()
+    versions: list[int] = []
+    for child in group.iterdir():
+        if not child.is_dir() or not child.name.isdigit():
+            continue
+        if not (child / "manifest.json").is_file():
+            continue
+        versions.append(int(child.name))
+    return tuple(sorted(set(versions)))
 
 
 def index_path(execution_id: str) -> Path:
@@ -150,7 +177,12 @@ def register_content_object(
             and c.get("angle") == angle
             and c.get("title") == title
         ]
-        next_seq = max(group_seqs or [0]) + 1
+        canonical_seqs = _canonical_group_sequences(
+            content_type=content_type,
+            angle=angle,
+            title=title,
+        )
+        next_seq = max([*group_seqs, *canonical_seqs, 0]) + 1
     index[ref] = {"contentType": content_type, "angle": angle, "title": title, "seq": next_seq}
     write_json(index_path(execution_id), {"schema": INDEX_SCHEMA, "refs": index})
     return index[ref]

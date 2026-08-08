@@ -176,12 +176,12 @@ def _post_candidates(
     return candidates
 
 
-def _creator_name(
+def _creator_identity(
     *,
     release_root: Path,
     creator_ids: list[str],
     article: Mapping[str, Any],
-) -> str:
+) -> dict[str, str]:
     author_id = _required_text(article.get("authorId"), label="release article authorId")
     matches = []
     for creator_ref in creator_ids:
@@ -198,9 +198,28 @@ def _creator_name(
         raise AppUatEnvelopeError(
             "appUatEnvelope article author must map to exactly one release creator"
         )
-    return _required_text(
-        matches[0].get("displayName"), label="release creator displayName"
-    )
+    profile = matches[0]
+    avatar_asset = profile.get("avatarAsset")
+    if not isinstance(avatar_asset, Mapping):
+        raise AppUatEnvelopeError("release creator avatarAsset must be an object")
+    return {
+        "creatorName": _required_text(
+            profile.get("displayName"),
+            label="release creator displayName",
+        ),
+        "creatorUserHandle": _required_text(
+            profile.get("userHandle"),
+            label="release creator userHandle",
+        ),
+        "creatorPersonaId": _required_text(
+            profile.get("personaId"),
+            label="release creator personaId",
+        ),
+        "creatorAvatarAssetId": _required_text(
+            avatar_asset.get("assetId"),
+            label="release creator avatarAssetId",
+        ),
+    }
 
 
 def _tag_label(
@@ -289,6 +308,11 @@ def build_app_uat_envelope(
         raise AppUatEnvelopeError(
             "appUatEnvelope video sourceAttribution must be an object"
         )
+    creator_identity = _creator_identity(
+        release_root=release_root,
+        creator_ids=creator_ids,
+        article=article,
+    )
     return {
         "releaseId": _required_text(release_id, label="releaseId"),
         "releaseClass": _required_text(release_class, label="releaseClass"),
@@ -313,9 +337,7 @@ def build_app_uat_envelope(
             video.get("publishTitle") or video.get("title"),
             label="release video title",
         ),
-        "creatorName": _creator_name(
-            release_root=release_root, creator_ids=creator_ids, article=article
-        ),
+        **creator_identity,
         "tagLabel": _tag_label(
             release_root=release_root, tag_refs=tag_refs, article=article
         ),

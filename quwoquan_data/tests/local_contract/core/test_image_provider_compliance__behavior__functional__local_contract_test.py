@@ -1,7 +1,8 @@
 """P4 图库 acquisition/rights 分轨与非中文译简体门。
 
-- P4a：Pinterest/图虫均可通过受治理公开直链、支持 API 或人工文件取得研究素材；
-  取得不等于授权，provider 分类不得伪造逐资产 rightsStatus。
+- P4a：图虫可通过受治理公开直链、支持 API 或人工文件取得研究素材；Pinterest
+  只允许支持 API 或人工文件，禁止 public_direct；取得不等于授权，provider 分类
+  不得伪造逐资产 rightsStatus。
 - P4b：research 记录权利缺口但不因未验证而阻断；commercial/enforce 保持硬门。
 - P4c 非中文图片元数据门：英文/拉丁主导 caption / 标题须先译简体中文，否则阻断发布。
 
@@ -12,7 +13,10 @@ from __future__ import annotations
 import copy
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -32,6 +36,7 @@ from content.source.research.image_provider_compliance import (  # noqa: E402
 from content.source.research.source_quality import _collection_gate  # noqa: E402
 from core.asset_placement import _caption_is_degraded, caption_semantic_issues  # noqa: E402
 from core.localization import simplified_chinese_publish_issues  # noqa: E402
+from governance.coverage import distribution  # noqa: E402
 
 
 # ---------------------------------------------------------------- P4a 分级 + 受限如实标注
@@ -51,8 +56,9 @@ def test_p4a_tuchong_and_pinterest_have_governed_research_acquisition_paths():
     assert pinterest["researchEligible"] is True
     assert pinterest["commercialEvidenceRequired"] is True
     assert set(pinterest["acquisitionPaths"]) == {
-        "public_direct", "supported_api", "manual_file"
+        "supported_api", "manual_file"
     }
+    assert "public_direct" not in pinterest["acquisitionPaths"]
     assert image_provider_restriction(source_id="pinterest") is None
 
 
@@ -103,6 +109,22 @@ def _tuchong_collection() -> dict:
     }
 
 
+def _use_research_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = distribution.load_content_distribution_policy()
+    research_policy = replace(
+        policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
+        release_class=distribution.ReleaseClass.RESEARCH,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: research_policy,
+    )
+
+
 def test_p4b_full_per_image_authorization_passes_gate():
     verdict = _collection_gate(
         _tuchong_collection(), entity_id="九寨沟", vertical="travel"
@@ -110,7 +132,10 @@ def test_p4b_full_per_image_authorization_passes_gate():
     assert verdict["passed"], verdict["issues"]
 
 
-def test_p4b_research_missing_authorization_is_audited_not_blocked():
+def test_p4b_research_missing_authorization_is_audited_not_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _use_research_distribution(monkeypatch)
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
@@ -119,7 +144,10 @@ def test_p4b_research_missing_authorization_is_audited_not_blocked():
     assert any("authorizationProof" in issue for issue in verdict["rightsAuditIssues"])
 
 
-def test_p4b_research_unsupported_license_is_audited_not_blocked():
+def test_p4b_research_unsupported_license_is_audited_not_blocked(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _use_research_distribution(monkeypatch)
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0]["license"] = "CC BY-NC 4.0"
     bad["images"][0]["termsUrl"] = "https://creativecommons.org/licenses/by-nc/4.0/"
@@ -129,7 +157,10 @@ def test_p4b_research_unsupported_license_is_audited_not_blocked():
     assert verdict["rightsAuditIssues"]
 
 
-def test_p4b_research_lifecycle_is_not_inferred_from_vertical_name():
+def test_p4b_research_lifecycle_is_not_inferred_from_vertical_name(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _use_research_distribution(monkeypatch)
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="photography")

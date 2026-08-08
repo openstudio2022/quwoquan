@@ -153,6 +153,72 @@ func TestStableAndGrayReplicasShareOneAtomicAdmissionBucket(t *testing.T) {
 		t.Fatalf("owner calls=%d want=4; replicas did not share one atomic bucket", calls)
 	}
 
+	// IssueConnectionTicket is authored as a session operation. Stable and gray
+	// must therefore consume one shared Redis-backed session bucket and surface
+	// the gateway-owned 429 contract, rather than a second realtime-owned limit.
+	sessionPolicies := integrationPolicies(1, time.Second)
+	stableSessionAdmission, err := application.NewService("prod", stableStore, sessionPolicies, metrics)
+	if err != nil {
+		t.Fatalf("new stable session admission: %v", err)
+	}
+	graySessionAdmission, err := application.NewService("prod", grayStore, sessionPolicies, metrics)
+	if err != nil {
+		t.Fatalf("new gray session admission: %v", err)
+	}
+	sessionDescriptor := rtauth.OperationSecurityDescriptor{
+		CanonicalOperationID: "realtime.connection.IssueConnectionTicket",
+		ContractGraphSHA256:  descriptor.ContractGraphSHA256,
+		Method:               http.MethodPost,
+		PathTemplate:         "/realtime/tickets",
+		OperationKind:        "session",
+		AuthMode:             "required",
+		ActorRequirement:     "persona",
+		Principal:            "persona",
+		Idempotency:          "none",
+		CommercialStatus:     "ready",
+		TimeoutMilliseconds:  1500,
+	}
+	stableSessionHandler := integrationEdgeHandler(
+		t,
+		stableSessionAdmission,
+		verifier,
+		authority,
+		sessionDescriptor,
+		owner.URL,
+	)
+	graySessionHandler := integrationEdgeHandler(
+		t,
+		graySessionAdmission,
+		verifier,
+		authority,
+		sessionDescriptor,
+		owner.URL,
+	)
+	stableSessionClient := startUnixHTTPReplica(t, "session-stable", stableSessionHandler)
+	graySessionClient := startUnixHTTPReplica(t, "session-gray", graySessionHandler)
+	firstSessionResponse := executeSessionIntegrationRequest(t, stableSessionClient, token)
+	if firstSessionResponse.StatusCode != http.StatusNoContent {
+		t.Fatalf(
+			"first IssueConnectionTicket status=%d body=%s",
+			firstSessionResponse.StatusCode,
+			readBody(firstSessionResponse),
+		)
+	}
+	_ = firstSessionResponse.Body.Close()
+	secondSessionResponse := executeSessionIntegrationRequest(t, graySessionClient, token)
+	retryAfter := assertTypedAdmissionError(
+		t,
+		secondSessionResponse,
+		http.StatusTooManyRequests,
+		"GATEWAY.USER.rate_limited",
+	)
+	if retryAfter != 1 {
+		t.Fatalf("IssueConnectionTicket Retry-After=%d want=1", retryAfter)
+	}
+	if calls := ownerCalls.Load(); calls != 5 {
+		t.Fatalf("owner calls=%d want=5; denied session request reached realtime owner", calls)
+	}
+
 	// A repeated command idempotency key is intentionally not a second quota
 	// path: admission is consumed before owner-level idempotency semantics.
 	stopRedis()
@@ -163,8 +229,8 @@ func TestStableAndGrayReplicasShareOneAtomicAdmissionBucket(t *testing.T) {
 		http.StatusServiceUnavailable,
 		"GATEWAY.MIDDLEWARE.rate_limit_state_unavailable",
 	)
-	if calls := ownerCalls.Load(); calls != 4 {
-		t.Fatalf("owner calls after Redis fault=%d want=4", calls)
+	if calls := ownerCalls.Load(); calls != 5 {
+		t.Fatalf("owner calls after Redis fault=%d want=5", calls)
 	}
 	assertAdmissionMetricContract(t, registry)
 }
@@ -226,7 +292,7 @@ func integrationEdgeHandler(
 	}
 	ownerProxy, err := httpadapter.NewOwnerProxy(httpadapter.OwnerProxyConfig{
 		Routes: []httpadapter.OwnerRoute{{
-			OperationPrefix: "content.",
+			OperationPrefix: strings.SplitN(descriptor.CanonicalOperationID, ".", 2)[0] + ".",
 			Upstream:        origin,
 		}},
 		TrustedNetworkHeader: "X-Edge-Client-IP",
@@ -281,12 +347,31 @@ func executeIntegrationRequestResult(
 	return response, nil
 }
 
+func executeSessionIntegrationRequest(
+	t *testing.T,
+	client *http.Client,
+	token string,
+) *http.Response {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodPost, "http://api-edge.local/realtime/tickets", nil)
+	if err != nil {
+		t.Fatalf("new IssueConnectionTicket request: %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("X-Edge-Client-IP", "198.51.100.20")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("execute IssueConnectionTicket request: %v", err)
+	}
+	return response
+}
+
 func assertTypedAdmissionError(
 	t *testing.T,
 	response *http.Response,
 	wantStatus int,
 	wantCode string,
-) {
+) int {
 	t.Helper()
 	defer response.Body.Close()
 	var body rterr.ErrorResponse
@@ -305,6 +390,7 @@ func assertTypedAdmissionError(
 		body.Recovery.DisruptionLevel != "snackbar" {
 		t.Fatalf("Retry-After=%d recovery=%+v", headerSeconds, body.Recovery)
 	}
+	return headerSeconds
 }
 
 func assertAdmissionMetricContract(t *testing.T, registry *prometheus.Registry) {

@@ -10,7 +10,7 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {

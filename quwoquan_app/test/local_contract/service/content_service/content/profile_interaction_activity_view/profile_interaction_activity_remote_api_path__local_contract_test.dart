@@ -1,6 +1,9 @@
 /// 对象级端云契约：Remote adapter 的 HTTP path 与 generated metadata 对齐。
 library;
 
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+// readiness_case: profile_interaction_activity_view_list_profile_interaction_activities_received_app_local
+// readiness_case: profile_interaction_activity_view_list_profile_interaction_activities_sent_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';

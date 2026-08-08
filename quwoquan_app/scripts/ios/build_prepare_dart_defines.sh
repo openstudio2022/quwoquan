@@ -42,6 +42,21 @@ for encoded in filter(None, sys.argv[1].strip().split(",")):
         break
 PY
 )"
+EXISTING_LAUNCH_POLICY="$(
+  python3 - "${DART_DEFINES:-}" <<'PY'
+import base64
+import sys
+
+for encoded in filter(None, sys.argv[1].strip().split(",")):
+    try:
+        decoded = base64.b64decode(encoded).decode("utf-8")
+    except Exception:
+        continue
+    if decoded.startswith("APP_LAUNCH_POLICY="):
+        print(decoded.split("=", 1)[1].strip())
+        break
+PY
+)"
 ENV_NAME="${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-}}"
 LAUNCH_MODE="${QWQ_APP_LAUNCH_MODE:-${EXISTING_LAUNCH_MODE:-}}"
 DIRECT_RUNTIME_DEFINES_JSON=""
@@ -54,6 +69,7 @@ case "$DIRECT_ENVIRONMENT" in
     ;;
 esac
 DIRECT_TARGET="${DIRECT_ENVIRONMENT}-local"
+LAUNCH_POLICY="${QWQ_APP_LAUNCH_POLICY:-${EXISTING_LAUNCH_POLICY:-test_live}}"
 
 if [[ -z "$LAUNCH_MODE" \
    && "${CONFIGURATION:-}" == Debug* \
@@ -109,17 +125,18 @@ import shlex
 import sys
 
 payload = json.loads(sys.argv[1])
-if payload.get("status") != "passed":
-    raise SystemExit("App Debug preflight did not pass")
+if payload.get("status") not in {"passed", "warning"}:
+    raise SystemExit("App Debug preflight did not allow test_live")
+for warning in payload.get("warnings") or []:
+    print(f"[ios-dart-defines] WARN: {warning}", file=sys.stderr)
 for key, field in (
     ("QWQ_CONTENT_RELEASE_ID", "releaseId"),
     ("QWQ_CONTENT_MANIFEST_DIGEST", "manifestDigest"),
     ("QWQ_CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"),
 ):
     value = str(payload.get(field) or "").strip()
-    if not value:
-        raise SystemExit(f"App content preflight is missing {field}")
-    print(f"export {key}={shlex.quote(value)}")
+    if value:
+        print(f"export {key}={shlex.quote(value)}")
 PY
   )" || {
     echo "[ios-dart-defines] GATE_BLOCK: App content preflight returned an invalid receipt." >&2
@@ -132,12 +149,9 @@ PY
       --env "$DIRECT_ENVIRONMENT" \
       --target "$DIRECT_TARGET" \
       --launch-mode direct_flutter_run \
+      --launch-policy test_live \
       --app-instance-id direct-flutter-run \
-      --app-instance-namespace direct-flutter-run \
-      --content-release-id "$QWQ_CONTENT_RELEASE_ID" \
-      --content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST" \
-      --content-readiness-receipt-digest \
-      "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
+      --app-instance-namespace direct-flutter-run
   )"; then
     echo "[ios-dart-defines] GATE_BLOCK: canonical direct Debug handoff could not be built." >&2
     exit 2
@@ -152,6 +166,7 @@ handoff = json.loads(sys.argv[1])
 values = {
     "QWQ_APP_RUNTIME_ENV": handoff["environment"],
     "QWQ_APP_LAUNCH_MODE": handoff["launchMode"],
+    "QWQ_APP_LAUNCH_POLICY": handoff["launchPolicy"],
     "QWQ_LAUNCH_TARGET": handoff["target"],
     "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
     "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigDigest"],
@@ -179,8 +194,10 @@ PY
   eval "$DIRECT_HANDOFF_EXPORTS"
   ENV_NAME="$QWQ_APP_RUNTIME_ENV"
   LAUNCH_MODE="$QWQ_APP_LAUNCH_MODE"
+  LAUNCH_POLICY="$QWQ_APP_LAUNCH_POLICY"
   echo "[ios-dart-defines] direct Debug uses canonical $DIRECT_TARGET handoff." >&2
-  if [[ "${PLATFORM_NAME:-}" == "iphonesimulator" ]]; then
+  if [[ "${PLATFORM_NAME:-}" == "iphonesimulator" \
+     && -n "${QWQ_RUN_CONSUMER_ID:-}" ]]; then
     DIRECT_SIMULATOR_UDID="$(
       PYTHONPATH="$APP_DIR/.." PYTHONDONTWRITEBYTECODE=1 "$DIRECT_PYTHON" - \
         "${QWQ_IOS_SIMULATOR_UDID:-${TARGET_DEVICE_IDENTIFIER:-}}" <<'PY'
@@ -199,8 +216,7 @@ PY
       --action install --device "$DIRECT_SIMULATOR_UDID" \
       --lease-id "direct-flutter-run:${DIRECT_SIMULATOR_UDID}" \
       --defer-endpoint-probe >/dev/null; then
-      echo "[ios-dart-defines] GATE_BLOCK: selected Simulator system-trust preparation failed; inspect the stackctl diagnostics above." >&2
-      exit 2
+      echo "[ios-dart-defines] WARN: Simulator trust is unavailable; test_live continues with typed network recovery." >&2
     fi
     if ! PYTHONDONTWRITEBYTECODE=1 "$DIRECT_PYTHON" \
       "$APP_DIR/../quwoquan_ops/cli/stackctl.py" --output-format json \
@@ -209,14 +225,11 @@ PY
       --consumer "direct-flutter-run" \
       --bundle-id "${PRODUCT_BUNDLE_IDENTIFIER:-com.example.quwoquanApp}" \
       --ports "" \
-      --handoff-digest "$QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST" \
-      --release-id "$QWQ_CONTENT_RELEASE_ID" \
-      --manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST" \
-      --readiness-receipt-digest \
-      "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST" >/dev/null; then
-      echo "[ios-dart-defines] GATE_BLOCK: failed to acquire the Simulator runtime consumer lease." >&2
-      exit 2
+      --handoff-digest "$QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST" >/dev/null; then
+      echo "[ios-dart-defines] WARN: Simulator runtime lease is unavailable; compile-first test_live continues." >&2
     fi
+  elif [[ "${PLATFORM_NAME:-}" == "iphonesimulator" ]]; then
+    echo "[ios-dart-defines] WARN: compile-only Debug does not own Simulator trust or a runtime lease; use run.sh for a device-bound test_live session." >&2
   fi
 fi
 
@@ -253,7 +266,8 @@ else
       "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
       --env "$ENV_NAME" \
       --format json \
-      --launch-mode "$LAUNCH_MODE"
+      --launch-mode "$LAUNCH_MODE" \
+      --launch-policy "$LAUNCH_POLICY"
   )"
 fi
 
@@ -305,10 +319,7 @@ for label, value in (
             file=sys.stderr,
         )
         raise SystemExit(5)
-if runtime_defines.get("QWQ_APP_LAUNCH_MODE", "") in {
-    "direct_flutter_run",
-    "canonical_launcher",
-}:
+if runtime_defines.get("APP_LAUNCH_POLICY", "") == "prod_release":
     if not content_release_id:
         print(
             "[ios-dart-defines] FAIL: release-bound contentReleaseId is required.",
@@ -340,6 +351,8 @@ required_keys = {
     "MEDIA_VIDEO_CDN_BASE_URL",
     "MEDIA_UPLOAD_BASE_URL",
     "RTC_MEDIA_CONNECTION_URL",
+    "APP_LAUNCH_POLICY",
+    "CONTENT_BINDING_STATE",
 }
 native_runtime_keys = required_keys | {"QWQ_APP_LAUNCH_MODE"}
 
@@ -399,6 +412,10 @@ if target_build_dir and resources_folder:
                 "launchTarget": launch_target,
                 "entrypoint": "lib/main_prod.dart",
                 "launchMode": runtime_defines.get("QWQ_APP_LAUNCH_MODE", ""),
+                "launchPolicy": runtime_defines.get("APP_LAUNCH_POLICY", ""),
+                "contentBindingState": runtime_defines.get(
+                    "CONTENT_BINDING_STATE", ""
+                ),
                 "runtimeDefines": {
                     key: merged[key]
                     for key in sorted(native_runtime_keys)

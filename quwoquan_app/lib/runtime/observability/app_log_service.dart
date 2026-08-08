@@ -105,7 +105,10 @@ class AppLogService implements AppEventLogPort {
     // 是唯一权威，键名规则只覆盖它没枚举到的常见敏感键。
     final redactedPayload = _applyOperationPrivacy(
       context: context,
-      payload: _redactor.redactMap(rawPayload),
+      payload: _redactor.redactMap(
+        rawPayload,
+        operationId: context.operationId,
+      ),
     );
     final envelope = _buildEnvelope(
       ts: DateTime.now().toIso8601String(),

@@ -187,10 +187,11 @@ CANONICAL_EVENT_REF_RE = re.compile(
     r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[A-Z][A-Za-z0-9]*$"
 )
 
-# Stable service-owned resource roles.  These are layout semantics enforced by
+# Stable service-owned resource root-entry roles. These are layout semantics enforced by
 # this gate, not an asset registry: services still own the actual resources and
 # are discovered solely from their physical directories.
 COMMON_RESOURCE_ROOT_ROLES = {
+    "coverage-toolchain.lock": "coverage_toolchain_lock",
     "migrations": "schema_migration",
     "templates": "runtime_template",
     "policies": "runtime_policy",

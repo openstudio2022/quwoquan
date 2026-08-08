@@ -2,6 +2,7 @@ events:
 - name: PremiumPoolEntryUpserted
   description: 全局精选池条目完成原子准入或重新准入。
   delivery_semantics: transactional_outbox
+  wire_event_type: PremiumPoolEntryUpserted
   topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
   payload_fields:
@@ -23,6 +24,7 @@ events:
 - name: PremiumPoolEntryRolledBack
   description: 全局精选池条目由 active 原子回滚。
   delivery_semantics: transactional_outbox
+  wire_event_type: PremiumPoolEntryRolledBack
   topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
   payload_fields:
@@ -44,6 +46,7 @@ events:
 - name: PremiumPoolEntryTakedownEjected
   description: 全局精选池条目经两个不同 operator 对同一 revision 双签后不可变下架。
   delivery_semantics: transactional_outbox
+  wire_event_type: PremiumPoolEntryTakedownEjected
   topic: events.ops.premium_pool_entry
   payload_entity: PremiumPoolEntry
   payload_fields:

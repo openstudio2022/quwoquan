@@ -8,7 +8,6 @@ collections:
     indexes:
     - {name: idx_connector_invocations_account_created, keys: {accountId: 1, createdAt: -1}}
     - {name: idx_connector_invocations_connection_created, keys: {connectionId: 1, createdAt: -1}}
-    - {name: idx_connector_invocations_run_status, keys: {assistantRunId: 1, status: 1, updatedAt: -1}}
     - {name: idx_connector_invocations_worker_claim, keys: {status: 1, leaseExpiresAt: 1, updatedAt: 1}}
   connector_invocation_command_receipts:
     publication_role: not_published

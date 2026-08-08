@@ -27,6 +27,7 @@ from support.path_setup import model_runtime_root
 SCRIPTS_DIR = model_runtime_root() / "scripts"
 from training_sample_policy import filter_point_in_time_rows
 from sample_joiner import build_training_samples
+from replay_dataset import _dataset_digest
 from generate_seed_data import generate_facts, generate_posts, generate_users
 
 TRAINING_CHAIN_SCRIPTS = [
@@ -60,6 +61,17 @@ def test_replay_freeze_materializes_sample_snapshots():
         "冻结集禁止回退为只存 sampleIds（--clean 会物理摧毁引用）"
     )
     assert "sourceSampleId" in src, "快照文档必须保留源样本 id 以便追溯"
+    assert "uq_recommendation_replay_dataset_digest" in src
+    assert "uq_recommendation_replay_sample_identity" in src
+
+
+def test_replay_dataset_digest_is_order_independent_and_content_bound():
+    rows = [{"_id": "sample-b"}, {"_id": "sample-a"}]
+    digest = _dataset_digest("content_feed", rows)
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+    assert digest == _dataset_digest("content_feed", list(reversed(rows)))
+    assert digest != _dataset_digest("other_scenario", rows)
+    assert digest != _dataset_digest("content_feed", [{"_id": "sample-c"}])
 
 
 def test_evaluate_replay_reads_materialized_snapshot():

@@ -9,6 +9,121 @@ import (
 	"quwoquan_service/internal/metadata/ast"
 )
 
+func TestLifecycleEntrypointBinderResolvesAllFiveProjectionConsumers(t *testing.T) {
+	root, objectRoot := lifecycleImplementationFixture(t)
+	consumers := []ast.LifecycleEventConsumer{
+		{Name: "ProjectPost", Kind: "projector", Facet: "PostConsumer", Method: "processOnce"},
+		{Name: "ProjectPool", Kind: "projector", Facet: "PoolConsumer", Method: "processOnce"},
+		{Name: "ProjectPersona", Kind: "projector", Facet: "PersonaConsumer", Method: "processOnce"},
+		{Name: "ProjectAccount", Kind: "projector", Facet: "AccountConsumer", Method: "processOnce"},
+		{Name: "ProjectGathering", Kind: "projector", Facet: "GatheringConsumer", Method: "processOnce"},
+	}
+	for index, consumer := range consumers {
+		writeLifecycleFixture(t, filepath.Join(objectRoot, "adapters", consumer.Name+".go"), `package adapters
+type `+consumer.Facet+` struct{}
+func (*`+consumer.Facet+`) ProcessOnce() error { return nil }
+`)
+		consumers[index].Idempotency = "aggregate_version"
+	}
+	catalog := lifecycleEntrypointCatalog(ast.ObjectKindProjection, consumers)
+	var errs []error
+	bindLifecycleEntrypointImplementations(catalog, root, &errs)
+	if len(errs) != 0 {
+		t.Fatalf("bind lifecycle entrypoints: %v", errs)
+	}
+	for _, consumer := range catalog.Objects[0].Lifecycle.EventConsumers {
+		if consumer.Implementation == nil ||
+			consumer.Implementation.Path == "" ||
+			len(consumer.Implementation.SHA256) != 64 {
+			t.Fatalf("unresolved consumer: %+v", consumer)
+		}
+	}
+}
+
+func TestLifecycleEntrypointBinderRejectsMissingOrAmbiguousProjectionImplementation(t *testing.T) {
+	tests := map[string]func(t *testing.T, objectRoot string){
+		"missing": func(t *testing.T, objectRoot string) {},
+		"ambiguous": func(t *testing.T, objectRoot string) {
+			for _, name := range []string{"first.go", "second.go"} {
+				writeLifecycleFixture(t, filepath.Join(objectRoot, "adapters", name), `package adapters
+type DemoLifecycleProjector struct{}
+func (*DemoLifecycleProjector) ProcessOnce() error { return nil }
+`)
+			}
+		},
+	}
+	for name, prepare := range tests {
+		name, prepare := name, prepare
+		t.Run(name, func(t *testing.T) {
+			root, objectRoot := lifecycleImplementationFixture(t)
+			prepare(t, objectRoot)
+			catalog := lifecycleEntrypointCatalog(
+				ast.ObjectKindProjection,
+				[]ast.LifecycleEventConsumer{{
+					Name: "ProjectDemo", Kind: "projector",
+					Facet: "DemoLifecycleProjector", Method: "processOnce",
+					Idempotency: "aggregate_version",
+				}},
+			)
+			var errs []error
+			bindLifecycleEntrypointImplementations(catalog, root, &errs)
+			if len(errs) == 0 || catalog.Objects[0].Lifecycle.EventConsumers[0].Implementation != nil {
+				t.Fatalf("invalid implementation accepted: errors=%v consumer=%+v", errs,
+					catalog.Objects[0].Lifecycle.EventConsumers[0])
+			}
+		})
+	}
+}
+
+func TestLifecycleEntrypointBinderAlsoBindsAggregateConsumers(t *testing.T) {
+	root, objectRoot := lifecycleImplementationFixture(t)
+	writeLifecycleFixture(t, filepath.Join(objectRoot, "application", "handler.go"), `package application
+type DemoLifecycleHandler struct{}
+func (*DemoLifecycleHandler) Handle() error { return nil }
+`)
+	catalog := lifecycleEntrypointCatalog(
+		ast.ObjectKindAggregateRoot,
+		[]ast.LifecycleEventConsumer{{
+			Name: "HandleDemo", Kind: "event_handler",
+			Facet: "DemoLifecycleHandler", Method: "handle",
+			Idempotency: "event_id",
+		}},
+	)
+	var errs []error
+	bindLifecycleEntrypointImplementations(catalog, root, &errs)
+	consumer := catalog.Objects[0].Lifecycle.EventConsumers[0]
+	if len(errs) != 0 || consumer.Implementation == nil ||
+		!strings.HasSuffix(consumer.Implementation.Path, "/application/handler.go") {
+		t.Fatalf("aggregate lifecycle implementation not bound: errors=%v consumer=%+v", errs, consumer)
+	}
+}
+
+func TestLifecycleEntrypointBinderDoesNotSkipObjectsWithHTTPEntrypoints(t *testing.T) {
+	root, objectRoot := lifecycleImplementationFixture(t)
+	writeLifecycleFixture(t, filepath.Join(objectRoot, "adapters", "consumer.go"), `package adapters
+type DemoLifecycleProjector struct{}
+func (*DemoLifecycleProjector) Apply() error { return nil }
+`)
+	catalog := lifecycleEntrypointCatalog(
+		ast.ObjectKindProjection,
+		[]ast.LifecycleEventConsumer{{
+			Name: "ProjectDemo", Kind: "projector",
+			Facet: "DemoLifecycleProjector", Method: "apply",
+			Idempotency: "aggregate_version",
+		}},
+	)
+	catalog.Operations = []ast.Operation{{
+		ID: "demo.demo_object.GetDemo", ObjectID: "demo.demo_object",
+	}}
+	var errs []error
+	bindLifecycleEntrypointImplementations(catalog, root, &errs)
+	consumer := catalog.Objects[0].Lifecycle.EventConsumers[0]
+	if len(errs) != 0 || consumer.Implementation == nil ||
+		!strings.HasSuffix(consumer.Implementation.Path, "/adapters/consumer.go") {
+		t.Fatalf("HTTP object lifecycle implementation not bound: errors=%v consumer=%+v", errs, consumer)
+	}
+}
+
 func TestLifecycleImplementationResolvesConcreteGoFacet(t *testing.T) {
 	root, objectRoot := lifecycleImplementationFixture(t)
 	writeLifecycleFixture(t, filepath.Join(objectRoot, "application", "projector.go"), `package application
@@ -80,6 +195,53 @@ func (*DemoLifecycleProjector) Apply() error { return nil }
 	}
 }
 
+func TestLifecycleImplementationRejectsEmptyGoAndPythonMarkers(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		path   string
+		body   string
+		facet  string
+		method string
+	}{
+		{
+			name: "empty Go method", path: "application/empty.go",
+			body: `package application
+type EmptyHandler struct{}
+func (*EmptyHandler) Handle() {}
+`,
+			facet: "EmptyHandler", method: "handle",
+		},
+		{
+			name: "Python pass marker", path: "adapters/empty.py",
+			body: `class EmptyHandler:
+    def handle(self):
+        pass
+`,
+			facet: "EmptyHandler", method: "handle",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			root, objectRoot := lifecycleImplementationFixture(t)
+			writeLifecycleFixture(t, filepath.Join(objectRoot, testCase.path), testCase.body)
+			index, err := buildLifecycleSourceIndex(objectRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = resolveLifecycleImplementation(
+				root,
+				lifecycleImplementationObject(),
+				ast.LifecycleEventConsumer{
+					Name: "HandleDemo", Facet: testCase.facet, Method: testCase.method,
+				},
+				index,
+			)
+			if err == nil || !strings.Contains(err.Error(), "exactly one owning production source") {
+				t.Fatalf("empty lifecycle marker was accepted: %v", err)
+			}
+		})
+	}
+}
+
 func TestLifecycleImplementationResolvesPythonClassAndSnakeCaseMethod(t *testing.T) {
 	root, objectRoot := lifecycleImplementationFixture(t)
 	writeLifecycleFixture(t, filepath.Join(objectRoot, "application", "projector.py"), `class RecommendationModelRuntimeCoordinator:
@@ -127,6 +289,11 @@ func lifecycleImplementationFixture(t *testing.T) (string, string) {
 	if err := os.MkdirAll(objectRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	writeLifecycleFixture(
+		t,
+		filepath.Join(root, "quwoquan_service", "services", "demo-service", "contracts", "domain.yaml"),
+		"domain: demo\n",
+	)
 	return root, objectRoot
 }
 
@@ -168,4 +335,17 @@ func lifecycleImplementationObject() ast.Object {
 		ID: "demo.demo_object", Domain: "demo", Name: "DemoObject",
 		SourcePath: "demo/demo_context/demo_object/object.yaml",
 	}
+}
+
+func lifecycleEntrypointCatalog(
+	kind ast.ObjectKind,
+	consumers []ast.LifecycleEventConsumer,
+) *ast.Catalog {
+	object := lifecycleImplementationObject()
+	object.Kind = kind
+	object.Lifecycle = &ast.LifecycleDefinition{
+		SourceEvents:   []string{"content.post.PostPublished"},
+		EventConsumers: consumers,
+	}
+	return &ast.Catalog{Objects: []ast.Object{object}}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/model"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/ports"
 	definitionmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/domain/model"
@@ -30,9 +31,8 @@ type CommandFacade struct {
 }
 
 type QueryFacade struct {
-	reader      ports.Reader
-	definitions definitionports.Reader
-	now         func() time.Time
+	reader ports.Reader
+	grants grantapp.ConnectorGrantResolver
 }
 
 func NewCommandFacade(
@@ -50,21 +50,14 @@ func NewCommandFacade(
 }
 
 func NewQueryFacade(reader ports.Reader) *QueryFacade {
-	return &QueryFacade{
-		reader: reader,
-		now:    func() time.Time { return time.Now().UTC() },
-	}
+	return &QueryFacade{reader: reader}
 }
 
 func NewCapabilityQueryFacade(
 	reader ports.Reader,
-	definitions definitionports.Reader,
-	now func() time.Time,
+	grants grantapp.ConnectorGrantResolver,
 ) *QueryFacade {
-	if now == nil {
-		now = func() time.Time { return time.Now().UTC() }
-	}
-	return &QueryFacade{reader: reader, definitions: definitions, now: now}
+	return &QueryFacade{reader: reader, grants: grants}
 }
 
 func (facade *CommandFacade) Create(
@@ -172,76 +165,37 @@ func (facade *QueryFacade) List(
 
 func (facade *QueryFacade) ResolveCapability(
 	ctx context.Context,
+	authorization grantapp.TrustedRuntimeAuthorization,
 	input model.ResolveCapabilityInput,
 ) (model.CapabilityGrantDecision, error) {
-	if facade == nil || facade.reader == nil || facade.definitions == nil || facade.now == nil {
+	if facade == nil || facade.grants == nil {
 		return model.CapabilityGrantDecision{}, model.ErrStorageUnavailable
 	}
 	normalized, err := model.NormalizeResolveCapabilityInput(input)
 	if err != nil {
 		return model.CapabilityGrantDecision{}, err
 	}
-	decision := model.CapabilityGrantDecision{
-		CapabilityKey: normalized.CapabilityKey,
-		SurfaceKind:   normalized.SurfaceKind,
-		Reason:        model.CapabilityReasonNoConnection,
+	decision, err := facade.grants.ResolveConnectorGrant(
+		ctx,
+		authorization,
+		grantapp.ConnectorResolutionRequest{
+			ResolutionID:   normalized.ResolutionID,
+			CapabilityKey:  normalized.CapabilityKey,
+			SurfaceKind:    normalized.SurfaceKind,
+			ConnectionRefs: normalized.ConnectionRefs,
+		},
+	)
+	if err != nil {
+		return model.CapabilityGrantDecision{}, err
 	}
-	now := facade.now().UTC()
-	for _, connectionRef := range normalized.ConnectionRefs {
-		connection, readErr := facade.reader.Get(ctx, normalized.AccountID, connectionRef)
-		if errors.Is(readErr, model.ErrNotFound) {
-			continue
-		}
-		if readErr != nil {
-			return model.CapabilityGrantDecision{}, model.ErrStorageUnavailable
-		}
-		if !connection.IsActive(now) {
-			decision.Reason = model.CapabilityReasonConnectionInactive
-			continue
-		}
-		if !connection.Grants(normalized.CapabilityKey) {
-			decision.Reason = model.CapabilityReasonCapabilityDenied
-			continue
-		}
-		definition, definitionErr := facade.definitions.Get(ctx, connection.ConnectorID)
-		if errors.Is(definitionErr, definitionmodel.ErrNotFound) {
-			decision.Reason = model.CapabilityReasonDefinitionMissing
-			continue
-		}
-		if definitionErr != nil {
-			return model.CapabilityGrantDecision{}, model.ErrStorageUnavailable
-		}
-		if !definition.Grants(normalized.CapabilityKey) {
-			decision.Reason = model.CapabilityReasonCapabilityDenied
-			continue
-		}
-		if definition.AuthorizationMode == definitionmodel.AuthorizationOAuth2 &&
-			!model.ValidProviderAccountSubjectDigest(
-				connection.ProviderAccountSubjectDigest,
-			) {
-			decision.Reason = model.CapabilityReasonConnectionInactive
-			continue
-		}
-		if !definition.SupportsSurface(normalized.SurfaceKind) {
-			decision.Reason = model.CapabilityReasonSurfaceDenied
-			continue
-		}
-		freshness := connection.FreshnessAt.UTC()
-		decision.Allowed = true
-		decision.ConnectionID = connection.ConnectionID
-		decision.ConnectorID = connection.ConnectorID
-		decision.FreshnessAt = &freshness
-		decision.ExpiresAt = normalizeDecisionTime(connection.ExpiresAt)
-		decision.Reason = model.CapabilityReasonAllowed
-		return decision, nil
-	}
-	return decision, nil
-}
-
-func normalizeDecisionTime(value *time.Time) *time.Time {
-	if value == nil || value.IsZero() {
-		return nil
-	}
-	normalized := value.UTC()
-	return &normalized
+	return model.CapabilityGrantDecision{
+		Allowed:       decision.Allowed,
+		CapabilityKey: decision.CapabilityKey,
+		SurfaceKind:   decision.SurfaceKind,
+		ConnectionID:  decision.ConnectionID,
+		ConnectorID:   decision.ConnectorID,
+		FreshnessAt:   decision.FreshnessAt,
+		ExpiresAt:     decision.ExpiresAt,
+		Reason:        decision.Reason,
+	}, nil
 }

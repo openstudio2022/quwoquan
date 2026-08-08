@@ -1,9 +1,4 @@
 // readiness_case: get-gathering-local
-// readiness_case: get-public-gathering-local
-// readiness_case: list-gatherings-by-host-local
-// readiness_case: list-gatherings-by-source-local
-// readiness_case: list-gathering-applications-local
-// readiness_case: list-gathering-roster-local
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-002
 package application_test

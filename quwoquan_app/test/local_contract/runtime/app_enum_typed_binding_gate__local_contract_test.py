@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-002
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-002.t2
 """The enum typed-binding ratchet must fail loudly instead of scanning nothing.
 
 Negative cases come first, because a scanner that silently measures an empty

@@ -1,13 +1,11 @@
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
-from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, Mapping, Path, article_commercial_closure_enabled, data_issue, data_issues, execution_content_plan_packet_path, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, write_json
-from content.execution.controller.content_plan_assets import (
-    article_asset_claims as _article_asset_claims,
-    asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha,
-    claim as _claim, claims_conflict as _claims_conflict,
-    image_claims as _image_claims,
-    source_ref as _source_ref,
+from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, data_issue, data_issues, execution_root, read_json
+from content.execution.controller.content_plan_asset_semantics import (
+    admitted_article_asset_rows as _admitted_article_asset_rows,
+    article_target_scope as _article_target_scope,
 )
+from content.execution.controller.content_plan_assets import article_asset_claims as _article_asset_claims, asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha, claim as _claim, claims_conflict as _claims_conflict, image_claims as _image_claims, source_ref as _source_ref
 from content.execution.controller.content_plan_output import write_content_plan_diagnostics, write_content_plan_packet
 from content.execution.controller.content_plan_decisions import (
     ContentPlanRejectLedger,
@@ -15,11 +13,7 @@ from content.execution.controller.content_plan_decisions import (
     missing_source_diagnostic,
     persist_content_plan_shortfall_absorb as _persist_content_plan_shortfall_absorb,
 )
-from core.entity_focus import (
-    VERDICT_STRONG as _VERDICT_STRONG,
-    classify_entity_focus as _classify_entity_focus,
-    coverage_targets_mentioned as _coverage_targets_mentioned,
-)
+from core.entity_focus import classify_entity_focus as _classify_entity_focus, coverage_targets_mentioned as _coverage_targets_mentioned
 
 def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) -> list[DataIssue]:
     """Build exact per-entity content plans from validated source units."""
@@ -59,11 +53,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
     _clean_content_plan_outputs(ctx)
     root = execution_root(ctx.execution_id)
     etype = coverage_entity_type(active_spec)
-    targets = [
-        str(target.get("name") or "").strip()
-        for target in ((active_spec.get("scope") or {}).get("coverageTargets") or [])
-        if str(target.get("name") or "").strip()
-    ]
+    targets, target_aliases = _article_target_scope(active_spec)
     task_region = str(((active_spec.get("scope") or {}).get("region") or "")).strip()
     execution_policy = active_spec.get("executionPolicy") if isinstance(active_spec.get("executionPolicy"), Mapping) else {}
     daily_object_target = int(execution_policy.get("targetObjectCount") or 0)
@@ -217,7 +207,14 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                         target,
                     }
                 )
-                if not rows:
+                admitted_rows, semantic_issues = _admitted_article_asset_rows(
+                    rows, entity_id=target, article_text=base_body, entity_aliases=target_aliases.get(target, ()),
+                )
+                for semantic_issue in semantic_issues:
+                    rejects.warn_article_image(
+                        "asset_semantic_mismatch", source_id, semantic_issue
+                    )
+                if not admitted_rows:
                     rejects.warn_article_image("no_source_assets", source_id)
                 article_candidates.append(
                     {
@@ -244,7 +241,10 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                             or ((meta.get("siteTemplate") or {}).get("freshnessTier") if isinstance(meta.get("siteTemplate"), Mapping) else "")
                             or ""
                         ),
-                        "rows": rows,
+                        "rows": admitted_rows,
+                        "targetEntity": target,
+                        "targetAliases": list(target_aliases.get(target, ())),
+                        "articleAnchorText": base_body,
                     }
                 )
             elif lane == "image":

@@ -15,10 +15,6 @@ collections:
       keys:
         status: 1
         updatedAt: -1
-    - name: idx_skill_subscriptions_trigger
-      keys:
-        status: 1
-        trigger.type: 1
     - name: idx_skill_subscriptions_delivery
       keys:
         status: 1

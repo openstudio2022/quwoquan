@@ -92,7 +92,7 @@ def test_review_failures_absorbed_when_quota_is_met__functional__local_contract(
     )
 
 
-def test_review_failures_block_when_quota_is_short__functional__local_contract(
+def test_review_failures_allow_qualified_partial_publish_when_quota_is_short__functional__local_contract(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -121,10 +121,10 @@ def test_review_failures_block_when_quota_is_short__functional__local_contract(
 
     result = stage_download_build._run_build_validate(ctx)
 
-    assert result.status == "failed"
-    assert "独立审阅后未达配额" in result.message
+    assert result.status == "done"
+    assert "主页采纳门与独立审阅部分通过" in result.message
     assert "1/3" in result.message
-    assert result.fallback_stage == "build_homepage"
+    assert result.fallback_stage is None
 
 
 def test_reviewer_binding_precondition_always_blocks__functional__local_contract(

@@ -1394,3 +1394,243 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_lifecycle_contract__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: call_session_initiate_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: InitiateCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_list_calls_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListCalls}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_get_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_answer_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: AnswerCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_join_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: JoinCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_report_media_connected_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ReportMediaConnected}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_toggle_mute_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ToggleMute}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_start_screen_share_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: StartScreenShare}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_stop_screen_share_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: StopScreenShare}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_hangup_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: HangupCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_reject_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: RejectCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_cancel_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: CancelCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_leave_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: LeaveCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_invite_to_call_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: InviteToCall}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_toggle_camera_app_api
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ToggleCamera}
+  runner_source_path: quwoquan_app/test/api_integration/service/rtc_service/rtc/call_session/rtc_api_contract_runner__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_initiate_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: InitiateCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_answer_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: AnswerCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_reject_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: RejectCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_cancel_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: CancelCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_hangup_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: HangupCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_join_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: JoinCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_leave_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: LeaveCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_report_media_connected_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportMediaConnected}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_invite_to_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: InviteToCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_get_call_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GetCall}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_list_calls_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListCalls}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_toggle_mute_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ToggleMute}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_toggle_camera_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ToggleCamera}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_start_screen_share_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: StartScreenShare}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_stop_screen_share_app_local
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: StopScreenShare}
+  runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

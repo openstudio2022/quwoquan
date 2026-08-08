@@ -438,6 +438,14 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: greeting_request_send_greeting_request_app_local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SendGreetingRequest}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
   - case_id: list-greeting-inbox-local
     spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
     producer: service

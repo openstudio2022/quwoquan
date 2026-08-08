@@ -1,6 +1,8 @@
 /// 对象级端云契约：Remote adapter 的 HTTP path 与 generated metadata 对齐。
 library;
 
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+// readiness_case: circle_get_circle_stats_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
@@ -230,7 +232,9 @@ void main() {
     });
 
     test('getCircleStats → GET /circles/{circleId}/stats', () async {
-      await repo.stats(CircleStatsQuery(circleId: 'c1'));
+      final stats = await repo.stats(CircleStatsQuery(circleId: 'c1'));
+      expect(stats.circleId, 'c1');
+      expect(stats.memberCount, 0);
       expect(log.last.method, 'GET');
       expect(
         log.last.path,

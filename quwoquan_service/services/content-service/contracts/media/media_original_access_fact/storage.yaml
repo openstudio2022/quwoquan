@@ -4,10 +4,6 @@ collections:
     entity: MediaOriginalAccessFact
     role: append_only
     indexes:
-    - name: idx_media_original_access_audit
-      keys:
-        auditId: 1
-      unique: true
     - name: idx_media_original_access_asset_time
       keys:
         assetId: 1
@@ -26,11 +22,6 @@ collections:
   media_original_access_receipts:
     entity: MediaOriginalAccessFact
     role: idempotency_receipt
-    indexes:
-    - name: idx_media_original_access_receipt_key
-      keys:
-        idempotencyKey: 1
-      unique: true
 transaction:
   scope:
   - media_original_access_facts

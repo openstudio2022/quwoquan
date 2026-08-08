@@ -71,29 +71,35 @@ type TokenSubject struct {
 	AccountID     string
 	PersonaID     string
 	DeviceActorID string
-	AuthEpoch     int64
-	Scopes        []string
-	Permissions   []string
-	Roles         []string
+	// ServiceActorID is the independently signed service actor for a service
+	// acting on behalf of AccountID. It must never be encoded by replacing the
+	// account subject with "service:<name>" because downstream ownership checks
+	// need both identities without guessing.
+	ServiceActorID string
+	AuthEpoch      int64
+	Scopes         []string
+	Permissions    []string
+	Roles          []string
 }
 
 // Claims 是已签名 credential 的载荷；ActorContext 只能由这些 claims 重建。
 type Claims struct {
-	Issuer        string    `json:"iss"`
-	Audience      string    `json:"aud"`
-	TokenType     TokenType `json:"tkn"`
-	Subject       string    `json:"sub,omitempty"`
-	Persona       string    `json:"psn,omitempty"`
-	DeviceActorID string    `json:"did,omitempty"`
-	AuthEpoch     int64     `json:"ae,omitempty"`
-	TokenVersion  int       `json:"ver"`
-	Scope         string    `json:"scope,omitempty"`
-	Permissions   []string  `json:"permissions,omitempty"`
-	Roles         []string  `json:"roles,omitempty"`
-	JWTID         string    `json:"jti"`
-	IssuedAt      int64     `json:"iat"`
-	NotBefore     int64     `json:"nbf"`
-	ExpiresAt     int64     `json:"exp"`
+	Issuer         string    `json:"iss"`
+	Audience       string    `json:"aud"`
+	TokenType      TokenType `json:"tkn"`
+	Subject        string    `json:"sub,omitempty"`
+	Persona        string    `json:"psn,omitempty"`
+	DeviceActorID  string    `json:"did,omitempty"`
+	ServiceActorID string    `json:"act,omitempty"`
+	AuthEpoch      int64     `json:"ae,omitempty"`
+	TokenVersion   int       `json:"ver"`
+	Scope          string    `json:"scope,omitempty"`
+	Permissions    []string  `json:"permissions,omitempty"`
+	Roles          []string  `json:"roles,omitempty"`
+	JWTID          string    `json:"jti"`
+	IssuedAt       int64     `json:"iat"`
+	NotBefore      int64     `json:"nbf"`
+	ExpiresAt      int64     `json:"exp"`
 }
 
 type jwtHeader struct {
@@ -119,11 +125,27 @@ func (s *Signer) Sign(subject TokenSubject) (string, error) {
 	accountID := strings.TrimSpace(subject.AccountID)
 	personaID := strings.TrimSpace(subject.PersonaID)
 	deviceActorID := strings.TrimSpace(subject.DeviceActorID)
+	serviceActorID := strings.TrimSpace(subject.ServiceActorID)
+	roles := normalizedGrants(subject.Roles)
 	authEpoch := subject.AuthEpoch
 	switch s.config.Type {
 	case TokenTypeAccess:
 		if accountID == "" || deviceActorID != "" {
 			return "", errors.New("auth: access token requires only an account subject")
+		}
+		if serviceActorID != "" &&
+			(strings.HasPrefix(accountID, "service:") ||
+				!containsGrant(roles, "service")) {
+			return "", errors.New(
+				"auth: delegated service account token requires distinct account and service actors",
+			)
+		}
+		if serviceActorID == "" &&
+			containsGrant(roles, "service") &&
+			!strings.HasPrefix(accountID, "service:") {
+			return "", errors.New(
+				"auth: service role with an account subject requires a service actor",
+			)
 		}
 		if authEpoch < 0 {
 			return "", errors.New("auth: access token auth epoch cannot be negative")
@@ -132,7 +154,8 @@ func (s *Signer) Sign(subject TokenSubject) (string, error) {
 			authEpoch = 1
 		}
 	case TokenTypeDevice:
-		if deviceActorID == "" || accountID != "" || personaID != "" || authEpoch != 0 {
+		if deviceActorID == "" || accountID != "" || personaID != "" ||
+			serviceActorID != "" || authEpoch != 0 {
 			return "", errors.New("auth: device ticket requires only a device actor")
 		}
 	}
@@ -142,21 +165,22 @@ func (s *Signer) Sign(subject TokenSubject) (string, error) {
 		return "", err
 	}
 	claims := Claims{
-		Issuer:        strings.TrimSpace(s.config.Issuer),
-		Audience:      strings.TrimSpace(s.config.Audience),
-		TokenType:     s.config.Type,
-		Subject:       accountID,
-		Persona:       personaID,
-		DeviceActorID: deviceActorID,
-		AuthEpoch:     authEpoch,
-		TokenVersion:  s.config.TokenVersion,
-		Scope:         strings.Join(normalizedGrants(subject.Scopes), " "),
-		Permissions:   normalizedGrants(subject.Permissions),
-		Roles:         normalizedGrants(subject.Roles),
-		JWTID:         jwtID,
-		IssuedAt:      issued.Unix(),
-		NotBefore:     issued.Unix(),
-		ExpiresAt:     issued.Add(s.config.TTL).Unix(),
+		Issuer:         strings.TrimSpace(s.config.Issuer),
+		Audience:       strings.TrimSpace(s.config.Audience),
+		TokenType:      s.config.Type,
+		Subject:        accountID,
+		Persona:        personaID,
+		DeviceActorID:  deviceActorID,
+		ServiceActorID: serviceActorID,
+		AuthEpoch:      authEpoch,
+		TokenVersion:   s.config.TokenVersion,
+		Scope:          strings.Join(normalizedGrants(subject.Scopes), " "),
+		Permissions:    normalizedGrants(subject.Permissions),
+		Roles:          roles,
+		JWTID:          jwtID,
+		IssuedAt:       issued.Unix(),
+		NotBefore:      issued.Unix(),
+		ExpiresAt:      issued.Add(s.config.TTL).Unix(),
 	}
 	headerSeg, err := encodeSegment(jwtHeader{Alg: "HS256", Typ: "JWT"})
 	if err != nil {
@@ -246,10 +270,22 @@ func (v *Verifier) Verify(token string) (*Claims, error) {
 			claims.AuthEpoch < 0 {
 			return nil, ErrInvalidToken
 		}
+		serviceActorID := strings.TrimSpace(claims.ServiceActorID)
+		if serviceActorID != "" &&
+			(strings.HasPrefix(strings.TrimSpace(claims.Subject), "service:") ||
+				!containsGrant(claims.Roles, "service")) {
+			return nil, ErrInvalidToken
+		}
+		if serviceActorID == "" &&
+			containsGrant(claims.Roles, "service") &&
+			!strings.HasPrefix(strings.TrimSpace(claims.Subject), "service:") {
+			return nil, ErrInvalidToken
+		}
 	case TokenTypeDevice:
 		if strings.TrimSpace(claims.DeviceActorID) == "" ||
 			strings.TrimSpace(claims.Subject) != "" ||
 			strings.TrimSpace(claims.Persona) != "" ||
+			strings.TrimSpace(claims.ServiceActorID) != "" ||
 			claims.AuthEpoch != 0 {
 			return nil, ErrInvalidToken
 		}
@@ -298,6 +334,15 @@ func grantsAreCanonical(values []string) bool {
 		seen[value] = struct{}{}
 	}
 	return true
+}
+
+func containsGrant(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func encodeSegment(v any) (string, error) {

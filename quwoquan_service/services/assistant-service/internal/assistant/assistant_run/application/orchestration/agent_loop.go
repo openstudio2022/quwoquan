@@ -476,10 +476,24 @@ func (l *AgentLoop) runTurnWithSinkAfterSeq(
 }
 
 func sanitizeTurnForSurface(turn assistant.AssistantTurn) assistant.AssistantTurn {
-	switch strings.TrimSpace(turn.RequestContext.SurfaceKind) {
-	case "conversation", "circle":
-		turn.SessionPreferences = nil
-		turn.LongTermPreferences = nil
+	channel := channelpkg.ResolveForSurface(
+		turn.TurnType,
+		turn.Trigger,
+		turn.RequestContext.SurfaceKind,
+	)
+	if channel.ContextPersistence() != channelpkg.ContextPersistenceChannelOnly {
+		return turn
+	}
+	// Shared channels keep only owner-backed conversation/domain facts admitted
+	// later by ContextProfile readers. Caller/session personal state must not be
+	// forwarded to routing, subagents, model prompting or presentation.
+	turn.ContextTurns = nil
+	turn.ContextSummary = nil
+	turn.PageContext = nil
+	turn.SessionPreferences = nil
+	turn.LongTermPreferences = nil
+	turn.FeedbackContextSnapshot = assistant.AssistantFeedbackContextSnapshot{
+		Decision: "shared_surface_excluded",
 	}
 	return turn
 }

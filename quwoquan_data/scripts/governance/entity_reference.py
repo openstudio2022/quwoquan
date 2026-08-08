@@ -7,12 +7,9 @@ accumulating task-specific URL and keyword exceptions.
 from __future__ import annotations
 
 from functools import lru_cache
-from pathlib import Path
 
 import yaml
-
 from core.paths import REPO_DATA_ROOT
-
 
 ENTITY_REFERENCE_ROOT = REPO_DATA_ROOT / "reference" / "travel" / "entities"
 
@@ -23,7 +20,7 @@ def _aliases_by_name() -> dict[str, tuple[str, ...]]:
     for path in sorted(ENTITY_REFERENCE_ROOT.rglob("*.yaml")):
         document = yaml.safe_load(path.read_text(encoding="utf-8"))
         if not isinstance(document, dict):
-            raise ValueError(f"entity reference must be an object: {path}")
+            raise TypeError(f"entity reference must be an object: {path}")
         for district in document.get("districts") or ():
             if not isinstance(district, dict):
                 continue
@@ -31,16 +28,21 @@ def _aliases_by_name() -> dict[str, tuple[str, ...]]:
                 if not isinstance(leaf, dict):
                     continue
                 name = str(leaf.get("name") or "").strip()
+                canonical_name = str(leaf.get("canonicalName") or "").strip()
                 values = leaf.get("aliases") or ()
-                if not name or not isinstance(values, list):
+                if not name or not canonical_name or not isinstance(values, list):
                     continue
                 normalized = tuple(
                     value
-                    for value in dict.fromkeys(str(item).strip() for item in values)
+                    for value in dict.fromkeys(
+                        [name, canonical_name, *(str(item).strip() for item in values)]
+                    )
                     if value
                 )
-                if normalized:
-                    aliases[name] = normalized
+                for lookup_name in (name, canonical_name):
+                    aliases[lookup_name] = tuple(
+                        value for value in normalized if value != lookup_name
+                    )
     return aliases
 
 

@@ -237,6 +237,16 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 			err,
 		)
 	}
+	entryViewReader := entrypersistence.NewMongoReader(database)
+	if err := entryViewReader.EnsureIndexes(ctx); err != nil {
+		inner.Close(ctx)
+		return nil, dependencyError("mongodb.assistant_entry_view", "indexes", err)
+	}
+	taskViewReader := taskpersistence.NewMongoReader(database)
+	if err := taskViewReader.EnsureIndexes(ctx); err != nil {
+		inner.Close(ctx)
+		return nil, dependencyError("mongodb.assistant_task_view", "indexes", err)
+	}
 	return &persistentDependencies{
 		subscriptionStore:  inner.SubscriptionStore,
 		subscriptionReader: subscriptionReader,
@@ -249,8 +259,8 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		preferenceReader:   inner.PreferenceReader,
 		turnViewReader:     turnViewStore,
 		turnViewProjector:  turnViewProjector,
-		entryViewReader:    entrypersistence.NewMongoReader(database),
-		taskViewReader:     taskpersistence.NewMongoReader(database),
+		entryViewReader:    entryViewReader,
+		taskViewReader:     taskViewReader,
 		policyReleaseStore: policyReleaseStore,
 		policyRolloutStore: policyRolloutStore,
 		learningFactStore:  learningFactStore,

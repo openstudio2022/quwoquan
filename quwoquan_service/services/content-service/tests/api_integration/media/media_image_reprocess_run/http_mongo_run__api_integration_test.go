@@ -53,6 +53,28 @@ func TestHTTPStartAndGetUseObjectOwnedMongoTransaction(t *testing.T) {
 	if startRecorder.Code != http.StatusAccepted {
 		t.Fatalf("start status=%d body=%s", startRecorder.Code, startRecorder.Body.String())
 	}
+	conflictingStartRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/content/media-image-reprocess-runs",
+		strings.NewReader(`{"runId":"different-image-reprocess-run","assetIds":["media-image"]}`),
+	)
+	conflictingStartRequest = conflictingStartRequest.WithContext(commandmeta.WithIdempotencyKey(
+		conflictingStartRequest.Context(),
+		"start-image-reprocess-once",
+	))
+	conflictingStartRecorder := httptest.NewRecorder()
+	handler.Start(conflictingStartRecorder, conflictingStartRequest)
+	if conflictingStartRecorder.Code != http.StatusConflict ||
+		!strings.Contains(
+			conflictingStartRecorder.Body.String(),
+			`"code":"CONTENT.USER.media_image_reprocess_version_conflict"`,
+		) {
+		t.Fatalf(
+			"conflicting start status=%d body=%s",
+			conflictingStartRecorder.Code,
+			conflictingStartRecorder.Body.String(),
+		)
+	}
 
 	getRequest := httptest.NewRequest(http.MethodGet, "/internal/content/media-image-reprocess-runs/image-reprocess-run", nil)
 	getRequest.SetPathValue("runId", "image-reprocess-run")

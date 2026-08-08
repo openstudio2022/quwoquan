@@ -284,21 +284,24 @@ type VerificationVerdict struct {
 }
 
 var (
-	ErrInvalidRun         = errors.New("invalid assistant run")
-	ErrInvalidTransition  = errors.New("invalid assistant run transition")
-	ErrRevisionConflict   = errors.New("assistant run revision conflict")
-	ErrInvalidTaskGraph   = errors.New("invalid assistant task graph")
-	ErrTaskNotReady       = errors.New("assistant task is not ready")
-	ErrItemStateConflict  = errors.New("assistant run item state conflict")
-	ErrCompletionRejected = errors.New("assistant run completion rejected")
-	ErrUnsafePayload      = errors.New("assistant run item contains unsafe reasoning payload")
-	ErrRunNotFound        = errors.New("assistant run not found")
-	ErrLeaseConflict      = errors.New("assistant run worker lease conflict")
-	ErrJournalGap         = errors.New("assistant run journal gap")
-	ErrJournalCorrupt     = errors.New("assistant run journal is corrupt")
-	ErrNoWork             = errors.New("assistant run queue has no ready work")
-	ErrExecutionFenced    = errors.New("assistant run execution is fenced")
-	ErrExecutionCancelled = errors.New("assistant run execution was cancelled")
+	ErrInvalidRun        = errors.New("invalid assistant run")
+	ErrInvalidTransition = errors.New("invalid assistant run transition")
+	ErrRevisionConflict  = errors.New("assistant run revision conflict")
+	// ErrRunIdempotencyConflict is distinct from aggregate CAS contention: the
+	// caller reused one Start identity for a different immutable input.
+	ErrRunIdempotencyConflict = errors.New("assistant run idempotency conflict")
+	ErrInvalidTaskGraph       = errors.New("invalid assistant task graph")
+	ErrTaskNotReady           = errors.New("assistant task is not ready")
+	ErrItemStateConflict      = errors.New("assistant run item state conflict")
+	ErrCompletionRejected     = errors.New("assistant run completion rejected")
+	ErrUnsafePayload          = errors.New("assistant run item contains unsafe reasoning payload")
+	ErrRunNotFound            = errors.New("assistant run not found")
+	ErrLeaseConflict          = errors.New("assistant run worker lease conflict")
+	ErrJournalGap             = errors.New("assistant run journal gap")
+	ErrJournalCorrupt         = errors.New("assistant run journal is corrupt")
+	ErrNoWork                 = errors.New("assistant run queue has no ready work")
+	ErrExecutionFenced        = errors.New("assistant run execution is fenced")
+	ErrExecutionCancelled     = errors.New("assistant run execution was cancelled")
 	// ErrExecutionReplanned stops the current in-memory AgentLoop after a
 	// steering instruction crossed a persisted Item boundary. The Run remains
 	// runnable and the next claim receives the revised effective goal.
@@ -307,4 +310,10 @@ var (
 	ErrSkillDisabled           = errors.New("assistant Skill is disabled by the effective account or surface policy")
 	ErrSkillSettingUnavailable = errors.New("assistant Skill setting is unavailable")
 	ErrPolicyUnavailable       = errors.New("assistant policy selection is unavailable")
+	// Device permit failures are command-domain decisions. Keeping them
+	// separate prevents HTTP mapping from collapsing security rejection into a
+	// retryable aggregate revision conflict or a generic invalid argument.
+	ErrDeviceActionPermitInvalid  = errors.New("assistant device action permit is invalid")
+	ErrDeviceActionPermitExpired  = errors.New("assistant device action permit is expired")
+	ErrDeviceActionPermitReplayed = errors.New("assistant device action permit was already consumed")
 )

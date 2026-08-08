@@ -1,6 +1,7 @@
 events:
 - name: HomepageClaimRequested
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageClaimRequested
   payload_entity: HomepageClaimRequest
   payload_fields:
   - claimRequestId
@@ -12,6 +13,7 @@ events:
   - version
 - name: HomepageClaimReviewed
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageClaimReviewed
   payload_entity: HomepageClaimRequest
   payload_fields:
   - claimRequestId

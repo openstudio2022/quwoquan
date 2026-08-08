@@ -27,11 +27,8 @@ import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show
         assistantConnectorManagementFacetProvider,
-        assistantSkillActivityQueryProvider,
         assistantSkillCatalogFacetProvider,
         assistantSkillConsentFacetProvider,
-        skillDataControlProcessCommandWriterProvider,
-        skillDataControlProcessQueryProvider,
         assistantSessionRunFacetProvider,
         assistantSkillSubscriptionFacetProvider,
         assistantSkillUserSettingFacetProvider;
@@ -42,7 +39,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_user_setting/application/public/assistant_skill_setup_schema.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_catalog/presentation/assistant_skill_setup_sheet.dart';
-import 'package:quwoquan_app/runtime/di/presentation/assistant_skill_lifecycle_sheet.dart';
+import 'package:quwoquan_app/runtime/di/assistant_presentation_slots.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_catalog/presentation/assistant_skill_subscription_setup_sheet.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -654,15 +651,10 @@ class _AssistantSkillCenterPageState
   }
 
   Future<void> _openSkillLifecycle(AssistantSkillCenterItem skill) async {
-    await showAssistantSkillLifecycleSheet(
+    await ref.read(assistantSkillLifecyclePresenterProvider)(
       context: context,
       skillId: skill.skillId,
       skillName: skill.catalog.displayName,
-      activityQuery: ref.read(assistantSkillActivityQueryProvider),
-      dataControlCommandWriter: ref.read(
-        skillDataControlProcessCommandWriterProvider,
-      ),
-      dataControlQuery: ref.read(skillDataControlProcessQueryProvider),
       onProductAction: (action) => unawaited(
         _logSkillLifecycleAction(skillId: skill.skillId, action: action),
       ),
@@ -704,24 +696,26 @@ class _AssistantSkillCenterPageState
     required int skillCount,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await ref.read(appEventLogPortProvider).writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        pageVisitId: trace.newPageVisitId(),
-      ),
-      payload: <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'package_toggle',
-        'enabled': enabled,
-        'skillCount': skillCount,
-      },
-      summaryPayload: const <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'package_toggle',
-      },
-    );
+    await ref
+        .read(appEventLogPortProvider)
+        .writeEvent(
+          logType: AppLogType.pageAccess,
+          level: AppLogLevel.info,
+          context: AppLogContext(
+            sessionId: trace.sessionId,
+            pageVisitId: trace.newPageVisitId(),
+          ),
+          payload: <String, Object?>{
+            'event': 'skill_center_action',
+            'action': 'package_toggle',
+            'enabled': enabled,
+            'skillCount': skillCount,
+          },
+          summaryPayload: const <String, Object?>{
+            'event': 'skill_center_action',
+            'action': 'package_toggle',
+          },
+        );
   }
 
   Future<void> _logSkillCenterSingleSkillToggle({
@@ -729,47 +723,51 @@ class _AssistantSkillCenterPageState
     required bool enabled,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await ref.read(appEventLogPortProvider).writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        pageVisitId: trace.newPageVisitId(),
-      ),
-      payload: <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'single_skill_toggle',
-        'skillId': skillId,
-        'enabled': enabled,
-      },
-      summaryPayload: const <String, Object?>{
-        'event': 'skill_center_action',
-        'action': 'single_skill_toggle',
-      },
-    );
+    await ref
+        .read(appEventLogPortProvider)
+        .writeEvent(
+          logType: AppLogType.pageAccess,
+          level: AppLogLevel.info,
+          context: AppLogContext(
+            sessionId: trace.sessionId,
+            pageVisitId: trace.newPageVisitId(),
+          ),
+          payload: <String, Object?>{
+            'event': 'skill_center_action',
+            'action': 'single_skill_toggle',
+            'skillId': skillId,
+            'enabled': enabled,
+          },
+          summaryPayload: const <String, Object?>{
+            'event': 'skill_center_action',
+            'action': 'single_skill_toggle',
+          },
+        );
   }
 
   Future<void> _logSkillLifecycleAction({
     required String skillId,
-    required AssistantSkillLifecycleUiAction action,
+    required String action,
   }) async {
     final trace = AppTraceContextStore.instance;
-    await ref.read(appEventLogPortProvider).writeEvent(
-      logType: AppLogType.pageAccess,
-      level: AppLogLevel.info,
-      context: AppLogContext(
-        sessionId: trace.sessionId,
-        pageVisitId: trace.newPageVisitId(),
-      ),
-      payload: <String, Object?>{
-        'event': 'skill_center_action',
-        'action': action.name,
-        'skillId': skillId,
-      },
-      summaryPayload: <String, Object?>{
-        'event': 'skill_center_action',
-        'action': action.name,
-      },
-    );
+    await ref
+        .read(appEventLogPortProvider)
+        .writeEvent(
+          logType: AppLogType.pageAccess,
+          level: AppLogLevel.info,
+          context: AppLogContext(
+            sessionId: trace.sessionId,
+            pageVisitId: trace.newPageVisitId(),
+          ),
+          payload: <String, Object?>{
+            'event': 'skill_center_action',
+            'action': action,
+            'skillId': skillId,
+          },
+          summaryPayload: <String, Object?>{
+            'event': 'skill_center_action',
+            'action': action,
+          },
+        );
   }
 }

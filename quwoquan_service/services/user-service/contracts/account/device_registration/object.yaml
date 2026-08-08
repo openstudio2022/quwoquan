@@ -68,6 +68,9 @@ lifecycle:
 members:
   DevicePushEndpoint:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [endpointRef]
+    cardinality: many
     max_cardinality: 2
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 只能经 DeviceRegistration 命令维护的 APNs VoIP / FCM endpoint。

@@ -14,6 +14,7 @@ from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )
+from content.execution.campaign.scale import execution_campaign_scale
 from content.execution.identity import parse_execution_id
 from content.execution.closure.adoption_campaign_contract import (
     ADOPTION_OPERATIONS,
@@ -108,8 +109,14 @@ def write_adoption_submission(
         binding=binding,
     )
     refs = lane_refs[carrier]
+    root_refs = lane_refs["homepage"]
+    scale = execution_campaign_scale(
+        root_identity.execution_id,
+        quota=len(root_refs),
+    )
     stable: dict[str, Any] = {
         "schema": SUBMISSION_SCHEMA,
+        "scale": scale,
         "rootExecutionId": root_identity.execution_id,
         "executionId": identity.execution_id,
         "operation": ADOPTION_OPERATIONS[carrier],

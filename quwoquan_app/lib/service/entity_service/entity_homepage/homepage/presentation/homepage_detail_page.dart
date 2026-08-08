@@ -40,9 +40,11 @@ import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart'
     show contentBehaviorTrackerProvider, contentEngagementTrackerProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_share_sheet.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show homepageRecommendationSlots;
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
   const HomepageDetailPage({
@@ -158,6 +160,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       );
     }
     return HomepageDetailShell(
+      recommendationSlots: homepageRecommendationSlots,
       selectionMode: widget.selectionMode,
       initialSummary: widget.initialSummary,
       isLoading: _isLoading,
@@ -287,11 +290,13 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           }
           // 介绍是详情页的可降级附属模块；失败不得遮蔽主页主档、壳层与对象 Bundle。
           unawaited(
-            ref.read(exceptionTelemetryPortProvider).recordHandledException(
-              source: 'entity.homepage_detail.load_introduction',
-              error: error,
-              stackTrace: stackTrace,
-            ),
+            ref
+                .read(exceptionTelemetryPortProvider)
+                .recordHandledException(
+                  source: 'entity.homepage_detail.load_introduction',
+                  error: error,
+                  stackTrace: stackTrace,
+                ),
           );
           return null;
         }
@@ -369,11 +374,13 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       return state.wishlisted;
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'entity.homepage_detail.load_wishlist_state',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'entity.homepage_detail.load_wishlist_state',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       return false;
     }
@@ -412,11 +419,13 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     } catch (error, stackTrace) {
       // best-effort：仅影响维护入口的 owner 判定，不阻断公开详情。
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'entity.homepage_detail.load_active_persona_context',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'entity.homepage_detail.load_active_persona_context',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
     }
   }

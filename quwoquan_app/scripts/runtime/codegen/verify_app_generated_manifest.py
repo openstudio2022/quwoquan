@@ -78,12 +78,8 @@ ALLOWED_EXACT_PATHS = frozenset(
         "lib/service/content_service/content/post/presentation/generated/content_ui_config.g.dart",
         "lib/runtime/transport/generated/cloud_api_defaults.g.dart",
         "lib/service/content_service/content/post/adapters/generated/article_detail_wire_keys.g.dart",
-        "lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
-        "lib/service/content_service/content/post/adapters/generated/content_post_immersive_wire_keys.g.dart",
         "lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/impact_help_type_metadata.g.dart",
         "lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_display_metadata.g.dart",
-        "lib/service/search_service/search/search_index_view/application/generated/search_contract.g.dart",
-        "lib/service/search_service/search/search_index_view/application/generated/search_registry.g.dart",
         "lib/runtime/observability/generated/app_telemetry_catalog.g.dart",
         "packages/quwoquan_cloud_contracts/lib/src/rtc/"
         "rtc_operation_contracts.g.dart",
@@ -91,6 +87,17 @@ ALLOWED_EXACT_PATHS = frozenset(
 )
 RETIRED_GENERATED_PATHS = frozenset(
     {
+        "lib/service/content_service/content/post/adapters/generated/"
+        "content_post_immersive_wire_keys.g.dart",
+        "lib/service/content_service/content/post/application/generated/"
+        "content_metadata.g.dart",
+        "lib/service/recommendation_service/recommendation/"
+        "recommendation_feature_profile_view/presentation/generated/"
+        "intersection_kind_metadata.g.dart",
+        "lib/service/search_service/search/search_index_view/application/generated/"
+        "search_contract.g.dart",
+        "lib/service/search_service/search/search_index_view/application/generated/"
+        "search_registry.g.dart",
         "lib/app/navigation/generated/app_pages.g.dart",
         "lib/app/navigation/generated/app_route_paths.g.dart",
         "lib/app/navigation/generated/app_ui_surfaces.g.dart",

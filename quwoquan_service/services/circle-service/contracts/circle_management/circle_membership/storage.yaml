@@ -14,14 +14,17 @@ collections:
       keys:
         circleId: 1
         state: 1
-        joinedAt: 1
         _id: 1
     - name: idx_circle_membership_persona
       keys:
         personaId: 1
         state: 1
-        joinedAt: -1
         _id: 1
+    - name: idx_circle_discovery_membership
+      keys:
+        personaId: 1
+        state: 1
+        circleId: 1
   circle_membership_command_receipts:
     publication_role: not_published
     entity: CircleMembershipCommandReceipt

@@ -19,7 +19,10 @@
         "entityRef",
         "carrier",
         "sourceRevision",
-        "idempotencyKey"
+        "idempotencyKey",
+        "jobSetEnvelopeDigest",
+        "jobSetDigest",
+        "actualTaskDigest"
       ],
       "additionalProperties": false,
       "properties": {
@@ -38,7 +41,19 @@
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
-        "idempotencyKey": {"type": "string", "minLength": 5}
+        "idempotencyKey": {"type": "string", "minLength": 5},
+        "jobSetEnvelopeDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "jobSetDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "actualTaskDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     }
   }

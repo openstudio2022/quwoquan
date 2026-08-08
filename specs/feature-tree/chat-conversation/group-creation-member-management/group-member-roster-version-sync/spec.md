@@ -53,6 +53,14 @@
 - THEN chat-service 更新成员表与 `membersRosterRevision` 并发布合并后的 `ConversationRosterUpdated`。
 - AND 另一客户端定点读取该群和成员页后得到相同版本、排序与成员集合。
 
+<a id="gwt-002"></a>
+### GWT-002 Remote roster 读取与成员搜索保持只读
+
+- GIVEN 已认证群成员打开成员搜索页，production Remote 的 ListMembers 返回 canonical 排序、分页、成员身份与当前 roster revision。
+- WHEN 用户输入或清除搜索词、打开某个成员主页，或读取期间发生网络与权限失败。
+- THEN 页面只在已读取的 roster 内按展示名或 handle 过滤并导航到该成员的 canonical Persona，搜索本身不写成员事实、不改变排序或推进 roster revision。
+- AND 读取失败进入可重试页面终态并保留服务端为唯一真相，不以空搜索结果冒充空成员表，也不发起成员治理命令。
+
 ## 6. 依赖
 
 - 前置要求：[`group-creation-member-management`](../spec.md) 的成员权限与群生命周期。
@@ -70,3 +78,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：App 和 Alpha adapter 已有版本及定点刷新覆盖，仍需以真实 chat-service 集成测试证明同群事件合并窗口。
 - 完成判定：`GWT-001` 具有 chat-service `api_integration` 与 App `local_contract` 的双向 `spec_ref`。
+
+<a id="open-002"></a>
+### OPEN-002 成员搜索页 production Remote UAT 尚未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺真实账号从 Remote roster 进入成员搜索、打开 Persona 以及读取失败恢复的页面级证据；本地过滤或 Widget 测试不能替代 production Remote user_acceptance。
+- 完成判定：`GWT-002` 由同一候选的 Android 与 iPhone physical ResultBundle 直接绑定，且证明搜索期间成员写调用为零、失败不降级为空 roster。

@@ -340,10 +340,8 @@ extension _SearchNetworkResultsPageStateDataNavigation
       final dto = detail.post;
       final raw = detail.mergedArticleWireMap;
       final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+        ref: ref,
         posts: <ContentPostViewData>[dto],
-        discoveryState: ref.read(discoveryStateProvider),
-        relationshipState: ref.read(userRelationshipStateProvider),
-        postInteractionState: ref.read(postInteractionStateProvider),
       );
       primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
       final navFeedRequestId = ref

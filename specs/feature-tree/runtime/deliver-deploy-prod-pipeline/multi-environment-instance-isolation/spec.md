@@ -60,8 +60,8 @@
 - 端侧每次启动必须显式绑定 `device-id` 或等价唯一设备选择结果。
 - 端侧实例记录只用于诊断与 stop/list，不得演化为服务端多套编排。
 - 环境矩阵、业务数据清单与 runbook 明确“端侧可多实例、本机商业 runtime 串行单套”的统一口径。
-- `stackctl up` 只消费已激活的不可变候选；开发者冷/热一键会话统一由 `stackctl dev-session` 编排 package、full up、health 与可选 App handoff，App launcher 不得反向拥有环境生命周期。
-- `stackctl dev-session --all-nonprod` 必须按 Alpha→Beta→Gamma 串行执行，任一 target 失败即停止后续阶段并保留已完成回执；Makefile 只能是该命令的薄包装。
+- Prod `stackctl up` 只消费已激活的不可变候选；Alpha/Beta/Gamma 开发者冷/热一键会话由 `stackctl dev-session` 从当前工作树实时编排 render、full up、health 与可选 App handoff，App launcher 不得反向拥有环境生命周期。
+- `stackctl dev-session --all-nonprod` 必须按 Alpha→Beta→Gamma 串行执行并保留每个 target 的 compile/launch、告警与 health 结果；严格 runtime health 失败不抹除可编译事实，也不产生环境健康伪成功。
 - full runtime 已健康运行时，`content-release/content-commercial` 任务必须复用它且不得改写 full startup receipt；无 full runtime 的独立 bounded workload 才拥有自己的启动与停止事实。
 - bounded workload 正常、失败或取消后必须恢复进入前 runtime 状态；恢复失败保留 partial/typed blocker，禁止把原本健康的 full runtime 写成 stopped。
 
@@ -76,7 +76,7 @@
   非空结果命中当前 immutable release，禁止仅凭 HTTP 2xx 或空 `items` 判绿。
 - Docker 与 Podman 都必须从 target 派生 project/network/container/volume 名称；
   cleanup 只能作用于当前 receipt 绑定资源。
-- 同一 target 的重复 `dev-session` 在候选、release、配置和健康身份一致时必须走热复用，不重复 package 或 compose up；任一 identity 漂移必须 fail-closed。
+- 同一 target 的重复 `dev-session` 在当前 topology/config 与运行态一致时可走热复用；source/config/generated 漂移进入 `mutableWorkspaceWarnings` 并允许实时重建，安全边界与 target 资源串用仍 fail-closed。
 
 ## 4. 契约引用
 
@@ -87,19 +87,16 @@
 <a id="gwt-001"></a>
 ### GWT-001 多环境环境实例隔离
 
-- GIVEN 同一源码 baseline、候选/rollback release attestation 与 Alpha/Beta/Gamma
-  各自的 Provider evidence 均有效。
+- GIVEN Alpha/Beta/Gamma 当前工作树可编译，且 target/env 与非生产安全边界有效。
 - WHEN 执行 canonical local environment matrix。
-- THEN Alpha、Beta、Gamma 按序完成 package、up、health、认证、realtime、release verify、
-  Feed readback 与 down，且共享 runtime 从未并发占用。
-- THEN 三个 target 的端口、资源名、部署/缓存/数据路径、JWT secret、CA fingerprint、
-  runtime receipt、release receipt 与 report 互不相同，候选 baselineId 相同。
+- THEN Alpha、Beta、Gamma 按序完成实时 render、编译、可选 up、health 与 App handoff；runtime/Provider/content 不健康以独立结果报告，不阻止后续 target 的编译验证。
+- THEN 三个 target 的端口、资源名、部署/缓存/数据路径、JWT secret、CA fingerprint与 report 互不相同；test-live 不要求共享 immutable baselineId 或 release receipt。
 - THEN 每段使用真实 phase 时长和唯一 report 目录，Feed 证据命中当前 release，最终结果
   只在所有 live 子报告身份一致且成功时为 passed。
 - THEN `emulator_only` 通过时只生成
   `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`，记录设备覆盖与 Android 真机 waiver；
   final acceptance 与 release receipt 必须拒绝其关闭正式发布 blocker。
-- THEN `dev-session --all-nonprod` 复用同一串行资源合同；重复执行健康 target 不改变 runtime 事实，bounded content 任务结束后 full receipt 仍为 running。
+- THEN `dev-session --all-nonprod` 复用同一串行资源合同；source/config 漂移只进入告警，严格 health 结果保持真实且不得冒充 compile/launch 失败。
 - AND 任一启动、清理、证据或身份失败返回 canonical `GATE_BLOCK`，完成 partial teardown，
   不覆盖旧报告、不继续下一个 target、不产生伪成功事实。
 

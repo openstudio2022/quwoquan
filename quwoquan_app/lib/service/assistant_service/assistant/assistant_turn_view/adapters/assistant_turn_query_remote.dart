@@ -25,9 +25,17 @@ final class AssistantTurnQueryGeneratedAdapter implements AssistantTurnQuery {
     int limit = kAssistantTurnListDefaultLimit,
     String cursor = '',
   }) {
+    final normalizedSessionId = sessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      throw ArgumentError.value(
+        sessionId,
+        'sessionId',
+        '${AppCloudOperationIds.assistantAssistantTurnViewListSessionTurns} requires a non-blank sessionId',
+      );
+    }
     return client.assistantAssistantTurnViewListSessionTurns(
       AssistantTurnListQuery(
-        sessionId: sessionId,
+        sessionId: normalizedSessionId,
         limit: limit,
         cursor: cursor.trim().isEmpty ? null : cursor.trim(),
       ),

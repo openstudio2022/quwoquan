@@ -50,14 +50,15 @@ import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/user_data_notifier.dart';
-import 'package:quwoquan_app/runtime/di/presentation/my_qr_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_update_proposal_review_sheet.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/edit_profile_participant_slots.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 part 'edit_profile_page_sections.dart';
 part 'edit_profile_page_phone_qr.dart';
 
 class EditProfilePage extends ConsumerStatefulWidget {
-  const EditProfilePage({super.key});
+  const EditProfilePage({super.key, required this.participantSlots});
+
+  final EditProfileParticipantSlots participantSlots;
 
   @override
   ConsumerState<EditProfilePage> createState() => _EditProfilePageState();
@@ -570,7 +571,9 @@ class _PhoneBindPage extends ConsumerStatefulWidget {
 }
 
 class _ProfileQrCardPage extends ConsumerWidget {
-  const _ProfileQrCardPage();
+  const _ProfileQrCardPage({required this.participantSlots});
+
+  final EditProfileParticipantSlots participantSlots;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -596,7 +599,10 @@ class _ProfileQrCardPage extends ConsumerWidget {
           if (!snapshot.hasData) {
             return AppRequestFeedback.section();
           }
-          return _QrCardBody(card: snapshot.data!);
+          return _QrCardBody(
+            card: snapshot.data!,
+            builder: participantSlots.buildQrCard,
+          );
         },
       ),
     );

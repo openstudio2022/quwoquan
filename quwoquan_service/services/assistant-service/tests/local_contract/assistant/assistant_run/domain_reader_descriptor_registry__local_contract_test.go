@@ -9,6 +9,7 @@ import (
 	"quwoquan_service/generated/operationsecurity"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	skillcontext "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
 	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
 	readermodel "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/model"
 	readerresource "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/infrastructure/resource"
@@ -56,6 +57,41 @@ func TestCanonicalDomainReaderDescriptorsBindOnlyGeneratedOwnerOperations(t *tes
 			!containsSurface(found.SurfaceKinds, readermodel.SurfacePublic) {
 			t.Fatalf("public Reader %q boundary=%+v", resolverRef, found)
 		}
+	}
+}
+
+func TestProductionReaderDefinitionsReferenceEachPublicObjectDescriptorOnce(t *testing.T) {
+	descriptors, err := skillcontextinfra.RuntimeDescriptors()
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicObjects := make(map[string]struct{})
+	for _, descriptor := range descriptors {
+		if descriptor.Authority == generated.AssistantContextAuthorityDomainCanonical &&
+			descriptor.Sensitivity == generated.AssistantContextSensitivityPublic &&
+			descriptor.CitationPolicy == readermodel.CitationEntityReference &&
+			containsValue(descriptor.AcceptedSourceKinds, "domain") {
+			publicObjects[descriptor.DescriptorID] = struct{}{}
+		}
+	}
+	seen := make(map[string]struct{})
+	for _, definition := range domainreader.ProductionReaderDefinitions() {
+		if _, exists := publicObjects[definition.DescriptorID]; !exists {
+			t.Fatalf("production Reader definition %q has no public Descriptor", definition.DescriptorID)
+		}
+		if definition.Build == nil {
+			t.Fatalf("production Reader definition %q has no adapter", definition.DescriptorID)
+		}
+		if _, duplicate := seen[definition.DescriptorID]; duplicate {
+			t.Fatalf("duplicate production Reader definition %q", definition.DescriptorID)
+		}
+		seen[definition.DescriptorID] = struct{}{}
+	}
+	if len(seen) != len(publicObjects) {
+		t.Fatalf("production definitions=%v public descriptors=%v", seen, publicObjects)
+	}
+	if _, err := readerresource.NewCatalog(append(descriptors, descriptors[0])); err == nil {
+		t.Fatal("duplicate runtime Descriptor was accepted at startup")
 	}
 }
 

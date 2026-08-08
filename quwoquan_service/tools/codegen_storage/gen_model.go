@@ -236,7 +236,7 @@ func resolveGoType(
 		}
 	}
 
-	notNull := col.IsNotNull() || col.IsPK()
+	notNull := col.IsNotNull() || col.IsPrimaryKey()
 
 	if field.Type != "" {
 		return fieldTypeToGoType(nested, camelName, field.Type, notNull)

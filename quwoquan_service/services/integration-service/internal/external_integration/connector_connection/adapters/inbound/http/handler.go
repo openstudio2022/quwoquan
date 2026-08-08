@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +14,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	connectionerrors "quwoquan_service/services/integration-service/generated/external_integration/connector_connection"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_connection/application"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/model"
 )
@@ -53,8 +56,12 @@ func (handler *Handler) handleResolveCapability(
 	writer http.ResponseWriter,
 	request *http.Request,
 ) {
+	authorization, err := trustedGrantAuthorization(request)
+	if err != nil {
+		writeHTTPError(writer, request, err)
+		return
+	}
 	var body struct {
-		AccountID      string   `json:"accountId"`
 		CapabilityKey  string   `json:"capabilityKey"`
 		SurfaceKind    string   `json:"surfaceKind"`
 		ConnectionRefs []string `json:"connectionRefs"`
@@ -79,10 +86,20 @@ func (handler *Handler) handleResolveCapability(
 		)
 		return
 	}
+	resolutionID, err := newResolutionID()
+	if err != nil {
+		writeHTTPError(
+			writer,
+			request,
+			connectionerrors.AppErrorFromConnectorConnectionUnavailable(err.Error()),
+		)
+		return
+	}
 	decision, err := handler.queries.ResolveCapability(
 		request.Context(),
+		authorization,
 		model.ResolveCapabilityInput{
-			AccountID:      body.AccountID,
+			ResolutionID:   resolutionID,
 			CapabilityKey:  body.CapabilityKey,
 			SurfaceKind:    body.SurfaceKind,
 			ConnectionRefs: body.ConnectionRefs,
@@ -93,6 +110,50 @@ func (handler *Handler) handleResolveCapability(
 		return
 	}
 	writeJSON(writer, http.StatusOK, decision)
+}
+
+func trustedGrantAuthorization(
+	request *http.Request,
+) (grantapp.TrustedRuntimeAuthorization, error) {
+	principal, ok := rtauth.PrincipalFromContext(request.Context())
+	if !ok || principal.TokenType != rtauth.TokenTypeAccess ||
+		strings.TrimSpace(principal.Subject) == "" ||
+		strings.TrimSpace(principal.Subject) !=
+			strings.TrimSpace(principal.Actor.AccountID) ||
+		strings.TrimSpace(principal.ServiceActorID) != "assistant-service" ||
+		!containsString(principal.Roles, "service") ||
+		!containsString(strings.Fields(principal.Scope), "integration.connector_grant.read") {
+		return grantapp.TrustedRuntimeAuthorization{},
+			connectionerrors.AppErrorFromConnectorGrantAuthorizationDenied(
+				"connector grant resolution requires a signed account subject and allowed service actor",
+			)
+	}
+	authorization, err := grantapp.NewTrustedRuntimeAuthorization(
+		principal.Subject,
+		principal.ServiceActorID,
+	)
+	if err != nil {
+		return grantapp.TrustedRuntimeAuthorization{},
+			connectionerrors.AppErrorFromConnectorGrantAuthorizationDenied(err.Error())
+	}
+	return authorization, nil
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func newResolutionID() (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return "capability-grant-" + hex.EncodeToString(raw), nil
 }
 
 func (handler *Handler) handleList(writer http.ResponseWriter, request *http.Request) {

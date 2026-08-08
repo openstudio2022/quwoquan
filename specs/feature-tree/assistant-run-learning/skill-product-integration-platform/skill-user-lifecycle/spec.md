@@ -40,9 +40,16 @@
 - 同一 Skill 可以同时拥有多个不同触发条件或目的地的 Subscription；Skill Center 必须以稳定 `subscriptionId` 列表展示与操作，不得按 `skillId` 覆盖或折叠。
 - 已声明的 Setting/Consent typed operation 必须允许候选环境执行以产生 Remote/UAT 证据；operation `ready` 只表达运行可达性，最终发布仍必须由本 Story 的环境、真机、SLI/SLO 与回滚 OPEN 准出，禁止形成“缺证据所以禁止调用、又因禁止调用无法取得证据”的循环门。
 
+<a id="req-002"></a>
+### REQ-002 Skill Center 必须以 production Remote 完成多对象生命周期与失败恢复
+
+- `assistant.skill_center` 必须从同一 active package 读取 Catalog，并分别通过各 owner 的 production Remote 读取和修改 Setting、Consent、Subscription、Activity、DataControl 与 Connector 状态；任一局部失败不得把其他对象状态改写为默认值，也不得把单个 toggle 当成整个 Skill 生命周期。
+- Setting、Consent、Subscription 与 DataControl mutation 只有在 typed receipt 或对象结果返回并经 owner 重新读取收敛后才显示成功；授权不足、Consent 撤销、Connector 断开或不可用必须阻止相关能力并保留用户可恢复的设置或请求，不得保存 Connector credential、伪造连接成功或绕过 Integration owner。
+
 ## 4. 契约引用
 
 - object / projection：`assistant.SkillUserSetting`、`assistant.SkillConsent`、`assistant.SkillSubscription`、`assistant.SkillActivityView`、`assistant.SkillDataControlRequest`
+- page：`assistant.skill_center`
 
 ## 5. 验收场景
 
@@ -73,6 +80,15 @@
 - AND 失败后刷新仍以 typed request ID 读取最新 revision，并在同一请求上恢复未完成 action。
 - AND 未确认时无任何副作用，完成结果不声称 Connector、Run 法定审计或其他领域数据已删除。
 
+<a id="gwt-004"></a>
+### GWT-004 Skill Center 以 production Remote 完成分轨控制与 Connector 恢复
+
+- GIVEN 已认证用户打开 `assistant.skill_center`，同一 active package 的 Catalog 与该用户现有 Setting、Consent、Subscription、Activity、DataControl 和 Connector owner 状态可读取。
+- WHEN 用户查看 Skill 详情、保存 Setting、授权或撤销 Consent、创建或暂停 Subscription、创建并确认或恢复 DataControl 请求，并在 Connector 断开后执行受控重连与刷新。
+- THEN 每个动作只经对应对象 owner 的 generated production Remote operation 生效，页面重新读取后分别展示收敛状态，任何对象不得冒充另一个对象的启用、授权、主动投递或数据控制事实。
+- AND 授权不足、Consent 撤销、Connector 断开或 Provider 不可用时，相关 Reader/Tool 保持 fail-closed，页面保留最后一次已确认状态与待处理意图，并提供登录、授权、重连或重试入口，不泄露 credential、调用正文或外部响应。
+- AND DataControl 未知结果只使用原 typed request ID 重新读取和续接，Setting、Consent、Subscription 与 Connector mutation 也不得通过本地成功、重复创建或跨 owner fallback 消除失败。
+
 ## 6. 依赖
 
 - 前置要求：active package profiles、generated Facade 和 account authority。
@@ -88,8 +104,10 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺同一 Skill 详情中的完整活动审计、数据控制和 Connector 恢复旅程，用户目前无法在一个入口完成这些控制。
+- 影响或价值：尚缺 `assistant.skill_center` 同一候选上的完整 Catalog、Setting、Consent、Subscription、Activity、DataControl 和 Connector 恢复旅程，用户目前无法在一个入口以 production Remote 完成并验证这些分轨控制。
 - 尚缺实现：仍缺 `event/context_change/follow_up` Trigger setup、Connector native 建连/重连、SkillActivity/DataControl generated App 接线，以及相关 SLI/SLO 和回滚装配。
 - 尚缺验收证据：仍缺同一候选的受管 Remote、撤权后 Run 安全边界、主动规则物理真机、数据控制恢复、双端物理真机和回滚收据。
-- 完成判定：`GWT-001/GWT-002/GWT-003` 具有 Setting/Consent/Subscription/Catalog detail/Activity/DataControl 的 local_contract、api_integration 与 Flutter user_acceptance 直接 `spec_ref`；完成事件/上下文主动规则、connector 和数据控制 generated App 管理，并取得同一候选双端物理真机和受管环境回执。
-- 依赖：Assistant contracts/codegen、Skill Center 重构与 trigger/runtime policy。
+- 完成判定：`GWT-001/GWT-002/GWT-003/GWT-004` 具有 Catalog/Setting/Consent/Subscription/Activity/DataControl/Connector 的对象 local_contract、真实 api_integration 与 Flutter user_acceptance 直接 `spec_ref`，并完成事件/上下文主动规则、Connector 和数据控制 generated App 管理。
+- 环境证据：绑定同一 commit、ContractGraph、candidate、production Remote composition 和环境 Provider 的 Android 实机与 iPhone 实机 `ReadinessResultBundle` 均为 passed，并取得受管环境 activate/readback/rollback 回执。
+- 阻断规则：缺任一结果、存在动态 skip 或结果不属于同一候选时继续阻断。
+- 依赖：Assistant contracts/codegen、Skill Center 重构、Integration Connector native continuation、trigger/runtime policy、受管环境与 Android/iPhone 物理设备。

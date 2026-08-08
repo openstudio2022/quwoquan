@@ -1,0 +1,42 @@
+{
+  "executionId": "20260808--travel-video-m1--china-beta-bootstrap-not-m100--scale-032",
+  "agentRunId": "run-dcd72fa2-361e-4dc7-a8a3-082b185a602b",
+  "agentModel": "auto",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "none",
+  "sources": [
+    {
+      "assetRef": "sources/杭州西湖__tourism_video_site__314c967b/assets/source.mp4",
+      "sourceRef": "https://pixabay.com/videos/autumn-west-lake-hangzhou-china-322063/",
+      "rightsRef": "sources/杭州西湖__tourism_video_site__314c967b/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/杭州西湖__tourism_video_site__314c967b/media/probe.json",
+      "watermarkEvidenceRef": "sources/杭州西湖__tourism_video_site__314c967b/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/杭州西湖__tourism_video_site__314c967b/rights/audio_rights_evidence.json",
+      "sha256": "sha256:962552759426d860461567ffb99f29e6bc09469057e639aa0c58d6a07fa39c98",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "acresoffilm",
+      "originalCreatorProfileUrl": null,
+      "platform": "Pixabay Videos",
+      "sourcePostUrl": "https://pixabay.com/videos/autumn-west-lake-hangzhou-china-322063/",
+      "originalAssetUrl": "https://pixabay.com/videos/autumn-west-lake-hangzhou-china-322063/",
+      "attributionText": "西湖亭景与湖面连续实景片段 — acresoffilm — Pixabay Content License terms observed; redistribution authorization unverified — https://pixabay.com/videos/autumn-west-lake-hangzhou-china-322063/",
+      "rightsBasis": "Pixabay Content License terms observed; redistribution authorization unverified",
+      "commercialAuthorizationStatus": "unverified",
+      "publicationAdmission": "research_release",
+      "authorizationProofUrl": null,
+      "termsUrl": "https://pixabay.com/service/license-summary/",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "no_audio",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-08T19:49:30.153480+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "Pixabay Content License terms observed; redistribution authorization unverified"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 

@@ -11,6 +11,8 @@ import (
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
+	rterr "quwoquan_service/runtime/errors"
+	premiumgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/premium_pool_entry"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/application"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/domain/model"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/premium_pool_entry/domain/ports"
@@ -158,18 +160,26 @@ func (handler *Handler) writeApplicationError(
 ) {
 	switch {
 	case errors.Is(err, model.ErrInvalidArgument):
-		handler.writeError(w, r, http.StatusBadRequest, "精选池请求无效", err.Error())
+		handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryInvalidArgument(err.Error()))
 	case errors.Is(err, model.ErrNotFound):
-		handler.writeError(w, r, http.StatusNotFound, "精选池条目不存在", err.Error())
-	case application.IsUserConflict(err):
-		handler.writeError(w, r, http.StatusConflict, "精选池状态已变化，请刷新后重试", err.Error())
+		handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryNotFound(err.Error()))
+	case errors.Is(err, model.ErrIdempotencyConflict):
+		handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryIdempotencyConflict(err.Error()))
+	case errors.Is(err, model.ErrRevisionConflict):
+		handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryRevisionConflict(err.Error()))
+	case errors.Is(err, model.ErrDualApprovalRequired):
+		handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryDualApprovalRequired(err.Error()))
 	default:
-		message := "精选池读取失败，请稍后重试"
 		if write {
-			message = "精选池操作失败，请稍后重试"
+			handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryStorageWriteFailed(err.Error()))
+			return
 		}
-		handler.writeError(w, r, http.StatusInternalServerError, message, err.Error())
+		handler.writeAppError(w, r, premiumgenerated.AppErrorFromPremiumPoolEntryStorageReadFailed(err.Error()))
 	}
+}
+
+func (handler *Handler) writeAppError(w http.ResponseWriter, r *http.Request, err *rterr.AppError) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 func commandContextFromRequest(r *http.Request) (ports.CommandContext, error) {

@@ -36,7 +36,7 @@ def _manifest_paths(kind: str) -> list[Path]:
     return sorted((PUBLISH / kind).rglob("manifest.json"))
 
 
-def test_geo_content_trinity_legacy_golden_blocks_without_article_images(
+def test_geo_content_trinity_legacy_golden_cannot_bypass_current_release_gates(
     tmp_path: Path,
 ) -> None:
     manifests = [
@@ -67,7 +67,7 @@ def test_geo_content_trinity_legacy_golden_blocks_without_article_images(
 
     with pytest.raises(
         ObjectTransactionError,
-        match="article media (closure|coverage)",
+        match="(lacks a valid frozen sourceDigest|article media (closure|coverage))",
     ):
         build_aggregate_release(
             publish_root=PUBLISH,

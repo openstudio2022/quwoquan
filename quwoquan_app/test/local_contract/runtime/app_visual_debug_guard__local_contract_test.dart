@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/shell/startup/startup_welcome_appearance.dart';
-import 'package:quwoquan_app/runtime/di/shell/composition/quwoquan_app_shell.dart';
+import 'package:quwoquan_app/runtime/shell/composition/quwoquan_app_shell.dart';
 
 void main() {
   tearDown(() {

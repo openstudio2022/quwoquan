@@ -16,7 +16,7 @@ from core.io import write_json
 from core.schema import assert_valid
 from core.source_digest import content_source_revision, current_source_digest
 
-from content.execution.campaign.process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission_reconciliation_contract import (
     ERROR_CODES,
     REASONS,

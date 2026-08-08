@@ -79,7 +79,7 @@ def terminal_campaign_predecessor_target_names(
             "predecessor terminal campaign evidence is invalid"
         )
     from content.execution.campaign.plan import sha256_payload
-    from content.execution.campaign.process import CAMPAIGN_CARRIERS
+    from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 
     submissions = load_terminal_submission_documents(
         root_id,

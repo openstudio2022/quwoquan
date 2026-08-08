@@ -2,6 +2,7 @@ package runruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -206,8 +207,15 @@ func sameStringSequence(left []string, right []string) bool {
 
 func appendGoalRevisionPlanItem(run *Run, now time.Time) error {
 	itemID := "plan:" + run.RunID + ":goal:" + fmt.Sprint(run.GoalRevision)
+	goalDigest := goalChainDigest(*run)
+	if goalDigest == "" {
+		return ErrJournalCorrupt
+	}
 	for _, item := range run.Items {
 		if item.ItemID == itemID {
+			if !goalRevisionPlanItemMatches(*run, item, run.GoalRevision) {
+				return ErrJournalCorrupt
+			}
 			return nil
 		}
 	}
@@ -217,7 +225,10 @@ func appendGoalRevisionPlanItem(run *Run, now time.Time) error {
 		generated.AssistantRunItemKindPlan,
 		"task_root",
 		summary,
-		map[string]any{"goalRevision": run.GoalRevision},
+		map[string]any{
+			"goalRevision": run.GoalRevision,
+			"goalDigest":   goalDigest,
+		},
 		now,
 	); err != nil {
 		return err
@@ -236,34 +247,135 @@ func (w *DurableWorker) persistPresentation(
 	current Run,
 	presentation map[string]any,
 ) (Run, error) {
+	run, _, err := w.persistPresentationAtBoundary(
+		ctx,
+		current,
+		presentation,
+		false,
+	)
+	return run, err
+}
+
+func (w *DurableWorker) persistWaitingPresentation(
+	ctx context.Context,
+	current Run,
+	presentation map[string]any,
+) (Run, bool, error) {
+	return w.persistPresentationAtBoundary(ctx, current, presentation, true)
+}
+
+func (w *DurableWorker) persistPresentationAtBoundary(
+	ctx context.Context,
+	current Run,
+	presentation map[string]any,
+	pauseAware bool,
+) (Run, bool, error) {
 	if len(presentation) == 0 {
-		return current, nil
+		return current, pauseAware && (current.PauseRequested ||
+			current.State == generated.AssistantRunStatePaused), nil
 	}
-	nextRevision := int64(1)
-	if revision, ok := presentationRevision(current.PresentationDocument["revision"]); ok {
-		nextRevision = revision + 1
+	if !validPresentationDocument(presentation) ||
+		unsafeReasoningPayload(presentation) ||
+		strings.TrimSpace(stringField(presentation, "committedAt")) != "" {
+		return Run{}, false, ErrUnsafePayload
 	}
-	document := cloneMap(presentation)
-	document["revision"] = nextRevision
-	document["committedAt"] = ""
+	pauseWon := false
 	run, err := w.commitMutation(ctx, current.RunID, "presentation_snapshot", func(
 		run *Run,
 		now time.Time,
 	) error {
+		pauseWon = false
+		if pauseAware && (run.PauseRequested ||
+			run.State == generated.AssistantRunStatePaused) {
+			pauseWon = true
+			return nil
+		}
+		if len(run.PresentationDocument) > 0 {
+			if !validPresentationDocument(run.PresentationDocument) ||
+				!validPresentationCommitState(run.PresentationDocument) {
+				return ErrJournalCorrupt
+			}
+			if samePresentationContent(run.PresentationDocument, presentation) {
+				return nil
+			}
+			if !presentationDocumentCommitted(run.PresentationDocument) {
+				return ErrJournalCorrupt
+			}
+		}
+		nextRevision := int64(1)
+		if revision, ok := presentationRevision(run.PresentationDocument["revision"]); ok {
+			nextRevision = revision + 1
+		}
+		document := cloneMap(presentation)
+		document["revision"] = nextRevision
+		document["committedAt"] = ""
 		return run.SetPresentationDocument(document, now)
 	})
-	observePresentationProjection("snapshot", err)
 	if err != nil {
-		return Run{}, err
+		observePresentationProjection("snapshot", err)
+		return Run{}, false, err
 	}
+	if pauseWon {
+		return run, true, nil
+	}
+	observePresentationProjection("snapshot", nil)
 	committed, err := w.commitMutation(ctx, run.RunID, "presentation_commit", func(
 		run *Run,
 		now time.Time,
 	) error {
+		pauseWon = false
+		if pauseAware && (run.PauseRequested ||
+			run.State == generated.AssistantRunStatePaused) {
+			pauseWon = true
+			return nil
+		}
+		if !samePresentationContent(run.PresentationDocument, presentation) ||
+			!validPresentationCommitState(run.PresentationDocument) {
+			return ErrJournalCorrupt
+		}
+		if presentationDocumentCommitted(run.PresentationDocument) {
+			return nil
+		}
 		return run.CommitPresentation(now)
 	})
-	observePresentationProjection("commit", err)
-	return committed, err
+	if err != nil {
+		observePresentationProjection("commit", err)
+		return Run{}, false, err
+	}
+	if pauseWon {
+		return committed, true, nil
+	}
+	observePresentationProjection("commit", nil)
+	return committed, false, nil
+}
+
+func samePresentationContent(left map[string]any, right map[string]any) bool {
+	if len(left) == 0 || len(right) == 0 {
+		return len(left) == 0 && len(right) == 0
+	}
+	left = cloneMap(left)
+	right = cloneMap(right)
+	delete(left, "revision")
+	delete(left, "committedAt")
+	delete(right, "revision")
+	delete(right, "committedAt")
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && string(leftJSON) == string(rightJSON)
+}
+
+func presentationDocumentCommitted(document map[string]any) bool {
+	committedAt := strings.TrimSpace(stringField(document, "committedAt"))
+	if committedAt == "" {
+		return false
+	}
+	_, err := time.Parse(time.RFC3339Nano, committedAt)
+	return err == nil
+}
+
+func validPresentationCommitState(document map[string]any) bool {
+	committedAt := strings.TrimSpace(stringField(document, "committedAt"))
+	return committedAt == "" || presentationDocumentCommitted(document)
 }
 
 func (w *DurableWorker) commitMutation(
@@ -272,20 +384,37 @@ func (w *DurableWorker) commitMutation(
 	eventKind string,
 	change func(*Run, time.Time) error,
 ) (Run, error) {
+	run, _, err := w.commitMutationWithOutcome(ctx, runID, eventKind, change)
+	return run, err
+}
+
+// commitMutationWithOutcome distinguishes a mutation committed by this worker
+// from a no-op caused by an already-terminal aggregate or by the change
+// function deliberately yielding to a concurrent durable control command.
+func (w *DurableWorker) commitMutationWithOutcome(
+	ctx context.Context,
+	runID string,
+	eventKind string,
+	change func(*Run, time.Time) error,
+) (Run, bool, error) {
+	claim, err := workClaimFromContext(ctx, runID)
+	if err != nil {
+		return Run{}, false, err
+	}
 	for attempt := 0; attempt < 4; attempt++ {
 		run, err := w.repository.Load(ctx, runID)
 		if err != nil {
-			return Run{}, err
+			return Run{}, false, err
 		}
 		if terminalRunState(run.State) {
-			return run, nil
+			return run, false, nil
 		}
 		expectedRevision := run.Revision
 		if err := change(&run, w.now().UTC()); err != nil {
-			return Run{}, err
+			return Run{}, false, err
 		}
 		if run.Revision == expectedRevision {
-			return run, nil
+			return run, false, nil
 		}
 		run.JournalSequence++
 		event := JournalEvent{
@@ -297,19 +426,20 @@ func (w *DurableWorker) commitMutation(
 			Payload:   mutationPayload(run, eventKind),
 			CreatedAt: w.now().UTC(),
 		}
-		if err := w.repository.Commit(
+		if err := w.repository.CommitClaim(
 			ctx,
+			claim,
 			expectedRevision,
 			run,
 			[]JournalEvent{event},
 			nil,
 		); err == nil {
-			return run, nil
+			return run, true, nil
 		} else if !errors.Is(err, ErrRevisionConflict) {
-			return Run{}, err
+			return Run{}, false, err
 		}
 	}
-	return Run{}, ErrRevisionConflict
+	return Run{}, false, ErrRevisionConflict
 }
 
 func mutationPayload(run Run, eventKind string) map[string]any {
@@ -335,13 +465,21 @@ func mutationPayload(run Run, eventKind string) map[string]any {
 		}
 	case "presentation_snapshot":
 		revision, _ := presentationRevision(run.PresentationDocument["revision"])
-		payload["baseRevision"] = int64(0)
+		payload["baseRevision"] = revision - 1
 		payload["revision"] = revision
 		payload["document"] = cloneMap(run.PresentationDocument)
 	case "presentation_commit":
 		revision, _ := presentationRevision(run.PresentationDocument["revision"])
 		payload["baseRevision"] = revision - 1
 		payload["revision"] = revision
+		// CommitPresentation has already persisted this canonical timestamp on
+		// the Run. Project that exact fact so live SSE consumers render the same
+		// committed document as GetAssistantRun; never synthesize a client-side
+		// timestamp for a commit that was not durably recorded.
+		payload["committedAt"] = stringField(
+			run.PresentationDocument,
+			"committedAt",
+		)
 	}
 	return payload
 }

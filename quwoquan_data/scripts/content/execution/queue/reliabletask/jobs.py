@@ -32,19 +32,82 @@ def _canonical_entity_ref(payload: Mapping[str, object]) -> str:
 def _post_source_revision(
     packet: Mapping[str, object],
     writing_pack: Mapping[str, object],
+    *,
+    author_packet: Path | None = None,
+    author_prompt: Path | None = None,
+    repair_report: Path | None = None,
 ) -> str:
     files: list[dict[str, str]] = []
     for raw in packet.get("sourcePaths") or []:
         path = Path(str(raw or "").strip())
         if path.is_file():
             files.append({"path": path.name, "sha256": sha256_file(path)})
-    return canonical_sha256(
-        {
-            "baseSourceRef": packet.get("baseSourceRef"),
-            "writingPack": writing_pack,
-            "sourceFiles": sorted(files, key=lambda row: (row["path"], row["sha256"])),
-        }
+    payload: dict[str, object] = {
+        "baseSourceRef": packet.get("baseSourceRef"),
+        "writingPack": writing_pack,
+        "sourceFiles": sorted(files, key=lambda row: (row["path"], row["sha256"])),
+    }
+    if repair_report is not None and repair_report.is_file():
+        payload["repairReportSha256"] = sha256_file(repair_report)
+    if author_packet is not None and author_packet.is_file():
+        payload["authorPacketSha256"] = sha256_file(author_packet)
+    if author_prompt is not None and author_prompt.is_file():
+        payload["authorPromptSha256"] = sha256_file(author_prompt)
+    return canonical_sha256(payload)
+
+
+def post_author_job_definition(
+    ctx: ExecutionContext,
+    ref: str,
+) -> tuple[str, dict[str, object]]:
+    """Derive the canonical mutex and identity metadata for one author job."""
+    from content.post import object_index as content_object
+    from content.post.article.draft_io import draft_package_dir, read_writing_pack
+
+    packet_path = draft_package_dir(ctx.execution_id, ref) / "author_job_packet.json"
+    if not packet_path.is_file():
+        raise ValueError(f"ReliableTask author packet missing: {ref}")
+    packet = read_json(packet_path)
+    pack = read_writing_pack(ctx.execution_id, ref) or {}
+    brief = content_object.read_brief_object(ctx.execution_id, ref) or {}
+    carrier = str(packet.get("carrier") or pack.get("carrier") or "").strip()
+    entity_ref = (
+        _canonical_entity_ref(pack)
+        or _canonical_entity_ref(brief)
+        or _canonical_entity_ref(packet)
     )
+    if not carrier or not entity_ref:
+        raise ValueError(
+            f"ReliableTask author identity incomplete: ref={ref} "
+            f"carrier={carrier!r} entityRef={entity_ref!r}"
+        )
+    creator_payload = packet.get("creatorAssignment")
+    creator = (
+        creator_from_payload(creator_payload)
+        if isinstance(creator_payload, Mapping)
+        else {}
+    )
+    metadata: dict[str, object] = {
+        "contentType": carrier,
+        "carrier": carrier,
+        "entityRef": entity_ref,
+        "sourceRevision": _post_source_revision(
+            packet,
+            pack,
+            author_packet=packet_path,
+            author_prompt=draft_package_dir(ctx.execution_id, ref) / "prompt.md",
+            repair_report=draft_package_dir(ctx.execution_id, ref).parent
+            / "5.review"
+            / "repair_report.json",
+        ),
+        "sourceUnitId": str(packet.get("baseSourceRef") or ""),
+        "contentObjectDir": content_object.content_object_rel(
+            ctx.execution_id,
+            ref,
+        ),
+        **creator,
+    }
+    return str(packet.get("baseSourceRef") or ref), metadata
 
 
 def _prepare_post_author_jobs(
@@ -52,54 +115,18 @@ def _prepare_post_author_jobs(
     prompts: list[str],
 ) -> int:
     from content.execution.agent.agent_checkpoint import _managed_author_ref
-    from content.post import object_index as content_object
-    from content.post.article.draft_io import draft_package_dir, read_writing_pack
 
     created = 0
     for prompt in prompts:
         ref = _managed_author_ref(prompt)
         if not ref:
             continue
-        packet_path = draft_package_dir(ctx.execution_id, ref) / "author_job_packet.json"
-        if not packet_path.is_file():
-            raise ValueError(f"ReliableTask author packet missing: {ref}")
-        packet = read_json(packet_path)
-        pack = read_writing_pack(ctx.execution_id, ref) or {}
-        brief = content_object.read_brief_object(ctx.execution_id, ref) or {}
-        carrier = str(packet.get("carrier") or pack.get("carrier") or "").strip()
-        entity_ref = (
-            _canonical_entity_ref(pack)
-            or _canonical_entity_ref(brief)
-            or _canonical_entity_ref(packet)
-        )
-        if not carrier or not entity_ref:
-            raise ValueError(
-                f"ReliableTask author identity incomplete: ref={ref} "
-                f"carrier={carrier!r} entityRef={entity_ref!r}"
-            )
-        creator_payload = packet.get("creatorAssignment")
-        creator = (
-            creator_from_payload(creator_payload)
-            if isinstance(creator_payload, Mapping)
-            else {}
-        )
-        metadata: dict[str, object] = {
-            "contentType": carrier,
-            "carrier": carrier,
-            "entityRef": entity_ref,
-            "sourceRevision": _post_source_revision(packet, pack),
-            "sourceUnitId": str(packet.get("baseSourceRef") or ""),
-            "contentObjectDir": content_object.content_object_rel(
-                ctx.execution_id,
-                ref,
-            ),
-            **creator,
-        }
+        mutex_key, metadata = post_author_job_definition(ctx, ref)
         enqueue_ref_job(
             ctx.execution_id,
             ref,
             "author",
-            mutex_key=str(packet.get("baseSourceRef") or ref),
+            mutex_key=mutex_key,
             meta=metadata,
             queue_backend=QueueBackend.RELIABLE_TASK,
         )
@@ -145,6 +172,33 @@ def _prepare_homepage_author_jobs(
         source_revision = str(compose.get("sourceRevision") or "").strip()
         if not source_revision:
             source_revision = canonical_sha256(compose)
+        repair_report = draft_dir.parent / "5.review" / "repair_report.json"
+        envelope_path = draft_dir / "agent_result_envelope.json"
+        repair_is_newer = False
+        if repair_report.is_file():
+            try:
+                repair_is_newer = (
+                    not envelope_path.is_file()
+                    or repair_report.stat().st_mtime >= envelope_path.stat().st_mtime
+                )
+            except OSError as exc:
+                raise RuntimeError(
+                    f"homepage author repair evidence unreadable: {object_ref}"
+                ) from exc
+            source_revision = canonical_sha256(
+                {
+                    "sourceRevision": source_revision,
+                    "repairReportSha256": sha256_file(repair_report),
+                }
+            )
+        if repair_is_newer:
+            from content.execution.queue.management import purge_jobs
+
+            purge_jobs(
+                ctx.execution_id,
+                stage="author",
+                refs=[object_ref],
+            )
         creator_payload = compose.get("creatorAssignment")
         creator = (
             creator_from_payload(creator_payload)
@@ -161,6 +215,8 @@ def _prepare_homepage_author_jobs(
             object_ref,
             "author",
             mutex_key=object_ref,
+            # 首轮成稿后，最多保留两次确定性 materialization 反馈修复机会。
+            max_attempts=3,
             meta={
                 "contentType": "homepage",
                 "carrier": "homepage",

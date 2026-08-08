@@ -30,6 +30,11 @@ import (
 	subscriptionports "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/domain/ports"
 )
 
+const (
+	assistantDurableSubtaskLeaseTTL          = 15 * time.Second
+	assistantDurableSubtaskHeartbeatInterval = 3 * time.Second
+)
+
 func buildAgentLoop(
 	appEnv string,
 	internalSearch *searchclient.Client,
@@ -39,6 +44,7 @@ func buildAgentLoop(
 	publicWebEvidence *publicwebpersistence.MongoEvidenceStore,
 	publicWebBudget *publicwebpersistence.MongoRunBudgetGate,
 	runs runruntime.Repository,
+	workerID string,
 	subscriptions subscriptionports.Store,
 	interests ports.ProactiveInterestReader,
 	consents consentports.Reader,
@@ -48,6 +54,13 @@ func buildAgentLoop(
 	promptAssets ports.PromptAssetResolver,
 	gatheringHandlers map[string]tool.Handler,
 ) (*orchestration.AgentLoop, error) {
+	if runs == nil {
+		return nil, fmt.Errorf("assistant run repository is required")
+	}
+	workerID = strings.TrimSpace(workerID)
+	if workerID == "" {
+		return nil, fmt.Errorf("assistant durable subtask worker ID is required")
+	}
 	model, err := buildModelProvider(
 		appEnv,
 		modelConfig,
@@ -81,6 +94,12 @@ func buildAgentLoop(
 			Registry: registry,
 		},
 	}, nil)
+	loop.DurableSubtasks = orchestration.NewDurableSubtaskCoordinator(
+		orchestration.NewRepositoryDurableSubtaskStore(runs, nil),
+		workerID,
+		assistantDurableSubtaskLeaseTTL,
+		assistantDurableSubtaskHeartbeatInterval,
+	)
 	loop.Catalog = skillCatalog
 	loop.PromptAssets = promptAssets
 	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model, Loader: skillCatalog}
