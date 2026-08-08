@@ -27,8 +27,8 @@ import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
-import 'package:quwoquan_app/runtime/di/presentation/author_impact_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/author_impact_evidence.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_evidence.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',

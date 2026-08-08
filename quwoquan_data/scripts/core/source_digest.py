@@ -29,6 +29,8 @@ _INPUT_ROOTS = (
     "quwoquan_data/requirements.txt",
     "quwoquan_data/requirements-cursor.txt",
     "quwoquan_service/services/content-service/contracts/media/media_asset",
+    "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
+    "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml",
 )
 # Data execution identity is deliberately environment-neutral. Environment
 # topology and readiness policy apply only when an immutable release is shipped.

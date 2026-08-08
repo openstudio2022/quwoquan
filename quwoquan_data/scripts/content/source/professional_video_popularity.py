@@ -31,7 +31,7 @@ def initial_popularity_signals(raw: dict[str, Any]) -> dict[str, Any]:
         "popularityScore": score,
         "popularityPercentile": None,
         "rankingEligible": False,
-        "rankingIneligibleReason": "not_evaluated",
+        "ineligibleReason": "not_evaluated",
         "comparisonCandidateCount": 0,
     }
 
@@ -55,10 +55,10 @@ def apply_popularity_percentiles(rows: list[dict[str, Any]]) -> None:
             "research_allowed",
             "commercial_allowed",
         }:
-            signals["rankingIneligibleReason"] = "asset_not_accepted"
+            signals["ineligibleReason"] = "asset_not_accepted"
             continue
         if signals.get("popularityScore") is None:
-            signals["rankingIneligibleReason"] = "incomplete_popularity_signals"
+            signals["ineligibleReason"] = "incomplete_popularity_signals"
             continue
         key = (
             str(signals["provider"]),
@@ -71,7 +71,7 @@ def apply_popularity_percentiles(rows: list[dict[str, Any]]) -> None:
         count = len(group)
         if count < 2:
             group[0]["popularitySignals"].update(
-                rankingIneligibleReason="insufficient_comparable_candidates",
+                ineligibleReason="insufficient_comparable_candidates",
                 comparisonCandidateCount=count,
             )
             continue
@@ -83,7 +83,7 @@ def apply_popularity_percentiles(rows: list[dict[str, Any]]) -> None:
             row["popularitySignals"].update(
                 popularityPercentile=round(percentile, 6),
                 rankingEligible=True,
-                rankingIneligibleReason="",
+                ineligibleReason="",
                 comparisonCandidateCount=count,
             )
 

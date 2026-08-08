@@ -9,12 +9,7 @@ import (
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/skillcontext"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
-)
-
-const (
-	CircleContextResolverRef  = "circle.current_context"
-	ContentContextResolverRef = "content.current_context"
-	EntityContextResolverRef  = "entity.current_context"
+	readerports "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/ports"
 )
 
 // ObjectContextResolver is deliberately object-neutral: new vertical facts
@@ -75,39 +70,57 @@ func (resolver ObjectContextResolver) Resolve(
 // registration API. The composition root may append this returned slice to
 // NewRuntimeRegistry without knowing any vertical-specific routing rule.
 func NewCanonicalDomainResolverRegistrations(
+	descriptors readerports.Catalog,
 	runs RunReader,
 	readers domainreader.CanonicalReaders,
 ) ([]application.RegisteredResolver, error) {
-	if runs == nil || readers.Circle == nil || readers.Content == nil || readers.Entity == nil {
+	if descriptors == nil || runs == nil {
 		return nil, fmt.Errorf("canonical domain context readers are unavailable")
 	}
-	return []application.RegisteredResolver{
-		{
-			ResolverRef: CircleContextResolverRef,
+	boundReaders := readers.BoundReaders()
+	if len(boundReaders) == 0 {
+		return nil, fmt.Errorf("canonical domain context reader registry is empty")
+	}
+	registrations := make([]application.RegisteredResolver, 0, len(boundReaders))
+	seenResolvers := make(map[string]struct{}, len(boundReaders))
+	for _, bound := range boundReaders {
+		descriptor, err := descriptors.GetDescriptor(
+			context.Background(),
+			bound.Descriptor.DescriptorID,
+		)
+		if err != nil || descriptor.DescriptorDigest != bound.Descriptor.DescriptorDigest {
+			return nil, fmt.Errorf(
+				"canonical domain reader descriptor %q changed after adapter binding",
+				bound.Descriptor.DescriptorID,
+			)
+		}
+		if _, duplicate := seenResolvers[descriptor.ResolverRef]; duplicate {
+			return nil, fmt.Errorf(
+				"duplicate canonical domain reader resolver %q",
+				descriptor.ResolverRef,
+			)
+		}
+		registrations = append(registrations, application.RegisteredResolver{
+			ResolverRef: descriptor.ResolverRef,
 			Resolver: ObjectContextResolver{
-				Runs: runs, Reader: readers.Circle,
-				OperationRef:       "circle.circle.GetCircle",
-				ObjectTypeRefs:     []string{"circle.Circle"},
-				SurfaceObjectTypes: map[string]string{"circle": "circle.Circle"},
+				Runs:               runs,
+				Reader:             bound.Reader,
+				OperationRef:       descriptor.OwnerOperationRefs[0],
+				ObjectTypeRefs:     append([]string(nil), descriptor.ObjectTypeRefs...),
+				SurfaceObjectTypes: cloneSurfaceObjectTypes(bound.SurfaceObjectTypes),
 			},
-		},
-		{
-			ResolverRef: ContentContextResolverRef,
-			Resolver: ObjectContextResolver{
-				Runs: runs, Reader: readers.Content,
-				OperationRef:   "content.post.GetPost",
-				ObjectTypeRefs: []string{"content.Post"},
-			},
-		},
-		{
-			ResolverRef: EntityContextResolverRef,
-			Resolver: ObjectContextResolver{
-				Runs: runs, Reader: readers.Entity,
-				OperationRef:   "entity.homepage.GetHomepageDetail",
-				ObjectTypeRefs: []string{"entity.Homepage"},
-			},
-		},
-	}, nil
+		})
+		seenResolvers[descriptor.ResolverRef] = struct{}{}
+	}
+	return registrations, nil
+}
+
+func cloneSurfaceObjectTypes(values map[string]string) map[string]string {
+	cloned := make(map[string]string, len(values))
+	for surfaceKind, objectType := range values {
+		cloned[surfaceKind] = objectType
+	}
+	return cloned
 }
 
 func resolveObjectTarget(

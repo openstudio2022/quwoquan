@@ -33,7 +33,7 @@ void main() {
 
   test('profile read facts encode the same canonical persona path key', () {
     final request =
-        encodeContentProfileInteractionReadFactUpdateProfileInteractionStateGeneratedRequest(
+        encodeContentProfileInteractionReadFactAppendProfileInteractionReadFactGeneratedRequest(
           AppendContentProfileInteractionReadFactCommand(
             personaId: 'persona-1',
             activityId: 'activity-1',

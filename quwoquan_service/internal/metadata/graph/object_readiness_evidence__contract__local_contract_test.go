@@ -201,6 +201,9 @@ func TestMissingServiceLayerEvidenceKeepsObjectContractReady(t *testing.T) {
 		"implementation.service.store": func(e *ast.ObjectReadinessEvidence) {
 			e.Service.Store = nil
 		},
+		"implementation.service.reader": func(e *ast.ObjectReadinessEvidence) {
+			e.Service.Reader = nil
+		},
 		"implementation.outbox": func(e *ast.ObjectReadinessEvidence) {
 			e.Service.Outbox = nil
 		},

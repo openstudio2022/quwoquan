@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -10,26 +9,38 @@ import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show journeyEventTrackerProvider;
-import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
-    show profileEditProposalCommandWriterProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/profile_update_proposal/application/public/profile_update_proposal_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-final class ProfileUpdateProposalReviewSheet extends ConsumerStatefulWidget {
-  const ProfileUpdateProposalReviewSheet({super.key, required this.proposal});
+typedef ProfileUpdateProposalActionTracker =
+    Future<void> Function({
+      required String action,
+      required String proposalId,
+      String? result,
+      String? failReasonCode,
+    });
+
+final class ProfileUpdateProposalReviewSheet extends StatefulWidget {
+  const ProfileUpdateProposalReviewSheet({
+    super.key,
+    required this.proposal,
+    required this.commandWriter,
+    required this.trackAction,
+  });
 
   final ProfileUpdateProposalView proposal;
+  final ProfileUpdateProposalWriter commandWriter;
+  final ProfileUpdateProposalActionTracker trackAction;
 
   @override
-  ConsumerState<ProfileUpdateProposalReviewSheet> createState() =>
+  State<ProfileUpdateProposalReviewSheet> createState() =>
       _ProfileUpdateProposalReviewSheetState();
 }
 
 final class _ProfileUpdateProposalReviewSheetState
-    extends ConsumerState<ProfileUpdateProposalReviewSheet> {
+    extends State<ProfileUpdateProposalReviewSheet> {
   bool _busy = false;
   String? _errorMessage;
 
@@ -44,19 +55,12 @@ final class _ProfileUpdateProposalReviewSheetState
 
   void _track(String action, {String? result, String? failReasonCode}) {
     unawaited(
-      ref
-          .read(journeyEventTrackerProvider)
-          .trackAction(
-            journey: 'profile_update_proposal',
-            action: action,
-            pageName: 'ProfileUpdateProposalReviewSheet',
-            targetType: 'profile_update_proposal',
-            targetKey: widget.proposal.id,
-            payload: <String, dynamic>{
-              'result': ?result,
-              'failReasonCode': ?failReasonCode,
-            },
-          ),
+      widget.trackAction(
+        action: action,
+        proposalId: widget.proposal.id,
+        result: result,
+        failReasonCode: failReasonCode,
+      ),
     );
   }
 
@@ -67,7 +71,7 @@ final class _ProfileUpdateProposalReviewSheetState
       _errorMessage = null;
     });
     try {
-      final writer = ref.read(profileEditProposalCommandWriterProvider);
+      final writer = widget.commandWriter;
       if (widget.proposal.status == ProposalStatus.pending) {
         await writer.confirm(
           ConfirmProfileUpdateProposalCommand(proposalId: widget.proposal.id),
@@ -107,11 +111,9 @@ final class _ProfileUpdateProposalReviewSheetState
       _errorMessage = null;
     });
     try {
-      await ref
-          .read(profileEditProposalCommandWriterProvider)
-          .reject(
-            RejectProfileUpdateProposalCommand(proposalId: widget.proposal.id),
-          );
+      await widget.commandWriter.reject(
+        RejectProfileUpdateProposalCommand(proposalId: widget.proposal.id),
+      );
       if (!mounted) return;
       _track('reject', result: 'succeeded');
       AppToast.show(context, ProfileText.editProfileProposalRejected);
@@ -139,13 +141,9 @@ final class _ProfileUpdateProposalReviewSheetState
       _errorMessage = null;
     });
     try {
-      await ref
-          .read(profileEditProposalCommandWriterProvider)
-          .rollback(
-            RollbackProfileUpdateProposalCommand(
-              proposalId: widget.proposal.id,
-            ),
-          );
+      await widget.commandWriter.rollback(
+        RollbackProfileUpdateProposalCommand(proposalId: widget.proposal.id),
+      );
       if (!mounted) return;
       _track('rollback', result: 'succeeded');
       AppToast.show(context, ProfileText.editProfileProposalRolledBack);

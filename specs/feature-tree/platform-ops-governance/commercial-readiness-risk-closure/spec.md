@@ -224,7 +224,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：mutation 与审批/审计非原子，单人自批可执行
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-002` 的可观察验收通过，双人双签后状态、workflow、audit、outbox 与 receipt 原子提交，单人自批被拒绝。
 
 <a id="open-004"></a>
 ### OPEN-004 发布 SLO 使用调用方数字而非真实监控读回
@@ -233,7 +233,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：发布 SLO 使用调用方数字而非真实监控读回
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-004` 的可观察验收通过，发布 SLO 只从 Prometheus 读回并满足最小样本与窗口。
 
 <a id="open-006"></a>
 <a id="open-007"></a>
@@ -256,7 +256,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：服务结构化日志没有统一 collector 上云
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-001` 的可观察验收通过，服务结构化日志经统一 collector 上云后在异常条件下仍不丢关键事实。
 
 <a id="open-009"></a>
 ### OPEN-009 GitHub 分支/环境/runner/Action 安全保护不足
@@ -265,7 +265,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：GitHub 分支/环境/runner/Action 安全保护不足
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-003` 的可观察验收通过，CI action 固定 commit SHA、工作流最小权限与 CODEOWNERS 在分支、环境和 runner 上均生效。
 
 <a id="open-010"></a>
 ### OPEN-010 构建与部署不是同一不可变制品
@@ -274,7 +274,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：构建与部署不是同一不可变制品
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-003` 的可观察验收通过，gray-initial/carry-on/full 只消费同一 `ReleaseEvidenceManifest`，部署不重建制品。
 
 <a id="open-011"></a>
 ### OPEN-011 缺少获批 Prod 发布与真实灰度回滚回执
@@ -283,7 +283,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仓库已将本地 release-state 降为缓存，并由 hosted service-plane CAS/不可变 receipt 裁决；仍缺受控 Prod SSH、发布审批与真实 gray traffic/rollback 执行，当前不能生成 last-good 或 rollback 运行回执。
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：`SIT-004` 的可观察验收在获批 Prod 发布上通过，真实 gray traffic 与回滚产生不可变 receipt。
 
 <a id="open-012"></a>
 ### OPEN-012 prod 渲染配置路径/证书/Secret 漂移

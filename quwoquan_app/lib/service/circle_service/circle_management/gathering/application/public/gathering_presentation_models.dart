@@ -1,6 +1,24 @@
 // Gathering 的跨对象公开展示值。
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
 
+final class GatheringCreateInitialValue {
+  const GatheringCreateInitialValue({
+    required this.host,
+    required this.creatorParticipates,
+    required this.purpose,
+    required this.schedule,
+    required this.place,
+    required this.policy,
+  });
+
+  final GatheringHostInput host;
+  final bool creatorParticipates;
+  final GatheringPurposeDraft purpose;
+  final GatheringScheduleDraft schedule;
+  final GatheringPlaceDraft place;
+  final GatheringPolicyDraft policy;
+}
+
 enum GatheringPrimaryAction {
   join,
   apply,

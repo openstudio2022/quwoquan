@@ -27,6 +27,20 @@ relationships:
   reference_fields:
   - userId
   target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.chat.conversation_user_state.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - identity 固定为 conversationId + personaId
 - readSeq 只能单调增加且不得超过 Conversation maxSeq

@@ -385,6 +385,79 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
     assert validate_result(rights, "release", "asset_rights_closure") == []
 
 
+def test_verified_research_asset_projects_final_editorial_rights(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    _write_json(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceUseMode": "rights_audit_only",
+            "rightsMode": "rights_audit_only",
+            "researchLane": "video",
+        },
+    )
+    index_path = execution / "sources/commons/assets/index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["assets"][0]["usageScope"] = "internal_reference"
+    _write_json(index_path, index)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"][0]["usageScope"] = "internal_reference"
+    _write_json(manifest_path, manifest)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    assert rights["assets"][0]["sourceUseMode"] == "licensed_adaptation"
+    assert rights["assets"][0]["usageScope"] == "editorial"
+    assert validate_result(rights, "release", "asset_rights_closure") == []
+
+
+def test_research_asset_without_authorization_proof_stays_audit_only(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    _write_json(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceUseMode": "rights_audit_only",
+            "rightsMode": "rights_audit_only",
+            "researchLane": "video",
+        },
+    )
+    index_path = execution / "sources/commons/assets/index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["assets"][0]["authorizationProof"] = ""
+    _write_json(index_path, index)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["assets"][0]["authorizationProof"] = ""
+    _write_json(manifest_path, manifest)
+
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    asset = rights["assets"][0]
+    assert asset["sourceUseMode"] == "rights_audit_only"
+    assert asset["rightsAuditStatus"] == "unverified"
+    assert asset["authorizationProof"] == ""
+    assert asset["rightsAuditIssues"] == [
+        "authorizationProof: not independently verified for research distribution"
+    ]
+    assert validate_result(rights, "release", "asset_rights_closure") == []
+
+
 def test_canonical_transaction_rejects_source_use_mode_upgrade(
     tmp_path: Path,
 ) -> None:

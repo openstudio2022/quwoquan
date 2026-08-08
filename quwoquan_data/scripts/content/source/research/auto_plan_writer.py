@@ -125,6 +125,19 @@ def _write_auto_research_plans_impl(
     selected_lanes = lanes or declared_lanes
     if not selected_lanes:
         raise ValueError("execution must declare at least one research lane")
+    if len(selected_lanes) == 1:
+        from content.source.research.scale_source_pool_runtime import (
+            write_frozen_scale_source_pool_plans,
+        )
+
+        frozen_report = write_frozen_scale_source_pool_plans(
+            execution_id, entity_ids, carrier=next(iter(selected_lanes))
+        )
+        if frozen_report is not None:
+            frozen_report["vertical"] = vertical
+            if write_shared_report:
+                _write_auto_report_artifacts(execution_id, frozen_report)
+            return frozen_report
     professional_image_bound = professional_image_context_enabled(
         external_input_context,
         selected_lanes,

@@ -29,6 +29,14 @@ class AppMessageNavigationTarget {
         AppRoutePaths.homepageDetail(id: targetId),
       );
     }
+    if (targetType == 'assistant_run' && targetId.isNotEmpty) {
+      return AppMessageNavigationTarget._(
+        Uri(
+          path: AppRoutePaths.assistantPersonal,
+          queryParameters: <String, String>{'runId': targetId},
+        ).toString(),
+      );
+    }
     if (routeId == 'myIntersections' ||
         routePath == AppRoutePaths.myIntersectionsPathTemplate ||
         targetId == 'myIntersections') {

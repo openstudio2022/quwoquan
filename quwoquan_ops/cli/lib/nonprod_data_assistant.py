@@ -75,7 +75,7 @@ def provision_assistant_notification_rtc(
         actor=actors[0],
         step="assistant-subscription",
         body={
-            "skillId": "travel_journey_manager",
+            "skillId": "travel_companion",
             "domainId": "travel",
             "tagRefs": ["travel", "weather", "traffic"],
             "searchQueryPlan": {
@@ -122,7 +122,7 @@ def provision_assistant_notification_rtc(
             bindings={"sessionId": assistant_session_id},
             body={
                 "turnType": "user",
-                "skillId": "travel_journey_manager",
+                "skillId": "travel_companion",
                 "domainId": "travel",
                 "input": {"text": text},
                 "trigger": {"type": "user"},
@@ -152,7 +152,7 @@ def provision_assistant_notification_rtc(
         actor=actors[0],
         step="assistant-invite",
         bindings={"conversationId": mention_conversation_id},
-        body={"skillId": "travel_journey_manager"},
+        body={"skillId": "travel_companion"},
     )
     mention = executor.call(
         "chat.message.SendMessage",

@@ -14,6 +14,7 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
@@ -32,6 +33,9 @@ final class _ChatPersonaQuery extends Fake implements PersonaQuery {
 }
 
 void main() {
+  // ChatMessageNotifier 读写本地会话时间线（sqflite），VM 测试需要 ffi 后端。
+  setUpAll(ensureSqfliteFfiInitialized);
+
   group('ChatMessageNotifier', () {
     test('loadMessages fills missing sender snapshots from members', () async {
       final mediaEndpoints = MediaEndpointConfig(

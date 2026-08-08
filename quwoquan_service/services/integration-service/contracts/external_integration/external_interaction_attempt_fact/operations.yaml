@@ -12,6 +12,13 @@ runtime_entrypoints:
     facet: ExternalInteractionAttemptFactAppender
     method: append
     object_owner: ExternalInteractionAttemptFact
+  telemetry:
+    metric: integration_external_interaction_attempt_append
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    failure_ratio_percent: 0.5
 readiness_cases:
 - case_id: append-external-interaction-attempt-local
   spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001

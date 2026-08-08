@@ -32,8 +32,11 @@ const (
 )
 
 type HookInput struct {
+	InvocationID         string
 	Phase                HookPhase
 	Run                  Run
+	RunRevision          int64
+	Outcome              string
 	TaskID               string
 	ToolName             string
 	Data                 map[string]any
@@ -105,8 +108,10 @@ func InvokeExecutionHook(
 	}
 	startedAt := time.Now()
 	result, err := wiring.registry.Run(ctx, HookInput{
+		InvocationID:         StableHookInvocationID(wiring.run.RunID, phase, wiring.run.Revision),
 		Phase:                phase,
 		Run:                  wiring.run,
+		RunRevision:          wiring.run.Revision,
 		TaskID:               strings.TrimSpace(taskID),
 		ToolName:             strings.TrimSpace(toolName),
 		Data:                 cloneMap(data),
@@ -114,6 +119,17 @@ func InvokeExecutionHook(
 	})
 	observeHookInvocation(phase, result.Decision, startedAt, err)
 	return result, err
+}
+
+// StableHookInvocationID is the durable idempotency identity for one hook
+// phase at one committed AssistantRun revision. Hook relays must preserve it
+// across retries, owner takeover, acknowledgement loss, and process restart.
+func StableHookInvocationID(runID string, phase HookPhase, revision int64) string {
+	runID = strings.TrimSpace(runID)
+	if runID == "" || !validHookPhase(phase) || revision <= 0 {
+		return ""
+	}
+	return runID + ":" + string(phase) + ":" + int64String(revision)
 }
 
 func NewHookRegistry(hooks ...RegisteredHook) (*HookRegistry, error) {

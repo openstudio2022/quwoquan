@@ -63,7 +63,7 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.download_gate import _build_prepare_homepage_retry_entity_ids, _download_repair_path, _download_retry_entity_ids, _download_retry_lane, _download_stage_gate_issues
     from content.execution.recovery.download_repair import _record_download_repair
     from content.execution.recovery.download_unresolved import (
-        absorb_download_shortfall_if_quota_met,
+        absorb_download_shortfall_if_any_ready,
         _write_download_availability,
     )
     from content.source.handler import handle_download
@@ -78,7 +78,7 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
         {},
         source="download_fetch_resume",
     )
-    persisted_absorbed = absorb_download_shortfall_if_quota_met(
+    persisted_absorbed = absorb_download_shortfall_if_any_ready(
         ctx,
         persisted_availability,
         stage=DataIssueStage.DOWNLOAD_FETCH,
@@ -106,7 +106,7 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     ) -> StageResult:
         _record_download_repair(ctx, issues)
         availability = _write_download_availability(ctx, {}, source=source)
-        absorbed = absorb_download_shortfall_if_quota_met(
+        absorbed = absorb_download_shortfall_if_any_ready(
             ctx,
             availability,
             stage=DataIssueStage.DOWNLOAD_FETCH,
@@ -313,6 +313,48 @@ def _qualified_entity_names(verdict: Any) -> tuple[str, ...]:
     return tuple(names)
 
 
+def _write_homepage_independent_review_repairs(ctx: ExecutionContext) -> None:
+    """Turn failed independent reviews into object-bound author retry input."""
+    from governance.coverage.entity_extract import entity_ref, require_domain_etype
+
+    from content.execution.controller.homepage_author_finalization import (
+        _write_homepage_repair_report,
+    )
+    from content.homepage.homepage_review import _entity_draft_dir
+    from core.io import read_json
+
+    for target in ctx.spec.scope.coverage_targets:
+        domain, entity_type = require_domain_etype(
+            target.entity_type,
+            context=target.name,
+        )
+        draft_dir = _entity_draft_dir(
+            ctx.execution_id,
+            domain,
+            entity_type,
+            target.name,
+        )
+        result_path = draft_dir.parent / "5.review" / "reviewer_result.json"
+        if not result_path.is_file():
+            continue
+        result = read_json(result_path)
+        if not isinstance(result, Mapping) or result.get("verdict") != "failed":
+            continue
+        issues = tuple(
+            str(item).strip()
+            for item in (result.get("issues") or [])
+            if str(item).strip()
+        )
+        if not issues:
+            continue
+        _write_homepage_repair_report(
+            ctx,
+            object_dir=draft_dir.parent,
+            ref=entity_ref(domain, entity_type, target.name),
+            materialization_messages=issues,
+        )
+
+
 def _run_build_validate(ctx: ExecutionContext) -> StageResult:
     from content.execution.controller.homepage_review_stage import (
         independent_reviewer_precondition_issues,
@@ -392,18 +434,19 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
     run_homepage_independent_reviews(
         ctx, homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     )
-    # 审阅结论逐对象写回 5.review/review.json，配额判定据此重算：
-    # 审阅未过的对象按丢弃处理，只要达标对象数仍满足配额，批次即可准出。
+    # 审阅结论逐对象写回 5.review/review.json。审阅未过的对象按丢弃处理；
+    # 只要仍有合格对象就 partial 准出，approvedQuota 只保留为规模里程碑。
     reviewed = homepage_quota_verdict(ctx)
-    if not reviewed.passed:
+    if reviewed.qualified_count <= 0:
         issues = reviewed.blocking_issues() or [
-            "homepage independent review did not satisfy the approved quota"
+            "homepage independent review produced no qualified objects"
         ]
+        _write_homepage_independent_review_repairs(ctx)
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.FAILED,
-            f"主页独立审阅后未达配额（达标 {reviewed.qualified_count}/{reviewed.approved_quota}）:\n  - "
+            f"主页独立审阅后无合格对象（达标 {reviewed.qualified_count}/{reviewed.approved_quota}）:\n  - "
             + "\n  - ".join(issues[:10]),
             fallback_stage=ExecutionStage.BUILD_HOMEPAGE,
             issue_records=stage_issues(
@@ -413,12 +456,18 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 recovery=DataRecoveryAction.REWIND_COMPOSE,
             ),
         )
+    if not reviewed.passed:
+        print(
+            "[build_validate] independent review partial "
+            f"{reviewed.qualified_count}/{reviewed.approved_quota}; "
+            "qualified objects continue"
+        )
     for line in reviewed.discard_summary():
         print(f"[build_validate] 审阅丢弃 {line}")
     return StageResult(
         ExecutionStage.BUILD_VALIDATE,
         AUTO,
         StageStatus.DONE,
-        "主页采纳门与独立审阅达标 "
-        f"{reviewed.qualified_count}/{reviewed.approved_quota}",
+        "主页采纳门与独立审阅部分通过（合格 "
+        f"{reviewed.qualified_count}/{reviewed.approved_quota}）",
     )

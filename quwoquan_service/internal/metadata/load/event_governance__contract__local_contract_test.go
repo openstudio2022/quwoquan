@@ -18,6 +18,7 @@ func TestEventGovernanceLoadsCanonicalIdentityInputsWithoutProducerConsumers(t *
 	const document = `events:
 - name: CallRinging
   delivery_semantics: transactional_outbox
+  wire_event_type: CallRinging
   topic: events.rtc.call_ringing
   payload_entity: CallEventPayload
   payload_shape: exact
@@ -45,6 +46,7 @@ func TestEventGovernanceLoadsCanonicalIdentityInputsWithoutProducerConsumers(t *
 	got := events[0]
 	if got.ObjectID != "rtc.call_session" || got.Name != "CallRinging" ||
 		got.DeliverySemantics != "transactional_outbox" ||
+		got.WireEventType != "CallRinging" ||
 		got.Topic != "events.rtc.call_ringing" ||
 		got.PayloadEntity != "CallEventPayload" || got.PayloadShape != "exact" ||
 		got.ClientWSType != "call.ringing" ||

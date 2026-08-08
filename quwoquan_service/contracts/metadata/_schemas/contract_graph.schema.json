@@ -27,7 +27,7 @@
           "domain": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
           "kind": {
-            "enum": ["aggregate_root", "owned_entity", "value_object", "projection", "external_reference", "append_only_fact", "runtime_session"]
+            "enum": ["aggregate_root", "append_only_fact", "process_manager", "projection", "external_reference", "runtime_session"]
           },
           "kindExplicit": { "type": "boolean" },
           "aggregateOwner": { "type": "string", "minLength": 1 },
@@ -35,7 +35,8 @@
           "sourcePath": { "type": "string", "minLength": 1 },
           "members": {
             "type": "array",
-            "items": { "type": "object" }
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/member" }
           },
           "lifecycle": {
             "type": "object",
@@ -55,7 +56,7 @@
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["name", "kind", "facet", "method", "idempotency"],
+                  "required": ["name", "kind", "facet", "method", "idempotency", "implementation"],
                   "properties": {
                     "name": { "type": "string", "minLength": 1 },
                     "kind": { "enum": ["projector", "event_handler", "subscription"] },
@@ -471,6 +472,8 @@
           "facet",
           "facadeMethod",
           "objectOwner",
+          "telemetry",
+          "slo",
           "sourcePath"
         ],
         "properties": {
@@ -504,8 +507,134 @@
           "idempotency": {
             "enum": ["event_id", "aggregate_version", "identity_payload_digest", "transaction_identity"]
           },
+          "telemetry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "trace"],
+            "properties": {
+              "metric": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "trace": { "const": true },
+              "attributes": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "slo": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "latencyP95Milliseconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "failureRatioPercent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              },
+              "freshnessP95Seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "backlogMaxEvents": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "deadLetterRatioPercent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              }
+            }
+          },
           "sourcePath": { "type": "string", "minLength": 1 }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "runtimeKind": {
+                  "enum": ["middleware", "internal_port"]
+                }
+              },
+              "required": ["runtimeKind"]
+            },
+            "then": {
+              "properties": {
+                "slo": {
+                  "required": [
+                    "latencyP95Milliseconds",
+                    "failureRatioPercent"
+                  ],
+                  "not": {
+                    "anyOf": [
+                      { "required": ["freshnessP95Seconds"] },
+                      { "required": ["backlogMaxEvents"] },
+                      { "required": ["deadLetterRatioPercent"] }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "runtimeKind": {
+                  "enum": ["projector", "event_handler", "subscription"]
+                }
+              },
+              "required": ["runtimeKind"]
+            },
+            "then": {
+              "properties": {
+                "slo": {
+                  "required": [
+                    "freshnessP95Seconds",
+                    "backlogMaxEvents",
+                    "failureRatioPercent"
+                  ],
+                  "not": {
+                    "anyOf": [
+                      { "required": ["latencyP95Milliseconds"] },
+                      { "required": ["deadLetterRatioPercent"] }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "runtimeKind": { "const": "external_port" }
+              },
+              "required": ["runtimeKind"]
+            },
+            "then": {
+              "properties": {
+                "slo": {
+                  "required": [
+                    "latencyP95Milliseconds",
+                    "failureRatioPercent",
+                    "deadLetterRatioPercent"
+                  ],
+                  "not": {
+                    "anyOf": [
+                      { "required": ["freshnessP95Seconds"] },
+                      { "required": ["backlogMaxEvents"] }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "projections": {
@@ -570,9 +699,8 @@
                 "objectKind": {
                   "enum": [
                     "aggregate_root",
-                    "owned_entity",
-                    "value_object",
                     "append_only_fact",
+                    "process_manager",
                     "projection",
                     "external_reference",
                     "runtime_session"
@@ -862,6 +990,70 @@
     }
   },
   "$defs": {
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "kind",
+        "cardinality",
+        "maxCardinality",
+        "ownership",
+        "aggregateOwner",
+        "description"
+      ],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+        "kind": { "enum": ["owned_entity", "value_object"] },
+        "identity": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" }
+        },
+        "cardinality": { "enum": ["one", "zero_or_one", "many"] },
+        "maxCardinality": { "type": "integer", "minimum": 1 },
+        "ownership": { "const": "aggregate" },
+        "writeAccess": { "const": "aggregate_facade_only" },
+        "appendOnly": { "const": true },
+        "aggregateOwner": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+        "description": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "cardinality": { "enum": ["one", "zero_or_one"] } },
+            "required": ["cardinality"]
+          },
+          "then": { "properties": { "maxCardinality": { "const": 1 } } }
+        },
+        {
+          "if": {
+            "properties": { "cardinality": { "const": "many" } },
+            "required": ["cardinality"]
+          },
+          "then": { "properties": { "maxCardinality": { "minimum": 2 } } }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "owned_entity" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["identity", "writeAccess"],
+            "not": { "required": ["appendOnly"] }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["identity"] },
+                { "required": ["writeAccess"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "requestBinding": {
       "type": "object",
       "additionalProperties": false,
@@ -898,7 +1090,7 @@
       "additionalProperties": false,
       "required": ["commands", "queries", "crossContext"],
       "properties": {
-        "commands": { "enum": ["aggregate_facade", "cli_facade", "via_aggregate_root", "append_only_sink", "session_facade", "none"] },
+        "commands": { "enum": ["aggregate_facade", "cli_facade", "via_aggregate_root", "append_only_sink", "process_facade", "session_facade", "none"] },
         "queries": { "enum": ["named_reader", "via_aggregate_projection", "external_port", "none"] },
         "crossContext": { "enum": ["public_contract_only", "event_only", "forbidden"] }
       }

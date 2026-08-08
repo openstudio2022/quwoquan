@@ -45,7 +45,7 @@ class _SearchNetworkResultsPageState
   final Set<String> _searchDwellFeedbackReported = <String>{};
   Map<String, int> _searchRankByObjectId = const <String, int>{};
   late final AppTelemetryRecorder _appTelemetry;
-  late final SearchFeedbackCommandWriter _searchFeedbackWriter;
+  late final SearchFeedbackFactAppender _searchFeedbackWriter;
   final Set<String> _searchTelemetrySubmitted = <String>{};
   String? _telemetryResultRequestId;
   DateTime? _telemetryResultShownAt;
@@ -67,7 +67,7 @@ class _SearchNetworkResultsPageState
   void initState() {
     super.initState();
     _appTelemetry = ref.read(appTelemetryReporterProvider);
-    _searchFeedbackWriter = ref.read(searchFeedbackCommandWriterProvider);
+    _searchFeedbackWriter = ref.read(searchFeedbackFactAppenderProvider);
     _feedRequestIdAtEnter = ref
         .read(feedSessionProvider.notifier)
         .currentFeedRequestId;

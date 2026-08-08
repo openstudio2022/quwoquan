@@ -54,6 +54,17 @@ func consumeExecutionModelResponse(
 	ctx context.Context,
 	response ModelResponse,
 ) error {
+	return ConsumeExecutionModelResponse(ctx, response)
+}
+
+// ConsumeExecutionModelResponse records one provider response in the shared
+// durable execution budget. Adapters that invoke the execution model outside
+// ReactRuntime, such as the constrained completion verifier, must call this
+// before decoding or accepting the response.
+func ConsumeExecutionModelResponse(
+	ctx context.Context,
+	response ModelResponse,
+) error {
 	policy, enabled := executionPolicyFromContext(ctx)
 	if !enabled {
 		return nil

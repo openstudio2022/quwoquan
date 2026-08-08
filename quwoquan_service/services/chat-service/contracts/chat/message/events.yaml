@@ -1,6 +1,7 @@
 events:
 - name: MessageSent
   delivery_semantics: transactional_outbox
+  wire_event_type: MessageSent
   payload_entity: MessageSentEventPayload
   payload_fields:
   - messageId
@@ -21,6 +22,7 @@ events:
   client_ws_type: MessageSent
 - name: MessageRecalled
   delivery_semantics: transactional_outbox
+  wire_event_type: MessageRecalled
   payload_entity: MessageRecalledEventPayload
   payload_fields:
   - messageId
@@ -31,6 +33,7 @@ events:
 - name: AssistantMentioned
   description: 会话消息中提及已加入助手时，交给 assistant-service 的可靠消费事件。
   delivery_semantics: transactional_outbox
+  wire_event_type: AssistantMentioned
   payload_entity: Message
   payload_fields:
   - conversationId

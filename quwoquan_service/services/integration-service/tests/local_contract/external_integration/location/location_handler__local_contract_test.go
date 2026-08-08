@@ -7,8 +7,10 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	locationgenerated "quwoquan_service/services/integration-service/generated/external_integration/location"
@@ -253,5 +255,50 @@ func TestNearbyTimeoutReturns504WithUpstreamTimeoutCode(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &body)
 	if body["code"] != locationgenerated.ErrUpstreamTimeout.Error() {
 		t.Fatalf("code=%v, want %s", body["code"], locationgenerated.ErrUpstreamTimeout.Error())
+	}
+}
+
+func TestUnexpectedLocationFailureReturnsCanonicalInternalError(t *testing.T) {
+	const privateDiagnostic = "vendor credential rejected at private endpoint"
+	client := &fakeProviderClient{
+		nearbyFn: func(model.NearbyQuery) ([]model.POI, error) {
+			return nil, errors.New(privateDiagnostic)
+		},
+		searchFn: func(model.SearchRequestFact) ([]model.POI, error) {
+			return nil, nil
+		},
+	}
+	handler := NewHandler(
+		newLocationService(t, client),
+		3000,
+		20,
+		20,
+		30.1,
+		104.2,
+	).Routes()
+	request := httptest.NewRequest(http.MethodGet, locationgenerated.NearbyPath, nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf(
+			"status=%d, want=500 body=%s",
+			recorder.Code,
+			recorder.Body.String(),
+		)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if body["code"] != locationgenerated.ErrLocationInternalError.Error() {
+		t.Fatalf(
+			"code=%v, want %s",
+			body["code"],
+			locationgenerated.ErrLocationInternalError.Error(),
+		)
+	}
+	if strings.Contains(recorder.Body.String(), privateDiagnostic) {
+		t.Fatalf("private provider diagnostic leaked: %s", recorder.Body.String())
 	}
 }

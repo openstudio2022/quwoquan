@@ -22,7 +22,7 @@ import 'package:quwoquan_app/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_session_store.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/runtime/platform/platform_target.dart';
-import 'package:quwoquan_app/runtime/di/shell/composition/quwoquan_app_shell.dart';
+import 'package:quwoquan_app/runtime/shell/composition/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/runtime/di/ops_dependencies.dart';
 
 RawReceivePort? _rootIsolateErrorPort;
@@ -105,7 +105,7 @@ Future<void> _runQuwoquanAppInBootstrapZone({
   _installRootIsolateErrorListener();
   AppStartupRuntime.instance.markBootstrapStarted();
   try {
-    await AppStartupRuntime.instance.beginNativeStartupAttempt();
+    unawaited(_hydrateNativeStartupTimingForBootstrap());
     CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
       await NativeRuntimeConfigBridge.readRuntimePackage(),
       enforceNativeLaunchBinding: currentAppPlatform != AppPlatform.web,
@@ -175,6 +175,21 @@ Future<void> _runQuwoquanAppInBootstrapZone({
       error: error,
       stack: stack,
       providerScopeOverrides: providerScopeOverrides,
+    );
+  }
+}
+
+Future<void> _hydrateNativeStartupTimingForBootstrap() async {
+  try {
+    await AppStartupRuntime.instance.beginNativeStartupAttempt();
+  } catch (error, stack) {
+    // Native timing only calibrates observability/deadline accounting. It is
+    // not configuration, security, or a Shell prerequisite and must never
+    // convert a slow MethodChannel into a startup failure.
+    logQuwoquanAppException(
+      source: 'bootstrap_native_timing_hydration',
+      exceptionText: error.toString(),
+      stackText: stack.toString(),
     );
   }
 }

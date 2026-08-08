@@ -13,16 +13,6 @@ collections:
         status: 1
         maxParticipants: 1
         createdAt: 1
-    - name: idx_cs_conv_created
-      keys:
-        conversationId: 1
-        createdAt: -1
-      sparse: true
-    - name: idx_cs_circle_created
-      keys:
-        circleId: 1
-        createdAt: -1
-      sparse: true
     - name: idx_cs_room
       keys:
         roomId: 1

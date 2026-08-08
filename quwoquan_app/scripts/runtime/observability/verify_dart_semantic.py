@@ -148,7 +148,7 @@ def is_text_surface(rel_path: str) -> bool:
     return rel_path.startswith(
         (
             "quwoquan_app/lib/runtime/shell/",
-            "quwoquan_app/lib/runtime/di/shell/",
+            "quwoquan_app/lib/runtime/shell/",
             "quwoquan_app/lib/design_system/",
         )
     )

@@ -46,9 +46,10 @@ CREATED_AT_PUBLISHED_FALLBACK = re.compile(
 READ_PATH_FILES = [
     ROOT
     / "quwoquan_app/lib/service/content_service/content/post/adapters/post_view_projection.dart",
-    ROOT / "quwoquan_app/lib/service/content_service/content/post/domain/content_post_detail_payload.dart",
     ROOT
-    / "quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_wire.yaml",
+    / "quwoquan_app/lib/service/content_service/content/post/application/public/content_post_detail_payload.dart",
+    ROOT
+    / "quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_slice.yaml",
 ]
 
 FORBIDDEN_READ_WIRE = (
@@ -69,7 +70,7 @@ def _non_comment_lines(text: str) -> str:
 
 ARTICLE_DETAIL_VIEW = (
     ROOT
-    / "quwoquan_app/lib/service/content_service/content/post/domain/article_detail_view.dart"
+    / "quwoquan_app/lib/service/content_service/content/post/application/public/article_detail_view.dart"
 )
 POST_FIELDS = (
     ROOT / "quwoquan_service/services/content-service/contracts/content/post/fields.yaml"
@@ -147,6 +148,7 @@ def main() -> int:
 
     for path in READ_PATH_FILES:
         if not path.exists():
+            failures.append(f"missing canonical read path: {path.relative_to(ROOT)}")
             continue
         text = _non_comment_lines(path.read_text(encoding="utf-8"))
         for token in FORBIDDEN_READ_WIRE:
@@ -155,7 +157,11 @@ def main() -> int:
                     f"{path.relative_to(ROOT)}: forbidden retired wire token {token!r}"
                 )
 
-    if ARTICLE_DETAIL_VIEW.exists():
+    if not ARTICLE_DETAIL_VIEW.exists():
+        failures.append(
+            f"{ARTICLE_DETAIL_VIEW.relative_to(ROOT)}: canonical article detail view missing"
+        )
+    else:
         view = ARTICLE_DETAIL_VIEW.read_text(encoding="utf-8")
         enum_match = re.search(
             r"enum ArticleDetailDocumentSource\s*\{([^}]+)\}",
@@ -176,14 +182,20 @@ def main() -> int:
                     f"ArticleDetailDocumentSource has retired values {sorted(extra)}"
                 )
 
-    if POST_FIELDS.exists():
+    if not POST_FIELDS.exists():
+        failures.append(f"{POST_FIELDS.relative_to(ROOT)}: canonical post fields missing")
+    else:
         fields = POST_FIELDS.read_text(encoding="utf-8")
         if re.search(r"^\s*- name: articleDocument\s*$", fields, re.MULTILINE):
             failures.append(
                 f"{POST_FIELDS.relative_to(ROOT)}: articleDocument field must be removed"
             )
 
-    if ARTICLE_POST_PROJECTION.exists():
+    if not ARTICLE_POST_PROJECTION.exists():
+        failures.append(
+            f"{ARTICLE_POST_PROJECTION.relative_to(ROOT)}: canonical article projection missing"
+        )
+    else:
         projection = ARTICLE_POST_PROJECTION.read_text(encoding="utf-8")
         body_block = _field_block(projection, "body")
         summary_block = _field_block(projection, "summary")
@@ -212,6 +224,7 @@ def main() -> int:
 
     for path in CONTENT_SCENARIO_FIXTURES:
         if not path.exists():
+            failures.append(f"missing article scenario fixture: {path.relative_to(ROOT)}")
             continue
         fixture_posts = _article_fixture_posts(path)
         if not fixture_posts:

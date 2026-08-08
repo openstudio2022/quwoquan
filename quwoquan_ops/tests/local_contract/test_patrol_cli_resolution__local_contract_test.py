@@ -141,7 +141,7 @@ class PatrolCliResolutionTest(unittest.TestCase):
             command,
         )
         self.assertIn(
-            "--dart-define=QWQ_PATROL_SESSION_MODE=prod_sim_anonymous_runtime",
+            "--dart-define=QWQ_PATROL_SESSION_MODE=runtime_anonymous_session",
             command,
         )
         self.assertNotIn("access-token", "\n".join(command))

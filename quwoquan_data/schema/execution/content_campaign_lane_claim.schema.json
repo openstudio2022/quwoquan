@@ -68,6 +68,25 @@
     "pgid": { "type": ["integer", "null"], "minimum": 1 },
     "returnCode": { "type": ["integer", "null"] },
     "error": { "type": ["string", "null"] },
+    "sliceCount": { "type": ["integer", "null"], "minimum": 1 },
+    "resumeCount": { "type": ["integer", "null"], "minimum": 0 },
+    "elapsedSeconds": { "type": ["number", "null"], "minimum": 0 },
+    "maxRssBytes": { "type": ["integer", "null"], "minimum": 0 },
+    "lastExecutionHeartbeatAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "heartbeatAgeSeconds": { "type": ["number", "null"], "minimum": 0 },
+    "terminationOwner": {
+      "enum": [
+        "lane_process",
+        "controller_yield",
+        "campaign_controller_timeout",
+        "external_or_kernel",
+        null
+      ]
+    },
+    "terminationSignal": { "type": ["string", "null"], "minLength": 1 },
     "acquiredAt": { "type": "string", "format": "date-time" },
     "heartbeatAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" },

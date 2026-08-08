@@ -114,15 +114,15 @@ class InMemoryAssistantSkillCatalogFacet implements AssistantSkillCatalogFacet {
         iconHint: 'chart',
       ),
       item(
-        skillId: 'travel_journey_manager',
+        skillId: 'travel_companion',
         displayName: '出行旅程管家',
         description: '结合天气、路况和景点拥堵提醒行程风险。',
         category: 'travel',
         iconHint: 'airplane',
         domainId: 'travel',
         requiredConsentScopes: const <String>[
+          'assistant.learning.feedback_context.read',
           'assistant.memory.preferences.read',
-          'travel.trip.read',
         ],
       ),
       item(
@@ -154,7 +154,7 @@ class InMemoryAssistantSkillCatalogFacet implements AssistantSkillCatalogFacet {
       (candidate) => candidate.skillId == skillId,
       orElse: () => throw StateError('skill catalog item not found'),
     );
-    final configurationSchema = skillId == 'travel_journey_manager'
+    final configurationSchema = skillId == 'travel_companion'
         ? <String, Object?>{
             'title': '旅行偏好',
             'description': '用于组合吃玩住行与提醒节奏。',
@@ -203,7 +203,7 @@ const Map<String, String> _fixtureSemanticLabelTexts = <String, String>{
   'circle': '圈子',
   'trip_organizer': '旅行组织者',
   'assistant.memory.preferences.read': '读取助手偏好',
-  'travel.trip.read': '读取行程',
+  'assistant.learning.feedback_context.read': '使用脱敏的助手反馈摘要',
 };
 
 SkillCatalogSemanticLabel _fixtureSemanticLabel(String id) =>

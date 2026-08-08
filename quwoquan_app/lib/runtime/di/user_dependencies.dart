@@ -194,15 +194,17 @@ final class UserProductionComposition {
 
   static ContactDiscoveryRepository contactDiscoveryRepository({
     required GeneratedCloudOperationClient client,
-    required Object invocationContext,
+    required ContactDiscoveryInvocationContextFactory invocationContext,
+    required ContactDiscoveryIdempotencyKeyFactory idempotencyKeyFactory,
   }) {
     final remote = RemoteContactDiscoveryFacet(
       client: client,
-      invocationContext: invocationContext as dynamic,
+      invocationContext: invocationContext,
     );
     return RemoteContactDiscoveryRepository(
       commandWriter: remote,
       query: remote,
+      idempotencyKeyFactory: idempotencyKeyFactory,
     );
   }
 

@@ -1610,6 +1610,14 @@ func integrationDeliveryPolicyReader(
 
 type integrationProactiveFinalModel struct{}
 
+func (integrationProactiveFinalModel) ModelExecutionCapabilities() runorchestration.ModelExecutionCapabilities {
+	return runorchestration.ModelExecutionCapabilities{
+		ToolCalling:     true,
+		ParallelTools:   true,
+		ReasoningEffort: true,
+	}
+}
+
 func (integrationProactiveFinalModel) Complete(
 	context.Context,
 	runorchestration.ModelRequest,

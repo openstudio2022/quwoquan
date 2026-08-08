@@ -9,7 +9,7 @@ ContentPostProjection contentPostProjectionFixture({
   String postId = 'post-1',
   String contentType = 'micro',
   String? contentIdentity,
-  String? assistantUsePolicy = 'inherit',
+  AssistantUsePolicy? assistantUsePolicy = AssistantUsePolicy.inherit,
   String? authorId = 'author-1',
   String? authorDisplayName = 'Author',
   String? authorAvatarUrl = '',

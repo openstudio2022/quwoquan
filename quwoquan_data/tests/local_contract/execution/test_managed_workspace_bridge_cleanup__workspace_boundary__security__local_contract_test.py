@@ -49,6 +49,14 @@ def test_client_close_reaps_managed_local_bridge_even_after_success(
         def close(self) -> None:
             events.append(("close", None))
 
+        def __exit__(
+            self,
+            _exc_type: object,
+            _exc_value: object,
+            _traceback: object,
+        ) -> None:
+            self.close()
+
     monkeypatch.setattr(
         agent_runner,
         "_terminate_workspace_cursor_bridges",

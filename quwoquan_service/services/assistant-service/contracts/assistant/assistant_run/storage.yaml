@@ -13,12 +13,6 @@ collections:
       keys:
         sessionId: 1
         createdAt: -1
-    - name: idx_runs_context_window
-      keys:
-        sessionId: 1
-        userId: 1
-        status: 1
-        createdAt: -1
     - name: uq_runs_client_request
       keys:
         userId: 1
@@ -26,11 +20,11 @@ collections:
         clientRequestId: 1
       unique: true
       sparse: true
-    - name: idx_runs_skill
+    - name: idx_runs_skill_activity
       keys:
-        skillId: 1
-        createdAt: -1
-      sparse: true
+        userId: 1
+        snapshot.frozenPolicySelection.template.skillId: 1
+        updatedAt: -1
     - name: idx_runs_status
       keys:
         status: 1
@@ -88,6 +82,24 @@ collections:
         nextAttemptAt: 1
         claimUntil: 1
         occurredAt: 1
+  assistant_run_hook_outbox:
+    publication_role: not_published
+    entity: AssistantRun
+    role: reliable_task
+    description: AssistantRun 从 runnable 进入 completed、failed、cancelled、paused 或 waiting_* 时，与 Run snapshot、journal 及 work queue 在同一 Mongo transaction 写入的 HookOnStop 持久任务。_id 固定为 runId:on_stop:runRevision；只保存 phase、outcome、runRevision、protectedFactsDigest、有界 data、claim/attempt、processedAt、receiptDigest 与脱敏 lastError，不保存 prompt、CoT、凭证或工具 payload。
+    indexes:
+    - name: uq_run_hook_outbox_invocation
+      keys:
+        runId: 1
+        phase: 1
+        runRevision: 1
+      unique: true
+    - name: idx_run_hook_outbox_claimable
+      keys:
+        processedAt: 1
+        nextAttemptAt: 1
+        claimUntil: 1
+        createdAt: 1
   assistant_run_web_evidence:
     publication_role: not_published
     entity: AssistantRun
@@ -141,6 +153,20 @@ collections:
     - name: idx_web_budgets_updated
       keys:
         updatedAt: -1
+transaction:
+  scope:
+  - assistant_runs
+  - assistant_run_events
+  - assistant_run_command_receipts
+  - assistant_run_work_queue
+  - assistant_run_terminal_outbox
+  - assistant_run_hook_outbox
+  isolation: mongo_transaction
+  guarantees:
+  - aggregate_revision_cas
+  - work_claim_fencing
+  - journal_receipt_outbox_atomicity
+  - stop_hook_delivery_intent_atomicity
 redis_cache:
 - key: page_ctx:{userId}
   ttl_seconds: 300

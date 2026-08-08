@@ -11,32 +11,44 @@ members:
   HostBinding:
     kind: value_object
     cardinality: one
+    max_cardinality: 1
     ownership: aggregate
+    description: Gathering 的单一 Host authority 绑定，不是独立对象。
   OrganizerAssignment:
     kind: value_object
     cardinality: many
+    max_cardinality: 32
     ownership: aggregate
+    description: Gathering 内有界 organizer 授权集合，不表达参与席位。
   GatheringParticipation:
     kind: owned_entity
     identity: [gatheringId, personaId]
     cardinality: many
+    max_cardinality: 10000
     ownership: aggregate
     write_access: aggregate_facade_only
+    description: Gathering 内按 persona 唯一的参与状态，只能经聚合命令更新。
   GatheringRevision:
     kind: value_object
     cardinality: many
+    max_cardinality: 2048
     ownership: aggregate
     append_only: true
+    description: Gathering 内有界、不可变的 revision 历史。
   GatheringAvailabilityWatch:
     kind: owned_entity
     identity: [gatheringId, personaId]
     cardinality: many
+    max_cardinality: 10000
     ownership: aggregate
     write_access: aggregate_facade_only
+    description: Gathering 内按 persona 唯一的名额提醒状态。
   GatheringOutcome:
     kind: value_object
     cardinality: zero_or_one
+    max_cardinality: 1
     ownership: aggregate
+    description: Gathering 完成后最多一个由 owner evidence 计算的结果。
 relationships:
 - name: created_by_persona
   kind: reference
@@ -56,6 +68,24 @@ relationships:
   target_object: chat.Conversation
 local_identity_reasons:
   currentGatheringRevisionId: Gathering 聚合内 append-only GatheringRevision 的当前指针，只能经 root facade 推进，不是跨服务或独立 Store 对象身份。
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.circle.gathering.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.circle.gathering.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.circle.gathering.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.circle.gathering.write
 business_rules:
 - createdByPersonaId 是不可变执行主体；HostBinding 与 OrganizerAssignment 只能由 owner authority evidence 创建、转移或撤销
 - OrganizerAssignment 只授予管理权且不占席；实际参加的 organizer 必须另有一条 active GatheringParticipation

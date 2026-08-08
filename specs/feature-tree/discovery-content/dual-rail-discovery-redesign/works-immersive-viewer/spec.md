@@ -119,6 +119,13 @@
 - product-ops 必须从同一 catalog 提供 enter latency、lifecycle outcome 与 sampled dwell 指标，Elasticsearch 小时聚合、SLO 和告警必须消费这些同源事件。
 - WorkBrowser 直达读取与文章详情 hydration 遇到 transient typed `RuntimeFailure` 时，必须展示可执行 Retry；Retry 只能重放同一 typed Remote reader，成功后恢复 canonical 内容，不得回退至 fixture、发现流或伪成功。
 
+<a id="req-015"></a>
+### REQ-015 release-bound production Remote 媒体消费与恢复
+
+- `content.media_viewer` 从作品流或直达入口打开时，必须由 generated client 与 production Remote 读取 `ContentPostDetailSlice` 或同源作品投影；展示的 Post、ready `MediaAsset` 与交付引用必须属于当前环境已激活的同一 canonical immutable release，并与当前候选的 release 身份和 manifest digest 一致。
+- 浏览器只拥有 hydration、展示、播放、交互入口与恢复体验；Post、MediaAsset、关系、隐私、举报和行为事实仍由 page contract 中各 participant 的公开 query/command 拥有，浏览器不得本地补写事实、复制 owner 或合成缺失媒体。
+- release 漂移、媒体未 ready/不可见、delivery reference 无效或 typed Remote 失败时，页面必须保留返回与不受影响的浏览上下文，提供重放同一 Reader 的 Retry 或 canonical 返回动作；禁止回退 fixture、无关发现流、旧 release、空白页或伪成功。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#workBrowser`
@@ -130,6 +137,9 @@
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#article_dark_paper_themes`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml#entityRefs`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_slice.yaml#ContentPostDetailSlice`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml#GetPost`
+- canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/discovery_feed.yaml#releaseId`
+- canonical：`quwoquan_service/services/content-service/contracts/media/media_asset/operations.yaml#GetMediaAsset`
 - canonical：`quwoquan_service/contracts/metadata/_shared/app_routes.yaml#homepageDetail`
 - canonical：`quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart`
 
@@ -230,6 +240,16 @@
 - WHEN App 上报 lifecycle 事件或用户执行 Retry。
 - THEN 每个事件均通过生成的 product-ops payload 进入同一 catalog；error/recovery 带 canonical error/recovery 语义，Elasticsearch/Prometheus/告警不引入对象级高基数维度。
 - AND transient typed Remote 失败后的 Retry 成功恢复 canonical 内容，且不会回退至 Mock、发现流或空白成功状态。
+
+<a id="gwt-014"></a>
+### GWT-014 immutable release 作品消费与交互恢复
+
+- GIVEN 当前候选在目标环境激活了一份包含可见 Post 与 ready MediaAsset 的 canonical immutable release，用户从真实作品流或直达入口打开 `content.media_viewer`。
+- WHEN App 通过 generated client 与 production Remote hydration 作品，用户浏览图片、播放视频或阅读文章，并执行一个由 participant 公开 command 拥有的交互或失败后的 Retry。
+- THEN 页面展示的 Post、媒体交付引用与 release/manifest 身份均绑定同一候选，媒体可真实读取或播放，且不得以 fixture、旧 release、静态 URL、空结果或本地 DTO 冒充成功。
+- AND 交互只交给对应 participant 的公开 command 并以 canonical readback 收敛；浏览器只拥有展示与恢复，不创建或修改 Post、MediaAsset、关系、隐私、举报及行为事实。
+- AND typed Remote、release、媒体 ready/visibility 或交付引用失败时保留返回和未受影响的浏览状态，Retry 只重放同一 Reader，失败不得跳到无关发现流或伪造空白成功。
+- AND 本场景只有在同一 commit、ContractGraph、candidate、environment 与真实 Provider 上取得 Android 物理设备及 iPhone 物理设备 `ReadinessResultBundle` 后才计通过；模拟器、Widget-only、blocked、failed 或 skipped 结果均不计。
 
 ## 6. 依赖
 
@@ -337,3 +357,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺少能够证明“作品沉浸式浏览器”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-013"></a>
+### OPEN-013 immutable release 媒体消费双物理设备验收
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：Data/content media sourceDigest 与发布物当前仍冻结，本场景保持 `WAIT_CONTENT`；尚缺同一候选的 canonical immutable release activation/readback、production Remote hydration、真实媒体读取/播放、交互恢复与 Android/iPhone 双物理设备结果，现有 local_contract、Widget、静态 URL 或历史 release 不得替代。
+- 完成判定：`GWT-014` 的每条结果均由职责匹配的 production user_acceptance runner 直接 `spec_ref`，且 Android 与 iPhone 物理设备 `ReadinessResultBundle` 绑定同一 commit、ContractGraph、candidate、environment 与真实 Provider 并全部为 passed。

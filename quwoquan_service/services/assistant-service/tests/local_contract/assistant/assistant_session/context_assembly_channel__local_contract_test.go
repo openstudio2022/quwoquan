@@ -157,7 +157,7 @@ func TestContextAssemblyRecallsAuthorizedIntersectionIntoSlots(t *testing.T) {
 	turn.IntersectionEvidence = []assistant.AuthorizedIntersectionEvidence{{
 		IntersectionID: "intersection-travel",
 		EvidenceID:     "evidence-travel",
-		SourceRef:      "shared_trip",
+		SourceRef:      "gathering:gathering-1",
 		ObjectTypeRef:  "place",
 		ObjectID:       "place-hangzhou",
 		PrimaryText:    "目的地是杭州，明天出发",
@@ -324,56 +324,129 @@ func (channelPreferenceReader) ResolveActiveSnapshots(
 		}}, nil
 }
 
-type confirmedMemoryPreferenceReader struct{}
-
-func (confirmedMemoryPreferenceReader) ResolveActiveSnapshots(
-	_ context.Context,
-	_, _ string,
-) ([]preferencemodel.AssistantPreferenceSnapshot, []preferencemodel.AssistantPreferenceSnapshot, error) {
-	confirmedAt := time.Date(2026, 7, 28, 9, 0, 0, 0, time.UTC)
-	return nil, []preferencemodel.AssistantPreferenceSnapshot{{
-		PreferenceID:    "memory-diet",
-		Scope:           preferencemodel.ScopeLongTerm,
-		Kind:            preferencemodel.KindDietaryRestrictions,
-		Value:           "对花生过敏，不吃含花生的食物",
-		SourceType:      preferencemodel.SourceSessionConfirmed,
-		SourceSessionID: "asn_memory_source",
-		ConfirmedAt:     &confirmedAt,
-		Version:         1,
-	}}, nil
-}
-
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001
-func TestConfirmedConfirmedMemoryEntersPrivateModelContext(t *testing.T) {
-	_, longTermPreferences, err := (confirmedMemoryPreferenceReader{}).ResolveActiveSnapshots(
-		t.Context(),
-		"persona-memory",
-		"session-memory",
+func TestPrivateMemoryReachesPromptOnlyThroughConsentAdmittedSkillContext(t *testing.T) {
+	const privateMemory = "对花生过敏，不吃含花生的食物"
+	now := time.Now().UTC()
+	value := map[string]any{
+		"preferences": []map[string]any{{
+			"preferenceKey": string(preferencemodel.KindDietaryRestrictions),
+			"value":         privateMemory,
+		}},
+	}
+	sourceDigest := canonicalContextFixtureDigest(value)
+	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
+		DescriptorID:        "assistant.preference_context",
+		ResolverRef:         "turn.preferences",
+		OwnerService:        "assistant-service",
+		OwnerOperationRefs:  []string{"assistant.assistant_preference.ListAssistantPreferences"},
+		InputSchemaRef:      "assistant.ListAssistantPreferencesQuery",
+		OutputSchemaRef:     "assistant.ContextSegment",
+		ObjectTypeRefs:      []string{"assistant.AssistantPreference"},
+		AcceptedSourceKinds: []string{"memory"},
+		Authority:           assistantgenerated.AssistantContextAuthorityUserDeclared,
+		Sensitivity:         assistantgenerated.AssistantContextSensitivityPrivate,
+		SurfaceKinds:        []readermodel.SurfaceKind{readermodel.SurfacePersonal},
+		ArtifactPolicy:      readermodel.ArtifactInlineOrStored,
+		CitationPolicy:      readermodel.CitationEntityReference,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := readerresource.NewCatalog([]readermodel.Descriptor{descriptor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := skillcontext.NewResolverRegistry(
+		catalog,
+		skillcontext.RegisteredResolver{
+			ResolverRef: descriptor.ResolverRef,
+			Resolver: sharedContextResolverFunc(func(skillcontext.ResolveRequest) (skillcontext.ResolvedContext, error) {
+				return skillcontext.ResolvedContext{
+					Kind:        "memory",
+					SourceRef:   "assistant.AssistantPreference:memory-diet@" + sourceDigest,
+					Authority:   assistantgenerated.AssistantContextAuthorityUserDeclared,
+					Sensitivity: assistantgenerated.AssistantContextSensitivityPrivate,
+					CapturedAt:  now,
+					TokenCost:   32,
+					Value:       value,
+				}, nil
+			}),
+		},
 	)
 	if err != nil {
-		t.Fatalf("ResolveActiveSnapshots(): %v", err)
+		t.Fatal(err)
 	}
-	turn := assistant.AssistantTurn{
-		TurnID:              "execution:memory-context-run",
-		SessionID:           "session-memory",
-		UserID:              "persona-memory",
-		Status:              "running",
-		Input:               assistant.AssistantTurnInput{Text: "给我推荐晚餐"},
-		LongTermPreferences: longTermPreferences,
-		CreatedAt:           time.Now().UTC(),
+	profile := skillcontext.Profile{
+		ProfileID:   "context.private_memory_consent",
+		AssetDigest: canonicalContextFixtureDigest(descriptor),
+		Requirements: []skillcontext.Requirement{{
+			SlotID:              "travel_preferences",
+			AcceptedSourceKinds: []string{"memory"},
+			Authority:           assistantgenerated.AssistantContextAuthorityUserDeclared,
+			Sensitivity:         assistantgenerated.AssistantContextSensitivityPrivate,
+			ConsentScopes:       []string{"assistant.memory.preferences.read"},
+			TokenBudget:         128,
+			ResolverRef:         descriptor.ResolverRef,
+			FallbackPolicy:      "omit",
+		}},
 	}
-	if len(turn.LongTermPreferences) != 1 {
-		t.Fatalf("turn long-term memories=%#v", turn.LongTermPreferences)
+	consentGranted := false
+	consentCalls := 0
+	assembler := skillcontext.NewAssembler(
+		registry,
+		skillcontext.ConsentReaderFunc(func(
+			_ context.Context,
+			ownerID string,
+			skillID string,
+			scopes []string,
+		) (bool, error) {
+			consentCalls++
+			if ownerID != "persona-memory" || skillID != "travel_companion" ||
+				len(scopes) != 1 || scopes[0] != "assistant.memory.preferences.read" {
+				t.Fatalf("unexpected consent request owner=%q skill=%q scopes=%v", ownerID, skillID, scopes)
+			}
+			return consentGranted, nil
+		}),
+	)
+	request := skillcontext.AssembleRequest{
+		RunID:              "run-memory-context",
+		OwnerID:            "persona-memory",
+		SkillID:            "travel_companion",
+		Visibility:         skillcontext.DeliveryPersonal,
+		AllowedSensitivity: assistantgenerated.AssistantContextSensitivityPrivate,
 	}
-	if len(turn.LongTermPreferences) != 1 ||
-		turn.LongTermPreferences[0].Kind != preferencemodel.KindDietaryRestrictions {
-		t.Fatalf("run long-term memories=%#v", turn.LongTermPreferences)
+	denied, err := assembler.Assemble(t.Context(), profile, request)
+	if err != nil {
+		t.Fatalf("Assemble(denied): %v", err)
 	}
-	if prompt := prompting.FormatConfirmedPreferencesForPrompt(turn.LongTermPreferences); !strings.Contains(
-		prompt,
-		"对花生过敏",
-	) || !strings.Contains(prompt, "scope=long_term") {
-		t.Fatalf("confirmed memory prompt=%q", prompt)
+	deniedPrompt, err := contextassembly.FormatForPrompt(&contextassembly.AssemblyResult{
+		SkillContextSnapshot: &denied,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(denied.Segments) != 0 || strings.Contains(deniedPrompt, privateMemory) {
+		t.Fatalf("unconsented memory reached prompt: snapshot=%#v prompt=%q", denied, deniedPrompt)
+	}
+
+	consentGranted = true
+	admitted, err := assembler.Assemble(t.Context(), profile, request)
+	if err != nil {
+		t.Fatalf("Assemble(admitted): %v", err)
+	}
+	admittedPrompt, err := contextassembly.FormatForPrompt(&contextassembly.AssemblyResult{
+		SkillContextSnapshot: &admitted,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if consentCalls != 2 || len(admitted.Segments) != 1 ||
+		admitted.Segments[0].DescriptorID != descriptor.DescriptorID ||
+		admitted.Segments[0].DescriptorDigest != descriptor.DescriptorDigest ||
+		admitted.Segments[0].SourceRef != "assistant.AssistantPreference:memory-diet@"+sourceDigest ||
+		strings.Count(admittedPrompt, privateMemory) != 1 {
+		t.Fatalf("consent-admitted memory lost provenance: snapshot=%#v prompt=%q", admitted, admittedPrompt)
 	}
 }
 

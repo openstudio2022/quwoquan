@@ -24,8 +24,20 @@ relationships:
   consistency: runtime
   access: external_port
   on_delete: detach
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "易失运行时状态，过期即消失，没有可供检索的稳定对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "服务内部投影与编排状态不构成小趣可用上下文，只服务所属域自身推进。"
 business_rules:
 - endpoint secret 只在单次 provider 调用内经 user-service typed reader 获取，不持久化到 Integration 账本。
 - deliveryKey 对同一业务通知与 endpoint 幂等，attempt 与 dead-letter 只由 Integration 事实对象追加。

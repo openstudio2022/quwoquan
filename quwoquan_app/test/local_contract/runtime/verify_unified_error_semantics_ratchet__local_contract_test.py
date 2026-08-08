@@ -54,7 +54,7 @@ class VerifyUnifiedErrorSemanticsRatchetTest(unittest.TestCase):
         )
         self.assertTrue(
             self.verifier.is_page_like(
-                "quwoquan_app/lib/runtime/di/shell/composition.dart"
+                "quwoquan_app/lib/runtime/shell/composition.dart"
             )
         )
         self.assertFalse(
@@ -64,7 +64,7 @@ class VerifyUnifiedErrorSemanticsRatchetTest(unittest.TestCase):
     def test_warning_triangle_is_not_a_generic_error_icon(self) -> None:
         violations = self.scan(
             {
-                "quwoquan_app/lib/service/travel_service/travel/trip/presentation/page.dart": (
+                "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/page.dart": (
                     "final icon = CupertinoIcons.exclamationmark_triangle;\n"
                 ),
             }
@@ -74,7 +74,7 @@ class VerifyUnifiedErrorSemanticsRatchetTest(unittest.TestCase):
     def test_bare_exclamation_icon_is_blocked(self) -> None:
         violations = self.scan(
             {
-                "quwoquan_app/lib/service/travel_service/travel/trip/presentation/page.dart": (
+                "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/page.dart": (
                     "final icon = CupertinoIcons.exclamationmark;\n"
                 ),
             }

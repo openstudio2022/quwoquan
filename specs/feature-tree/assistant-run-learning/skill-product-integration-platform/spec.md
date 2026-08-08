@@ -23,7 +23,7 @@
 ## 3. Journey / Scenario 贡献
 
 - [`JNY-009 / SCN-034`](../../spec.md#scn-034)：接收 active package 与主体/surface，输出详情、设置、授权、订阅、Placement 和活动；失败不伪装启用。
-- [`JNY-013 / SCN-030`](../../spec.md#scn-030)：为 `travel_companion` 渐进装配 Trip/Chat/Content/Public Web 上下文和允许能力。
+- [`JNY-013 / SCN-030`](../../spec.md#scn-030)：为 `travel_companion` 渐进装配 Gathering/GatheringPlan、Chat、Content 与 Public Web 上下文和允许能力。
 - [`JNY-013 / SCN-031`](../../spec.md#scn-031)：在主动 Trigger 和共享 surface 中重算 Consent/Placement/Connector 交集并投递安全结果。
 
 ## 4. Story

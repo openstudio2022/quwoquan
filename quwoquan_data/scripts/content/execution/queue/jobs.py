@@ -24,7 +24,7 @@ from content.execution.queue.core import (
     stable_job_id,
 )
 from content.execution.queue.model import QueueJob
-from content.execution.queue_backend import resolve_execution_queue_backend
+from content.execution.queue.backend import resolve_execution_queue_backend
 
 
 def _queue_stage(value: QueueJobStage | str) -> QueueJobStage:

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+// readiness_case: evaluate-entity-homepage-gathering-host-authority-local
 package local_contract
 
 import (

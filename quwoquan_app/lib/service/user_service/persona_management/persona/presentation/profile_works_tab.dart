@@ -20,20 +20,19 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
-import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_tab.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/runtime/di/presentation/intersection_reason_chip.dart';
-import 'package:quwoquan_app/runtime/di/discovery_state_provider.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_recommendation_slots.dart';
 
 /// 记录 Tab：统一承载 `全部 / 图片 / 视频 / 长文` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {
   const ProfileWorksTab({
     super.key,
+    required this.recommendationSlots,
     required this.mode,
     required this.userId,
     required this.isDark,
@@ -43,6 +42,7 @@ class ProfileWorksTab extends ConsumerStatefulWidget {
     this.suppressFailure = false,
   });
 
+  final ProfileRecommendationSlots recommendationSlots;
   final ProfileMode mode;
   final String userId;
   final bool isDark;
@@ -148,6 +148,9 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                       itemBuilder: (context, index) {
                         final post = filtered[index];
                         return _WorksPostCard(
+                          buildIntersectionReason: widget
+                              .recommendationSlots
+                              .buildIntersectionReason,
                           post: post,
                           isDark: widget.isDark,
                           onTap: () => _onPostTap(context, post),
@@ -213,6 +216,9 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                         itemBuilder: (context, index) {
                           final post = filtered[index];
                           return _WorksPostCard(
+                            buildIntersectionReason: widget
+                                .recommendationSlots
+                                .buildIntersectionReason,
                             post: post,
                             isDark: widget.isDark,
                             onTap: () => _onPostTap(context, post),
@@ -413,10 +419,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     final postViews = filtered.map(ContentSurfaceViewMapper.fromDto).toList();
     final isMoment = post.identity == 'moment';
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      ref: ref,
       posts: filtered,
-      discoveryState: ref.read(discoveryStateProvider),
-      relationshipState: ref.read(userRelationshipStateProvider),
-      postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
     final navFeedRequestId = ref
@@ -453,12 +457,14 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 /// 仅底部元信息改为「赞 + 转 + 评」。
 class _WorksPostCard extends ConsumerWidget {
   const _WorksPostCard({
+    required this.buildIntersectionReason,
     required this.post,
     required this.isDark,
     required this.onTap,
     this.onHorizontalDragEnd,
   });
 
+  final ProfileIntersectionReasonSlotBuilder buildIntersectionReason;
   final ContentPostViewData post;
   final bool isDark;
   final VoidCallback onTap;
@@ -524,7 +530,7 @@ class _WorksPostCard extends ConsumerWidget {
       showVideoBadge: post.isVideoLike,
       onTap: onTap,
       onHorizontalDragEnd: onHorizontalDragEnd,
-      header: IntersectionReasonChip.fromReasons(
+      header: buildIntersectionReason(
         post.intersectionReasons,
         isDark: isDark,
         // N5：用户主页作品卡 → 交集句对象片段点击精确归因为作者主页（非推荐流）。

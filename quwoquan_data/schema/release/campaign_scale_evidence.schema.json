@@ -15,6 +15,7 @@
     "generation",
     "fencingToken",
     "status",
+    "targetScale",
     "releaseId",
     "manifestDigest",
     "sourceRevision",
@@ -25,6 +26,11 @@
     "calibrationPreflightReceipt",
     "releaseAssetAdmissionRef",
     "releaseAssetAdmissionSha256",
+    "predecessorCarriedExecutionIds",
+    "releaseExecutionIds",
+    "sourcePool",
+    "sourcePoolDigest",
+    "predecessorSourcePoolDigests",
     "lanes",
     "duplicateAssetCount",
     "crossLaneWriteCount",
@@ -33,6 +39,10 @@
     "fourLaneLongestContinuousOverlapSeconds",
     "allSemanticJobsTerminalAt",
     "terminalResidualSampleAt",
+    "scaleStartedAt",
+    "scaleCompletedAt",
+    "wallClockBudgetSeconds",
+    "wallClockSeconds",
     "resourceSoakEvidenceRef",
     "resourceSoakEvidenceDigest",
     "faultInjectionEvidenceRef",
@@ -51,6 +61,7 @@
     "generation": {"type": "integer", "minimum": 1},
     "fencingToken": {"$ref": "#/$defs/digest"},
     "status": {"enum": ["passed", "failed"]},
+    "targetScale": {"enum": ["M100", "M1000", "M10000"]},
     "releaseId": {"type": "string", "minLength": 1},
     "manifestDigest": {"$ref": "#/$defs/digest"},
     "sourceRevision": {"$ref": "#/$defs/digest"},
@@ -63,6 +74,28 @@
     },
     "releaseAssetAdmissionRef": {"$ref": "#/$defs/safeRef"},
     "releaseAssetAdmissionSha256": {"$ref": "#/$defs/digest"},
+    "predecessorPromotion": {
+      "$ref": "#/$defs/predecessorPromotion"
+    },
+    "predecessorCarriedExecutionIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "releaseExecutionIds": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "sourcePool": {"$ref": "campaign_scale_source_pool.schema.json"},
+    "sourcePoolDigest": {"$ref": "#/$defs/digest"},
+    "predecessorSourcePoolDigests": {
+      "type": "array",
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
     "lanes": {
       "type": "array",
       "minItems": 4,
@@ -85,6 +118,10 @@
       "format": "date-time"
     },
     "terminalResidualSampleAt": {"type": "string", "format": "date-time"},
+    "scaleStartedAt": {"type": "string", "format": "date-time"},
+    "scaleCompletedAt": {"type": "string", "format": "date-time"},
+    "wallClockBudgetSeconds": {"type": ["integer", "null"], "minimum": 1},
+    "wallClockSeconds": {"type": "integer", "minimum": 0},
     "resourceSoakEvidenceRef": {"$ref": "#/$defs/safeRef"},
     "resourceSoakEvidenceDigest": {"$ref": "#/$defs/digest"},
     "faultInjectionEvidenceRef": {"$ref": "#/$defs/safeRef"},
@@ -104,11 +141,68 @@
           "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"}
         }
       }
+    },
+    {
+      "if": {"properties": {"targetScale": {"const": "M100"}}, "required": ["targetScale"]},
+      "then": {
+        "not": {"required": ["predecessorPromotion"]},
+        "properties": {
+          "predecessorCarriedExecutionIds": {"maxItems": 0},
+          "predecessorSourcePoolDigests": {"maxItems": 0},
+          "wallClockBudgetSeconds": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"targetScale": {"const": "M1000"}}, "required": ["targetScale"]},
+      "then": {
+        "required": ["predecessorPromotion"],
+        "properties": {
+          "predecessorPromotion": {"properties": {"targetScale": {"const": "M100"}}},
+          "predecessorCarriedExecutionIds": {"minItems": 4},
+          "predecessorSourcePoolDigests": {"minItems": 1, "maxItems": 1},
+          "wallClockBudgetSeconds": {"const": 259200},
+          "wallClockSeconds": {"maximum": 259200}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"targetScale": {"const": "M10000"}}, "required": ["targetScale"]},
+      "then": {
+        "required": ["predecessorPromotion"],
+        "properties": {
+          "predecessorPromotion": {"properties": {"targetScale": {"const": "M1000"}}},
+          "predecessorCarriedExecutionIds": {"minItems": 4},
+          "predecessorSourcePoolDigests": {"minItems": 2, "maxItems": 2},
+          "wallClockBudgetSeconds": {"const": 604800},
+          "wallClockSeconds": {"maximum": 604800}
+        }
+      }
     }
   ],
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "predecessorPromotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotionId", "releaseId", "manifestDigest", "sourceRevision",
+        "sourceDigest", "entityCatalogDigest", "targetScale", "receiptRef",
+        "receiptDigest"
+      ],
+      "properties": {
+        "promotionId": {"type": "string", "minLength": 1},
+        "releaseId": {"type": "string", "minLength": 1},
+        "manifestDigest": {"$ref": "#/$defs/digest"},
+        "sourceRevision": {"$ref": "#/$defs/digest"},
+        "sourceDigest": {"$ref": "#/$defs/digest"},
+        "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+        "targetScale": {"enum": ["M100", "M1000"]},
+        "receiptRef": {"$ref": "#/$defs/safeRef"},
+        "receiptDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
     "lane": {
       "type": "object",
       "additionalProperties": false,
@@ -122,6 +216,9 @@
         "executionPublishSha256",
         "finalizedCount",
         "researchAcceptedCount",
+        "predecessorCarriedCount",
+        "newFinalizedCount",
+        "totalUniqueFinalizedCount",
         "semanticCalibration"
       ],
       "properties": {
@@ -139,6 +236,9 @@
         "executionPublishSha256": {"$ref": "#/$defs/digest"},
         "finalizedCount": {"type": "integer", "minimum": 1},
         "researchAcceptedCount": {"type": "integer", "minimum": 0},
+        "predecessorCarriedCount": {"type": "integer", "minimum": 0},
+        "newFinalizedCount": {"type": "integer", "minimum": 1},
+        "totalUniqueFinalizedCount": {"type": "integer", "minimum": 1},
         "semanticCalibration": {"$ref": "#/$defs/semanticCalibration"}
       }
     },

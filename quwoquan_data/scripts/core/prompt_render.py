@@ -42,6 +42,7 @@ _PROMPT_FAMILY = {
     "homepage_independent_review": "homepage",
     "homepage_source_judge": "homepage",
     "post_independent_review": "_shared",
+    "professional_asset_independent_review": "_shared",
     "source_plan_homepage": "homepage",
     "review_repair": "_shared",
 }

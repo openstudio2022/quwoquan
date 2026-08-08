@@ -5,7 +5,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/discovery_feed_resident_page_window.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentPostProjection, FeedObjectCard;
+    show AssistantUsePolicy, ContentPostProjection, FeedObjectCard;
 
 void main() {
   test('resident window keeps four visible pages and six retained pages', () {
@@ -296,7 +296,7 @@ ContentPostViewData _post(int pageIndex, int itemIndex) {
       postId: 'page_${pageIndex}_post_$itemIndex',
       contentType: 'micro',
       contentIdentity: 'moment',
-      assistantUsePolicy: 'allow',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author_$pageIndex',
       authorDisplayName: 'Window Author',
       authorAvatarUrl: '',

@@ -55,6 +55,24 @@ relationships:
   reference_fields:
   - taxonomyReleaseId
   target_object: tag.TagTaxonomyRelease
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.user.persona.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.user.persona.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.user.persona.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.persona.write
 business_rules:
 - personaId 只使用 `us_<4hex>_<26 lowercase Crockford>`，其 4hex 与所属账号 logicalShard 一致；禁止版本段、别名格式或宽松解析
 - accountId 与 personaId 创建后不可变且 userHandle 全局唯一

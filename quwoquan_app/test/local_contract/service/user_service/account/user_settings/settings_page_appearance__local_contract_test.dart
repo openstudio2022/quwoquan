@@ -26,13 +26,13 @@ import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
 import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
-import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_about_page.dart';
+import 'package:quwoquan_app/runtime/shell/settings/settings_about_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_calls_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_notifications_page.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_page.dart';
-import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_permissions_page.dart';
+import 'package:quwoquan_app/runtime/shell/settings/settings_permissions_page.dart';
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 
 void main() {

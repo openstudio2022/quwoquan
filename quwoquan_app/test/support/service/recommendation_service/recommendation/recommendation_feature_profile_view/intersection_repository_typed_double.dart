@@ -388,8 +388,8 @@ class InMemoryIntersectionRepository
                   objectId: objectId,
                   objectKind: objectKind,
                   routeId: intersectionRouteIdForObjectKind(
-          _intersectionKindFromWireOrPerson(objectKind),
-        ),
+                    _intersectionKindFromWireOrPerson(objectKind),
+                  ),
                 ),
         ),
       );
@@ -492,33 +492,40 @@ class InMemoryIntersectionRepository
               ),
         isPrimary: true,
         priority: 1,
-        actionTier: 'light',
-        requiredGates: const <String>[],
-        dispatch: _dispatchForActionKey(key),
+        actionTier: _metaFor(key).tier.wireName,
+        requiredGates: _metaFor(
+          key,
+        ).requiredGates.map((gate) => gate.wireName).toList(growable: false),
+        dispatch: _metaFor(key).dispatch.wireName,
       ),
     ];
   }
 
-  static String _dispatchForActionKey(String key) {
-    if (IntersectionActionKeys.isAssistant(key)) return 'assistant';
-    if (IntersectionActionKeys.isGatheringAction(key)) return 'gathering';
-    return 'navigate';
+  /// 行动阶梯语义（tier / requiredGates / dispatch）的真相源是 canonical
+  /// registry codegen；替身只回放它，不在测试树里再写一份判定。
+  static IntersectionActionPolicy _metaFor(String key) {
+    final meta = IntersectionActionKeys.policyFor(key);
+    if (meta == null) {
+      throw StateError('unknown intersection actionKey: $key');
+    }
+    return meta;
   }
 
   static IntersectionActionHint _hydrateActionHint(
     IntersectionActionHint hint,
   ) {
+    final meta = _metaFor(hint.actionKey);
     return intersectionActionHintFixture(
       actionKey: hint.actionKey,
       label: hint.label,
       target: hint.target,
       isPrimary: hint.isPrimary,
       priority: hint.priority,
-      actionTier: hint.actionTier,
-      requiredGates: hint.requiredGates,
-      dispatch: hint.dispatch.isNotEmpty
-          ? hint.dispatch
-          : _dispatchForActionKey(hint.actionKey),
+      actionTier: meta.tier.wireName,
+      requiredGates: meta.requiredGates
+          .map((gate) => gate.wireName)
+          .toList(growable: false),
+      dispatch: meta.dispatch.wireName,
     );
   }
 }

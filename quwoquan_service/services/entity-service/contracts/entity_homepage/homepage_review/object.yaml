@@ -32,6 +32,24 @@ relationships:
   reference_fields:
   - authorPersonaId
   target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.entity.homepage_review.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.entity.homepage_review.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.entity.homepage_review.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.entity.homepage_review.write
 business_rules:
 - author persona 对同一 homepage 仅持有一条评价记录（唯一索引 authorPersonaId+homepageId）
 - 软删后再次创建复活同一聚合：重置 rating/body/tagRefs、status 回 active、version 继续递增

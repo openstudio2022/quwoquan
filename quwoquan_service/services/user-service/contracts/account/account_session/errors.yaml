@@ -6,21 +6,6 @@ description: 'AccountSession 对象专属错误码。格式：MODULE.KIND.REASON
 
   '
 errors:
-- code: USER.AUTH.login_locked
-  reason: locked
-  emitted_by:
-  - surface: http
-    operations:
-    - LoginWithPhone
-  http_status: 423
-  recovery_action: retry
-  recovery_after_seconds: 1800
-  disruption_level: inlineCard
-  dart_const: loginLocked
-  go_const: ErrLoginLocked
-  user_message:
-    zh: 账号因多次失败已暂时锁定，请30分钟后重试
-    en: Account temporarily locked due to multiple failed attempts, please retry in 30 minutes
 - code: USER.AUTH.token_expired
   reason: token_expired
   emitted_by:
@@ -159,20 +144,6 @@ errors:
   user_message:
     zh: 本机号码校验超时，请使用其他方式登录
     en: Carrier verification timed out; use SMS verification instead
-- code: USER.AUTH.carrier_phone_mismatch
-  reason: conflict
-  emitted_by:
-  - surface: http
-    operations:
-    - LoginOneTap
-  http_status: 409
-  recovery_action: fallback
-  disruption_level: inlineCard
-  dart_const: carrierPhoneMismatch
-  go_const: ErrCarrierPhoneMismatch
-  user_message:
-    zh: 本机号码与上次账号不一致，请使用其他手机号或其他方式登录
-    en: Carrier phone does not match the remembered account; use another phone or sign-in method
 - code: USER.AUTH.consent_required
   reason: consent_required
   emitted_by:

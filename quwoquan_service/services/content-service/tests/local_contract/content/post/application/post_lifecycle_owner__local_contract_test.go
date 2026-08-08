@@ -89,7 +89,7 @@ func TestPostSettingsUpdatedCarriesCanonicalProjectionSnapshot(t *testing.T) {
 		commandmeta.WithIdempotencyKey(context.Background(), "post-settings-snapshot-update"),
 		receipt.PostID,
 		"persona-owner",
-		map[string]any{"assistantUsePolicy": "excluded"},
+		map[string]any{"assistantUsePolicy": "exclude"},
 	)
 	if err != nil {
 		t.Fatalf("UpdatePostSettings() error = %v", err)

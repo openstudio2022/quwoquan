@@ -82,8 +82,6 @@ local_identity_reasons:
   publishIntentId: 一次发布意图在所属作者内的永久幂等键，不是 Post 聚合主身份
   sourceTaskId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
-taggable: true
-vector_enabled: true
 counter_strategy:
   description: 'Post 只承载可重建计数投影，不拥有互动事实。like 来自 ContentReaction
 
@@ -114,6 +112,29 @@ counter_strategy:
     - share
     event_watermark_increment:
     - view
+search_policy:
+  exposed: remote_index
+  object_type_refs:
+  - content.post
+  - location.place
+  eligibility_ref: quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex/projector.go#searchEligible
+  index_projector_ref: quwoquan_service/services/content-service/internal/content/post/application/searchprojection/post_projection.go#ProjectPostToSearchDocument
+  privacy_filter_ref: quwoquan_service/runtime/search/core.go#isPrivateVisibility
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.content.post.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.content.post.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.content.post.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.content.post.write
 business_rules:
 - 用户发布前内容只存在于端侧 LocalPostDraft；远端 Post 不承载编辑中的草稿
 - SubmitPostPublication 只接受本地草稿唯一且不可变的 publishIntentId，同一意图的任意重放返回同一 Post

@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/travel-journey/collaborative-trip-lifecycle/trip-moment-content-link/spec.md#gwt-001
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_publication_continuation_registry.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -13,8 +13,8 @@ void main() {
       );
       final receipt = _receipt();
       const continuation = CreateDraftPublicationContinuationRef(
-        operationId: 'travel.content_link.put',
-        sourceEntityRef: 'travel.TripShareSnapshot:share-1@1',
+        operationId: 'circle.gathering_plan.ProposeGatheringPlan',
+        sourceEntityRef: 'circle.GatheringPlan:plan-1@1',
       );
 
       await registry.apply(continuation: continuation, receipt: receipt);
@@ -26,7 +26,7 @@ void main() {
         registry.apply(
           continuation: const CreateDraftPublicationContinuationRef(
             operationId: 'unknown.operation',
-            sourceEntityRef: 'travel.TripShareSnapshot:share-1@1',
+            sourceEntityRef: 'circle.GatheringPlan:plan-1@1',
           ),
           receipt: receipt,
         ),
@@ -62,7 +62,7 @@ final class _RecordingHandler implements PostPublicationContinuationHandler {
       <CreateDraftPublicationContinuationRef>[];
 
   @override
-  String get operationId => 'travel.content_link.put';
+  String get operationId => 'circle.gathering_plan.ProposeGatheringPlan';
 
   @override
   Future<void> apply({

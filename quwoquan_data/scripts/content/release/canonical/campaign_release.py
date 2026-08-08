@@ -14,9 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign_process import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.identity import validate_execution_id
-from content.execution.reviewed_closure_adoption_campaign_contract import (
+from content.execution.closure.adoption_campaign_contract import (
     CAMPAIGN_ADOPTION_FIELD,
 )
 from content.release.canonical.aggregate_release import build_aggregate_release

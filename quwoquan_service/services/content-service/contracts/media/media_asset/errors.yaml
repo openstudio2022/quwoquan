@@ -11,7 +11,7 @@ errors:
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [RecordMediaProcessingResult, UpdateMediaAssetAccessPolicy, GetOwnedMediaAsset, GetMediaAssetReference, GetMediaAssetDeliveryReference, GetMediaAsset, DiscardMediaAsset, SelectAutoVideoCover, SelectManualVideoCover, content.post.SubmitPostPublication, content.media_original_access_fact.RequestOriginalImageAccess, content.media_upload_session.AbortMediaUpload, content.media_upload_session.CompleteMediaUpload, content.media_upload_session.GetMediaUploadSession]
+    operations: [RecordMediaProcessingResult, UpdateMediaAssetAccessPolicy, GetOwnedMediaAsset, GetMediaAssetReference, GetMediaAssetDeliveryReference, GetMediaAsset, DiscardMediaAsset, SelectAutoVideoCover, SelectManualVideoCover, content.post.SubmitPostPublication, content.original_access_quota.ReserveOriginalImageAccessGrant, content.media_upload_session.AbortMediaUpload, content.media_upload_session.CompleteMediaUpload, content.media_upload_session.GetMediaUploadSession]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: mediaNotFound

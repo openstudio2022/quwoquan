@@ -6,7 +6,10 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/adapters/homepage_claim_request_remote.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/adapters/homepage_status_report_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'production_cloud_operation_telemetry_evidence.dart';
@@ -23,6 +26,9 @@ final class EntityApiContractHarness {
     required this._httpClient,
     required this.telemetry,
     required this.query,
+    required this.claimRequests,
+    required this.statusReports,
+    required this._accountLifecycle,
     required this.session,
   });
 
@@ -53,13 +59,16 @@ final class EntityApiContractHarness {
 
     try {
       AuthSessionGrant? session;
+      String? activeIdempotencyKey;
       CloudOperationInvocationContext invocationContext(
         AppUiSurface surface,
-        String clientPageId,
-      ) => CloudOperationInvocationContext(
+        String clientPageId, {
+        String? idempotencyKey,
+      }) => CloudOperationInvocationContext(
         surfaceId: surface.id,
         routeId: surface.routeId,
         clientPageId: clientPageId,
+        idempotencyKey: idempotencyKey,
         actor: CloudOperationActorContext(
           accountId: session!.ownerId,
           personaId: session.activePersona?.personaId,
@@ -69,10 +78,8 @@ final class EntityApiContractHarness {
 
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) => invocationContext(
-          AppUiSurfaces.appShell,
-          clientPageId,
-        ),
+        invocationContext: (clientPageId) =>
+            invocationContext(AppUiSurfaces.appShell, clientPageId),
       );
       session = await accountSessions.loginAnonymous(
         LoginAnonymousCommand(
@@ -99,12 +106,48 @@ final class EntityApiContractHarness {
             invocationContext(AppUiSurfaces.homepagePicker, clientPageId),
       );
 
-      return EntityApiContractHarness._(
+      final harness = EntityApiContractHarness._(
         httpClient: httpClient,
         telemetry: telemetry,
         query: facets.query,
+        claimRequests: RemoteHomepageClaimRequestWriter(
+          client: client,
+          invocationContext: (clientPageId, surface) => invocationContext(
+            surface,
+            clientPageId,
+            idempotencyKey:
+                activeIdempotencyKey ??
+                (throw StateError(
+                  '$clientPageId requires an explicit idempotency scope',
+                )),
+          ),
+        ),
+        statusReports: RemoteHomepageStatusReportWriter(
+          client: client,
+          invocationContext: (clientPageId, surface) => invocationContext(
+            surface,
+            clientPageId,
+            idempotencyKey:
+                activeIdempotencyKey ??
+                (throw StateError(
+                  '$clientPageId requires an explicit idempotency scope',
+                )),
+          ),
+        ),
+        accountLifecycle: RemoteAccountLifecycleCommandWriter(
+          client: client,
+          invocationContext: (clientPageId) => invocationContext(
+            AppUiSurfaces.settingsAccountSecurity,
+            clientPageId,
+            idempotencyKey:
+                'entity-api-account-cleanup-'
+                '${session?.ownerId ?? (throw StateError('missing account session'))}',
+          ),
+        ),
         session: session,
       );
+      harness._setIdempotencyKey = (value) => activeIdempotencyKey = value;
+      return harness;
     } catch (_) {
       httpClient.close();
       await telemetry.dispose();
@@ -115,11 +158,41 @@ final class EntityApiContractHarness {
   final CloudHttpClient _httpClient;
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final HomepageQueryFacet query;
+  final RemoteHomepageClaimRequestWriter claimRequests;
+  final RemoteHomepageStatusReportWriter statusReports;
+  final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   final AuthSessionGrant session;
+  late final void Function(String? value) _setIdempotencyKey;
+  bool _idempotencyScopeActive = false;
+
+  Future<T> withIdempotencyKey<T>(
+    String idempotencyKey,
+    Future<T> Function() operation,
+  ) async {
+    final normalized = idempotencyKey.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(idempotencyKey, 'idempotencyKey');
+    }
+    if (_idempotencyScopeActive) {
+      throw StateError('nested Entity API idempotency scope is not allowed');
+    }
+    _idempotencyScopeActive = true;
+    _setIdempotencyKey(normalized);
+    try {
+      return await operation();
+    } finally {
+      _setIdempotencyKey(null);
+      _idempotencyScopeActive = false;
+    }
+  }
 
   Future<void> close() async {
     try {
-      await telemetry.waitForEvents(minimumCount: 1);
+      await _accountLifecycle.closeAccount(
+        CloseAccountCommand(
+          clientRequestId: 'entity-api-cleanup-${session.ownerId}',
+        ),
+      );
     } finally {
       _httpClient.close();
       await telemetry.dispose();

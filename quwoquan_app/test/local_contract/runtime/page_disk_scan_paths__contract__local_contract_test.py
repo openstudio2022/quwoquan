@@ -31,7 +31,7 @@ class PageDiskScanPathsContractTest(unittest.TestCase):
                 "lib/ui/welcome/pages/welcome_screen.dart",
                 "lib/components/legacy_panel_page.dart",
                 "lib/app/shell/legacy_app_shell.dart",
-                "lib/runtime/di/shell/main_app_shell.dart",
+                "lib/runtime/shell/main_app_shell.dart",
                 "lib/runtime/shell/recovery/recovery_page.dart",
                 "lib/runtime/shell/welcome/welcome_screen.dart",
             )

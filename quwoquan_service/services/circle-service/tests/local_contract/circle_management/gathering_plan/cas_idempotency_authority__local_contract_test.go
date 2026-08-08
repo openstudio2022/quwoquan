@@ -1,5 +1,8 @@
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-002
 // readiness_case: gathering-plan-cas-idempotency-authority-local
+// readiness_case: create-gathering-plan-local
+// readiness_case: propose-gathering-plan-local
+// readiness_case: commit-gathering-plan-proposal-local
 package gathering_plan_test
 
 import (

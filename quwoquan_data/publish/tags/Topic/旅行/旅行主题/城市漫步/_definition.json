@@ -1,1 +1,11 @@
-{"axisRole":"topic","createdAt":"2026-05-15T00:00:00+08:00","description":"以城市街区漫游为主的旅行体验","label":"城市漫步","labelEn":"City Walk","sameAsRefs":["Audience/用户/兴趣偏好/旅行摄影/城市漫游"],"updatedAt":"2026-07-28T13:45:38.217620+00:00"}
+{
+  "label": "城市漫步",
+  "labelEn": "City Walk",
+  "description": "以城市街区漫游为主的旅行体验",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/用户/兴趣偏好/旅行摄影/城市漫游"
+  ],
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
+}

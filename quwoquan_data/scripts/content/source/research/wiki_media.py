@@ -1,46 +1,28 @@
 """Image and travelogue source discovery providers."""
 from __future__ import annotations
 
-import math
 import re
-import urllib.parse
 from typing import Any
 
 from core.runtime_policy import active_runtime_policy
+from core.wiki_wikitext import parse_wikitext_placements
+
+from content.source.mediawiki_page import fetch_mediawiki_page_bundle
 from content.source.research import network_io
-from content.source.research.plan_state import _image_at, _image_window
-from content.source.research.reject_memory import _filter_rejected_images
-from content.source.research.source_quality import (
-    _ARTICLE_BASE_CATEGORIES,
-    _evidence_reason,
-    _image_pixel_issue,
-)
-from content.source.research.source_registry import _known_image_search_hints
-from content.source.research.text_match import (
-    _dedupe_terms,
-    _entity_name_variants,
-    _expanded_entity_aliases,
-    _normalized_title,
-    _text_mentions_entity,
-)
-from content.source.research.wiki_common import (
-    _BASE_DRAFT_IMAGE_CANDIDATES,
-    _OPENVERSE_API,
-    _strip_html,
-)
 from content.source.research.image_search_providers import (
     _commons_category_images,
     _commons_images,
     _openverse_images,
     _wikidata_commons_images,
 )
-from content.source.research.wiki_core import (
-    _claim_string_values,
-    _wikidata_claims,
-    _wiki_url,
+from content.source.research.reject_memory import _filter_rejected_images
+from content.source.research.source_registry import _known_image_search_hints
+from content.source.research.text_match import _expanded_entity_aliases
+from content.source.research.wiki_common import _strip_html
+from content.source.research.wiki_core import _wiki_url
+from content.source.research.wiki_media_subjects import (
+    wikimedia_subject_evidence_by_file,
 )
-from core.wiki_wikitext import parse_wikitext_placements
-from content.source.mediawiki_page import fetch_mediawiki_page_bundle
 
 _OPENVERSE_HTTP_TIMEOUT_SECONDS = active_runtime_policy().provider_timeouts.openverse_seconds
 
@@ -88,7 +70,7 @@ def _mediawiki_page_images(
         raw_name = str(placement.get("fileName") or "").strip()
         if not raw_name:
             continue
-        if not re.search(r"\.(?:jpe?g|png|webp)$", raw_name, re.I):
+        if not re.search(r"\.(?:jpe?g|png|webp)$", raw_name, re.IGNORECASE):
             continue  # 跳过 .webm/.ogv/.ogg/.gif/.svg/.pdf 等非位图展示文件
         file_title = raw_name if raw_name.startswith(("File:", "文件:")) else f"File:{raw_name}"
         key = _file_match_key(file_title)
@@ -119,6 +101,7 @@ def _mediawiki_page_images(
             if not isinstance(row, dict):
                 continue
             info_by_key[_file_match_key(str(row.get("title") or ""))] = row
+    subject_evidence_by_key = wikimedia_subject_evidence_by_file(info_by_key)
     images: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     # 页面自有图片必须全部归因；外部调用只有显式 limit 时才截取支持来源。
@@ -133,11 +116,11 @@ def _mediawiki_page_images(
         url = str(info.get("url") or "")
         if not url or url in seen_urls:
             continue
-        if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.I):
+        if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.IGNORECASE):
             continue
         meta = info.get("extmetadata") or {}
-        license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
-        license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
+        license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value") or "")
+        license_url = _strip_html((meta.get("LicenseUrl") or {}).get("value") or "")
         width = int(info.get("width") or 0)
         height = int(info.get("height") or 0)
         seen_urls.add(url)
@@ -190,6 +173,7 @@ def _mediawiki_page_images(
                 "coverCandidateRank": int(placement.get("coverCandidateRank") or 0),
                 "subjectKey": str(placement.get("subjectKey") or ""),
                 "isMapLike": bool(placement.get("isMapLike")),
+                "visualSubjectEvidence": list(subject_evidence_by_key.get(key, ())),
             }
         )
     return images

@@ -372,6 +372,37 @@ def test_open_completion_marks_acceptance_as_pending(tmp_path: Path) -> None:
     assert feature_tree.acceptance_refs_in_open(spec) == {"GWT-001"}
 
 
+def test_open_completion_reads_nested_evidence_bullets(tmp_path: Path) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    # 完成判定常写成「总述 + 逐条证据子 bullet」，锚点引用落在子 bullet 里。只读首行
+    # 会把已可裁定的 OPEN 误报为不可裁定，也会放过子 bullet 里引用不存在锚点的 OPEN。
+    spec = tmp_path / "spec.md"
+    write(
+        spec,
+        "# L3 Story：故事 (`story`)\n\n"
+        "### GWT-001 主路径\n\n"
+        "- GIVEN 条件。\n"
+        "- WHEN 动作。\n"
+        "- THEN 结果。\n\n"
+        "## 7. 开放事项\n\n"
+        "### OPEN-001 三层证据同时通过\n\n"
+        "- 完成判定：以下三层 release-bound 证据同时通过。\n"
+        "  - 仓内 local_contract 证明状态机语义。\n"
+        "  - 真机 CaseResult 直接引用 `GWT-001`。\n"
+        "- 依赖：受管设备。\n",
+    )
+
+    assert feature_tree.acceptance_refs_in_open(spec) == {"GWT-001"}
+    assert feature_tree.anchorless_opens_in_text(spec.read_text(encoding="utf-8")) == set()
+
+    # 同一入口也让子 bullet 里的悬空引用无法逃过校验。
+    write(
+        spec,
+        spec.read_text(encoding="utf-8").replace("`GWT-001`", "`GWT-404`"),
+    )
+    assert feature_tree.invalid_acceptance_refs_in_open(spec) == {"GWT-404"}
+
+
 def test_open_item_details_are_searchable_without_a_registry(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -555,3 +586,239 @@ def test_semantic_anchor_changes_detects_added_and_removed_ids(
         "modified": [],
         "deleted": ["REQ-001"],
     }
+
+
+COMPOSITE_ANCHOR = (
+    "### GWT-001 复合验收\n\n"
+    "- GIVEN 前置成立。\n"
+    "- WHEN 参与者发起动作。\n"
+    "- THEN 第一条结果。\n"
+    "- THEN 第二条结果。\n"
+    "- THEN 第三条结果。\n"
+)
+
+PRECONDITION_AND_ANCHOR = (
+    "### GWT-003 前置续写\n\n"
+    "- GIVEN 条件甲。\n"
+    "- AND 条件乙。\n"
+    "- WHEN 参与者发起动作。\n"
+    "- THEN 唯一结果。\n"
+)
+
+FOLDED_AND_ANCHOR = (
+    "### GWT-004 把独立结果折叠进 AND\n\n"
+    "- GIVEN 前置成立。\n"
+    "- WHEN 参与者发起动作。\n"
+    "- THEN 第一条独立结果。\n"
+    "- AND 第二条独立结果。\n"
+    "- AND 第三条独立结果。\n"
+)
+
+DOM_ANCHOR = (
+    "### DOM-001 领域验收\n\n"
+    "- 条件：前置成立。\n"
+    "- 可观察结果：第一条结果。\n"
+    "- 第二条结果。\n"
+    "- 禁止结果：第三条结果。\n"
+)
+
+SEPARATOR_FOLDED_ANCHOR = (
+    "### GWT-005 把独立结果折叠进同一个 bullet\n\n"
+    "- GIVEN 前置成立。\n"
+    "- WHEN 参与者发起动作。\n"
+    "- THEN 返回 canonical failure，且不产生伪成功事实。\n"
+    "- AND 事件写入审计流；告警在同一窗口触发。\n"
+)
+
+NATURAL_PHRASING_ANCHOR = (
+    "### GWT-006 单一结果的自然中文表述\n\n"
+    "- GIVEN 前置成立。\n"
+    "- WHEN 参与者发起动作。\n"
+    "- THEN 非 mutual 且未拉黑的用户可发起一条 pending 请求。\n"
+    "- AND 合并结果按 seq 严格有序且无重复，终态明确且可恢复。\n"
+)
+
+
+def test_clause_count_treats_every_outcome_bullet_as_one_clause() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    counts = feature_tree.acceptance_clause_counts_in_text(
+        COMPOSITE_ANCHOR + "\n" + DOM_ANCHOR + "\n" + PRECONDITION_AND_ANCHOR
+    )
+
+    # 一个顶层结果 bullet 就是一条子句；GIVEN/WHEN/条件 是前置条件。
+    assert counts == {"GWT-001": 3, "DOM-001": 3, "GWT-003": 1}
+
+
+def test_and_cannot_hide_an_independent_outcome_from_clause_counting() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    # 折叠漏口：把独立结果写成 AND 曾使锚点降为 C=1 并完全豁免复合规则。
+    counts = feature_tree.acceptance_clause_counts_in_text(FOLDED_AND_ANCHOR)
+    assert counts == {"GWT-004": 3}
+
+    # 判据只看行首关键字，不读标点，因此删掉句号不能把子句数改回 1。
+    assert feature_tree.acceptance_clause_counts_in_text(
+        FOLDED_AND_ANCHOR.replace("独立结果。", "独立结果")
+    ) == {"GWT-004": 3}
+
+    # 缩进续行属于同一个 bullet，不额外计一条子句。
+    assert feature_tree.outcome_clause_count(
+        "- GIVEN 前置成立。\n- THEN 一条结果，\n  续写仍在同一 bullet 内。\n"
+    ) == 1
+
+
+def test_separator_folded_outcomes_each_take_one_clause_slot() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    # 折叠漏口：把多个相互独立的结果用 `；` 或 `，且` 塞进同一个 bullet，曾让整组结果
+    # 只占一个子句位，测试覆盖其中任意一个即让全部结果显示为已绑定。
+    assert feature_tree.acceptance_clause_counts_in_text(SEPARATOR_FOLDED_ANCHOR) == {
+        "GWT-005": 4
+    }
+
+    assert feature_tree.outcome_sub_clauses(
+        "THEN 返回 canonical failure，且不产生伪成功事实。"
+    ) == ["THEN 返回 canonical failure", "不产生伪成功事实。"]
+    assert feature_tree.outcome_sub_clauses(
+        "THEN 事件写入审计流；告警在同一窗口触发。"
+    ) == ["THEN 事件写入审计流", "告警在同一窗口触发。"]
+    # `，并` 与 `，同时` 同样是顶层并列小句的停顿标记。
+    assert len(feature_tree.outcome_sub_clauses("THEN 写入回执，并立即回流详情页。")) == 2
+    assert len(feature_tree.outcome_sub_clauses("THEN 关联日志与指标，同时限制标签基数。")) == 2
+
+
+def test_single_outcome_natural_phrasing_is_not_split_into_noise() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    # 判据是「前置停顿 + 并列连词」：定语并列与形容词并列从不在连词前带停顿，
+    # 因此同一个结果的多个属性不会被拆成互相无法独立验证的噪音子句。
+    assert feature_tree.acceptance_clause_counts_in_text(NATURAL_PHRASING_ANCHOR) == {
+        "GWT-006": 2
+    }
+
+    for single in (
+        "THEN 非 mutual 且未拉黑的用户可发起一条 pending 请求。",
+        "THEN 合并结果按 seq 严格有序且无重复。",
+        "THEN 评论、超时与权限拒绝都有明确且可恢复的终态。",
+        # `以及` 只并列名词短语，拆开会撕碎同一个主语列表。
+        "THEN completed 的 answerText，以及状态与 trace 仍来自 Run Store。",
+        # `并发/并行/并列` 是构词，不是并列连词。
+        "THEN 聚合 feed 只使用有界并发扇出，并发请求数不超过配额上限。",
+    ):
+        assert feature_tree.outcome_sub_clauses(single) == [single], single
+
+
+def test_code_span_punctuation_is_not_a_clause_separator() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    # 标识符里的分号属于代码片段，不表达并列结果。
+    assert feature_tree.outcome_sub_clauses(
+        "THEN 返回 `a；b` 作为单个 token。"
+    ) == ["THEN 返回 `a；b` 作为单个 token。"]
+
+
+def test_separator_folded_outcome_cannot_escape_clause_level_binding() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    # 负例：一条 `；` 折叠的 THEN 声称已闭合时，必须逐条绑定，不能以「只有一条子句」
+    # 为由整体豁免复合判据。
+    counts = feature_tree.acceptance_clause_counts_in_text(
+        "### GWT-007 折叠后声称已闭合\n\n"
+        "- GIVEN 前置成立。\n"
+        "- WHEN 参与者发起动作。\n"
+        "- THEN 返回 409；写入审计事件。\n"
+    )
+    assert counts == {"GWT-007": 2}
+
+    errors = feature_tree.validate_acceptance_clause_coverage(
+        "specs/feature-tree/domain/spec.md", counts, set(), {}, {"GWT-007"}
+    )
+    assert len(errors) == 1
+    assert "gwt-007.t1..t2" in errors[0]
+
+
+def test_nested_bullets_do_not_add_outcome_clauses() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    assert feature_tree.outcome_clause_count(
+        "- GIVEN 前置成立。\n- THEN 一条结果。\n  - 说明：不是独立结果；也不是子句。\n"
+    ) == 1
+
+
+def test_anchorless_open_completion_is_detected_and_ratcheted(tmp_path: Path, monkeypatch) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    tautology = (
+        "### OPEN-001 同义反复\n\n"
+        "- 影响或价值：尚缺主路径由真实服务契约驱动。\n"
+        "- 完成判定：主路径由真实服务契约驱动。\n"
+    )
+    adjudicable = (
+        "### OPEN-002 可裁定\n\n"
+        "- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。\n"
+    )
+
+    assert feature_tree.anchorless_opens_in_text(tautology + "\n" + adjudicable) == {"OPEN-001"}
+
+    # 棘轮：存量不被追溯，只有本次增量新增或改写的 OPEN 才需要补齐。
+    root = tmp_path / "repo"
+    rel = "specs/feature-tree/domain/spec.md"
+    write(root / rel, tautology + "\n" + adjudicable)
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "git_head_text", lambda _rel: tautology)
+
+    # OPEN-001 原样存在于 HEAD，不追溯；OPEN-002 是本次新增，落入棘轮。
+    assert feature_tree.open_anchor_ratchet_targets(rel) == {"OPEN-002"}
+
+
+def test_partial_clause_binding_is_rejected() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    errors = feature_tree.validate_acceptance_clause_coverage(
+        "specs/feature-tree/domain/spec.md",
+        {"GWT-001": 3},
+        set(),
+        {"GWT-001": {1, 3}},
+        set(),
+    )
+
+    assert len(errors) == 1
+    assert "缺 t2" in errors[0]
+
+    assert not feature_tree.validate_acceptance_clause_coverage(
+        "specs/feature-tree/domain/spec.md",
+        {"GWT-001": 3},
+        set(),
+        {"GWT-001": {1, 2, 3}},
+        set(),
+    )
+
+
+def test_newly_closed_composite_acceptance_requires_clause_binding() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    args = ("specs/feature-tree/domain/spec.md", {"GWT-001": 3}, set(), {})
+
+    # 存量锚点不被追溯，代价只由本次做出闭合声称的改动承担。
+    assert not feature_tree.validate_acceptance_clause_coverage(*args, set())
+
+    errors = feature_tree.validate_acceptance_clause_coverage(*args, {"GWT-001"})
+    assert len(errors) == 1
+    assert "gwt-001.t1..t3" in errors[0]
+
+    # 仍挂在 OPEN 上的验收是公开债务，不要求覆盖。
+    assert not feature_tree.validate_acceptance_clause_coverage(
+        "specs/feature-tree/domain/spec.md", {"GWT-001": 3}, {"GWT-001"}, {}, {"GWT-001"}
+    )
+
+    # 单结果锚点仍由双向门禁承担，不受复合判据约束。
+    assert not feature_tree.validate_acceptance_clause_coverage(
+        "specs/feature-tree/domain/spec.md", {"GWT-002": 1}, set(), {}, {"GWT-002"}
+    )
+
+
+def test_clause_transition_detects_open_deletion(tmp_path: Path, monkeypatch) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    root = tmp_path / "repo"
+    rel = "specs/feature-tree/domain/spec.md"
+    head = (
+        COMPOSITE_ANCHOR
+        + "\n### OPEN-001 尚未闭合\n\n"
+        + "- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。\n"
+    )
+    write(root / rel, COMPOSITE_ANCHOR)
+    monkeypatch.setattr(feature_tree, "REPO_ROOT", root)
+    monkeypatch.setattr(feature_tree, "git_head_text", lambda _rel: head)
+
+    assert feature_tree.clause_binding_transitions(rel) == {"GWT-001"}

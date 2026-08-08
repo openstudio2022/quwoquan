@@ -33,6 +33,7 @@
 ### REQ-001 实体链接模板元数据（entity-link-templates-metadata）
 
 - 出站链接必须注入受控归因参数，入站路由匹配前必须剥离归因参数且保留归因上下文。
+- `link_templates.yaml` 每个 entity 的 `navigation.route_id` 与 `param_bindings` 必须能在 `app_routes.yaml` 解析；由 `verify_link_templates_route_ids.py` 在 `gate_repo.sh` 中 fail-closed 阻断合入。
 
 <a id="req-002"></a>
 ### REQ-002 对外链接统一携带归因参数且入站被剥离
@@ -95,14 +96,13 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 5 类实体双链与导航锚点同源
+### OPEN-001 实体链接模板失败语义尚无直接证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：codegen/verify 校验所有 route_id 存在；不存在则阻断合入。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：缺 `GWT-001.t2` 的直接证据。t1 已由 `content_share_template_public_link__local_contract_test.dart` 断言（deeplink 不含归因键、landingUrl 保留 share_id/utm_source）并实跑通过，route_id 存在性也已由 `verify_link_templates_route_ids.py` 在 gate 中阻断，但失败语义未单独证明。
+- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。
 
 <a id="open-002"></a>
 ### OPEN-002 对外链接统一携带归因参数且入站被剥离

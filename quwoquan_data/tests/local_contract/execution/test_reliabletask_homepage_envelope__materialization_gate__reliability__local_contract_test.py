@@ -8,7 +8,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 DATA_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -18,7 +17,7 @@ for path in (DATA_ROOT / "scripts", DATA_ROOT / "tests"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import reliabletask_worker  # noqa: E402
+from content.execution.queue.reliabletask import author as reliabletask_author
 
 
 def _homepage_job() -> SimpleNamespace:
@@ -48,7 +47,7 @@ def test_failed_homepage_materialization_invalidates_author_envelope(
     envelope_path = tmp_path / "agent_result_envelope.json"
     envelope_path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(
-        reliabletask_worker,
+        reliabletask_author,
         "_validate_author_envelope",
         lambda _job, _path: None,
     )
@@ -61,7 +60,7 @@ def test_failed_homepage_materialization_invalidates_author_envelope(
         lambda *_args: ["base draft fidelity below policy"],
     )
 
-    assert reliabletask_worker._existing_author_envelope_is_reusable(
+    assert reliabletask_author._existing_author_envelope_is_reusable(
         _homepage_job(),
         envelope_path,
     ) is False
@@ -75,7 +74,7 @@ def test_materialized_homepage_may_reuse_author_envelope(
     envelope_path = tmp_path / "agent_result_envelope.json"
     envelope_path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(
-        reliabletask_worker,
+        reliabletask_author,
         "_validate_author_envelope",
         lambda _job, _path: None,
     )
@@ -88,7 +87,7 @@ def test_materialized_homepage_may_reuse_author_envelope(
         lambda *_args: [],
     )
 
-    assert reliabletask_worker._existing_author_envelope_is_reusable(
+    assert reliabletask_author._existing_author_envelope_is_reusable(
         _homepage_job(),
         envelope_path,
     ) is True
@@ -107,14 +106,14 @@ def test_post_repair_newer_than_author_envelope_requires_fresh_agent_run(
     repair_path = execution_root_path / job.content_object_dir / "5.review" / "repair_report.json"
     repair_path.parent.mkdir(parents=True)
     repair_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
+    monkeypatch.setattr(reliabletask_author, "execution_root", lambda _execution_id: execution_root_path)
     monkeypatch.setattr(
-        reliabletask_worker,
+        reliabletask_author,
         "_validate_author_envelope",
-        lambda _job, _path: None,
+        lambda *_args: (_ for _ in ()).throw(AssertionError("validated stale envelope")),
     )
 
-    assert reliabletask_worker._existing_author_envelope_is_reusable(
+    assert reliabletask_author._existing_author_envelope_is_reusable(
         job,
         envelope_path,
     ) is False
@@ -136,9 +135,9 @@ def test_homepage_repair_uses_frozen_job_prompt_not_pending_prompt_scan(
         '"promptRef":"4.draft/prompt.md"}',
         encoding="utf-8",
     )
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
+    monkeypatch.setattr(reliabletask_author, "execution_root", lambda _execution_id: execution_root_path)
 
-    checkpoint, prompt = reliabletask_worker._author_prompt(SimpleNamespace(), job)
+    checkpoint, prompt = reliabletask_author._author_prompt(SimpleNamespace(), job)
 
     assert checkpoint == "build_homepage"
     assert prompt == "只依据冻结来源重写正文。"
@@ -148,6 +147,7 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
     monkeypatch,
     tmp_path: Path,
 ) -> None:
+    from content.execution.stage_reports import build_repair_report
     from core.data_issue import (
         DataIssueCode,
         DataIssueLane,
@@ -155,7 +155,6 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
         DataRecoveryAction,
         data_issue,
     )
-    from content.execution.stage_reports import build_repair_report
 
     job = _homepage_job()
     execution_root_path = tmp_path / "execution"
@@ -196,13 +195,16 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
+    monkeypatch.setattr(reliabletask_author, "execution_root", lambda _execution_id: execution_root_path)
 
-    checkpoint, prompt = reliabletask_worker._author_prompt(SimpleNamespace(), job)
+    checkpoint, prompt = reliabletask_author._author_prompt(SimpleNamespace(), job)
 
     assert checkpoint == "build_homepage"
     assert prompt.startswith("保留冻结正文。")
     assert "必须先用符合冻结正文合同的完整主页正文替换该占位" in prompt
+    assert "必须用局部编辑补回缺失标题及其对应底稿段落" in prompt
+    assert "日期戳、水印、页码、扫描编号" in prompt
+    assert "必须从 page.md 删除该图片标记" in prompt
     assert "[DATA.QUALITY.FAILED] 标题层级不符合页面合同" in prompt
 
 
@@ -251,10 +253,59 @@ def test_homepage_repair_feedback_rejects_untyped_recovery_contract(
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(reliabletask_worker, "execution_root", lambda _execution_id: execution_root_path)
+    monkeypatch.setattr(reliabletask_author, "execution_root", lambda _execution_id: execution_root_path)
 
     with pytest.raises(ValueError, match="issue contract invalid"):
-        reliabletask_worker._author_prompt(SimpleNamespace(), job)
+        reliabletask_author._author_prompt(SimpleNamespace(), job)
+
+
+def test_failed_independent_review_becomes_homepage_author_repair(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution.controller import (
+        homepage_author_finalization,
+        stage_download_build,
+    )
+    from content.homepage import homepage_review
+
+    draft_dir = tmp_path / "entities/地点/景区/测试实体甲/4.draft"
+    review_dir = draft_dir.parent / "5.review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "reviewer_result.json").write_text(
+        json.dumps(
+            {
+                "verdict": "failed",
+                "issues": ["1931 年旧影必须移动到对应时代段落"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(homepage_review, "_entity_draft_dir", lambda *_args: draft_dir)
+    monkeypatch.setattr(
+        homepage_author_finalization,
+        "_write_homepage_repair_report",
+        lambda _ctx, **kwargs: captured.update(kwargs),
+    )
+    ctx = SimpleNamespace(
+        execution_id=_homepage_job().execution_id,
+        spec=SimpleNamespace(
+            scope=SimpleNamespace(
+                coverage_targets=(
+                    SimpleNamespace(name="测试实体甲", entity_type="地点/景区"),
+                )
+            )
+        ),
+    )
+
+    stage_download_build._write_homepage_independent_review_repairs(ctx)
+
+    assert captured["ref"] == "/entity/地点/景区/测试实体甲"
+    assert captured["materialization_messages"] == (
+        "1931 年旧影必须移动到对应时代段落",
+    )
 
 
 def test_homepage_finalization_uses_bound_entity_ref_not_prompt_text(
@@ -274,7 +325,7 @@ def test_homepage_finalization_uses_bound_entity_ref_not_prompt_text(
     stale_repair_path.parent.mkdir(parents=True)
     stale_repair_path.write_text("{}", encoding="utf-8")
     captured: dict[str, str] = {}
-    from content.homepage import homepage_review, homepage_release
+    from content.homepage import homepage_release, homepage_review
 
     monkeypatch.setattr(homepage_review, "_entity_draft_dir", lambda *_args: draft_dir)
     monkeypatch.setattr(homepage_release, "materialize_entity_page", lambda *_args: [])
@@ -328,8 +379,8 @@ def test_homepage_finalization_writes_typed_repair_report_for_materialization_fa
     from content.execution.agent.outcome import AgentRunOutcome, ManagedAgentJobOutcome
     from content.execution.controller import homepage_author_finalization
     from content.homepage import homepage_release, homepage_review
-    from core.control_types import AgentProvider
     from core import schema
+    from core.control_types import AgentProvider
 
     entity = "测试实体甲"
     draft_dir = tmp_path / "4.draft"

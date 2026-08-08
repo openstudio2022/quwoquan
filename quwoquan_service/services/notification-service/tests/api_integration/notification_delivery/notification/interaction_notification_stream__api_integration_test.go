@@ -158,7 +158,8 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 		"eventName":                    "GreetingRequestSent",
 		"id":                           "g-api-1",
 		"requesterPersonaId":           "actor-api-1",
-		"targetPersonaId":              "recipient-api-1",
+		"targetPersonaId":              "recipient-persona-api-1",
+		"recipientAccountId":           "recipient-api-1",
 		"targetAllowsStrangerGreeting": "true",
 		"occurredAt":                   time.Now().UTC().Format(time.RFC3339Nano),
 	}
@@ -275,7 +276,13 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 	foundReport := false
 	foundHomepageClaim := false
 	foundHomepageStatus := false
+	foundGreeting := false
 	for _, item := range inbox.Items {
+		if item.Source == "greeting" &&
+			item.SourceID == "g-api-1" &&
+			item.UserID == "recipient-api-1" {
+			foundGreeting = true
+		}
 		if item.Target.TargetType == "report" &&
 			item.Target.TargetID == "report-api-1" {
 			foundReport = true
@@ -293,6 +300,9 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 	}
 	if !foundReport {
 		t.Fatalf("report result notification missing: %+v", inbox.Items)
+	}
+	if !foundGreeting {
+		t.Fatalf("greeting notification did not use canonical recipient AccountID: %+v", inbox.Items)
 	}
 	if !foundHomepageClaim || !foundHomepageStatus {
 		t.Fatalf("homepage governance result notifications missing: %+v", inbox.Items)

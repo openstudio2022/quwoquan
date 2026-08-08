@@ -399,7 +399,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final travelToggle = find.byKey(
-      const ValueKey<String>('assistant_skill_toggle_travel_journey_manager'),
+      const ValueKey<String>('assistant_skill_toggle_travel_companion'),
     );
     await _scrollTo(tester, travelToggle);
     expect(tester.widget<CupertinoSwitch>(travelToggle).value, isTrue);
@@ -407,7 +407,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final settings = await repository.listSkillUserSettings();
-    expect(settings.single.skillId, 'travel_journey_manager');
+    expect(settings.single.skillId, 'travel_companion');
     expect(settings.single.status, SkillUserSettingStatus.disabled);
     expect(await repository.listSkillSubscriptions(), isEmpty);
   });
@@ -526,7 +526,7 @@ void main() {
 
     final addReminder = find.byKey(
       const ValueKey<String>(
-        'assistant_skill_subscription_add_travel_journey_manager',
+        'assistant_skill_subscription_add_travel_companion',
       ),
     );
     await _scrollTo(tester, addReminder);
@@ -554,7 +554,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final subscription = (await repository.listSkillSubscriptions()).single;
-    expect(subscription.skillId, 'travel_journey_manager');
+    expect(subscription.skillId, 'travel_companion');
     expect(subscription.domainId, 'travel');
     expect(subscription.searchQueryPlan.rawText, '关注杭州行程天气、交通和集合变化');
     expect(subscription.trigger.cron, '0 8 * * *');
@@ -570,7 +570,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final consentButton = find.byKey(
-      const ValueKey<String>('assistant_skill_consent_travel_journey_manager'),
+      const ValueKey<String>('assistant_skill_consent_travel_companion'),
     );
     await _scrollTo(tester, consentButton);
     await tester.tap(consentButton);
@@ -578,15 +578,15 @@ void main() {
 
     final consent = (await repository.listConsents()).single;
     expect(consent.grantedScopes, <String>[
+      'assistant.learning.feedback_context.read',
       'assistant.memory.preferences.read',
-      'travel.trip.read',
     ]);
   });
 
   testWidgets('点开 Skill 后按需读取 package schema 并保存设置', (tester) async {
     final repository = InMemoryAssistantFacets();
     final travelCatalog = (await repository.listSkillCatalog()).singleWhere(
-      (item) => item.skillId == 'travel_journey_manager',
+      (item) => item.skillId == 'travel_companion',
     );
     await tester.pumpWidget(
       _buildApp(repository, visitRecorder: _CapturingVisitRecorder()),
@@ -594,7 +594,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final detailButton = find.byKey(
-      const ValueKey<String>('assistant_skill_detail_travel_journey_manager'),
+      const ValueKey<String>('assistant_skill_detail_travel_companion'),
     );
     await _scrollTo(tester, detailButton);
     await tester.tap(detailButton);
@@ -623,7 +623,10 @@ void main() {
       find.textContaining('assistant.memory.preferences.read'),
       findsNothing,
     );
-    expect(find.textContaining('travel.trip.read'), findsNothing);
+    expect(
+      find.textContaining('assistant.learning.feedback_context.read'),
+      findsNothing,
+    );
     expect(find.text('旅行偏好'), findsOneWidget);
     await tester.tap(
       find.byKey(
@@ -647,7 +650,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final setting = await repository.getSkillUserSetting(
-      skillId: 'travel_journey_manager',
+      skillId: 'travel_companion',
     );
     expect(setting.configurationData, <String, Object?>{
       'travelPace': 'balanced',

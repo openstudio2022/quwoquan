@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	sessionorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/application/orchestration"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/model"
@@ -72,7 +73,10 @@ func TestAssistantSessionCreateCommitsDeclaredDomainEventThroughOutbox(t *testin
 	created, err := service.CreateSession(
 		context.Background(),
 		"user-outbox",
-		assistant.CreateSessionInput{ClientRequestID: "request-outbox"},
+		assistant.CreateSessionInput{
+			Summary:         "  西湖同行计划  ",
+			ClientRequestID: "request-outbox",
+		},
 	)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
@@ -103,13 +107,39 @@ func TestAssistantSessionCreateCommitsDeclaredDomainEventThroughOutbox(t *testin
 	replayed, err := service.CreateSession(
 		context.Background(),
 		"user-outbox",
-		assistant.CreateSessionInput{ClientRequestID: "request-outbox"},
+		assistant.CreateSessionInput{
+			Summary:         "\n西湖同行计划\t",
+			ClientRequestID: "request-outbox",
+		},
 	)
 	if err != nil {
 		t.Fatalf("replay create session: %v", err)
 	}
 	if replayed.SessionID != created.SessionID {
 		t.Fatalf("idempotent replay created another session: %s", replayed.SessionID)
+	}
+	_, conflictErr := service.CreateSession(
+		context.Background(),
+		"user-outbox",
+		assistant.CreateSessionInput{
+			Summary:         "灵隐寺同行计划",
+			ClientRequestID: "request-outbox",
+		},
+	)
+	var appErr *rterr.AppError
+	if !errors.As(conflictErr, &appErr) ||
+		appErr.Code.String() != "ASSISTANT.USER.session_idempotency_conflict" ||
+		appErr.HTTPStatus != 409 {
+		t.Fatalf("different replay intent error=%T %v", conflictErr, conflictErr)
+	}
+	sessions, _, err := store.ListSessions(
+		context.Background(),
+		"user-outbox",
+		16,
+		"",
+	)
+	if err != nil || len(sessions) != 1 || sessions[0].SessionID != created.SessionID {
+		t.Fatalf("conflicting replay mutated aggregates: sessions=%#v err=%v", sessions, err)
 	}
 	// The first claim still holds the lease, so a second pending event would be
 	// the only thing a fresh owner could observe.

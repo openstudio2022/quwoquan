@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_circles_tab.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/presentation/profile_circles_tab.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -71,9 +71,7 @@ void main() {
     expect(query.lastQuery?.personaId, 'persona-001');
     expect(query.lastQuery?.limit, 100);
 
-    completer.complete(
-      PersonaCirclePageSlice(items: <PersonaCircleSlice>[]),
-    );
+    completer.complete(PersonaCirclePageSlice(items: <PersonaCircleSlice>[]));
     await tester.pump();
     await tester.pump();
 

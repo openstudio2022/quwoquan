@@ -47,7 +47,9 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
       body: WebPageMaxWidthFrame(
         child: SafeArea(
           bottom: false,
-          child: settings == null
+          child: state.isLoading
+              ? AppRequestFeedback.section()
+              : state.rawError != null || settings == null
               ? _buildUnavailable(state)
               : ListView(
                   padding: EdgeInsets.only(
@@ -156,7 +158,8 @@ class _SettingsPrivacyPageState extends ConsumerState<SettingsPrivacyPage> {
       onRecovery: (action) async {
         if (action.type == UiErrorActionType.retry) {
           await ref.read(userSettingsSectionsProvider.notifier).load();
-          return ref.read(userSettingsSectionsProvider).rawError == null
+          return ref.read(userSettingsSectionsProvider).isLoaded &&
+                  ref.read(userSettingsSectionsProvider).rawError == null
               ? UiRecoveryOutcome.recovered
               : UiRecoveryOutcome.stillBlocked;
         }

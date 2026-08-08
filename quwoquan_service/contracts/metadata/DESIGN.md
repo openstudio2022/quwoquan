@@ -43,17 +43,33 @@ service 只表达源码和部署所有权，不进入对象业务标识。
 
 ## 3. 对象类型
 
-独立对象只允许五种 kind：
+独立对象只允许六种 kind：
 
 | kind | compiler 必须验证的语义 |
 |---|---|
 | `aggregate_root` | command owner、事务边界、并发策略、必要 outbox |
 | `append_only_fact` | append sink、幂等/去重、禁止 update/delete |
+| `process_manager` | 长流程编排器（saga）：`process_facade` 命令面、`checkpoint` 进度、状态机与补偿、`domain`+`application`+`infrastructure` 三层齐全 |
 | `projection` | named Reader/Slice、禁止业务 command |
 | `external_reference` | 本地非权威、禁止本地生命周期写入 |
 | `runtime_session` | session owner、租约/fencing/TTL/终止语义 |
 
 `owned_entity`、`value_object` 是聚合成员语义，只能写在聚合根 `object.yaml.members`。它们不拥有独立目录、Store、Repository 或公开 Facade。
+
+### 3.1 `process_manager` 与相邻 kind 的判定边界
+
+`process_manager` 与 `aggregate_root` 的区别不是「是否有状态」，而是**状态的性质**：聚合根拥有一份业务事实的权威快照，`process_manager` 拥有一台跨若干步骤推进的状态机，因而必须同时声明补偿、超时与取消语义，进度由 `checkpoint` 而不是聚合版本表达。判据是：对象是否存在「未完成中间态 + 失败后需要补偿或恢复」这对语义。若有，它是 saga；若只是状态字段的合法迁移，它仍是聚合根。
+
+`process_manager` 与 `runtime_session` 的区别是**存储 seam 的持久性**：session 是租约/TTL 驱动的易失运行时状态，过期即消失且不需要补偿；saga 的 checkpoint 是持久权威记录，进程重启后必须能从中恢复推进。因此 `runtime_session` 的 `storage_role` 是 `runtime`，`process_manager` 与 `aggregate_root` 同为 `authoritative`。
+
+下列四个「带生命周期状态机」的对象是 `process_manager` 的边界候选，经判定**保持 `aggregate_root` 不变**。共同判据：它们的状态迁移是一份业务事实自身的合法演进，失败即终态，没有需要补偿的已提交外部副作用，也没有「从 checkpoint 续跑」的恢复语义。
+
+| 对象 | 保持的 kind | 保持原判的理由 |
+|---|---|---|
+| `content.MediaUploadSession` | `aggregate_root` | 只有 `pending -> completed\|aborted` 一次性迁移，且由 TTL 兜底作废；`aborted` 是终态而不是补偿动作，不存在中断后续跑。 |
+| `user.AccountSession` | `aggregate_root` | 凭据轮换是单步 CAS（`active -> rotated\|revoked\|expired`），吊销即不可恢复；rotation lineage 是审计血缘而不是流程 checkpoint。 |
+| `assistant.AssistantSession` | `aggregate_root` | 会话只承载身份、摘要与「至多一个 active run」的约束；被编排的长流程是 `assistant.assistant_run`，状态机与补偿都归 run 拥有。 |
+| `rtc.CallSession` | `aggregate_root` | 通话状态机由实时信令与参与者事件驱动，收尾是终止并落一条通话记录；不存在超时补偿或失败重放。 |
 
 ## 4. 文件分工
 
@@ -73,7 +89,7 @@ generated --------------------> contract types only
 
 - domain 不依赖 HTTP、数据库、消息中间件、配置框架或 transport DTO。
 - application 组织用例与事务边界，核心业务规则留在 domain。
-- command 只能修改 `aggregate_root` 或 `runtime_session`；事实对象只允许 append。
+- command 只能修改 `aggregate_root`、`process_manager` 或 `runtime_session`；事实对象只允许 append。`process_manager` 的命令面是 `process_facade`，表达流程推进/取消/恢复，不是聚合状态写入。
 - query 从 projection/read model 读取，不通过聚合仓储拼装复杂列表。
 - infrastructure 只实现端口，不向 domain 暴露 SDK 类型。
 - 禁止跨服务导入对方 `internal/**`。
@@ -126,7 +142,7 @@ ContractGraph 的 `readinessEvidence` **只承载静态结构证据**，并按 p
 - `app`：`domain`、`application`、`adapters`、`presentation`、`localContract`、`apiIntegration`、`userAcceptance`；
 - `ops`：`environmentAcceptance`、`rollbackRunner`、`replayRunner`。
 
-其中每个 artifact 严格只有 `{path, sha256}`；存储归属通过独立的 `StorageEvidence{storage, artifact}` 表达，不得把 owner/status/pass 塞回 artifact。静态 loader 只证明“实现 seam、测试入口或 runner 入口存在”，**不证明任何用例通过**。纯云对象允许 `app` 全空；App 各层是否必需由当前 `clientContract` 与页面物理 owner 派生。多对象页面的 `object_ids` 只表示 participant，不要求每个 participant 创建 presentation；只有 `source_path` 位于 `lib/<domain>/<context>/<object>/presentation/**` 的对象是物理 owner。
+其中每个 artifact 严格只有 `{path, sha256}`；存储归属通过独立的 `StorageEvidence{storage, artifact}` 表达，不得把 owner/status/pass 塞回 artifact。静态 loader 只证明“实现 seam、测试入口或 runner 入口存在”，**不证明任何用例通过**。纯云对象允许 `app` 全空；App 各层是否必需由当前 `clientContract` 与页面物理 owner 派生。多对象页面的 `object_ids` 只表示 participant，不要求每个 participant 创建 presentation；只有 `source_path` 位于 `lib/service/<service>/<context>/<object>/presentation/**` 的对象是物理 owner。
 
 所有执行结果独立进入 `ReadinessResultBundle`，不嵌入、不回写 ContractGraph。wire 不使用 `schemaVersion` 或版本信封；`generatedAt` 只标识 bundle 本身，绝不参与通过判定。`ReadinessCaseResult` 必须绑定 object/spec/case/producer/layer/target、当前 commit、ContractGraph source hash、当前部署的 `deploymentTarget`、`baselineId`、`packageDigest`、`configurationDigest`、`candidateManifestSha256`、candidate/release digest、environment/platform/device/provider、runner、时间区间及真实 receipt SHA256。ContractGraph source hash 由当前图 `sources` 中按 path 排序的 `path + NUL + sha256 + LF` 字节序列派生，evaluator 必须自行重算，禁止信任调用方传入的自述 hash。`failed`、`blocked`、`skipped`、旧 digest、未知 target、重复冲突和 receipt 字节不匹配一律 fail-closed。
 
@@ -172,6 +188,8 @@ edge         = consumer object.yaml lifecycle.source_events[]
 ```
 
 `events[].name` 只写 PascalCase 本地名；`event_ref` 由对象路径派生，不写 producer/service/topic。消费对象必须在 `source_events` 写完整 `event_ref`；compiler 反向生成 `event_ref -> consumer_ref[]`，禁止 name-only 推断、producer-side `consumers`、顶层 `consumption/subscriptions` 或中央 consumer registry。
+
+`wire_event_type` 是第四条独立轴，只存在于 `delivery_semantics: transactional_outbox` 的事件，精确表示 relay 写入消息 envelope 的 `eventType` / `eventName` 值。它不等于 `event_ref`，也不得从 PascalCase `name`、`topic` 或 `client_ws_type` 猜测：例如 Report 事件的生产 wire 保留完整对象前缀，MediaUploadSession 的生产 wire 保留点分值，而绝大多数对象使用 PascalCase wire。schema 强制每条 outbox 事件声明该值且非 outbox 事件不得携带；validator 强制全图唯一。两条 Go 事件常量生成链都从该字段发射常量值，producer 与 consumer 只消费生成常量，不得再各自维护点分/短名字符串。生成窗口之前无法引用尚不存在的对象常量时，该 runtime 硬切保持显式 source blocker，不得以双读或 alias 过渡。
 
 `lifecycle.event_consumers[]` 只声明对象内真实 handler 的 `name/kind/facet/method/idempotency`，不得重复事件列表，也不得被编译成 operation target。HTTP `api_routes` 与 `runtime_entrypoints` 仍按 DEC-011 互斥；有 HTTP 的消费对象由 object-target readiness case 验证真实 handler，只有完全没有 HTTP 入口的对象才保留唯一 typed `runtime_entrypoints`，其事件边仍只读取 lifecycle。
 对象自有 lifecycle consumer 的受控恢复 HTTP 命令使用 `application.lifecycle_owner`；它不得伪装成 `aggregate_owner` 或 `append_sink`，且 owner 必须是当前对象并声明 `lifecycle.source_events` 与 `lifecycle.event_consumers`。

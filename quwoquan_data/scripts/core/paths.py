@@ -17,6 +17,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.data_root import DataRoot
+
 # 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
 # 不随运行时 QWQ_DATA_ROOT 漂移；隔离/多环境只覆盖运行时数据根，不应丢失契约。
 _REPO_DATA_ROOT = Path(__file__).resolve().parents[2]
@@ -48,12 +50,43 @@ DATA_EXECUTIONS_ROOT = DATA_OUTPUT_ROOT / "tasks"
 DATA_LOCAL_ROOT = DATA_OUTPUT_ROOT / "local"
 DATA_CACHE_ROOT = DATA_LOCAL_ROOT / "cache"
 DATA_WORKSPACE_ROOT = DATA_LOCAL_ROOT / "workspace"
+CONTENT_CAMPAIGN_WORKSPACES_ROOT = DATA_CACHE_ROOT / "content-campaign-workspaces"
+CONTENT_CAMPAIGN_CAPSULES_ROOT = (
+    CONTENT_CAMPAIGN_WORKSPACES_ROOT / "content-addressed-capsules"
+)
+RESEARCH_SCALE_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "research-scale"
+CAMPAIGN_SCALE_EVIDENCE_ROOT = (
+    RESEARCH_SCALE_WORKSPACE_ROOT / "campaign-evidence"
+)
+RESEARCH_SCALE_PROMOTIONS_ROOT = RESEARCH_SCALE_WORKSPACE_ROOT / "promotions"
 SOURCE_ACQUISITION_ROOT = DATA_WORKSPACE_ROOT / "source-acquisition"
 DATA_RUNTIME_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "runtime"
 RELEASE_IDENTITY_INCIDENTS_ROOT = DATA_WORKSPACE_ROOT / "release-identity-incidents"
+RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT = (
+    DATA_WORKSPACE_ROOT / "release-identity-incident-migrations"
+)
 DATA_GC_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "gc"
 DATA_QUARANTINE_ROOT = DATA_WORKSPACE_ROOT / "quarantine"
 RELEASE_ROOT = DATA_OUTPUT_ROOT / "releases"
+
+CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF = CAMPAIGN_SCALE_EVIDENCE_ROOT.relative_to(
+    OUTPUT_ROOT
+).as_posix()
+RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF = RESEARCH_SCALE_PROMOTIONS_ROOT.relative_to(
+    OUTPUT_ROOT
+).as_posix()
+
+
+def campaign_scale_evidence_root(*, output_root: Path = OUTPUT_ROOT) -> Path:
+    """Return the canonical disposable workspace for campaign scale evidence."""
+
+    return Path(output_root) / CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF
+
+
+def research_scale_promotions_root(*, output_root: Path = OUTPUT_ROOT) -> Path:
+    """Return the canonical disposable workspace for research promotions."""
+
+    return Path(output_root) / RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF
 
 # Internal implementation alias.  It deliberately resolves to the single
 # execution work-package root; callers must not create a separate runtime tree.
@@ -313,87 +346,6 @@ def publish_meta_path() -> Path:
 
 
 # ─── 同构路径（runtime task 与 publish 共用）─────────────────────
-class DataRoot:
-    """runtime task 或 publish version 下的统一数据根。"""
-
-    def __init__(self, root: Path):
-        self.root = root
-
-    # entities: entities/{domain}/{type}/{name}/
-    def entities_dir(self) -> Path:
-        return self.root / "entities"
-
-    def entity_dir(self, domain: str, etype: str, name: str) -> Path:
-        return self.entities_dir() / domain / etype / name
-
-    def entity_json(self, domain: str, etype: str, name: str) -> Path:
-        return self.entity_dir(domain, etype, name) / "_entity.json"
-
-    def entity_page(self, domain: str, etype: str, name: str) -> Path:
-        return self.entity_dir(domain, etype, name) / "page.md"
-
-    def entity_manifest(self, domain: str, etype: str, name: str) -> Path:
-        return self.entity_dir(domain, etype, name) / "manifest.json"
-
-    # tags: tags/{dim}/{...path}/_definition.json
-    def tags_dir(self) -> Path:
-        return self.root / "tags"
-
-    def taxonomy(self) -> Path:
-        return self.tags_dir() / "_taxonomy.json"
-
-    def tag_dir(self, tag_path: str) -> Path:
-        return self.tags_dir() / tag_path
-
-    def tag_file(self, tag_path: str) -> Path:
-        return self.tag_dir(tag_path) / "_definition.json"
-
-    def tag_dimension_dir(self, dim: str) -> Path:
-        return self.tags_dir() / dim
-
-    # posts: posts/{content_type}/{angle_tag}/{title}/{seq}/
-    def posts_dir(self) -> Path:
-        return self.root / "posts"
-
-    def post_type_dir(self, content_type: str) -> Path:
-        return self.posts_dir() / content_type
-
-    def post_dir(self, content_type: str, angle_tag: str, title: str, seq: int = 1) -> Path:
-        return self.post_type_dir(content_type) / angle_tag / title / str(seq)
-
-    def post_article(self, content_type: str, angle_tag: str, title: str, seq: int = 1) -> Path:
-        return self.post_dir(content_type, angle_tag, title, seq) / "article.md"
-
-    def post_manifest(self, content_type: str, angle_tag: str, title: str, seq: int = 1) -> Path:
-        return self.post_dir(content_type, angle_tag, title, seq) / "manifest.json"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ─── publish 同构（单一主线）─────────────────────────────────────
 
 

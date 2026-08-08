@@ -21,6 +21,195 @@ codes:
     defaultLocation:
       businessObject: assistant_turn
       functionModule: pipeline_engine
+  - code: AUTH.DELEGATEDGRANT.invalid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.audience_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.actor_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.scope_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.digest_mismatch
+    origin: user
+    kind: contract
+    nature: permanent
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.target_mismatch
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_verifier
+  - code: AUTH.DELEGATEDGRANT.auth_epoch_mismatch
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: account_security_authority
+  - code: AUTH.DELEGATEDGRANT.replay
+    origin: user
+    kind: auth
+    nature: permanent
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_replay_guard
+  - code: AUTH.DELEGATEDGRANT.store_unavailable
+    origin: remoteDependency
+    kind: storage
+    nature: transient
+    defaultLocation:
+      businessObject: delegated_grant
+      functionModule: grant_replay_store
+  - code: AUTH.OIDC.invalid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: operator_identity
+      functionModule: oidc_verifier
+  - code: AUTH.OIDC.key_not_found
+    origin: remoteDependency
+    kind: auth
+    nature: transient
+    defaultLocation:
+      businessObject: operator_identity
+      functionModule: oidc_key_resolver
+  - code: AUTH.OIDC.mfa_required
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: operator_identity
+      functionModule: oidc_verifier
+  - code: AUTH.TOKEN.expired
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: AUTH.TOKEN.invalid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: AUTH.TOKEN.not_yet_valid
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: AUTH.TOKEN.version_mismatch
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: access_token
+      functionModule: token_verifier
+  - code: CHAT.GROUPAVATAR.recompute_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: chat_conversation
+      functionModule: group_avatar_worker
+  - code: CHAT.GROUPAVATAR.patch_fanout_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: chat_conversation
+      functionModule: notification_fanout_worker
+  - code: CHAT.GROUPAVATAR.notification_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: chat_conversation
+      functionModule: notification_retry
+  - code: CLIENT.PLATFORM.capability_unavailable
+    origin: localClient
+    kind: unsupported
+    nature: permanent
+    defaultLocation:
+      businessObject: app_runtime
+      functionModule: platform_capability_gateway
+  - code: RELIABLETASK.NOTIFICATION.fanout_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: reliable_notification
+      functionModule: notification_fanout_worker
+  - code: RELIABLETASK.NOTIFICATION.retry
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: reliable_notification
+      functionModule: notification_retry
+  - code: RELIABLETASK.WORKER.handler_failed
+    origin: system
+    kind: internal
+    nature: transient
+    defaultLocation:
+      businessObject: reliable_task
+      functionModule: task_worker
+  - code: SEARCH.BACKEND.recall_failed
+    origin: remoteDependency
+    kind: unavailable
+    nature: transient
+    defaultLocation:
+      businessObject: search_request
+      functionModule: recall_backend
+  - code: SEARCH.PLANNER.unknown_target
+    origin: developer
+    kind: validation
+    nature: bug
+    defaultLocation:
+      businessObject: search_request
+      functionModule: retrieve_planner
+  - code: SEARCH.USER.sensitive_query
+    origin: user
+    kind: validation
+    nature: permanent
+    defaultLocation:
+      businessObject: search_request
+      functionModule: query_safety
+  - code: SERVICE.RUNTIME.log_encoding_failed
+    origin: system
+    kind: parsing
+    nature: bug
+    defaultLocation:
+      businessObject: runtime_log_record
+      functionModule: canonical_log_encoder
   - code: APP.NETWORK.offline
     origin: environment
     kind: network
@@ -196,3 +385,91 @@ codes:
     defaultLocation:
       businessObject: runtime_request
       functionModule: error_normalizer
+  # 以下 GATEWAY.* 是平台默认拒绝边界的对外 HTTP 错误。它们由 runtime/auth 的
+  # generated operation guard 与 runtime/streaming 在 owner handler 之前产出，而
+  # runtime/auth 被全部 14 个服务链接，因此这些码不属于任何单一服务对象，归属地
+  # 只能是本文件。它们是本文件首批携带用户面字段的条目：httpStatus / userMessage /
+  # recoveryAction / disruptionLevel / goConst 仅对「会直接返回给用户」的码声明，
+  # 其余纯内部诊断码不写这组键。recoveryAction 与 disruptionLevel 的值域由
+  # runtime_recovery_policy.schema.yaml 的 RuntimeRecoveryAction / UserDisruptionLevel 定义。
+  - code: GATEWAY.USER.route_not_found
+    origin: user
+    kind: notFound
+    nature: permanent
+    defaultLocation:
+      businessObject: gateway_request
+      functionModule: operation_guard
+    reason: route_not_found
+    httpStatus: 404
+    recoveryAction: surface
+    disruptionLevel: inlineCard
+    goConst: ErrRouteNotFound
+    description: 请求的 method+path 没有匹配到任何已登记的 generated operation descriptor，默认拒绝。
+    userMessage:
+      zh: 接口不存在或已下线
+      en: This endpoint does not exist or has been retired
+  - code: GATEWAY.USER.unauthorized
+    origin: user
+    kind: auth
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: gateway_request
+      functionModule: operation_guard
+    reason: unauthorized
+    httpStatus: 401
+    recoveryAction: surface
+    disruptionLevel: inlineCard
+    goConst: ErrUnauthorized
+    description: operation 契约要求可信 principal，但请求没有携带可验证凭据。
+    userMessage:
+      zh: 请先登录后再继续
+      en: Please sign in to continue
+  - code: GATEWAY.USER.forbidden
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: gateway_request
+      functionModule: operation_guard
+    reason: forbidden
+    httpStatus: 403
+    recoveryAction: surface
+    disruptionLevel: inlineCard
+    goConst: ErrForbidden
+    description: operation 拒绝全部调用方，或当前 principal 的 actor/scope/permission 不满足授权判定。
+    userMessage:
+      zh: 当前账号没有该操作权限
+      en: This account is not allowed to perform this action
+  - code: GATEWAY.USER.invalid_argument
+    origin: user
+    kind: validation
+    nature: requiresUserAction
+    defaultLocation:
+      businessObject: gateway_request
+      functionModule: operation_guard
+    reason: invalid_argument
+    httpStatus: 400
+    recoveryAction: surface
+    disruptionLevel: inlineCard
+    goConst: ErrInvalidArgument
+    description: operation 契约要求的 Idempotency-Key 或 If-Match 前置条件缺失、格式非法或不被该 operation 允许。
+    userMessage:
+      zh: 请求参数不完整，请重试
+      en: The request is incomplete, please retry
+  - code: GATEWAY.MIDDLEWARE.unavailable
+    origin: environment
+    kind: unavailable
+    nature: transient
+    defaultLocation:
+      businessObject: gateway_request
+      functionModule: stream_transport
+    reason: unavailable
+    httpStatus: 503
+    recoveryAction: retry
+    recoveryAfterSeconds: 5
+    disruptionLevel: snackbar
+    goConst: ErrStreamTransportUnavailable
+    description: 流式 operation 所需的传输能力在当前连接上不具备，无法建立实时流。
+    userMessage:
+      zh: 当前连接不支持实时流，请稍后重试
+      en: Realtime streaming is unavailable on this connection, please retry

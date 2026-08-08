@@ -4,7 +4,7 @@ import '../../../../../support/service/recommendation_service/recommendation/rec
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/author_impact_query.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/author_impact_query.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';

@@ -84,32 +84,5 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: 仅 granted 的签名 URL 绝对到期时间；拒绝决策为空。
+    description: 仅 granted 的签名 URL 绝对到期时间；由 OriginalAccessQuota 预留时给定并原样记录，拒绝决策为空。
     role: append_only_fact
-types:
-  MediaOriginalAccessGrant:
-    description: Short-lived signed original-media access result and its immutable audit identity.
-    fields:
-      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
-      - {name: status, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: originalUrl, type: url, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: redact, api_exposure: read, ops_exposure: redacted}
-      - {name: format, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: sizeBytes, type: int, constraints: [NOT_NULL, MIN_1], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: ttlSeconds, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: auditId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
-  RequestOriginalImageAccessRequest:
-    fields:
-      - {name: purpose, type: enum, enum_ref: MediaOriginalAccessPurpose, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
-  RequestContentMediaOriginalAccessCommand:
-    fields:
-      - name: mediaId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_dart_type: String
-        client_normalization: trim
-      - name: purpose
-        type: enum
-        enum_ref: MediaOriginalAccessPurpose
-        client_default: MediaOriginalAccessPurpose.view

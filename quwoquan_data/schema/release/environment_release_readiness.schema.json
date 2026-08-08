@@ -135,6 +135,9 @@
         "videoWorkId",
         "videoTitle",
         "creatorName",
+        "creatorUserHandle",
+        "creatorPersonaId",
+        "creatorAvatarAssetId",
         "tagLabel",
         "videoAttribution"
       ],
@@ -151,6 +154,9 @@
         "videoWorkId": {"type": "string", "minLength": 1},
         "videoTitle": {"type": "string", "minLength": 1},
         "creatorName": {"type": "string", "minLength": 1},
+        "creatorUserHandle": {"type": "string", "minLength": 1},
+        "creatorPersonaId": {"type": "string", "minLength": 1},
+        "creatorAvatarAssetId": {"type": "string", "minLength": 1},
         "tagLabel": {"type": "string", "minLength": 1},
         "videoAttribution": {"type": "string", "minLength": 1}
       }

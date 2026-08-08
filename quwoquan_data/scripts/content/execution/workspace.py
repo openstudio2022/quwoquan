@@ -396,6 +396,7 @@ def create_execution_manifest(
     retry_of: str | None = None,
     semantic_selection_id: str = "default",
     semantic_preflight_binding: Mapping[str, Any] | None = None,
+    semantic_preflight_require_fresh: bool = True,
 ) -> dict[str, Any]:
     """Create exactly one immutable execution manifest and work-package tree.
 
@@ -435,7 +436,7 @@ def create_execution_manifest(
     recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
     if not isinstance(recipe_payload, dict):
         raise ValueError(f"recipe must be an object: {recipe_file}")
-    from content.execution.semantic_selection import semantic_manifest_identity
+    from content.execution.planning.semantic_selection import semantic_manifest_identity
 
     semantic_identity = semantic_manifest_identity(
         recipe_payload,
@@ -447,7 +448,7 @@ def create_execution_manifest(
         if manifest_path.is_file()
         else None
     )
-    from content.execution.semantic_preflight_admission import (
+    from content.execution.planning.semantic_preflight_admission import (
         resolve_manifest_preflight_binding,
     )
 
@@ -456,6 +457,9 @@ def create_execution_manifest(
         requested_binding=semantic_preflight_binding,
         semantic_selection_id=semantic_selection_id,
         output_root=core_paths.OUTPUT_ROOT,
+        require_requested_fresh=(
+            semantic_preflight_require_fresh and existing_manifest is None
+        ),
     )
     candidate = {
         "executionId": identity.execution_id,

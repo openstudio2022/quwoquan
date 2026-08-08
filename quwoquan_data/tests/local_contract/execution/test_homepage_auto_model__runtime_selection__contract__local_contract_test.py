@@ -14,7 +14,7 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import recipe
+from content.execution.planning.recipe import model as recipe
 from content.execution.model_contract import (
     execution_model_pair,
     semantic_execution_binding,

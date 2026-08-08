@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,12 +29,36 @@ import (
 func observeExecutionState(
 	executionID string,
 	carrier string,
+	stage string,
 	requestBindingDigest string,
+	executionEnvelopeDigest string,
+	jobSetEnvelopeDigest string,
+	jobSetDigest string,
+	actualTaskDigest string,
+	rawCampaignBinding string,
 ) error {
+	var campaignBinding reliabletask.DataContentCampaignBinding
+	decoder := json.NewDecoder(bytes.NewBufferString(rawCampaignBinding))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&campaignBinding); err != nil {
+		return fmt.Errorf("decode ReliableTask observer campaign binding: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err == nil {
+		return fmt.Errorf("ReliableTask observer campaign binding contains multiple JSON values")
+	} else if err != io.EOF {
+		return fmt.Errorf("decode ReliableTask observer campaign binding trailing data: %w", err)
+	}
 	request := reliabletask.DataContentExecutionObservationRequest{
-		ExecutionID:          executionID,
-		Carrier:              carrier,
-		RequestBindingDigest: requestBindingDigest,
+		ExecutionID:             executionID,
+		Carrier:                 carrier,
+		Stage:                   stage,
+		RequestBindingDigest:    requestBindingDigest,
+		ExecutionEnvelopeDigest: executionEnvelopeDigest,
+		JobSetEnvelopeDigest:    jobSetEnvelopeDigest,
+		JobSetDigest:            jobSetDigest,
+		ActualTaskDigest:        actualTaskDigest,
+		Campaign:                campaignBinding,
 	}
 	cfg, err := importer.LoadFleetStoreConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},

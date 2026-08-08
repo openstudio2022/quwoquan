@@ -56,6 +56,7 @@ import (
 	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocesspersistence "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/infrastructure/persistence"
 	originalaccesspersistence "quwoquan_service/services/content-service/internal/media/media_original_access_fact/infrastructure/persistence"
+	originalaccessquotapersistence "quwoquan_service/services/content-service/internal/media/original_access_quota/infrastructure/persistence"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationmessaging "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/messaging"
@@ -178,6 +179,7 @@ func main() {
 	var postServiceOpts []postapp.PostServiceOption
 	var mediaStore *mediaassetpersistence.MongoMediaStore
 	var mediaOriginalAccessStore *originalaccesspersistence.MongoStore
+	var originalAccessQuotaStore *originalaccessquotapersistence.MongoStore
 	var mediaImageReprocessStore *mediareprocesspersistence.MongoStore
 	var mediaUploadSessionStore *uploadsessionpersistence.MongoStore
 	var behaviorEventStore ports.BehaviorEventStore
@@ -351,6 +353,10 @@ func main() {
 		mediaOriginalAccessStore = originalaccesspersistence.NewMongoStore(db)
 		if err := mediaOriginalAccessStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service MediaOriginalAccessFact indexes init failed: %v", err)
+		}
+		originalAccessQuotaStore = originalaccessquotapersistence.NewMongoStore(db)
+		if err := originalAccessQuotaStore.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service OriginalAccessQuota indexes init failed: %v", err)
 		}
 		mediaImageReprocessStore = mediareprocesspersistence.NewMongoStore(db)
 		if err := mediaImageReprocessStore.EnsureIndexes(ctx); err != nil {
@@ -781,6 +787,7 @@ func main() {
 		healthChecker,
 		mediaStore,
 		mediaOriginalAccessStore,
+		originalAccessQuotaStore,
 		mediaImageReprocessStore,
 		mediaUploadSessionStore,
 		commentDataAdapter,

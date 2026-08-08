@@ -54,9 +54,7 @@ Future<PreparedPostPublicationPayload> uploadArticleMediaForPublication({
     tagRefs: tagRefs,
     entityRefs: entityRefs,
     visibility: state.settings.isPublic ? 'public' : 'private',
-    assistantUsePolicy: state.settings.assistantUsePolicy.trim().isEmpty
-        ? 'inherit'
-        : state.settings.assistantUsePolicy.trim(),
+    assistantUsePolicy: state.settings.assistantUsePolicy,
   );
   final payload = Map<String, Object?>.from(basePayload)
     ..remove('mediaUrls')

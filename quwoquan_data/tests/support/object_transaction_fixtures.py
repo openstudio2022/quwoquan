@@ -116,6 +116,14 @@ def build_package(
             "creatorRefsRef": "creator.refs.json",
             "tagRefsRef": "tag.refs.json",
             "assetRefsRef": "asset.refs.json",
+            "assets": [
+                {
+                    "assetId": "cover",
+                    "objectKey": object_key,
+                    "sha256": digest,
+                    "bytes": image.stat().st_size,
+                }
+            ],
         },
     )
     (object_root / "page.md").write_text(

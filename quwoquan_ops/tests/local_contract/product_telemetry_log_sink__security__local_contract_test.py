@@ -9,11 +9,12 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib.common import ROOT, load_json_yaml
+from quwoquan_ops.cli.lib.common import ROOT
 from quwoquan_ops.cli.lib.product_telemetry_log_sink import (
     ProductTelemetryLogSink,
     load_product_telemetry_log_sink,
 )
+from quwoquan_ops.cli.lib.storage_contract_view import load_storage_contract_view
 
 
 LOCAL_ES_ENVIRONMENT = {
@@ -69,7 +70,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
     def test_contract_declares_one_elasticsearch_adapter_for_four_environments(
         self,
     ) -> None:
-        specification = load_json_yaml(
+        specification = load_storage_contract_view(
             ROOT
             / "quwoquan_service/services/product-ops-service/contracts/product_ops"
             / "event_record/storage.yaml"

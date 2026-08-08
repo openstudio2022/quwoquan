@@ -17,6 +17,20 @@ relationships:
 - {name: dataControlSource, target_object: assistant.SkillDataControlRequest, reference_fields: [dataControlRequestId], kind: projection_source, cardinality: 'N:1', consistency: runtime, access: named_reader, on_delete: retain}
 local_identity_reasons:
   skillId: stable active Skill package key used only as a query partition and never as projection identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.skill_activity_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 活动项只保存/返回 source object reference、状态、时间、失败码与恢复动作，不得包含用户问题、回答、scope、trigger 条件、Connector payload 或 Provider 正文。
 - accountId 只来自可信主体；skillId 为必填查询分区，非 owner 事实不得进入 Slice。

@@ -1,4 +1,4 @@
-"""Write the create-once research M100 promotion receipt."""
+"""Write create-once cumulative research scale promotion receipts."""
 from __future__ import annotations
 
 import hashlib
@@ -13,11 +13,21 @@ from content.release.canonical.campaign_scale_evidence import (
     load_campaign_scale_evidence,
 )
 from content.release.canonical.object_transaction_contract import _read_json
-from content.source.professional_video_receipt import (
-    assert_publishable_popularity_signals,
+from content.release.canonical.research_scale_capacity import ResearchScaleCapacityEvidenceError, project_capacity_throughput
+from content.release.canonical.research_scale_predecessor import (
+    ResearchScalePredecessorError,
+    load_predecessor_promotion,
+)
+from content.release.canonical.research_scale_promotion_timing import ResearchScalePromotionTimingError, validate_promotion_timing
+from content.release.canonical.research_scale_source_mix import ResearchScaleSourceMixError, validate_research_scale_source_mix
+from content.release.canonical.research_scale_video_popularity import (
+    VIDEO_POPULARITY_EVIDENCE_ERROR,
+    VIDEO_POPULARITY_SIGNALS,
+    ResearchScaleVideoPopularityError,
+    collect_m100_video_popularity_observations,
 )
 from core.io import write_json
-from core.paths import OUTPUT_ROOT, RELEASE_ROOT
+from core.paths import OUTPUT_ROOT, RELEASE_ROOT, research_scale_promotions_root
 from core.release_layout import payload_digest, payload_file
 from core.schema import assert_valid
 from governance.coverage.distribution import load_content_distribution_policy
@@ -25,9 +35,6 @@ from governance.coverage.distribution import load_content_distribution_policy
 
 class ResearchScalePromotionError(RuntimeError):
     pass
-
-
-_VIDEO_POPULARITY_BLOCKER = "DATA.RELEASE.VIDEO_POPULARITY_INCOMPLETE"
 
 
 def _safe_segment(value: str, *, label: str) -> str:
@@ -90,84 +97,37 @@ def _file_sha256(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
-def _assert_m100_video_popularity(
+def _collect_m100_video_popularity(
     release: Path,
     *,
     expected_video_count: int,
-) -> None:
-    """Recheck strict ranking evidence only at the M100 promotion boundary."""
-    desired = _read_json(payload_file(release, "desired_state.json"))
-    desired_refs = desired.get("desiredRefs")
-    post_refs = desired_refs.get("posts") if isinstance(desired_refs, Mapping) else None
-    if not isinstance(post_refs, list):
-        raise ResearchScalePromotionError(
-            f"{_VIDEO_POPULARITY_BLOCKER}: release desired video refs are missing"
+) -> dict[str, Any]:
+    """Validate and project truthful milestone popularity observations."""
+    try:
+        observations = collect_m100_video_popularity_observations(
+            release,
+            expected_video_count=expected_video_count,
         )
-    objects_root = payload_file(release, "objects")
-    video_count = 0
-    for raw_ref in post_refs:
-        post_ref = Path(str(raw_ref or ""))
-        if post_ref.is_absolute() or not post_ref.parts or ".." in post_ref.parts:
-            raise ResearchScalePromotionError(
-                f"{_VIDEO_POPULARITY_BLOCKER}: release post ref is unsafe"
-            )
-        object_root = objects_root / "posts" / post_ref
-        manifest = _read_json(object_root / "manifest.json")
-        if str(manifest.get("contentType") or "").strip() != "video":
-            continue
-        video_count += 1
-        rights = _read_json(object_root / "rights.json")
-        rights_assets = rights.get("assets")
-        if not isinstance(rights_assets, list):
-            raise ResearchScalePromotionError(
-                f"{_VIDEO_POPULARITY_BLOCKER}: {raw_ref} rights assets are missing"
-            )
-        ranked_video_assets = 0
-        for raw_asset in rights_assets:
-            if not isinstance(raw_asset, Mapping):
-                continue
-            binding = raw_asset.get("independentAssetReview")
-            if not isinstance(binding, Mapping) or binding.get("assetKind") != "video":
-                continue
-            receipt_ref = Path(str(binding.get("receiptRef") or ""))
-            if (
-                receipt_ref.is_absolute()
-                or not receipt_ref.parts
-                or ".." in receipt_ref.parts
-            ):
-                raise ResearchScalePromotionError(
-                    f"{_VIDEO_POPULARITY_BLOCKER}: {raw_ref} review receipt ref is unsafe"
-                )
-            receipt = _read_json(object_root / receipt_ref)
-            snapshot = receipt.get("assetSnapshot")
-            if (
-                receipt.get("assetKind") != "video"
-                or receipt.get("reviewDecision") != "accepted"
-                or not isinstance(snapshot, Mapping)
-                or snapshot.get("assetId") != binding.get("acquisitionAssetId")
-            ):
-                raise ResearchScalePromotionError(
-                    f"{_VIDEO_POPULARITY_BLOCKER}: {raw_ref} review binding is invalid"
-                )
-            try:
-                assert_publishable_popularity_signals(
-                    snapshot.get("popularitySignals"),
-                    asset_id=str(snapshot.get("assetId") or "<missing>"),
-                )
-            except (TypeError, ValueError) as exc:
-                raise ResearchScalePromotionError(
-                    f"{_VIDEO_POPULARITY_BLOCKER}: {exc}"
-                ) from exc
-            ranked_video_assets += 1
-        if ranked_video_assets < 1:
-            raise ResearchScalePromotionError(
-                f"{_VIDEO_POPULARITY_BLOCKER}: {raw_ref} has no ranked video asset"
-            )
-    if video_count != expected_video_count:
-        raise ResearchScalePromotionError(
-            f"{_VIDEO_POPULARITY_BLOCKER}: release video object count "
-            f"{video_count} != admitted {expected_video_count}"
-        )
+    except ResearchScaleVideoPopularityError as exc:
+        raise ResearchScalePromotionError(str(exc)) from exc
+    denominator = len(observations)
+    return {
+        "signalAvailability": [
+            {
+                "signal": signal,
+                **_rate_statistic(
+                    sum(row[field] is not None for row in observations),
+                    denominator,
+                ),
+            }
+            for signal, field in VIDEO_POPULARITY_SIGNALS
+        ],
+        "rankingCoverage": _rate_statistic(
+            sum(row["rankingEligible"] is True for row in observations),
+            denominator,
+        ),
+        "observations": observations,
+    }
 
 
 def write_research_scale_promotion(
@@ -175,11 +135,18 @@ def write_research_scale_promotion(
     release_id: str,
     promotion_id: str,
     campaign_evidence_path: Path,
+    target_scale: str = "M100",
+    predecessor_promotion_path: Path | None = None,
     release_root: Path = RELEASE_ROOT,
     output_root: Path = OUTPUT_ROOT,
 ) -> tuple[dict[str, Any], Path]:
     release_id = _safe_segment(release_id, label="releaseId")
     promotion_id = _safe_segment(promotion_id, label="promotionId")
+    target_scale = str(target_scale or "").strip().upper()
+    if target_scale not in {"M100", "M1000", "M10000"}:
+        raise ResearchScalePromotionError(
+            f"unsupported research milestone: {target_scale}"
+        )
     release = release_root / release_id
     header = _read_json(payload_file(release, "release.json"))
     admission = _read_json(payload_file(release, "asset_admission.json"))
@@ -216,6 +183,11 @@ def write_research_scale_promotion(
         raise ResearchScalePromotionError(
             "canonical campaign resource isolation evidence is not passed"
         )
+    try:
+        promotion_timing = validate_promotion_timing(target_scale=target_scale, evidence=evidence, resource_evidence=resource_evidence)
+        capacity_throughput = project_capacity_throughput(evidence=evidence, resource_evidence=resource_evidence)
+    except (ResearchScalePromotionTimingError, ResearchScaleCapacityEvidenceError) as exc:
+        raise ResearchScalePromotionError(str(exc)) from exc
     source_revision = str(evidence.get("sourceRevision") or "")
     entity_catalog_digest = str(evidence.get("entityCatalogDigest") or "")
     if (
@@ -226,7 +198,24 @@ def write_research_scale_promotion(
         raise ResearchScalePromotionError(
             "campaign sourceRevision/sourceDigest/entityCatalogDigest drift"
         )
+    try:
+        predecessor_reference, predecessor_counts = load_predecessor_promotion(
+            predecessor_promotion_path,
+            target_scale=target_scale,
+            source_revision=source_revision,
+            source_digest=source_digest_value,
+            entity_catalog_digest=entity_catalog_digest,
+            output_root=output_root,
+        )
+    except ResearchScalePredecessorError as exc:
+        raise ResearchScalePromotionError(str(exc)) from exc
     policy = load_content_distribution_policy()
+    if policy.video_popularity_signals != tuple(
+        signal for signal, _field in VIDEO_POPULARITY_SIGNALS
+    ):
+        raise ResearchScalePromotionError(
+            "video popularity policy signals differ from promotion statistics"
+        )
     carrier_rows = admission.get("carrierCounts")
     if not isinstance(carrier_rows, list):
         raise ResearchScalePromotionError("release carrierCounts are missing")
@@ -237,7 +226,10 @@ def write_research_scale_promotion(
     }
     carriers = ("homepage", "article", "image", "video")
     expected_carriers = set(carriers)
-    targets = dict(policy.m100_targets)
+    targets = {
+        carrier: policy.scale_target(target_scale, carrier)
+        for carrier in carriers
+    }
     lanes = {
         str(row.get("carrier") or ""): row
         for row in evidence.get("lanes") or []
@@ -249,7 +241,7 @@ def write_research_scale_promotion(
         or set(targets) != expected_carriers
     ):
         raise ResearchScalePromotionError(
-            "M100 requires complete homepage/article/image/video evidence"
+            f"{target_scale} requires complete homepage/article/image/video evidence"
         )
     promotion_counts: list[dict[str, Any]] = []
     for carrier in carriers:
@@ -278,7 +270,7 @@ def write_research_scale_promotion(
         discarded = _count(
             receipt.get("discardedCount"), label=f"{carrier} discardedCount"
         )
-        shortfall = _count(
+        receipt_shortfall = _count(
             receipt.get("shortfallCount"), label=f"{carrier} shortfallCount"
         )
         approved_quota = _count(
@@ -288,23 +280,29 @@ def write_research_scale_promotion(
             admission_row.get("researchAcceptedCount"),
             label=f"{carrier} researchAcceptedCount",
         )
+        carried = predecessor_counts[carrier]
+        required_delta = max(0, target - carried)
         discards = receipt.get("discards")
         if (
             receipt.get("carrier") != carrier
             or receipt.get("executionId") != lane.get("executionId")
             or receipt.get("phase") != "publish"
             or receipt.get("status") not in {"finalized", "partial"}
-            or approved_quota != target
+            or approved_quota != required_delta
             or selected != qualified + discarded
             or not isinstance(discards, list)
             or len(discards) != discarded
             or finalized != qualified
-            or accepted != qualified
-            or shortfall != max(0, target - qualified)
+            or accepted != carried + qualified
+            or receipt_shortfall != max(0, required_delta - qualified)
             or qualified < 1
         ):
             raise ResearchScalePromotionError(
                 f"{carrier} promotion count/receipt closure is inconsistent"
+            )
+        if receipt_shortfall != 0 or accepted < target:
+            raise ResearchScalePromotionError(
+                f"DATA.SCALE.ATTAINMENT_SHORTFALL: {carrier} requires {target} cumulative finalized objects"
             )
         if (
             _count(lane.get("finalizedCount"), label=f"{carrier} lane finalizedCount")
@@ -313,7 +311,7 @@ def write_research_scale_promotion(
                 lane.get("researchAcceptedCount"),
                 label=f"{carrier} lane researchAcceptedCount",
             )
-            != accepted
+            != qualified
         ):
             raise ResearchScalePromotionError(
                 f"{carrier} campaign/release accepted count drift"
@@ -324,9 +322,12 @@ def write_research_scale_promotion(
                 "targetCount": target,
                 "qualifiedCount": qualified,
                 "finalizedCount": finalized,
+                "predecessorCarriedCount": carried,
+                "newFinalizedCount": finalized,
+                "totalUniqueFinalizedCount": accepted,
                 "selectedCount": selected,
                 "discardedCount": discarded,
-                "shortfallCount": shortfall,
+                "shortfallCount": 0,
                 "researchAcceptedCount": accepted,
             }
         )
@@ -346,11 +347,9 @@ def write_research_scale_promotion(
     )
     illustrated_statistic = _rate_statistic(illustrated_count, article_count)
     text_only_statistic = _rate_statistic(text_only_count, article_count)
-    article_lane = next(
-        row for row in promotion_counts if row["carrier"] == "article"
-    )
+    article_lane = next(row for row in promotion_counts if row["carrier"] == "article")
     if (
-        article_count != article_lane["qualifiedCount"]
+        article_count != article_lane["totalUniqueFinalizedCount"]
         or illustrated_count + text_only_count != article_count
         or float(article_coverage.get("illustratedRate") or 0.0)
         != illustrated_statistic["rate"]
@@ -360,6 +359,10 @@ def write_research_scale_promotion(
         != illustrated_statistic["rate"]
     ):
         raise ResearchScalePromotionError("campaign article coverage evidence drift")
+    if illustrated_statistic["rate"] < policy.illustrated_rate_target:
+        raise ResearchScalePromotionError(
+            "DATA.SCALE.ATTAINMENT_SHORTFALL: article illustrated rate is below 0.9"
+        )
     duplicate_count = _count(
         evidence.get("duplicateAssetCount"), label="campaign duplicateAssetCount"
     )
@@ -367,10 +370,6 @@ def write_research_scale_promotion(
         evidence.get("crossLaneWriteCount"), label="campaign crossLaneWriteCount"
     )
     raw_recovery_rate = fault_evidence["automaticRecoveryRate"]
-    if not isinstance(raw_recovery_rate, (int, float)) or isinstance(
-        raw_recovery_rate, bool
-    ):
-        raise ResearchScalePromotionError("automaticRecoveryRate must be numeric")
     recovery_eligible = _count(
         fault_evidence.get("recoveryEligibleCount"), label="recoveryEligibleCount"
     )
@@ -378,19 +377,40 @@ def write_research_scale_promotion(
         fault_evidence.get("automaticRecoveredCount"),
         label="automaticRecoveredCount",
     )
-    recovery_statistic = _rate_statistic(
-        automatic_recovered,
-        recovery_eligible,
-    )
     expected_recovery_status = (
         "NOT_EXERCISED" if recovery_eligible == 0 else "MEASURED"
     )
+    expected_recovery_rate = (
+        round(automatic_recovered / recovery_eligible, 6)
+        if recovery_eligible
+        else None
+    )
     if (
         automatic_recovered > recovery_eligible
-        or float(raw_recovery_rate) != recovery_statistic["rate"]
+        or (
+            recovery_eligible == 0
+            and raw_recovery_rate is not None
+        )
+        or (
+            recovery_eligible > 0
+            and (
+                isinstance(raw_recovery_rate, bool)
+                or not isinstance(raw_recovery_rate, (int, float))
+                or float(raw_recovery_rate) != expected_recovery_rate
+            )
+        )
         or fault_evidence.get("automaticRecoveryStatus") != expected_recovery_status
     ):
         raise ResearchScalePromotionError("automatic recovery statistics drift")
+    minimum_recovery_samples = {"M100": 20, "M1000": 50, "M10000": 100}[target_scale]
+    if (
+        recovery_eligible < minimum_recovery_samples
+        or expected_recovery_rate is None
+        or expected_recovery_rate < policy.automatic_recovery_rate_target
+    ):
+        raise ResearchScalePromotionError(
+            "DATA.SCALE.ATTAINMENT_SHORTFALL: automatic recovery hard gate failed"
+        )
     if duplicate_count or cross_lane_count:
         raise ResearchScalePromotionError(
             "M100 duplicateAssetCount and crossLaneWriteCount must both be zero"
@@ -417,29 +437,8 @@ def write_research_scale_promotion(
         if isinstance(lane.get("retryChain"), list)
         and len(lane["retryChain"]) == 1
     )
-    statistics = {
-        "objectPassRate": _rate_statistic(
-            object_pass_numerator, object_pass_denominator
-        ),
-        "illustratedRate": illustrated_statistic,
-        "automaticRecoveryRate": recovery_statistic,
-        "firstPassRate": _rate_statistic(first_pass_lane_count, len(carriers)),
-        "discardRate": _rate_statistic(
-            discarded_count, object_pass_denominator
-        ),
-        "quotaAttainmentByCarrier": [
-            {
-                "carrier": carrier,
-                **_rate_statistic(
-                    int(row["qualifiedCount"]),
-                    int(row["targetCount"]),
-                ),
-            }
-            for carrier, row in zip(carriers, promotion_counts, strict=True)
-        ],
-    }
     try:
-        _assert_m100_video_popularity(
+        video_popularity = _collect_m100_video_popularity(
             release,
             expected_video_count=next(
                 int(row["researchAcceptedCount"])
@@ -451,8 +450,66 @@ def write_research_scale_promotion(
         raise
     except (OSError, TypeError, ValueError) as exc:
         raise ResearchScalePromotionError(
-            f"{_VIDEO_POPULARITY_BLOCKER}: release video evidence is unreadable: {exc}"
+            f"{VIDEO_POPULARITY_EVIDENCE_ERROR}: "
+            f"release video evidence is unreadable: {exc}"
         ) from exc
+    if (
+        video_popularity["rankingCoverage"]["rate"] != 1
+        or any(
+            row["rate"] != 1
+            for row in video_popularity["signalAvailability"]
+        )
+    ):
+        raise ResearchScalePromotionError(
+            "DATA.SCALE.ATTAINMENT_SHORTFALL: milestone videos require complete popularity signals and percentile"
+        )
+    try:
+        professional_image_source_mix = validate_research_scale_source_mix(admission)
+    except ResearchScaleSourceMixError as exc:
+        raise ResearchScalePromotionError(str(exc)) from exc
+    image_total = next(
+        int(row["totalUniqueFinalizedCount"])
+        for row in promotion_counts
+        if row["carrier"] == "image"
+    )
+    if professional_image_source_mix["acceptedImageAssetCount"] != image_total:
+        raise ResearchScalePromotionError(
+            "DATA.SOURCE.POOL_SHORTFALL: image provider evidence count differs from cumulative finalized count"
+        )
+    statistics = {
+        "objectPassRate": _rate_statistic(
+            object_pass_numerator, object_pass_denominator
+        ),
+        "illustratedRate": illustrated_statistic,
+        "videoPopularity": {
+            "statistical": policy.video_popularity_statistical,
+            "nonBlocking": policy.video_popularity_non_blocking,
+            **video_popularity,
+        },
+        "automaticRecoveryRate": {
+            "statistical": policy.automatic_recovery_statistical,
+            "nonBlocking": policy.automatic_recovery_non_blocking,
+            "status": expected_recovery_status,
+            "eligibleCount": recovery_eligible,
+            "automaticCount": automatic_recovered,
+            "targetRate": policy.automatic_recovery_rate_target,
+            "rate": expected_recovery_rate,
+        },
+        "firstPassRate": _rate_statistic(first_pass_lane_count, len(carriers)),
+        "discardRate": _rate_statistic(
+            discarded_count, object_pass_denominator
+        ),
+        "quotaAttainmentByCarrier": [
+            {
+                "carrier": carrier,
+                **_rate_statistic(
+                    int(row["totalUniqueFinalizedCount"]),
+                    int(row["targetCount"]),
+                ),
+            }
+            for carrier, row in zip(carriers, promotion_counts, strict=True)
+        ],
+    }
     document: dict[str, Any] = {
         "schema": "quwoquan_data.research_scale_promotion",
         "promotionId": promotion_id,
@@ -463,9 +520,14 @@ def write_research_scale_promotion(
         "sourceRevision": source_revision,
         "sourceDigest": source_digest_value,
         "entityCatalogDigest": entity_catalog_digest,
-        "targetScale": "M100",
+        "targetScale": target_scale,
+        "sourcePoolDigest": str(evidence["sourcePoolDigest"]),
+        "predecessorSourcePoolDigests": list(evidence["predecessorSourcePoolDigests"]),
+        **promotion_timing,
+        "capacityThroughputByCarrier": capacity_throughput,
         "carrierCounts": promotion_counts,
         "statistics": statistics,
+        "professionalImageSourceMix": professional_image_source_mix,
         "duplicateAssetCount": 0,
         "crossLaneWriteCount": 0,
         "resourceIsolationPassed": True,
@@ -490,9 +552,6 @@ def write_research_scale_promotion(
         "terminalResidualSampleAt": str(
             resource_evidence["terminalResidualSampleAt"]
         ),
-        "automaticRecoveryStatus": str(
-            fault_evidence["automaticRecoveryStatus"]
-        ),
         "campaignEvidenceRef": _evidence_ref(
             campaign_evidence_path, output_root=output_root
         ),
@@ -507,21 +566,26 @@ def write_research_scale_promotion(
         "faultInjectionEvidenceDigest": str(
             evidence["faultInjectionEvidenceDigest"]
         ),
-        "m1000Eligible": True,
+        "nextScaleEligible": {
+            "M100": "M1000",
+            "M1000": "M10000",
+            "M10000": "COMPLETE",
+        }[target_scale],
         "recordedAt": datetime.now(timezone.utc).isoformat(),
     }
+    if predecessor_reference is not None:
+        document["predecessorPromotion"] = predecessor_reference
     assert_valid(
         document,
         "release",
         "research_scale_promotion",
-        label="research M100 promotion",
+        label=f"research {target_scale} promotion",
     )
     path = (
-        output_root
-        / "data/release-promotions"
+        research_scale_promotions_root(output_root=output_root)
         / release_id
         / promotion_id
-        / "research-m100.json"
+        / f"research-{target_scale.lower()}.json"
     )
     try:
         path.parent.mkdir(parents=True, exist_ok=False)
@@ -531,9 +595,4 @@ def write_research_scale_promotion(
         ) from exc
     write_json(path, document)
     return document, path
-
-
-__all__ = [
-    "ResearchScalePromotionError",
-    "write_research_scale_promotion",
-]
+__all__ = ["ResearchScalePromotionError", "write_research_scale_promotion"]

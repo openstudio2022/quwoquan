@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,6 +84,7 @@ func (publisher *greetingPublisher) PublishGreeting(ctx context.Context, event g
 	greetingID, _ := event.Payload["id"].(string)
 	requesterID, _ := event.Payload["requesterPersonaId"].(string)
 	targetID, _ := event.Payload["targetPersonaId"].(string)
+	recipientAccountID, _ := event.Payload["recipientAccountId"].(string)
 	source, _ := event.Payload["source"].(string)
 	conversationID, _ := event.Payload["promotedConversationId"].(string)
 	expireAt, _ := event.Payload["expireAt"].(string)
@@ -100,9 +102,10 @@ func (publisher *greetingPublisher) PublishGreeting(ctx context.Context, event g
 	}
 	switch event.EventName {
 	case userevent.GreetingRequestSent:
-		if source == "" || expireAt == "" {
+		if source == "" || expireAt == "" || strings.TrimSpace(recipientAccountID) == "" {
 			return fmt.Errorf("GreetingRequestSent payload is incomplete")
 		}
+		canonicalPayload["recipientAccountId"] = strings.TrimSpace(recipientAccountID)
 		canonicalPayload["source"] = source
 		canonicalPayload["expireAt"] = expireAt
 	case userevent.GreetingRequestReplied:
@@ -125,9 +128,13 @@ func (publisher *greetingPublisher) PublishGreeting(ctx context.Context, event g
 	}
 	realtimePayload["targetAllowsStrangerGreeting"] = allows
 
-	// realtime 用户事件（在线红点/推送路由）：Sent/Cancelled 收件人是 target，
-	// Replied/Ignored 收件人是 requester。
-	recipient, actor := targetID, requesterID
+	// realtime 用户事件（在线红点/推送路由）：Sent 收件人是 canonical
+	// target Account；Cancelled 仍指向 target Persona，Replied/Ignored 指向 requester
+	// Persona。AppMessage 只消费 Sent 的 Account 身份。
+	recipient, actor := strings.TrimSpace(recipientAccountID), requesterID
+	if event.EventName != userevent.GreetingRequestSent {
+		recipient = targetID
+	}
 	if event.EventName == userevent.GreetingRequestReplied ||
 		event.EventName == userevent.GreetingRequestIgnored {
 		recipient, actor = requesterID, targetID
@@ -141,6 +148,7 @@ func (publisher *greetingPublisher) PublishGreeting(ctx context.Context, event g
 		GreetingID:                   event.AggregateID,
 		RequesterPersonaID:           requesterID,
 		TargetPersonaID:              targetID,
+		RecipientAccountID:           strings.TrimSpace(recipientAccountID),
 		Source:                       source,
 		PromotedConversationID:       conversationID,
 		ExpireAt:                     expireAt,

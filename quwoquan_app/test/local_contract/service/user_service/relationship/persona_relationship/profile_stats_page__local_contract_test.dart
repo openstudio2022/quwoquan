@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
@@ -22,7 +23,10 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/profile_stats_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-002
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -277,6 +281,7 @@ class _TestUserProfileRepository extends MockUserProfileRepository
     this.following = const <ProfileSocialRelationRowViewData>[],
     this.circles = const <PersonaCircleSlice>[],
     this.followersError,
+    this.followersLoader,
   });
 
   final UserHomepageBundleViewData bundle;
@@ -284,6 +289,12 @@ class _TestUserProfileRepository extends MockUserProfileRepository
   final List<ProfileSocialRelationRowViewData> following;
   final List<PersonaCircleSlice> circles;
   final Object? followersError;
+  final Future<CursorPage<ProfileSocialRelationRowViewData>> Function({
+    String? query,
+    String? cursor,
+    required int limit,
+  })?
+  followersLoader;
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
@@ -299,6 +310,10 @@ class _TestUserProfileRepository extends MockUserProfileRepository
     String? cursor,
     int limit = 20,
   }) async {
+    final loader = followersLoader;
+    if (loader != null) {
+      return loader(query: query, cursor: cursor, limit: limit);
+    }
     if (followersError != null) {
       throw followersError!;
     }
@@ -345,6 +360,73 @@ class _TestUserProfileRepository extends MockUserProfileRepository
       nextCursor: end < items.length ? '$end' : null,
       totalCount: items.length,
     );
+  }
+}
+
+final class _ControlledCapabilityRepository
+    implements RelationshipCapabilityRepository {
+  final List<Completer<RelationshipCapabilityViewData>> requests =
+      <Completer<RelationshipCapabilityViewData>>[];
+
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => true;
+
+  @override
+  Future<RelationshipCapabilityViewData> getCapability(String targetUserId) {
+    final request = Completer<RelationshipCapabilityViewData>();
+    requests.add(request);
+    return request.future;
+  }
+}
+
+final class _SequenceCapabilityRepository
+    implements RelationshipCapabilityRepository {
+  _SequenceCapabilityRepository(this.responses);
+
+  final List<RelationshipCapabilityViewData> responses;
+  var calls = 0;
+
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => true;
+
+  @override
+  Future<RelationshipCapabilityViewData> getCapability(
+    String targetUserId,
+  ) async {
+    final index = calls++;
+    if (index >= responses.length) {
+      throw StateError('No capability response configured');
+    }
+    return responses[index];
+  }
+}
+
+final class _RecordingRelationshipCommandWriter
+    implements PersonaRelationshipCommandWriter {
+  var followCalls = 0;
+  var unfollowCalls = 0;
+
+  @override
+  Future<void> follow(
+    String targetPersonaId, {
+    required String sourceSurfaceId,
+  }) async {
+    followCalls += 1;
+  }
+
+  @override
+  Future<void> unfollow(String targetPersonaId) async {
+    unfollowCalls += 1;
+  }
+}
+
+final class _ReadbackChatRepository extends MockChatRepository {
+  var getConversationCalls = 0;
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) async {
+    getConversationCalls += 1;
+    return super.getConversation(conversationId);
   }
 }
 
@@ -530,6 +612,9 @@ Widget _buildTestApp({
   String userId = 'profile_target',
   bool authenticated = true,
   _TestCircleMembershipQuery? circleMembershipQuery,
+  RelationshipCapabilityRepository? capabilityRepository,
+  PersonaRelationshipCommandWriter? relationshipCommandWriter,
+  _ReadbackChatRepository? chatRepository,
 }) {
   return ProviderScope(
     overrides: [
@@ -540,6 +625,16 @@ Widget _buildTestApp({
       userProfileCircleMembershipQueryProvider.overrideWithValue(
         circleMembershipQuery ?? _TestCircleMembershipQuery(repository.circles),
       ),
+      if (capabilityRepository != null)
+        relationshipCapabilityRepositoryForSurfaceProvider.overrideWith(
+          (ref, surface) => capabilityRepository,
+        ),
+      if (relationshipCommandWriter != null)
+        personaRelationshipCommandWriterProvider.overrideWith(
+          (ref, surface) => relationshipCommandWriter,
+        ),
+      if (chatRepository != null)
+        chatConversationRepositoryProvider.overrideWithValue(chatRepository),
       authSessionControllerProvider.overrideWith(
         authenticated
             ? _AuthenticatedAuthSessionController.new
@@ -583,6 +678,13 @@ Widget _buildTestApp({
             builder: (_, state) =>
                 Text('User ${state.pathParameters['userHandle']}'),
           ),
+          GoRoute(
+            path: AppRoutePaths.chatDetailPathTemplate.replaceAll(
+              '{id}',
+              ':id',
+            ),
+            builder: (_, state) => Text('Chat ${state.pathParameters['id']}'),
+          ),
         ],
       ),
     ),
@@ -595,6 +697,11 @@ Finder _segmentedControl() =>
 Finder _segmentedLabel(String label) {
   return find.descendant(of: _segmentedControl(), matching: find.text(label));
 }
+
+Finder _relationAction(String label) => find.descendant(
+  of: find.byType(CustomScrollView),
+  matching: find.text(label),
+);
 
 TextEditingController _searchController(WidgetTester tester) {
   final field = tester.widget<CupertinoSearchTextField>(
@@ -1083,6 +1190,209 @@ void main() {
 
       expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
       expect(find.text(SearchText.reload), findsOneWidget);
+    });
+
+    testWidgets('关注命令ACK后仍等待Remote capability收敛才更新按钮', (tester) async {
+      final target = _row(
+        id: 'fan_follow',
+        displayName: '待关注用户',
+        userHandle: 'fan_follow',
+      );
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'profile_target',
+          followerCount: 1,
+          followingCount: 0,
+          circleCount: 0,
+        ),
+        followers: <ProfileSocialRelationRowViewData>[target],
+      );
+      final capabilityRepository = _ControlledCapabilityRepository();
+      final writer = _RecordingRelationshipCommandWriter();
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'fans',
+          repository: repository,
+          capabilityRepository: capabilityRepository,
+          relationshipCommandWriter: writer,
+        ),
+      );
+      await _pumpInitialLoad(tester);
+      await tester.tap(_relationAction(FoundationText.follow));
+      await tester.pump();
+
+      expect(capabilityRepository.requests, hasLength(1));
+      capabilityRepository.requests.first.complete(
+        _capability(targetId: target.personaId, relationState: 'not_following'),
+      );
+      await _pumpFrames(tester, count: 3);
+      expect(writer.followCalls, 1);
+      expect(capabilityRepository.requests, hasLength(2));
+      expect(_relationAction(FoundationText.follow), findsOneWidget);
+
+      capabilityRepository.requests.last.complete(
+        _capability(targetId: target.personaId, relationState: 'following'),
+      );
+      await _pumpFrames(tester, count: 3);
+      expect(_relationAction(FoundationText.following), findsOneWidget);
+    });
+
+    testWidgets('取关未收敛保留行并可重试同一关系意图', (tester) async {
+      final target = _row(
+        id: 'following_retry',
+        displayName: '仍在关注',
+        userHandle: 'following_retry',
+        relationState: 'following',
+      );
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'me',
+          followerCount: 0,
+          followingCount: 1,
+          circleCount: 0,
+          isOwner: true,
+        ),
+        following: <ProfileSocialRelationRowViewData>[target],
+      );
+      final capabilityRepository =
+          _SequenceCapabilityRepository(<RelationshipCapabilityViewData>[
+            _capability(targetId: target.personaId, relationState: 'following'),
+            _capability(targetId: target.personaId, relationState: 'following'),
+            _capability(targetId: target.personaId, relationState: 'following'),
+            _capability(
+              targetId: target.personaId,
+              relationState: 'not_following',
+            ),
+          ]);
+      final writer = _RecordingRelationshipCommandWriter();
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'following',
+          userId: 'me',
+          repository: repository,
+          capabilityRepository: capabilityRepository,
+          relationshipCommandWriter: writer,
+        ),
+      );
+      await _pumpInitialLoad(tester);
+      await tester.tap(_relationAction(FoundationText.following));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(ProfileText.profileStatsUnfollow));
+      await tester.pumpAndSettle();
+
+      expect(find.text(target.displayName), findsOneWidget);
+      expect(writer.unfollowCalls, 1);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+
+      await tester.tap(find.text(ContentText.tryAgain));
+      await tester.pumpAndSettle();
+      expect(writer.unfollowCalls, 2);
+      expect(find.text(target.displayName), findsNothing);
+    });
+
+    testWidgets('私信只在Create后GetConversation权威回读收敛才导航', (tester) async {
+      final target = _row(
+        id: 'mutual_message',
+        displayName: '互关联系人',
+        userHandle: 'mutual_message',
+        relationState: 'mutual',
+      );
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'profile_target',
+          followerCount: 1,
+          followingCount: 0,
+          circleCount: 0,
+        ),
+        followers: <ProfileSocialRelationRowViewData>[target],
+      );
+      final chatRepository = _ReadbackChatRepository();
+
+      await tester.pumpWidget(
+        _buildTestApp(
+          type: 'fans',
+          repository: repository,
+          chatRepository: chatRepository,
+        ),
+      );
+      await _pumpInitialLoad(tester);
+      await tester.tap(find.text(ProfileText.profileStatsMutual));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(ProfileText.profileDirectMessage));
+      await tester.pumpAndSettle();
+
+      expect(chatRepository.getConversationCalls, 1);
+      expect(find.textContaining('Chat '), findsOneWidget);
+    });
+
+    testWidgets('连续搜索的旧响应不能覆盖较新Remote结果', (tester) async {
+      final oldRequest =
+          Completer<CursorPage<ProfileSocialRelationRowViewData>>();
+      final newRequest =
+          Completer<CursorPage<ProfileSocialRelationRowViewData>>();
+      final repository = _TestUserProfileRepository(
+        bundle: _bundle(
+          subjectUserId: 'profile_target',
+          followerCount: 1,
+          followingCount: 0,
+          circleCount: 0,
+        ),
+        followersLoader: ({query, cursor, required limit}) {
+          if (query == 'old') {
+            return oldRequest.future;
+          }
+          if (query == 'new') {
+            return newRequest.future;
+          }
+          return Future<CursorPage<ProfileSocialRelationRowViewData>>.value(
+            CursorPage<ProfileSocialRelationRowViewData>(
+              items: <ProfileSocialRelationRowViewData>[
+                _row(id: 'initial', displayName: '初始结果', userHandle: 'initial'),
+              ],
+            ),
+          );
+        },
+      );
+
+      await tester.pumpWidget(
+        _buildTestApp(type: 'fans', repository: repository),
+      );
+      await _pumpInitialLoad(tester);
+      await tester.enterText(find.byType(CupertinoSearchTextField), 'old');
+      await tester.pump(const Duration(milliseconds: 320));
+      await tester.enterText(find.byType(CupertinoSearchTextField), 'new');
+      await tester.pump(const Duration(milliseconds: 320));
+
+      newRequest.complete(
+        CursorPage<ProfileSocialRelationRowViewData>(
+          items: <ProfileSocialRelationRowViewData>[
+            _row(
+              id: 'new_result',
+              displayName: '较新结果',
+              userHandle: 'new_result',
+            ),
+          ],
+        ),
+      );
+      await _pumpFrames(tester, count: 3);
+      expect(find.text('较新结果'), findsOneWidget);
+
+      oldRequest.complete(
+        CursorPage<ProfileSocialRelationRowViewData>(
+          items: <ProfileSocialRelationRowViewData>[
+            _row(
+              id: 'old_result',
+              displayName: '迟到旧结果',
+              userHandle: 'old_result',
+            ),
+          ],
+        ),
+      );
+      await _pumpFrames(tester, count: 3);
+      expect(find.text('较新结果'), findsOneWidget);
+      expect(find.text('迟到旧结果'), findsNothing);
     });
 
     testWidgets('游客点击关注会进入登录页', (tester) async {

@@ -83,7 +83,7 @@ CircleFeedItemView buildCircleFeedItemContract({
   required String postId,
   String contentType = 'image',
   String? contentIdentity,
-  String? assistantUsePolicy,
+  AssistantUsePolicy? assistantUsePolicy,
   String? authorId,
   String? authorDisplayName,
   String? authorAvatarUrl,

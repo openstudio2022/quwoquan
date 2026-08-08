@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/campaign_failed_execution_reconciliation_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "decision",
+    "reason",
+    "errorCode",
+    "originalSourceIdentity",
+    "observedSourceIdentity",
+    "submissions",
+    "campaignEvidence",
+    "executionEvidence",
+    "blockerEvidence",
+    "retryPolicy",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.campaign_failed_execution_reconciliation_receipt"
+    },
+    "rootExecutionId": { "type": "string", "minLength": 1 },
+    "decision": { "const": "superseded" },
+    "reason": {
+      "enum": [
+        "source_drift",
+        "controller_interrupted_before_claim",
+        "claimed_execution_source_drift"
+      ]
+    },
+    "errorCode": {
+      "enum": [
+        "DATA.CAMPAIGN.FAILED_EXECUTION_SOURCE_DRIFT",
+        "DATA.CAMPAIGN.CONTROLLER_INTERRUPTED_BEFORE_CLAIM",
+        "DATA.CAMPAIGN.CLAIMED_EXECUTION_SOURCE_DRIFT"
+      ]
+    },
+    "originalSourceIdentity": {
+      "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/sourceIdentity"
+    },
+    "observedSourceIdentity": {
+      "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/sourceIdentity"
+    },
+    "submissions": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        },
+        "article": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        },
+        "image": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        },
+        "video": {
+          "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/submissionEvidence"
+        }
+      }
+    },
+    "campaignEvidence": {
+      "oneOf": [
+        { "$ref": "#/$defs/sourceDriftCampaignEvidence" },
+        { "$ref": "#/$defs/controllerInterruptedBeforeClaimEvidence" }
+      ]
+    },
+    "executionEvidence": {
+      "oneOf": [
+        { "$ref": "#/$defs/executionAbsence" },
+        { "$ref": "#/$defs/claimedExecutionSupersessions" }
+      ]
+    },
+    "blockerEvidence": { "$ref": "#/$defs/fileEvidence" },
+    "retryPolicy": { "const": "new_four_lane_execution_with_retryOf" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "receiptDigest": { "$ref": "#/$defs/sha256" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "reason": { "const": "source_drift" } },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.FAILED_EXECUTION_SOURCE_DRIFT"
+          },
+          "campaignEvidence": {
+            "$ref": "#/$defs/sourceDriftCampaignEvidence"
+          },
+          "executionEvidence": {
+            "$ref": "#/$defs/executionAbsence"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "controller_interrupted_before_claim" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.CONTROLLER_INTERRUPTED_BEFORE_CLAIM"
+          },
+          "campaignEvidence": {
+            "$ref": "#/$defs/controllerInterruptedBeforeClaimEvidence"
+          },
+          "executionEvidence": {
+            "$ref": "#/$defs/executionAbsence"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "claimed_execution_source_drift" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.CLAIMED_EXECUTION_SOURCE_DRIFT"
+          },
+          "campaignEvidence": {
+            "$ref": "#/$defs/sourceDriftCampaignEvidence"
+          },
+          "executionEvidence": {
+            "$ref": "#/$defs/claimedExecutionSupersessions"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "executionAbsence": {
+      "type": "object",
+      "required": ["lanes"],
+      "additionalProperties": false,
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "$ref": "campaign_submission_reconciliation_receipt.schema.json#/$defs/laneExecutionAbsence"
+          }
+        }
+      }
+    },
+    "claimedExecutionSupersessions": {
+      "type": "object",
+      "required": ["lanes"],
+      "additionalProperties": false,
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/claimedExecutionSupersession" }
+        }
+      }
+    },
+    "claimedExecutionSupersession": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionRootRef",
+        "executionRootExists",
+        "supersessionReceipt",
+        "supersessionReceiptDigest",
+        "previousStatus"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionRootRef": { "type": "string", "minLength": 1 },
+        "executionRootExists": { "const": true },
+        "supersessionReceipt": { "$ref": "#/$defs/fileEvidence" },
+        "supersessionReceiptDigest": { "$ref": "#/$defs/sha256" },
+        "previousStatus": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sourceDriftCampaignEvidence": {
+      "type": "object",
+      "required": ["plan", "report", "runtimeSnapshot", "claims"],
+      "additionalProperties": false,
+      "properties": {
+        "plan": { "$ref": "#/$defs/fileEvidence" },
+        "report": { "$ref": "#/$defs/fileEvidence" },
+        "runtimeSnapshot": { "$ref": "#/$defs/fileEvidence" },
+        "claims": {
+          "type": "object",
+          "required": ["homepage", "article", "image", "video"],
+          "additionalProperties": false,
+          "properties": {
+            "homepage": { "$ref": "#/$defs/fileEvidence" },
+            "article": { "$ref": "#/$defs/fileEvidence" },
+            "image": { "$ref": "#/$defs/fileEvidence" },
+            "video": { "$ref": "#/$defs/fileEvidence" }
+          }
+        }
+      }
+    },
+    "controllerInterruptedBeforeClaimEvidence": {
+      "type": "object",
+      "required": [
+        "plan",
+        "runtimeSnapshot",
+        "campaignReportExists",
+        "claimsPresent",
+        "runtimeLaneCheckpointsPresent"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "plan": { "$ref": "#/$defs/fileEvidence" },
+        "runtimeSnapshot": { "$ref": "#/$defs/fileEvidence" },
+        "campaignReportExists": { "const": false },
+        "claimsPresent": { "const": false },
+        "runtimeLaneCheckpointsPresent": { "const": false }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "fileEvidence": {
+      "type": "object",
+      "required": ["ref", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

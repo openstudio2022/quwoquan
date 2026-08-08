@@ -54,9 +54,8 @@ types:
     - {name: connectionId, source: path.connectionId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
   ResolveConnectorCapabilityGrantRequest:
-    description: Assistant 等受信服务在每个工具安全边界提交的最小授权求交输入；不得包含 token、credential 或 Connector Provider 参数。
+    description: Assistant 等受信服务在每个工具安全边界提交的最小授权求交输入；账号只能来自验签 principal 的真实 account subject，请求不得包含 accountId、token、credential 或 Connector Provider 参数。
     fields:
-    - {name: accountId, source: accountId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: write, reference: true}
     - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: allow, api_exposure: none, ops_exposure: write}
     - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: write}
     - {name: connectionRefs, source: connectionRefs, type: '[]string', constraints: [NOT_NULL], classification: PRIVATE, log_policy: metadata_only, api_exposure: none, ops_exposure: write}

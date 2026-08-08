@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
@@ -44,9 +43,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/pre
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
-import 'package:quwoquan_app/runtime/di/discovery_state_provider.dart';
-import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 
 part 'home_circles_hub_page_widgets.dart';
 
@@ -460,10 +457,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      ref: ref,
       posts: viewerDtos,
-      discoveryState: ref.read(discoveryStateProvider),
-      relationshipState: ref.read(userRelationshipStateProvider),
-      postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
     final navFeedRequestId = ref

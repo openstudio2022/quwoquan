@@ -51,7 +51,7 @@
 - canonical：`quwoquan_app/lib/runtime/auth/auth_gate.dart`
 - canonical：`quwoquan_app/lib/runtime/auth/auth_continuation.dart`
 - canonical：`quwoquan_app/lib/runtime/di/navigation/app_router.dart`
-- canonical：`quwoquan_app/lib/runtime/di/shell/main_app_shell.dart`
+- canonical：`quwoquan_app/lib/runtime/shell/main_app_shell.dart`
 
 ## 5. 验收场景
 

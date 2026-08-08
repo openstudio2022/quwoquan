@@ -1,24 +1,28 @@
 events:
 - name: PersonaCreated
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaCreated
   payload_entity: Persona
   payload_fields:
   - userId
   - personaId
 - name: PersonaUpdated
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaUpdated
   payload_entity: Persona
   payload_fields:
   - userId
   - personaId
 - name: PersonaRetired
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaRetired
   payload_entity: Persona
   payload_fields:
   - userId
   - personaId
 - name: PersonaActivated
   delivery_semantics: transactional_outbox
+  wire_event_type: PersonaActivated
   payload_entity: Persona
   payload_fields:
   - userId

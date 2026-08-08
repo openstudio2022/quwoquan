@@ -278,7 +278,11 @@ func NewRuntimeRegistryWithCanonicalReaders(
 	readers domainreader.CanonicalReaders,
 	extra ...application.RegisteredResolver,
 ) (*application.ResolverRegistry, error) {
-	canonical, err := NewCanonicalDomainResolverRegistrations(runs, readers)
+	canonical, err := NewCanonicalDomainResolverRegistrations(
+		descriptors,
+		runs,
+		readers,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -54,7 +54,7 @@ func (s *ReadFactService) AppendReadFact(
 ) (ReadFactAck, error) {
 	if strings.TrimSpace(commandmeta.IdempotencyKey(ctx)) == "" {
 		return ReadFactAck{}, contentgenerated.AppErrorFromIdempotencyConflict(
-			"UpdateProfileInteractionState requires Idempotency-Key",
+			"AppendProfileInteractionReadFact requires Idempotency-Key",
 		)
 	}
 	fact, err := readfactmodel.New(

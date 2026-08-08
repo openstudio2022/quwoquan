@@ -21,6 +21,7 @@ N0-5：freeze 物化完整样本文档（不再只存 sampleIds）。sample_join
 rec_training_samples 生命周期，保证跨周可复现。
 """
 import argparse
+import hashlib
 import os
 import sys
 from datetime import datetime, timezone
@@ -42,12 +43,31 @@ def _default_dataset_id(now: datetime) -> str:
     return f"rds_{iso.year}w{iso.week:02d}"
 
 
+def _dataset_digest(scenario: str, rows: list[dict]) -> str:
+    identities = sorted(str(row.get("_id") or "").strip() for row in rows)
+    if not identities or any(not identity for identity in identities):
+        raise ValueError("replay dataset rows require immutable source identities")
+    material = scenario.strip() + "\n" + "\n".join(identities)
+    return "sha256:" + hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
 def freeze(args) -> int:
     client = MongoClient(args.mongodb_uri)
     db = client[args.db]
     samples_coll = db["rec_training_samples"]
     datasets_coll = db[REPLAY_DATASET_COLLECTION]
     snapshot_coll = db[REPLAY_SAMPLE_COLLECTION]
+
+    datasets_coll.create_index(
+        [("datasetDigest", 1)],
+        unique=True,
+        name="uq_recommendation_replay_dataset_digest",
+    )
+    snapshot_coll.create_index(
+        [("datasetId", 1), ("sourceSampleId", 1)],
+        unique=True,
+        name="uq_recommendation_replay_sample_identity",
+    )
 
     # 物化快照需要完整样本文档（features/labels/ts），不再只投影 ids。
     rows = list(
@@ -68,6 +88,7 @@ def freeze(args) -> int:
     eval_rows = rows[val_end:]
     now = datetime.now(timezone.utc)
     dataset_id = args.dataset_id or _default_dataset_id(now)
+    dataset_digest = _dataset_digest(args.scenario, eval_rows)
 
     existing = datasets_coll.find_one({"_id": dataset_id})
     if existing:
@@ -96,6 +117,7 @@ def freeze(args) -> int:
     datasets_coll.insert_one({
         "_id": dataset_id,
         "scenario": args.scenario,
+        "datasetDigest": dataset_digest,
         "frozenAt": now,
         "sampleCount": 0,
         "snapshotCollection": REPLAY_SAMPLE_COLLECTION,
@@ -112,6 +134,7 @@ def freeze(args) -> int:
                 "account closure reduced replay dataset below minimum size "
                 f"(closed_subjects={len(newly_closed)})"
             )
+        dataset_digest = _dataset_digest(args.scenario, eval_rows)
         snapshot_docs = []
         for row in eval_rows:
             doc = dict(row)
@@ -150,6 +173,7 @@ def freeze(args) -> int:
             {"_id": dataset_id, "privacyStatus": "building"},
             {"$set": {
                 "privacyStatus": "active",
+                "datasetDigest": dataset_digest,
                 "sampleCount": len(eval_rows),
                 "tsRange": {
                     "from": eval_rows[0].get("ts"),

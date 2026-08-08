@@ -3,14 +3,24 @@ from __future__ import annotations
 
 import hashlib
 import http.client
-from datetime import datetime, timezone
 import threading
 import urllib.parse
 import urllib.robotparser
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueError,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
 from core.runtime_policy import active_runtime_policy
+from core.source_fidelity import assess_source_content_fidelity
+from governance.coverage.source_registry import resolve_travel_source_runtime
+
 from content.source.fetch_http import _http_get_bytes
 from content.source.fetch_text import (
     _USER_AGENT,
@@ -20,15 +30,6 @@ from content.source.fetch_text import (
     extract_page_text_with_inline_images,
 )
 from content.source.mediawiki_page import fetch_mediawiki_page_bundle_for_url
-from core.data_issue import (
-    DataIssueCode,
-    DataIssueError,
-    DataIssueStage,
-    DataRecoveryAction,
-    data_issue,
-)
-from core.source_fidelity import assess_source_content_fidelity
-from governance.coverage.source_registry import resolve_travel_source_runtime
 from content.source.research import network_io
 from content.source.research.article_frontier_contract import FileDailyPageBudget
 from content.source.research.article_frontier_profile import (
@@ -272,7 +273,10 @@ def fetch_source_payload(
                     ),
                 )
             )
-        from core.source_layout import merge_rendered_text_layout, render_source_markdown
+        from core.source_layout import (
+            merge_rendered_text_layout,
+            render_source_markdown,
+        )
         from core.wiki_wikitext import parse_wikitext_layout
 
         host = urllib.parse.urlparse(url).hostname or ""
@@ -312,7 +316,12 @@ def fetch_source_payload(
                 list(bundle.rendered_image_titles),
                 entity_id=entity_id,
                 entity_aliases=(),
-                limit=12,
+                # A page-owned Wikivoyage source unit must not silently lose a
+                # later semantically relevant figure because Commons returns
+                # titles alphabetically.  The provider helper still enforces
+                # its bounded 50-title API batch; ``None`` means retain every
+                # admissible bitmap from that frozen batch.
+                limit=None,
                 collection_page_url=url,
                 require_metadata_entity_match=False,
             )

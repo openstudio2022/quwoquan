@@ -359,6 +359,15 @@ def build_entity_object_transaction_package(
                 if str(issue).strip()
             ]
             if (
+                not require_rights_proof
+                and rights_audit_status is RightsAuditStatus.VERIFIED
+                and not authorization_proof
+            ):
+                rights_audit_status = RightsAuditStatus.UNVERIFIED
+                rights_audit_issues.append(
+                    "authorizationProof: not independently verified for research distribution"
+                )
+            if (
                 rights_audit_status is not RightsAuditStatus.VERIFIED
                 and not rights_audit_issues
             ):
@@ -466,7 +475,14 @@ def build_entity_object_transaction_package(
                     "bytes": asset_source.stat().st_size,
                 }
             )
-            canonical_assets.append({**raw, "objectKey": object_key})
+            canonical_assets.append(
+                {
+                    **raw,
+                    "objectKey": object_key,
+                    "sha256": digest,
+                    "bytes": asset_source.stat().st_size,
+                }
+            )
 
         if not cas_rows:
             raise ObjectTransactionError("entity 事务至少需要一个已授权发布资产")

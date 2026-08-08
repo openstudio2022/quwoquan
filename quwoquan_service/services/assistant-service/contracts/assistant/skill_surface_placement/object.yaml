@@ -33,8 +33,20 @@ local_identity_reasons:
     只通过所属服务的 typed reader 校验存在性和管理员权限
   disabledSkillIds: >-
     active SkillPackageRelease 内的稳定 Skill key 集合；不是本聚合拥有的子对象身份
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.assistant.skill_surface_placement.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 同一 surfaceKind + surfaceId 最多一个 Placement；Conversation 与 Circle 的事实和成员权限仍归所属服务
 - all_shared_eligible 使 active package 中 shared-safe 且未禁用的官方 Skill 对新 Run 可用

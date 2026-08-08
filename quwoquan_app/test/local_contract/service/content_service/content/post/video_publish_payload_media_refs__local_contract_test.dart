@@ -63,9 +63,12 @@ void main() {
     expect(prepared.payload, isNot(contains('videoUrl')));
     expect(prepared.payload, isNot(contains('thumbnailUrl')));
     expect(prepared.payload, isNot(contains('coverUrl')));
+    // payload 是发布命令的 wire 形态中转 map，coverStrategy 最终经
+    // `_optionalPayloadText` 落成字符串：断言 canonical wire 值，塞 Dart 枚举
+    // 会被 toString 成 `MediaCoverStrategy.firstFrame` 发给云侧。
     expect(
       prepared.payload['coverStrategy'],
-      MediaCoverStrategy.firstFrame,
+      MediaCoverStrategy.firstFrame.wireName,
     );
     expect(prepared.payload['durationMs'], 1600);
     expect(prepared.payload['width'], 1080);

@@ -22,7 +22,7 @@ import 'package:quwoquan_app/design_system/search/app_search_field.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/add_contact_entry_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/my_qr_card.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_card.dart';
 
 /// 添加联系人主页：胶囊搜索框 + 扫一扫 / 手机联系人入口 + 我的二维码大卡。
 ///

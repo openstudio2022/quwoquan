@@ -2,12 +2,18 @@ package reliabletask
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"time"
 )
 
 type DataContentFleetReport struct {
 	Schema                             string                   `json:"schema"`
+	ExecutionID                        string                   `json:"executionId"`
+	Stage                              string                   `json:"stage"`
+	JobSetEnvelopeDigest               string                   `json:"jobSetEnvelopeDigest"`
+	JobSetDigest                       string                   `json:"jobSetDigest"`
+	ActualTaskDigest                   string                   `json:"actualTaskDigest"`
 	Passed                             bool                     `json:"passed"`
 	Backend                            string                   `json:"backend"`
 	Total                              int                      `json:"total"`
@@ -15,6 +21,7 @@ type DataContentFleetReport struct {
 	StageCompletedCount                int                      `json:"stageCompletedCount"`
 	PublishTaskCount                   int                      `json:"publishTaskCount"`
 	ObjectTransactionResultCount       int                      `json:"objectTransactionResultCount"`
+	ResearchAcceptedCount              int                      `json:"researchAcceptedCount"`
 	CommercialAcceptedCount            int                      `json:"commercialAcceptedCount"`
 	FleetControlPlaneThroughputPerHour float64                  `json:"fleetControlPlaneThroughputPerHour"`
 	FleetAcceptedThroughputPerHour     float64                  `json:"fleetAcceptedThroughputPerHour"`
@@ -41,6 +48,31 @@ type DataContentFleetReport struct {
 	CompletedAt                        string                   `json:"completedAt"`
 }
 
+func BindDataContentFleetReport(
+	report DataContentFleetReport,
+	executionID string,
+	stage string,
+	jobSetEnvelopeDigest string,
+	jobSetDigest string,
+	actualTaskDigest string,
+) (DataContentFleetReport, error) {
+	if strings.TrimSpace(executionID) == "" ||
+		(strings.TrimSpace(stage) != "author" && strings.TrimSpace(stage) != "publish") ||
+		!validSHA256Digest(jobSetEnvelopeDigest) ||
+		!validSHA256Digest(jobSetDigest) ||
+		!validSHA256Digest(actualTaskDigest) {
+		return DataContentFleetReport{}, fmt.Errorf(
+			"data content fleet report attempt binding is invalid",
+		)
+	}
+	report.ExecutionID = strings.TrimSpace(executionID)
+	report.Stage = strings.TrimSpace(stage)
+	report.JobSetEnvelopeDigest = strings.TrimSpace(jobSetEnvelopeDigest)
+	report.JobSetDigest = strings.TrimSpace(jobSetDigest)
+	report.ActualTaskDigest = strings.TrimSpace(actualTaskDigest)
+	return report, nil
+}
+
 // DataContentTaskOutcome is the minimal service-owned completion receipt for
 // one frozen Data job. Detailed failure text remains in ReliableTask storage;
 // only its stable classification crosses the Data service boundary.
@@ -52,7 +84,7 @@ type DataContentTaskOutcome struct {
 }
 
 // BuildDataContentFleetReport projects one batch onto a quota gate: a publish
-// batch passes once commercially accepted objects reach requiredQuota, an
+// batch passes once lifecycle-accepted canonical objects reach requiredQuota, an
 // author batch once succeeded tasks reach it. Objects below the quota line are
 // discarded by the caller, so a batch is oversampled instead of retried.
 // finalizedObjectCount is an observation of on-disk finished objects and never
@@ -79,6 +111,7 @@ func BuildDataContentFleetReport(
 	stageCompleted := 0
 	publishTasks := 0
 	transactionResults := 0
+	researchAccepted := 0
 	commercialAccepted := 0
 	recoveryEligible := 0
 	automaticRecovered := 0
@@ -112,12 +145,18 @@ func BuildDataContentFleetReport(
 		if task.Status == TaskStatusSucceeded && dataContentObjectTransactionResultRecorded(task) {
 			transactionResults++
 		}
-		if task.Status == TaskStatusSucceeded && dataContentResultCommerciallyAccepted(task) {
+		if task.Status == TaskStatusSucceeded &&
+			(dataContentResultResearchAccepted(task) ||
+				dataContentResultCommerciallyAccepted(task)) {
 			acceptedAt, err := time.Parse(time.RFC3339Nano, task.Result["completedAt"])
 			if err == nil &&
 				!executionCreatedAt.IsZero() &&
 				acceptedAt.After(executionCreatedAt) {
-				commercialAccepted++
+				if dataContentResultResearchAccepted(task) {
+					researchAccepted++
+				} else {
+					commercialAccepted++
+				}
 				if canonicalFinalizedAt.IsZero() || acceptedAt.After(canonicalFinalizedAt) {
 					canonicalFinalizedAt = acceptedAt
 				}
@@ -148,8 +187,9 @@ func BuildDataContentFleetReport(
 		recoveryStatus = "MEASURED"
 	}
 	// Idempotent resume may leave jobs non-succeeded while canonical objects
-	// are already finalized on disk; count those toward the commercial quota.
-	quotaMet := commercialAccepted >= requiredQuota ||
+	// are already finalized on disk; count those toward the canonical quota.
+	canonicalAccepted := researchAccepted + commercialAccepted
+	quotaMet := canonicalAccepted >= requiredQuota ||
 		finalizedObjectCount >= requiredQuota
 	acceptedStatus := "GATE_BLOCK_NO_COMMERCIAL_BATCH"
 	if publishTasks > 0 && quotaMet {
@@ -165,7 +205,7 @@ func BuildDataContentFleetReport(
 	} else if total > 0 {
 		passed = succeeded >= requiredQuota && missingObjectCount == 0
 	}
-	fleetAcceptedThroughput := float64(commercialAccepted) / fleetElapsedHours
+	fleetAcceptedThroughput := float64(canonicalAccepted) / fleetElapsedHours
 	endToEndAcceptedThroughput := 0.0
 	endToEndWallClock := time.Duration(0)
 	var canonicalFinalizedAtText *string
@@ -173,7 +213,7 @@ func BuildDataContentFleetReport(
 		endToEndWallClock = canonicalFinalizedAt.Sub(executionCreatedAt)
 		endToEndHours := endToEndWallClock.Hours()
 		if endToEndHours > 0 {
-			endToEndAcceptedThroughput = float64(commercialAccepted) / endToEndHours
+			endToEndAcceptedThroughput = float64(canonicalAccepted) / endToEndHours
 		}
 		value := canonicalFinalizedAt.UTC().Format(time.RFC3339Nano)
 		canonicalFinalizedAtText = &value
@@ -187,6 +227,7 @@ func BuildDataContentFleetReport(
 		StageCompletedCount:                stageCompleted,
 		PublishTaskCount:                   publishTasks,
 		ObjectTransactionResultCount:       transactionResults,
+		ResearchAcceptedCount:              researchAccepted,
 		CommercialAcceptedCount:            commercialAccepted,
 		FleetControlPlaneThroughputPerHour: float64(succeeded) / fleetElapsedHours,
 		FleetAcceptedThroughputPerHour:     fleetAcceptedThroughput,
@@ -248,6 +289,14 @@ func dataContentResultCommerciallyAccepted(task ReliableAsyncTask) bool {
 	return dataContentObjectTransactionResultRecorded(task) &&
 		result["status"] == "accepted" &&
 		result["acceptanceClass"] == DataContentAcceptanceCommercialCanonical &&
+		validDataContentSHA256(result["canonicalObjectSha256"])
+}
+
+func dataContentResultResearchAccepted(task ReliableAsyncTask) bool {
+	result := task.Result
+	return dataContentObjectTransactionResultRecorded(task) &&
+		result["status"] == "accepted" &&
+		result["acceptanceClass"] == DataContentAcceptanceResearchCanonical &&
 		validDataContentSHA256(result["canonicalObjectSha256"])
 }
 

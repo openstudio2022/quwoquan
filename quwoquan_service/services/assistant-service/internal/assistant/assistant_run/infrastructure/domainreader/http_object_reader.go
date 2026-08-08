@@ -19,9 +19,6 @@ import (
 )
 
 type objectReaderSpec struct {
-	domain               string
-	operationRef         string
-	objectTypeRef        string
 	pathParameter        string
 	responseObjectField  string
 	identityField        string
@@ -37,39 +34,41 @@ type httpObjectReader struct {
 	baseURL    string
 	http       *http.Client
 	now        func() time.Time
+	authority  ReaderAuthority
 	spec       objectReaderSpec
 	descriptor rtauth.OperationSecurityDescriptor
 }
 
 func newHTTPObjectReader(
-	baseURL string,
-	httpClient *http.Client,
+	transport ReaderTransport,
+	authority ReaderAuthority,
 	now func() time.Time,
 	spec objectReaderSpec,
 ) (*httpObjectReader, error) {
-	parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
+	parsed, err := url.Parse(strings.TrimRight(strings.TrimSpace(transport.BaseURL), "/"))
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil ||
 		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
 		parsed.RawQuery != "" || parsed.Fragment != "" {
-		return nil, fmt.Errorf("%s base URL must be absolute http or https", spec.domain)
+		return nil, fmt.Errorf("%s base URL must be absolute http or https", authority.OwnerService)
 	}
-	if httpClient == nil {
-		return nil, fmt.Errorf("%s observed HTTP client is required", spec.domain)
+	if transport.HTTPClient == nil {
+		return nil, fmt.Errorf("%s observed HTTP client is required", authority.OwnerService)
 	}
 	if now == nil {
 		now = time.Now
 	}
-	descriptor, err := publicReadDescriptor(spec)
+	descriptor, err := publicReadDescriptor(authority)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateObjectReaderSpec(spec, descriptor); err != nil {
+	if err := validateObjectReaderSpec(authority, spec, descriptor); err != nil {
 		return nil, err
 	}
 	return &httpObjectReader{
 		baseURL:    strings.TrimRight(parsed.String(), "/"),
-		http:       httpClient,
+		http:       transport.HTTPClient,
 		now:        now,
+		authority:  authority,
 		spec:       spec,
 		descriptor: descriptor,
 	}, nil
@@ -80,7 +79,7 @@ func (reader *httpObjectReader) ReadObjectContext(
 	target ObjectTarget,
 ) (ObjectContext, error) {
 	if reader == nil || reader.http == nil ||
-		strings.TrimSpace(target.ObjectTypeRef) != reader.spec.objectTypeRef ||
+		strings.TrimSpace(target.ObjectTypeRef) != reader.authority.ObjectTypeRef ||
 		strings.TrimSpace(target.ObjectID) == "" {
 		return ObjectContext{}, fmt.Errorf("domain object context request is invalid")
 	}
@@ -114,7 +113,7 @@ func (reader *httpObjectReader) ReadObjectContext(
 		return ObjectContext{}, fmt.Errorf(
 			"canonical domain object status=%d operation=%s",
 			response.StatusCode,
-			reader.spec.operationRef,
+			reader.authority.OperationRef,
 		)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, reader.spec.maxResponseBytes+1))
@@ -135,21 +134,28 @@ func (reader *httpObjectReader) ReadObjectContext(
 	}
 	digest := sha256.Sum256(canonical)
 	return ObjectContext{
-		Target:       ObjectTarget{ObjectTypeRef: reader.spec.objectTypeRef, ObjectID: objectID},
-		OperationRef: reader.spec.operationRef,
+		Target:       ObjectTarget{ObjectTypeRef: reader.authority.ObjectTypeRef, ObjectID: objectID},
+		OperationRef: reader.authority.OperationRef,
 		CapturedAt:   reader.now().UTC(),
 		SourceDigest: "sha256:" + hex.EncodeToString(digest[:]),
 		TokenCost:    (len(canonical) + 3) / 4,
 		Value:        projected,
-		Summary:      objectSummary(reader.spec, objectID, projected),
+		Summary:      objectSummary(reader.authority.ObjectTypeRef, reader.spec, objectID, projected),
 	}, nil
 }
 
 func publicReadDescriptor(
-	spec objectReaderSpec,
+	authority ReaderAuthority,
 ) (rtauth.OperationSecurityDescriptor, error) {
-	for _, descriptor := range operationsecurity.ForDomain(spec.domain) {
-		if descriptor.CanonicalOperationID != spec.operationRef {
+	domain, _, ok := strings.Cut(strings.TrimSpace(authority.OperationRef), ".")
+	if !ok || domain == "" {
+		return rtauth.OperationSecurityDescriptor{}, fmt.Errorf(
+			"invalid canonical domain reader operation %q",
+			authority.OperationRef,
+		)
+	}
+	for _, descriptor := range operationsecurity.ForDomain(domain) {
+		if descriptor.CanonicalOperationID != authority.OperationRef {
 			continue
 		}
 		if descriptor.Method != http.MethodGet || descriptor.OperationKind != "query" ||
@@ -157,30 +163,36 @@ func publicReadDescriptor(
 			descriptor.ActorRequirement != "none" || descriptor.Principal != "public" {
 			return rtauth.OperationSecurityDescriptor{}, fmt.Errorf(
 				"domain reader operation %s is not a ready public query",
-				spec.operationRef,
+				authority.OperationRef,
 			)
 		}
 		return descriptor, nil
 	}
 	return rtauth.OperationSecurityDescriptor{}, fmt.Errorf(
 		"missing generated domain reader operation %s",
-		spec.operationRef,
+		authority.OperationRef,
 	)
 }
 
 func validateObjectReaderSpec(
+	authority ReaderAuthority,
 	spec objectReaderSpec,
 	descriptor rtauth.OperationSecurityDescriptor,
 ) error {
 	placeholder := "{" + strings.TrimSpace(spec.pathParameter) + "}"
-	if spec.domain == "" || spec.operationRef == "" || spec.objectTypeRef == "" ||
+	if strings.TrimSpace(authority.DescriptorID) == "" ||
+		strings.TrimSpace(authority.DescriptorDigest) == "" ||
+		strings.TrimSpace(authority.ResolverRef) == "" ||
+		strings.TrimSpace(authority.OwnerService) == "" ||
+		strings.TrimSpace(authority.OperationRef) == "" ||
+		strings.TrimSpace(authority.ObjectTypeRef) == "" ||
 		spec.identityField == "" || spec.pathParameter == "" ||
 		spec.maxResponseBytes <= 0 || strings.Count(descriptor.PathTemplate, placeholder) != 1 {
-		return fmt.Errorf("invalid domain object reader specification for %s", spec.operationRef)
+		return fmt.Errorf("invalid domain object reader specification for %s", authority.OperationRef)
 	}
 	remainder := strings.Replace(descriptor.PathTemplate, placeholder, "", 1)
 	if strings.ContainsAny(remainder, "{}") {
-		return fmt.Errorf("domain object reader path has unbound parameters: %s", spec.operationRef)
+		return fmt.Errorf("domain object reader path has unbound parameters: %s", authority.OperationRef)
 	}
 	projected := make(map[string]struct{}, len(spec.projectionFields))
 	for _, field := range spec.projectionFields {
@@ -266,7 +278,12 @@ func projectObjectContext(
 	return projected, nil
 }
 
-func objectSummary(spec objectReaderSpec, objectID string, value map[string]any) string {
+func objectSummary(
+	objectTypeRef string,
+	spec objectReaderSpec,
+	objectID string,
+	value map[string]any,
+) string {
 	label := ""
 	for _, field := range spec.summaryFields {
 		if raw, ok := value[field].(string); ok && strings.TrimSpace(raw) != "" {
@@ -278,9 +295,9 @@ func objectSummary(spec objectReaderSpec, objectID string, value map[string]any)
 		label = string([]rune(label)[:160])
 	}
 	if label == "" {
-		return fmt.Sprintf("%s %s", spec.objectTypeRef, objectID)
+		return fmt.Sprintf("%s %s", objectTypeRef, objectID)
 	}
-	return fmt.Sprintf("%s %s: %s", spec.objectTypeRef, objectID, label)
+	return fmt.Sprintf("%s %s: %s", objectTypeRef, objectID, label)
 }
 
 func containsString(values []string, wanted string) bool {

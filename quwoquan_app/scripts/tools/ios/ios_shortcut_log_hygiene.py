@@ -16,8 +16,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, TextIO
 
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-APP_ROOT = Path(__file__).resolve().parents[2]
+from _common.paths import APP_ROOT
+
 DEFAULT_IOS_ROOT = APP_ROOT / "ios"
 
 

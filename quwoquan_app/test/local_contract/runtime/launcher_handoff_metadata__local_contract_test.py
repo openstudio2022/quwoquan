@@ -1,6 +1,5 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 
-import json
 import subprocess
 import sys
 import unittest
@@ -10,10 +9,13 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(APP_DIR / "scripts/device"))
+sys.path.insert(0, str(APP_DIR / "test/support/runtime/launcher"))
 
+import build_launcher_handoff as launcher
 from build_launcher_handoff import (
     effective_launch_manifest_digest,
 )
+from launcher_package_fixture import build_test_handoff
 from launch_manifest_metadata import (
     LAUNCH_MANIFEST_METADATA,
     load_launch_manifest_contract,
@@ -21,32 +23,33 @@ from launch_manifest_metadata import (
 )
 
 
-HANDOFF_BUILDER = APP_DIR / "scripts/device/build_launcher_handoff.py"
-
-
 def _build_handoff(
     environment: str,
     target: str,
     *extra_arguments: str,
+    launch_mode: str = "metadata_contract_test",
+    bind_prod: bool = True,
 ) -> dict[str, object]:
-    result = subprocess.run(
-        [
-            "python3",
-            str(HANDOFF_BUILDER),
-            "--env",
-            environment,
-            "--target",
-            target,
-            "--launch-mode",
-            "metadata_contract_test",
-            *extra_arguments,
-        ],
-        cwd=APP_DIR,
-        check=True,
-        capture_output=True,
-        text=True,
+    arguments = list(extra_arguments)
+    if environment == "prod" and bind_prod and "--content-release-id" not in arguments:
+        digest = "sha256:" + "f" * 64
+        arguments.extend(
+            (
+                "--content-release-id",
+                "release-prod",
+                "--content-manifest-digest",
+                digest,
+                "--content-readiness-receipt-digest",
+                digest,
+            )
+        )
+    return build_test_handoff(
+        launcher,
+        environment,
+        target,
+        launch_mode=launch_mode,
+        extra_arguments=tuple(arguments),
     )
-    return json.loads(result.stdout)
 
 
 class LauncherHandoffMetadataContractTest(unittest.TestCase):
@@ -84,7 +87,8 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
             ios_direct.index("app-debug-preflight"),
             ios_direct.index("build_launcher_handoff.py"),
         )
-        self.assertIn('--content-release-id "$QWQ_CONTENT_RELEASE_ID"', ios_direct)
+        self.assertIn("--launch-policy test_live", ios_direct)
+        self.assertNotIn('--content-release-id "$QWQ_CONTENT_RELEASE_ID"', ios_direct)
 
         android = (APP_DIR / "android/app/build.gradle.kts").read_text(
             encoding="utf-8"
@@ -96,7 +100,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         ]
         self.assertLess(
             android_direct.index('"app-debug-preflight"'),
-            android_direct.index('"--content-release-id"'),
+            android_direct.index('"--launch-policy"'),
         )
         self.assertNotIn("handoff[handoffKey]", android_direct)
 
@@ -120,60 +124,51 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
                     ),
                 )
 
-    def test_direct_flutter_run_requires_release_bound_content_identity(self) -> None:
-        missing = subprocess.run(
-            [
-                "python3",
-                str(HANDOFF_BUILDER),
-                "--env",
-                "alpha",
-                "--target",
-                "alpha-local",
-                "--launch-mode",
-                "direct_flutter_run",
-            ],
-            cwd=APP_DIR,
-            check=False,
-            capture_output=True,
-            text=True,
+    def test_test_live_is_unbound_and_prod_release_requires_content(self) -> None:
+        test_live = _build_handoff(
+            "alpha",
+            "alpha-local",
+            launch_mode="direct_flutter_run",
         )
-        self.assertEqual(missing.returncode, 2)
-        self.assertIn(
-            "effective launch content binding is required for launch mode direct_flutter_run",
-            missing.stdout,
-        )
+        self.assertEqual(test_live["launchPolicy"], "test_live")
+        self.assertEqual(test_live["contentBindingState"], "unbound")
+        self.assertEqual(test_live["contentReleaseId"], "")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "effective launch content binding is required for launch policy "
+            + launcher.PROD_RELEASE_LAUNCH_POLICY,
+        ):
+            _build_handoff(
+                "prod",
+                "prod-hosted",
+                launch_mode="canonical_launcher",
+                bind_prod=False,
+            )
 
         digest = "sha256:" + "a" * 64
-        complete = subprocess.run(
-            [
-                "python3",
-                str(HANDOFF_BUILDER),
-                "--env",
-                "alpha",
-                "--target",
-                "alpha-local",
-                "--launch-mode",
-                "direct_flutter_run",
-                "--content-release-id",
-                "release-alpha",
-                "--content-manifest-digest",
-                digest,
-                "--content-readiness-receipt-digest",
-                digest,
-            ],
-            cwd=APP_DIR,
-            check=True,
-            capture_output=True,
-            text=True,
+        handoff = _build_handoff(
+            "prod",
+            "prod-hosted",
+            "--content-release-id",
+            "release-alpha",
+            "--content-manifest-digest",
+            digest,
+            "--content-readiness-receipt-digest",
+            digest,
+            launch_mode="canonical_launcher",
         )
-        handoff = json.loads(complete.stdout)
         self.assertEqual(handoff["contentReleaseId"], "release-alpha")
+        self.assertEqual(
+            handoff["launchPolicy"], launcher.PROD_RELEASE_LAUNCH_POLICY
+        )
+        self.assertEqual(handoff["contentBindingState"], "bound")
 
     def test_content_binding_is_inside_effective_manifest_digest(self) -> None:
         digest = "sha256:" + "b" * 64
         handoff = _build_handoff(
-            "alpha",
-            "alpha-local",
+            "prod",
+            "prod-hosted",
             "--content-release-id",
             "release-alpha",
             "--content-manifest-digest",
@@ -299,30 +294,16 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertEqual(validate_handoff_against_metadata(handoff), [])
 
     def test_transport_values_without_required_flag_are_gate_blocked(self) -> None:
-        result = subprocess.run(
-            [
-                "python3",
-                str(HANDOFF_BUILDER),
-                "--env",
+        with self.assertRaisesRegex(
+            ValueError,
+            "transport evidence must be empty when transport.required=false",
+        ):
+            _build_handoff(
                 "alpha",
-                "--target",
                 "alpha-local",
-                "--launch-mode",
-                "metadata_contract_test",
                 "--reverse-expected-ports",
                 "7443",
-            ],
-            cwd=APP_DIR,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("GATE_BLOCK", result.stdout)
-        self.assertIn(
-            "transport evidence must be empty when transport.required=false",
-            result.stdout,
-        )
+            )
 
 
 if __name__ == "__main__":

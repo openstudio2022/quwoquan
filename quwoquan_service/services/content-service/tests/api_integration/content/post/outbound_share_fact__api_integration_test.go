@@ -12,7 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
+func TestAppendOutboundShareFactPersistsFactReceiptAndOutbox(t *testing.T) {
 	created := submitPublishedPostWithAuthor(
 		t,
 		"outbound-share-owner",
@@ -37,7 +37,7 @@ func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusCreated {
-			t.Fatalf("CreateOutboundShare status=%d body=%s", recorder.Code, recorder.Body.String())
+			t.Fatalf("AppendOutboundShareFact status=%d body=%s", recorder.Code, recorder.Body.String())
 		}
 		var result map[string]any
 		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {

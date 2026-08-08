@@ -873,7 +873,9 @@
           "name",
           "kind",
           "phase",
-          "application"
+          "application",
+          "telemetry",
+          "slo"
         ],
         "properties": {
           "name": {
@@ -943,6 +945,59 @@
                 "pattern": "^[A-Z][A-Za-z0-9]*$"
               }
             }
+          },
+          "telemetry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "metric",
+              "trace"
+            ],
+            "properties": {
+              "metric": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "trace": {
+                "const": true
+              },
+              "attributes": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "slo": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "latency_p95_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "failure_ratio_percent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              },
+              "freshness_p95_seconds": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "backlog_max_events": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "dead_letter_ratio_percent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              }
+            }
           }
         },
         "allOf": [
@@ -953,7 +1008,8 @@
                 "phase": { "const": "post_authorization_pre_owner_proxy" },
                 "application": {
                   "properties": { "kind": { "const": "session" } }
-                }
+                },
+                "slo": { "$ref": "#/$defs/runtimeEntrypointSynchronousSlo" }
               },
               "not": {
                 "anyOf": [
@@ -970,7 +1026,8 @@
                 "phase": { "const": "event_projection" },
                 "application": {
                   "properties": { "kind": { "const": "command" } }
-                }
+                },
+                "slo": { "$ref": "#/$defs/runtimeEntrypointEventStreamSlo" }
               },
               "not": {
                 "anyOf": [
@@ -987,7 +1044,8 @@
                 "phase": { "const": "event_command" },
                 "application": {
                   "properties": { "kind": { "const": "command" } }
-                }
+                },
+                "slo": { "$ref": "#/$defs/runtimeEntrypointEventStreamSlo" }
               },
               "not": {
                 "anyOf": [
@@ -1004,7 +1062,8 @@
                 "phase": { "const": "event_ingest" },
                 "application": {
                   "properties": { "kind": { "const": "command" } }
-                }
+                },
+                "slo": { "$ref": "#/$defs/runtimeEntrypointEventStreamSlo" }
               },
               "not": {
                 "anyOf": [
@@ -1022,7 +1081,8 @@
                 "phase": { "const": "transactional_append" },
                 "application": {
                   "properties": { "kind": { "const": "command" } }
-                }
+                },
+                "slo": { "$ref": "#/$defs/runtimeEntrypointSynchronousSlo" }
               }
             }
           },
@@ -1031,7 +1091,8 @@
             "then": {
               "required": ["source_objects", "idempotency"],
               "properties": {
-                "phase": { "const": "outbound_invocation" }
+                "phase": { "const": "outbound_invocation" },
+                "slo": { "$ref": "#/$defs/runtimeEntrypointOutboundSlo" }
               }
             }
           }
@@ -1125,6 +1186,45 @@
     }
   },
   "$defs": {
+    "runtimeEntrypointSynchronousSlo": {
+      "description": "同步在途 seam（middleware / internal_port）：调用方在栈上等待结果，可判定的维度只有单次调用耗时与失败比率。没有 HTTP 状态码，因此不使用 availability_percent。",
+      "required": ["latency_p95_ms", "failure_ratio_percent"],
+      "not": {
+        "anyOf": [
+          { "required": ["freshness_p95_seconds"] },
+          { "required": ["backlog_max_events"] },
+          { "required": ["dead_letter_ratio_percent"] }
+        ]
+      }
+    },
+    "runtimeEntrypointEventStreamSlo": {
+      "description": "事件消费 seam（projector / event_handler / subscription）：调用方已经离场，用户可见的失效是滞后与积压，而不是单次调用延迟。因此口径是端到端新鲜度、未处理积压与重试后仍失败的比率。",
+      "required": [
+        "freshness_p95_seconds",
+        "backlog_max_events",
+        "failure_ratio_percent"
+      ],
+      "not": {
+        "anyOf": [
+          { "required": ["latency_p95_ms"] },
+          { "required": ["dead_letter_ratio_percent"] }
+        ]
+      }
+    },
+    "runtimeEntrypointOutboundSlo": {
+      "description": "外部调用 seam（external_port）：既有同步调用耗时与失败比率，又有重试耗尽后进入死信的比率；死信率是该 seam 独有的可判定失效维度。",
+      "required": [
+        "latency_p95_ms",
+        "failure_ratio_percent",
+        "dead_letter_ratio_percent"
+      ],
+      "not": {
+        "anyOf": [
+          { "required": ["freshness_p95_seconds"] },
+          { "required": ["backlog_max_events"] }
+        ]
+      }
+    },
     "readinessTarget": {
       "type": "object",
       "additionalProperties": false,

@@ -56,7 +56,7 @@ func Evaluate(
 			contract.Producer = testProducerForLayer(contract.Layer)
 		}
 		if contract.SourcePath == "" {
-			contract.SourcePath = "assistant/assistant_run/operations.yaml"
+			contract.SourcePath = "assistant/assistant/assistant_run/operations.yaml"
 		}
 		if contract.RunnerSourcePath == "" {
 			contract.RunnerSourcePath = testRunnerSourcePath(contract)
@@ -111,7 +111,12 @@ func TestEvaluateRequiresTheExactDynamicCaseMatrixForCommercialClosure(t *testin
 }
 
 func TestValidProducerRunnerSourcePathAcceptsCanonicalServiceTestLanguages(t *testing.T) {
-	const contractSource = "recommendation/recommendation_model_release/operations.yaml"
+	identity := objectPathIdentity{
+		domain: "recommendation", context: "recommendation",
+		object:         "recommendation_model_release",
+		serviceRoot:    []string{"quwoquan_service", "services", "recommendation-service"},
+		appServiceRoot: "recommendation_service",
+	}
 	for _, path := range []string{
 		"quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_release__local_contract_test.go",
 		"quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_model_release/test_model_release__api_integration_test.py",
@@ -121,24 +126,25 @@ func TestValidProducerRunnerSourcePathAcceptsCanonicalServiceTestLanguages(t *te
 			layer = LayerAPIIntegration
 		}
 		if !validProducerRunnerSourcePath(
-			path, "recommendation.recommendation_model_release", contractSource,
-			ProducerService, layer,
+			path, identity, ProducerService, layer,
 		) {
 			t.Fatalf("canonical Service runner rejected: %s", path)
 		}
 	}
 	if validProducerRunnerSourcePath(
 		"quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_model_release/model_release.py",
-		"recommendation.recommendation_model_release", contractSource,
-		ProducerService, LayerAPIIntegration,
+		identity, ProducerService, LayerAPIIntegration,
 	) {
 		t.Fatal("non-test Python source accepted as a Service runner")
 	}
 }
 
 func TestValidProducerRunnerSourcePathUsesAppServiceTree(t *testing.T) {
-	const contractSource = "assistant/assistant_run/operations.yaml"
-	const objectID = "assistant.assistant_run"
+	identity := objectPathIdentity{
+		domain: "assistant", context: "assistant", object: "assistant_run",
+		serviceRoot:    []string{"quwoquan_service", "services", "assistant-service"},
+		appServiceRoot: "assistant_service",
+	}
 	for _, testCase := range []struct {
 		path  string
 		layer Layer
@@ -157,14 +163,16 @@ func TestValidProducerRunnerSourcePathUsesAppServiceTree(t *testing.T) {
 		},
 	} {
 		if !validProducerRunnerSourcePath(
-			testCase.path, objectID, contractSource, ProducerApp, testCase.layer,
+			testCase.path, identity, ProducerApp, testCase.layer,
 		) {
 			t.Fatalf("canonical App service-tree runner rejected: %s", testCase.path)
 		}
 	}
+	// The retired shape omits the `service/<service>_service` segments and
+	// addresses the object directly under the layer directory.
 	if validProducerRunnerSourcePath(
-		"quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run__local_contract_test.dart",
-		objectID, contractSource, ProducerApp, LayerLocalContract,
+		"quwoquan_app/test/local_contract/assistant/assistant_run/assistant_run__local_contract_test.dart",
+		identity, ProducerApp, LayerLocalContract,
 	) {
 		t.Fatal("retired domain-shaped App runner path was accepted")
 	}
@@ -717,6 +725,24 @@ func TestEvaluateDistinguishesPageParticipantFromPhysicalOwner(t *testing.T) {
 		)
 		requireViolation(t, closure, "READINESS.CASE_CONTRACT.TARGET_MISMATCH")
 	})
+
+	t.Run("wrong service root cannot invent an object owner", func(t *testing.T) {
+		current := implementedGraph(true)
+		current.Documents[0].Content = json.RawMessage(`{
+		  "pages":[{
+		    "page_id":"assistant.personal_session",
+		    "source_path":"lib/service/not_the_owner/assistant/assistant_run/presentation/session_page.dart",
+		    "object_ids":[]
+		  }]
+		}`)
+		closure := Evaluate(
+			context.Background(), current,
+			ReadinessResultBundle{GeneratedAt: testStart, Results: []ReadinessCaseResult{result}},
+			[]ReadinessCaseContract{contract}, testEvaluationContext(),
+			memoryReceiptResolver{"receipt": bytes},
+		)
+		requireViolation(t, closure, "READINESS.CASE_CONTRACT.TARGET_MISMATCH")
+	})
 }
 
 func TestEvaluateRequiresTrustedReceiptAndRealUserAcceptanceProvenance(t *testing.T) {
@@ -997,9 +1023,16 @@ func testRunnerSourcePath(contract ReadinessCaseContract) string {
 
 func implementedGraph(implemented bool) *graph.ContractGraph {
 	return &graph.ContractGraph{
-		Objects: []ast.Object{{ID: testObjectID, Domain: "assistant", Name: "assistant_run"}},
+		Objects: []ast.Object{{
+			ID: testObjectID, Domain: "assistant", Name: "AssistantRun",
+			SourcePath: "assistant/assistant/assistant_run/object.yaml",
+		}},
+		ReadinessEvidence: []ast.ObjectReadinessEvidence{{
+			ObjectID:   testObjectID,
+			SourcePath: "quwoquan_service/services/assistant-service/internal/assistant/assistant_run",
+		}},
 		Sources: []ast.SourceDigest{{
-			Path: "assistant/assistant_run/operations.yaml", SHA256: strings.Repeat("b", 64),
+			Path: "assistant/assistant/assistant_run/operations.yaml", SHA256: strings.Repeat("b", 64),
 		}, {
 			Path: "_shared/page_object_contract.yaml", SHA256: strings.Repeat("8", 64),
 		}},

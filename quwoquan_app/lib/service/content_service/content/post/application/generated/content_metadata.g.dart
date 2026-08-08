@@ -29,6 +29,9 @@ class GeneratedPostRuntimeMetadata {
 
   // Canonical max_utf8_bytes projected onto persisted Post DTO fields.
   static const Map<String, int> postSnapshotFieldByteLimits = <String, int>{
+    'authorId': 128,
+    'postId': 256,
+    'title': 320,
   };
 
   // Current feed projection defaults.

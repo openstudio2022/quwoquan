@@ -6,14 +6,14 @@ providers:
   - provider: pinterest
     displayName: Pinterest
     priority: 0
-    discoveryMode: public_search_url
+    discoveryMode: manual_or_supported_api
     publicDiscoveryUrls:
-      - https://www.pinterest.com/search/pins/
-    searchUrlTemplate: "https://www.pinterest.com/search/pins/?q={query}"
+      - https://www.pinterest.com/
+    searchUrlTemplate: ""
     queryTemplates:
       - "{entity} {category} {season} {style} {viewpoint} photography {popularity}"
       - "{entity} travel landscape {style} {viewpoint} {popularity}"
-    acquisitionPaths: [public_direct, supported_api, manual_file]
+    acquisitionPaths: [supported_api, manual_file]
     termsUrl: https://policy.pinterest.com/en/terms-of-service
     accessPolicy:
       anonymousOnly: true

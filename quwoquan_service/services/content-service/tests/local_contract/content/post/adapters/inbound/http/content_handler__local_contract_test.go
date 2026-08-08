@@ -995,6 +995,16 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
 	postID, _ := created["postId"].(string)
 
+	forbiddenReq := httptest.NewRequest("DELETE", "/content/posts/"+postID, nil)
+	setActorHeaders(forbiddenReq, "u_delete_intruder", "u_delete_intruder")
+	forbiddenReq.Header.Set("Idempotency-Key", "delete-post-forbidden")
+	forbiddenRec := httptest.NewRecorder()
+	handler.ServeHTTP(forbiddenRec, forbiddenReq)
+	if forbiddenRec.Code != http.StatusForbidden ||
+		!strings.Contains(forbiddenRec.Body.String(), "CONTENT.USER.forbidden_delete") {
+		t.Fatalf("non-owner delete status=%d body=%s", forbiddenRec.Code, forbiddenRec.Body.String())
+	}
+
 	delReq := httptest.NewRequest("DELETE", "/content/posts/"+postID, nil)
 	setActorHeaders(delReq, "u_delete", "u_delete")
 	delReq.Header.Set("Idempotency-Key", "delete-post-stable")

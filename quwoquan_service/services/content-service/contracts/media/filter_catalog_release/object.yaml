@@ -42,6 +42,20 @@ relationships:
   target_object: content.FilterAdjustmentValues
 local_identity_reasons:
   recommendedFallbackPresetIds: 同一 FilterCatalogRelease 内预设排序选择器，随聚合校验并不可变，不是跨对象业务引用
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.content.filter_catalog_release.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - releaseId、canonicalDigest、categories、presets 与 recommendedFallbackPresetIds 在 Stage 成功后不可变
 - categories 数量 1..32、presets 数量 1..256，categoryId、category sort 与 presetId 分别全局唯一
@@ -65,16 +79,23 @@ lifecycle:
 members:
   FilterCategoryDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [categoryId]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内有界分类定义，不允许独立 Store/Facade。
   FilterPresetDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [presetId]
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内有界预设定义，不允许独立 Store/Facade。
   FilterAdjustmentValues:
     kind: value_object
-    cardinality: 1:N
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
     description: 预设的强类型 15 项调整参数，不允许任意键 Map。

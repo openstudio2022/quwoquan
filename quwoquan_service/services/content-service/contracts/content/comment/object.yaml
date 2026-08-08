@@ -52,9 +52,25 @@ relationships:
   reference_fields:
   - attachmentMediaIds
   target_object: content.MediaAsset
-taggable: false
-vector_enabled: false
 relation_signal: true
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.content.comment.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.content.comment.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.content.comment.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.content.comment.write
 business_rules:
 - Comment 只持有自身权威状态；Post.commentCount 是由 CommentCreated/CommentDeleted/CommentModerated/CommentsTombstoned
   事实异步重建的投影，count 只统计 active。

@@ -152,7 +152,7 @@ func (h *Handler) unavailable(w http.ResponseWriter) {
 }
 
 func (h *Handler) notFound(w http.ResponseWriter) {
-	h.writeJSON(w, http.StatusNotFound, map[string]string{"code": "RUNTIME.USER.route_not_found"})
+	h.writeJSON(w, http.StatusNotFound, map[string]string{"code": "GATEWAY.USER.route_not_found"})
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, value any) {

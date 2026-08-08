@@ -3,12 +3,17 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/content_service/media/filter_catalog_release/image_editor_filter_catalog_typed_double.dart';
 
 File _writePng(Directory dir, String name) {
   final file = File('${dir.path}/$name');
@@ -54,6 +59,7 @@ void main() {
     Object? doneResult;
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: file.path,
@@ -88,6 +94,7 @@ void main() {
     Object? doneResult;
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: file.path,
@@ -149,6 +156,7 @@ void main() {
     Object? doneResult;
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: file.path,
@@ -177,6 +185,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: file.path,
@@ -222,6 +231,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: file.path,
@@ -252,6 +262,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: _imageEditorOverrides(),
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: file.path,
@@ -284,3 +295,12 @@ void main() {
     );
   });
 }
+
+/// 图片编辑页只依赖滤镜目录读面：先封死 App↔Cloud 边界，再注入对象级 typed
+/// double，保证 widget 测试不会构造真实 generated operation client。
+List<Override> _imageEditorOverrides() => <Override>[
+  ...sealedCloudBoundaryOverrides(),
+  imageEditorFilterRepositoryProvider.overrideWithValue(
+    InMemoryImageEditorFilterCatalog(),
+  ),
+];

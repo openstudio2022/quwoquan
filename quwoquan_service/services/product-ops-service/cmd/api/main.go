@@ -840,50 +840,20 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
-	writeRuntimeError(w, r, http.StatusNotFound, "接口不存在", "route not found")
-}
-
-func writeRuntimeError(
+func writeRuntimeNotFound(
 	w http.ResponseWriter,
 	r *http.Request,
-	status int,
-	userMessage string,
-	debugMessage string,
+	_ int,
+	_ string,
+	_ string,
 ) {
-	reason := "internal_error"
-	kind := rterr.KindSystem
-	module := rterr.ModuleOps
-	switch status {
-	case http.StatusBadRequest, http.StatusMethodNotAllowed:
-		reason = "invalid_argument"
-		kind = rterr.KindUser
-	case http.StatusUnauthorized:
-		reason = "unauthorized"
-		kind = rterr.KindUser
-		module = rterr.ModuleGateway
-	case http.StatusForbidden:
-		reason = "forbidden"
-		kind = rterr.KindUser
-		module = rterr.ModuleGateway
-	case http.StatusNotFound:
-		reason = "route_not_found"
-		kind = rterr.KindUser
-	case http.StatusConflict:
-		reason = "conflict"
-		kind = rterr.KindUser
-	}
-	appError := rterr.NewAppError(
-		rterr.NewCode(module, kind, reason),
-		userMessage,
-		debugMessage,
-	)
-	if status == http.StatusUnauthorized {
-		appError.WithMetadata("unauthorized", http.StatusUnauthorized)
-	}
 	rterr.WriteHTTPError(
 		w,
-		appError,
+		rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+			"接口不存在",
+			"route not found",
+		),
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)
 }

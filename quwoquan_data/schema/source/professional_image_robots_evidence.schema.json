@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_robots_evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "provider", "robotsUrl", "robotsBody", "robotsBodySha256",
+    "userAgent", "targetUrl", "observedAt", "allowed", "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_robots_evidence"},
+    "provider": {"enum": ["pinterest", "tuchong"]},
+    "robotsUrl": {"type": "string", "pattern": "^https://"},
+    "robotsBody": {"type": "string", "minLength": 1, "maxLength": 1048576},
+    "robotsBodySha256": {"$ref": "#/$defs/digest"},
+    "userAgent": {"type": "string", "minLength": 1},
+    "targetUrl": {"type": "string", "pattern": "^https://"},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "allowed": {"type": "boolean"},
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

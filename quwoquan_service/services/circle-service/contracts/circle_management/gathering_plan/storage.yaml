@@ -11,12 +11,6 @@ collections:
     - name: uq_gathering_plan_gathering
       keys: {gatheringId: 1}
       unique: true
-    - name: idx_gathering_plan_current_revision
-      keys: {_id: 1, currentRevisionNumber: -1}
-    - name: idx_gathering_plan_proposal
-      keys: {_id: 1, proposals.proposalId: 1}
-    - name: idx_gathering_plan_updated
-      keys: {updatedAt: -1, _id: 1}
   gathering_plan_command_receipts:
     publication_role: not_published
     entity: GatheringPlanCommandReceipt

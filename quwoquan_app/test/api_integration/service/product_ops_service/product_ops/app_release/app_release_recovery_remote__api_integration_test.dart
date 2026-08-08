@@ -1,13 +1,14 @@
 // spec_ref: specs/feature-tree/spec.md#uat-003
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+// readiness_case: app_release_get_app_recovery_version_app_api
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/service/product_ops_service/product_ops/app_release/adapters/remote_app_release_recovery_reader.dart';
 import 'package:quwoquan_app/service/product_ops_service/product_ops/app_release/application/app_release_recovery_reader.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
+import 'package:quwoquan_app/runtime/di/app_cloud_operation_telemetry_sink.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/recovery_runtime_binding.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
@@ -29,7 +30,7 @@ const _effectiveLaunchManifestDigest = String.fromEnvironment(
   'API_CONTRACT_EFFECTIVE_LAUNCH_MANIFEST_DIGEST',
 );
 
-late http.Client _httpClient;
+http.Client? _httpClient;
 late RecoveryRuntimeBinding _binding;
 
 void main() {
@@ -40,8 +41,9 @@ void main() {
       runtimeConfigDigest: _runtimeConfigDigest,
       effectiveLaunchManifestDigest: _effectiveLaunchManifestDigest,
     );
-    _httpClient = http.Client();
-    final probe = await _httpClient
+    final httpClient = http.Client();
+    _httpClient = httpClient;
+    final probe = await httpClient
         .get(_binding.recoveryOrigin.resolve('/healthz'))
         .timeout(const Duration(seconds: 5));
     if (probe.statusCode >= 400) {
@@ -52,7 +54,7 @@ void main() {
     }
   });
 
-  tearDownAll(() => _httpClient.close());
+  tearDownAll(() => _httpClient?.close());
 
   test(
     'candidate-bound public recovery facts round-trip for Android and iOS',
@@ -96,9 +98,11 @@ void main() {
 
 GeneratedCloudOperationClient _generatedClient() {
   return buildGeneratedCloudOperationClient(
-    httpClient: CloudHttpClient(client: _httpClient),
+    httpClient: CloudHttpClient(client: _httpClient!),
     clientContextProvider: const _RecoveryApiClientContext(),
-    telemetrySink: const _NoopTelemetrySink(),
+    telemetrySink: const AppCloudOperationTelemetrySink(
+      clientContextProvider: _RecoveryApiClientContext(),
+    ),
     environment: CloudRuntimeEnvironment(
       environment: _binding.environment,
       gatewayBaseUri: _binding.recoveryOrigin,
@@ -118,11 +122,4 @@ final class _RecoveryApiClientContext implements CloudClientContextProvider {
       locale: 'zh-CN',
     );
   }
-}
-
-final class _NoopTelemetrySink implements CloudOperationTelemetrySink {
-  const _NoopTelemetrySink();
-
-  @override
-  void record(CloudOperationTelemetryEvent event) {}
 }

@@ -217,10 +217,6 @@ func main() {
 	if err != nil {
 		exitErr(err)
 	}
-	service, err := readService(filepath.Join(postDir, "operations.yaml"))
-	if err != nil {
-		exitErr(err)
-	}
 	uiDef, uiErr := readUIConfig(
 		filepath.Join(postDir, "ui_config.yaml"),
 		true,
@@ -243,24 +239,19 @@ func main() {
 		exitErr(fmt.Errorf("Post entity not found in fields.yaml"))
 	}
 
-	defaults := buildPostDefaults(post.Fields)
-	postSnapshotFieldByteLimits := buildPostSnapshotFieldByteLimits(
+	postSnapshotFieldByteLimits, err := buildPostSnapshotFieldByteLimits(
 		post.Fields,
-		projection.ClientProjection.Fields,
+		projection,
 	)
-	feedDefaults := buildFeedDefaults(defaults)
+	if err != nil {
+		exitErr(fmt.Errorf("derive Post snapshot field byte limits: %w", err))
+	}
 	contentTypes := shared.Enums["ContentType"]
 	if len(contentTypes) == 0 {
 		contentTypes = []string{"image", "video", "micro", "article"}
 	}
-	contentTypeMapping := buildContentTypeToRender(contentTypes)
-	_, appTabToCategory := buildDiscoveryMappings(contentTypes)
-	feedCategoryToType := uiDef.FeedRequestTypeByCategory
-	feedRoute := findRoute(service.APIRoutes, "GetFeed")
-	getPostRoute := findRoute(service.APIRoutes, "GetPost")
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
-	likeRoutes := buildMutationRoutes(service.APIRoutes,
-		[]string{"LikePost", "UnlikePost", "FavoritePost", "UnfavoritePost"})
+	feedCategoryToType := uiDef.FeedRequestTypeByCategory
 
 	if err := writeCanonicalContentMetadata(
 		appDir,
@@ -270,25 +261,6 @@ func main() {
 	); err != nil {
 		exitErr(err)
 	}
-
-	// 1. 生成 content_metadata.g.dart（原 post_runtime_metadata.g.dart）
-	metaOut := renderContentMetadataDart(
-		defaults,
-		postSnapshotFieldByteLimits,
-		feedDefaults,
-		contentTypeMapping,
-		feedCategoryToType,
-		appTabToCategory,
-		feedRoute,
-		getPostRoute,
-		feedDefaultLimit,
-		likeRoutes,
-	)
-	metaPath := contentPostApplicationOutputPath(
-		appDir,
-		"content_metadata.g.dart",
-	)
-	writeFile(metaPath, metaOut)
 	generatedStandaloneProjectionPaths := map[string]bool{}
 
 	if err := writePostReadPresentationArtifacts(appDir, filepath.Join(postDir, "projections")); err != nil {
@@ -598,15 +570,6 @@ func main() {
 		renderAppTelemetryCatalogDart(telemetryCatalog),
 	)
 	if searchContract != nil {
-		writeFile(
-			searchIndexViewApplicationOutputPath(
-				appDir,
-				"search_contract.g.dart",
-			),
-			renderSearchContractDart(searchContract),
-		)
-	}
-	if searchContract != nil {
 		if err := writeCanonicalSearchMetadata(
 			appDir,
 			searchContract,
@@ -634,15 +597,6 @@ func main() {
 	}
 	if err := generateContentPreviewTrackManifestContract(appDir); err != nil {
 		exitErr(err)
-	}
-	if searchObjects != nil {
-		writeFile(
-			searchIndexViewApplicationOutputPath(
-				appDir,
-				"search_registry.g.dart",
-			),
-			renderSearchRegistryDart(searchObjects),
-		)
 	}
 	if err := generateAssistantRuntimeArtifacts(metadataDir, appDir); err != nil {
 		exitErr(err)

@@ -11,8 +11,10 @@ import (
 	runerrors "quwoquan_service/services/assistant-service/generated/assistant/assistant_run"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/model"
+	channelpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/channel"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	rundomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain"
+	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
 )
 
 type StartInput struct {
@@ -122,7 +124,13 @@ func (s *UseCases) Start(
 		}
 	}
 	var sessionPreferences, longTermPreferences = []preferencemodel.AssistantPreferenceSnapshot(nil), []preferencemodel.AssistantPreferenceSnapshot(nil)
-	if s.preferenceSnapshots != nil {
+	channel := channelpkg.ResolveForSurface(
+		"",
+		assistantmodel.AssistantTurnTrigger{},
+		input.TrustedRequestContext.SurfaceKind,
+	)
+	if s.preferenceSnapshots != nil &&
+		channel.ContextPersistence() == channelpkg.ContextPersistencePrivateLongTerm {
 		sessionPreferences, longTermPreferences, err =
 			s.preferenceSnapshots.ResolveActiveSnapshots(
 				ctx,
@@ -347,6 +355,14 @@ func mapRunError(err error) error {
 		return appErr
 	case errors.Is(err, runruntime.ErrPolicyUnavailable):
 		return runerrors.AppErrorFromRunPolicyUnavailable(err.Error())
+	case errors.Is(err, runruntime.ErrRunIdempotencyConflict):
+		return runerrors.AppErrorFromRunIdempotencyConflict(err.Error())
+	case errors.Is(err, runruntime.ErrDeviceActionPermitInvalid):
+		return runerrors.AppErrorFromDeviceActionPermitInvalid(err.Error())
+	case errors.Is(err, runruntime.ErrDeviceActionPermitExpired):
+		return runerrors.AppErrorFromDeviceActionPermitExpired(err.Error())
+	case errors.Is(err, runruntime.ErrDeviceActionPermitReplayed):
+		return runerrors.AppErrorFromDeviceActionPermitReplayed(err.Error())
 	case errors.Is(err, ErrIntersectionEvidenceNotFound):
 		return runerrors.AppErrorFromIntersectionEvidenceNotFound(err.Error())
 	case errors.Is(err, ErrIntersectionEvidenceUnavailable):

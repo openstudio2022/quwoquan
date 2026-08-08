@@ -83,7 +83,7 @@ func (resolver *CandidateResolver) collectCandidates(
 		}
 		values, err := resolver.publicProviders.PublicProviderCandidates(ctx, requirement)
 		if err != nil {
-			return grantmodel.Candidates{}, unavailableSource(kind, err)
+			return grantmodel.Candidates{}, candidateSourceFailure(kind, err)
 		}
 		normalized, err := normalizePublicProviders(requirement.CapabilityKey, values)
 		return grantmodel.Candidates{PublicProviders: normalized}, err
@@ -93,7 +93,7 @@ func (resolver *CandidateResolver) collectCandidates(
 		}
 		values, err := resolver.userConnectors.UserConnectorCandidates(ctx, requirement)
 		if err != nil {
-			return grantmodel.Candidates{}, unavailableSource(kind, err)
+			return grantmodel.Candidates{}, candidateSourceFailure(kind, err)
 		}
 		normalized, err := normalizeUserConnectors(requirement.CapabilityKey, values)
 		return grantmodel.Candidates{UserConnectors: normalized}, err
@@ -103,7 +103,7 @@ func (resolver *CandidateResolver) collectCandidates(
 		}
 		values, err := resolver.deviceBindings.DeviceCapabilityCandidates(ctx, requirement)
 		if err != nil {
-			return grantmodel.Candidates{}, unavailableSource(kind, err)
+			return grantmodel.Candidates{}, candidateSourceFailure(kind, err)
 		}
 		normalized, err := normalizeDeviceBindings(requirement.CapabilityKey, values)
 		return grantmodel.Candidates{DeviceBindings: normalized}, err
@@ -113,13 +113,31 @@ func (resolver *CandidateResolver) collectCandidates(
 		}
 		values, err := resolver.domainOperations.DomainOperationCandidates(ctx, requirement)
 		if err != nil {
-			return grantmodel.Candidates{}, unavailableSource(kind, err)
+			return grantmodel.Candidates{}, candidateSourceFailure(kind, err)
 		}
 		normalized, err := normalizeDomainOperations(requirement.CapabilityKey, values)
 		return grantmodel.Candidates{DomainOperations: normalized}, err
 	default:
 		return grantmodel.Candidates{}, grantmodel.ErrInvalidRequirement
 	}
+}
+
+func candidateSourceFailure(kind grantmodel.BindingKind, err error) error {
+	for _, semantic := range []error{
+		grantmodel.ErrProviderUnavailable,
+		grantmodel.ErrConnectorRevoked,
+		grantmodel.ErrConnectorExpired,
+		grantmodel.ErrConnectorCapability,
+		grantmodel.ErrConnectorSurfaceDenied,
+		grantmodel.ErrDeviceUnavailable,
+		grantmodel.ErrDevicePermissionDenied,
+		grantmodel.ErrDomainOperationInvalid,
+	} {
+		if errors.Is(err, semantic) {
+			return err
+		}
+	}
+	return unavailableSource(kind, err)
 }
 
 func unavailableSource(kind grantmodel.BindingKind, cause error) error {
@@ -174,6 +192,7 @@ func normalizeUserConnectors(
 		value.AccountID = strings.TrimSpace(value.AccountID)
 		value.ConnectionID = strings.TrimSpace(value.ConnectionID)
 		value.ConnectorID = strings.TrimSpace(value.ConnectorID)
+		value.ContractDigest = strings.TrimSpace(value.ContractDigest)
 		value.ProviderAccountSubjectDigest = strings.TrimSpace(
 			value.ProviderAccountSubjectDigest,
 		)

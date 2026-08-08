@@ -236,3 +236,11 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_claim_request/homepage_claim_request_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_claim_request_create_homepage_claim_request_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: CreateHomepageClaimRequest}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_claim_request/homepage_claim_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

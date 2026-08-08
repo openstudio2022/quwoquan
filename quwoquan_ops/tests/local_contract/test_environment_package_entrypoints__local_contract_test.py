@@ -396,6 +396,6 @@ if __name__ == "__main__":
         test_package_boundary_and_isolation_include_every_package_kind(Path(temporary))
     test_public_make_targets_delegate_environment_operations_to_stackctl()
     with tempfile.TemporaryDirectory() as temporary:
-        test_stackctl_rejects_missing_portal_oidc_and_routes_private_config_script(
+        test_stackctl_rejects_missing_portal_oidc_and_has_no_private_prod_state_writer(
             Path(temporary)
         )

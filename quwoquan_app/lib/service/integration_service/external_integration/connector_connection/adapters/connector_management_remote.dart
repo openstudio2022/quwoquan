@@ -21,7 +21,7 @@ final class RemoteConnectorManagementFacet implements ConnectorManagementFacet {
   final GeneratedCloudOperationClient client;
   final ConnectorInvocationContextFactory invocationContext;
   final ConnectorDefinitionReader definitionReader;
-  final ConnectorInvocationReader invocationReader;
+  final ConnectorInvocationProcessQuery invocationReader;
 
   @override
   Future<List<ConnectorDefinition>> listConnectorDefinitions({

@@ -1249,7 +1249,7 @@
         },
         {
           "caseId": "agent_eval_travel_companion_02",
-          "clarificationSlotId": "trip_plan",
+          "clarificationSlotId": "gathering_plan",
           "input": "我们群里同时有西湖周末游和绍兴两日游，先帮我修改西湖行程第二天晚餐",
           "scenario": "slot_clarification"
         },
@@ -1308,7 +1308,7 @@
       "evaluationAssetDigest": "sha256:6a547548bbc1e52919433b0c45fde8deaabeed66f96f9495db517fb487f7010f",
       "evaluationProfileRef": "evaluation.travel_companion",
       "skillId": "travel_companion",
-      "skillReleaseDigest": "sha256:0aee38087b23ae25e29712c8ce5f10353189a32dd510ed5dbab957bda736f6d9"
+      "skillReleaseDigest": "sha256:2ff50a0ad3734369dbd4c8879f9a46416cb2dbbc57fc5857ea2c08e6a957cd66"
     },
     {
       "assetId": "assistant.replay.weather",

@@ -782,6 +782,7 @@ func loadEventsGovernance(
 			ObjectID:              object.ID,
 			Name:                  strings.TrimSpace(scalarString(mapping["name"])),
 			DeliverySemantics:     strings.TrimSpace(scalarString(mapping["delivery_semantics"])),
+			WireEventType:         strings.TrimSpace(scalarString(mapping["wire_event_type"])),
 			Topic:                 strings.TrimSpace(scalarString(mapping["topic"])),
 			PayloadEntity:         strings.TrimSpace(scalarString(mapping["payload_entity"])),
 			PayloadShape:          strings.TrimSpace(scalarString(mapping["payload_shape"])),

@@ -1,6 +1,6 @@
 # test/support/runtime — 横切测试基础设施
 
-与 [`app-cloud-business-object-commercial-closure`](../../../specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#req-004) 对齐。
+与 [`app-cloud-business-object-commercial-closure`](../../../../specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#req-004) 对齐。
 
 ## 规则
 

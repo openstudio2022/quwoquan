@@ -12,6 +12,7 @@ SCRIPT = (
     / "quwoquan_service"
     / "scripts"
     / "verify"
+    / "structure"
     / "verify_service_layering.py"
 )
 
@@ -27,8 +28,22 @@ def _load_gate():
 
 class ServiceLayeringContractTest(unittest.TestCase):
     def test_service_layering_has_no_reverse_dependencies(self) -> None:
-        issues = _load_gate().collect_issues()
+        gate = _load_gate()
+        scanned = gate._production_source_files(gate._services_root())
+        self.assertTrue(scanned, "service layering scanner must inspect real sources")
+        issues = gate.collect_issues()
         self.assertEqual([], issues, "\n".join(issues))
+
+    def test_empty_service_scan_fails_closed(self) -> None:
+        gate = _load_gate()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            gate.SERVICE_ROOT = Path(temp_dir)
+            (gate.SERVICE_ROOT / "services").mkdir()
+            issues = gate.collect_issues()
+        self.assertTrue(
+            any("scanner matched zero" in issue for issue in issues),
+            issues,
+        )
 
     def test_context_object_layer_path_drives_go_and_python_checks(self) -> None:
         gate = _load_gate()

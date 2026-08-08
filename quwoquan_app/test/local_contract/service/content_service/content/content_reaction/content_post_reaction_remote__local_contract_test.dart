@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+// readiness_case: content_reaction_get_content_reaction_state_app_local
+// readiness_case: content_reaction_like_post_app_local
+// readiness_case: content_reaction_unlike_post_app_local
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,26 +10,30 @@ import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
+import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_reaction/adapters/post_reaction_facets_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('RemoteContentPostReactionFacet local contract', () {
     test('LikePost 只经 generated executor 发送 typed command', () async {
-      http.Request? captured;
+      final captured = <http.Request>[];
+      var callCount = 0;
       final adapter = RemoteContentPostReactionFacet(
         client: _client((request) {
-          captured = request;
+          captured.add(request);
+          callCount += 1;
           return <String, Object?>{
             'reactionId': 'reaction-1',
             'postId': 'post-1',
             'version': 1,
             'liked': true,
-            'changed': true,
-            'replayed': false,
+            'changed': callCount == 1,
+            'replayed': callCount > 1,
           };
         }),
         invocationContext: _context,
@@ -34,34 +42,51 @@ void main() {
       final result = await adapter.likePost(
         LikeContentPostCommand(postId: 'post-1'),
       );
-      final request = captured;
-      expect(request, isNotNull);
-
-      expect(request!.method, 'POST');
-      expect(request.url.path, '/content/posts/post-1/like');
-      expect(
-        request.headers['X-Client-Operation-Id'],
-        AppCloudOperationIds.contentContentReactionLikePost,
+      final replay = await adapter.likePost(
+        LikeContentPostCommand(postId: 'post-1'),
       );
-      expect(request.headers['Idempotency-Key'], 'post-reaction-command');
-      expect(request.headers['authorization'], 'Bearer reaction-token');
+
       expect(result.postId, 'post-1');
       expect(result.liked, isTrue);
       expect(result.changed, isTrue);
+      expect(result.replayed, isFalse);
+      expect(replay.reactionId, result.reactionId);
+      expect(replay.version, result.version);
+      expect(replay.changed, isFalse);
+      expect(replay.replayed, isTrue);
+      expect(captured, hasLength(2));
+      for (final request in captured) {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/content/posts/post-1/like');
+        expect(request.body, isEmpty);
+        expect(
+          request.headers['X-Client-Page-Id'],
+          ContentRequestPageIds.likePost,
+        );
+        expect(
+          request.headers['X-Client-Operation-Id'],
+          AppCloudOperationIds.contentContentReactionLikePost,
+        );
+        expect(request.headers['X-Client-Surface-Id'], 'homeFeed');
+        expect(request.headers['Idempotency-Key'], 'post-reaction-command');
+        expect(request.headers['authorization'], 'Bearer reaction-token');
+      }
     });
 
     test('UnlikePost 使用 generated path 且严格解码结果', () async {
-      http.Request? captured;
+      final captured = <http.Request>[];
+      var callCount = 0;
       final adapter = RemoteContentPostReactionFacet(
         client: _client((request) {
-          captured = request;
+          captured.add(request);
+          callCount += 1;
           return <String, Object?>{
             'reactionId': 'reaction-1',
             'postId': 'post-1',
             'version': 2,
             'liked': false,
-            'changed': true,
-            'replayed': false,
+            'changed': callCount == 1,
+            'replayed': callCount > 1,
           };
         }),
         invocationContext: _context,
@@ -70,17 +95,35 @@ void main() {
       final result = await adapter.unlikePost(
         UnlikeContentPostCommand(postId: 'post-1'),
       );
-      final request = captured;
-      expect(request, isNotNull);
-
-      expect(request!.method, 'DELETE');
-      expect(request.url.path, '/content/posts/post-1/like');
-      expect(
-        request.headers['X-Client-Operation-Id'],
-        AppCloudOperationIds.contentContentReactionUnlikePost,
+      final replay = await adapter.unlikePost(
+        UnlikeContentPostCommand(postId: 'post-1'),
       );
+
       expect(result.version, 2);
       expect(result.liked, isFalse);
+      expect(result.changed, isTrue);
+      expect(result.replayed, isFalse);
+      expect(replay.reactionId, result.reactionId);
+      expect(replay.version, result.version);
+      expect(replay.changed, isFalse);
+      expect(replay.replayed, isTrue);
+      expect(captured, hasLength(2));
+      for (final request in captured) {
+        expect(request.method, 'DELETE');
+        expect(request.url.path, '/content/posts/post-1/like');
+        expect(request.body, isEmpty);
+        expect(
+          request.headers['X-Client-Page-Id'],
+          ContentRequestPageIds.unlikePost,
+        );
+        expect(
+          request.headers['X-Client-Operation-Id'],
+          AppCloudOperationIds.contentContentReactionUnlikePost,
+        );
+        expect(request.headers['X-Client-Surface-Id'], 'homeFeed');
+        expect(request.headers['Idempotency-Key'], 'post-reaction-command');
+        expect(request.headers['authorization'], 'Bearer reaction-token');
+      }
     });
 
     test('GetContentReactionState 使用 typed query 且不携带幂等键', () async {
@@ -111,9 +154,54 @@ void main() {
         request.headers['X-Client-Operation-Id'],
         AppCloudOperationIds.contentContentReactionGetContentReactionState,
       );
+      expect(
+        request.headers['X-Client-Page-Id'],
+        ContentRequestPageIds.getContentReactionState,
+      );
+      expect(request.headers['X-Client-Surface-Id'], 'homeFeed');
+      expect(request.headers['authorization'], 'Bearer reaction-token');
       expect(request.headers.containsKey('Idempotency-Key'), isFalse);
       expect(result.updatedAt, DateTime.utc(2026, 7, 14, 8));
       expect(result.liked, isTrue);
+    });
+
+    test('malformed reaction state fail-closed，不合成互动状态', () async {
+      final adapter = RemoteContentPostReactionFacet(
+        client: _client((_) {
+          return <String, Object?>{
+            'found': true,
+            'postId': 'post-1',
+            'liked': 'yes',
+            'version': 3,
+          };
+        }),
+        invocationContext: _context,
+      );
+
+      await expectLater(
+        adapter.getReactionState(
+          GetContentPostReactionStateQuery(postId: 'post-1'),
+        ),
+        throwsA(
+          isA<CloudException>()
+              .having(
+                (error) => error.type,
+                'type',
+                CloudErrorType.invalidResponse,
+              )
+              .having(
+                (error) => error.code,
+                'code',
+                'APP.CONTRACT.invalid_json',
+              )
+              .having(
+                (error) => error.sourceOperationId,
+                'sourceOperationId',
+                AppCloudOperationIds
+                    .contentContentReactionGetContentReactionState,
+              ),
+        ),
+      );
     });
   });
 }

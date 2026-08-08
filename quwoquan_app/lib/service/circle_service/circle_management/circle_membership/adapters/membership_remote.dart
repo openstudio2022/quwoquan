@@ -8,10 +8,18 @@ typedef CircleMembershipInvocationContextFactory =
       required bool command,
     });
 
+typedef CircleMembershipClientRequestInvocationContextFactory =
+    CloudOperationInvocationContext Function(
+      String clientPageId, {
+      required bool command,
+      String? idempotencyKey,
+    });
+
 final class RemoteCircleMembershipFacet
     implements
         CircleMembershipCommands,
         CircleMembershipModeration,
+        ClientRequestBoundCircleMembershipModeration,
         CircleMembershipQueries,
         PendingCircleMemberships {
   const RemoteCircleMembershipFacet({
@@ -20,14 +28,51 @@ final class RemoteCircleMembershipFacet
   });
 
   final GeneratedCloudOperationClient client;
-  final CircleMembershipInvocationContextFactory invocationContext;
+  final Object invocationContext;
+
+  CloudOperationInvocationContext _context(
+    String clientPageId, {
+    required bool command,
+    String? clientRequestId,
+  }) {
+    final normalizedClientRequestId = clientRequestId?.trim();
+    if (clientRequestId != null) {
+      if (normalizedClientRequestId == null ||
+          normalizedClientRequestId.isEmpty) {
+        throw ArgumentError.value(
+          clientRequestId,
+          'clientRequestId',
+          'must not be blank',
+        );
+      }
+      final factory = invocationContext;
+      if (factory is! CircleMembershipClientRequestInvocationContextFactory) {
+        throw StateError(
+          'Circle membership moderation requires caller-bound clientRequestId',
+        );
+      }
+      return factory(
+        clientPageId,
+        command: command,
+        idempotencyKey: normalizedClientRequestId,
+      );
+    }
+    final factory = invocationContext;
+    if (factory is CircleMembershipInvocationContextFactory) {
+      return factory(clientPageId, command: command);
+    }
+    if (factory is CircleMembershipClientRequestInvocationContextFactory) {
+      return factory(clientPageId, command: command);
+    }
+    throw StateError('Invalid circle membership invocation context factory');
+  }
 
   @override
   Future<CircleMembershipCommandResult> join(
     JoinCircleMembershipCommand command,
   ) => client.circleCircleMembershipJoinCircle(
     command,
-    context: invocationContext(CircleRequestPageIds.joinCircle, command: true),
+    context: _context(CircleRequestPageIds.joinCircle, command: true),
   );
 
   @override
@@ -35,7 +80,7 @@ final class RemoteCircleMembershipFacet
     LeaveCircleMembershipCommand command,
   ) => client.circleCircleMembershipLeaveCircle(
     command,
-    context: invocationContext(CircleRequestPageIds.leaveCircle, command: true),
+    context: _context(CircleRequestPageIds.leaveCircle, command: true),
   );
 
   @override
@@ -43,7 +88,7 @@ final class RemoteCircleMembershipFacet
     UpdateCircleMembershipRoleCommand command,
   ) => client.circleCircleMembershipUpdateCircleMembershipRole(
     command,
-    context: invocationContext(
+    context: _context(
       CircleRequestPageIds.updateCircleMembershipRole,
       command: true,
     ),
@@ -52,22 +97,40 @@ final class RemoteCircleMembershipFacet
   @override
   Future<CircleMembershipCommandResult> approve(
     DecideCircleMembershipCommand command,
-  ) => client.circleCircleMembershipApproveCircleMember(
+  ) => Future<CircleMembershipCommandResult>.error(
+    StateError('approve requires a caller-bound clientRequestId'),
+  );
+
+  @override
+  Future<CircleMembershipCommandResult> approveWithClientRequestId(
+    DecideCircleMembershipCommand command, {
+    required String clientRequestId,
+  }) => client.circleCircleMembershipApproveCircleMember(
     command,
-    context: invocationContext(
+    context: _context(
       CircleRequestPageIds.approveCircleMember,
       command: true,
+      clientRequestId: clientRequestId,
     ),
   );
 
   @override
   Future<CircleMembershipCommandResult> reject(
     DecideCircleMembershipCommand command,
-  ) => client.circleCircleMembershipRejectCircleMember(
+  ) => Future<CircleMembershipCommandResult>.error(
+    StateError('reject requires a caller-bound clientRequestId'),
+  );
+
+  @override
+  Future<CircleMembershipCommandResult> rejectWithClientRequestId(
+    DecideCircleMembershipCommand command, {
+    required String clientRequestId,
+  }) => client.circleCircleMembershipRejectCircleMember(
     command,
-    context: invocationContext(
+    context: _context(
       CircleRequestPageIds.rejectCircleMember,
       command: true,
+      clientRequestId: clientRequestId,
     ),
   );
 
@@ -76,7 +139,7 @@ final class RemoteCircleMembershipFacet
     CircleMembershipListQuery query,
   ) => client.circleCircleMembershipListCircleMemberships(
     query,
-    context: invocationContext(
+    context: _context(
       CircleRequestPageIds.listCircleMemberships,
       command: false,
     ),
@@ -87,7 +150,7 @@ final class RemoteCircleMembershipFacet
     PendingCircleMembershipListQuery query,
   ) => client.circleCircleMembershipListPendingCircleMemberships(
     query,
-    context: invocationContext(
+    context: _context(
       CircleRequestPageIds.listPendingCircleMemberships,
       command: false,
     ),
@@ -98,7 +161,7 @@ final class RemoteCircleMembershipFacet
     MyCircleMembershipQuery query,
   ) => client.circleCircleMembershipGetMyCircleMembership(
     query,
-    context: invocationContext(
+    context: _context(
       CircleRequestPageIds.getMyCircleMembership,
       command: false,
     ),
@@ -109,9 +172,6 @@ final class RemoteCircleMembershipFacet
     PersonaCircleListQuery query,
   ) => client.circleCircleMembershipListPersonaCircles(
     query,
-    context: invocationContext(
-      CircleRequestPageIds.listPersonaCircles,
-      command: false,
-    ),
+    context: _context(CircleRequestPageIds.listPersonaCircles, command: false),
   );
 }

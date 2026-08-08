@@ -104,4 +104,29 @@ void main() {
       AppRoutePaths.homepageDetail(id: 'homepage_1'),
     );
   });
+
+  test('Assistant run notification resumes the canonical personal route', () {
+    final message = AppMessage(
+      messageId: 'msg_assistant_run',
+      userId: 'user_1',
+      messageType: NotificationType.assistant,
+      source: 'assistant_subscription',
+      sourceId: 'sub_1',
+      destination: const AppMessageDestination(type: 'user', id: 'user_1'),
+      title: '小趣任务有新进展',
+      summary: '点击继续查看后台任务',
+      target: const AppMessageTarget(
+        targetType: 'assistant_run',
+        targetId: 'arn_run/with space',
+        query: AppMessageRouteQuery(),
+      ),
+      read: false,
+      createdAt: DateTime.utc(2026, 8, 8),
+    );
+
+    expect(
+      AppMessageNavigationTarget.fromMessage(message)?.location,
+      '${AppRoutePaths.assistantPersonal}?runId=arn_run%2Fwith+space',
+    );
+  });
 }

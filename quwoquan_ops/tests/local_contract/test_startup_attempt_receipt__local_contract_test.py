@@ -91,7 +91,8 @@ def _active_candidate_files(
     )
     candidate = {
         "baselineId": baseline_id,
-        "runtimeConfigDigest": oci["configurationDigest"],
+        "configurationDigest": oci["configurationDigest"],
+        "runtimeConfigDigest": "sha256:" + "d" * 64,
         "buildInputDigest": oci["buildInputDigest"],
         "imageDigest": oci["imageDigest"],
     }
@@ -719,7 +720,7 @@ def test_candidate_oci_loader_cross_checks_active_candidate_digests(
         tmp_path
     )
     mismatches = (
-        ("runtimeConfigDigest", "configurationDigest"),
+        ("configurationDigest", "configurationDigest"),
         ("buildInputDigest", "buildInputDigest"),
         ("imageDigest", "imageDigest"),
     )

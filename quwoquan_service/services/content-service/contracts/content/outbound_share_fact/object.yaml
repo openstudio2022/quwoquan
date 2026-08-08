@@ -37,8 +37,20 @@ relationships:
 local_identity_reasons:
   referralId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 只有渠道返回成功后才能追加事实
 - 同一 actor 与 idempotencyKey 只产生一个 eventId 和一条 outbox 事件
@@ -47,3 +59,10 @@ lifecycle:
   states:
   - recorded
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - AppendOutboundShareFact
+    rationale: 站外分享事实追加；仅要求 Idempotency-Key 去重，分享次数统计为下游派生投影，写入侧无实例级可变不变式。
+    evaluated_at: '2026-08-07'

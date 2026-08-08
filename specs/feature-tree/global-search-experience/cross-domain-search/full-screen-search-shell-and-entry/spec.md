@@ -62,6 +62,13 @@
 - 云端实体主页从请求开始即获得 6 秒总预算；3 秒只是阻塞空白页的慢提示，不得在 3 秒重新发请求或延长 deadline。
 - query 变化、清空、返回与页面销毁必须取消 transport、递增 generation 并清理计时器；旧响应不得覆盖新 query。
 
+<a id="req-006"></a>
+### REQ-006 全局搜索页以 production Remote 组合默认态、联想态与正式结果交接
+
+- 默认态的远端最近搜索、热词、圈子和地点启发，以及输入后的 canonical suggest，必须来自 production Remote composition；本地缓存只承担游客或离线表现，不得冒充云端事实。
+- 本地联想、主页预览和网络结果入口可独立结算；单域失败不得清空其他已确认结果，query 替换、清空、返回或页面销毁后旧响应不得回写。
+- 提交网络搜索时必须携带同一 query/session/referral 上下文进入正式结果页，不得由各入口维护第二套搜索请求或路由语义。
+
 ## 4. 契约引用
 
 - canonical：`specs/feature-tree/global-search-experience/spec.md`
@@ -120,8 +127,29 @@
 - THEN 长文 Tab 只展示单列长文阅读流，不展示长文组标题。
 - THEN 小趣 Tab 单独展示总结、推荐方向、相关对象和可继续追问，不参与全部混排。
 
+<a id="gwt-005"></a>
+### GWT-005 全局搜索 production Remote 旅程与局部恢复
+
+- GIVEN 用户从首页、聊天、讨论或助手入口打开同一全屏搜索，App 使用 production Remote composition，且默认态存在可回读的最近搜索或启发数据。
+- WHEN 用户查看默认态、输入 query、打开联想命中或提交网络搜索。
+- THEN 默认态与 suggest 阶段分别消费各对象公开 Remote 结果；本地联系人、会话与消息可先展示，但不得替代云端主页、热词、圈子、地点或正式结果事实。
+- THEN 网络搜索交接保留同一 query、session、launch context 与 referral，正式结果只进入 canonical 网络结果页，不创建中间结果页或第二搜索接口。
+- THEN 任一 Remote 分区失败只影响对应分区并提供重试；已确认结果、输入和焦点保持可用，旧 query 的 response 在替换、清空、返回或页面销毁后不得覆盖当前页面。
+
 ## 6. 依赖
 
 - 前置要求：[`cross-domain-search`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 全局搜索页 production Remote 双真机验收
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：缺少同一 candidate 上从多入口进入、默认态 Remote 回读、联想局部失败恢复到网络结果交接的完整真实设备证据。
+- 完成判定：`GWT-005` 的每条结果在物理 Android 与物理 iPhone 上通过，且两类 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
+- 依赖：production Remote 搜索及参与对象 Provider、真实可回读数据、对象级或 Journey `user_acceptance` runner；fixture、Mock、模拟器首帧或 skip 不计通过。

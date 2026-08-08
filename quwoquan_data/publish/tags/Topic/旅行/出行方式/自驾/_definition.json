@@ -1,1 +1,15 @@
-{"aliases":["自驾游"],"axisRole":"topic","createdAt":"2026-05-15T00:00:00+08:00","description":"自驾车旅行","label":"自驾","labelEn":"Self-drive","sameAsRefs":["Audience/创作者/垂类身份/自驾达人","Audience/用户/兴趣偏好/旅行摄影/自驾"],"updatedAt":"2026-07-28T13:45:38.217620+00:00"}
+{
+  "label": "自驾",
+  "labelEn": "Self-drive",
+  "description": "自驾车旅行",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/创作者/垂类身份/自驾达人",
+    "Audience/用户/兴趣偏好/旅行摄影/自驾"
+  ],
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00",
+  "aliases": [
+    "自驾游"
+  ]
+}

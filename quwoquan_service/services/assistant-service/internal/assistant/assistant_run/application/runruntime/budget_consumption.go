@@ -15,8 +15,9 @@ type BudgetConsumption struct {
 }
 
 // BudgetConsumptionReceipt is an idempotent observation emitted at a model or
-// tool boundary. Scope is frozen to Run + goal revision; Sequence is monotonic
-// within that scope and Consumption is the absolute Run total at that point.
+// tool boundary. Scope is frozen to Run + goal revision + root execution
+// attempt; Sequence is monotonic within that scope and Consumption remains the
+// absolute Run total across every verifier repair attempt.
 type BudgetConsumptionReceipt struct {
 	Scope       string
 	Sequence    int64
@@ -31,8 +32,18 @@ func budgetConsumptionFromCheckpoint(checkpoint *Checkpoint) BudgetConsumption {
 }
 
 func budgetReceiptScope(run Run) string {
-	return "run:" + strings.TrimSpace(run.RunID) + ":goal:" +
+	return executionAttemptScope(run)
+}
+
+func executionAttemptScope(run Run) string {
+	scope := "run:" + strings.TrimSpace(run.RunID) + ":goal:" +
 		fmt.Sprint(run.GoalRevision)
+	for _, task := range run.TaskGraph.Tasks {
+		if task.TaskID == "task_root" && task.Attempt > 1 {
+			return scope + ":task:task_root:attempt:" + fmt.Sprint(task.Attempt)
+		}
+	}
+	return scope
 }
 
 func (r *Run) RecordBudgetConsumption(

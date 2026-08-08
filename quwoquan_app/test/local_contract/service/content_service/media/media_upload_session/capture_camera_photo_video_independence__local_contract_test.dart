@@ -6,6 +6,7 @@ import 'package:quwoquan_app/service/content_service/media/filter_catalog_releas
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/adapters/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/create_media_models.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_creation_launch_models.dart';
 
 /// 共享高保相机壳，但图片与视频路由语义、返回结果类型、主按钮、标题必须互不串线。
 void main() {

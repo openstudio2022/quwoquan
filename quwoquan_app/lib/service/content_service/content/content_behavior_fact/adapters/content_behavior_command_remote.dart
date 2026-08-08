@@ -8,7 +8,7 @@ typedef ContentBehaviorInvocationContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);
 
 final class RemoteContentBehaviorCommandAdapter
-    implements ContentBehaviorCommandWriter {
+    implements ContentBehaviorFactAppender {
   const RemoteContentBehaviorCommandAdapter({
     required this.client,
     required this.invocationContext,

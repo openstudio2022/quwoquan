@@ -5,7 +5,7 @@
     "tags": ["quwoquan", "l2", "flywheel", "recommendation"],
     "timezone": "browser",
     "refresh": "30s",
-    "description": "行为反馈 → 兴趣/人群画像派生(content) → 双路 CQRS 投影(user 域 rm_user_profile_view + 宽表 rm_recommend_feature) → 引擎按 policy×segment 归因 → 画像反哺小艺主动。与 scripts/recommendation/eval_content_flywheel_loop.py 的数据面闭环实证互补。",
+    "description": "行为反馈 → 兴趣/人群画像派生(content) → 双路 CQRS 投影(user 域 rm_user_profile_view + 宽表 rm_recommend_feature) → 引擎按 policy×segment 归因 → 画像反哺小艺主动。与 quwoquan_service/scripts/product-ops-service/tools/eval_content_flywheel_loop.py 的数据面闭环实证互补。",
     "panels": [
       {
         "title": "① 兴趣画像派生吞吐（result）",

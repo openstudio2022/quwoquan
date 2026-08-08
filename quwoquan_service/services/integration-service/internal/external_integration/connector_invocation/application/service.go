@@ -8,20 +8,17 @@ import (
 
 	"github.com/google/uuid"
 
-	connectionmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/model"
-	connectionports "quwoquan_service/services/integration-service/internal/external_integration/connector_connection/domain/ports"
-	definitionmodel "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/domain/model"
-	definitionports "quwoquan_service/services/integration-service/internal/external_integration/connector_definition/domain/ports"
+	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
+	grantmodel "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/domain/model"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/domain/model"
 	"quwoquan_service/services/integration-service/internal/external_integration/connector_invocation/domain/ports"
 )
 
 type CommandFacade struct {
-	store       ports.Store
-	connections connectionports.Reader
-	definitions definitionports.Reader
-	now         func() time.Time
-	newID       func() string
+	store          ports.Store
+	authorizations *grantapp.CapabilityGrantSessionFacade
+	now            func() time.Time
+	newID          func() string
 }
 
 type QueryFacade struct {
@@ -30,8 +27,7 @@ type QueryFacade struct {
 
 func NewCommandFacade(
 	store ports.Store,
-	connections connectionports.Reader,
-	definitions definitionports.Reader,
+	authorizations *grantapp.CapabilityGrantSessionFacade,
 	now func() time.Time,
 	newID func() string,
 ) *CommandFacade {
@@ -42,8 +38,7 @@ func NewCommandFacade(
 		newID = uuid.NewString
 	}
 	return &CommandFacade{
-		store: store, connections: connections, definitions: definitions,
-		now: now, newID: newID,
+		store: store, authorizations: authorizations, now: now, newID: newID,
 	}
 }
 
@@ -53,42 +48,43 @@ func NewQueryFacade(reader ports.Reader) *QueryFacade {
 
 func (facade *CommandFacade) Accept(
 	ctx context.Context,
+	authorization grantapp.TrustedRuntimeAuthorization,
 	input model.AcceptInput,
 ) (model.MutationResult, error) {
-	if facade == nil || facade.store == nil || facade.connections == nil ||
-		facade.definitions == nil {
+	if facade == nil || facade.store == nil || facade.authorizations == nil {
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
 	now := facade.now()
-	connection, err := facade.connections.Get(
+	resolved, err := facade.authorizations.AuthorizeFinalInput(
 		ctx,
-		strings.TrimSpace(input.AccountID),
-		strings.TrimSpace(input.ConnectionID),
+		authorization,
+		grantapp.FinalAuthorizationInput{
+			ResolutionID:    strings.TrimSpace(input.ResolutionID),
+			CapabilityKey:   strings.TrimSpace(input.Capability),
+			SurfaceKind:     strings.TrimSpace(input.SurfaceKind),
+			ConnectionRefs:  []string{strings.TrimSpace(input.ConnectionID)},
+			BindingKind:     grantmodel.BindingUserConnector,
+			InputDigest:     strings.TrimSpace(input.InputDigest),
+			ConfirmationRef: strings.TrimSpace(input.ConfirmationRef),
+			PermitRef:       strings.TrimSpace(input.PermitRef),
+			IdempotencyKey:  strings.TrimSpace(input.IdempotencyKey),
+		},
 	)
-	if errors.Is(err, connectionmodel.ErrNotFound) {
-		return model.MutationResult{}, model.ErrConnectionNotFound
-	}
 	if err != nil {
-		return model.MutationResult{}, model.ErrStorageUnavailable
+		return model.MutationResult{}, mapGrantError(err)
 	}
-	if !connection.IsActive(now) {
-		return model.MutationResult{}, model.ErrConnectionInactive
-	}
-	if !connection.Grants(strings.TrimSpace(input.Capability)) {
+	if resolved.UserConnector == nil ||
+		resolved.BindingKind != grantmodel.BindingUserConnector ||
+		resolved.UserConnector.ConnectionID != strings.TrimSpace(input.ConnectionID) {
 		return model.MutationResult{}, model.ErrCapabilityDenied
 	}
-	definition, err := facade.definitions.Get(ctx, connection.ConnectorID)
-	if errors.Is(err, definitionmodel.ErrNotFound) {
-		return model.MutationResult{}, model.ErrCapabilityDenied
-	}
+	bindingDigest, err := grantmodel.BindingDigest(resolved)
 	if err != nil {
-		return model.MutationResult{}, model.ErrStorageUnavailable
-	}
-	if !definition.Grants(strings.TrimSpace(input.Capability)) {
 		return model.MutationResult{}, model.ErrCapabilityDenied
 	}
 	input.InvocationID = facade.newID()
-	input.ConfirmationRequired = definition.ConfirmationPolicy == definitionmodel.ConfirmationUser
+	input.AccountID = authorization.AccountID
+	input.BindingDigest = bindingDigest
 	input.OccurredAt = now
 	command, err := model.NewAcceptCommand(input)
 	if err != nil {
@@ -99,11 +95,13 @@ func (facade *CommandFacade) Accept(
 
 func (facade *CommandFacade) Continue(
 	ctx context.Context,
+	authorization grantapp.TrustedRuntimeAuthorization,
 	input model.ContinueInput,
 ) (model.MutationResult, error) {
-	if facade == nil || facade.store == nil || facade.connections == nil {
+	if facade == nil || facade.store == nil || facade.authorizations == nil {
 		return model.MutationResult{}, model.ErrStorageUnavailable
 	}
+	input.AccountID = authorization.AccountID
 	current, err := facade.store.Get(
 		ctx,
 		strings.TrimSpace(input.AccountID),
@@ -112,16 +110,25 @@ func (facade *CommandFacade) Continue(
 	if err != nil {
 		return model.MutationResult{}, err
 	}
-	connection, err := facade.connections.Get(ctx, current.AccountID, current.ConnectionID)
-	if errors.Is(err, connectionmodel.ErrNotFound) ||
-		(err == nil && !connection.IsActive(facade.now())) {
-		return model.MutationResult{}, model.ErrConnectionInactive
+	if strings.TrimSpace(input.ConfirmationRef) != current.ConfirmationRef {
+		return model.MutationResult{}, model.ErrInvalidArgument
 	}
-	if err != nil {
-		return model.MutationResult{}, model.ErrStorageUnavailable
-	}
-	if !connection.Grants(current.Capability) {
-		return model.MutationResult{}, model.ErrCapabilityDenied
+	if _, err := facade.authorizations.RevalidateFinalAuthorization(
+		ctx,
+		authorization,
+		grantapp.FinalAuthorizationInput{
+			ResolutionID:    current.ResolutionID,
+			CapabilityKey:   current.Capability,
+			SurfaceKind:     current.SurfaceKind,
+			ConnectionRefs:  []string{current.ConnectionID},
+			BindingKind:     grantmodel.BindingUserConnector,
+			InputDigest:     current.InputDigest,
+			ConfirmationRef: current.ConfirmationRef,
+			PermitRef:       current.PermitRef,
+			IdempotencyKey:  current.IdempotencyKey,
+		},
+	); err != nil {
+		return model.MutationResult{}, mapGrantError(err)
 	}
 	input.OccurredAt = facade.now()
 	normalized, err := model.NewContinueInput(input)
@@ -129,6 +136,29 @@ func (facade *CommandFacade) Continue(
 		return model.MutationResult{}, err
 	}
 	return facade.store.Continue(ctx, normalized)
+}
+
+func mapGrantError(err error) error {
+	switch {
+	case errors.Is(err, grantmodel.ErrInvalidRequirement),
+		errors.Is(err, grantmodel.ErrConfirmationRequired),
+		errors.Is(err, grantmodel.ErrPermitRequired),
+		errors.Is(err, grantmodel.ErrIdempotencyRequired),
+		errors.Is(err, grantapp.ErrRuntimeAuthorizationInvalid),
+		errors.Is(err, grantapp.ErrFinalAuthorizationMismatch):
+		return model.ErrInvalidArgument
+	case errors.Is(err, grantmodel.ErrConnectorRevoked),
+		errors.Is(err, grantmodel.ErrConnectorExpired),
+		errors.Is(err, grantapp.ErrCapabilityGrantSessionExpired):
+		return model.ErrConnectionInactive
+	case errors.Is(err, grantmodel.ErrConnectorCapability),
+		errors.Is(err, grantmodel.ErrConnectorSurfaceDenied),
+		errors.Is(err, grantmodel.ErrCapabilityGrantRequired),
+		errors.Is(err, grantapp.ErrCapabilityGrantSessionNotFound):
+		return model.ErrCapabilityDenied
+	default:
+		return model.ErrStorageUnavailable
+	}
 }
 
 func (facade *QueryFacade) Get(

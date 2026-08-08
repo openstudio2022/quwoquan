@@ -15,6 +15,10 @@ export 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
     show appTelemetryReporterProvider;
 export 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.dart'
     show cloudRuntimeEnvironmentProvider;
+export 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart'
+    show appEventLogPortProvider, exceptionTelemetryPortProvider;
+export 'package:quwoquan_app/runtime/observability/app_observability_ports.dart'
+    show AppEventLogPort, ExceptionTelemetryPort;
 
 export 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
@@ -34,4 +38,3 @@ export 'package:quwoquan_app/service/user_service/relationship/persona_relations
 export 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_rtc_facets.dart';
-export 'package:quwoquan_app/runtime/di/app_providers_gathering_journey.dart';

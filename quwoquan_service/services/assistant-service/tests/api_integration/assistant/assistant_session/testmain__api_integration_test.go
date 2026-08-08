@@ -449,7 +449,6 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	assertMongoIndex(t, "assistant_session_summary_receipts", "uq_session_summary_source_sequence")
 	assertMongoIndex(t, "assistant_session_outbox", "idx_assistant_session_outbox_claimable")
 	assertMongoIndex(t, "assistant_learning_facts", "uq_assistant_learning_fact_sequence")
-	assertMongoIndex(t, "assistant_learning_facts", "idx_assistant_learning_fact_turn")
 	assertMongoIndex(t, "rm_assistant_learning_projection", "idx_assistant_learning_projection_owner_updated")
 
 	var activeIndexDefinition string

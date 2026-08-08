@@ -8,7 +8,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/runtime/di/presentation/conversation_avatar.dart';
+import 'package:quwoquan_app/runtime/di/chat_presentation_slots.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
@@ -26,7 +26,7 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
@@ -387,7 +387,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
   }
 }
 
-class _InboxConversationTile extends StatelessWidget {
+class _InboxConversationTile extends ConsumerWidget {
   const _InboxConversationTile({
     required this.item,
     required this.onTap,
@@ -406,8 +406,8 @@ class _InboxConversationTile extends StatelessWidget {
 
   static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
-  Widget _buildAvatar(BuildContext context) {
-    return ConversationAvatar(
+  Widget _buildAvatar(BuildContext context, WidgetRef ref) {
+    return ref.watch(conversationAvatarBuilderProvider)(
       conversationId: item.id,
       conversationType: item.isGroup ? 'group' : 'direct',
       title: item.title,
@@ -418,7 +418,7 @@ class _InboxConversationTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final inboxTileIsDark =
         CupertinoTheme.of(context).brightness == Brightness.dark;
     final onAccentFg = AppColorsFunctional.getColor(
@@ -451,7 +451,7 @@ class _InboxConversationTile extends StatelessWidget {
                   Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      _buildAvatar(context),
+                      _buildAvatar(context, ref),
                       if (item.hasUnread)
                         Positioned(
                           top: -4,

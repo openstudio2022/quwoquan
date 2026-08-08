@@ -190,7 +190,7 @@ def main() -> int:
         f"generated_at: {_yaml_escape(now)}",
         "policy_note: Heuristic regex counts may include comments/strings; use as triage, not proof.",
         "scopes:",
-        "  - quwoquan_app/lib/<domain>/<context>/<object>/presentation",
+        "  - quwoquan_app/lib/service/<service>/<context>/<object>/presentation",
         "  - quwoquan_app/lib/runtime/shell",
         "  - quwoquan_app/lib/design_system",
         "summary:",

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/release/research_scale_promotion.schema.json",
-  "title": "Research M100 structural promotion receipt",
-  "description": "M100 names a workload target. Promotion requires four real lanes with at least one hard-qualified published object each; target attainment and rates are receipt statistics, not promotion gates.",
+  "title": "Research cumulative scale promotion receipt",
+  "description": "Create-once M100, M1000, or M10000 promotion. Target attainment, article media, ranked video, recovery, resource, and predecessor identity are hard gates.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -16,8 +16,16 @@
     "sourceDigest",
     "entityCatalogDigest",
     "targetScale",
+    "sourcePoolDigest",
+    "predecessorSourcePoolDigests",
+    "scaleStartedAt",
+    "scaleCompletedAt",
+    "wallClockBudgetSeconds",
+    "wallClockSeconds",
+    "capacityThroughputByCarrier",
     "carrierCounts",
     "statistics",
+    "professionalImageSourceMix",
     "duplicateAssetCount",
     "crossLaneWriteCount",
     "resourceIsolationPassed",
@@ -29,14 +37,13 @@
     "fourLaneLongestContinuousOverlapSeconds",
     "allSemanticJobsTerminalAt",
     "terminalResidualSampleAt",
-    "automaticRecoveryStatus",
     "campaignEvidenceRef",
     "campaignEvidenceDigest",
     "resourceSoakEvidenceRef",
     "resourceSoakEvidenceDigest",
     "faultInjectionEvidenceRef",
     "faultInjectionEvidenceDigest",
-    "m1000Eligible",
+    "nextScaleEligible",
     "recordedAt"
   ],
   "properties": {
@@ -49,20 +56,43 @@
     "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "targetScale": {"const": "M100"},
+    "targetScale": {"enum": ["M100", "M1000", "M10000"]},
+    "sourcePoolDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "predecessorSourcePoolDigests": {
+      "type": "array", "maxItems": 2, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+    },
+    "scaleStartedAt": {"type": "string", "format": "date-time"},
+    "scaleCompletedAt": {"type": "string", "format": "date-time"},
+    "wallClockBudgetSeconds": {"type": ["integer", "null"], "minimum": 1},
+    "wallClockSeconds": {"type": "integer", "minimum": 0},
+    "capacityThroughputByCarrier": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/capacityThroughput"}, {"properties": {"carrier": {"const": "homepage"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capacityThroughput"}, {"properties": {"carrier": {"const": "article"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capacityThroughput"}, {"properties": {"carrier": {"const": "image"}}}]},
+        {"allOf": [{"$ref": "#/$defs/capacityThroughput"}, {"properties": {"carrier": {"const": "video"}}}]}
+      ],
+      "items": false
+    },
+    "predecessorPromotion": {"$ref": "#/$defs/predecessorPromotion"},
     "carrierCounts": {
       "type": "array",
       "minItems": 4,
       "maxItems": 4,
       "prefixItems": [
-        {"$ref": "#/$defs/homepageM100Count"},
-        {"$ref": "#/$defs/articleM100Count"},
-        {"$ref": "#/$defs/imageM100Count"},
-        {"$ref": "#/$defs/videoM100Count"}
+        {"$ref": "#/$defs/homepageCount"},
+        {"$ref": "#/$defs/articleCount"},
+        {"$ref": "#/$defs/imageCount"},
+        {"$ref": "#/$defs/videoCount"}
       ],
       "items": false
     },
     "statistics": {"$ref": "#/$defs/statistics"},
+    "professionalImageSourceMix": {"$ref": "#/$defs/professionalImageSourceMix"},
     "duplicateAssetCount": {"const": 0},
     "crossLaneWriteCount": {"const": 0},
     "resourceIsolationPassed": {"const": true},
@@ -116,17 +146,98 @@
     "fourLaneLongestContinuousOverlapSeconds": {"type": "integer", "minimum": 3600},
     "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"},
     "terminalResidualSampleAt": {"type": "string", "format": "date-time"},
-    "automaticRecoveryStatus": {"enum": ["MEASURED", "NOT_EXERCISED"]},
     "campaignEvidenceRef": {"type": "string", "minLength": 1},
     "campaignEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "resourceSoakEvidenceRef": {"type": "string", "minLength": 1},
     "resourceSoakEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "faultInjectionEvidenceRef": {"type": "string", "minLength": 1},
     "faultInjectionEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "m1000Eligible": {"const": true},
+    "nextScaleEligible": {"enum": ["M1000", "M10000", "COMPLETE"]},
     "recordedAt": {"type": "string", "minLength": 1}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"targetScale": {"const": "M100"}}, "required": ["targetScale"]},
+      "then": {
+        "properties": {
+          "nextScaleEligible": {"const": "M1000"},
+          "predecessorSourcePoolDigests": {"maxItems": 0},
+          "wallClockBudgetSeconds": {"type": "null"},
+          "carrierCounts": {
+            "prefixItems": [
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
+              {"properties": {"targetCount": {"const": 10}, "totalUniqueFinalizedCount": {"minimum": 10}, "researchAcceptedCount": {"minimum": 10}}}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"targetScale": {"const": "M1000"}}, "required": ["targetScale"]},
+      "then": {
+        "required": ["predecessorPromotion"],
+        "properties": {
+          "nextScaleEligible": {"const": "M10000"},
+          "predecessorSourcePoolDigests": {"minItems": 1, "maxItems": 1},
+          "predecessorPromotion": {"properties": {"targetScale": {"const": "M100"}}},
+          "wallClockBudgetSeconds": {"const": 259200},
+          "wallClockSeconds": {"maximum": 259200},
+          "carrierCounts": {
+            "prefixItems": [
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"targetScale": {"const": "M10000"}}, "required": ["targetScale"]},
+      "then": {
+        "required": ["predecessorPromotion"],
+        "properties": {
+          "nextScaleEligible": {"const": "COMPLETE"},
+          "predecessorSourcePoolDigests": {"minItems": 2, "maxItems": 2},
+          "predecessorPromotion": {"properties": {"targetScale": {"const": "M1000"}}},
+          "wallClockBudgetSeconds": {"const": 604800},
+          "wallClockSeconds": {"maximum": 604800},
+          "carrierCounts": {
+            "prefixItems": [
+              {"properties": {"targetCount": {"const": 10000}, "totalUniqueFinalizedCount": {"minimum": 10000}, "researchAcceptedCount": {"minimum": 10000}}},
+              {"properties": {"targetCount": {"const": 10000}, "totalUniqueFinalizedCount": {"minimum": 10000}, "researchAcceptedCount": {"minimum": 10000}}},
+              {"properties": {"targetCount": {"const": 10000}, "totalUniqueFinalizedCount": {"minimum": 10000}, "researchAcceptedCount": {"minimum": 10000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}}
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "predecessorPromotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotionId", "releaseId", "manifestDigest", "sourceRevision",
+        "sourceDigest", "entityCatalogDigest", "targetScale", "receiptRef",
+        "receiptDigest"
+      ],
+      "properties": {
+        "promotionId": {"type": "string", "minLength": 1},
+        "releaseId": {"type": "string", "minLength": 1},
+        "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "targetScale": {"enum": ["M100", "M1000"]},
+        "receiptRef": {"type": "string", "minLength": 1},
+        "receiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
     "carrierCount": {
       "type": "object",
       "additionalProperties": false,
@@ -135,6 +246,9 @@
         "targetCount",
         "qualifiedCount",
         "finalizedCount",
+        "predecessorCarriedCount",
+        "newFinalizedCount",
+        "totalUniqueFinalizedCount",
         "selectedCount",
         "discardedCount",
         "shortfallCount",
@@ -147,32 +261,35 @@
         "finalizedCount": {"type": "integer", "minimum": 1},
         "selectedCount": {"type": "integer", "minimum": 1},
         "discardedCount": {"type": "integer", "minimum": 0},
-        "shortfallCount": {"type": "integer", "minimum": 0},
+        "predecessorCarriedCount": {"type": "integer", "minimum": 0},
+        "newFinalizedCount": {"type": "integer", "minimum": 1},
+        "totalUniqueFinalizedCount": {"type": "integer", "minimum": 1},
+        "shortfallCount": {"const": 0},
         "researchAcceptedCount": {"type": "integer", "minimum": 1}
       }
     },
-    "homepageM100Count": {
+    "homepageCount": {
       "allOf": [
         {"$ref": "#/$defs/carrierCount"},
-        {"properties": {"carrier": {"const": "homepage"}, "targetCount": {"const": 100}}}
+        {"properties": {"carrier": {"const": "homepage"}}}
       ]
     },
-    "articleM100Count": {
+    "articleCount": {
       "allOf": [
         {"$ref": "#/$defs/carrierCount"},
-        {"properties": {"carrier": {"const": "article"}, "targetCount": {"const": 100}}}
+        {"properties": {"carrier": {"const": "article"}}}
       ]
     },
-    "imageM100Count": {
+    "imageCount": {
       "allOf": [
         {"$ref": "#/$defs/carrierCount"},
-        {"properties": {"carrier": {"const": "image"}, "targetCount": {"const": 100}}}
+        {"properties": {"carrier": {"const": "image"}}}
       ]
     },
-    "videoM100Count": {
+    "videoCount": {
       "allOf": [
         {"$ref": "#/$defs/carrierCount"},
-        {"properties": {"carrier": {"const": "video"}, "targetCount": {"const": 10}}}
+        {"properties": {"carrier": {"const": "video"}}}
       ]
     },
     "rateStatistic": {
@@ -185,50 +302,238 @@
         "rate": {"type": "number", "minimum": 0, "maximum": 1}
       }
     },
-    "recoveryRateStatistic": {
+    "signalAvailability": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["numerator", "denominator", "rate"],
+      "required": ["signal", "numerator", "denominator", "rate"],
       "properties": {
+        "signal": {"enum": ["play", "like", "comment", "share", "favorite"]},
         "numerator": {"type": "integer", "minimum": 0},
-        "denominator": {"type": "integer", "minimum": 0},
-        "rate": {"type": "number", "minimum": 0, "maximum": 1}
+        "denominator": {"type": "integer", "minimum": 1},
+        "rate": {"const": 1}
+      }
+    },
+    "playAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "play"}}}
+      ]
+    },
+    "likeAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "like"}}}
+      ]
+    },
+    "commentAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "comment"}}}
+      ]
+    },
+    "shareAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "share"}}}
+      ]
+    },
+    "favoriteAvailability": {
+      "allOf": [
+        {"$ref": "#/$defs/signalAvailability"},
+        {"properties": {"signal": {"const": "favorite"}}}
+      ]
+    },
+    "nullableCount": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "nullableNumber": {
+      "type": ["number", "null"]
+    },
+    "popularityComparisonBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "topic", "timeBucket", "candidateCount"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "topic": {"type": "string", "minLength": 1},
+        "timeBucket": {"type": "string", "minLength": 1},
+        "candidateCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "videoPopularityObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectRef", "assetId", "playCount", "likeCount", "commentCount",
+        "shareCount", "favoriteCount", "observedAt", "comparisonBucket",
+        "popularityScore", "popularityPercentile", "rankingEligible",
+        "ineligibleReason"
+      ],
+      "properties": {
+        "objectRef": {"type": "string", "pattern": "^posts/video/"},
+        "assetId": {"type": "string", "minLength": 1},
+        "playCount": {"$ref": "#/$defs/nullableCount"},
+        "likeCount": {"$ref": "#/$defs/nullableCount"},
+        "commentCount": {"$ref": "#/$defs/nullableCount"},
+        "shareCount": {"$ref": "#/$defs/nullableCount"},
+        "favoriteCount": {"$ref": "#/$defs/nullableCount"},
+        "observedAt": {"type": "string", "minLength": 1},
+        "comparisonBucket": {"$ref": "#/$defs/popularityComparisonBucket"},
+        "popularityScore": {"$ref": "#/$defs/nullableNumber"},
+        "popularityPercentile": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rankingEligible": {"type": "boolean"},
+        "ineligibleReason": {"type": "string"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"rankingEligible": {"const": true}},
+            "required": ["rankingEligible"]
+          },
+          "then": {
+            "properties": {
+              "ineligibleReason": {"const": ""},
+              "popularityPercentile": {"type": "number"}
+            }
+          },
+          "else": {
+            "properties": {
+              "ineligibleReason": {"minLength": 1},
+              "popularityPercentile": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "videoPopularityStatistic": {
+      "type": "object",
+      "description": "Truthful five-signal availability and comparable-bucket ranking coverage; complete coverage gates M100 and above.",
+      "additionalProperties": false,
+      "required": [
+        "statistical", "nonBlocking", "signalAvailability",
+        "rankingCoverage", "observations"
+      ],
+      "properties": {
+        "statistical": {"const": true},
+        "nonBlocking": {"const": false},
+        "signalAvailability": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            {"$ref": "#/$defs/playAvailability"},
+            {"$ref": "#/$defs/likeAvailability"},
+            {"$ref": "#/$defs/commentAvailability"},
+            {"$ref": "#/$defs/shareAvailability"},
+            {"$ref": "#/$defs/favoriteAvailability"}
+          ],
+          "items": false
+        },
+        "rankingCoverage": {
+          "allOf": [
+            {"$ref": "#/$defs/rateStatistic"},
+            {"properties": {"rate": {"const": 1}}}
+          ]
+        },
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/videoPopularityObservation"}
+        }
+      }
+    },
+    "automaticRecoveryStatistic": {
+      "type": "object",
+      "description": "Observed automatic recovery; eligible sample count and a rate of at least 0.95 gate promotion.",
+      "additionalProperties": false,
+      "required": [
+        "statistical", "nonBlocking", "status", "eligibleCount",
+        "automaticCount", "targetRate", "rate"
+      ],
+      "properties": {
+        "statistical": {"const": true},
+        "nonBlocking": {"const": false},
+        "status": {"const": "MEASURED"},
+        "eligibleCount": {"type": "integer", "minimum": 20},
+        "automaticCount": {"type": "integer", "minimum": 19},
+        "targetRate": {"const": 0.95},
+        "rate": {"type": "number", "minimum": 0.95, "maximum": 1}
+      }
+    },
+    "providerAssetCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "acceptedAssetCount", "acceptedAssetRatio"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "acceptedAssetCount": {"type": "integer", "minimum": 1},
+        "acceptedAssetRatio": {"type": "number", "exclusiveMinimum": 0, "maximum": 0.7}
+      }
+    },
+    "professionalImageSourceMix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedImageAssetCount", "originalAssetClosureCount",
+        "pinterestAcceptedAssetCount", "tuchongAcceptedAssetCount",
+        "pinterestTuchongAcceptedAssetCount", "pinterestTuchongAcceptedAssetRatio",
+        "largestProvider", "maxProviderAcceptedAssetRatio", "providerAssetCounts"
+      ],
+      "properties": {
+        "acceptedImageAssetCount": {"type": "integer", "minimum": 1},
+        "originalAssetClosureCount": {"type": "integer", "minimum": 1},
+        "pinterestAcceptedAssetCount": {"type": "integer", "minimum": 1},
+        "tuchongAcceptedAssetCount": {"type": "integer", "minimum": 1},
+        "pinterestTuchongAcceptedAssetCount": {"type": "integer", "minimum": 1},
+        "pinterestTuchongAcceptedAssetRatio": {"type": "number", "minimum": 0.5, "maximum": 1},
+        "largestProvider": {"const": "pinterest"},
+        "maxProviderAcceptedAssetRatio": {"type": "number", "exclusiveMinimum": 0, "maximum": 0.7},
+        "providerAssetCounts": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/providerAssetCount"}
+        }
       }
     },
     "quotaAttainment": {
       "type": "object",
-      "description": "Per-carrier qualifiedCount / targetCount; the rate may exceed 1 and never gates promotion.",
+      "description": "Per-carrier cumulative unique finalized / targetCount; rate must be at least one.",
       "additionalProperties": false,
       "required": ["carrier", "numerator", "denominator", "rate"],
       "properties": {
         "carrier": {"enum": ["homepage", "article", "image", "video"]},
         "numerator": {"type": "integer", "minimum": 1},
         "denominator": {"type": "integer", "minimum": 1},
-        "rate": {"type": "number", "minimum": 0}
+        "rate": {"type": "number", "minimum": 1}
       }
     },
     "homepageQuotaAttainment": {
       "allOf": [
         {"$ref": "#/$defs/quotaAttainment"},
-        {"properties": {"carrier": {"const": "homepage"}, "denominator": {"const": 100}}}
+        {"properties": {"carrier": {"const": "homepage"}}}
       ]
     },
     "articleQuotaAttainment": {
       "allOf": [
         {"$ref": "#/$defs/quotaAttainment"},
-        {"properties": {"carrier": {"const": "article"}, "denominator": {"const": 100}}}
+        {"properties": {"carrier": {"const": "article"}}}
       ]
     },
     "imageQuotaAttainment": {
       "allOf": [
         {"$ref": "#/$defs/quotaAttainment"},
-        {"properties": {"carrier": {"const": "image"}, "denominator": {"const": 100}}}
+        {"properties": {"carrier": {"const": "image"}}}
       ]
     },
     "videoQuotaAttainment": {
       "allOf": [
         {"$ref": "#/$defs/quotaAttainment"},
-        {"properties": {"carrier": {"const": "video"}, "denominator": {"const": 10}}}
+        {"properties": {"carrier": {"const": "video"}}}
       ]
     },
     "statistics": {
@@ -237,6 +542,7 @@
       "required": [
         "objectPassRate",
         "illustratedRate",
+        "videoPopularity",
         "automaticRecoveryRate",
         "firstPassRate",
         "discardRate",
@@ -249,11 +555,16 @@
         },
         "illustratedRate": {
           "description": "Illustrated article count / article count in the promoted release.",
-          "$ref": "#/$defs/rateStatistic"
+          "allOf": [
+            {"$ref": "#/$defs/rateStatistic"},
+            {"properties": {"rate": {"minimum": 0.9}}}
+          ]
+        },
+        "videoPopularity": {
+          "$ref": "#/$defs/videoPopularityStatistic"
         },
         "automaticRecoveryRate": {
-          "description": "Automatically recovered fault count / recovery-eligible fault count; 0/0 is NOT_EXERCISED.",
-          "$ref": "#/$defs/recoveryRateStatistic"
+          "$ref": "#/$defs/automaticRecoveryStatistic"
         },
         "firstPassRate": {
           "description": "Lanes whose retryChain contains only the current execution / four promoted lanes.",
@@ -277,6 +588,27 @@
         }
       }
     },
+    "capacityThroughput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier", "measuredScale", "sourceRevision", "sourceDigest", "entityCatalogDigest", "throughputUnit", "perSlotThroughputSamples", "evidenceRef", "evidenceDigest", "throughputBasisDigest"],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "measuredScale": {"enum": ["M100", "M1000", "M10000"]},
+        "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "throughputUnit": {"const": "objects_per_second_per_slot"},
+        "perSlotThroughputSamples": {
+          "type": "array",
+          "minItems": 10,
+          "items": {"type": "number", "exclusiveMinimum": 0}
+        },
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "throughputBasisDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
     "semanticJobs": {
       "type": "object",
       "additionalProperties": false,
@@ -289,6 +621,7 @@
         "semanticJobIds",
         "semanticJobSucceededIds",
         "semanticJobTerminalIds",
+        "perSlotThroughputSamples",
         "activeDurationSeconds",
         "activeIntervals"
       ],
@@ -315,6 +648,11 @@
           "minItems": 10,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}
+        },
+        "perSlotThroughputSamples": {
+          "type": "array",
+          "minItems": 10,
+          "items": {"type": "number", "exclusiveMinimum": 0}
         },
         "activeDurationSeconds": {"type": "integer", "minimum": 3600},
         "activeIntervals": {

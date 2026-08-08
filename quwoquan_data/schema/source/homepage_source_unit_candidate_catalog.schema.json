@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/homepage_source_unit_candidate_catalog.schema.json",
+  "title": "Immutable entity homepage source-unit candidate catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "catalogId", "catalogVersion", "policyRevision", "sourceRevision",
+    "sourceDigest", "entityCatalogDigest", "createdAt", "minimumCandidateCount",
+    "candidates", "catalogDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.homepage_source_unit_candidate_catalog"},
+    "catalogId": {"type": "string", "minLength": 1},
+    "catalogVersion": {"type": "string", "minLength": 1, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$"},
+    "policyRevision": {"const": "encyclopedia-primary"},
+    "sourceRevision": {"$ref": "#/$defs/sha256"},
+    "sourceDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "createdAt": {"type": "string", "minLength": 1},
+    "minimumCandidateCount": {"type": "integer", "minimum": 1},
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}},
+    "catalogDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "accessEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anonymousPublicAccess", "loginRequired", "captchaRequired",
+        "paywallRequired", "drmProtected", "accessControlBypass"
+      ],
+      "properties": {
+        "anonymousPublicAccess": {"const": true},
+        "loginRequired": {"const": false},
+        "captchaRequired": {"const": false},
+        "paywallRequired": {"const": false},
+        "drmProtected": {"const": false},
+        "accessControlBypass": {"const": false}
+      }
+    },
+    "primarySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceUnitId", "sourceUnitRef", "sourceUnitDigest", "sourceKind", "platform",
+        "extractor", "policyRevision", "sourceUrl", "capturedAt", "bodyEvidenceRef",
+        "bodyContentSha256", "accessEvidence"
+      ],
+      "properties": {
+        "sourceUnitId": {"type": "string", "minLength": 1, "pattern": "^[^/]+$"},
+        "sourceUnitRef": {"type": "string", "pattern": "^sources/[^/]+$"},
+        "sourceUnitDigest": {"$ref": "#/$defs/sha256"},
+        "sourceKind": {"enum": ["wikipedia", "baidu_baike", "toutiao_baike"]},
+        "platform": {"type": "string", "minLength": 1},
+        "extractor": {"enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html"]},
+        "policyRevision": {"const": "encyclopedia-primary"},
+        "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "capturedAt": {"type": "string", "minLength": 1},
+        "bodyEvidenceRef": {"type": "string", "pattern": "^sources/[^/]+/source\\.md$"},
+        "bodyContentSha256": {"$ref": "#/$defs/sha256"},
+        "accessEvidence": {"$ref": "#/$defs/accessEvidence"}
+      }
+    },
+    "hero": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assetId", "entityRef", "observedEntityRef", "sourceUnitRef", "sourceUnitDigest",
+        "assetRef", "originalAssetUrl", "sourcePageUrl", "platform", "provider", "creator",
+        "capturedAt", "contentSha256", "license", "termsUrl", "authorizationProof",
+        "authorizationRequired", "rightsStatus", "rightsIssues", "acquisitionStatus",
+        "distributionDecision", "qualityStatus", "safetyStatus", "generated", "accessEvidence"
+      ],
+      "properties": {
+        "assetId": {"type": "string", "minLength": 1},
+        "entityRef": {"type": "string", "minLength": 1},
+        "observedEntityRef": {"type": "string", "minLength": 1},
+        "sourceUnitRef": {"type": "string", "minLength": 1},
+        "sourceUnitDigest": {"$ref": "#/$defs/sha256"},
+        "assetRef": {"type": "string", "minLength": 1},
+        "originalAssetUrl": {"type": "string", "pattern": "^https://"},
+        "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+        "platform": {"type": "string", "minLength": 1},
+        "provider": {"type": "string", "minLength": 1},
+        "creator": {"type": "string", "minLength": 1},
+        "capturedAt": {"type": "string", "minLength": 1},
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "license": {"type": "string", "minLength": 1},
+        "termsUrl": {"type": "string", "pattern": "^https://"},
+        "authorizationProof": {"type": "string"},
+        "authorizationRequired": {"type": "boolean"},
+        "rightsStatus": {"enum": ["verified", "unverified", "unknown"]},
+        "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "acquisitionStatus": {"const": "acquired"},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed"]},
+        "qualityStatus": {"const": "passed"},
+        "safetyStatus": {"const": "passed"},
+        "generated": {"const": false},
+        "accessEvidence": {"$ref": "#/$defs/accessEvidence"}
+      }
+    },
+    "factEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field", "sourceId", "sourceUrl", "evidenceRef", "contentSha256", "accessEvidence"
+      ],
+      "properties": {
+        "field": {"enum": ["openingHours", "ticketPriceRange", "recommendedDurationMinutes", "bestSeasonTagRefs", "altitudeMeters", "officialWebsite"]},
+        "sourceId": {"type": "string", "minLength": 1},
+        "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "accessEvidence": {"$ref": "#/$defs/accessEvidence"}
+      }
+    },
+    "factConflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "preferredSourceId", "conflictingSourceId", "resolution", "observedAt"],
+      "properties": {
+        "field": {"enum": ["openingHours", "ticketPriceRange", "recommendedDurationMinutes", "bestSeasonTagRefs", "altitudeMeters", "officialWebsite"]},
+        "preferredSourceId": {"type": "string", "minLength": 1},
+        "conflictingSourceId": {"type": "string", "minLength": 1},
+        "resolution": {"const": "official_source_preferred"},
+        "observedAt": {"type": "string", "minLength": 1}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId", "entityRef", "observedEntityRef", "sourceRevision", "sourceDigest",
+        "entityCatalogDigest", "primarySource", "structuredFacts", "factEvidence",
+        "factConflicts", "hero"
+      ],
+      "properties": {
+        "candidateId": {"type": "string", "minLength": 1},
+        "entityRef": {"type": "string", "minLength": 1},
+        "observedEntityRef": {"type": "string", "minLength": 1},
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "primarySource": {"$ref": "#/$defs/primarySource"},
+        "structuredFacts": {"$ref": "../publish/entity.schema.json#/properties/structuredFacts"},
+        "factEvidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/factEvidence"}},
+        "factConflicts": {"type": "array", "items": {"$ref": "#/$defs/factConflict"}},
+        "hero": {"$ref": "#/$defs/hero"}
+      }
+    }
+  }
+}

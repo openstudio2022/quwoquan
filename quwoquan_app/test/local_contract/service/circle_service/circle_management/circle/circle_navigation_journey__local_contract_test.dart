@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/circle_shell_presentation_slots.dart';
 import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_behavior_fact/application/public/circle_behavior_fact_appender.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_engagement_tracker.dart';
@@ -71,7 +72,9 @@ Widget _scopedApp({CircleQueryReader? circleQuery}) {
                 contentEngagementTracker: contentEngagementTracker,
                 hasAuthenticatedOwner: false,
                 behaviorFactAppender: null,
-                membershipApprovalPageBuilder: (_) => const SizedBox.shrink(),
+                participantSlots: buildCircleShellParticipantSlots(
+                  membershipApprovalPageBuilder: (_) => const SizedBox.shrink(),
+                ),
               ),
             ),
           ),

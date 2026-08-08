@@ -22,7 +22,8 @@ import 'package:quwoquan_app/design_system/search/app_search_field.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/contact_candidate_vm.dart';
-import 'package:quwoquan_app/runtime/di/presentation/contact_candidate_row.dart';
+import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
+import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/contact_candidate_row.dart';
 
 /// 添加联系人搜索结果页：趣我圈号(精确)/昵称(模糊) 查找 + 能力位驱动添加。
 class ContactSearchResultPage extends ConsumerStatefulWidget {
@@ -37,13 +38,18 @@ class ContactSearchResultPage extends ConsumerStatefulWidget {
 
 class _ContactSearchResultPageState
     extends ConsumerState<ContactSearchResultPage> {
+  static const Duration _followCapabilityTimeout = Duration(seconds: 10);
+
   final TextEditingController _controller = TextEditingController();
   Timer? _debounce;
   String _query = '';
   bool _loading = false;
   List<ContactCandidateVm> _results = <ContactCandidateVm>[];
   final Set<String> _pending = <String>{};
+  final Map<String, int> _followAttemptByTarget = <String, int>{};
   Object? _rawError;
+  int _searchRequestGeneration = 0;
+  int _followAttemptSequence = 0;
 
   @override
   void initState() {
@@ -63,17 +69,28 @@ class _ContactSearchResultPageState
   }
 
   void _onChanged(String value) {
-    setState(() => _query = value);
+    setState(() {
+      _query = value;
+      _searchRequestGeneration += 1;
+      _invalidateFollowAttempts();
+    });
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 320), () {
       unawaited(_runSearch(value));
     });
   }
 
+  void _onSubmitted(String value) {
+    _debounce?.cancel();
+    unawaited(_runSearch(value));
+  }
+
   Future<void> _runSearch(String value) async {
     final query = value.trim();
+    final requestGeneration = ++_searchRequestGeneration;
     if (query.isEmpty) {
       setState(() {
+        _invalidateFollowAttempts();
         _results = <ContactCandidateVm>[];
         _loading = false;
         _rawError = null;
@@ -81,6 +98,7 @@ class _ContactSearchResultPageState
       return;
     }
     setState(() {
+      _invalidateFollowAttempts();
       _loading = true;
       _rawError = null;
     });
@@ -88,7 +106,9 @@ class _ContactSearchResultPageState
       final items = await ref
           .read(profileQueryProvider(AppUiSurfaces.addContactSearch))
           .searchSocialRelations(query: query);
-      if (!mounted || _query.trim() != query) {
+      if (!mounted ||
+          requestGeneration != _searchRequestGeneration ||
+          _query.trim() != query) {
         return;
       }
       setState(() {
@@ -109,7 +129,7 @@ class _ContactSearchResultPageState
             ),
       );
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestGeneration != _searchRequestGeneration) {
         return;
       }
       setState(() {
@@ -132,31 +152,94 @@ class _ContactSearchResultPageState
         relationState: cap.relationState,
         canFollow: cap.canFollow,
         canUnfollow: cap.canUnfollow,
+        isBlocked: cap.isBlocked,
+        isBlockedBy: cap.isBlockedBy,
       ),
     );
   }
 
+  void _invalidateFollowAttempts() {
+    _followAttemptByTarget.clear();
+    _pending.clear();
+  }
+
   Future<void> _add(ContactCandidateVm candidate) async {
-    if (_pending.contains(candidate.personaId)) {
+    final selectedIndex = _results.indexWhere(
+      (item) => item.personaId == candidate.personaId,
+    );
+    if (selectedIndex < 0) {
       return;
     }
-    setState(() => _pending.add(candidate.personaId));
+    final selected = _results[selectedIndex];
+    if (!selected.addState.canTriggerAdd ||
+        _pending.contains(selected.personaId)) {
+      return;
+    }
+    final targetPersonaId = selected.personaId;
+    final resultGeneration = _searchRequestGeneration;
+    final attempt = ++_followAttemptSequence;
+    Object? failure;
+    setState(() {
+      _pending.add(targetPersonaId);
+      _followAttemptByTarget[targetPersonaId] = attempt;
+    });
     try {
+      final capabilityRepository = ref.read(
+        relationshipCapabilityRepositoryForSurfaceProvider(
+          AppUiSurfaces.addContactSearch,
+        ),
+      );
+      final preflight = await capabilityRepository
+          .getCapability(targetPersonaId)
+          .timeout(_followCapabilityTimeout);
+      _requireFollowPreflight(preflight, targetPersonaId: targetPersonaId);
+      if (!_isCurrentFollowAttempt(
+        targetPersonaId,
+        attempt,
+        resultGeneration,
+      )) {
+        return;
+      }
       await ref
-          .read(userRelationshipStateProvider.notifier)
-          .setFollowingWithSync(
-            candidate.personaId,
-            currentFollowing: false,
-            shouldFollow: true,
-            sourceSurface: AppUiSurfaces.addContactSearch,
+          .read(
+            personaRelationshipCommandWriterProvider(
+              AppUiSurfaces.addContactSearch,
+            ),
+          )
+          .follow(
+            targetPersonaId,
+            sourceSurfaceId: AppUiSurfaces.addContactSearch.id,
           );
-      if (!mounted) {
+      if (!_isCurrentFollowAttempt(
+        targetPersonaId,
+        attempt,
+        resultGeneration,
+      )) {
+        return;
+      }
+      final confirmed = await capabilityRepository
+          .getCapability(targetPersonaId)
+          .timeout(_followCapabilityTimeout);
+      if (confirmed.targetPersonaId.trim() != targetPersonaId.trim() ||
+          !confirmed.viewerFollowsTarget ||
+          confirmed.isBlocked ||
+          confirmed.isBlockedBy) {
+        throw StateError(
+          'FollowUser did not converge in authoritative relationship state',
+        );
+      }
+      if (!mounted ||
+          !_isCurrentFollowAttempt(
+            targetPersonaId,
+            attempt,
+            resultGeneration,
+          )) {
         return;
       }
       setState(() {
         _results = _results
             .map(
-              (c) => c.personaId == candidate.personaId
+              (c) => c.personaId == targetPersonaId
                   ? c.copyWith(addState: ContactAddState.added)
                   : c,
             )
@@ -171,33 +254,64 @@ class _ContactSearchResultPageState
               action: 'follow_contact_from_search',
               pageName: 'ContactSearchResultPage',
               targetType: 'user',
-              targetKey: candidate.personaId,
+              targetKey: targetPersonaId,
             ),
       );
     } catch (error) {
-      if (mounted) {
-        await AppActionErrorFeedback.show(
-          context,
-          semantic: runtimeErrorSemantic(
-            context,
-            error: error,
-            category: UiErrorCategory.submit,
-            scope: UiErrorScope.dialog,
-          ),
-          onAction: (action) async {
-            if (action.type == UiErrorActionType.retry ||
-                action.type == UiErrorActionType.resubmit) {
-              await _add(candidate);
-            }
-          },
-        );
+      if (_isCurrentFollowAttempt(targetPersonaId, attempt, resultGeneration)) {
+        failure = error;
       }
     } finally {
-      if (mounted) {
-        setState(() => _pending.remove(candidate.personaId));
+      if (_isCurrentFollowAttempt(targetPersonaId, attempt, resultGeneration)) {
+        setState(() => _pending.remove(targetPersonaId));
       }
     }
+    if (failure == null ||
+        !mounted ||
+        !_isCurrentFollowAttempt(targetPersonaId, attempt, resultGeneration)) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: ensureRetryUiErrorSemantic(
+        runtimeErrorSemantic(
+          context,
+          error: failure,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+      ),
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await _add(selected);
+        }
+      },
+    );
   }
+
+  void _requireFollowPreflight(
+    RelationshipCapabilityViewData capability, {
+    required String targetPersonaId,
+  }) {
+    if (capability.targetPersonaId.trim() != targetPersonaId.trim() ||
+        !capability.canFollow ||
+        capability.viewerFollowsTarget ||
+        capability.isSelf ||
+        capability.isBlocked ||
+        capability.isBlockedBy) {
+      throw StateError('FollowUser is not allowed by current capability');
+    }
+  }
+
+  bool _isCurrentFollowAttempt(
+    String targetPersonaId,
+    int attempt,
+    int resultGeneration,
+  ) =>
+      mounted &&
+      _followAttemptByTarget[targetPersonaId] == attempt &&
+      _searchRequestGeneration == resultGeneration;
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +345,7 @@ class _ContactSearchResultPageState
                 autofocus: widget.initialQuery.isEmpty,
                 placeholder: ContactText.addContactSearchHubPlaceholder,
                 onChanged: _onChanged,
-                onSubmitted: (value) => unawaited(_runSearch(value)),
+                onSubmitted: _onSubmitted,
               ),
             ),
             Expanded(child: _buildResults(context)),

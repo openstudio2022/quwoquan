@@ -8,8 +8,10 @@ import (
 	"sort"
 	"strings"
 
+	"quwoquan_service/internal/metadata/ast"
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/storagecontract"
 	"quwoquan_service/internal/metadata/validate"
 )
 
@@ -186,85 +188,18 @@ func (s Source) skipsMigration(tableName string) bool {
 
 // --- Storage YAML ---
 
-// StorageYAML 的字段集必须是 contracts/metadata/_schemas/storage.schema.json
-// 顶层键集的子集；schema 是键集唯一真相源，由
-// storage_reader_keyset__contract__local_contract_test.go 断言。
-type StorageYAML struct {
-	Backend     string                   `yaml:"backend"`
-	Tables      map[string]TableDef      `yaml:"tables"`
-	Collections map[string]CollectionDef `yaml:"collections"`
-	RedisCache  []RedisCacheDef          `yaml:"redis_cache"`
-}
-
-type TableDef struct {
-	Entity             string             `yaml:"entity"`
-	PK                 []string           `yaml:"pk"`
-	FK                 *ForeignKeyDef     `yaml:"fk"`
-	Columns            []ColumnDef        `yaml:"columns"`
-	Indexes            []IndexDef         `yaml:"indexes"`
-	UniqueConstraints  []UniqueConstraint `yaml:"unique_constraints"`
-	SearchIndexes      []SearchIndexDef   `yaml:"search_indexes"`
-	CacheExcluded      bool               `yaml:"cache_excluded"`
-	InfrastructureOnly bool               `yaml:"infrastructure_only"`
-}
-
-type ColumnDef struct {
-	Name        string   `yaml:"name"`
-	Type        string   `yaml:"type"`
-	Constraints []string `yaml:"constraints"`
-	Default     any      `yaml:"default"`
-}
-
-func (c ColumnDef) IsPK() bool      { return hasConstraint(c.Constraints, "PK") }
-func (c ColumnDef) IsNotNull() bool { return hasConstraint(c.Constraints, "NOT_NULL") }
-func (c ColumnDef) IsUnique() bool  { return hasConstraint(c.Constraints, "UNIQUE") }
-
-type IndexDef struct {
-	Name      string   `yaml:"name"`
-	Columns   []string `yaml:"columns"`
-	Unique    bool     `yaml:"unique"`
-	Condition string   `yaml:"condition"`
-}
-
-type UniqueConstraint struct {
-	Name      string   `yaml:"name"`
-	Columns   []string `yaml:"columns"`
-	Condition string   `yaml:"condition"`
-}
-
-type SearchIndexDef struct {
-	Name    string   `yaml:"name"`
-	Columns []string `yaml:"columns"`
-	Type    string   `yaml:"type"`
-}
-
-type ForeignKeyDef struct {
-	Column     string `yaml:"column"`
-	References string `yaml:"references"`
-	OnDelete   string `yaml:"on_delete"`
-}
-
-type CollectionDef struct {
-	Entity  string     `yaml:"entity"`
-	Indexes []MongoIdx `yaml:"indexes"`
-}
-
-type MongoIdx struct {
-	Name     string         `yaml:"name"`
-	Keys     map[string]any `yaml:"keys"`
-	KeyOrder []string       `yaml:"key_order"`
-	Unique   bool           `yaml:"unique"`
-	Sparse   bool           `yaml:"sparse"`
-}
-
-type RedisCacheDef struct {
-	Key          string   `yaml:"key"`
-	TTLSeconds   int      `yaml:"ttl_seconds"`
-	Entity       string   `yaml:"entity"`
-	Type         string   `yaml:"type"`
-	Description  string   `yaml:"description"`
-	InvalidateOn []string `yaml:"invalidate_on"`
-}
+// Code generation consumes the compiler's one closed storage document. These
+// aliases are names for generator signatures, not independent wire models.
+type StorageYAML = ast.StorageDocument
+type TableDef = ast.StorageTable
+type ColumnDef = ast.StorageColumn
+type IndexDef = ast.StorageTableIndex
+type UniqueConstraint = ast.StorageUniqueConstraint
+type SearchIndexDef = ast.StorageTableSearchIndex
+type ForeignKeyDef = ast.StorageForeignKey
+type CollectionDef = ast.StorageCollection
+type MongoIdx = ast.StorageCollectionIndex
+type RedisCacheDef = ast.StorageRedisCache
 
 // --- Fields YAML ---
 
@@ -293,11 +228,15 @@ type FieldDef struct {
 }
 
 func loadStorageYAML(contractGraph *graph.ContractGraph, path string) (*StorageYAML, error) {
-	var s StorageYAML
-	if err := contractGraph.DecodeDocumentYAML(path, &s); err != nil {
+	data, err := contractGraph.DocumentContent(path)
+	if err != nil {
 		return nil, err
 	}
-	return &s, nil
+	document, err := storagecontract.DecodeJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("decode canonical storage document %s: %w", path, err)
+	}
+	return &document, nil
 }
 
 // loadSharedTypes reads the cross-service composite types so that a field

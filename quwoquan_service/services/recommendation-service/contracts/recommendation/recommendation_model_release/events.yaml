@@ -1,6 +1,7 @@
 events:
 - name: RecommendationModelReleaseStaged
   delivery_semantics: transactional_outbox
+  wire_event_type: RecommendationModelReleaseStaged
   payload_entity: RecommendationModelRelease
   payload_fields:
   - id
@@ -11,6 +12,7 @@ events:
   - createdAt
 - name: RecommendationModelReleaseActivated
   delivery_semantics: transactional_outbox
+  wire_event_type: RecommendationModelReleaseActivated
   payload_entity: RecommendationModelRelease
   payload_fields:
   - id
@@ -21,6 +23,7 @@ events:
   - activatedAt
 - name: RecommendationModelReleaseRetired
   delivery_semantics: transactional_outbox
+  wire_event_type: RecommendationModelReleaseRetired
   payload_entity: RecommendationModelRelease
   payload_fields:
   - id

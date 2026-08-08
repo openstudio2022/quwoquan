@@ -38,7 +38,7 @@ type ContentHandler struct {
 	profileReadFactHandler       profileInteractionReadFactHTTPHandler
 	mediaAssetHandler            mediaAssetHTTPHandler
 	mediaUploadSessionHandler    mediaUploadSessionHTTPHandler
-	mediaOriginalAccessHandler   mediaOriginalAccessHTTPHandler
+	originalAccessQuotaHandler   originalAccessQuotaHTTPHandler
 	filterCatalogReleaseHandler  filterCatalogReleaseHTTPHandler
 	mediaImageReprocessHandler   mediaImageReprocessHTTPHandler
 	behaviorService              *behaviorapp.BehaviorService
@@ -233,7 +233,7 @@ type ReportHTTPHandler interface {
 }
 
 type outboundShareHTTPHandler interface {
-	CreateOutboundShare(http.ResponseWriter, *http.Request)
+	AppendOutboundShareFact(http.ResponseWriter, *http.Request)
 }
 
 type contentBehaviorHTTPHandler interface {
@@ -266,8 +266,8 @@ type mediaUploadSessionHTTPHandler interface {
 	Get(http.ResponseWriter, *http.Request)
 }
 
-type mediaOriginalAccessHTTPHandler interface {
-	Request(http.ResponseWriter, *http.Request)
+type originalAccessQuotaHTTPHandler interface {
+	Reserve(http.ResponseWriter, *http.Request)
 }
 
 type mediaImageReprocessHTTPHandler interface {
@@ -355,11 +355,11 @@ func WithMediaUploadSessionHandler(
 	}
 }
 
-func WithMediaOriginalAccessHandler(
-	handler mediaOriginalAccessHTTPHandler,
+func WithOriginalAccessQuotaHandler(
+	handler originalAccessQuotaHTTPHandler,
 ) ContentHandlerOption {
 	return func(contentHandler *ContentHandler) {
-		contentHandler.mediaOriginalAccessHandler = handler
+		contentHandler.originalAccessQuotaHandler = handler
 	}
 }
 

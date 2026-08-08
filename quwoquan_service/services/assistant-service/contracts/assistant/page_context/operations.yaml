@@ -33,3 +33,11 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/page_context/report_ttl__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: page_context_report_page_context_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportPageContext}
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/page_context/page_context_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

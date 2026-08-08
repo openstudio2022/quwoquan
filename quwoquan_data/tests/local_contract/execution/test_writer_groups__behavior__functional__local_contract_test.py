@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 
-from content.execution.writer_groups import (  # noqa: E402
+from content.execution.planning.writer_groups import (  # noqa: E402
     writer_group_completion_status,
     writer_group_dir,
     writer_group_issues,

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
@@ -35,6 +35,16 @@ final class _ComposerPersonaQuery extends Fake implements PersonaQuery {
 }
 
 final class _NoopRealtimeConnectionNotifier extends RealtimeConnectionNotifier {
+  _NoopRealtimeConnectionNotifier()
+    : super(
+        delegateFactory:
+            ({
+              required ref,
+              required onStateChanged,
+              required currentUserIdResolver,
+            }) => throw StateError('overridden build must not create delegate'),
+      );
+
   @override
   TransportState build() => TransportState.idle;
 

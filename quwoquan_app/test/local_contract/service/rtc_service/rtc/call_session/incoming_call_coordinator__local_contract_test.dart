@@ -126,7 +126,7 @@ void main() {
         pushEndpointGatewayProvider.overrideWithValue(
           _EmptyPushEndpointGateway(),
         ),
-        incomingCallPresentationAcknowledgerProvider.overrideWithValue(
+        notificationDeliveryJobProcessCommandWriterProvider.overrideWithValue(
           acknowledger,
         ),
       ],
@@ -159,7 +159,7 @@ void main() {
         userSettingsQueryReaderProvider.overrideWithValue(
           const _CallSettingsReader(),
         ),
-        incomingCallPresentationAcknowledgerProvider.overrideWithValue(
+        notificationDeliveryJobProcessCommandWriterProvider.overrideWithValue(
           _RecordingPresentationAcknowledger(),
         ),
       ],
@@ -278,7 +278,7 @@ final class _RecordingCallKitService extends CallKitService {
 }
 
 final class _RecordingPresentationAcknowledger
-    implements IncomingCallPresentationAcknowledger {
+    implements NotificationDeliveryJobProcessCommandWriter {
   final receipts = <IncomingCallPresentationReceipt>[];
 
   @override

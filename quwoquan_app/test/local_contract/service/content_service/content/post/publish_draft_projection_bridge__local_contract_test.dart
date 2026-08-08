@@ -144,7 +144,7 @@ void main() {
             summary: '用户确认摘要',
             tagRefs: <String>['Topic/旅行/城市漫步'],
             entityRefs: <String>['entity:sight:west_lake'],
-            assistantUsePolicy: 'allow_summary',
+            assistantUsePolicy: AssistantUsePolicy.exclude,
           ),
         );
 
@@ -153,7 +153,7 @@ void main() {
         expect(payload['summary'], '用户确认摘要');
         expect(payload['tagRefs'], <String>['Topic/旅行/城市漫步']);
         expect(payload['entityRefs'], <String>['entity:sight:west_lake']);
-        expect(payload['assistantUsePolicy'], 'allow_summary');
+        expect(payload['assistantUsePolicy'], 'exclude');
         expect(payload['articleMarkdown'], contains('summary: "用户确认摘要"'));
         expect(payload['articleMarkdown'], contains('tag_refs:'));
         expect(payload['articleMarkdown'], contains('entity_refs:'));
@@ -543,7 +543,7 @@ void main() {
             summary: '草稿摘要',
             tagRefs: <String>['Topic/旅行/城市漫步'],
             entityRefs: <String>['entity:sight:west_lake'],
-            assistantUsePolicy: 'allow_summary',
+            assistantUsePolicy: AssistantUsePolicy.exclude,
           ),
         ),
       );
@@ -566,7 +566,7 @@ void main() {
       expect(restored.state.settings.entityRefs, <String>[
         'entity:sight:west_lake',
       ]);
-      expect(restored.state.settings.assistantUsePolicy, 'allow_summary');
+      expect(restored.state.settings.assistantUsePolicy, AssistantUsePolicy.exclude);
     });
   });
 }

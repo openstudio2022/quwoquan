@@ -884,3 +884,67 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: comment_create_comment_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-007
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateComment}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_delete_comment_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-012
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: DeleteComment}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_pin_comment_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-012
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: PinComment}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_unpin_comment_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-012
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UnpinComment}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_list_comments_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-021
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListComments}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_list_comment_replies_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-021
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCommentReplies}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_list_comments_by_author_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCommentsByAuthor}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_list_comments_for_post_author_app_local
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCommentsForPostAuthor}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

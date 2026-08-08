@@ -98,3 +98,11 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/app_release/app_release_recovery__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: app_release_get_app_recovery_version_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetAppRecoveryVersion}
+  runner_source_path: quwoquan_app/test/api_integration/service/product_ops_service/product_ops/app_release/app_release_recovery_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

@@ -7,6 +7,8 @@ import 'package:quwoquan_app/service/user_service/persona_management/profile_upd
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_edit_models.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show editProfileParticipantSlots;
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/edit_profile_page.dart';
@@ -73,9 +75,7 @@ class _StubProposalReader implements ProfileUpdateProposalReader {
   Future<ProfileUpdateProposalSlice> list(
     ProfileUpdateProposalListQuery query,
   ) async {
-    return ProfileUpdateProposalSlice(
-      items: <ProfileUpdateProposalView>[],
-    );
+    return ProfileUpdateProposalSlice(items: <ProfileUpdateProposalView>[]);
   }
 }
 
@@ -91,7 +91,7 @@ Widget _host({
     child: const CupertinoApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: EditProfilePage(),
+      home: EditProfilePage(participantSlots: editProfileParticipantSlots),
     ),
   );
 }

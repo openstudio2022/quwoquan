@@ -1,31 +1,24 @@
-"""Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
-from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Path, article_commercial_closure_enabled, data_issue, data_issues, execution_content_plan_packet_path, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, write_json
-from content.execution.controller.content_plan_assets import (
-    article_asset_claims as _article_asset_claims,
-    asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha,
-    claim as _claim, claims_conflict as _claims_conflict,
-    image_claims as _image_claims,
-    source_ref as _source_ref,
+from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, data_issue, data_issues, execution_root, read_json
+from content.execution.controller.content_plan_asset_semantics import (
+    admitted_article_asset_rows as _admitted_article_asset_rows,
+    article_target_scope as _article_target_scope,
 )
+from content.execution.controller.content_plan_assets import article_asset_claims as _article_asset_claims, asset_ref as _asset_ref, asset_rows as _asset_rows, asset_sha as _asset_sha, claim as _claim, claims_conflict as _claims_conflict, image_claims as _image_claims, source_ref as _source_ref
 from content.execution.controller.content_plan_output import write_content_plan_diagnostics, write_content_plan_packet
 from content.execution.controller.content_plan_decisions import (
     ContentPlanRejectLedger,
-    absorb_video_content_plan_shortfalls,
+    absorb_content_plan_shortfalls,
     missing_source_diagnostic,
-    persist_video_content_plan_absorb as _persist_video_content_plan_absorb,
+    persist_content_plan_shortfall_absorb as _persist_content_plan_shortfall_absorb,
 )
-from core.entity_focus import (
-    VERDICT_STRONG as _VERDICT_STRONG,
-    classify_entity_focus as _classify_entity_focus,
-    coverage_targets_mentioned as _coverage_targets_mentioned,
-)
+from core.entity_focus import classify_entity_focus as _classify_entity_focus, coverage_targets_mentioned as _coverage_targets_mentioned
 
 def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) -> list[DataIssue]:
     """Build exact per-entity content plans from validated source units."""
     from content.execution.controller.content_plan_prep import _article_source_quality_sort_key, _assess_content_plan_publish_image, _clean_content_plan_outputs
-    from content.execution.source_ready_scope import source_ready_runtime_spec
+    from content.execution.planning.source_ready_scope import source_ready_runtime_spec
     from content.post.article.base_draft import load_base_draft_text
     from content.post.article.base_draft_source import extract_source_title
     from core.quality_gates import derive_writing_intent
@@ -60,11 +53,7 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
     _clean_content_plan_outputs(ctx)
     root = execution_root(ctx.execution_id)
     etype = coverage_entity_type(active_spec)
-    targets = [
-        str(target.get("name") or "").strip()
-        for target in ((active_spec.get("scope") or {}).get("coverageTargets") or [])
-        if str(target.get("name") or "").strip()
-    ]
+    targets, target_aliases = _article_target_scope(active_spec)
     task_region = str(((active_spec.get("scope") or {}).get("region") or "")).strip()
     execution_policy = active_spec.get("executionPolicy") if isinstance(active_spec.get("executionPolicy"), Mapping) else {}
     daily_object_target = int(execution_policy.get("targetObjectCount") or 0)
@@ -138,6 +127,13 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                 DataIssueCode.SOURCE_MISSING,
                 stage=DataIssueStage.CONTENT_PLAN,
                 ref=target,
+                lane=(
+                    DataIssueLane.IMAGE
+                    if image_lane_enabled and not article_lane_enabled
+                    else DataIssueLane.ARTICLE
+                    if article_lane_enabled and not image_lane_enabled
+                    else DataIssueLane.ALL
+                ),
                 recovery=DataRecoveryAction.REPLACE_SOURCE,
                 message=reason,
             ))
@@ -211,7 +207,14 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                         target,
                     }
                 )
-                if not rows:
+                admitted_rows, semantic_issues = _admitted_article_asset_rows(
+                    rows, entity_id=target, article_text=base_body, entity_aliases=target_aliases.get(target, ()),
+                )
+                for semantic_issue in semantic_issues:
+                    rejects.warn_article_image(
+                        "asset_semantic_mismatch", source_id, semantic_issue
+                    )
+                if not admitted_rows:
                     rejects.warn_article_image("no_source_assets", source_id)
                 article_candidates.append(
                     {
@@ -238,7 +241,10 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                             or ((meta.get("siteTemplate") or {}).get("freshnessTier") if isinstance(meta.get("siteTemplate"), Mapping) else "")
                             or ""
                         ),
-                        "rows": rows,
+                        "rows": admitted_rows,
+                        "targetEntity": target,
+                        "targetAliases": list(target_aliases.get(target, ())),
+                        "articleAnchorText": base_body,
                     }
                 )
             elif lane == "image":
@@ -381,7 +387,8 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                     DataIssueCode.SOURCE_RETAINED_SHORTFALL,
                     stage=DataIssueStage.CONTENT_PLAN,
                     ref=target,
-                    recovery=DataRecoveryAction.STOP,
+                    lane=DataIssueLane.ARTICLE,
+                    recovery=DataRecoveryAction.REPLACE_SOURCE,
                     message=reason,
                     attributes={
                         "carrier": "article",
@@ -401,7 +408,8 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
                     DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
                     stage=DataIssueStage.CONTENT_PLAN,
                     ref=target,
-                    recovery=DataRecoveryAction.STOP,
+                    lane=DataIssueLane.IMAGE,
+                    recovery=DataRecoveryAction.REPLACE_MEDIA,
                     message=reason,
                     attributes={
                         "carrier": "image",
@@ -457,17 +465,18 @@ def _auto_content_plan(ctx: ExecutionContext, active_spec: Mapping[str, Any]) ->
         )
     write_content_plan_diagnostics(ctx.execution_id, source_diagnostics=source_diagnostics)
     if issues:
-        # Video oversample absorb: when frame/source shortfalls leave enough
-        # planned videos to meet approvedQuota, demote the shortfall tail and
-        # continue. Rights gates stay strict — only the oversample discard
-        # pool is absorbed, matching download_fetch absorb semantics.
-        absorbed = absorb_video_content_plan_shortfalls(
+        from content.execution.identity import parse_execution_id
+
+        # Source/media shortfalls are object dispositions. Any real planned
+        # object continues through materialization/review; only a zero-object
+        # closure remains blocking.
+        absorbed = absorb_content_plan_shortfalls(
             ctx=ctx,
             active_spec=active_spec,
             items=items,
             issues=issues,
-            video_lane_enabled=video_lane_enabled,
-            persist_absorb=_persist_video_content_plan_absorb,
+            carrier=parse_execution_id(ctx.execution_id).content_type.value,
+            persist_absorb=_persist_content_plan_shortfall_absorb,
         )
         if not absorbed:
             _clean_content_plan_outputs(ctx)

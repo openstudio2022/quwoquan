@@ -5,10 +5,17 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from content.execution.controller.content_plan_asset_semantics import (
+    article_asset_semantic_issue,
+)
 from content.execution.controller.content_plan_prep import (
     _assess_content_plan_publish_image,
 )
-from content.execution.support import ExecutionContext, read_json, relative_execution_ref
+from content.execution.support import (
+    ExecutionContext,
+    read_json,
+    relative_execution_ref,
+)
 
 
 def asset_rows(source_dir: Path) -> list[dict[str, Any]]:
@@ -40,6 +47,22 @@ def asset_sha(row: Mapping[str, Any]) -> str:
     return str(row.get("sha256") or "").removeprefix("sha256:").strip().lower()
 
 
+def _canonical_article_asset_issue(
+    source_dir: Path,
+    row: Mapping[str, Any],
+) -> str:
+    """Reject a global canonical duplicate before it enters a frozen plan."""
+    from content.post.article.route_assets import _canonical_image_conflict
+
+    return _canonical_image_conflict(
+        {
+            "path": source_dir / "assets" / str(row.get("fileName") or ""),
+            "sourceAssetId": str(row.get("sourceAssetId") or ""),
+            "sha256": str(row.get("sha256") or ""),
+        }
+    )
+
+
 def source_ref(ctx: ExecutionContext, source_dir: Path) -> str:
     return relative_execution_ref(source_dir / "source.md", ctx.execution_id)
 
@@ -67,6 +90,18 @@ def article_asset_claims(
     for row in candidate.get("rows") or []:
         if not isinstance(row, Mapping):
             continue
+        semantic_issue = article_asset_semantic_issue(
+            row,
+            entity_id=str(candidate.get("targetEntity") or "").strip(),
+            entity_aliases=tuple(
+                str(value).strip()
+                for value in candidate.get("targetAliases") or []
+                if str(value).strip()
+            ),
+            article_text=str(candidate.get("articleAnchorText") or ""),
+        )
+        if semantic_issue:
+            continue
         ref = asset_ref(ctx, source_dir, row)
         sha = asset_sha(row)
         collection_id = str(row.get("sourceCollectionId") or "").strip()
@@ -74,6 +109,8 @@ def article_asset_claims(
             continue
         asset_path = root / ref
         if not asset_path.is_file():
+            continue
+        if _canonical_article_asset_issue(source_dir, row):
             continue
         verdict = _assess_content_plan_publish_image(asset_path, ctx)
         if verdict.blocks_image_publish:

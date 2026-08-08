@@ -32,7 +32,7 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.execution.object_scan import iter_execution_object_dirs  # noqa: E402
+from content.execution.planning.object_scan import iter_execution_object_dirs  # noqa: E402
 from core.article_package import compute_document_sha256  # noqa: E402
 from core.io import read_json  # noqa: E402
 from core.image_rules import pixel_size_issue, relevance_issue  # noqa: E402

@@ -11,7 +11,6 @@ import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.da
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/group_home_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/feed_realtime_patch_provider.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 与 [Ref.read] / [WidgetRef.read] 兼容，避免 `Ref` 与 `WidgetRef` 类型分裂。
@@ -245,9 +244,9 @@ class RealtimeMessageHandler {
 
       // 展示性提示：+1 只用于即时角标；未读真相源是服务端 inbox 投影，
       // 下一次 sync/ListInbox 会以服务端值覆盖本地提示值。
-      cache.patchInbox(
+      cache.applyOptimisticInboxHint(
         conversationId,
-        ChatInboxCachePatch(
+        ChatInboxOptimisticHint(
           lastMessagePreview: preview,
           lastMessageAt: DateTime.tryParse(timestamp),
           unreadCount: currentUnread + 1,
@@ -256,7 +255,7 @@ class RealtimeMessageHandler {
     } catch (error, stackTrace) {
       // best-effort：补丁失败仅影响列表预览即时性，下次同步拉最新态；仍上报观测。
       unawaited(
-        AppExceptionTelemetryService.instance.recordGlobalException(
+        _read(exceptionTelemetryPortProvider).recordGlobalException(
           source: 'chat.realtime.conversation_list_patch',
           exceptionText: error.toString(),
           stackText: stackTrace.toString(),
@@ -294,7 +293,7 @@ class RealtimeMessageHandler {
       } catch (error, stackTrace) {
         // best-effort：维持现有缓存，下次读取从云端补齐；上报以免静默退化。
         unawaited(
-          AppExceptionTelemetryService.instance.recordGlobalException(
+          _read(exceptionTelemetryPortProvider).recordGlobalException(
             source: 'chat.realtime.conversation_cache_refresh',
             exceptionText: error.toString(),
             stackText: stackTrace.toString(),
@@ -316,7 +315,7 @@ class RealtimeMessageHandler {
       } catch (error, stackTrace) {
         // 重连补全失败若静默即丢消息不可观测：必须上报，由下一次心跳/重连兜底。
         unawaited(
-          AppExceptionTelemetryService.instance.recordGlobalException(
+          _read(exceptionTelemetryPortProvider).recordGlobalException(
             source: 'chat.realtime.reconnect_gap_recovery',
             exceptionText: error.toString(),
             stackText: stackTrace.toString(),
@@ -336,7 +335,7 @@ class RealtimeMessageHandler {
       } catch (error, stackTrace) {
         // best-effort：仅影响头像即时刷新，后续同步补齐；上报保留观测面。
         unawaited(
-          AppExceptionTelemetryService.instance.recordGlobalException(
+          _read(exceptionTelemetryPortProvider).recordGlobalException(
             source: 'chat.realtime.avatar_patch_sync',
             exceptionText: error.toString(),
             stackText: stackTrace.toString(),

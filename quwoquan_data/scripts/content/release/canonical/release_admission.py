@@ -25,7 +25,12 @@ from governance.coverage.distribution import (
 _CARRIERS = ("homepage", "article", "image", "video")
 
 
-def _object_rows(objects_root: Path, desired: Mapping[str, list[str]]) -> list[dict[str, Any]]:
+def _object_rows(
+    objects_root: Path,
+    desired: Mapping[str, list[str]],
+    *,
+    output_root: Path,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for kind in ("entities", "posts"):
         for ref in desired[kind]:
@@ -54,7 +59,11 @@ def _object_rows(objects_root: Path, desired: Mapping[str, list[str]]) -> list[d
             if not isinstance(raw_assets, list):
                 raise ObjectTransactionError(f"release object rights assets must be an array: {kind}/{ref}")
             object_ref = f"{kind}/{ref}"
-            review_object_ref = f"/entity/{ref}" if kind == "entities" else ref
+            review_object_ref = (
+                f"/entity/{ref}"
+                if kind == "entities"
+                else str(manifest.get("topicId") or ref).strip()
+            )
             assets: list[dict[str, Any]] = []
             reviewed_asset_kinds: dict[str, str] = {}
             for raw in raw_assets:
@@ -62,7 +71,7 @@ def _object_rows(objects_root: Path, desired: Mapping[str, list[str]]) -> list[d
                     raise ObjectTransactionError(f"release rights asset must be an object: {object_ref}")
                 try:
                     review_binding = validate_frozen_asset_review_binding(
-                        object_root=root,
+                        output_root=output_root,
                         object_ref=review_object_ref,
                         rights_asset=raw,
                         source_digest=source_digest,
@@ -286,8 +295,13 @@ def build_release_asset_admission(
     objects_root: Path,
     desired: Mapping[str, list[str]],
     policy: ContentDistributionPolicy,
+    output_root: Path | None = None,
 ) -> dict[str, Any]:
-    objects = _object_rows(objects_root, desired)
+    if output_root is None:
+        from core import paths as core_paths
+
+        output_root = core_paths.OUTPUT_ROOT
+    objects = _object_rows(objects_root, desired, output_root=output_root)
     assets = [asset for row in objects for asset in row["assets"]]
     assets.extend(_creator_assets(objects_root, desired))
     asset_ids = [str(asset["assetId"]) for asset in assets]

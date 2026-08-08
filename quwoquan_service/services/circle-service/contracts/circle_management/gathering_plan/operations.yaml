@@ -51,7 +51,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_create
+    metric: circle_gathering_plan_create
     trace: true
     attributes:
     - outcome
@@ -107,7 +107,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_propose
+    metric: circle_gathering_plan_propose
     trace: true
     attributes:
     - outcome
@@ -165,7 +165,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_commit
+    metric: circle_gathering_plan_commit
     trace: true
     attributes:
     - outcome
@@ -216,7 +216,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_get
+    metric: circle_gathering_plan_get
     trace: true
     attributes:
     - outcome
@@ -275,7 +275,7 @@ api_routes:
     response_classification: INTERNAL
     log_policy: metadata_only
   telemetry:
-    metric: gathering_plan_revision_list
+    metric: circle_gathering_plan_revision_list
     trace: true
     attributes:
     - outcome
@@ -285,6 +285,41 @@ api_routes:
     availability_percent: 99.9
   request_body_kind: none
 readiness_cases:
+- case_id: create-gathering-plan-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CreateGatheringPlan}
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/cas_idempotency_authority__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: propose-gathering-plan-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ProposeGatheringPlan}
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/cas_idempotency_authority__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: commit-gathering-plan-proposal-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: CommitGatheringPlanProposal}
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/cas_idempotency_authority__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: get-gathering-plan-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetGatheringPlan}
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/query_facets__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
+- case_id: list-gathering-plan-revisions-local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ListGatheringPlanRevisions}
+  runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/query_facets__local_contract_test.go
+  executions: [{env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}]
 - case_id: gathering-plan-create-propose-commit-local
   spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
   producer: service

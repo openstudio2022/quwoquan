@@ -24,8 +24,20 @@ relationships:
 local_identity_reasons:
   feedRequestId: immutable feed delivery correlation key scoped to this append-only fact; it is not a business-object identity
   releaseId: canonical data activation coordinate paired with manifestDigest; the repository has no independently owned DataRelease business object to reference
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 同一 deliveryPageId 只能以完全相同 payload 幂等追加，冲突必须 fail-closed
 - 单页最多 20 个 Post、20 个对象卡，未压缩 JSON 不得超过 65536 bytes

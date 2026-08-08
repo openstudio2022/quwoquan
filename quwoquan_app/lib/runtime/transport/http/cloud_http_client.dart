@@ -405,6 +405,51 @@ class CloudHttpClient {
     }
   }
 
+  /// 媒体数据面（对象存储 / CDN）的唯一流式出站入口。
+  ///
+  /// 与 [send] 的三点差异都是数据面语义要求，不是放宽纪律：
+  ///
+  /// 1. **不合并鉴权头**：数据面授权只由服务端签发的 URL 承载，把 App bearer
+  ///    附到对象存储 origin 等于把凭证泄露给第三方。调用方必须使用
+  ///    `mediaDataPlaneHttpClientProvider`（`StubCloudAuthTokenProvider`），
+  ///    本方法额外主动剥掉 `Authorization`，形成双保险。
+  /// 2. **不套 retry**：请求体是一次性 `Stream`，重放会发出截断的第二份 body，
+  ///    因此固定走 [_sendSingleAttempt]。
+  /// 3. **保留 [http.RequestAbortedException]**：取消是产品语义（用户放弃上传），
+  ///    必须原样上抛，不能被映射成可重试的传输失败。
+  ///
+  /// 超时来自本 client 构造期的 `timeout`：媒体数据面预期比 Gateway 请求长得多，
+  /// 由 provider 声明，而不是由每个 adapter 各写一个 `.timeout(...)`。
+  Future<http.StreamedResponse> sendDataPlaneStream(
+    http.BaseRequest request,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    request.headers.removeWhere((key, _) => key.toLowerCase() == 'authorization');
+    try {
+      final response = await _sendSingleAttempt(request).timeout(_timeout);
+      stopwatch.stop();
+      _latencyObserver?.call(
+        request.method,
+        request.url.path,
+        stopwatch.elapsedMilliseconds,
+        response.statusCode,
+      );
+      return response;
+    } catch (error) {
+      stopwatch.stop();
+      _latencyObserver?.call(
+        request.method,
+        request.url.path,
+        stopwatch.elapsedMilliseconds,
+        error is CloudException ? error.statusCode ?? -1 : -1,
+      );
+      if (error is CloudException || error is http.RequestAbortedException) {
+        rethrow;
+      }
+      throw _mapException(error, requestPath: request.url.path);
+    }
+  }
+
   /// JSON 解码结果可能是 `Map`、`List`、标量或 `null`；返回 [CloudHttpDecodedJson]（即 [Object?]）。
   Future<CloudHttpDecodedJson> getJson(
     Uri uri, {

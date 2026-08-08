@@ -50,8 +50,19 @@ func canonicalProjectionObject() map[string]any {
 			"commands": "none", "queries": "named_reader",
 			"cross_context": "public_contract_only",
 		},
-		"relationships":  []any{},
-		"business_rules": []any{"Only canonical source callbacks may update the view."},
+		"relationships": []any{},
+		"search_policy": map[string]any{
+			"exposed":            "none",
+			"not_exposed_reason": "Schema fixtures do not participate in production search.",
+		},
+		"assistant_access": map[string]any{
+			"read":  map[string]any{"mode": "none", "scopes": []any{}},
+			"cite":  map[string]any{"mode": "none", "scopes": []any{}},
+			"write": map[string]any{"mode": "none", "scopes": []any{}},
+		},
+		"business_rules": []any{
+			"Only canonical source callbacks may update the view.",
+		},
 		"lifecycle": map[string]any{
 			"checkpoint": "source_sequence",
 			"rebuild":    "replay_authoritative_source",

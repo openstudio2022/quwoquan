@@ -7,7 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
-import 'package:quwoquan_app/runtime/di/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
+import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/runtime/di/circle_shell_presentation_slots.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
@@ -19,7 +22,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle_mem
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_action_bar.dart';
-import 'package:quwoquan_app/runtime/di/presentation/circle_shell.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_shell.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/presentation/section_storage.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_permission_guard.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -210,7 +213,9 @@ Widget _scopedApp({
       circleDetailBehaviorFactWriterProvider.overrideWithValue(
         _NoopCircleBehaviorFactWriter(),
       ),
-      behaviorRepositoryProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorRepositoryProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       ...overrides,
     ],
     child: MaterialApp.router(
@@ -222,7 +227,9 @@ Widget _scopedApp({
             builder: (_, _) => Scaffold(
               body: CircleShell(
                 circleId: circleId,
-                membershipApprovalPageBuilder: (_) => const SizedBox.shrink(),
+                participantSlots: buildCircleShellParticipantSlots(
+                  membershipApprovalPageBuilder: (_) => const SizedBox.shrink(),
+                ),
                 onBack: onBack,
                 sourceAppearanceMode: sourceAppearanceMode,
               ),

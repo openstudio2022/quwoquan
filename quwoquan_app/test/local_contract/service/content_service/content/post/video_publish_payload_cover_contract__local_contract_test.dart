@@ -72,7 +72,12 @@ void main() {
       expect(prepared.payload, isNot(contains('videoUrl')));
       expect(prepared.payload, isNot(contains('thumbnailUrl')));
       expect(prepared.payload, isNot(contains('coverUrl')));
-      expect(prepared.payload['coverStrategy'], 'manual');
+      // 两条发布路径（上传后 typed 选封面 / 本地准备意图）都必须落 canonical
+      // wire 值，不能把 Dart 枚举 toString 混进 payload。
+      expect(
+        prepared.payload['coverStrategy'],
+        MediaCoverStrategy.manual.wireName,
+      );
       expect(prepared.payload['coverFrameTimeMs'], 3200);
       expect(prepared.payload['durationMs'], 12345);
       expect(prepared.payload['width'], 1080);

@@ -6,7 +6,7 @@ attribution_params:
     key: utm_medium
   - desc: 运营活动标识
     key: utm_campaign
-  - desc: 单次站外分享事实 id，与 content/content/outbound_share_fact CreateOutboundShare 追加事实及埋点对齐
+  - desc: 单次站外分享事实 id，与 content/content/outbound_share_fact AppendOutboundShareFact 追加事实及埋点对齐
     key: share_id
   - desc: 邀请者 personaId，拉新归因，对齐 user/invite_record
     key: inviter

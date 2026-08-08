@@ -42,6 +42,62 @@ def test_script_architecture_rejects_retired_workflow_and_controller_run(
     assert sum("retired ambiguous module" in issue for issue in issues) == 2
 
 
+def test_script_architecture_rejects_execution_root_non_kernel_module(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    scripts = _minimal_scripts_root(tmp_path)
+    misplaced = scripts / "content/execution/campaign_orchestrator.py"
+    misplaced.write_text("", encoding="utf-8")
+    monkeypatch.setattr(verify_script_architecture, "SCRIPTS_ROOT", scripts)
+    monkeypatch.setattr(verify_script_architecture, "REPO_ROOT", tmp_path)
+
+    issues = verify_script_architecture.script_architecture_issues()
+
+    assert any(
+        "execution root only permits stable kernel" in issue
+        for issue in issues
+    )
+
+
+def test_script_architecture_rejects_environment_lookup_dependency(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    scripts = _minimal_scripts_root(tmp_path)
+    lookup = (
+        scripts
+        / "content/release/canonical/build_lookup_indexes.py"
+    )
+    lookup.parent.mkdir(parents=True, exist_ok=True)
+    lookup.write_text(
+        "from core.paths import OUTPUT_ROOT\n"
+        "from content.release.environment.topology import target\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(verify_script_architecture, "SCRIPTS_ROOT", scripts)
+    monkeypatch.setattr(verify_script_architecture, "REPO_ROOT", tmp_path)
+
+    issues = verify_script_architecture.script_architecture_issues()
+
+    assert sum("immutable lookup indexes" in issue for issue in issues) == 2
+
+
+def test_script_architecture_rejects_data_tool_cache(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    scripts = _minimal_scripts_root(tmp_path)
+    cache = tmp_path / ".ruff_cache"
+    cache.mkdir()
+    monkeypatch.setattr(verify_script_architecture, "SCRIPTS_ROOT", scripts)
+    monkeypatch.setattr(verify_script_architecture, "REPO_ROOT", tmp_path)
+
+    issues = verify_script_architecture.script_architecture_issues()
+
+    assert any(".ruff_cache" in issue for issue in issues)
+
+
 def test_script_architecture_rejects_weak_types_in_control_modules(
     tmp_path: Path,
     monkeypatch,

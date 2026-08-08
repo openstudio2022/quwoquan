@@ -11,6 +11,50 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPTS_ROOT.parent.parent
 ALLOWED_ROOT_ENTRIES = {"cli.py", "core", "content", "governance", "verify", "__init__.py"}
+EXECUTION_ROOT_MODULES = frozenset(
+    {
+        "__init__.py",
+        "asset_registry.py",
+        "baseline.py",
+        "baseline_packet.py",
+        "context.py",
+        "contracts.py",
+        "coverage.py",
+        "diagnostics.py",
+        "execution_state_journal.py",
+        "execution_supersession.py",
+        "execution_terminal.py",
+        "handler.py",
+        "identity.py",
+        "model_contract.py",
+        "production_contracts.py",
+        "prompt_snapshot.py",
+        "request.py",
+        "runtime_contract.py",
+        "runtime_state.py",
+        "spec_contract.py",
+        "stage_reports.py",
+        "store.py",
+        "support.py",
+        "target_integrity.py",
+        "terminal_state_integrity.py",
+        "workspace.py",
+    }
+)
+FORBIDDEN_DATA_CACHE_DIRS = frozenset(
+    {
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".tox",
+        ".nox",
+        ".ipynb_checkpoints",
+    }
+)
+LOOKUP_INDEX_MODULE = Path(
+    "content/release/canonical/build_lookup_indexes.py"
+)
 _MILESTONE_NAME_FRAGMENTS = (
     "t[1-4]",
     "m6",
@@ -167,6 +211,26 @@ def _weak_control_type_issues(path: Path) -> list[str]:
     return issues
 
 
+def _lookup_index_boundary_issues() -> list[str]:
+    path = SCRIPTS_ROOT / LOOKUP_INDEX_MODULE
+    if not path.is_file():
+        return []
+    text = path.read_text(encoding="utf-8")
+    forbidden = (
+        "content.release.environment",
+        "OUTPUT_ROOT",
+        "envImports",
+        "homepageId",
+        "introductionUrl",
+    )
+    return [
+        f"{path.relative_to(REPO_ROOT)}: immutable lookup indexes "
+        f"must not depend on environment runtime token {token}"
+        for token in forbidden
+        if token in text
+    ]
+
+
 def script_architecture_issues() -> list[str]:
     issues: list[str] = []
     for required in (
@@ -191,6 +255,13 @@ def script_architecture_issues() -> list[str]:
         path = SCRIPTS_ROOT / relative
         if path.exists():
             issues.append(f"{path.relative_to(REPO_ROOT)}: retired ambiguous module")
+    execution_root = SCRIPTS_ROOT / "content/execution"
+    for path in sorted(execution_root.glob("*.py")):
+        if path.name not in EXECUTION_ROOT_MODULES:
+            issues.append(
+                f"{path.relative_to(REPO_ROOT)}: execution root only permits "
+                "stable kernel and CLI binding modules"
+            )
     for path in _python_files(SCRIPTS_ROOT):
         if MILESTONE_NAME_RE.search(path.name):
             issues.append(
@@ -200,9 +271,9 @@ def script_architecture_issues() -> list[str]:
             )
         text = path.read_text(encoding="utf-8")
         lines = text.count("\n") + 1
-        if path.name == "cli.py":
+        if path == SCRIPTS_ROOT / "cli.py":
             limit = MAX_CLI_LINES
-        elif (SCRIPTS_ROOT / "content/execution/controller") in path.parents:
+        elif path.parent == SCRIPTS_ROOT / "content/execution/controller":
             limit = MAX_CONTROLLER_LINES
         else:
             limit = MAX_MODULE_LINES
@@ -233,6 +304,18 @@ def script_architecture_issues() -> list[str]:
                     f"{path.relative_to(REPO_ROOT)}: core may not depend on domain layer: {stripped}"
                 )
                 break
+    for cache_name in sorted(FORBIDDEN_DATA_CACHE_DIRS):
+        direct = SCRIPTS_ROOT.parent / cache_name
+        if direct.exists():
+            issues.append(
+                f"{direct.relative_to(REPO_ROOT)}: generated cache must not exist in source tree"
+            )
+        for scan_root in (SCRIPTS_ROOT, SCRIPTS_ROOT.parent / "tests"):
+            for path in sorted(scan_root.rglob(cache_name)):
+                issues.append(
+                    f"{path.relative_to(REPO_ROOT)}: generated cache must not exist in source tree"
+                )
+    issues.extend(_lookup_index_boundary_issues())
     return issues
 
 

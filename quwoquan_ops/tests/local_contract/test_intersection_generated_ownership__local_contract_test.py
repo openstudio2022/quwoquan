@@ -24,7 +24,7 @@ def go_string_list(source: str, variable: str) -> set[str]:
 
 class IntersectionGeneratedOwnershipContractTest(unittest.TestCase):
     # spec_ref: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation/spec.md#gwt-001
-    def test_layered_targets_are_owned_while_legacy_remains_active(self) -> None:
+    def test_layered_targets_are_owned_while_legacy_is_retired(self) -> None:
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         resource = next(
             item
@@ -44,16 +44,21 @@ class IntersectionGeneratedOwnershipContractTest(unittest.TestCase):
             "quwoquan_app/packages/quwoquan_cloud_contracts/"
             "lib/src/generated/**"
         )
-        legacy = (
+        canonical_display = (
             "quwoquan_app/lib/service/recommendation_service/recommendation/"
             "recommendation_feature_profile_view/presentation/generated/"
             "intersection_display_metadata.g.dart"
+        )
+        retired_legacy = (
+            "quwoquan_app/lib/service/recommendation_service/recommendation/"
+            "recommendation_feature_profile_view/presentation/generated/"
+            "intersection_kind_metadata.g.dart"
         )
         for path in {
             application_root,
             presentation_root,
             package_root,
-            legacy,
+            canonical_display,
         }:
             self.assertIn(path, write_paths)
 
@@ -75,21 +80,26 @@ class IntersectionGeneratedOwnershipContractTest(unittest.TestCase):
         self.assertIn(application_root.removeprefix("quwoquan_app/").removesuffix("/**"), active_roots)
         self.assertIn(presentation_root.removeprefix("quwoquan_app/").removesuffix("/**"), active_roots)
         self.assertIn(package_root.removeprefix("quwoquan_app/").removesuffix("/**"), active_roots)
-        self.assertIn(legacy, write_paths)
+        self.assertIn(canonical_display, write_paths)
         self.assertNotIn(
             "quwoquan_app/lib/cloud/runtime/generated/recommendation/"
             "intersection_kind_metadata.g.dart",
             write_paths,
         )
-        retired_legacy = (
+        retired_runtime_legacy = (
             "lib/cloud/runtime/generated/recommendation/"
             "intersection_kind_metadata.g.dart"
         )
-        self.assertIn(retired_legacy, retired_exact)
-        self.assertNotIn(retired_legacy, active_exact)
+        self.assertIn(retired_runtime_legacy, retired_exact)
+        self.assertNotIn(retired_runtime_legacy, active_exact)
+        self.assertIn(
+            retired_legacy.removeprefix("quwoquan_app/"),
+            retired_exact,
+            msg="same-object legacy output must be retired after consumer cutover",
+        )
 
     # spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
-    def test_feedback_and_legacy_writers_have_independent_lifecycles(self) -> None:
+    def test_feedback_and_layered_writers_have_independent_lifecycles(self) -> None:
         main_source = (GENERATOR / "main.go").read_text(encoding="utf-8")
         for call in (
             "writeIntersectionFeedbackContracts(",
@@ -98,6 +108,13 @@ class IntersectionGeneratedOwnershipContractTest(unittest.TestCase):
             self.assertEqual(main_source.count(call), 1)
         self.assertNotIn("writeLegacyIntersectionKindMetadata(", main_source)
         self.assertNotIn("writeIntersectionKindMetadata(", main_source)
+        canonical_source = (
+            GENERATOR / "intersection_kind_metadata_codegen.go"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            '"intersection_kind_metadata.g.dart"',
+            canonical_source,
+        )
 
 
 if __name__ == "__main__":

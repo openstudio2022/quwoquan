@@ -7,12 +7,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-ACTIVE_SURFACES = [
-    ROOT / ".github" / "workflows",
-    ROOT / "quwoquan_ops" / "deploy",
-    ROOT / "quwoquan_service" / "scripts" / "deploy",
-    ROOT / "quwoquan_app" / "scripts" / "gamma",
-]
+#: 固定执行面：路径由本仓库布局直接决定，必须存在。
+STATIC_SURFACES = (
+    ".github/workflows",
+    "quwoquan_app/scripts/gamma",
+    "quwoquan_app/deploy",
+)
+#: 部署执行面按对象树发现：第一方部署基线归服务 `deploy/`，四环境入口归
+#: `environments/<env>/deploy`，控制面与外部 workload 各自持有 `deploy/`。
+#: 每条声明都必须至少发现一个根，否则说明目录轴又变了而门禁在空扫。
+DISCOVERED_SURFACE_GLOBS = (
+    "quwoquan_service/services/*/deploy",
+    "quwoquan_service/services/*/environments/*/deploy",
+    "quwoquan_service/control-plane/*/deploy",
+    "quwoquan_ops/external/*/deploy",
+)
 
 SCRIPT_GLOBS = ("*.py", "*.sh", "*.yml", "*.yaml")
 
@@ -29,11 +38,33 @@ WORKFLOW_PROHIBITED_ENV_PATTERNS = {
 }
 
 
-def iter_files() -> list[Path]:
-    files: list[Path] = []
-    for root in ACTIVE_SURFACES:
-        if not root.exists():
+def resolve_surfaces() -> tuple[list[Path], list[str]]:
+    """解析执行面。目标缺失时返回阻断项，绝不静默跳过成空扫。"""
+    surfaces: list[Path] = []
+    problems: list[str] = []
+    for relative in STATIC_SURFACES:
+        root = ROOT / relative
+        if not root.is_dir():
+            problems.append(
+                f"声明的执行面不存在: {relative}；目录轴变更后必须把门禁指向新的 canonical 路径"
+            )
             continue
+        surfaces.append(root)
+    for pattern in DISCOVERED_SURFACE_GLOBS:
+        discovered = sorted(path for path in ROOT.glob(pattern) if path.is_dir())
+        if not discovered:
+            problems.append(
+                f"执行面发现模式没有命中任何目录: {pattern}；"
+                "部署目录轴变更后必须同步该模式，不得让门禁空扫通过"
+            )
+            continue
+        surfaces.extend(discovered)
+    return surfaces, problems
+
+
+def iter_files(surfaces: list[Path]) -> list[Path]:
+    files: list[Path] = []
+    for root in surfaces:
         for pattern in SCRIPT_GLOBS:
             files.extend(root.rglob(pattern))
     return sorted({path for path in files if path.is_file()})
@@ -45,9 +76,12 @@ def line_is_retired_comment(raw_line: str) -> bool:
 
 
 def main() -> int:
-    issues: list[str] = []
+    surfaces, issues = resolve_surfaces()
     workflow_root = ROOT / ".github" / "workflows"
-    for path in iter_files():
+    scanned = iter_files(surfaces)
+    if not scanned:
+        issues.append("执行面扫描结果为空；门禁不得在没有被测文件的情况下通过")
+    for path in scanned:
         rel = path.relative_to(ROOT)
         try:
             text = path.read_text(encoding="utf-8")
@@ -67,7 +101,9 @@ def main() -> int:
         for issue in issues:
             print(f"  - {issue}", file=sys.stderr)
         return 1
-    print("[verify_prod_access_guard] OK")
+    print(
+        f"[verify_prod_access_guard] OK: surfaces={len(surfaces)} files={len(scanned)}"
+    )
     return 0
 
 

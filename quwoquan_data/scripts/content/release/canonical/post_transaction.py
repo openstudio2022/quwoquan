@@ -235,7 +235,7 @@ def build_post_object_transaction_package(
                 asset_kind="video" if mime.startswith("video/") else "image",
                 asset_id=asset_id,
                 content_sha256=digest,
-                object_ref=object_ref,
+                object_ref=str(source_manifest.get("topicId") or "").strip(),
                 execution_root=execution_root,
                 execution_manifest=manifest,
                 object_root=object_root,
@@ -289,6 +289,16 @@ def build_post_object_transaction_package(
                 for issue in (raw.get("rightsAuditIssues") or [])
                 if str(issue).strip()
             ]
+            if (
+                not require_rights_proof
+                and source_use_mode == "rights_audit_only"
+                and rights_audit_status is RightsAuditStatus.VERIFIED
+                and not authorization_proof
+            ):
+                rights_audit_status = RightsAuditStatus.UNVERIFIED
+                rights_audit_issues.append(
+                    "authorizationProof: not independently verified for research distribution"
+                )
             if require_rights_proof and rights_audit_issues:
                 raise ObjectTransactionError(
                     f"post asset 权利审计仍有未关闭问题：{asset_id}"
@@ -352,6 +362,18 @@ def build_post_object_transaction_package(
                 raise ObjectTransactionError(
                     f"post asset 缺 canonical modelReleaseStatus：{asset_id}"
                 )
+            # Source units in the research lifecycle are deliberately ingested
+            # as rights_audit_only/internal_reference.  A verified independent
+            # asset review closes that audit for the immutable research object;
+            # project the final rights truth instead of copying intermediate
+            # admission vocabulary into the publish closure.
+            if (
+                rights_audit_status is RightsAuditStatus.VERIFIED
+                and source_use_mode == "rights_audit_only"
+            ):
+                source_use_mode = "licensed_adaptation"
+            if usage_scope == "internal_reference":
+                usage_scope = "editorial"
             rights_row = {
                     "assetId": asset_id,
                     "sourceKind": str(primary_source.get("platform") or "source_catalog"),

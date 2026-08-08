@@ -19,6 +19,7 @@
         "DATA.SOURCE.PAGE_TYPE_INVALID",
         "DATA.SOURCE.CONTENT_INCOMPLETE",
         "DATA.SOURCE.QUALIFICATION_EXHAUSTED",
+        "DATA.SOURCE.POOL_SHORTFALL",
         "DATA.MEDIA.FETCH_FAILED",
         "DATA.MEDIA.RIGHTS_UNAVAILABLE",
         "DATA.MEDIA.PUBLISHABLE_SHORTFALL",
@@ -31,6 +32,7 @@
         "DATA.AGENT.EXECUTION_FAILED",
         "DATA.AGENT.CREDENTIAL_INVALID",
         "DATA.AGENT.PROVIDER_REJECTED",
+        "DATA.AGENT.CAPACITY_SHORTFALL",
         "DATA.AGENT.SCALE_CALIBRATION_REQUIRED",
         "DATA.AGENT.TIMEOUT",
         "DATA.AGENT.RESULT_INVALID",
@@ -44,6 +46,9 @@
         "DATA.QUEUE.STARTUP_FAILED",
         "DATA.QUEUE.RESULT_ENVELOPE_INVALID",
         "DATA.QUEUE.TIMEOUT",
+        "DATA.SCALE.ATTAINMENT_SHORTFALL",
+        "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT",
+        "DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED",
         "DATA.INTERNAL.UNEXPECTED"
       ]
     },
@@ -55,7 +60,7 @@
         "entity_source_bundle", "explore", "image_fetch", "image_rights",
         "media_check", "post_annotate", "post_author", "post_compose", "post_plan",
         "post_review", "publish", "quality_analysis",
-        "review", "source_gate", "source_plan", "source_screen", "verify_homepage_media"
+        "review", "scale_promotion", "source_gate", "source_plan", "source_screen", "verify_homepage_media"
       ]
     },
     "ref": { "type": "string", "maxLength": 512 },

@@ -47,6 +47,18 @@ type Repository interface {
 
 type WorkerRepository interface {
 	Repository
+	// CommitClaim is the only mutation path available to a durable worker. The
+	// implementation must validate and write-touch the current work claim in
+	// the same transaction as the Run snapshot, journal, receipt, and outbox so
+	// an expired worker can never commit after a higher fencing token takes over.
+	CommitClaim(
+		context.Context,
+		WorkClaim,
+		int64,
+		Run,
+		[]JournalEvent,
+		*CommandReceipt,
+	) error
 	LatestSequence(context.Context, string) (int64, error)
 }
 

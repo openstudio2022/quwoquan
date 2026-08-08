@@ -1,42 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/shell/state/feed_attribution_session.dart';
 import 'package:uuid/uuid.dart';
 
 // 跨对象 feed attribution session 只在 runtime/di 提供。
 const _uuid = Uuid();
-const _sessionTimeoutMinutes = 30;
-
-class _FeedSessionState {
-  _FeedSessionState() : sessionId = _uuid.v4(), _lastActivity = DateTime.now();
-
-  final String sessionId;
-  DateTime _lastActivity;
-
-  bool get isExpired =>
-      DateTime.now().difference(_lastActivity).inMinutes >=
-      _sessionTimeoutMinutes;
-
-  void touch() {
-    _lastActivity = DateTime.now();
-  }
-}
+const _sessionTimeout = Duration(minutes: 30);
 
 class FeedSessionNotifier extends Notifier<String> {
-  _FeedSessionState _state = _FeedSessionState();
+  FeedAttributionSession _session = _newSession();
   String _currentFeedRequestId = _uuid.v4();
 
   @override
   String build() {
-    return _state.sessionId;
+    return _session.sessionId;
   }
 
   String get sessionId {
-    if (_state.isExpired) {
-      _state = _FeedSessionState();
-      state = _state.sessionId;
+    final now = DateTime.now();
+    if (_session.isExpired(now, timeout: _sessionTimeout)) {
+      _session = _newSession(now);
+      state = _session.sessionId;
     } else {
-      _state.touch();
+      _session.touch(now);
     }
-    return _state.sessionId;
+    return _session.sessionId;
   }
 
   /// 当前 feed 会话的 feedRequestId。
@@ -63,9 +50,12 @@ class FeedSessionNotifier extends Notifier<String> {
   }
 
   void invalidate() {
-    _state = _FeedSessionState();
-    state = _state.sessionId;
+    _session = _newSession();
+    state = _session.sessionId;
   }
+
+  static FeedAttributionSession _newSession([DateTime? now]) =>
+      FeedAttributionSession(uuid: _uuid, now: now ?? DateTime.now());
 }
 
 final feedSessionProvider = NotifierProvider<FeedSessionNotifier, String>(

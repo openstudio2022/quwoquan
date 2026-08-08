@@ -2,8 +2,6 @@ package persistence
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -13,17 +11,15 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	originalaccesserrors "quwoquan_service/services/content-service/generated/media/media_original_access_fact"
 	originalaccessmodel "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/model"
 	originalaccessports "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/ports"
 )
 
-// MongoStore exclusively owns the immutable decision facts, idempotency
-// receipts and rate-window reservations of MediaOriginalAccessFact.
+// MongoStore exclusively owns the immutable decision facts and idempotency
+// receipts of MediaOriginalAccessFact. Quota rows belong to OriginalAccessQuota.
 type MongoStore struct {
-	facts      *mongo.Collection
-	receipts   *mongo.Collection
-	rateLimits *mongo.Collection
+	facts    *mongo.Collection
+	receipts *mongo.Collection
 }
 
 func NewMongoStore(database *mongo.Database) *MongoStore {
@@ -31,23 +27,16 @@ func NewMongoStore(database *mongo.Database) *MongoStore {
 		panic("MediaOriginalAccessFact MongoStore requires database")
 	}
 	return &MongoStore{
-		facts:      database.Collection("media_original_access_facts"),
-		receipts:   database.Collection("media_original_access_receipts"),
-		rateLimits: database.Collection("media_original_access_rate_limits"),
+		facts:    database.Collection("media_original_access_facts"),
+		receipts: database.Collection("media_original_access_receipts"),
 	}
 }
 
 func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
-	if _, err := store.facts.Indexes().CreateMany(ctx, []mongo.IndexModel{
+	_, err := store.facts.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "assetId", Value: 1}, {Key: "grantedAt", Value: -1}}, Options: options.Index().SetName("idx_media_original_access_asset_time")},
 		{Keys: bson.D{{Key: "viewerId", Value: 1}, {Key: "assetId", Value: 1}, {Key: "purpose", Value: 1}, {Key: "grantedAt", Value: -1}}, Options: options.Index().SetName("idx_media_original_access_viewer_asset_purpose_time")},
 		{Keys: bson.D{{Key: "viewerId", Value: 1}, {Key: "idempotencyKey", Value: 1}}, Options: options.Index().SetName("idx_media_original_access_dedupe").SetUnique(true)},
-	}); err != nil {
-		return err
-	}
-	_, err := store.rateLimits.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
-		Options: options.Index().SetName("idx_media_original_access_rate_limit_expire").SetExpireAfterSeconds(0),
 	})
 	return err
 }
@@ -82,11 +71,6 @@ func (s *MongoStore) Append(
 			"media original access append requires command digest",
 		)
 	}
-	if strings.EqualFold(request.Fact.Outcome, "granted") && !request.RateLimit.IsValid() {
-		return originalaccessports.AppendResult{}, errors.New(
-			"media original access append requires a valid rate limit policy",
-		)
-	}
 	if replayed, found, err := s.findMediaOriginalAccessReceipt(ctx, request.Fact.IdempotencyKey, request.CommandDigest); err != nil || found {
 		return replayed, err
 	}
@@ -102,15 +86,6 @@ func (s *MongoStore) Append(
 		} else if found {
 			result = replayed
 			return nil, nil
-		}
-		if strings.EqualFold(request.Fact.Outcome, "granted") {
-			if rateLimitErr := s.reserveMediaOriginalAccessRateLimit(
-				txCtx,
-				request.Fact,
-				request.RateLimit,
-			); rateLimitErr != nil {
-				return nil, rateLimitErr
-			}
 		}
 		factDocument := mediaOriginalAccessFactDocumentFrom(request.Fact)
 		if _, insertErr := s.facts.InsertOne(txCtx, factDocument); insertErr != nil {
@@ -128,45 +103,6 @@ func (s *MongoStore) Append(
 		return originalaccessports.AppendResult{}, err
 	}
 	return result, nil
-}
-
-func (s *MongoStore) reserveMediaOriginalAccessRateLimit(
-	ctx context.Context,
-	fact originalaccessmodel.Fact,
-	limit originalaccessports.RateLimit,
-) error {
-	windowStart := fact.GrantedAt.UTC().Truncate(limit.Window)
-	keyInput := strings.Join([]string{
-		strings.TrimSpace(fact.ViewerID),
-		strings.TrimSpace(fact.AssetID),
-		strings.TrimSpace(fact.Purpose),
-		windowStart.Format(time.RFC3339Nano),
-	}, ":")
-	digest := sha256.Sum256([]byte(keyInput))
-	limitID := hex.EncodeToString(digest[:])
-	_, err := s.rateLimits.UpdateOne(
-		ctx,
-		bson.D{
-			{Key: "_id", Value: limitID},
-			{Key: "count", Value: bson.D{{Key: "$lt", Value: limit.MaxGrants}}},
-		},
-		bson.D{
-			{Key: "$inc", Value: bson.D{{Key: "count", Value: 1}}},
-			{Key: "$setOnInsert", Value: bson.D{
-				{Key: "expiresAt", Value: windowStart.Add(limit.Window)},
-			}},
-		},
-		options.UpdateOne().SetUpsert(true),
-	)
-	if mongo.IsDuplicateKeyError(err) {
-		return originalaccesserrors.AppErrorFromOriginalAccessRateLimited(
-			"media original access rate limit exhausted",
-		)
-	}
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *MongoStore) findMediaOriginalAccessReceipt(

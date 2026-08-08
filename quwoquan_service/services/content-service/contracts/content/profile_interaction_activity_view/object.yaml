@@ -115,6 +115,20 @@ local_identity_reasons:
   previewRouteId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
   sourceEventId: immutable source outbox identity used only for projector dedupe and replay traceability
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.content.profile_interaction_activity_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - received 与 sent 方向由源事件参与者语义确定，查询参数不得重解释方向。
 - 同一 sourceEventId 只物化一次活动行，稳定分页使用 occurredAt 与 activityId 复合游标。

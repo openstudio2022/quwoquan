@@ -23,15 +23,25 @@ ALLOWED_ATTACHMENT_DIRS = frozenset({"screenshots"})
 
 
 def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
-    issues: list[str] = []
+    # 空扫描不是通过：扫描根缺失或一个 run 都没有时，本门禁什么都没校验，
+    # 等价于没有门禁，因此必须阻断而不是返回空 issue 列表。
     if not root.exists():
-        return issues
+        return [
+            f"{_rel(root)}: observability 扫描根不存在，无法校验任何布局；"
+            "先产出可观测运行输出（stackctl 等），不得按空集报告通过"
+        ]
+    issues: list[str] = []
     old_root = root / "observability"
     if old_root.exists():
         issues.append(f"{_rel(old_root)}: old observability root is forbidden; use env/<env>/observability")
 
     env_root = root / "env"
-    if env_root.exists():
+    if not env_root.is_dir():
+        issues.append(
+            f"{_rel(env_root)}: 缺少 env/ 扫描根，没有任何环境可观测输出可供校验"
+        )
+    else:
+        observed_runs = 0
         for entry in sorted(env_root.iterdir()):
             if not entry.is_dir():
                 issues.append(f"{_rel(entry)}: env/ only allows environment directories")
@@ -39,13 +49,26 @@ def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
             if entry.name not in ENV_SEGMENTS:
                 issues.append(f"{_rel(entry)}: unknown env segment")
                 continue
-            issues.extend(_observability_runs_issues(entry / "observability"))
+            observability_root = entry / "observability"
+            observed_runs += _observability_run_count(observability_root)
+            issues.extend(_observability_runs_issues(observability_root))
+        if observed_runs == 0:
+            issues.append(
+                f"{_rel(env_root)}: 扫描到 0 个 observability run；"
+                "空扫描不构成通过证据"
+            )
     data_observability = root / "data" / "observability"
     if data_observability.exists():
         issues.append(
             f"{_rel(data_observability)}: data observability is forbidden; use env/repo/observability"
         )
     return issues
+
+
+def _observability_run_count(observability_root: Path) -> int:
+    if not observability_root.is_dir():
+        return 0
+    return sum(1 for entry in observability_root.iterdir() if entry.is_dir())
 
 
 def _observability_runs_issues(observability_root: Path) -> list[str]:

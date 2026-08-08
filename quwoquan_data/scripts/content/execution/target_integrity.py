@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from content.execution.active_spec import active_spec
+from content.execution.planning.active_spec import active_spec
 from content.execution.context import ExecutionContext
 
 

@@ -45,6 +45,7 @@ func (failOpenGreetingStore) MarkPendingBlockedBetween(context.Context, string, 
 
 type failOpenGreetingCommands struct {
 	committed *greetingmodel.GreetingRequest
+	commit    *greetingports.GreetingCommit
 }
 
 func (*failOpenGreetingCommands) LoadCommandReceipt(context.Context, string, string, string) (*greetingmodel.GreetingRequest, bool, error) {
@@ -52,6 +53,7 @@ func (*failOpenGreetingCommands) LoadCommandReceipt(context.Context, string, str
 }
 func (s *failOpenGreetingCommands) CommitCommand(_ context.Context, commit greetingports.GreetingCommit) error {
 	s.committed = commit.Greeting
+	s.commit = &commit
 	return nil
 }
 func (*failOpenGreetingCommands) CountRecentByRequester(context.Context, string, time.Duration) (int64, error) {
@@ -91,6 +93,26 @@ func (allowGreetingPolicy) AllowsStrangerGreeting(context.Context, string) (bool
 	return true, nil
 }
 
+type recordingGreetingPolicy struct{ accountID string }
+
+func (policy *recordingGreetingPolicy) AllowsStrangerGreeting(
+	_ context.Context,
+	accountID string,
+) (bool, error) {
+	policy.accountID = accountID
+	return true, nil
+}
+
+type staticGreetingRecipientAccounts map[string]string
+
+func (accounts staticGreetingRecipientAccounts) ResolveOwnerAccountID(
+	_ context.Context,
+	personaID string,
+) (string, bool, error) {
+	accountID, found := accounts[personaID]
+	return accountID, found, nil
+}
+
 type unavailableGreetingIntersection struct{}
 
 func (unavailableGreetingIntersection) ResolveGreetingIntersection(
@@ -105,6 +127,7 @@ func (unavailableGreetingIntersection) ResolveGreetingIntersection(
 func TestGreetingIntersectionResolutionFailureDegradesToOrdinaryGreeting(t *testing.T) {
 	t.Parallel()
 	commands := &failOpenGreetingCommands{}
+	policy := &recordingGreetingPolicy{}
 	service := greetingapp.NewGreetingService(
 		failOpenGreetingStore{},
 		commands,
@@ -112,7 +135,8 @@ func TestGreetingIntersectionResolutionFailureDegradesToOrdinaryGreeting(t *test
 		failOpenConversationGateway{},
 		failOpenEventPublisher{},
 		failOpenGreetingStream{},
-		allowGreetingPolicy{},
+		staticGreetingRecipientAccounts{"persona-b": "account-b"},
+		policy,
 		unavailableGreetingIntersection{},
 	)
 	created, err := service.Send(context.Background(), greetingapp.SendGreetingRequest{
@@ -139,5 +163,40 @@ func TestGreetingIntersectionResolutionFailureDegradesToOrdinaryGreeting(t *test
 	}
 	if len(created.IntersectionSnapshot) != 0 {
 		t.Fatalf("failed resolution must not freeze client facts: %s", created.IntersectionSnapshot)
+	}
+	if commands.commit == nil ||
+		commands.commit.EventPayload["recipientAccountId"] != "account-b" {
+		t.Fatalf("GreetingRequestSent did not freeze recipient AccountID: %+v", commands.commit)
+	}
+	if policy.accountID != "account-b" {
+		t.Fatalf("notification policy read %q, want canonical AccountID", policy.accountID)
+	}
+}
+
+func TestGreetingSendRejectsTargetWithoutCanonicalRecipientAccount(t *testing.T) {
+	t.Parallel()
+	commands := &failOpenGreetingCommands{}
+	service := greetingapp.NewGreetingService(
+		failOpenGreetingStore{},
+		commands,
+		failOpenRelationships{},
+		failOpenConversationGateway{},
+		failOpenEventPublisher{},
+		failOpenGreetingStream{},
+		staticGreetingRecipientAccounts{},
+		allowGreetingPolicy{},
+	)
+
+	created, err := service.Send(context.Background(), greetingapp.SendGreetingRequest{
+		RequesterPersonaID: "persona-a",
+		TargetPersonaID:    "persona-b",
+		RequestMessage:     "认识一下",
+		IdempotencyKey:     "greeting-missing-account-1",
+	})
+	if err == nil || created != nil {
+		t.Fatalf("missing recipient account must fail closed: created=%+v err=%v", created, err)
+	}
+	if commands.commit != nil {
+		t.Fatalf("missing recipient account must not commit greeting: %+v", commands.commit)
 	}
 }

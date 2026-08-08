@@ -2,12 +2,21 @@ description: Connector 调用状态、脱敏回执与服务命令输入。
 fields:
 - {name: invocationId, source: invocationId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: accountId, source: accountId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
+- {name: resolutionId, source: capabilityGrantResolutionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
 - {name: connectionId, source: connectionId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
 - {name: assistantRunId, source: assistantRunId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state, reference: true}
 - {name: capability, source: capability, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: surfaceKind, source: surfaceKind, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: bindingDigest, source: capabilityGrantBindingDigest, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: inputDigest, source: finalInputDigest, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: confirmationDigest, source: confirmationDigest, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: permitDigest, source: permitDigest, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: idempotencyDigest, source: invocationIdempotencyDigest, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: status, source: status, type: enum, enum_ref: ConnectorInvocationStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: requestDigest, source: requestDigest, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: confirmationRef, source: confirmationRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: permitRef, source: permitRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: idempotencyKey, source: invocationIdempotencyKey, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: continuationRef, source: continuationRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: none, role: authoritative_state}
 - {name: resultRef, source: resultRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: resultDigest, source: resultDigest, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
@@ -46,20 +55,22 @@ types:
     fields:
     - {name: items, source: items, type: '[]ConnectorInvocationView', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: read, ops_exposure: none}
   InvokeConnectorCapabilityRequest:
-    description: Assistant 服务命令；payloadRef 仅指向受保护 artifact，Integration 不回显正文。
+    description: Assistant 服务在 final input 冻结且用户确认后提交的命令；账号只来自验签 principal，payload/confirmation/permit 仅为受保护引用。
     fields:
-    - {name: accountId, source: accountId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: resolutionId, source: resolutionId, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: connectionId, source: connectionId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: assistantRunId, source: assistantRunId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: capability, source: capability, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: inputDigest, source: inputDigest, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
     - {name: payloadRef, source: payloadRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
-    - {name: confirmationRef, source: confirmationRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
+    - {name: confirmationRef, source: confirmationRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
+    - {name: permitRef, source: permitRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
     - {name: continuationRef, source: continuationRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
   ContinueConnectorInvocationRequest:
     description: 用户确认或设备/外部回执到达后，在 invocation 安全边界续接。
     fields:
     - {name: invocationId, source: path.invocationId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: none}
-    - {name: accountId, source: accountId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: confirmationRef, source: confirmationRef, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop, api_exposure: write, ops_exposure: none}
     - {name: continuationRef, source: continuationRef, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: expectedRevision, source: expectedRevision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}

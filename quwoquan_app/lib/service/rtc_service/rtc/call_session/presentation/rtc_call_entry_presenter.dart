@@ -1,11 +1,11 @@
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show WidgetRef;
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
-import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/errors/local_domain_failure.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -168,34 +168,30 @@ final class RtcCallEntryPresenter {
     BuildContext context,
     RtcCallEntryUnavailableReason reason,
   ) {
-    final message = switch (reason) {
-      RtcCallEntryUnavailableReason.blocked =>
-        RtcErrorCode.blocked.defaultMessage,
+    // 端侧本地判定的入口不可用原因同样对应已声明的 stable code，因此走
+    // localDomainCloudException 接回统一映射链：与云端返回同一个码时，文案、
+    // 恢复动作与埋点 sourceCode 完全一致，不再是只剩字符串的旁路。
+    final localCode = switch (reason) {
+      RtcCallEntryUnavailableReason.blocked => RtcErrorCode.blocked,
       RtcCallEntryUnavailableReason.notMutual ||
       RtcCallEntryUnavailableReason.capabilityDenied ||
-      RtcCallEntryUnavailableReason.missingTarget =>
-        RtcErrorCode.notMutual.defaultMessage,
+      RtcCallEntryUnavailableReason.missingTarget => RtcErrorCode.notMutual,
       RtcCallEntryUnavailableReason.missingConversationContext ||
       RtcCallEntryUnavailableReason.missingCircleContext =>
-        CallText.callContextUnavailable,
-      RtcCallEntryUnavailableReason.noParticipants => CallText.callNoContacts,
+        RtcErrorCode.invalidCallAction,
+      RtcCallEntryUnavailableReason.noParticipants =>
+        RtcErrorCode.invalidArgument,
       RtcCallEntryUnavailableReason.participantLimitExceeded =>
-        RtcErrorCode.callFull.defaultMessage,
+        RtcErrorCode.callFull,
     };
     return AppActionErrorFeedback.show(
       context,
-      semantic: UiErrorSemantic(
+      semantic: runtimeErrorSemantic(
+        context,
+        error: localDomainCloudException(localCode.code),
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-        title: CallText.callEntryUnavailableTitle,
-        message: message,
-        primaryAction: const UiErrorAction(
-          type: UiErrorActionType.dismiss,
-          label: FoundationText.confirm,
-        ),
-        dismissible: true,
-        presentation: UiErrorPresentation.actionDialog,
-        tone: UiErrorTone.caution,
+        allowRetry: false,
       ),
     );
   }
@@ -213,25 +209,16 @@ final class RtcCallEntryPresenter {
         ),
       );
     }
+    // 没有具体 failure 时也不再手写语义：以 canonical internal_error 走同一条
+    // 映射链，保证这类"兜底失败"在埋点里仍然带着可聚合的 sourceCode。
     return AppActionErrorFeedback.show(
       context,
-      semantic: UiErrorSemantic(
+      semantic: runtimeErrorSemantic(
+        context,
+        error: localDomainCloudException(RtcErrorCode.internalError.code),
         category: UiErrorCategory.submit,
         scope: UiErrorScope.global,
-        title: CallText.callEntryUnavailableTitle,
-        message: RtcErrorCode.internalError.defaultMessage,
-        primaryAction: const UiErrorAction(
-          type: UiErrorActionType.dismiss,
-          label: FoundationText.confirm,
-        ),
-        dismissible: true,
-        presentation: UiErrorPresentation.actionDialog,
-        tone: UiErrorTone.caution,
       ),
     );
   }
 }
-
-final rtcCallEntryPresenterProvider = Provider<RtcCallEntryPresenter>(
-  (ref) => const RtcCallEntryPresenter(),
-);

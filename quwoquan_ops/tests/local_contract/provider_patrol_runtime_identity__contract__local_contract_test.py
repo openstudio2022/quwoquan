@@ -39,6 +39,7 @@ def _runtime_fixture(root: Path) -> tuple[dict[str, object], dict[str, object]]:
         "sourceRevision": "a" * 40,
         "packageDigest": _digest("package"),
         "imageDigest": _digest("image"),
+        "configurationDigest": _digest("service-configuration"),
         "runtimeConfigDigest": _digest("runtime"),
         "environmentRuntimeDigest": _digest_bytes(runtime_raw),
         "providerRuntime": {
@@ -76,7 +77,7 @@ def _runtime_fixture(root: Path) -> tuple[dict[str, object], dict[str, object]]:
         "env": "alpha",
         "target": "alpha-local",
         "candidateDigest": manifest["baselineId"],
-        "configurationDigest": manifest["runtimeConfigDigest"],
+        "configurationDigest": manifest["configurationDigest"],
         "providerRuntimeDigest": _digest("provider"),
         "observabilityLogSinkDigest": _digest("es-compose"),
         "composeProject": "quwoquan-alpha",
@@ -137,6 +138,14 @@ class ProviderPatrolRuntimeIdentityContractTest(unittest.TestCase):
 
         self.assertEqual(identity.baseline_id, manifest["baselineId"])
         self.assertEqual(identity.package_digest, manifest["packageDigest"])
+        self.assertEqual(
+            identity.runtime_config_digest,
+            manifest["runtimeConfigDigest"],
+        )
+        self.assertNotEqual(
+            startup["configurationDigest"],
+            identity.runtime_config_digest,
+        )
         self.assertEqual(identity.attempt_id, "attempt-alpha-1")
         self.assertEqual(
             identity.elasticsearch_compose_digest,
@@ -149,7 +158,9 @@ class ProviderPatrolRuntimeIdentityContractTest(unittest.TestCase):
             "stopped": {"status": "stopped"},
             "bounded workload": {"workload": "content-commercial"},
             "candidate": {"candidateDigest": _digest("other-baseline")},
-            "runtime": {"configurationDigest": _digest("other-runtime")},
+            "startup service configuration": {
+                "configurationDigest": _digest("other-service-configuration")
+            },
             "Provider": {"providerRuntimeDigest": _digest("other-provider")},
             "Elasticsearch": {
                 "observabilityLogSinkDigest": _digest("other-es")
@@ -180,6 +191,9 @@ class ProviderPatrolRuntimeIdentityContractTest(unittest.TestCase):
             ].update({"adapterId": "ext.obs.other"}),
             "environment runtime digest": lambda manifest: manifest.update(
                 {"environmentRuntimeDigest": _digest("other-runtime-bytes")}
+            ),
+            "service configuration": lambda manifest: manifest.update(
+                {"configurationDigest": _digest("other-service-configuration")}
             ),
         }
         for label, mutate in mutations.items():

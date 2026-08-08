@@ -32,6 +32,13 @@
             "minLength": 1
           },
           "delivery_semantics": { "$ref": "#/$defs/deliverySemantics" },
+          "wire_event_type": {
+            "description": "事务性 outbox 实际写入消息 envelope 的 event type。它与 PascalCase 本地 name、传输 topic、客户端 client_ws_type 是四条独立轴；producer/consumer 常量必须由本字段生成。",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*$"
+          },
           "topic": {
             "description": "事件落在哪个具名主题/流上。它只是名字，不表达任何投递保证——保证只由 delivery_semantics 表达。没有具名主题的事件不写这个键。",
             "type": "string",
@@ -61,7 +68,21 @@
             }
           },
           "no_consumer_reason": { "type": "string", "minLength": 1 }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "delivery_semantics": { "const": "transactional_outbox" }
+              },
+              "required": ["delivery_semantics"]
+            },
+            "then": { "required": ["wire_event_type"] },
+            "else": {
+              "not": { "required": ["wire_event_type"] }
+            }
+          }
+        ]
       }
     }
   },

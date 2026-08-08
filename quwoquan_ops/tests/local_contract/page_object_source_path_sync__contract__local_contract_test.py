@@ -1,7 +1,7 @@
 """锁定 page_object_contract 路径同步工具的行为契约。
 
 覆盖：唯一定位才修、幂等、外科手术式改写、git 重命名链优先、无法唯一定位必须
-报人工裁决，以及多 participant 页面只在 physical owner 无法证明时报告 REVIEW。
+报人工裁决，以及全部 object-presentation 页面的 owner/participant/public-seam REVIEW。
 """
 
 from __future__ import annotations
@@ -58,11 +58,13 @@ def page_block(
     *,
     entry_widget: str,
     object_ids: list[str],
+    page_kind: str = "routed",
     mount_evidence: list[str] | None = None,
 ) -> str:
     lines = [
         f"  - page_id: {page_id}",
         f"    source_path: {source_path}",
+        f"    page_kind: {page_kind}",
         f"    object_ids: [{', '.join(object_ids)}]",
         "    capability_requirements: { all_of: [], any_of: [] }",
         f"    entry_widget: {entry_widget}",
@@ -89,6 +91,23 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
         target.write_text(
             f"class {widget} extends StatelessWidget {{}}\n", encoding="utf-8"
         )
+
+    def write_dart_text(self, relative: str, text: str) -> None:
+        target = self.app / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+    @staticmethod
+    def service_shape(path: str):
+        parts = Path(path).parts
+        if (
+            len(parts) < 7
+            or parts[0] != "lib"
+            or parts[1] != "service"
+            or parts[5] not in {"domain", "application", "adapters", "presentation"}
+        ):
+            return None
+        return parts[2].removesuffix("_service"), parts[3], parts[4], parts[5]
 
     def write_contract(self, *blocks: str) -> None:
         self.contract.write_text(CONTRACT_HEADER + "".join(blocks), encoding="utf-8")
@@ -328,23 +347,12 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
             )
         )
 
-        def shape_of(path: str):
-            parts = Path(path).parts
-            if (
-                len(parts) < 7
-                or parts[0] != "lib"
-                or parts[1] != "service"
-                or parts[5] != "presentation"
-            ):
-                return None
-            return parts[3], parts[3], parts[4], parts[5]
-
-        report = self.run_sync(shape_of=shape_of)
+        report = self.run_sync(shape_of=self.service_shape)
         self.assertEqual(
             [
                 item
                 for item in report.review
-                if item.kind == "multi_object_single_presentation"
+                if item.kind == "object_presentation_participant_drift"
             ],
             [],
         )
@@ -361,29 +369,18 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
             )
         )
 
-        def shape_of(path: str):
-            parts = Path(path).parts
-            if (
-                len(parts) < 7
-                or parts[0] != "lib"
-                or parts[1] != "service"
-                or parts[5] != "presentation"
-            ):
-                return None
-            return parts[3], parts[3], parts[4], parts[5]
-
-        report = self.run_sync(shape_of=shape_of)
+        report = self.run_sync(shape_of=self.service_shape)
         finding = next(
             item
             for item in report.review
-            if item.kind == "multi_object_single_presentation"
+            if item.kind == "object_presentation_participant_drift"
         )
         self.assertEqual(finding.page_id, "assistant.personal_session")
         self.assertIn("派生 physical owner assistant.assistant_run 未出现在 object_ids", finding.detail)
         self.assertIn("notification.notification", finding.detail)
 
     def test_unresolvable_object_presentation_is_reported(self) -> None:
-        source = "lib/runtime/shell/fake_owner/presentation/fake_shell_page.dart"
+        source = "lib/service/fake_service/fake_context/fake_owner/presentation/fake_page.dart"
         self.write_dart(source, "FakeShellPage")
         self.write_contract(
             page_block(
@@ -397,7 +394,6 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
         report = self.run_sync(shape_of=lambda _: None)
         self.assertEqual(len(report.review), 1)
         self.assertIn("无法从 ContractGraph roster", report.review[0].detail)
-        self.assertIn("shell 伪装", report.review[0].detail)
 
     def test_duplicate_participant_set_is_reported(self) -> None:
         source = "lib/service/assistant_service/assistant/assistant_run/presentation/session_page.dart"
@@ -412,12 +408,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
         )
 
         report = self.run_sync(
-            shape_of=lambda _: (
-                "assistant",
-                "assistant",
-                "assistant_run",
-                "presentation",
-            )
+            shape_of=self.service_shape
         )
         self.assertEqual(len(report.review), 1)
         self.assertIn("重复 participant", report.review[0].detail)
@@ -432,6 +423,7 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
                 source,
                 entry_widget="StartupRecoveryPage",
                 object_ids=["ops.app_release", "ops.recovery_failure"],
+                page_kind="shell",
             )
         )
 
@@ -450,15 +442,365 @@ class PageObjectSourcePathSyncTest(unittest.TestCase):
             )
         )
 
-        def shape_of(path: str):
-            parts = Path(path).parts
-            return (parts[1], parts[2], parts[3], parts[4]) if len(parts) >= 6 else None
-
-        report = self.run_sync(shape_of=shape_of)
+        report = self.run_sync(shape_of=self.service_shape)
         self.assertEqual(
-            [item for item in report.review if item.kind == "multi_object_single_presentation"],
+            [
+                item
+                for item in report.review
+                if item.kind == "object_presentation_participant_drift"
+            ],
             [],
         )
+
+    def test_empty_routed_object_page_is_reported(self) -> None:
+        source = (
+            "lib/service/circle_service/circle_management/circle/"
+            "presentation/circle_detail_page.dart"
+        )
+        self.write_dart(source, "CircleDetailPage")
+        self.write_contract(
+            page_block(
+                "circle.detail",
+                source,
+                entry_widget="CircleDetailPage",
+                object_ids=[],
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("physical owner circle.circle 未出现在 object_ids", report.review[0].detail)
+
+    def test_single_other_participant_on_routed_page_is_reported(self) -> None:
+        source = (
+            "lib/service/circle_service/circle_management/circle/"
+            "presentation/circle_detail_page.dart"
+        )
+        self.write_dart(source, "CircleDetailPage")
+        self.write_contract(
+            page_block(
+                "circle.detail",
+                source,
+                entry_widget="CircleDetailPage",
+                object_ids=["content.post"],
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("physical owner circle.circle 未出现在 object_ids", report.review[0].detail)
+
+    def test_embedded_cross_object_public_consumer_need_not_claim_physical_owner(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        filter_port = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/image_editor_filter_catalog.dart"
+        )
+        self.write_dart_text(
+            filter_port,
+            "abstract interface class ImageEditorFilterCatalog {}\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/"
+            "image_editor_filter_catalog.dart';\n"
+            "class CameraCapturePage extends StatelessWidget {\n"
+            "  CameraCapturePage(this.catalog);\n"
+            "  final ImageEditorFilterCatalog catalog;\n"
+            "}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=["content.filter_catalog_release"],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(report.review, [])
+
+    def test_missing_cross_object_public_port_used_from_part_is_reported(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        filter_port = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/image_editor_filter_catalog.dart"
+        )
+        self.write_dart_text(
+            filter_port,
+            "abstract interface class ImageEditorFilterCatalog {}\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/"
+            "image_editor_filter_catalog.dart';\n"
+            "part 'camera_capture_page_body.dart';\n"
+            "class CameraCapturePage extends StatelessWidget {}\n",
+        )
+        self.write_dart_text(
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page_body.dart",
+            "part of 'camera_capture_page.dart';\n"
+            "final class CameraCaptureBody {\n"
+            "  CameraCaptureBody(this.catalog);\n"
+            "  final ImageEditorFilterCatalog catalog;\n"
+            "}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=[],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("content.filter_catalog_release", report.review[0].detail)
+        self.assertIn("image_editor_filter_catalog.dart", report.review[0].detail)
+        self.assertIn("ImageEditorFilterCatalog", report.review[0].detail)
+
+    def test_missing_cross_object_public_provider_is_reported(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        filter_provider = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/filter_catalog_provider.dart"
+        )
+        self.write_dart_text(
+            filter_provider,
+            "final filterCatalogProvider = Provider<Object>((ref) => Object());\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/"
+            "filter_catalog_provider.dart';\n"
+            "final catalog = ref.watch(filterCatalogProvider);\n"
+            "class CameraCapturePage extends StatelessWidget {}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=[],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("filterCatalogProvider", report.review[0].detail)
+
+    def test_public_typed_value_and_static_resolver_do_not_create_participant(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        route_value = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/filter_catalog_route_extra.dart"
+        )
+        self.write_dart_text(
+            route_value,
+            "class FilterCatalogRouteExtra {}\n"
+            "abstract final class FilterCatalogResolver {\n"
+            "  static FilterCatalogRouteExtra resolve() => FilterCatalogRouteExtra();\n"
+            "}\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/"
+            "filter_catalog_route_extra.dart';\n"
+            "final extra = FilterCatalogResolver.resolve();\n"
+            "class CameraCapturePage extends StatelessWidget {}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=[],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(report.review, [])
+
+    def test_typed_intent_consumed_from_instance_coordinator_seam_is_reported(self) -> None:
+        source = (
+            "lib/service/chat_service/chat/conversation/"
+            "presentation/chat_conversation_page.dart"
+        )
+        rtc_entry = (
+            "lib/service/rtc_service/rtc/call_session/application/public/"
+            "rtc_call_entry_coordinator.dart"
+        )
+        self.write_dart_text(
+            rtc_entry,
+            "enum RtcCallEntryMediaType { audio, video }\n"
+            "final class RtcCallEntryIntent {\n"
+            "  const RtcCallEntryIntent(this.mediaType);\n"
+            "  final RtcCallEntryMediaType mediaType;\n"
+            "}\n"
+            "final class RtcCallEntryCoordinator {\n"
+            "  Future<void> initiate(RtcCallEntryIntent intent) async {}\n"
+            "}\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/rtc_service/rtc/call_session/"
+            "application/public/rtc_call_entry_coordinator.dart';\n"
+            "final intent = RtcCallEntryIntent(RtcCallEntryMediaType.audio);\n"
+            "class ChatConversationPage extends StatelessWidget {}\n",
+        )
+        self.write_contract(
+            page_block(
+                "chat.detail",
+                source,
+                entry_widget="ChatConversationPage",
+                object_ids=["chat.conversation"],
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(len(report.review), 1)
+        self.assertIn("rtc.call_session", report.review[0].detail)
+        self.assertIn("RtcCallEntryCoordinator", report.review[0].detail)
+
+    def test_static_coordinator_and_value_with_instance_helper_do_not_create_participant(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        route_value = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/filter_catalog_route_extra.dart"
+        )
+        self.write_dart_text(
+            route_value,
+            "final class FilterCatalogRouteExtra {\n"
+            "  String normalized() => 'route';\n"
+            "}\n"
+            "abstract final class FilterCatalogCoordinator {\n"
+            "  static FilterCatalogRouteExtra resolve() => FilterCatalogRouteExtra();\n"
+            "}\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/"
+            "filter_catalog_route_extra.dart';\n"
+            "final extra = FilterCatalogCoordinator.resolve();\n"
+            "class CameraCapturePage extends StatelessWidget {}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=[],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(report.review, [])
+
+    def test_commented_public_import_does_not_create_participant(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        filter_port = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/image_editor_filter_catalog.dart"
+        )
+        self.write_dart_text(
+            filter_port,
+            "abstract interface class ImageEditorFilterCatalog {}\n",
+        )
+        self.write_dart_text(
+            source,
+            "/* import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/"
+            "image_editor_filter_catalog.dart'; */\n"
+            "const fakeImport = \"import 'package:quwoquan_app/service/"
+            "content_service/media/filter_catalog_release/application/public/"
+            "image_editor_filter_catalog.dart'; ImageEditorFilterCatalog\";\n"
+            "class CameraCapturePage extends StatelessWidget {}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=[],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(report.review, [])
+
+    def test_generated_and_runtime_public_imports_do_not_create_participant(self) -> None:
+        source = (
+            "lib/service/content_service/media/media_upload_session/"
+            "presentation/camera_capture_page.dart"
+        )
+        generated_port = (
+            "lib/service/content_service/media/filter_catalog_release/"
+            "application/public/generated/filter_catalog_port.g.dart"
+        )
+        runtime_port = "lib/runtime/application/public/runtime_media_port.dart"
+        self.write_dart_text(
+            generated_port,
+            "abstract interface class GeneratedFilterCatalogPort {}\n",
+        )
+        self.write_dart_text(
+            runtime_port,
+            "abstract interface class RuntimeMediaPort {}\n",
+        )
+        self.write_dart_text(
+            source,
+            "import 'package:quwoquan_app/service/content_service/media/"
+            "filter_catalog_release/application/public/generated/"
+            "filter_catalog_port.g.dart';\n"
+            "import 'package:quwoquan_app/runtime/application/public/"
+            "runtime_media_port.dart';\n"
+            "final GeneratedFilterCatalogPort? generatedPort = null;\n"
+            "final RuntimeMediaPort? runtimePort = null;\n"
+            "class CameraCapturePage extends StatelessWidget {}\n",
+        )
+        self.write_contract(
+            page_block(
+                "media.camera_capture",
+                source,
+                entry_widget="CameraCapturePage",
+                object_ids=[],
+                page_kind="embedded",
+            )
+        )
+
+        report = self.run_sync(shape_of=self.service_shape)
+        self.assertEqual(report.review, [])
 
     def test_page_outside_disk_scan_set_is_reported(self) -> None:
         source = "lib/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart"

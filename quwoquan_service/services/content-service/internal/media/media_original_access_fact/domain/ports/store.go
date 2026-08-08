@@ -2,7 +2,6 @@ package ports
 
 import (
 	"context"
-	"time"
 
 	originalaccessmodel "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/model"
 )
@@ -10,16 +9,6 @@ import (
 type AppendRequest struct {
 	Fact          originalaccessmodel.Fact
 	CommandDigest string
-	RateLimit     RateLimit
-}
-
-type RateLimit struct {
-	MaxGrants int
-	Window    time.Duration
-}
-
-func (limit RateLimit) IsValid() bool {
-	return limit.MaxGrants > 0 && limit.Window > 0
 }
 
 type AppendResult struct {
@@ -27,9 +16,10 @@ type AppendResult struct {
 	Replayed bool
 }
 
-// Store is the only write port for original access
-// audit facts. Implementations must atomically append the fact and idempotency
-// receipt; the fact itself is the durable audit record.
+// Store is the only write port for original access audit facts.
+// Implementations must atomically append the fact and its idempotency receipt.
+// The fact is a durable audit record only: quota counters and grant TTL are
+// owned by the OriginalAccessQuota aggregate and must not appear here.
 type Store interface {
 	Append(
 		context.Context,

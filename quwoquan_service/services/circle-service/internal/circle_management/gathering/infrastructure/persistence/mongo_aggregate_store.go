@@ -65,11 +65,9 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 func (store *MongoAggregateStore) EnsureIndexes(ctx context.Context) error {
 	if _, err := store.gatherings.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "conversationId", Value: 1}}, Options: options.Index().SetName(gatheringConversationIndex).SetSparse(true).SetUnique(true)},
-		{Keys: bson.D{{Key: "lifecycleStatus", Value: 1}, {Key: "schedule.startAt", Value: 1}, {Key: "schedule.endAt", Value: 1}}, Options: options.Index().SetName("idx_gathering_lifecycle_schedule")},
 		{Keys: bson.D{{Key: "hostBinding.hostSubjectKind", Value: 1}, {Key: "hostBinding.hostSubjectId", Value: 1}, {Key: "lifecycleStatus", Value: 1}, {Key: "schedule.startAt", Value: 1}}, Options: options.Index().SetName("idx_gathering_host_page")},
 		{Keys: bson.D{{Key: "purpose.sourceObjectRefs.objectRef.objectTypeRef", Value: 1}, {Key: "purpose.sourceObjectRefs.objectRef.objectId", Value: 1}, {Key: "lifecycleStatus", Value: 1}, {Key: "schedule.startAt", Value: 1}}, Options: options.Index().SetName("idx_gathering_source_page")},
 		{Keys: bson.D{{Key: "participations.personaId", Value: 1}, {Key: "participations.state", Value: 1}}, Options: options.Index().SetName("idx_gathering_participation_identity")},
-		{Keys: bson.D{{Key: "availabilityWatches.personaId", Value: 1}, {Key: "availabilityWatches.status", Value: 1}, {Key: "schedule.startAt", Value: 1}}, Options: options.Index().SetName("idx_gathering_availability_watch")},
 	}); err != nil {
 		return err
 	}

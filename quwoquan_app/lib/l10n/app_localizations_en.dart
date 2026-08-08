@@ -1777,6 +1777,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get replyToPrefix => ' replied to ';
 
   @override
+  String get content_createEntryPublishContent => 'Post content';
+
+  @override
+  String get content_createEntryChooseActionSubtitle =>
+      'Choose what you want to start.';
+
+  @override
+  String get content_createEntryChooseContentSubtitle =>
+      'Start with photos, video, or text.';
+
+  @override
+  String get circle_createEntryStartGathering => 'Start an activity';
+
+  @override
+  String get chat_createEntryStartGroupChat => 'Start a group chat';
+
+  @override
+  String get circle_authGateTitleStartGathering =>
+      'Sign in to start an activity';
+
+  @override
+  String get circle_authGateSubtitleStartGathering =>
+      'The activity will be created with your account and keep participation and group collaboration connected.';
+
+  @override
+  String get circle_authGatePromptStartGathering =>
+      'Sign in to start an activity';
+
+  @override
+  String get circle_authContinuationStartGathering =>
+      'Your activity setup will continue after sign-in';
+
+  @override
+  String get circle_gatheringCreateUnavailableTitle =>
+      'Activity creation is unavailable';
+
+  @override
+  String get circle_gatheringCreateUnavailableMessage =>
+      'This version cannot open activity creation right now. Please try again later.';
+
+  @override
   String createMaxImagesToastTemplate(int count) {
     return 'You can add at most $count photos';
   }

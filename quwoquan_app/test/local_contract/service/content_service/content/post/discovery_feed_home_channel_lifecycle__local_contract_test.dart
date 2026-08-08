@@ -15,6 +15,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/di
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
+        AssistantUsePolicy,
         CloudOperationCancellationSignal,
         ContentFeedEmptyReason,
         ContentFeedOutcome;
@@ -335,7 +336,7 @@ ContentPostViewData _recoveredCanonicalPost() => ContentPostViewData(
   type: 'micro',
   identity: 'moment',
   displayFormat: 'note',
-  assistantUsePolicy: 'allow',
+  assistantUsePolicy: AssistantUsePolicy.inherit,
   authorId: 'author-recovered',
   displayName: '恢复内容作者',
   avatarUrl: '',

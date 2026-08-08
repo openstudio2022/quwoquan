@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/runtime/di/shell/flows/pip_call_hangup_flow.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/pip_call_hangup_flow.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';

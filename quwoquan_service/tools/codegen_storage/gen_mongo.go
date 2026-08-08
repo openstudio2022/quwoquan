@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,10 +26,12 @@ type mongoStoreData struct {
 }
 
 type mongoIdxData struct {
-	Name   string
-	Keys   []mongoKeyData
-	Unique bool
-	Sparse bool
+	Name               string
+	Keys               []mongoKeyData
+	Unique             bool
+	Sparse             bool
+	HasExpiration      bool
+	ExpireAfterSeconds int64
 }
 
 type mongoKeyData struct {
@@ -57,10 +60,29 @@ func generateMongoStore(ctx *genContext, collName string, coll CollectionDef) er
 	}
 
 	for _, idx := range coll.Indexes {
+		if len(idx.Keys) == 0 {
+			return fmt.Errorf(
+				"index %s uses a text/vector union not supported by the Mongo store generator; keep it in an object-owned implementation",
+				idx.Name,
+			)
+		}
+		if len(idx.PartialFilter) > 0 {
+			return fmt.Errorf(
+				"index %s uses partial_filter not supported by the Mongo store generator; keep it in an object-owned implementation",
+				idx.Name,
+			)
+		}
 		id := mongoIdxData{
 			Name:   idx.Name,
 			Unique: idx.Unique,
 			Sparse: idx.Sparse,
+		}
+		if idx.ExpireAfterSeconds != nil {
+			if *idx.ExpireAfterSeconds < 0 || *idx.ExpireAfterSeconds > math.MaxInt32 {
+				return fmt.Errorf("index %s expire_after_seconds is outside Mongo int32 range", idx.Name)
+			}
+			id.HasExpiration = true
+			id.ExpireAfterSeconds = *idx.ExpireAfterSeconds
 		}
 		keys := append([]string{}, idx.KeyOrder...)
 		if len(keys) == 0 {
@@ -154,7 +176,7 @@ func (s *{{.BaseName}}) EnsureIndexes(ctx context.Context) error {
 				{Key: "{{.Field}}", Value: {{.ValueExpr}}},
 {{- end}}
 			},
-			Options: options.Index().SetName("{{.Name}}"){{if .Unique}}.SetUnique(true){{end}}{{if .Sparse}}.SetSparse(true){{end}},
+			Options: options.Index().SetName("{{.Name}}"){{if .Unique}}.SetUnique(true){{end}}{{if .Sparse}}.SetSparse(true){{end}}{{if .HasExpiration}}.SetExpireAfterSeconds({{.ExpireAfterSeconds}}){{end}},
 		},
 {{- end}}
 	}

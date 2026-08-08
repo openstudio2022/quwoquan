@@ -22,8 +22,8 @@
       "expectedSummaryContains": ["为什么提醒你", "重大信息", "非投资建议"]
     },
     {
-      "caseId": "m9_travel_journey_manager_departure",
-      "skillId": "travel_journey_manager",
+      "caseId": "m9_travel_companion_departure",
+      "skillId": "travel_companion",
       "inputText": "每天出发前提醒我行程天气、路况和景点拥堵",
       "expectedTitle": "出行管家：今日行程提醒",
       "expectedSummaryContains": ["为什么提醒你", "天气", "拥堵"]

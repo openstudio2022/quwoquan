@@ -21,12 +21,6 @@ collections:
         userId: 1
         action: 1
         createdAt: -1
-    - name: idx_behavior_feed_attribution
-      keys:
-        feedRequestId: 1
-        channelId: 1
-        recallPath: 1
-        createdAt: -1
     - name: idx_behavior_expire
       keys:
         createdAt: 1

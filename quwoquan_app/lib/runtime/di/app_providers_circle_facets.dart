@@ -218,11 +218,22 @@ final circleDetailMembershipQueryProvider = Provider<CircleMembershipQueries>(
 
 /// 圈子级审批（owner/admin）：命令与待审批队列按 circleDetail surface 装配。
 final circleDetailMembershipModerationWriterProvider =
-    Provider<CircleMembershipModeration>(
-      (ref) => _circlePort(
-        ref,
-        AppUiSurfaces.circleDetail,
+    Provider<ClientRequestBoundCircleMembershipModeration>(
+      (ref) => CircleProductionComposition.generatedAdapter(
         CircleProductionAdapter.membership,
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext:
+            (
+              String clientPageId, {
+              required bool command,
+              String? idempotencyKey,
+            }) => _circleOperationInvocationContext(
+              ref,
+              surface: AppUiSurfaces.circleDetail,
+              clientPageId: clientPageId,
+              command: command,
+              idempotencyKey: idempotencyKey,
+            ),
       ),
     );
 

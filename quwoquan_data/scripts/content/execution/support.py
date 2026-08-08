@@ -101,7 +101,7 @@ from content.execution.context import (
     save_execution_state,
 )
 from content.execution.contracts import ExecutionState, ExecutionStateTransition
-from content.execution.active_spec import (
+from content.execution.planning.active_spec import (
     active_spec as _active_spec,
     active_target as _active_target,
     entity_homepages_per_target as _entity_homepages_per_target,

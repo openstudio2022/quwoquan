@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// readiness_case: intersection_visit_state_get_my_intersection_summary_app_api
+// readiness_case: intersection_visit_state_get_object_intersections_app_api
+// readiness_case: intersection_visit_state_list_my_intersections_app_api
+// readiness_case: intersection_visit_state_mark_intersections_visited_app_api
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +26,8 @@ const _viewerId = String.fromEnvironment('APP_CURRENT_USER_ID');
 const _personObjectId = String.fromEnvironment('TEST_INTERSECTION_OBJECT_ID');
 
 /// canonical acceptance JWT（`quwoquan_ops/cli/lib/local_environment_auth.py`
-/// 本地签发通道），由包装脚本 `quwoquan_app/scripts/gamma/run_intersection_remote_smoke.py`
+/// 本地签发通道），由工具
+/// `quwoquan_app/scripts/tools/gamma/intersection_remote_smoke.py`
 /// 仅通过测试子进程环境注入，禁止写入 flutter argv / dart-define / 报告。
 /// content-service 强制 verified principal，无 token 的 smoke 恒 401（R-IX08）。
 final _acceptanceToken =

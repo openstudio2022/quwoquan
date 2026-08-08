@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/profile_update_proposal/application/public/profile_update_proposal_ports.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_update_proposal_review_sheet.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/profile_update_proposal/presentation/profile_update_proposal_review_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -58,6 +58,8 @@ Future<void> _pumpProposalJourney(
       ],
       child: CupertinoApp(
         home: ProfileUpdateProposalReviewSheet(
+          commandWriter: writer,
+          trackAction: _ignoreProposalAction,
           proposal: ProfileUpdateProposalView(
             id: 'proposal-uat',
             personaId: 'persona-uat',
@@ -84,6 +86,13 @@ Future<void> _pumpProposalJourney(
   );
   await tester.pumpAndSettle();
 }
+
+Future<void> _ignoreProposalAction({
+  required String action,
+  required String proposalId,
+  String? result,
+  String? failReasonCode,
+}) async {}
 
 final class _JourneyProposalWriter implements ProfileUpdateProposalWriter {
   _JourneyProposalWriter({this.failApply = false});

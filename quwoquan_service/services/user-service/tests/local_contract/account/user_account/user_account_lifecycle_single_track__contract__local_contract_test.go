@@ -3,6 +3,7 @@ package local_contract
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"quwoquan_service/internal/metadata/ast"
@@ -65,23 +66,36 @@ func TestUserAccountLifecycleAndPrivacyUseCanonicalContractVocabulary(t *testing
 	if account.Privacy.Document.DataLifecycle == nil {
 		t.Fatal("user account privacy data lifecycle is missing")
 	}
-	for _, target := range []string{
-		"user.persona",
-		"user.credential_binding",
-		"user.device_registration",
-		"user.user_settings",
+	// 注销级联策略的真相源是 privacy.yaml：persona 与 credential_binding 的行被
+	// 内容、社交关系与风控留痕引用，物理删除会造成悬挂引用，因此按 REQ-004
+	// 「任何实际保留事实必须不可逆匿名化」保留行并原地不可逆覆写个人数据；
+	// 设备注册与用户设置无外部引用，整行物理删除。
+	for target, wantStrategy := range map[string]ast.PrivacyDeletionStrategy{
+		"user.persona":             ast.PrivacyDeletionScrub,
+		"user.credential_binding":  ast.PrivacyDeletionScrub,
+		"user.device_registration": ast.PrivacyDeletionHardDelete,
+		"user.user_settings":       ast.PrivacyDeletionHardDelete,
 	} {
 		cascade := requirePrivacyDeletionCascade(
 			t,
 			account.Privacy.Document.DataLifecycle.DeletionCascade,
 			target,
 		)
-		if cascade.Strategy != ast.PrivacyDeletionHardDelete {
+		if cascade.Strategy != wantStrategy {
 			t.Fatalf(
 				"privacy deletion cascade for %q uses %q, want %q",
 				target,
 				cascade.Strategy,
-				ast.PrivacyDeletionHardDelete,
+				wantStrategy,
+			)
+		}
+		// scrub 与 soft_delete 的合规姿态不同、不得互相替代；选 scrub 必须写明
+		// 保留行的正当动因与被覆写的字段范围，否则保留行就是无理由的数据滞留。
+		if cascade.Strategy == ast.PrivacyDeletionScrub &&
+			strings.TrimSpace(cascade.Description) == "" {
+			t.Fatalf(
+				"privacy deletion cascade for %q scrubs without stating why the row is kept",
+				target,
 			)
 		}
 	}

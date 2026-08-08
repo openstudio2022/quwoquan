@@ -12,14 +12,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_gathering_journey.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_publication_continuation_registry.dart';
 
-/// Cross-object Post publication follow-up handlers aggregated from domain ports.
+/// Canonical cross-object publication handlers are registered only after their
+/// generated owner operation is available. Unknown continuations fail closed.
 final postPublicationContinuationRegistryProvider =
     Provider<PostPublicationContinuationRegistry>(
-      (ref) => ref.watch(
-        gatheringJourneyPostPublicationContinuationRegistryProvider,
+      (ref) => PostPublicationContinuationRegistry(
+        const <PostPublicationContinuationHandler>[],
       ),
     );
 

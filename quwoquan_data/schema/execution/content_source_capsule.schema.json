@@ -28,9 +28,44 @@
       }
     },
     "externalInputsDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolSnapshotRootRef": {"const": "scale-source-pool"},
+    "sourcePoolSnapshotDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "laneSourcePoolSelections": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"$ref": "scale_source_pool_selection.schema.json"},
+        "article": {"$ref": "scale_source_pool_selection.schema.json"},
+        "image": {"$ref": "scale_source_pool_selection.schema.json"},
+        "video": {"$ref": "scale_source_pool_selection.schema.json"}
+      }
+    },
     "capsuleDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "treeDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
   },
+  "allOf": [
+    {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": [
+          "sourcePoolSnapshotRootRef",
+          "sourcePoolSnapshotDigest",
+          "laneSourcePoolSelections"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolSnapshotRootRef"]},
+            {"required": ["sourcePoolSnapshotDigest"]},
+            {"required": ["laneSourcePoolSelections"]}
+          ]
+        }
+      }
+    }
+  ],
   "$defs": {
     "lane": {
       "type": "object",

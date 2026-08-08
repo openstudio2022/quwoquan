@@ -1,5 +1,7 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import 'package:quwoquan_app/service/user_service/account/user_account/domain/qr_payload_parser.dart';
+
 class ProfileCredentialSummaryData {
   const ProfileCredentialSummaryData({
     required this.credentialType,
@@ -37,20 +39,47 @@ class ProfileQrCardData {
     this.expiresAt,
   });
 
-  factory ProfileQrCardData.fromWire(ProfileQrCardWire projection) {
-    if (projection.qrPayload.isEmpty) {
-      throw StateError('Profile QR card qrPayload is required');
+  factory ProfileQrCardData.fromWire(
+    ProfileQrCardWire projection, {
+    DateTime? now,
+  }) {
+    final publicProfileUrl = projection.publicProfileUrl.trim();
+    final qrPayload = projection.qrPayload.trim();
+    final qrTokenId = projection.qrTokenId.trim();
+    final displayName = projection.displayName.trim();
+    if (publicProfileUrl != projection.publicProfileUrl ||
+        qrPayload != projection.qrPayload ||
+        qrTokenId != projection.qrTokenId ||
+        displayName != projection.displayName ||
+        publicProfileUrl.isEmpty ||
+        qrPayload.isEmpty ||
+        qrTokenId.isEmpty ||
+        displayName.isEmpty) {
+      throw StateError('Profile QR card is not canonical');
     }
-    return ProfileQrCardData(
-      publicProfileUrl: projection.publicProfileUrl,
-      qrPayload: projection.qrPayload,
-      qrTokenId: projection.qrTokenId,
+    final profileUri = Uri.tryParse(publicProfileUrl);
+    if (profileUri == null) {
+      throw StateError('Profile QR card publicProfileUrl is invalid');
+    }
+    final card = ProfileQrCardData(
+      publicProfileUrl: publicProfileUrl,
+      qrPayload: qrPayload,
+      qrTokenId: qrTokenId,
       avatarUrl: projection.avatarUrl ?? '',
-      displayName: projection.displayName,
+      displayName: displayName,
       region: projection.region ?? '',
       shareText: projection.shareText ?? '',
       expiresAt: projection.expiresAt,
     );
+    card.requireUsableAt(
+      trustedPublicOrigin: Uri(
+        scheme: profileUri.scheme,
+        host: profileUri.host,
+        port: profileUri.hasPort ? profileUri.port : null,
+      ),
+      now: now ?? DateTime.now(),
+    );
+    return card;
   }
 
   final String publicProfileUrl;
@@ -61,6 +90,35 @@ class ProfileQrCardData {
   final String region;
   final String shareText;
   final DateTime? expiresAt;
+
+  /// 校验服务端卡片只能指向当前运行包信任的公开主页 origin，且尚未过期。
+  QrPayloadParseResult requireUsableAt({
+    required Uri trustedPublicOrigin,
+    required DateTime now,
+  }) {
+    if (publicProfileUrl.trim() != publicProfileUrl ||
+        qrPayload.trim() != qrPayload ||
+        qrTokenId.trim() != qrTokenId ||
+        displayName.trim() != displayName ||
+        publicProfileUrl.isEmpty ||
+        qrPayload.isEmpty ||
+        qrTokenId.isEmpty ||
+        displayName.isEmpty) {
+      throw StateError('Profile QR card is not canonical');
+    }
+    final parsed = QrPayloadParser.parse(
+      qrPayload,
+      trustedPublicOrigin: trustedPublicOrigin,
+    );
+    if (parsed == null || parsed.publicProfileUrl != publicProfileUrl) {
+      throw StateError('Profile QR card payload is not canonical');
+    }
+    final expiry = expiresAt;
+    if (expiry != null && !expiry.toUtc().isAfter(now.toUtc())) {
+      throw StateError('Profile QR card has expired');
+    }
+    return parsed;
+  }
 }
 
 class ProfileEditSnapshotData {

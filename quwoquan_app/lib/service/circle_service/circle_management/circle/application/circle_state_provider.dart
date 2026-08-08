@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/errors/generated/circle/circle_membership_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -278,7 +277,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
           )
           .catchError((Object error, StackTrace stackTrace) {
             unawaited(
-              AppExceptionTelemetryService.instance.recordGlobalException(
+              ref.read(exceptionTelemetryPortProvider).recordGlobalException(
                 source: 'circle.behavior.${eventType.wireName}',
                 exceptionText: error.toString(),
                 stackText: stackTrace.toString(),

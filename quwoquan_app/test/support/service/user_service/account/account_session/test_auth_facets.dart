@@ -3,6 +3,8 @@ import 'package:quwoquan_app/service/user_service/account/authentication_challen
 import 'package:quwoquan_app/service/user_service/account/credential_binding/application/public/credential_binding_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../runtime/fixtures/fixture_user_resolver.dart';
+
 /// local_contract 专用对象级身份 Facet 组合，仅用于 Provider override。
 ///
 /// production/Patrol composition 不得导入本文件；测试通过当前 AccountSession、
@@ -13,8 +15,12 @@ class TestAuthFacets
         AuthenticationChallengeWriter,
         CredentialBindingWriter,
         CredentialBindingReader {
-  static const String ownerId = 'fixture_user_current';
-  static const String personaId = 'fixture_user_current';
+  /// 身份单一真相源是 user-service canonical 场景，不在此处再抄一份常量：
+  /// persona 与 user 是两个对象，硬编码同值会让「登录返回 metadata 当前身份」
+  /// 这条契约在 persona 拆分后失真。
+  static String get ownerId => FixtureUserResolver.currentUserVariantUserId;
+  static String get personaId =>
+      FixtureUserResolver.currentUserVariantPersonaId;
 
   @override
   Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {

@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260808--travel-video-m1--china-beta-bootstrap-not-m100--scale-015",
+  "executionBinding": "frozen",
+  "objectRef": "杭州西湖_video",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-8803c746-a487-4e04-b6b3-7bfb3b3aed49",
+    "resultHash": "sha256:21483901b7b2281ba1f204a1af75912e2db11cc4912ba3816818fec46935eefb"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

@@ -6,15 +6,28 @@ import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/models/visit_models.dart';
+import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
+import '../../../../../support/service/notification_service/notification_delivery/notification/app_message_typed_double.dart';
+import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
 
 Widget _scopedApp({required ChatRepository overrideRepo}) {
   return ProviderScope(
     overrides: [
+      // 消息页顶部的 App 消息未读角标走 notification 对象的 typed port；
+      // 先封死 App↔Cloud 边界，再显式声明本套件真正依赖的两个对象级 port。
+      ...sealedCloudBoundaryOverrides(),
       chatRepositoryCompositionProvider.overrideWithValue(overrideRepo),
+      appMessageQueryProvider.overrideWithValue(
+        const EmptyAppMessageQueryDouble(),
+      ),
+      greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
+      visitRecorderServiceProvider.overrideWithValue(_NoopVisitRecorder()),
     ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
@@ -102,6 +115,14 @@ void main() {
       expect(find.byType(ChatPage), findsOneWidget);
     });
   });
+}
+
+/// 本套件断言的是 ChatPage 的渲染健壮性，与访问轨迹落库无关。
+final class _NoopVisitRecorder extends VisitRecorderService {
+  _NoopVisitRecorder() : super();
+
+  @override
+  Future<void> recordVisit(VisitTarget target) async {}
 }
 
 class _CustomMockChatRepository extends MockChatRepository {

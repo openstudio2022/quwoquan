@@ -82,13 +82,12 @@
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
-### OPEN-002 request wire 位置缺 schema 级必填与统一维度
+### OPEN-002 request wire 位置缺统一维度
 
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：当前 `quwoquan_service/contracts/metadata/_schemas/operations.schema.json` 没有把 `request_bindings` 声明为含路径占位符的 api_route 的必填字段，schema 校验本身放行缺 path binding 的 operation。
-- 该约束只由 `quwoquan_service/internal/metadata/validate/governance_request_bindings.go` 在编译期兜底为 `CONTRACT.REQUEST_BINDING.MISSING_PATH`，schema 与治理校验因此形成两个强度不同的入口。
-- body 位置由 `request_entity` 与 `request_body_kind` 承担并与 `request_bindings` 分离，request 侧缺少统一表达全部 wire position 的单一维度。
+- 影响或价值：缺少统一表达 request 侧全部 wire position 的单一维度：body 位置由 `request_entity` 与 `request_body_kind` 承担，与 `request_bindings` 分离，两者各自演进。
+- schema 级必填已闭合：`operations.schema.json` 已用 `if path 含 {占位符} then required request_bindings` 且 `request_bindings.path` `minItems: 1`，与 `governance_request_bindings.go` 的 `CONTRACT.REQUEST_BINDING.MISSING_PATH` 同强度，不再是两个宽严不一的入口。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 - 依赖：request wire position 单一维度建模裁决。

@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+// readiness_case: post_get_author_impact_app_api
+// readiness_case: post_list_author_impact_evidence_app_api
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/author_impact_remote.dart';

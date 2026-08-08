@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
+import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_policy.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_redactor.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_writer.dart';
+import 'package:quwoquan_app/runtime/observability/operation_privacy_redactor.dart';
 
 class AppLogContext {
   const AppLogContext({
@@ -17,6 +19,8 @@ class AppLogContext {
     this.component = '',
     this.target = '',
     this.action = '',
+    this.operationId = '',
+    this.operationDirection = OperationPayloadDirection.request,
   });
 
   final String sessionId;
@@ -30,9 +34,16 @@ class AppLogContext {
   final String component;
   final String target;
   final String action;
+
+  /// ContractGraph operation id。非空时该条日志的载荷额外受
+  /// `operation.privacy` 约束；未登记的 operation 按 fail-closed 丢弃载荷。
+  final String operationId;
+
+  /// 载荷方向，决定取 request 还是 response 的密级。
+  final OperationPayloadDirection operationDirection;
 }
 
-class AppLogService {
+class AppLogService implements AppEventLogPort {
   AppLogService._({
     required this._writer,
     required this._policy,
@@ -56,11 +67,14 @@ class AppLogService {
   final AppLogWriter _writer;
   final AppLogPolicy _policy;
   final AppLogRedactor _redactor;
+  static const OperationPrivacyRedactor _privacyRedactor =
+      OperationPrivacyRedactor();
 
   void boostSession(String sessionId) => _policy.boostSession(sessionId);
   void boostRun(String runId) => _policy.boostRun(runId);
   void clearBoosts() => _policy.clearBoosts();
 
+  @override
   Future<String?> writeEvent({
     required AppLogType logType,
     required AppLogLevel level,
@@ -87,7 +101,15 @@ class AppLogService {
     final rawPayload = includeFull
         ? payload
         : (summaryPayload ?? _toSummary(payload));
-    final redactedPayload = _redactor.redactMap(rawPayload);
+    // 键名黑名单先兜底，再由 `operation.privacy` 做最终裁决：契约声明的密级
+    // 是唯一权威，键名规则只覆盖它没枚举到的常见敏感键。
+    final redactedPayload = _applyOperationPrivacy(
+      context: context,
+      payload: _redactor.redactMap(
+        rawPayload,
+        operationId: context.operationId,
+      ),
+    );
     final envelope = _buildEnvelope(
       ts: DateTime.now().toIso8601String(),
       logType: logType,
@@ -113,6 +135,7 @@ class AppLogService {
     }
   }
 
+  @override
   Future<String?> writeRunFile({
     required String runId,
     required Map<String, dynamic> payload,
@@ -129,6 +152,24 @@ class AppLogService {
       }
       return null;
     }
+  }
+
+  /// 对声明了 operation 的日志套用 `operation.privacy`。
+  ///
+  /// `operationId` 为空表示这不是 operation 作用域的日志（生命周期、导航等），
+  /// 不进入契约表；一旦声明了 operation 就必须 fail-closed，未登记的 operation
+  /// 载荷整条丢弃，避免「契约没覆盖到」变成「运行时泄漏」。
+  Map<String, dynamic> _applyOperationPrivacy({
+    required AppLogContext context,
+    required Map<String, dynamic> payload,
+  }) {
+    final operationId = context.operationId.trim();
+    if (operationId.isEmpty) return payload;
+    return _privacyRedactor.redactLogPayload(
+      operationId: operationId,
+      direction: context.operationDirection,
+      payload: payload,
+    );
   }
 
   Map<String, dynamic> _toSummary(Map<String, dynamic> payload) {

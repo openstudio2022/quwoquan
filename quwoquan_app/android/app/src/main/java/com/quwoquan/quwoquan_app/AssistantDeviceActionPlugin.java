@@ -9,7 +9,6 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Process;
 import android.provider.CalendarContract;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
@@ -574,12 +573,6 @@ final class AssistantDeviceActionPlugin {
   }
 
   private String permissionStatus() {
-    if (hasCalendarPermission()) {
-      return "granted";
-    }
-    if (permissionIsPolicyFixed()) {
-      return "restricted";
-    }
     boolean requested =
         preferences().getBoolean(PERMISSION_REQUESTED, false);
     boolean canExplain =
@@ -587,32 +580,19 @@ final class AssistantDeviceActionPlugin {
                 activity, Manifest.permission.READ_CALENDAR)
             || ActivityCompat.shouldShowRequestPermissionRationale(
                 activity, Manifest.permission.WRITE_CALENDAR);
-    return !requested || canExplain ? "requestable" : "denied";
+    return permissionStatus(hasCalendarPermission(), requested, canExplain);
   }
 
-  private boolean permissionIsPolicyFixed() {
-    try {
-      int readFlags =
-          activity
-              .getPackageManager()
-              .getPermissionFlags(
-                  Manifest.permission.READ_CALENDAR,
-                  activity.getPackageName(),
-                  Process.myUserHandle());
-      int writeFlags =
-          activity
-              .getPackageManager()
-              .getPermissionFlags(
-                  Manifest.permission.WRITE_CALENDAR,
-                  activity.getPackageName(),
-                  Process.myUserHandle());
-      int fixed =
-          PackageManager.FLAG_PERMISSION_POLICY_FIXED
-              | PackageManager.FLAG_PERMISSION_SYSTEM_FIXED;
-      return (readFlags & fixed) != 0 || (writeFlags & fixed) != 0;
-    } catch (RuntimeException error) {
-      return false;
+  static String permissionStatus(
+      boolean granted, boolean requested, boolean canExplain) {
+    if (granted) {
+      return "granted";
     }
+    // Android's public SDK does not expose the system/policy-fixed permission
+    // flags to an ordinary application.  A previously requested permission
+    // without rationale therefore remains the honest observable "denied"
+    // state; managed-device restrictions are not guessed from hidden APIs.
+    return !requested || canExplain ? "requestable" : "denied";
   }
 
   static boolean validArguments(String operation, MethodCall call) {

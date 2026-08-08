@@ -515,9 +515,9 @@ func rebuildTestHandler(ctx context.Context) error {
 		conversationGateway,
 		userEventPublisher,
 		userEventPublisher,
+		personapersistence.NewOwnerReader(pgPool),
 		greetingapp.NewSettingsGreetingNotifyPolicy(
 			userSettingsStore,
-			personaStore,
 		),
 	)
 	greetingRelay := greetingapp.NewGreetingOutboxRelay(

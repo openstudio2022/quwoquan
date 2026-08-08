@@ -7,13 +7,15 @@ extension _ProfileShellBuilders on _ProfileShellState {
     if (widget.mode != ProfileMode.other) {
       return const SizedBox.shrink();
     }
-    return OtherProfileIntersectionCard(userId: widget.userId);
+    return widget.recommendationSlots.buildOtherIntersection(
+      userId: widget.userId,
+    );
   }
 
   /// 打动摘要模块（他人主页 / 我的主页双视角）。
   ///
   /// async 三态：加载时保留稳定反馈；失败时必须呈现可恢复状态，不能伪装成
-  /// 「暂无打动事实」。data 由 [AuthorImpactCard] 决定（other 无事实收起，
+  /// 「暂无打动事实」。data 由 Recommendation participant 决定（other 无事实收起，
   /// mine 空态展示鼓励发布文案）。
   Widget _buildAuthorImpactCard(bool isDark, {required bool suppressFailure}) {
     final isMine = widget.mode == ProfileMode.mine;
@@ -27,7 +29,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     final contentBehaviorTracker = ref.watch(contentBehaviorTrackerProvider);
     final impact = ref.watch(authorImpactProvider(request));
     return impact.when(
-      data: (summary) => AuthorImpactCard(
+      data: (summary) => widget.recommendationSlots.buildAuthorImpact(
         summary: summary,
         isDark: isDark,
         isMine: isMine,
@@ -475,7 +477,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
             ),
           ),
           if (widget.mode == ProfileMode.mine) ...[
-            MyIntersectionInboxCard(isDark: isDark),
+            widget.recommendationSlots.buildMyIntersection(isDark: isDark),
           ] else ...[
             _buildIntersectionCard(),
           ],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from content.execution.reviewed_closure_adoption_contract import (
+from content.execution.closure.adoption_contract import (
     validate_release_identity_incident,
     validate_reviewed_closure_adoption_receipt,
     validate_reviewed_closure_adoption_ref,
@@ -12,6 +12,9 @@ from content.execution.reviewed_closure_adoption_contract import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
+)
+from content.release.canonical.release_identity_incident_legacy_migration import (
+    load_validated_legacy_incident_projection,
 )
 from core.paths import OUTPUT_ROOT, RELEASE_IDENTITY_INCIDENTS_ROOT
 
@@ -68,10 +71,16 @@ def release_identity_incident_refs(
                         "canonical incident receipt is missing; "
                         f"evidence={incident_path}"
                     )
-                incident = validate_release_identity_incident(
-                    _read_json(incident_path),
-                    output_root=output_root.resolve(),
-                )
+                try:
+                    incident = validate_release_identity_incident(
+                        _read_json(incident_path),
+                        output_root=output_root.resolve(),
+                    )
+                except (OSError, TypeError, ValueError):
+                    incident = load_validated_legacy_incident_projection(
+                        incident_path,
+                        output_root=output_root.resolve(),
+                    )
                 if (
                     incident.release_id != release_path.name
                     or incident.incident_id != incident_root.name

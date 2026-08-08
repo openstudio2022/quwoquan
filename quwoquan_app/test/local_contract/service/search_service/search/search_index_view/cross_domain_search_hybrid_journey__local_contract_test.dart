@@ -284,7 +284,7 @@ final class _SearchJourneyHarness {
         ),
         recentSearchQueryProvider.overrideWithValue(recentSearches),
         recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
-        searchFeedbackCommandWriterProvider.overrideWithValue(feedback),
+        searchFeedbackFactAppenderProvider.overrideWithValue(feedback),
         assistantSearchRunFacetProvider.overrideWithValue(assistantSearch),
         chatRepositoryCompositionProvider.overrideWithValue(chatRepository),
         circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),

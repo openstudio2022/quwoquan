@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/platform/temporary_file_cleanup.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -27,9 +26,11 @@ class ChatSendOutbox {
     required this.maxQueueSize,
     required this.sendCommand,
     required this.sendQueuedVoice,
+    required this.telemetry,
     Future<void> Function(String path)? deleteTemporaryFile,
   }) : _deleteTemporaryFile = deleteTemporaryFile ?? deleteAppTemporaryFile;
 
+  final ExceptionTelemetryPort telemetry;
   final int maxQueueSize;
   final Future<void> Function(ChatSendMessageCommand command) sendCommand;
   final Future<VoiceSendStatus> Function(
@@ -53,7 +54,7 @@ class ChatSendOutbox {
       // Hive 不可用（如测试容器未初始化本地存储）时降级为不持久化：
       // 发送失败仍即时反馈，仅失去跨重启自动重发；结构化上报保留观测。
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        telemetry.recordHandledException(
           source: 'chat.send_outbox.init',
           error: error,
           stackTrace: stackTrace,
@@ -157,7 +158,7 @@ class ChatSendOutbox {
           await box.delete(key);
         } catch (error, stackTrace) {
           unawaited(
-            AppExceptionTelemetryService.instance.recordHandledException(
+            telemetry.recordHandledException(
               source: 'chat.send_outbox.drain',
               error: error,
               stackTrace: stackTrace,
@@ -279,6 +280,7 @@ class ChatSendOutboxNotifier extends Notifier<int>
       maxQueueSize: 200,
       sendCommand: (command) => writer.sendMessage(command),
       sendQueuedVoice: voiceSender,
+      telemetry: ref.read(exceptionTelemetryPortProvider),
     );
     _outbox = outbox;
     ref.onDispose(() {

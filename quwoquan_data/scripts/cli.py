@@ -29,11 +29,15 @@ def main() -> None:
     )
     from content.release.canonical.handler import register_parser as register_release
     from content.release.environment.cli import register_parser as register_ship
+    from content.source.research.handler_cli import (
+        register_parser as register_source_pool,
+    )
     from content.templates.handler import register_parser as register_template
     from governance.handler import register_parser as register_governance
     from verify.handler import register_parser as register_verify
 
     register_task(subparsers)
+    register_source_pool(subparsers)
     register_filter_catalog(subparsers)
     register_release(subparsers)
     register_ship(subparsers)

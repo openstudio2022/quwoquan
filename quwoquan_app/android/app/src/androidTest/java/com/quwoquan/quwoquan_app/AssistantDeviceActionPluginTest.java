@@ -23,6 +23,14 @@ import org.junit.Test;
 
 public final class AssistantDeviceActionPluginTest {
   @Test
+  public void permissionStatusUsesOnlyPubliclyObservableState() {
+    assertEquals("granted", AssistantDeviceActionPlugin.permissionStatus(true, true, false));
+    assertEquals("requestable", AssistantDeviceActionPlugin.permissionStatus(false, false, false));
+    assertEquals("requestable", AssistantDeviceActionPlugin.permissionStatus(false, true, true));
+    assertEquals("denied", AssistantDeviceActionPlugin.permissionStatus(false, true, false));
+  }
+
+  @Test
   public void validatesCanonicalCrudArguments() {
     Map<String, Object> create = eventArguments("create-1");
     assertTrue(

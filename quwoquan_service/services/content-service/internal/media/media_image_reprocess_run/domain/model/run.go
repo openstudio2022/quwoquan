@@ -10,9 +10,10 @@ import (
 const MaxRunAssets = 500
 
 var (
-	ErrInvalidRun       = errors.New("invalid media image reprocess run")
-	ErrInvalidRunStatus = errors.New("invalid media image reprocess run status")
-	ErrRunNotFound      = errors.New("media image reprocess run not found")
+	ErrInvalidRun         = errors.New("invalid media image reprocess run")
+	ErrInvalidRunStatus   = errors.New("invalid media image reprocess run status")
+	ErrRunNotFound        = errors.New("media image reprocess run not found")
+	ErrRunVersionConflict = errors.New("media image reprocess run version conflict")
 )
 
 type Status string

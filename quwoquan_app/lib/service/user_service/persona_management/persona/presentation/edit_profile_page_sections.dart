@@ -436,7 +436,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   Future<void> _showQrCode() async {
     await Navigator.of(context).push<void>(
-      CupertinoPageRoute<void>(builder: (_) => const _ProfileQrCardPage()),
+      CupertinoPageRoute<void>(
+        builder: (_) =>
+            _ProfileQrCardPage(participantSlots: widget.participantSlots),
+      ),
     );
   }
 
@@ -500,7 +503,8 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
     if (_isDirty) return;
     final changed = await showAppBottomModal<bool>(
       context: context,
-      builder: (_) => ProfileUpdateProposalReviewSheet(proposal: proposal),
+      builder: (_) =>
+          widget.participantSlots.buildProposalReview(proposal: proposal),
     );
     if (changed == true && mounted) {
       setState(() => _loading = true);

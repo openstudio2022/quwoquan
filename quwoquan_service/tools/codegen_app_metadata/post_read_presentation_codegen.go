@@ -215,14 +215,6 @@ func writePostReadPresentationArtifacts(appDir, postProjectionsDir string) error
 	); err != nil {
 		return err
 	}
-	if err := writeWireKeysGeneratedFile(
-		appDir,
-		postProjectionsDir,
-		"content_post_immersive_wire_keys.yaml",
-		"content_post_immersive_wire_keys.g.dart",
-	); err != nil {
-		return err
-	}
 	if err := writeContentMediaPostProjectionKeys(
 		appDir,
 		postProjectionsDir,

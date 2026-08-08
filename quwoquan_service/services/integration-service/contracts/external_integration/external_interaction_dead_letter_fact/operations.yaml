@@ -12,6 +12,13 @@ runtime_entrypoints:
     facet: ExternalInteractionDeadLetterFactAppender
     method: append
     object_owner: ExternalInteractionDeadLetterFact
+  telemetry:
+    metric: integration_external_interaction_dead_letter_append
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    failure_ratio_percent: 0.5
 readiness_cases:
 - case_id: append-external-interaction-dead-letter-local
   spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001

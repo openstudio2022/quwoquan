@@ -113,6 +113,7 @@ func newRuntimeLogRecord(kind string, payload map[string]any) (runtimeLogRecord,
 	attributes, err := runtimeLogAttributes(
 		mapValue(payload["attrs"], payload["attributes"]),
 		signalContract.AttributeAllowlist,
+		runtimeLogObjectID(correlationValue.OperationID),
 	)
 	if err != nil {
 		return runtimeLogRecord{}, err
@@ -563,7 +564,11 @@ func nextRuntimeLogRecordID() string {
 	return "r." + strconv.FormatInt(now.UnixMicro(), 36) + "." + strconv.FormatUint(sequence, 36)
 }
 
-func runtimeLogAttributes(input map[string]any, allowlist []string) (map[string]string, error) {
+func runtimeLogAttributes(
+	input map[string]any,
+	allowlist []string,
+	objectID string,
+) (map[string]string, error) {
 	if len(input) == 0 {
 		return nil, nil
 	}
@@ -587,7 +592,15 @@ func runtimeLogAttributes(input map[string]any, allowlist []string) (map[string]
 		if _, ok := allowed[trimmedKey]; !ok {
 			continue
 		}
-		text, err := runtimeLogAttributeText(input[key])
+		redactedValue, keep := redactCatalogFieldPrivacyAttribute(
+			objectID,
+			trimmedKey,
+			input[key],
+		)
+		if !keep {
+			continue
+		}
+		text, err := runtimeLogAttributeText(redactedValue)
 		if err != nil {
 			return nil, err
 		}

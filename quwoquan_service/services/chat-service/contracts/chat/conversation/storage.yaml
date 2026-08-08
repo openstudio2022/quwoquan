@@ -28,11 +28,6 @@ collections:
     - name: idx_conv_last_msg_time
       keys:
         lastMessageTime: -1
-    - name: search_conv_title
-      source: search_conv_title
-      type: text
-      fields:
-      - title
   conversations_command_receipts:
     publication_role: not_published
     entity: Conversation

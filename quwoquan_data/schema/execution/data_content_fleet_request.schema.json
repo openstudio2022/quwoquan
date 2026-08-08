@@ -5,6 +5,16 @@
   "required": [
     "schema",
     "executionId",
+    "campaignScale",
+    "scaleClass",
+    "executionEnvelopeDigest",
+    "jobSetEnvelopeDigest",
+    "jobSetDigest",
+    "actualTaskDigest",
+    "requiredWorkers",
+    "partitionCount",
+    "partitionAlgorithm",
+    "checkpointPolicy",
     "requireCommercial",
     "recoverDeadTasks",
     "objectTimeoutMilliseconds",
@@ -20,6 +30,42 @@
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
+    "campaignScale": {
+      "type": "string",
+      "pattern": "^M[1-9][0-9]{0,5}$"
+    },
+    "scaleClass": {
+      "enum": ["BELOW_M100", "M100_PLUS", "M10000_PLUS"]
+    },
+    "executionEnvelopeDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "jobSetEnvelopeDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "jobSetDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actualTaskDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "requiredWorkers": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "partitionCount": {
+      "enum": [16, 32, 64, 128, 256]
+    },
+    "partitionAlgorithm": {
+      "const": "sha256_carrier_object_ref_mod_v1"
+    },
+    "checkpointPolicy": {
+      "$ref": "#/$defs/checkpointPolicy"
+    },
     "requireCommercial": {
       "type": "boolean"
     },
@@ -33,6 +79,9 @@
     "requiredQuota": {
       "type": "integer",
       "minimum": 1
+    },
+    "campaignBinding": {
+      "$ref": "#/$defs/campaignBinding"
     },
     "jobs": {
       "type": "array",
@@ -93,8 +142,76 @@
           },
           "partitionKey": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^(0|[1-9][0-9]{0,2})$"
           }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scaleClass": {"enum": ["M100_PLUS", "M10000_PLUS"]}
+        },
+        "required": ["scaleClass"]
+      },
+      "then": {"required": ["campaignBinding"]}
+    }
+  ],
+  "$defs": {
+    "checkpointPolicy": {
+      "type": "object",
+      "required": ["mode", "scope", "cursor", "resume", "store", "fencing", "everyFinalizedObjects", "everySeconds", "triggerMode"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"const": "partition_watermark"},
+        "scope": {"const": "execution_stage_partition"},
+        "cursor": {"const": "last_succeeded_job_id"},
+        "resume": {"const": "strictly_after_cursor"},
+        "store": {"const": "MongoStore"},
+        "fencing": {"const": "execution_job_set_digest"},
+        "everyFinalizedObjects": {"const": 100},
+        "everySeconds": {"const": 900},
+        "triggerMode": {"const": "first_reached"}
+      }
+    },
+    "campaignBinding": {
+      "type": "object",
+      "required": [
+        "rootExecutionId",
+        "campaignRunId",
+        "campaignGeneration",
+        "campaignFencingToken",
+        "campaignPlanDigest",
+        "campaignSourceRevision",
+        "campaignSourceDigest",
+        "campaignEntityCatalogDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rootExecutionId": {"type": "string", "minLength": 1},
+        "campaignRunId": {"type": "string", "minLength": 1},
+        "campaignGeneration": {"type": "integer", "minimum": 1},
+        "campaignFencingToken": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignPlanDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignSourceRevision": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignSourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "campaignEntityCatalogDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
         }
       }
     }

@@ -39,16 +39,18 @@
 
 - canonical：`specs/feature-tree/chat-conversation/commercial-message-system/spec.md`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/operations.yaml`
+- canonical：`quwoquan_service/services/user-service/contracts/relationship/greeting_request/operations.yaml`
+- canonical：`quwoquan_service/services/notification-service/contracts/notification_delivery/notification/operations.yaml`
 
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
 ### GWT-001 消息首页商用信息架构
 
-- GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
-- WHEN 参与者执行“消息首页商用信息架构”对应的公开行为。
-- THEN 页面入口和首页数据消费继续由消息域 metadata 真相源驱动。
-- AND 失败时返回 canonical failure，且不产生伪成功事实。
+- GIVEN 已认证用户通过 production Remote composition 打开 `chat.home`，Chat 会话/联系、User GreetingRequest 与 Notification AppMessage 的所属服务均可独立返回结果或 canonical failure。
+- WHEN 用户切换消息、联系、打招呼和通知分区，刷新列表并打开会话、成员、打招呼收件箱或通知目标。
+- THEN 消息与未读筛选只消费 Chat MessageHome，联系筛选只消费 Chat ContactHome，待处理打招呼只消费 User GreetingRequest，通知与未读数只消费 Notification AppMessage；页面不按标题、本地缓存或跨对象私有状态拼接业务事实。
+- AND 任一分区失败只阻断该分区并提供可重试终态，不把错误改写为空列表、不覆盖其他已确认分区；打开目标与已读动作只写对应 owner，恢复后按各自 Remote readback 收敛。
 
 ## 6. 依赖
 
@@ -63,15 +65,6 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：商用消息首页 IA 在消息模块内可稳定进入和展示。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 消息首页 IA 绑定消息 metadata 契约
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：页面入口和首页数据消费继续由消息域 metadata 真相源驱动。
-- 完成判定：页面入口和首页数据消费继续由消息域 metadata 真相源驱动。
+- 准出影响：`block`
+- 影响或价值：尚缺同一候选真实账号覆盖四个 owner 分区、跨分区失败隔离、打开目标与已读回读的 production Remote 页面验收；现有 local_contract 或单对象 API 证据不能替代首页 Journey。
+- 完成判定：`GWT-001` 的四个分区与失败恢复由 user_acceptance 直接绑定，并取得 Android 与 iPhone physical ResultBundle；任一分区仍靠 fixture、错误转空或缺少 owner readback 时保持 BLOCK。

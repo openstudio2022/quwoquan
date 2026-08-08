@@ -15,6 +15,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
@@ -38,6 +39,8 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
   bool _handling = false;
   late bool _canUseCamera;
   late bool _canUseGallery;
+  int _attemptGeneration = 0;
+  int? _activeAttempt;
 
   @override
   void initState() {
@@ -56,90 +59,103 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
 
   @override
   void dispose() {
+    _attemptGeneration += 1;
+    _activeAttempt = null;
     _scanLine.dispose();
     unawaited(_controller?.dispose());
     super.dispose();
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_handling || capture.barcodes.isEmpty) {
+    if (capture.barcodes.isEmpty) {
       return;
     }
     final raw = capture.barcodes.first.rawValue?.trim() ?? '';
-    await _process(raw);
+    await _startRawAttempt(raw);
   }
 
   Future<void> _pickFromGallery() async {
     if (!_canUseGallery) {
       return;
     }
-    final path = await ref
-        .read(imagePickGatewayProvider)
-        .pickImage(
-          context,
-          source: ImagePickSource.photoLibrary,
-          cameraRouteName: PageAccessInternalRoutes.addContactScanGallery,
-          galleryRouteName: PageAccessInternalRoutes.addContactScanGallery,
-        );
-    if (!mounted || path == null || path.trim().isEmpty) {
+    final attempt = _beginAttempt();
+    if (attempt == null) {
       return;
     }
-    String raw;
     try {
-      raw = await ref
-          .read(contactQrImageAnalyzerProvider)
-          .analyzeImage(path: path);
-    } catch (error) {
-      if (!mounted) {
+      final path = await ref
+          .read(imagePickGatewayProvider)
+          .pickImage(
+            context,
+            source: ImagePickSource.photoLibrary,
+            cameraRouteName: PageAccessInternalRoutes.addContactScanGallery,
+            galleryRouteName: PageAccessInternalRoutes.addContactScanGallery,
+          );
+      if (!mounted || !_isCurrentAttempt(attempt)) {
         return;
       }
-      setState(() => _handling = false);
-      unawaited(_controller?.start());
-      await AppActionErrorFeedback.show(
-        context,
-        semantic: runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.dialog,
-        ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry) {
-            await _pickFromGallery();
-          }
-        },
-      );
-      return;
-    }
-    if (raw.isEmpty) {
-      if (mounted) {
-        AppToast.show(context, ContactText.scanQrNoCodeFound);
+      if (path == null || path.trim().isEmpty) {
+        await _recoverAttempt(attempt);
+        return;
       }
-      return;
+      final raw = await ref
+          .read(contactQrImageAnalyzerProvider)
+          .analyzeImage(path: path);
+      if (!mounted || !_isCurrentAttempt(attempt)) {
+        return;
+      }
+      if (raw.isEmpty) {
+        AppToast.show(context, ContactText.scanQrNoCodeFound);
+        await _recoverAttempt(attempt);
+        return;
+      }
+      await _process(raw, attempt: attempt);
+    } catch (error) {
+      await _showAttemptError(
+        attempt: attempt,
+        error: error,
+        retry: _pickFromGallery,
+      );
     }
-    await _process(raw);
   }
 
-  Future<void> _process(String raw) async {
-    final parsed = QrPayloadParser.parse(raw);
-    if (parsed == null || !parsed.isValid) {
-      if (mounted) {
-        AppToast.show(context, ContactText.scanQrInvalidCode);
-      }
+  Future<void> _startRawAttempt(String raw) async {
+    final attempt = _beginAttempt();
+    if (attempt == null) {
       return;
     }
-    setState(() => _handling = true);
-    unawaited(_controller?.stop());
+    await _process(raw, attempt: attempt);
+  }
+
+  Future<void> _process(String raw, {required int attempt}) async {
+    if (!_isCurrentAttempt(attempt)) {
+      return;
+    }
+    final trustedPublicOrigin = Uri.tryParse(
+      CloudRuntimeConfig.publicWebBaseUrl.trim(),
+    );
+    final parsed = trustedPublicOrigin == null
+        ? null
+        : QrPayloadParser.parse(raw, trustedPublicOrigin: trustedPublicOrigin);
+    if (parsed == null || !parsed.isValid) {
+      if (_isCurrentAttempt(attempt)) {
+        AppToast.show(context, ContactText.scanQrInvalidCode);
+      }
+      await _recoverAttempt(attempt);
+      return;
+    }
     try {
       final ProfileQrResolveWire resolved = await ref
           .read(profileEditQueryProvider(AppUiSurfaces.addContactScan))
           .resolveProfileQrToken(token: parsed.token, handle: parsed.handle);
-      if (!mounted) {
+      if (!mounted || !_isCurrentAttempt(attempt)) {
         return;
       }
-      if (resolved.personaId.trim().isEmpty) {
-        throw StateError('empty personaId');
+      if (!_isAcceptedResolution(resolved, parsed)) {
+        throw StateError('Profile QR resolution is not canonical');
       }
+      final personaId = resolved.personaId.trim();
+      final userHandle = resolved.userHandle.trim();
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -148,38 +164,122 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
               action: 'resolve_profile_qr',
               pageName: 'ScanContactQrPage',
               targetType: 'user',
-              targetKey: resolved.personaId,
+              targetKey: personaId,
             ),
       );
       context.pushReplacement(
         AppRoutePaths.addContactConfirm(
-          handle: resolved.userHandle.isNotEmpty
-              ? resolved.userHandle
-              : parsed.handle,
-          userId: resolved.personaId,
+          handle: userHandle,
+          userId: personaId,
           source: 'scan',
         ),
       );
     } catch (error) {
-      if (!mounted) {
-        return;
+      await _showAttemptError(
+        attempt: attempt,
+        error: error,
+        retry: () => _startRawAttempt(raw),
+      );
+    }
+  }
+
+  int? _beginAttempt() {
+    if (!mounted || _handling || _activeAttempt != null) {
+      return null;
+    }
+    final attempt = ++_attemptGeneration;
+    setState(() {
+      _handling = true;
+      _activeAttempt = attempt;
+    });
+    unawaited(_controller?.stop());
+    return attempt;
+  }
+
+  bool _isCurrentAttempt(int attempt) {
+    return mounted && _handling && _activeAttempt == attempt;
+  }
+
+  bool _releaseAttempt(int attempt) {
+    if (!_isCurrentAttempt(attempt)) {
+      return false;
+    }
+    setState(() {
+      _handling = false;
+      _activeAttempt = null;
+    });
+    return true;
+  }
+
+  Future<void> _recoverAttempt(int attempt) async {
+    if (!_releaseAttempt(attempt)) {
+      return;
+    }
+    await _restartScanner();
+  }
+
+  Future<void> _restartScanner() async {
+    final controller = _controller;
+    if (!mounted || !_canUseCamera || controller == null) {
+      return;
+    }
+    try {
+      await controller.start();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _canUseCamera = false);
       }
-      await AppActionErrorFeedback.show(
-        context,
-        semantic: runtimeErrorSemantic(
+    }
+  }
+
+  Future<void> _showAttemptError({
+    required int attempt,
+    required Object error,
+    required Future<void> Function() retry,
+  }) async {
+    if (!_releaseAttempt(attempt) || !mounted) {
+      return;
+    }
+    var retried = false;
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: ensureRetryUiErrorSemantic(
+        runtimeErrorSemantic(
           context,
           error: error,
           category: UiErrorCategory.submit,
           scope: UiErrorScope.dialog,
         ),
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _process(raw);
-          }
-        },
-      );
+      ),
+      onAction: (action) async {
+        if ((action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) &&
+            mounted &&
+            _activeAttempt == null) {
+          retried = true;
+          await retry();
+        }
+      },
+    );
+    if (!retried && mounted && _activeAttempt == null) {
+      await _restartScanner();
     }
+  }
+
+  bool _isAcceptedResolution(
+    ProfileQrResolveWire resolved,
+    QrPayloadParseResult parsed,
+  ) {
+    final personaId = resolved.personaId.trim();
+    final userHandle = resolved.userHandle.trim();
+    final publicProfileUrl = resolved.publicProfileUrl.trim();
+    return personaId.isNotEmpty &&
+        personaId == resolved.personaId &&
+        resolved.scanStatus == 'accepted' &&
+        userHandle == resolved.userHandle &&
+        userHandle == parsed.handle &&
+        publicProfileUrl == resolved.publicProfileUrl &&
+        publicProfileUrl == parsed.publicProfileUrl;
   }
 
   @override

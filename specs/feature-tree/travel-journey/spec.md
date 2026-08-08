@@ -1,6 +1,6 @@
 # L1 Domain Service：Gathering 共同旅行体验 (`travel-journey`)
 
-> 一句话定位：把多人多日旅行表达为 Gathering + optional Plan/Map/Calendar/Experience 的体验组合，并保留已退役 travel-service 到当前 owner 的历史 crosswalk。
+> 一句话定位：把多人多日旅行表达为 Gathering + optional Plan/Map/Calendar/Experience 的体验组合，并治理已静态退役 travel-service 的 target-only 历史数据迁移。
 
 ## 1. 目标与用户价值
 
@@ -15,8 +15,9 @@
 
 ### 已退役源边界
 
-- 历史 `TripPlan`、Revision、Membership、Moment、Placement、ShareSnapshot、Template 与 GuideAssignment 只存在于 crosswalk、脱敏快照和迁移 receipt；生产源码、进程、contract、generated client、路由与 App DI 均已删除。
-- 每类历史源对象通过确定性映射进入 Gathering/Plan/Experience/Content/Chat 目标 owner；inventory、parity、cutover 与 target-only rollback 由签名 receipt 证明，禁止恢复源写入或源 runtime。
+- 生产源码、进程、contract、generated client、路由与 App DI 已删除；运行主链不得重新出现源 Reader、Writer、route、client 或 fallback。
+- 历史 `TripPlan`、Revision、Membership、Moment、Placement、ShareSnapshot、Template 与 GuideAssignment 只允许作为 target-only inventory、crosswalk、脱敏迁移输入和审计 receipt 存在。
+- 每类历史源对象必须通过确定性映射进入 Gathering/Plan/Experience/Content/Chat 目标 owner，或被明确 archived、quarantined、not_applicable；alpha、beta、gamma、prod 的 inventory、parity、cutover 与 target-only rollback 在签名 receipt 完成前不得宣称数据迁移完成。
 
 ### 本领域不拥有
 
@@ -78,10 +79,11 @@
 - Calendar 只是导出/提醒 capability，不拥有日程真相；设备、OAuth Connector 或 Provider 不可用时返回结构化 unavailable，不伪造成功。
 
 <a id="req-003"></a>
-### REQ-003 travel-service 已完成 target-only 迁移与退役
+### REQ-003 travel-service 生产主链永久退役，历史数据仅允许 target-only 迁移
 
-- travel-service 的进程、contracts、generated client、App DI、旧 Skill 绑定和 route/page/surface 已删除；App、Assistant 与 api-edge 对该服务的依赖保持为零。
-- 历史对象只经确定性 target owner、ID crosswalk、幂等映射、count/digest/orphan/collision receipt 与隐私裁剪判定进入目标；不得双读、双写或保留兼容 shim。
+- travel-service 的进程、contracts、generated client、App DI、旧 Skill 绑定和 route/page/surface 已删除；App、Assistant 与 api-edge 对该服务的依赖必须永久为零，生成链不得从 materialized、symlink 或旧摘要复活源 owner。
+- 历史对象只经确定性 target owner、ID crosswalk、幂等映射、count/digest/orphan/collision receipt 与隐私裁剪判定进入目标；每个环境必须独立证明 source inventory 与 target readback，不得以本地合成快照代替环境事实。
+- 不得双读、双写或保留兼容 shim；静态退役通过不能替代历史数据迁移准出，历史数据迁移未完成也不能恢复源服务。
 - 回滚只允许恢复目标应用/config 或目标数据快照，不得恢复源写入、源 runtime 或源产品入口。
 
 ## 6. 领域验收
@@ -89,9 +91,9 @@
 <a id="dom-001"></a>
 ### DOM-001 Gathering 旅行体验所有权与 target-only 收敛
 
-- 条件：多个有效 GatheringParticipant 在活动群聊 Board 启用、修订、记录和分享旅行可选能力，且已退役源对象的签名 crosswalk/receipt 可供审计。
+- 条件：多个有效 GatheringParticipant 在活动群聊 Board 启用、修订、记录和分享旅行可选能力；存在历史源数据的环境提供与候选、crosswalk 和目标 readback 绑定的签名 receipt。
 - 可观察结果：Gathering 仍是唯一活动根，Plan current Revision 唯一且历史不可变，Experience/Post 只以引用关联，时间线与地图收敛到同一事实；所有生产调用只读目标 owner。
-- 禁止结果：不得保留长期公共 Trip 根、复制 Participation/Conversation/Post/Media、手工写投影、以消息或助手状态代替计划、双读双写 travel-service，或泄露公开分享禁止字段。
+- 禁止结果：不得保留长期公共 Trip 根、复制 Participation/Conversation/Post/Media、手工写投影、以消息或助手状态代替计划、双读双写或恢复 travel-service，或用合成 receipt 冒充环境迁移完成。
 
 ## 7. 工程归属
 
@@ -105,12 +107,22 @@
 
 ## 8. 开放事项
 
+<a id="open-001"></a>
+### OPEN-001 四环境历史 Trip 数据 target-only 迁移证据未完成
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺验收证据：alpha、beta、gamma、prod 真实历史对象全集的 inventory、目标 owner import/readback、100% parity、cutover 与 target-only rollback receipt。生产主链已经静态退役，仓内现有证据只证明控制面能校验合成快照；若把静态删除当作数据迁移完成，可能遗失历史计划、参与、内容引用或审计义务。
+- 完成判定：四环境分别提供绑定同一 source snapshot、crosswalk、ContractGraph、mapping、target candidate 与审批摘要的 inventory、owner-command import、target readback、100% parity、cutover receipt；Prod 另有 target backup 和 target-only rollback 演练，且全部历史对象满足 sourceCount = migrated + archived + quarantined + notApplicable、orphan/collision=0、raw PII emission=0。
+- 依赖：各环境受保护的源 inventory、Circle/Chat/Content canonical import command、目标 readback、审批与配置激活证据。
+
 <a id="open-002"></a>
 ### OPEN-002 Gathering 旅行体验与真环境 UAT 未完成
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 travel-service target-only 迁移与退役已经完成。尚缺实现：GatheringPlan/Revision、Experience reference、Map/Calendar、Chat Board 与 Content 回顾在同一 production Remote composition 中的完整旅行体验及真实 Provider/Connector。尚缺验收证据：跨域 API integration、离线恢复、隐私分享和 Android/iPhone 真环境结果。
+- 影响或价值：尚缺实现：GatheringPlan/Revision、Experience reference、Map/Calendar、Chat Board 与 Content 回顾在同一 production Remote composition 中的完整旅行体验及真实 Provider/Connector；尚缺验收证据：跨域 API integration、离线恢复、隐私分享和 Android/iPhone 真环境结果。travel-service 生产主链已经静态退役，历史数据迁移由 `OPEN-001` 独立阻断。
 - 完成判定：`DOM-001` 由目标 owner 的 local_contract、Circle/Assistant/Chat/Content/Integration 跨域 api_integration 和 [AppRoot 双端共同旅行验收](../spec.md#uat-012) 直接覆盖；Android 与 iPhone 真环境均可从活动群聊看板启用、修订、记录和分享，所有结果绑定同一 Gathering/Plan revision，Provider 不可用时结构化降级，公开分享完成隐私裁剪，参与不自动 mutual。
 - 依赖：本 L2/L3 的阻断 OPEN、Circle production Remote、Chat Board/AssetIndex、Assistant active Skill package、Content draft/media、Integration Provider/Connector 与 Gathering Outcome。

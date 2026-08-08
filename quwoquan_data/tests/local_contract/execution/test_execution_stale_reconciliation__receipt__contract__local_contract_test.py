@@ -6,12 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from content.execution import (
-    context,
-    execution_supersession,
-    execution_terminal,
-    reconcile,
-)
+from content.execution import context, execution_supersession, execution_terminal
+from content.execution.controller.execute import reconcile
 from content.execution.execution_terminal import load_terminal_execution_evidence
 from core.control_types import ExecutionStateStatus
 from core.io import read_json, write_json
@@ -65,6 +61,49 @@ def _drift_manifest(root: Path) -> None:
             "executionId": root.name,
             "sourceDigest": source,
         },
+    )
+
+
+def _pre_controller_fixture(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    _drift_manifest(root)
+    documents = {
+        "0.plan/request.json": {"topic": "travel"},
+        "0.plan/target_set.json": {
+            "executionId": root.name,
+            "targetCount": 1,
+        },
+        "0.plan/queue_backend_envelope.json": {
+            "executionId": root.name,
+            "queueBackend": "reliabletask",
+        },
+        "_shared/execution_progress.json": {
+            "executionId": root.name,
+            "lastRunId": None,
+            "counts": {"entities": 0, "posts": 0},
+        },
+        "_shared/target_selection.json": {"executionId": root.name},
+        "evidence/model_readiness.json": {"executionId": root.name},
+        "evidence/runtime_preflight.json": {"ready": True},
+        "sources/qualification/request.json": {"executionId": root.name},
+    }
+    for relative, document in documents.items():
+        write_json(root / relative, document)
+    specification = root / "0.plan/execution_spec.yaml"
+    specification.parent.mkdir(parents=True, exist_ok=True)
+    specification.write_text("status: active\n", encoding="utf-8")
+    catalog = root / "_shared/catalog.ndjson"
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text('{"entityRef":"地点/景区/杭州西湖"}\n', encoding="utf-8")
+    (root / "_shared/execution_state.lock").touch()
+
+
+def _freeze_supersession_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    frozen_source = SourceDigest.from_document(current_source_digest().to_document())
+    monkeypatch.setattr(
+        execution_supersession,
+        "current_source_digest",
+        lambda **_kwargs: frozen_source,
     )
 
 
@@ -186,14 +225,8 @@ def test_source_drift_supersession_is_create_once_and_anchor_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = tmp_path / "tasks" / EXECUTION_ID
-    root.mkdir(parents=True)
-    _drift_manifest(root)
-    frozen_source = SourceDigest.from_document(current_source_digest().to_document())
-    monkeypatch.setattr(
-        execution_supersession,
-        "current_source_digest",
-        lambda **_kwargs: frozen_source,
-    )
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
 
     receipt, path = execution_supersession.supersede_execution(
         EXECUTION_ID,
@@ -210,6 +243,9 @@ def test_source_drift_supersession_is_create_once_and_anchor_bound(
     assert repeated_path == path
     assert receipt["decision"] == "superseded"
     assert receipt["evidenceDisposition"] == "protected_read_only"
+    assert receipt["stateEvidence"] == "missing_pre_controller"
+    assert receipt["processEvidence"]["livenessProbe"] == "pid_pgid_only_no_argv"
+    assert receipt["rootInventoryEntryCount"] > 0
     before_files = {item.relative_to(root) for item in root.rglob("*")}
     terminal = load_terminal_execution_evidence(root)
     assert terminal is not None
@@ -221,6 +257,172 @@ def test_source_drift_supersession_is_create_once_and_anchor_bound(
     manifest["executionId"] = "tampered"
     write_json(root / "execution_manifest.json", manifest)
     with pytest.raises(ValueError, match="anchor drift"):
+        load_terminal_execution_evidence(root)
+
+
+@pytest.mark.parametrize("fragment", ["head", "events"])
+def test_source_drift_supersession_refuses_missing_state_journal_fragments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fragment: str,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    if fragment == "head":
+        write_json(root / "_shared/execution_state_head.json", {"sequence": 0})
+    else:
+        write_json(
+            root / "_shared/execution_state_events/00000000000000000001.json",
+            {"fragment": True},
+        )
+
+    with pytest.raises(ValueError, match="journal fragments"):
+        execution_supersession.supersede_execution(
+            EXECUTION_ID,
+            reason="source_drift",
+            executions_root=root.parent,
+        )
+
+    assert not tuple((root / "_shared/reconciliation").glob("supersession-*.json"))
+
+
+def test_source_drift_supersession_refuses_active_lease_without_pid(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    write_json(
+        root / "_shared/controller_lease.json",
+        {
+            "executionId": root.name,
+            "status": "active",
+            "pid": None,
+            "pgid": None,
+        },
+    )
+
+    with pytest.raises(ValueError, match="controller lease is active"):
+        execution_supersession.supersede_execution(
+            EXECUTION_ID,
+            reason="source_drift",
+            executions_root=root.parent,
+        )
+
+
+@pytest.mark.parametrize("live_field", ["pid", "pgid"])
+def test_source_drift_supersession_refuses_live_recorded_identity_without_argv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    live_field: str,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    lease = {
+        "executionId": root.name,
+        "status": "released",
+        "pid": 43210 if live_field == "pid" else None,
+        "pgid": 43210 if live_field == "pgid" else None,
+    }
+    write_json(root / "_shared/controller_lease.json", lease)
+    monkeypatch.setattr(
+        execution_supersession,
+        "_pid_alive",
+        lambda _pid: live_field == "pid",
+    )
+    monkeypatch.setattr(
+        execution_supersession,
+        "_pgid_alive",
+        lambda _pgid: live_field == "pgid",
+    )
+
+    with pytest.raises(ValueError, match="process group is still alive"):
+        execution_supersession.supersede_execution(
+            EXECUTION_ID,
+            reason="source_drift",
+            executions_root=root.parent,
+        )
+
+    assert not hasattr(execution_supersession, "_process_command")
+    assert not hasattr(execution_supersession, "_group_commands")
+
+
+def test_source_drift_supersession_refuses_active_state_without_live_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _fixture(tmp_path, monkeypatch)
+    _drift_manifest(root)
+    (root / "_shared/controller_lease.json").unlink()
+    _freeze_supersession_source(monkeypatch)
+
+    with pytest.raises(ValueError, match="state is not supersession-eligible: running"):
+        execution_supersession.supersede_execution(
+            EXECUTION_ID,
+            reason="source_drift",
+            executions_root=root.parent,
+        )
+
+
+def test_source_drift_supersession_refuses_unexpected_pre_controller_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    write_json(root / "posts/article/partial.json", {"partial": True})
+
+    with pytest.raises(ValueError, match="not an exact pre-controller closure"):
+        execution_supersession.supersede_execution(
+            EXECUTION_ID,
+            reason="source_drift",
+            executions_root=root.parent,
+        )
+
+
+@pytest.mark.parametrize("corruption", ["nonempty_lock", "symlink"])
+def test_source_drift_supersession_refuses_pre_controller_root_corruption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    corruption: str,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    if corruption == "nonempty_lock":
+        (root / "_shared/execution_state.lock").write_text("owned", encoding="utf-8")
+        expected = "state lock must be empty"
+    else:
+        (root / "unexpected-link").symlink_to(root / "0.plan", target_is_directory=True)
+        expected = "root contains a symlink"
+
+    with pytest.raises(ValueError, match=expected):
+        execution_supersession.supersede_execution(
+            EXECUTION_ID,
+            reason="source_drift",
+            executions_root=root.parent,
+        )
+
+
+def test_source_drift_supersession_receipt_detects_root_inventory_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    execution_supersession.supersede_execution(
+        EXECUTION_ID,
+        reason="source_drift",
+        executions_root=root.parent,
+    )
+    (root / "unexpected-empty-directory").mkdir()
+
+    with pytest.raises(ValueError, match="root inventory drift"):
         load_terminal_execution_evidence(root)
 
 

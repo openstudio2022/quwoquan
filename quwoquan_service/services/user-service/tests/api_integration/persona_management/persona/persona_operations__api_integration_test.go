@@ -11,9 +11,12 @@ package api_integration
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	runtimeerrors "quwoquan_service/runtime/errors"
 	application "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	useridentity "quwoquan_service/services/user-service/internal/account/user_account/domain/user/identity"
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
@@ -51,7 +54,7 @@ func personaOperationIdentity(t *testing.T) (string, string) {
 }
 
 func personaOperationMeta(key string) application.PersonaCommandMeta {
-	return application.PersonaCommandMeta{IdempotencyKey: key, CommandDigest: "sha256:cc4c9a72efb00ef0376136712bc233e71e6a4f7692a302526c780fc41e7771f8"}
+	return application.PersonaCommandMeta{IdempotencyKey: key, CommandDigest: "cc4c9a72efb00ef0376136712bc233e71e6a4f7692a302526c780fc41e7771f8"}
 }
 
 func TestPersonaOperationsCommitStateReceiptOutboxAndProjection(t *testing.T) {
@@ -144,6 +147,21 @@ func TestPersonaOperationsCommitStateReceiptOutboxAndProjection(t *testing.T) {
 		}
 		if receiptCount < 7 || outboxCount < 7 {
 			t.Fatalf("Persona packet receipts=%d outbox=%d", receiptCount, outboxCount)
+		}
+
+		for index := 0; index < 2; index++ {
+			if _, err := service.CreatePersona(ctx, ownerID, application.CreatePersonaCommand{
+				DisplayName: "Quota Persona",
+			}, personaOperationMeta(fmt.Sprintf("quota-fill-%d", index))); err != nil {
+				t.Fatalf("fill Persona quota index=%d err=%v", index, err)
+			}
+		}
+		_, err = service.CreatePersona(ctx, ownerID, application.CreatePersonaCommand{
+			DisplayName: "Over Quota Persona",
+		}, personaOperationMeta("quota-rejected"))
+		var quotaErr *runtimeerrors.AppError
+		if !errors.As(err, &quotaErr) || quotaErr.Code.String() != "USER.PERSONA.quota_reached" {
+			t.Fatalf("expected USER.PERSONA.quota_reached, got %T: %v", err, err)
 		}
 	})
 }

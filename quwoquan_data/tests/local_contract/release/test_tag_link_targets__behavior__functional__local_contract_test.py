@@ -44,6 +44,7 @@ def _seed_publish() -> None:
     _tag("Topic/旅行/玩法/徒步", "徒步")
     _tag("Topic/季节/秋", "秋", landing=True)
     _tag("Topic/旅行/玩法/潜水", "潜水")
+    _tag("Topic/旅行/玩法/未引用", "未引用")
     # 唯一命中一个有主页实体的地点标签（WP4-2：routePath 绑定实体主页路由）。
     _tag("Entity/地点/景区/5A景区", "5A景区")
     write_json(PUBLISH_ROOT / "posts" / "article" / "攻略" / "毕棚沟" / "1" / "manifest.json", {
@@ -67,6 +68,19 @@ def _seed_publish() -> None:
         "quality": {"promotedAt": "2026-07-07T09:00:00+00:00"},
     })
     write_json(
+        PUBLISH_ROOT
+        / "posts"
+        / "article"
+        / "攻略"
+        / "不属于当前发布"
+        / "1"
+        / "manifest.json",
+        {
+            "entityRefs": [],
+            "tagRefs": ["Topic/旅行/玩法/徒步"],
+        },
+    )
+    write_json(
         payload_file(RELEASE_ROOT / "tag-link-targets", "desired_state.json"),
         {
             "schema": "quwoquan_data.release_desired_state",
@@ -74,6 +88,13 @@ def _seed_publish() -> None:
             "desiredRefs": {
                 "posts": ["posts/article/攻略/毕棚沟/1"],
                 "entities": ["地点/景区/九寨沟"],
+                "creators": [],
+                "tags": [
+                    "Entity/地点/景区/5A景区",
+                    "Topic/季节/秋",
+                    "Topic/旅行/玩法/徒步",
+                    "Topic/旅行/玩法/潜水",
+                ],
             },
         },
     )
@@ -91,7 +112,9 @@ def test_tag_link_targets_are_derived_not_tag_fields():
     by_ref = {row["tagRef"]: row for row in rows}
     assert by_ref["Topic/季节/秋"]["targetKind"] == "landing"
     assert by_ref["Topic/旅行/玩法/徒步"]["targetKind"] == "search"
+    assert by_ref["Topic/旅行/玩法/徒步"]["counts"]["posts"] == 1
     assert by_ref["Topic/旅行/玩法/潜水"]["targetKind"] == "none"
+    assert "Topic/旅行/玩法/未引用" not in by_ref
     definition = read_json(TAXONOMY_ROOT / "Topic/旅行/玩法/徒步" / "_definition.json")
     assert "linkable" not in definition and "targetKind" not in definition
 

@@ -9,6 +9,14 @@ runtime_entrypoints:
     facet: UserProfileTagConsumer
     method: processOnce
     object_owner: ObjectTagIndexView
+  telemetry:
+    metric: tag_object_tag_index_projection
+    trace: true
+    attributes: [outcome]
+  slo:
+    freshness_p95_seconds: 60
+    backlog_max_events: 1000
+    failure_ratio_percent: 1
 
 readiness_cases:
 - case_id: project-object-tag-index-local

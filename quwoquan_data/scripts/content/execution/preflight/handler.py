@@ -10,8 +10,13 @@ import tempfile
 from pathlib import Path
 
 from core.control_types import AgentProvider
+from core.cursor_credentials import (
+    CURSOR_SENSITIVE_PROCESS_ENV_KEYS,
+    cursor_safe_subprocess_env,
+    resolve_cursor_api_key,
+)
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
-from core.python_environment import prepare_data_runtime_cache
+from core.python_environment import _redact_secret_text, prepare_data_runtime_cache
 from core.runtime_policy import active_runtime_policy
 
 from content.execution.preflight.evidence import compact_ready_evidence
@@ -19,12 +24,12 @@ from content.execution.preflight.receipt import (
     build_semantic_preflight_receipt,
     write_semantic_preflight_receipt,
 )
-from content.execution.preflight.runtime import prepare_selected_runtime
 from content.execution.preflight.report_print import (
     _print_preflight,
     _print_semantic_agent_probe,
     _print_semantic_agent_workspace_smoke,
 )
+from content.execution.preflight.runtime import prepare_selected_runtime
 from content.execution.preflight.selection import (
     CALIBRATION_SEMANTIC_SELECTION_ID,
     DEFAULT_SEMANTIC_SELECTION_ID,
@@ -128,7 +133,7 @@ def _workspace_smoke_report(
     selection: SemanticPreflightSelection | None = None,
 ) -> dict:
     """Exercise four independent campaign-lane workspaces concurrently."""
-    from content.execution.campaign_process import CAMPAIGN_CARRIERS
+    from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 
     policy = active_runtime_policy()
     resolved = selection or resolve_semantic_preflight_selection(
@@ -180,7 +185,7 @@ def _startup_timeout_seconds(args: argparse.Namespace) -> float:
 
 
 def _reliabletask_fleet_report() -> dict:
-    from content.execution.reliabletask_fleet import reliabletask_fleet_preflight
+    from content.execution.queue.reliabletask.fleet import reliabletask_fleet_preflight
 
     try:
         report = reliabletask_fleet_preflight()
@@ -311,7 +316,7 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         cmd.append("--no-network")
     for endpoint in getattr(args, "endpoint", None) or []:
         cmd.extend(["--endpoint", str(endpoint)])
-    child_env = os.environ.copy()
+    child_env = cursor_safe_subprocess_env(os.environ)
     child_env[_RUNTIME_CHILD_ENV] = "1"
     proc = subprocess.run(
         cmd,
@@ -320,19 +325,28 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         check=False,
         env=child_env,
     )
+    child_secrets = _runtime_child_secret_values()
+    child_stdout = _redact_runtime_child_diagnostic(
+        proc.stdout,
+        secrets=child_secrets,
+    )
+    child_stderr = _redact_runtime_child_diagnostic(
+        proc.stderr,
+        secrets=child_secrets,
+    )
     try:
-        report = json.loads((proc.stdout or "{}").strip() or "{}")
+        report = json.loads(child_stdout or "{}")
     except json.JSONDecodeError:
         report = {
             "schema": "quwoquan_data.environment_preflight",
             "ready": False,
-            "issues": [proc.stderr.strip() or "env preflight subprocess did not return JSON"],
+            "issues": [child_stderr or "env preflight subprocess did not return JSON"],
         }
     if not report:
         report = {
             "schema": "quwoquan_data.environment_preflight",
             "ready": False,
-            "issues": [proc.stderr.strip() or "task preflight subprocess returned an empty report"],
+            "issues": [child_stderr or "task preflight subprocess returned an empty report"],
         }
     if proc.returncode != 0:
         report["ready"] = False
@@ -352,6 +366,33 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
                 + ",".join(missing_identity)
             )
     return report if isinstance(report, dict) else {"ready": False, "issues": ["invalid preflight report"]}
+
+
+def _runtime_child_secret_values() -> tuple[str, ...]:
+    """Capture process and canonical credential values before removing aliases."""
+
+    inherited = {
+        str(os.environ.get(name) or "")
+        for name in CURSOR_SENSITIVE_PROCESS_ENV_KEYS
+        if str(os.environ.get(name) or "")
+    }
+    canonical = resolve_cursor_api_key()
+    if canonical:
+        inherited.add(canonical)
+    return tuple(sorted(inherited, key=len, reverse=True))
+
+
+def _redact_runtime_child_diagnostic(
+    value: object,
+    *,
+    secrets: tuple[str, ...],
+) -> str:
+    """Remove Cursor credentials before child output reaches evidence or logs."""
+
+    text = str(value or "")
+    for secret in secrets:
+        text = text.replace(secret, "<redacted-cursor-process-secret>")
+    return _redact_secret_text(text).strip()
 
 
 def handle_ready(args: argparse.Namespace) -> None:
@@ -446,7 +487,7 @@ def handle_ready(args: argparse.Namespace) -> None:
             encoding="utf-8",
         )
     receipt_out = getattr(args, "receipt_out", None)
-    if receipt_out:
+    if receipt_out and bool(report.get("ready")):
         receipt_path = _report_output_path(receipt_out)
         receipt = build_semantic_preflight_receipt(
             selection=selection,

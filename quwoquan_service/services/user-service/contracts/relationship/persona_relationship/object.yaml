@@ -28,6 +28,25 @@ relationships:
   - lowerPersonaId
   - upperPersonaId
   target_object: user.Persona
+search_policy:
+  exposed: local_only
+  object_type_refs:
+  - chat.contact
+  delegated_enforcement: "联系人检索只在端侧对已建立关系的本地快照执行；服务端不提供按昵称反查关系的远端检索面，避免社交图被枚举。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.persona_relationship.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.user.persona_relationship.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.persona_relationship.write
 business_rules:
 - lowerPersonaId 必须小于 upperPersonaId，且 source/target 只能来自该 pair
 - directions 最多两个，每个方向唯一
@@ -47,5 +66,9 @@ lifecycle:
 members:
   RelationshipDirection:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [sourcePersonaId, targetPersonaId]
+    cardinality: many
     max_cardinality: 2
+    ownership: aggregate
+    write_access: aggregate_facade_only
+    description: 双向 Persona 关系中的单个有向状态，只能经 PersonaRelationship 聚合更新。

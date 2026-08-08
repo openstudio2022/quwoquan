@@ -10,34 +10,56 @@ import (
 )
 
 type MemoryStore struct {
-	mu                   sync.Mutex
-	outboxes             map[string]TaskOutboxRecord
-	outboxByDedupe       map[string]string
-	outboxByIdempotency  map[string]string
-	tasks                map[string]ReliableAsyncTask
-	taskByDedupe         map[string]string
-	notifications        map[string]NotificationOutboxRecord
-	ledgers              map[string]NotificationDeliveryLedgerRecord
-	attempts             map[string]ProviderAttemptRecord
-	resultOutboxes       map[string]ExternalInteractionResultOutboxRecord
-	taskRecoveryReceipts map[string]TaskRecoveryReceipt
-	leases               map[string]TaskLease
+	mu                     sync.Mutex
+	outboxes               map[string]TaskOutboxRecord
+	outboxByDedupe         map[string]string
+	outboxByIdempotency    map[string]string
+	tasks                  map[string]ReliableAsyncTask
+	taskByDedupe           map[string]string
+	notifications          map[string]NotificationOutboxRecord
+	ledgers                map[string]NotificationDeliveryLedgerRecord
+	attempts               map[string]ProviderAttemptRecord
+	resultOutboxes         map[string]ExternalInteractionResultOutboxRecord
+	taskRecoveryReceipts   map[string]TaskRecoveryReceipt
+	leases                 map[string]TaskLease
+	dataContentCheckpoints map[string]DataContentPartitionCheckpoint
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		outboxes:             map[string]TaskOutboxRecord{},
-		outboxByDedupe:       map[string]string{},
-		outboxByIdempotency:  map[string]string{},
-		tasks:                map[string]ReliableAsyncTask{},
-		taskByDedupe:         map[string]string{},
-		notifications:        map[string]NotificationOutboxRecord{},
-		ledgers:              map[string]NotificationDeliveryLedgerRecord{},
-		attempts:             map[string]ProviderAttemptRecord{},
-		resultOutboxes:       map[string]ExternalInteractionResultOutboxRecord{},
-		taskRecoveryReceipts: map[string]TaskRecoveryReceipt{},
-		leases:               map[string]TaskLease{},
+		outboxes:               map[string]TaskOutboxRecord{},
+		outboxByDedupe:         map[string]string{},
+		outboxByIdempotency:    map[string]string{},
+		tasks:                  map[string]ReliableAsyncTask{},
+		taskByDedupe:           map[string]string{},
+		notifications:          map[string]NotificationOutboxRecord{},
+		ledgers:                map[string]NotificationDeliveryLedgerRecord{},
+		attempts:               map[string]ProviderAttemptRecord{},
+		resultOutboxes:         map[string]ExternalInteractionResultOutboxRecord{},
+		taskRecoveryReceipts:   map[string]TaskRecoveryReceipt{},
+		leases:                 map[string]TaskLease{},
+		dataContentCheckpoints: map[string]DataContentPartitionCheckpoint{},
 	}
+}
+
+func (s *MemoryStore) FlushDataContentPartitionCheckpoint(
+	ctx context.Context,
+	checkpoint DataContentPartitionCheckpoint,
+) error {
+	_ = ctx
+	key := checkpoint.ExecutionID + "|" + checkpoint.Stage + "|" + checkpoint.PartitionKey
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, ok := s.dataContentCheckpoints[key]; ok {
+		if existing.JobSetDigest != checkpoint.JobSetDigest {
+			return errors.New("DATA.RELIABLETASK.STALE_FENCE: partition checkpoint jobSetDigest drift")
+		}
+		if existing.CompletedCount > checkpoint.CompletedCount {
+			return errors.New("DATA.RELIABLETASK.STALE_CHECKPOINT: partition checkpoint cannot move backwards")
+		}
+	}
+	s.dataContentCheckpoints[key] = checkpoint
+	return nil
 }
 
 func (s *MemoryStore) RunInTransaction(ctx context.Context, fn func(context.Context) error) error {
@@ -334,16 +356,26 @@ func (s *MemoryStore) PurgeDataContentExecution(
 	return result, nil
 }
 
-func (s *MemoryStore) CountDataContentOutboxes(
+func (s *MemoryStore) CountDataContentOutboxesByIdempotencyKeys(
 	ctx context.Context,
 	executionID string,
 	stage string,
+	idempotencyKeys []string,
 ) (int64, error) {
 	_ = ctx
 	executionID = strings.TrimSpace(executionID)
 	stage = strings.TrimSpace(stage)
 	if executionID == "" || (stage != "author" && stage != "publish") {
 		return 0, errors.New("data content executionId and stage are required")
+	}
+	keys := make(map[string]struct{}, len(idempotencyKeys))
+	for _, key := range idempotencyKeys {
+		if key = strings.TrimSpace(key); key != "" {
+			keys[key] = struct{}{}
+		}
+	}
+	if len(keys) == 0 {
+		return 0, errors.New("data content idempotency keys are required")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -352,6 +384,9 @@ func (s *MemoryStore) CountDataContentOutboxes(
 		if outbox.TaskType == DataContentTaskType &&
 			outbox.Payload["executionId"] == executionID &&
 			outbox.Payload["stage"] == stage {
+			if _, exists := keys[outbox.IdempotencyKey]; !exists {
+				continue
+			}
 			count++
 		}
 	}

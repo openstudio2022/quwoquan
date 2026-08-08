@@ -97,7 +97,7 @@
   - 本领域负责：在用户确认后通过既有 Follow/Conversation/Circle 机制延续旅行关系，并提供公开署名/资质引用。
   - 进入条件：目标主体与关系动作允许。
   - 交付给下游的结果：关系 command receipt 或明确拒绝。
-  - 不负责：不创造额外关系等级或 Trip 成员事实。
+  - 不负责：不创造额外关系等级或 GatheringParticipation 事实。
 
 ## 4. 业务能力
 

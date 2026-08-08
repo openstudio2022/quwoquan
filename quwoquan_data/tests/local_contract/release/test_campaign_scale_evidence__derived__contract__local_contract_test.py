@@ -7,23 +7,43 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from content.execution.scale_semantic_promotion import (
+from content.release.canonical import campaign_scale_cumulative, research_scale_promotion as research_scale_promotion_module
+from content.execution.scale.semantic_promotion import (
     select_scale_calibration_refs,
     semantic_calibration_evidence_path,
 )
+from content.execution.campaign.source_pool_binding import (
+    bound_scale_source_pool_snapshot_digest,
+    materialize_bound_scale_source_pool,
+)
+from content.source.research.scale_source_pool import build_scale_source_pool_plan
 from content.release.canonical.campaign_scale_evidence import (
     CampaignScaleEvidenceError,
     load_campaign_scale_evidence,
     write_campaign_scale_evidence,
 )
+from content.release.canonical.campaign_scale_source_pool import source_pool_lineage_fields
 from content.release.canonical.handler import register_parser
 from content.release.canonical.research_scale_promotion import (
     ResearchScalePromotionError,
     write_research_scale_promotion,
 )
+from content.release.canonical.research_scale_promotion_timing import (
+    ResearchScalePromotionTimingError,
+    validate_promotion_timing,
+)
+from content.release.canonical.research_scale_video_popularity import (
+    ResearchScaleVideoPopularityError,
+    collect_m100_video_popularity_observations,
+)
+from core.paths import campaign_scale_evidence_root, research_scale_promotions_root
 from core.runtime_policy import runtime_profile_digest
 from core.source_digest import SourceDigest
 from support.semantic_preflight_fixture import ready_semantic_preflight
+from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone_readiness__contract__local_contract_test import (
+    EVIDENCE_PAYLOADS,
+    _candidate as _scale_pool_candidate,
+)
 
 CARRIERS = ("homepage", "article", "image", "video")
 SOURCE_DIGEST = "sha256:" + "a" * 64
@@ -83,8 +103,17 @@ def _resign_receipt(path: Path) -> dict[str, object]:
     return payload
 
 
-def _write_ranked_release_videos(release: Path, *, count: int) -> None:
-    refs = [f"video/work-{index:03d}" for index in range(count)]
+def _write_ranked_release_videos(
+    release: Path,
+    *,
+    count: int,
+    execution_id: str,
+    source_revision: str,
+    refs: list[str] | None = None,
+) -> None:
+    output = release.parents[2]
+    refs = refs or [f"video/work-{index:03d}" for index in range(count)]
+    assert len(refs) == count
     _write(
         release / "payload/desired_state.json",
         {
@@ -101,7 +130,49 @@ def _write_ranked_release_videos(release: Path, *, count: int) -> None:
     for index, ref in enumerate(refs):
         object_root = release / "payload/objects/posts" / ref
         asset_id = f"video-asset-{index:03d}"
-        receipt_ref = "asset_reviews/receipts/review.json"
+        content_sha256 = "sha256:" + f"{index + 1:064x}"[-64:]
+        review_id = "asset-review-" + f"{index + 1:064x}"[-64:]
+        receipt_ref = (
+            f"data/tasks/{execution_id}/evidence/asset_reviews/receipts/"
+            f"{review_id}.json"
+        )
+        popularity_signals = {
+            "playCount": 1_000 + index,
+            "likeCount": 100 + index,
+            "commentCount": 10 + index,
+            "shareCount": 5 + index,
+            "favoriteCount": 20 + index,
+            "observedAt": "2026-08-05T00:00:00Z",
+            "provider": "professional_video_fixture",
+            "topic": "travel",
+            "timeBucket": "2026-W32",
+            "popularityScore": 1_135 + 5 * index,
+            "popularityPercentile": round(index / max(count - 1, 1), 6),
+            "rankingEligible": True,
+            "ineligibleReason": "",
+            "comparisonCandidateCount": max(count, 2),
+        }
+        review_stable = {
+            "schema": "quwoquan_data.independent_asset_review_receipt",
+            "reviewId": review_id,
+            "assetKind": "video",
+            "objectRef": ref,
+            "sourceRevision": source_revision,
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+            "executionManifestRef": f"data/tasks/{execution_id}/execution_manifest.json",
+            "authorExecution": {"executionId": execution_id},
+            "reviewerExecution": {"executionId": execution_id},
+            "reviewDecision": "accepted",
+            "assetSnapshot": {
+                "assetId": asset_id,
+                "contentSha256": content_sha256,
+                "popularitySignals": popularity_signals,
+            },
+        }
+        review = {**review_stable, "receiptDigest": _digest(review_stable)}
+        receipt_path = output / receipt_ref
+        _write(receipt_path, review)
         _write(object_root / "manifest.json", {"contentType": "video"})
         _write(
             object_root / "rights.json",
@@ -111,37 +182,167 @@ def _write_ranked_release_videos(release: Path, *, count: int) -> None:
                         "independentAssetReview": {
                             "assetKind": "video",
                             "acquisitionAssetId": asset_id,
+                            "objectRef": ref,
                             "receiptRef": receipt_ref,
+                            "receiptDigest": review["receiptDigest"],
+                            "receiptFileSha256": _file_digest(receipt_path),
+                            "sourceRevision": source_revision,
+                            "sourceDigest": SOURCE_DIGEST,
+                            "entityCatalogDigest": CATALOG_DIGEST,
+                            "contentSha256": content_sha256,
+                            "popularitySignalsDigest": _digest(popularity_signals),
                         }
                     }
                 ]
             },
         )
-        _write(
-            object_root / receipt_ref,
-            {
-                "assetKind": "video",
-                "reviewDecision": "accepted",
-                "assetSnapshot": {
-                    "assetId": asset_id,
-                    "popularitySignals": {
-                        "playCount": 1_000 + index,
-                        "likeCount": 100 + index,
-                        "commentCount": 10 + index,
-                        "shareCount": 5 + index,
-                        "favoriteCount": 20 + index,
-                        "observedAt": "2026-08-05T00:00:00Z",
-                        "provider": "professional_video_fixture",
-                        "topic": "travel",
-                        "timeBucket": "2026-W32",
-                        "popularityScore": 1_135 + 5 * index,
-                        "popularityPercentile": round(index / max(count - 1, 1), 6),
-                        "rankingEligible": True,
-                        "rankingIneligibleReason": "",
-                        "comparisonCandidateCount": count,
-                    },
-                },
-            },
+
+
+def _single_video_popularity_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:
+    release = tmp_path / "output/data/releases/research-release"
+    execution_id = _execution_id("video")
+    source_revision = _digest(
+        {
+            "schema": "quwoquan_data.campaign_content_source_revision",
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+        }
+    )
+    _write_ranked_release_videos(
+        release,
+        count=1,
+        execution_id=execution_id,
+        source_revision=source_revision,
+    )
+    rights_path = release / "payload/objects/posts/video/work-000/rights.json"
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    receipt_ref = rights["assets"][0]["independentAssetReview"]["receiptRef"]
+    return release, rights_path, release.parents[2] / receipt_ref
+
+
+def test_video_popularity_reads_digest_bound_execution_review(tmp_path: Path) -> None:
+    release, _rights_path, _receipt_path = _single_video_popularity_fixture(tmp_path)
+
+    observations = collect_m100_video_popularity_observations(
+        release,
+        expected_video_count=1,
+    )
+
+    assert observations[0]["assetId"] == "video-asset-000"
+    assert observations[0]["rankingEligible"] is True
+
+
+def test_video_popularity_rejects_legacy_object_local_review_ref(
+    tmp_path: Path,
+) -> None:
+    release, rights_path, _receipt_path = _single_video_popularity_fixture(tmp_path)
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    rights["assets"][0]["independentAssetReview"]["receiptRef"] = (
+        "asset_reviews/receipts/review.json"
+    )
+    _write(rights_path, rights)
+
+    with pytest.raises(
+        ResearchScaleVideoPopularityError,
+        match="must name execution evidence",
+    ):
+        collect_m100_video_popularity_observations(
+            release,
+            expected_video_count=1,
+        )
+
+
+def test_video_popularity_rejects_review_ref_traversal(tmp_path: Path) -> None:
+    release, rights_path, _receipt_path = _single_video_popularity_fixture(tmp_path)
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    rights["assets"][0]["independentAssetReview"]["receiptRef"] = (
+        "data/tasks/execution/evidence/asset_reviews/receipts/../../review.json"
+    )
+    _write(rights_path, rights)
+
+    with pytest.raises(
+        ResearchScaleVideoPopularityError,
+        match="must name execution evidence",
+    ):
+        collect_m100_video_popularity_observations(
+            release,
+            expected_video_count=1,
+        )
+
+
+def test_video_popularity_rejects_execution_review_digest_drift(
+    tmp_path: Path,
+) -> None:
+    release, rights_path, receipt_path = _single_video_popularity_fixture(tmp_path)
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["assetSnapshot"]["popularitySignals"]["playCount"] += 1
+    _write(receipt_path, receipt)
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    rights["assets"][0]["independentAssetReview"]["receiptFileSha256"] = (
+        _file_digest(receipt_path)
+    )
+    _write(rights_path, rights)
+
+    with pytest.raises(
+        ResearchScaleVideoPopularityError,
+        match="execution review binding drift",
+    ):
+        collect_m100_video_popularity_observations(
+            release,
+            expected_video_count=1,
+        )
+
+
+def test_video_popularity_rejects_cross_execution_review_binding(
+    tmp_path: Path,
+) -> None:
+    release, rights_path, receipt_path = _single_video_popularity_fixture(tmp_path)
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["reviewerExecution"]["executionId"] = _execution_id("video", 3)
+    receipt["receiptDigest"] = _digest(
+        {key: value for key, value in receipt.items() if key != "receiptDigest"}
+    )
+    _write(receipt_path, receipt)
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    binding = rights["assets"][0]["independentAssetReview"]
+    binding["receiptDigest"] = receipt["receiptDigest"]
+    binding["receiptFileSha256"] = _file_digest(receipt_path)
+    _write(rights_path, rights)
+
+    with pytest.raises(
+        ResearchScaleVideoPopularityError,
+        match="execution review binding drift",
+    ):
+        collect_m100_video_popularity_observations(
+            release,
+            expected_video_count=1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("binding_field", "drifted_value"),
+    (
+        ("objectRef", "video/different-work"),
+        ("contentSha256", "sha256:" + "f" * 64),
+    ),
+)
+def test_video_popularity_rejects_review_object_or_content_drift(
+    tmp_path: Path,
+    binding_field: str,
+    drifted_value: str,
+) -> None:
+    release, rights_path, _receipt_path = _single_video_popularity_fixture(tmp_path)
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    rights["assets"][0]["independentAssetReview"][binding_field] = drifted_value
+    _write(rights_path, rights)
+
+    with pytest.raises(
+        ResearchScaleVideoPopularityError,
+        match="execution review binding drift",
+    ):
+        collect_m100_video_popularity_observations(
+            release,
+            expected_video_count=1,
         )
 
 
@@ -697,6 +898,91 @@ def _write_sol_calibration_runs(
         )
 
 
+def _scale_pool_fixture(
+    output: Path,
+    *,
+    source_revision: str,
+) -> tuple[dict[str, object], dict[str, object], str, dict[str, dict[str, object]], str]:
+    candidates: list[dict[str, object]] = []
+    for carrier in ("homepage", "article"):
+        candidates.extend(
+            _scale_pool_candidate(carrier, index, provider=f"{carrier}-source")
+            for index in range(180)
+        )
+    image_providers = (
+        ["Pinterest"] * 80
+        + ["图虫"] * 20
+        + ["Pexels"] * 50
+        + ["Wikimedia Commons"] * 30
+    )
+    candidates.extend(
+        _scale_pool_candidate("image", index, provider=provider)
+        for index, provider in enumerate(image_providers)
+    )
+    candidates.extend(
+        _scale_pool_candidate("video", index, provider="Pexels Videos")
+        for index in range(100)
+    )
+    for row in candidates:
+        row.update(
+            {
+                "sourceRevision": source_revision,
+                "sourceDigest": SOURCE_DIGEST,
+                "entityCatalogDigest": CATALOG_DIGEST,
+            }
+        )
+        readiness = row.get("videoReadiness")
+        if isinstance(readiness, dict):
+            index = int(str(row["candidateId"]).rsplit("-", 1)[-1])
+            readiness["popularityPercentile"] = round(index / 99, 6)
+            readiness["comparisonBucket"]["candidateCount"] = 100
+    pool_plan = build_scale_source_pool_plan(
+        pool_id="research-m100-pool-001",
+        target_scale="M100",
+        source_revision=source_revision,
+        source_digest=SOURCE_DIGEST,
+        entity_catalog_digest=CATALOG_DIGEST,
+        created_at=START.isoformat(),
+        candidates=candidates,
+    )
+    pool_plan_path = output / "data/local/workspace/scale-source-pools/m100/plan.json"
+    _write(pool_plan_path, pool_plan)
+    evidence_root = output / "data/local/workspace/scale-source-pools/m100/evidence"
+    for relative, body in EVIDENCE_PAYLOADS.values():
+        destination = evidence_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(body)
+    binding: dict[str, object] = {
+        "poolId": pool_plan["poolId"],
+        "targetScale": pool_plan["targetScale"],
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "planRef": pool_plan_path.relative_to(output).as_posix(),
+        "planDigest": pool_plan["planDigest"],
+        "planFileSha256": _file_digest(pool_plan_path),
+    }
+    selections: dict[str, dict[str, object]] = {}
+    for carrier in CARRIERS:
+        stable_selection = {
+            "carrier": carrier,
+            "candidateIds": [f"{carrier}-{index:05d}" for index in range(100)],
+            "candidateCount": 100,
+        }
+        selections[carrier] = {
+            **stable_selection,
+            "selectionDigest": _digest(stable_selection),
+        }
+    evidence_ref = evidence_root.relative_to(output).as_posix()
+    snapshot_digest = bound_scale_source_pool_snapshot_digest(
+        binding,
+        evidence_root_ref=evidence_ref,
+        output_root=output,
+        lane_selections=selections,
+    )
+    return pool_plan, binding, evidence_ref, selections, snapshot_digest
+
+
 def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     output = tmp_path / "output"
     tasks = output / "data/tasks"
@@ -728,10 +1014,18 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         }
         for carrier in CARRIERS
     }
+    (
+        pool_plan,
+        pool_binding,
+        pool_evidence_ref,
+        pool_selections,
+        source_pool_snapshot_digest,
+    ) = _scale_pool_fixture(output, source_revision=source_revision)
     plan_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
         "executionMode": "central",
+        "scale": "M100",
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
@@ -739,6 +1033,9 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": terra_preflight_binding,
+        "scaleSourcePool": pool_binding,
+        "sourcePoolEvidenceRootRef": pool_evidence_ref,
+        "laneSourcePoolSelections": pool_selections,
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": _digest(
             {
@@ -761,6 +1058,85 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     )
     plan_path = campaign_root / "campaign_plan.json"
     _write(plan_path, plan)
+    capsule_stable = {
+        "schema": "quwoquan_data.content_campaign_source_capsule",
+        "format": "source-snapshot-v1",
+        "gitCommitSha": plan["gitCommitSha"],
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "roots": ["quwoquan_data"],
+        "laneExternalInputs": {
+            carrier: {
+                "rootRef": f"external-inputs/{carrier}",
+                "externalInputRefs": [],
+                "externalInputsDigest": empty_external_digest,
+            }
+            for carrier in CARRIERS
+        },
+        "externalInputsDigest": plan["externalInputsDigest"],
+        "scaleSourcePool": pool_binding,
+        "sourcePoolSnapshotRootRef": "scale-source-pool",
+        "sourcePoolSnapshotDigest": source_pool_snapshot_digest,
+        "laneSourcePoolSelections": pool_selections,
+    }
+    capsule_digest = _digest(capsule_stable)
+    capsule_root = output / "data/local/workspace/content-campaign-workspaces/content-addressed-capsules" / capsule_digest.removeprefix("sha256:")
+    materialize_bound_scale_source_pool(
+        pool_binding,
+        evidence_root_ref=pool_evidence_ref,
+        output_root=output,
+        destination=capsule_root / "scale-source-pool",
+        lane_selections=pool_selections,
+        expected_snapshot_digest=source_pool_snapshot_digest,
+    )
+    _write(
+        capsule_root / ".qwq_campaign_capsule.json",
+        {**capsule_stable, "capsuleDigest": capsule_digest, "treeDigest": "sha256:" + "c" * 64},
+    )
+    capsule_ref = capsule_root.relative_to(output).as_posix()
+    report_lane = lambda carrier: {
+        "executionId": execution_ids[carrier],
+        "status": "finalized",
+        "phase": "publish",
+        "reviewReturnCode": 0,
+        "publishReturnCode": 0,
+        "sourceCapsuleRef": capsule_ref,
+        "sourceCapsuleDigest": capsule_digest,
+        "sourceCapsuleCommitSha": plan["gitCommitSha"],
+        "sourceCapsuleSourceDigest": SOURCE_DIGEST,
+        "sourceCapsuleReadOnly": True,
+        "executionRootRef": f"data/tasks/{execution_ids[carrier]}",
+        "cleanupStatus": "cleaned",
+        "approvedQuota": 100,
+        "qualifiedCount": 100,
+        "finalizedCount": 100,
+        "selectedCount": 100,
+        "discardedCount": 0,
+        "shortfallCount": 0,
+        "error": None,
+    }
+    _write(
+        campaign_root / "campaign_report.json",
+        {
+            "schema": "quwoquan_data.content_campaign_report",
+            "rootExecutionId": root_id,
+            "campaignRunId": f"{root_id}-run",
+            "campaignGeneration": 1,
+            "campaignFencingToken": FENCING_TOKEN,
+            "status": "succeeded",
+            "phase": "completed",
+            "planDigest": plan["planDigest"],
+            "gitBranch": plan["gitBranch"],
+            "gitCommitSha": plan["gitCommitSha"],
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+            "lanes": {carrier: report_lane(carrier) for carrier in CARRIERS},
+            "failure": None,
+            "startedAt": START.isoformat(),
+            "updatedAt": (START + timedelta(seconds=3720)).isoformat(),
+        },
+    )
 
     fault_cases: list[dict[str, object]] = []
     fault_types = (
@@ -903,6 +1279,36 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 )
 
     release = release_root / "research-release"
+    image_assets = [
+        {
+            "assetId": f"professional-image-{index:03d}",
+            "objectRef": f"posts/image/测试/test-{index:03d}/001",
+            "acquisitionStatus": "acquired",
+            "rightsStatus": "unverified",
+            "authorizationRequired": True,
+            "distributionDecision": "research_allowed",
+            "sourceUrl": (
+                f"https://images.pinterest.example/original/{index:03d}.jpg"
+                if index < 60
+                else f"https://photo.tuchong.example/original/{index:03d}.jpg"
+            ),
+            "platform": "pinterest" if index < 60 else "tuchong",
+            "creator": f"Professional Photographer {index:03d}",
+            "capturedAt": "2026-08-05T00:00:00Z",
+            "contentSha256": "sha256:" + f"{index + 1000:064x}"[-64:],
+            "license": "unknown",
+            "termsUrl": (
+                "https://policy.pinterest.com/terms-of-service"
+                if index < 60
+                else "https://tuchong.com/info/terms"
+            ),
+            "authorizationProof": "",
+            "rightsIssues": ["authorization_required"],
+            "generated": False,
+        }
+        for index in range(100)
+    ]
+    authorization_ids = [str(row["assetId"]) for row in image_assets]
     _write(
         release / "payload/release.json",
         {
@@ -912,14 +1318,14 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "releaseKind": "content",
             "releaseClass": "research",
             "productLifecycleState": "research",
-            "containsUnverifiedAssets": False,
+            "containsUnverifiedAssets": True,
             "rightsStatusCounts": {
                 "verified": 0,
-                "unverified": 0,
+                "unverified": 100,
                 "restricted": 0,
                 "unknown": 0,
             },
-            "authorizationRequiredAssetIds": [],
+            "authorizationRequiredAssetIds": authorization_ids,
             "researchAcceptedCount": 400,
             "commercialAcceptedCount": 0,
             "canonicalMerkle": "sha256:" + "e" * 64,
@@ -937,21 +1343,21 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "releaseId": "research-release",
             "releaseClass": "research",
             "productLifecycleState": "research",
-            "containsUnverifiedAssets": False,
+            "containsUnverifiedAssets": True,
             "rightsStatusCounts": {
                 "verified": 0,
-                "unverified": 0,
+                "unverified": 100,
                 "restricted": 0,
                 "unknown": 0,
             },
-            "authorizationRequiredAssetIds": [],
+            "authorizationRequiredAssetIds": authorization_ids,
             "researchAcceptedCount": 400,
             "commercialAcceptedCount": 0,
             "carrierCounts": [
                 {
                     "carrier": carrier,
                     "objectCount": 100,
-                    "assetCount": 0,
+                    "assetCount": 100 if carrier == "image" else 0,
                     "researchAcceptedCount": 100,
                     "commercialAcceptedCount": 0,
                 }
@@ -964,11 +1370,67 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "illustratedRate": 0.9,
                 "textOnlyRate": 0.1,
             },
-            "sourceAssetCounts": [],
-            "assets": [],
+            "sourceAssetCounts": [
+                {
+                    "displayName": "Pinterest",
+                    "provider": "pinterest",
+                    "plannedAssetCount": 60,
+                    "discoveredAssetCount": 60,
+                    "downloadedAssetCount": 60,
+                    "acceptedAssetCount": 60,
+                    "rejectedAssetCount": 0,
+                    "verifiedAssetCount": 0,
+                    "unverifiedAssetCount": 60,
+                    "restrictedAssetCount": 0,
+                    "unknownAssetCount": 0,
+                },
+                {
+                    "displayName": "图虫",
+                    "provider": "tuchong",
+                    "plannedAssetCount": 40,
+                    "discoveredAssetCount": 40,
+                    "downloadedAssetCount": 40,
+                    "acceptedAssetCount": 40,
+                    "rejectedAssetCount": 0,
+                    "verifiedAssetCount": 0,
+                    "unverifiedAssetCount": 40,
+                    "restrictedAssetCount": 0,
+                    "unknownAssetCount": 0,
+                },
+            ],
+            "assets": image_assets,
         },
     )
-    _write_ranked_release_videos(release, count=100)
+    _write_ranked_release_videos(
+        release,
+        count=100,
+        execution_id=execution_ids["video"],
+        source_revision=source_revision,
+        refs=_publish_refs("video")["posts"],
+    )
+    for carrier in ("article", "image"):
+        for raw_ref in _publish_refs(carrier)["posts"]:
+            _write(
+                release / "payload/objects/posts" / raw_ref / "manifest.json",
+                {"contentType": carrier},
+            )
+    _write(
+        release / "payload/desired_state.json",
+        {
+            "schema": "quwoquan_data.release_desired_state",
+            "releaseId": "research-release",
+            "desiredRefs": {
+                "creators": [],
+                "entities": _publish_refs("homepage")["entities"],
+                "posts": [
+                    raw_ref
+                    for carrier in ("article", "image", "video")
+                    for raw_ref in _publish_refs(carrier)["posts"]
+                ],
+                "tags": [],
+            },
+        },
+    )
 
     session_path, samples_root, faults_root = _write_runtime_receipts(
         output=output,
@@ -1014,13 +1476,353 @@ def _write_evidence(
     )
 
 
+def test_cumulative_scale_context_binds_predecessor_and_current_execution_closure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "output"
+    release_root = output / "data/releases"
+    predecessor_release = release_root / "predecessor-release"
+    source_revision = _digest(
+        {
+            "schema": "quwoquan_data.campaign_content_source_revision",
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+        }
+    )
+    predecessor_ids = {carrier: _execution_id(carrier) for carrier in CARRIERS}
+    current_ids = {
+        carrier: _execution_id(carrier).replace("-m100--", "-m1000--")
+        for carrier in CARRIERS
+    }
+    predecessor_header = {
+        "schema": "quwoquan_data.release",
+        "releaseId": "predecessor-release",
+        "sourceOwner": "qwq_data",
+        "releaseKind": "content",
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "containsUnverifiedAssets": False,
+        "rightsStatusCounts": {
+            "verified": 0,
+            "unverified": 0,
+            "restricted": 0,
+            "unknown": 0,
+        },
+        "authorizationRequiredAssetIds": [],
+        "researchAcceptedCount": 4,
+        "commercialAcceptedCount": 0,
+        "canonicalMerkle": "sha256:" + "e" * 64,
+        "executionIds": list(predecessor_ids.values()),
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "sourceDigests": [SOURCE_DIGEST_DOCUMENT],
+    }
+    _write(predecessor_release / "payload/release.json", predecessor_header)
+    _write(
+        predecessor_release / "payload/desired_state.json",
+        {
+            "schema": "quwoquan_data.release_desired_state",
+            "releaseId": "predecessor-release",
+            "desiredRefs": {
+                "entities": ["地点/景区/predecessor"],
+                "posts": [
+                    "article/predecessor/001",
+                    "image/predecessor/001",
+                    "video/predecessor/001",
+                ],
+                "creators": [],
+                "tags": [],
+            },
+        },
+    )
+    manifest_digest = campaign_scale_cumulative.payload_digest(predecessor_release)
+    predecessor_reference = {
+        "promotionId": "promotion-m100",
+        "releaseId": "predecessor-release",
+        "manifestDigest": manifest_digest,
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "targetScale": "M100",
+        "receiptRef": "data/local/workspace/promotions/promotion-m100.json",
+        "receiptDigest": "sha256:" + "c" * 64,
+    }
+    monkeypatch.setattr(
+        campaign_scale_cumulative,
+        "load_predecessor_promotion",
+        lambda *_args, **_kwargs: (
+            predecessor_reference,
+            {carrier: 1 for carrier in CARRIERS},
+        ),
+    )
+    plan = {
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "executionIds": current_ids,
+    }
+    current_header = {
+        **predecessor_header,
+        "releaseId": "current-release",
+        "executionIds": [*predecessor_ids.values(), *current_ids.values()],
+    }
+
+    scale, predecessor, counts, carried_ids, release_ids, refs = (
+        campaign_scale_cumulative.scale_context(
+            target_scale="M1000",
+            predecessor_promotion_path=output / predecessor_reference["receiptRef"],
+            plan=plan,
+            header=current_header,
+            release_root=release_root,
+            output_root=output,
+        )
+    )
+
+    assert scale == "M1000"
+    assert predecessor == predecessor_reference
+    assert counts == {carrier: 1 for carrier in CARRIERS}
+    assert carried_ids == sorted(predecessor_ids.values())
+    assert release_ids == sorted(current_header["executionIds"])
+    assert {carrier: len(refs[carrier]) for carrier in CARRIERS} == {
+        carrier: 1 for carrier in CARRIERS
+    }
+
+    with pytest.raises(
+        CampaignScaleEvidenceError,
+        match="predecessor carried plus current four lanes",
+    ):
+        campaign_scale_cumulative.scale_context(
+            target_scale="M1000",
+            predecessor_promotion_path=output / predecessor_reference["receiptRef"],
+            plan=plan,
+            header={**current_header, "executionIds": list(current_ids.values())},
+            release_root=release_root,
+            output_root=output,
+        )
+
+
+def test_campaign_scale_evidence_records_m100_as_zero_carried_cumulative_baseline(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    evidence, path = _write_evidence(fixture)
+
+    loaded, _resource, _fault = load_campaign_scale_evidence(
+        path,
+        output_root=fixture["output"],
+    )
+    assert loaded == evidence
+    assert evidence["targetScale"] == "M100"
+    assert evidence["predecessorCarriedExecutionIds"] == []
+    assert evidence["releaseExecutionIds"] == sorted(
+        fixture["plan"]["executionIds"].values()
+    )
+    assert [row["predecessorCarriedCount"] for row in evidence["lanes"]] == [0] * 4
+    assert [row["newFinalizedCount"] for row in evidence["lanes"]] == [100] * 4
+    assert [row["totalUniqueFinalizedCount"] for row in evidence["lanes"]] == [
+        100
+    ] * 4
+    assert evidence["scaleStartedAt"] == START.isoformat()
+    assert evidence["scaleCompletedAt"] == (
+        START + timedelta(hours=1, minutes=2)
+    ).isoformat()
+    assert evidence["wallClockBudgetSeconds"] is None
+    assert evidence["wallClockSeconds"] == 3720
+
+
+def test_campaign_scale_source_pool_blocks_predecessor_candidate_reuse(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    evidence, evidence_path = _write_evidence(fixture)
+    promotion, promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-source-pool-lineage",
+        campaign_evidence_path=evidence_path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+    assert promotion["sourcePoolDigest"] == evidence["sourcePoolDigest"]
+    assert evidence["predecessorSourcePoolDigests"] == []
+
+    current_pool = json.loads(json.dumps(evidence["sourcePool"]))
+    current_pool["poolId"] = "research-m1000-pool-001"
+    current_pool["targetScale"] = "M1000"
+    with pytest.raises(CampaignScaleEvidenceError, match="POOL_SHORTFALL.*reused"):
+        source_pool_lineage_fields(
+            source_pool_fields={
+                "sourcePool": current_pool,
+                "sourcePoolDigest": _digest(current_pool),
+            },
+            target_scale="M1000",
+            predecessor_promotion_path=promotion_path,
+            output_root=fixture["output"],
+        )
+
+
+def test_cumulative_scale_wall_clock_uses_predecessor_promotion_and_hard_budgets(
+    tmp_path: Path,
+) -> None:
+    predecessor_path = tmp_path / "predecessor-promotion.json"
+    _write(predecessor_path, {"recordedAt": START.isoformat()})
+    plan = {"frozenAt": (START - timedelta(days=30)).isoformat()}
+
+    at_budget = campaign_scale_cumulative.scale_timing_fields(
+        target_scale="M1000",
+        plan=plan,
+        predecessor_promotion_path=predecessor_path,
+        resource={
+            "allSemanticJobsTerminalAt": (START + timedelta(days=2)).isoformat(),
+            "terminalResidualSampleAt": (START + timedelta(days=3)).isoformat(),
+        },
+    )
+
+    assert at_budget == {
+        "scaleStartedAt": START.isoformat(),
+        "scaleCompletedAt": (START + timedelta(days=3)).isoformat(),
+        "wallClockBudgetSeconds": 259200,
+        "wallClockSeconds": 259200,
+    }
+    with pytest.raises(
+        CampaignScaleEvidenceError,
+        match="DATA.SCALE.ATTAINMENT_SHORTFALL",
+    ):
+        campaign_scale_cumulative.scale_timing_fields(
+            target_scale="M1000",
+            plan=plan,
+            predecessor_promotion_path=predecessor_path,
+            resource={
+                "terminalResidualSampleAt": (
+                    START + timedelta(seconds=259201)
+                ).isoformat()
+            },
+        )
+    with pytest.raises(
+        CampaignScaleEvidenceError,
+        match="DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED",
+    ):
+        campaign_scale_cumulative.scale_timing_fields(
+            target_scale="M10000",
+            plan=plan,
+            predecessor_promotion_path=predecessor_path,
+            resource={
+                "terminalResidualSampleAt": (
+                    START + timedelta(seconds=604801)
+                ).isoformat()
+            },
+        )
+
+
+def test_promotion_timing_revalidates_campaign_projection_and_typed_budgets() -> None:
+    m1000_completed = START + timedelta(seconds=259200)
+    evidence = {
+        "targetScale": "M1000",
+        "scaleStartedAt": START.isoformat(),
+        "scaleCompletedAt": m1000_completed.isoformat(),
+        "wallClockBudgetSeconds": 259200,
+        "wallClockSeconds": 259200,
+    }
+
+    assert validate_promotion_timing(
+        target_scale="M1000",
+        evidence=evidence,
+        resource_evidence={"terminalResidualSampleAt": m1000_completed.isoformat()},
+    ) == {
+        "scaleStartedAt": START.isoformat(),
+        "scaleCompletedAt": m1000_completed.isoformat(),
+        "wallClockBudgetSeconds": 259200,
+        "wallClockSeconds": 259200,
+    }
+
+    exceeded = START + timedelta(seconds=259201)
+    with pytest.raises(
+        ResearchScalePromotionTimingError,
+        match="DATA.SCALE.ATTAINMENT_SHORTFALL",
+    ):
+        validate_promotion_timing(
+            target_scale="M1000",
+            evidence={
+                **evidence,
+                "scaleCompletedAt": exceeded.isoformat(),
+                "wallClockSeconds": 259201,
+            },
+            resource_evidence={"terminalResidualSampleAt": exceeded.isoformat()},
+        )
+
+    m10000_exceeded = START + timedelta(seconds=604801)
+    with pytest.raises(
+        ResearchScalePromotionTimingError,
+        match="DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED",
+    ):
+        validate_promotion_timing(
+            target_scale="M10000",
+            evidence={
+                **evidence,
+                "targetScale": "M10000",
+                "scaleCompletedAt": m10000_exceeded.isoformat(),
+                "wallClockBudgetSeconds": 604800,
+                "wallClockSeconds": 604801,
+            },
+            resource_evidence={
+                "terminalResidualSampleAt": m10000_exceeded.isoformat()
+            },
+        )
+
+
+def test_promotion_writer_preserves_typed_wall_clock_blocker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _fixture(tmp_path)
+    _evidence, path = _write_evidence(fixture)
+
+    def block_timing(**_kwargs: object) -> dict[str, object]:
+        raise ResearchScalePromotionTimingError(
+            "DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED: governed timing blocker"
+        )
+
+    monkeypatch.setattr(
+        research_scale_promotion_module,
+        "validate_promotion_timing",
+        block_timing,
+    )
+    with pytest.raises(
+        ResearchScalePromotionError,
+        match="DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED",
+    ):
+        write_research_scale_promotion(
+            release_id="research-release",
+            promotion_id="promotion-wall-clock-blocked",
+            campaign_evidence_path=path,
+            release_root=fixture["releaseRoot"],
+            output_root=fixture["output"],
+        )
+
+
 def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
     evidence, path = _write_evidence(fixture)
 
+    assert path == (
+        campaign_scale_evidence_root(output_root=fixture["output"])
+        / "research-release/scale-evidence-1/campaign-scale.json"
+    )
     assert evidence["status"] == "passed"
+    assert evidence["targetScale"] == "M100"
+    assert evidence["predecessorCarriedExecutionIds"] == []
+    assert evidence["releaseExecutionIds"] == sorted(
+        fixture["plan"]["executionIds"].values()
+    )
+    assert "predecessorPromotion" not in evidence
+    assert [row["predecessorCarriedCount"] for row in evidence["lanes"]] == [0] * 4
+    assert [row["newFinalizedCount"] for row in evidence["lanes"]] == [100] * 4
+    assert [row["totalUniqueFinalizedCount"] for row in evidence["lanes"]] == [
+        100
+    ] * 4
     calibration_binding = evidence["calibrationPreflightReceipt"]
     assert calibration_binding["receiptRef"] == (
         fixture["calibrationPreflightReceiptPath"]
@@ -1115,7 +1917,14 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
         release_root=fixture["releaseRoot"],
         output_root=fixture["output"],
     )
-    assert promotion["m1000Eligible"] is True
+    assert promotion["targetScale"] == "M100"
+    assert promotion["scaleStartedAt"] == START.isoformat()
+    assert promotion["scaleCompletedAt"] == (
+        START + timedelta(hours=1, minutes=2)
+    ).isoformat()
+    assert promotion["wallClockBudgetSeconds"] is None
+    assert promotion["wallClockSeconds"] == 3720
+    assert promotion["nextScaleEligible"] == "M1000"
     assert promotion["campaignEvidenceDigest"] == evidence["evidenceDigest"]
     assert promotion["carrierCounts"][-1]["targetCount"] == 10
     assert promotion["carrierCounts"][-1]["qualifiedCount"] == 100
@@ -1131,10 +1940,29 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
         "rate": 0.9,
     }
     assert promotion["statistics"]["automaticRecoveryRate"] == {
-        "numerator": 19,
-        "denominator": 20,
+        "statistical": True,
+        "nonBlocking": False,
+        "status": "MEASURED",
+        "eligibleCount": 20,
+        "automaticCount": 19,
+        "targetRate": 0.95,
         "rate": 0.95,
     }
+    assert promotion["statistics"]["videoPopularity"]["statistical"] is True
+    assert promotion["statistics"]["videoPopularity"]["nonBlocking"] is False
+    assert promotion["statistics"]["videoPopularity"]["rankingCoverage"] == {
+        "numerator": 100,
+        "denominator": 100,
+        "rate": 1.0,
+    }
+    assert promotion["statistics"]["videoPopularity"]["signalAvailability"] == [
+        {"signal": signal, "numerator": 100, "denominator": 100, "rate": 1.0}
+        for signal in ("play", "like", "comment", "share", "favorite")
+    ]
+    assert promotion["professionalImageSourceMix"]["acceptedImageAssetCount"] == 100
+    assert promotion["professionalImageSourceMix"]["largestProvider"] == "pinterest"
+    assert promotion["professionalImageSourceMix"]["pinterestAcceptedAssetCount"] == 60
+    assert promotion["professionalImageSourceMix"]["tuchongAcceptedAssetCount"] == 40
     assert promotion["statistics"]["firstPassRate"] == {
         "numerator": 3,
         "denominator": 4,
@@ -1153,6 +1981,10 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert promotion["terminalResidualSampleAt"] == resource[
         "terminalResidualSampleAt"
     ]
+    assert promotion_path == (
+        research_scale_promotions_root(output_root=fixture["output"])
+        / "research-release/promotion-1/research-m100.json"
+    )
     assert promotion_path.is_file()
 
     repeated, repeated_path = _write_evidence(fixture)
@@ -1160,16 +1992,15 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert repeated_path == path
 
 
-def test_m100_promotion_blocks_truthfully_unranked_video(
+def test_m100_promotion_blocks_unranked_video(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
     release = fixture["releaseRoot"] / "research-release"
-    receipt_path = next(
-        (release / "payload/objects/posts/video").glob(
-            "*/asset_reviews/receipts/review.json"
-        )
-    )
+    rights_path = next((release / "payload/objects/posts/video").rglob("rights.json"))
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    receipt_ref = rights["assets"][0]["independentAssetReview"]["receiptRef"]
+    receipt_path = fixture["output"] / receipt_ref
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     signals = receipt["assetSnapshot"]["popularitySignals"]
     signals.update(
@@ -1178,15 +2009,26 @@ def test_m100_promotion_blocks_truthfully_unranked_video(
             "popularityScore": None,
             "popularityPercentile": None,
             "rankingEligible": False,
-            "rankingIneligibleReason": "incomplete_popularity_signals",
+            "ineligibleReason": "incomplete_popularity_signals",
         }
     )
+    receipt["receiptDigest"] = _digest(
+        {key: value for key, value in receipt.items() if key != "receiptDigest"}
+    )
     _write(receipt_path, receipt)
+    rights["assets"][0]["independentAssetReview"].update(
+        {
+            "receiptDigest": receipt["receiptDigest"],
+            "receiptFileSha256": _file_digest(receipt_path),
+            "popularitySignalsDigest": _digest(signals),
+        }
+    )
+    _write(rights_path, rights)
     _evidence, path = _write_evidence(fixture)
 
     with pytest.raises(
         ResearchScalePromotionError,
-        match="DATA.RELEASE.VIDEO_POPULARITY_INCOMPLETE",
+        match="DATA.SCALE.ATTAINMENT_SHORTFALL",
     ):
         write_research_scale_promotion(
             release_id="research-release",
@@ -1410,7 +2252,7 @@ def test_campaign_scale_evidence_blocks_missing_sol_calibration_sample(
         _write_evidence(fixture)
 
 
-def test_zero_recovery_denominator_is_recorded_without_blocking_promotion(
+def test_zero_recovery_denominator_blocks_promotion(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
@@ -1431,24 +2273,65 @@ def test_zero_recovery_denominator_is_recorded_without_blocking_promotion(
 
     evidence, path = _write_evidence(fixture)
     fault = json.loads((path.parent / "fault-injection.json").read_text())
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
+    assert fault["status"] == "passed"
     assert fault["automaticRecoveryStatus"] == "NOT_EXERCISED"
-    assert fault["automaticRecoveryRate"] == 0
+    assert fault["automaticRecoveryRate"] is None
 
-    promotion, _promotion_path = write_research_scale_promotion(
-        release_id="research-release",
-        promotion_id="promotion-statistical-recovery",
-        campaign_evidence_path=path,
-        release_root=fixture["releaseRoot"],
-        output_root=fixture["output"],
-    )
-    assert promotion["m1000Eligible"] is True
-    assert promotion["automaticRecoveryStatus"] == "NOT_EXERCISED"
-    assert promotion["statistics"]["automaticRecoveryRate"] == {
-        "numerator": 0,
-        "denominator": 0,
-        "rate": 0.0,
-    }
+    with pytest.raises(
+        ResearchScalePromotionError,
+        match="automatic recovery hard gate failed",
+    ):
+        write_research_scale_promotion(
+            release_id="research-release",
+            promotion_id="promotion-statistical-recovery",
+            campaign_evidence_path=path,
+            release_root=fixture["releaseRoot"],
+            output_root=fixture["output"],
+        )
+
+
+def test_low_automatic_recovery_rate_blocks_promotion(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    for receipt_path in fixture["faultsRoot"].glob("*/receipt.json"):
+        if receipt_path.parent.name.endswith("-0"):
+            continue
+        payload = json.loads(receipt_path.read_text())
+        payload.update(
+            {
+                "actionStatus": "failed",
+                "actionResultCode": "DATA.RUNTIME_EVIDENCE.FIXTURE_FAILED",
+                "faultEventAt": None,
+                "eventRef": None,
+                "eventSha256": None,
+                "queueEventEvidenceDigest": None,
+            }
+        )
+        _write(receipt_path, payload)
+        _resign_receipt(receipt_path)
+
+    evidence, path = _write_evidence(fixture)
+    fault = json.loads((path.parent / "fault-injection.json").read_text())
+
+    assert evidence["status"] == "passed"
+    assert fault["status"] == "passed"
+    assert fault["recoveryEligibleCount"] == 4
+    assert fault["automaticRecoveredCount"] == 3
+    assert fault["automaticRecoveryRate"] == 0.75
+
+    with pytest.raises(
+        ResearchScalePromotionError,
+        match="automatic recovery hard gate failed",
+    ):
+        write_research_scale_promotion(
+            release_id="research-release",
+            promotion_id="promotion-low-statistical-recovery",
+            campaign_evidence_path=path,
+            release_root=fixture["releaseRoot"],
+            output_root=fixture["output"],
+        )
 
 
 def test_resource_soak_requires_one_continuous_four_lane_hour(
@@ -1765,6 +2648,10 @@ def test_release_cli_exposes_canonical_campaign_scale_evidence_writer() -> None:
             "evidence-1",
             "--release-id",
             "research-release",
+            "--target-scale",
+            "M1000",
+            "--predecessor-promotion",
+            "/tmp/m100-promotion.json",
             "--campaign-plan",
             "/tmp/campaign-plan.json",
             "--runtime-session",
@@ -1776,6 +2663,8 @@ def test_release_cli_exposes_canonical_campaign_scale_evidence_writer() -> None:
 
     assert parsed.release_command == "campaign-scale-evidence"
     assert parsed.evidence_id == "evidence-1"
+    assert parsed.target_scale == "M1000"
+    assert parsed.predecessor_promotion == "/tmp/m100-promotion.json"
     assert parsed.runtime_session == "/tmp/runtime-session.json"
     assert parsed.calibration_preflight_receipt == (
         "/tmp/sol-calibration-preflight.json"

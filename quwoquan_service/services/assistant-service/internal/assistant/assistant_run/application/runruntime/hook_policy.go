@@ -29,8 +29,11 @@ var mandatoryHookPolicyRefs = []string{
 
 type HookAuditRecord struct {
 	HookPolicyRef        string
+	InvocationID         string
 	Phase                HookPhase
 	RunDigest            string
+	RunRevision          int64
+	Outcome              string
 	TaskID               string
 	ToolName             string
 	ProtectedFactsDigest string
@@ -66,8 +69,11 @@ func (sink SlogHookAuditSink) RecordHookAudit(
 		ctx,
 		"assistant lifecycle hook audited",
 		slog.String("hook_policy_ref", record.HookPolicyRef),
+		slog.String("invocation_id", record.InvocationID),
 		slog.String("phase", string(record.Phase)),
 		slog.String("run_digest", record.RunDigest),
+		slog.Int64("run_revision", record.RunRevision),
+		slog.String("outcome", record.Outcome),
 		slog.String("task_id", record.TaskID),
 		slog.String("tool_name", record.ToolName),
 		slog.String("protected_facts_digest", record.ProtectedFactsDigest),
@@ -183,8 +189,11 @@ func (hook auditLifecycleHook) Invoke(
 	}
 	if err := hook.sink.RecordHookAudit(ctx, HookAuditRecord{
 		HookPolicyRef:        hook.Name(),
+		InvocationID:         strings.TrimSpace(input.InvocationID),
 		Phase:                input.Phase,
 		RunDigest:            auditRunDigest(input.Run.RunID),
+		RunRevision:          input.RunRevision,
+		Outcome:              strings.TrimSpace(input.Outcome),
 		TaskID:               strings.TrimSpace(input.TaskID),
 		ToolName:             strings.TrimSpace(input.ToolName),
 		ProtectedFactsDigest: strings.TrimSpace(input.ProtectedFactsDigest),

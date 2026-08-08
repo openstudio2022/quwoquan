@@ -8,12 +8,18 @@ import 'package:quwoquan_app/service/user_service/relationship/persona_relations
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
 
 import '../../../../../support/service/user_service/persona_management/persona/profile_shell_scroll_utils.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
 /// 创作 Tab（V5）：二级子页恰为 全部/图片/视频/长文，全链路无「微趣/moment」概念。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -31,6 +37,10 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
+      ...sealedCloudBoundaryOverrides(),
+      behaviorRepositoryProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
@@ -50,6 +60,8 @@ Widget _scopedApp() {
     child: MaterialApp(
       theme: ThemeData.light(),
       home: const ProfileShell(
+        recommendationSlots: profileRecommendationSlots,
+        participantSlots: profileParticipantSlots,
         mode: ProfileMode.mine,
         userId: 'nature_photographer',
       ),

@@ -19,16 +19,6 @@ const (
 	PrefixAppMessage              Prefix = "msg_"
 	PrefixNotificationDeliveryJob Prefix = "ndj_"
 	PrefixFeedRequest             Prefix = "frq_"
-	PrefixTripPlan                Prefix = "trip_"
-	PrefixTripPlanRevision        Prefix = "trv_"
-	PrefixTripMembership          Prefix = "tpm_"
-	PrefixTripPlanPlacement       Prefix = "tpl_"
-	PrefixTripMoment              Prefix = "tmo_"
-	PrefixTripPlanContentLink     Prefix = "tcl_"
-	PrefixTripShareSnapshot       Prefix = "tss_"
-	PrefixTripPlanTemplate        Prefix = "tpt_"
-	PrefixTripGuideAssignment     Prefix = "tga_"
-	PrefixTravelDomainEvent       Prefix = "tve_"
 )
 
 var prefixPattern = regexp.MustCompile(`^[a-z][a-z0-9]{1,15}_$`)
@@ -100,14 +90,4 @@ func init() {
 	DefaultRegistry.MustRegister(PrefixAppMessage, "AppMessage")
 	DefaultRegistry.MustRegister(PrefixNotificationDeliveryJob, "NotificationDeliveryJob")
 	DefaultRegistry.MustRegister(PrefixFeedRequest, "FeedRequest")
-	DefaultRegistry.MustRegister(PrefixTripPlan, "TripPlan")
-	DefaultRegistry.MustRegister(PrefixTripPlanRevision, "TripPlanRevision")
-	DefaultRegistry.MustRegister(PrefixTripMembership, "TripMembership")
-	DefaultRegistry.MustRegister(PrefixTripPlanPlacement, "TripPlanPlacement")
-	DefaultRegistry.MustRegister(PrefixTripMoment, "TripMoment")
-	DefaultRegistry.MustRegister(PrefixTripPlanContentLink, "TripPlanContentLink")
-	DefaultRegistry.MustRegister(PrefixTripShareSnapshot, "TripShareSnapshot")
-	DefaultRegistry.MustRegister(PrefixTripPlanTemplate, "TripPlanTemplate")
-	DefaultRegistry.MustRegister(PrefixTripGuideAssignment, "TripGuideAssignment")
-	DefaultRegistry.MustRegister(PrefixTravelDomainEvent, "TravelDomainEvent")
 }

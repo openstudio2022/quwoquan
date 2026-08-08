@@ -14,6 +14,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:sqflite/sqflite.dart';
 part 'local_chat_search_store_impl.dart';
 part 'local_chat_search_store_queries.dart';
+part 'local_chat_search_store_support.dart';
 
 abstract interface class LocalChatSearchReader {
   Future<List<LocalChatSearchContactRecord>> searchContacts({

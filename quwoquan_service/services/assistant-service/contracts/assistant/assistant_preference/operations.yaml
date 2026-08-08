@@ -310,3 +310,35 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_preference/assistant_preference__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_preference_set_assistant_preference_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: SetAssistantPreference}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_preference/assistant_preference_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: assistant_preference_list_assistant_preferences_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListAssistantPreferences}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_preference/assistant_preference_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: assistant_preference_revoke_assistant_preference_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: RevokeAssistantPreference}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_preference/assistant_preference_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: assistant_preference_restore_assistant_preference_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: RestoreAssistantPreference}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_preference/assistant_preference_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

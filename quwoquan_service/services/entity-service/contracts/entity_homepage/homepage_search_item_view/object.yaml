@@ -21,6 +21,23 @@ relationships:
 local_identity_reasons:
   canonicalEntityId: external data-catalog entity key resolved only through the EntityHomepage external
     projection port
+search_policy:
+  exposed: remote_index
+  eligibility_ref: quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_search_projection.go#HomepageSearchEligible
+  index_projector_ref: quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_search_projection.go#ProjectHomepageToSearchDocument
+  privacy_filter_ref: quwoquan_service/runtime/search/core.go#isPrivateVisibility
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.entity.homepage_search_item_view.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.entity.homepage_search_item_view.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 只投影 Homepage 已公开且可搜索的 canonical 字段，不复制审核草稿或外部原始载荷。
 - 同一 homepageId 仅保留最高聚合版本，重复或乱序事件不得回退条目。

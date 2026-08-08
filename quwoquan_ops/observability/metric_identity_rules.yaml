@@ -1,0 +1,72 @@
+# 端云 metric 语义同源规则（唯一真相源：本文件 + ContractGraph + 现场扫描）
+#
+# 只读调研结论（见 verify_metric_identity_homology.py --survey 的现场输出）决定了这套规则的形状：
+#
+# 1. `telemetry.metric`（云侧 operation 契约）当前 525 个 operation 里只有 449 个不同取值，
+#    37 个取值被 2~11 个 operation 共享（`chat_conversation_query` 覆盖 11 个 operation）。
+#    所以它**不是** operationId 的改名，而是 operation 之上的 SLI 族（family）分组键。
+# 2. Prometheus 的 `contract_metric` label 值，在派生 recording rule 里逐字等于
+#    `telemetry.metric`；在手写 PromQL 里则是人写的正则/字面量，会漂移。
+# 3. App 侧 `operationId` 有两个互不相干的取值域：
+#    * 云 operation：generated `operation_contracts.g.dart` 的 `canonicalOperationId`，
+#      逐字等于 ContractGraph 的 `operations[].id`（`<domain>.<object>.<PascalOperation>`）。
+#    * App 本地动作：手写字面量（`app.runtime.anr_watchdog`、`send_otp` 等），没有云侧对应物。
+#
+# 因此「snake_case ↔ camelCase 等价」是错误模型：三者的连接键是 **operationId**，
+# `contract_metric` 只是 operationId 的多对一投影。规则据此分成三组：
+#   identity_join   —— operationId 在三处必须逐字一致
+#   family_projection —— contract_metric 必须是 ContractGraph 声明的族名，且与 operationId 可联合满足
+#   naming_structure —— 族名的结构约束，防止跨域串味与无锚点命名
+schema: metric_identity.v1
+
+identity_join:
+  # ContractGraph operation id 的字面形状；三处标识共享它。
+  operation_id_pattern: "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$"
+  # App 生成侧 canonicalOperationId 的来源文件；其取值必须是 ContractGraph operation id 的子集。
+  app_generated_operation_sources:
+    - quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/operation_contracts.g.dart
+  # App 手写 operationId（本地动作，没有云侧 operation）必须满足两条之一：
+  #   1. 落在保留命名空间里（`app.runtime.anr_watchdog` 这类）；
+  #   2. 已登记在云侧 ingest 的 bounded 词表里（登录流的历史词表就属于这类）。
+  # 两者都不满足时，云侧会把该取值静默折成 `other`，端上埋点与云上指标当场失去同源性。
+  # 任何情况下都不得与 ContractGraph operation id 相等，否则两个取值域会在同一个字段里混流。
+  app_local_operation_namespaces:
+    - "app."
+    - "content.local_draft."
+  # 云侧 bounded 词表：`<file>#<func>` 指向一个 Go switch，case 字面量即已登记取值。
+  app_local_operation_registries:
+    - path: quwoquan_service/services/product-ops-service/cmd/api/telemetry_metrics.go
+      func: boundedLoginOperation
+  app_local_operation_scan_roots:
+    - quwoquan_app/lib
+  app_local_operation_excluded_path_fragments:
+    - /generated/
+
+family_projection:
+  # contract_metric 只允许作为 label 值出现；这条与 verify_object_alert_coverage.py 的
+  # series-position 判定互补，这里管的是「值是否存在、是否与 operation 联合可满足」。
+  promql_roots:
+    - quwoquan_ops/observability/monitoring/alerts
+    - quwoquan_ops/observability/monitoring/dashboards
+  # 一个 selector 同时正向匹配 operation 与 contract_metric 时，
+  # ContractGraph 里必须至少有一个 operation 同时满足两者。
+  require_joint_satisfiability: true
+  # contract_metric 的正向字面量必须是已声明的 telemetry.metric。
+  require_declared_literal: true
+
+naming_structure:
+  # 结构约束一：族名必须以自己的 domain 开头，避免跨域同名族在 PromQL 里串味。
+  require_domain_prefix: true
+  require_token_anchor: true
+  # 结构约束二：族名必须与 domain / object / operation localId 至少共享一个下划线 token，
+  # 保证族名对人可读且与契约锚定，而不是自由取名。
+  require_token_anchor: true
+  # 允许的命名转换：operation localId 的 PascalCase 在参与 token 比对前折成 snake_case。
+  # 这是唯一被允许的形态转换，不允许语义改写（同义词替换、缩写、翻译）。
+  # 允许的形态转换（只作用于 token 比对，不改写任何真实取值）：
+  #   pascal_to_snake —— operation localId 的 PascalCase 折成 snake_case；
+  #   singular_plural —— 末尾 `s` 归一，容许 `metric` / `metrics` 这类单复数写法差异。
+  # 不允许同义词替换、缩写展开、翻译等语义改写。
+  case_transforms:
+    - pascal_to_snake
+    - singular_plural

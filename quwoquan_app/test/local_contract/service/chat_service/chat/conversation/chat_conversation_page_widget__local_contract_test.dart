@@ -9,7 +9,7 @@ import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
@@ -239,6 +239,16 @@ class _EmptyMessagesChatRepository extends MockChatRepository {
 }
 
 class _NoopRealtimeConnectionNotifier extends RealtimeConnectionNotifier {
+  _NoopRealtimeConnectionNotifier()
+    : super(
+        delegateFactory:
+            ({
+              required ref,
+              required onStateChanged,
+              required currentUserIdResolver,
+            }) => throw StateError('overridden build must not create delegate'),
+      );
+
   @override
   TransportState build() => TransportState.idle;
 

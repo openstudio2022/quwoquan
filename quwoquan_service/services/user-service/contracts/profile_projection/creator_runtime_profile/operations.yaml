@@ -9,6 +9,14 @@ runtime_entrypoints:
   kind: projector
   phase: event_projection
   application: {kind: command, facet: AccountClosureProjector, method: apply, object_owner: CreatorRuntimeProfile}
+  telemetry:
+    metric: user_creator_runtime_profile_projection
+    trace: true
+    attributes: [outcome]
+  slo:
+    freshness_p95_seconds: 60
+    backlog_max_events: 1000
+    failure_ratio_percent: 1
 consumers:
 - name: user-profile-api
   capabilities:

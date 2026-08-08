@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-
+from dataclasses import replace
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
 from content.source.handler_fetch_media import _source_collection_title
+import pytest
+from governance.coverage import distribution
 
 
 
@@ -388,7 +390,20 @@ def test_openverse_filters_nc_nd_and_keeps_publishable_license():
     assert [image["url"] for image in images] == ["https://img.example/good.jpg"]
     assert images[0]["sourceCollectionId"].startswith("openverse:wikimedia:")
 
-def test_research_travel_lanes_record_bad_image_license_without_blocking():
+def test_research_travel_lanes_record_bad_image_license_without_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    policy = distribution.load_content_distribution_policy()
+    research_policy = replace(
+        policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
+        release_class=distribution.ReleaseClass.RESEARCH,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: research_policy,
+    )
     assert _license_allows_app_publish(
         "CC0",
         "http://creativecommons.org/publicdomain/zero/1.0/deed.en",

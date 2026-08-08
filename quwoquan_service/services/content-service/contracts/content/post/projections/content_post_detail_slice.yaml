@@ -8,7 +8,7 @@ fields:
   - {name: postId, type: string, nullable: false}
   - {name: contentType, type: string, nullable: false}
   - {name: contentIdentity, type: string, nullable: true}
-  - {name: assistantUsePolicy, type: string, nullable: true}
+  - {name: assistantUsePolicy, type: enum, enum_ref: AssistantUsePolicy, nullable: true}
   - {name: authorId, type: string, nullable: true}
   - {name: authorDisplayName, type: string, nullable: true}
   - {name: authorAvatarUrl, type: string, nullable: true}

@@ -10,10 +10,12 @@ import (
 )
 
 // operationAdmissionErrorsContract is the declaring authority for the gateway
-// admission rejection copy. runtime/auth is mounted by every service and must
-// not import one service's generated error package, so the guard keeps a local
-// mirror; this test is what makes the mirror non-authoritative.
-const operationAdmissionErrorsContract = "../../services/api-edge/contracts/edge_security/operation_admission_decision/errors.yaml"
+// admission rejection copy. These codes are produced before any owner handler by
+// a guard that every service links, so they belong to no single service object
+// and are declared in the runtime failure code contract. runtime/auth still keeps
+// a local mirror because it must not import a service's generated error package;
+// this test is what makes the mirror non-authoritative.
+const operationAdmissionErrorsContract = "../../contracts/runtime_errors/errors/runtime_failure_codes.yaml"
 
 func TestOperationGuardUserMessagesMatchContract(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Clean(operationAdmissionErrorsContract))
@@ -21,20 +23,20 @@ func TestOperationGuardUserMessagesMatchContract(t *testing.T) {
 		t.Fatalf("read %s: %v", operationAdmissionErrorsContract, err)
 	}
 	var contract struct {
-		Errors []struct {
+		Codes []struct {
 			Code        string `yaml:"code"`
 			Reason      string `yaml:"reason"`
 			UserMessage struct {
 				ZH string `yaml:"zh"`
-			} `yaml:"user_message"`
-		} `yaml:"errors"`
+			} `yaml:"userMessage"`
+		} `yaml:"codes"`
 	}
 	if err := yaml.Unmarshal(raw, &contract); err != nil {
 		t.Fatalf("parse %s: %v", operationAdmissionErrorsContract, err)
 	}
 
 	declared := map[string]string{}
-	for _, entry := range contract.Errors {
+	for _, entry := range contract.Codes {
 		if !strings.HasPrefix(entry.Code, "GATEWAY.USER.") {
 			continue
 		}

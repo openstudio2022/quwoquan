@@ -19,6 +19,20 @@ relationships:
   reference_fields:
   - ownerId
   target_object: user.UserAccount
+search_policy:
+  exposed: none
+  not_exposed_reason: "认证、凭据与会话安全对象，任何检索暴露都会直接削弱账号安全。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "认证凭据、会话密钥与风控状态对小趣完全关闭，不存在可开放的子集。"
 business_rules:
 - credentialType + credentialKey 全局唯一且 secret 仅保存不可逆引用
 - 绑定必须消费已完成且未消费的 AuthenticationChallenge

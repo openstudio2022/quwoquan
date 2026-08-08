@@ -1,35 +1,18 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
+// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
 
 library;
 
 import '../operation_request_payload.dart';
+import "../generated/recommendation/intersection_contract_vocabulary.g.dart";
 import "../generated/shared_operation_enums.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
-import "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart";
 
+export "../generated/recommendation/intersection_contract_vocabulary.g.dart";
 export "../generated/shared_operation_enums.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
-export "package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart";
 
 part '../generated/requests/content/content_operation_contracts.g.requests.g.dart';
-
-enum AssistantUsePolicy {
-  inherit("inherit"),
-  exclude("exclude");
-
-  const AssistantUsePolicy(this.wireName);
-
-  final String wireName;
-
-  static AssistantUsePolicy fromWire(Object? value, String path) {
-    return switch (value) {
-      "inherit" => AssistantUsePolicy.inherit,
-      "exclude" => AssistantUsePolicy.exclude,
-      _ => throw FormatException('$path has an invalid enum value'),
-    };
-  }
-}
 
 enum CaptureDisclosureGroup {
   gear("gear"),
@@ -1774,7 +1757,7 @@ final class ContentPostDetailSlice {
   final String postId;
   final String contentType;
   final String? contentIdentity;
-  final String? assistantUsePolicy;
+  final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
@@ -1829,7 +1812,7 @@ final class ContentPostDetailSlice {
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
       contentIdentity: map["contentIdentity"] == null ? null : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
-      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : _requiredString(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
+      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : AssistantUsePolicy.fromWire(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
       authorId: map["authorId"] == null ? null : _requiredString(map["authorId"], '$path.authorId'),
       authorDisplayName: map["authorDisplayName"] == null ? null : _requiredString(map["authorDisplayName"], '$path.authorDisplayName'),
       authorAvatarUrl: map["authorAvatarUrl"] == null ? null : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
@@ -1884,7 +1867,7 @@ final class ContentPostDetailSlice {
     "postId": postId,
     "contentType": contentType,
     if (contentIdentity != null) "contentIdentity": contentIdentity!,
-    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!,
+    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
     if (authorDisplayName != null) "authorDisplayName": authorDisplayName!,
     if (authorAvatarUrl != null) "authorAvatarUrl": authorAvatarUrl!,
@@ -1979,7 +1962,7 @@ final class ContentPostProjection {
   final String postId;
   final String contentType;
   final String? contentIdentity;
-  final String? assistantUsePolicy;
+  final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
@@ -2020,7 +2003,7 @@ final class ContentPostProjection {
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
       contentIdentity: map["contentIdentity"] == null ? null : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
-      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : _requiredString(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
+      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : AssistantUsePolicy.fromWire(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
       authorId: map["authorId"] == null ? null : _requiredString(map["authorId"], '$path.authorId'),
       authorDisplayName: map["authorDisplayName"] == null ? null : _requiredString(map["authorDisplayName"], '$path.authorDisplayName'),
       authorAvatarUrl: map["authorAvatarUrl"] == null ? null : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
@@ -2061,7 +2044,7 @@ final class ContentPostProjection {
     "postId": postId,
     "contentType": contentType,
     if (contentIdentity != null) "contentIdentity": contentIdentity!,
-    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!,
+    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
     if (authorDisplayName != null) "authorDisplayName": authorDisplayName!,
     if (authorAvatarUrl != null) "authorAvatarUrl": authorAvatarUrl!,

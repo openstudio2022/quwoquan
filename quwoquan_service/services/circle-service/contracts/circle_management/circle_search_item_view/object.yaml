@@ -32,6 +32,23 @@ local_identity_reasons:
     as an aggregate Store identity
   domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
+search_policy:
+  exposed: remote_index
+  eligibility_ref: quwoquan_service/services/circle-service/internal/circle_management/circle/application/circle_search_projection.go#CircleSearchEligible
+  index_projector_ref: quwoquan_service/services/circle-service/internal/circle_management/circle/application/circle_search_projection.go#ProjectCircleToSearchDocument
+  privacy_filter_ref: quwoquan_service/runtime/search/core.go#isPrivateVisibility
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.circle.circle_search_item_view.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.circle.circle_search_item_view.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 搜索条目只投影 Circle 的公开字段和 canonical homepage 引用，不复制成员或私密治理状态。
 - 同一 circleId 的版本必须单调应用，重复事件不得产生第二条搜索条目。
@@ -44,6 +61,7 @@ lifecycle:
   checkpoint: circle_outbox_sequence
   rebuild: replay_circle_public_events
   tombstone: delete_search_item_keep_checkpoint
+  idempotency: aggregate_version
   event_consumers:
   - name: ProjectCircleSearchItem
     kind: projector

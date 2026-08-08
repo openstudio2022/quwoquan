@@ -32,7 +32,7 @@ from core.io import read_json, write_json  # noqa: E402
 from core.paths import STAGE_DOWNLOAD  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.execution import store  # noqa: E402
-from content.execution.selection import build_execution_spec  # noqa: E402
+from content.execution.planning.selection import build_execution_spec  # noqa: E402
 from content.source.image_scale_proof import (  # noqa: E402
     build_open_license_scale_proof,
     write_open_license_scale_proof,
@@ -75,6 +75,9 @@ def _make_task(
         video_works_per_target=0,
         approved_quota=len(targets),
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
         target_entity_count=len(targets),
     )
     spec["content"]["research"]["imageCountPolicy"] = image_count_policy
@@ -153,6 +156,9 @@ def _make_homepage_task(name: str, targets: list[str]) -> str:
         video_works_per_target=0,
         approved_quota=len(targets),
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
         target_entity_count=len(targets),
     )
     spec["status"] = "active"
@@ -257,7 +263,20 @@ def _remove_distribution_rights_fields(execution_id: str, entity_id: str) -> Non
     write_json(plan_path, plan)
 
 
-def test_media_scale_proof_audits_incomplete_travel_rights_in_research():
+def test_media_scale_proof_audits_incomplete_travel_rights_in_research(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    policy = distribution.load_content_distribution_policy()
+    research_policy = replace(
+        policy,
+        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
+        release_class=distribution.ReleaseClass.RESEARCH,
+    )
+    monkeypatch.setattr(
+        distribution,
+        "load_content_distribution_policy",
+        lambda: research_policy,
+    )
     execution_id = _make_task("旅行图片授权强制门", ["景区甲"])
     _write_image_plan(execution_id, "景区甲", 2)
     _remove_distribution_rights_fields(execution_id, "景区甲")
@@ -357,6 +376,9 @@ def test_scale_proof_reads_each_target_from_its_declared_entity_type():
         target_entity_count=2,
         approved_quota=2,
         oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
     )
     spec["status"] = "active"
     store.save_spec(spec)

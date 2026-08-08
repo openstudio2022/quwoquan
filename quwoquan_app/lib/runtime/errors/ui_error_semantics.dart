@@ -85,6 +85,9 @@ class UiErrorSemanticResolver {
         group: group,
         category: category,
         scope: scope,
+        // 恢复组只负责「发生了什么 + 唯一恢复动作」；登录续接承诺是另一层信息，
+        // 必须继续透出，否则 auth gate 会丢掉「登录成功进目标态」这一半契约。
+        secondaryMessage: _continuationSecondaryMessage(continuation),
         retryAfterSeconds: AppUserRecoveryContract.retryAfterSeconds(error),
         sourceCode: _sourceCode(error, failure),
         failureKind: failure?.kind,
@@ -195,6 +198,9 @@ class UiErrorSemanticResolver {
       scope: scope,
       title: copy.title,
       message: copy.message,
+      // 恢复组只说「需要登录 + 去登录」；带上 continuation 时还要告诉用户登录成功后
+      // 会回到哪个目标态，这是登录入口双目标契约里「成功进目标态」的那一半。
+      secondaryMessage: _continuationSecondaryMessage(continuation),
       primaryAction: copy.action,
       dismissible: true,
       copyKey: 'recovery.loginAgain',
@@ -722,6 +728,18 @@ class UiErrorSemanticResolver {
           ? ContentText.loginToContinue
           : null;
     }
+    return _continuationSecondaryMessage(continuation) ??
+        authGateReason?.prompt;
+  }
+
+  /// 登录续接承诺文案。
+  ///
+  /// 只有真的带上 [AuthContinuation] 时才向用户承诺「登录成功后继续原动作」；
+  /// 没有 continuation 就不承诺，避免出现登录成功却回不到目标态的空头支票。
+  static String? _continuationSecondaryMessage(AuthContinuation? continuation) {
+    if (continuation == null) {
+      return null;
+    }
     if (continuation is SubmitCommentContinuation) {
       return '登录后将继续提交刚刚输入的评论';
     }
@@ -764,7 +782,7 @@ class UiErrorSemanticResolver {
         AuthContinuationSheet.createCircle => '登录后将继续打开建圈流程',
       };
     }
-    return authGateReason?.prompt;
+    return null;
   }
 
   static String _copyKey(

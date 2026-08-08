@@ -13,6 +13,10 @@ from content.source.professional_video_acquisition import (
     acquired_video_specs_for_entity,
     load_professional_video_acquisition_receipt,
 )
+from content.source.professional_video_popular_catalog import (
+    build_professional_video_popular_candidate_catalog,
+    write_create_once_professional_video_popular_candidate_catalog,
+)
 from content.source.professional_video_receipt import (
     assert_publishable_popularity_signals,
 )
@@ -469,11 +473,11 @@ def test_popularity_never_invents_comparability(tmp_path: Path) -> None:
     )
     by_id = {row["assetId"]: row for row in receipt["assets"]}
     assert by_id["missing"]["popularitySignals"]["rankingEligible"] is False
-    assert by_id["missing"]["popularitySignals"]["rankingIneligibleReason"] == (
+    assert by_id["missing"]["popularitySignals"]["ineligibleReason"] == (
         "incomplete_popularity_signals"
     )
     assert by_id["single"]["popularitySignals"]["rankingEligible"] is False
-    assert by_id["single"]["popularitySignals"]["rankingIneligibleReason"] == (
+    assert by_id["single"]["popularitySignals"]["ineligibleReason"] == (
         "insufficient_comparable_candidates"
     )
     assert receipt["acceptedAssetCount"] == 2
@@ -501,6 +505,104 @@ def test_popularity_never_invents_comparability(tmp_path: Path) -> None:
             by_id["single"]["popularitySignals"],
             asset_id="single",
         )
+
+
+def test_acquisition_physically_consumes_popular_catalog_binding(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manual_root = tmp_path / "manual"
+    manual_root.mkdir()
+    _write_video(manual_root / "high.mp4", moving=True, seed=21)
+    response = {
+        "provider": "bilibili",
+        "sourcePageUrl": "https://www.bilibili.com/video/BV-popular",
+        "apiEvidenceUrl": "https://api.bilibili.com/x/web-interface/archive/stat",
+        "statusCode": 200,
+        "contentType": "application/json",
+        "accessEvidence": {
+            "supportedApi": True, "cookiesSent": False, "loginRequired": False,
+            "paywallRequired": False, "drmProtected": False,
+            "accessControlBypass": False,
+        },
+        "items": [
+            {
+                "sourceId": source_id, "entityId": "西湖", "observedEntityId": "西湖",
+                "creator": f"Creator {source_id}", "title": f"西湖热门旅行 {source_id}",
+                "observedAt": "2026-08-08T09:00:00Z", "topic": "west-lake-travel",
+                "timeBucket": "2026-W32", "playCount": score * 100,
+                "likeCount": score * 10, "commentCount": score,
+                "shareCount": score, "favoriteCount": score * 2,
+            }
+            for source_id, score in (("low", 10), ("high", 20))
+        ],
+    }
+    catalog = build_professional_video_popular_candidate_catalog(
+        source_revision="sha256:" + "1" * 64,
+        source_digest=_DIGEST_A,
+        entity_catalog_digest=_DIGEST_B,
+        metadata_responses=[response],
+        manual_file_manifests=[{
+            "provider": "bilibili", "sourceId": "high",
+            "sourcePageUrl": response["sourcePageUrl"], "manualFileRef": "high.mp4",
+        }],
+        evidence_root=manual_root,
+    )
+    output_root = tmp_path / "acquisition"
+    catalog_ref = (
+        "professional-video-popular-catalogs/"
+        f"{catalog['catalogDigest'][7:]}.json"
+    )
+    catalog_path = output_root / catalog_ref
+    write_create_once_professional_video_popular_candidate_catalog(catalog_path, catalog)
+    catalog_sha = "sha256:" + __import__("hashlib").sha256(
+        catalog_path.read_bytes()
+    ).hexdigest()
+    candidate = next(row for row in catalog["candidates"] if row["sourceId"] == "high")
+    popularity = candidate["popularity"]
+    item = _item(
+        "popular", "high.mp4",
+        counts=tuple(popularity[field] for field in (
+            "playCount", "likeCount", "commentCount", "shareCount", "favoriteCount"
+        )),
+    )
+    item.update(
+        provider="bilibili", platform="B站", displayName="B站热门旅行视频",
+        sourceUrl=candidate["sourcePageUrl"], title=candidate["title"],
+        creator=candidate["creator"],
+        popularitySignals={
+            **{field: popularity[field] for field in (
+                "playCount", "likeCount", "commentCount", "shareCount", "favoriteCount"
+            )},
+            "observedAt": candidate["observedAt"], "provider": candidate["provider"],
+            "topic": candidate["topic"], "timeBucket": candidate["timeBucket"],
+        },
+        popularCandidateId=candidate["candidateId"], popularCatalogRef=catalog_ref,
+        popularCatalogDigest=catalog["catalogDigest"],
+        popularCatalogFileSha256=catalog_sha,
+    )
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.assert_video_source_admitted",
+        lambda *_args, **_kwargs: None,
+    )
+    manifest_path = tmp_path / "popular.json"
+    write_json(manifest_path, _manifest(
+        [item], manifest_id="popular-catalog-bound",
+        source_revision="sha256:" + "1" * 64,
+    ))
+    receipt, _receipt_path = acquire_professional_videos(
+        manifest_path, handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root, output_root=output_root,
+    )
+    row = receipt["assets"][0]
+    assert row["popularCatalogRef"] == catalog_ref
+    assert row["contentSha256"] == candidate["manualFileSha256"]
+    assert row["popularitySignals"] == {
+        **popularity, "observedAt": candidate["observedAt"],
+        "provider": candidate["provider"], "topic": candidate["topic"],
+        "timeBucket": candidate["timeBucket"], "rankingEligible": True,
+        "ineligibleReason": "",
+    }
 
 
 def test_slideshow_is_not_counted_as_sourced_or_premium_video(tmp_path: Path) -> None:

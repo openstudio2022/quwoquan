@@ -45,6 +45,7 @@
 - canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_group/events.yaml#CircleGroupCreated`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation/events.yaml#CircleGroupConversationProvisioned`
 - canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_group_membership/events.yaml`
+- canonical：`quwoquan_service/services/circle-service/contracts/circle_management/circle_group_membership/operations.yaml`
 - canonical：`quwoquan_service/services/chat-service/contracts/chat/conversation_membership/object.yaml`
 
 ## 5. 验收场景
@@ -66,6 +67,100 @@
 - THEN active 只创建一次 Chat member/UserState，role 映射为 owner/admin/member。
 - THEN left/removed 原子删除 UserState 和 ChatInbox 可达性，迟到 MessageSent 不得复活。
 - THEN role_changed 只更新既有 Chat member，不创建重复名册行；Chat HTTP 成员治理全部返回 circle_group_managed_by_circle。
+
+以下 operation 级 GWT 只裁定 CircleGroupMembership owner 的 command/query 终态；它们不替代 GWT-001/GWT-002 对 Chat binding、Inbox、realtime、重复/乱序、reclaim、DLQ 与 health 的跨服务终态要求。
+
+<a id="gwt-003"></a>
+### GWT-003 申请加入 CircleGroup
+
+- GIVEN 调用 Persona 是 active Circle member，目标 CircleGroup 可加入且未超过 active member 容量。
+- WHEN Persona 使用稳定幂等键提交 canonical `ApplyJoinCircleGroup`。
+- THEN command receipt 与 owner authoritative readback 收敛到同一 membership、version 及符合 join policy 的 state，且只提交一次状态变化与 outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 membership 与 receipt 身份，不增加 version、membership 或 outbox。
+- THEN 容量、资格、归档或幂等冲突返回 canonical typed failure，owner state、receipt 与 outbox 不产生部分成功。
+
+<a id="gwt-004"></a>
+### GWT-004 分页读取 CircleGroup 成员关系
+
+- GIVEN 调用 Persona 有权读取目标 CircleGroup 的成员关系，且至少存在一条匹配筛选条件的 membership。
+- WHEN Persona 提交 canonical `ListCircleGroupMemberships` 并沿 owner cursor 继续分页。
+- THEN 每页返回 nonempty typed `CircleGroupMembershipPageSlice`，只披露公开 membership slice，不暴露 storage identity 或 decision actor。
+- THEN cursor 分页保持稳定顺序且不重复、不漏项，筛选 state 与下一页 cursor 均由 owner reader 裁定。
+- THEN 无权枚举、非法 cursor 或 owner reader 失败返回 canonical typed failure，不泄露任何成员数据，也不合成成功空页。
+
+<a id="gwt-005"></a>
+### GWT-005 读取本人 CircleGroup 成员关系
+
+- GIVEN 调用 Persona 在目标 CircleGroup 中存在可读取的本人 membership。
+- WHEN Persona 提交 canonical `GetMyCircleGroupMembership`。
+- THEN 返回 nonempty typed `CircleGroupMembershipSlice`，其 persona、group、circle、state、role 与 owner authoritative readback 一致。
+- THEN 查询主体固定为认证 Persona，调用方不能通过 path、query 或 payload 探测其他 Persona 的 membership。
+- THEN membership 不存在、身份不匹配或 owner reader 失败返回对应 canonical typed failure，不把依赖失败合成为“未加入”成功态。
+
+<a id="gwt-006"></a>
+### GWT-006 离开 CircleGroup
+
+- GIVEN 调用 Persona 拥有允许离开的 active CircleGroup membership。
+- WHEN Persona 使用稳定幂等键提交 canonical `LeaveCircleGroup`。
+- THEN command receipt 与 owner authoritative readback 收敛到同一 membership 的 left state 与新 version，且只提交一次状态变化与 outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 membership 与 receipt 身份，不重复推进 version 或 outbox。
+- THEN owner 不可离开、version 冲突、membership 不存在或幂等冲突返回 canonical typed failure，owner state、receipt 与 outbox 不产生部分成功。
+
+<a id="gwt-007"></a>
+### GWT-007 审批 CircleGroup 加入申请
+
+- GIVEN 调用 Persona 是目标 CircleGroup owner 或 manager，目标 membership 处于可审批状态且容量可用。
+- WHEN 调用 Persona 使用稳定幂等键提交 canonical `ApproveCircleGroupMember`。
+- THEN command receipt 与 owner authoritative readback 收敛到目标 membership 的 active state 与新 version，且只提交一次状态变化与 outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 membership 与 receipt 身份，不重复推进 version、容量占用或 outbox。
+- THEN BOLA、容量、状态、version 或幂等冲突返回 canonical typed failure，owner state、receipt、容量与 outbox 不产生部分成功。
+
+<a id="gwt-008"></a>
+### GWT-008 拒绝 CircleGroup 加入申请
+
+- GIVEN 调用 Persona 是目标 CircleGroup owner 或 manager，目标 membership 处于可拒绝状态。
+- WHEN 调用 Persona 使用稳定幂等键提交 canonical `RejectCircleGroupMember`。
+- THEN command receipt 与 owner authoritative readback 收敛到目标 membership 的 rejected state 与新 version，且只提交一次状态变化与 outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 membership 与 receipt 身份，不重复推进 version 或 outbox。
+- THEN BOLA、状态、version 或幂等冲突返回 canonical typed failure，owner state、receipt 与 outbox 不产生部分成功。
+
+<a id="gwt-009"></a>
+### GWT-009 移除 CircleGroup 成员
+
+- GIVEN 调用 Persona 是目标 CircleGroup owner 或 manager，目标 membership 可被移除且不是受保护 owner。
+- WHEN 调用 Persona 使用稳定幂等键提交 canonical `RemoveCircleGroupMember`。
+- THEN command receipt 与 owner authoritative readback 收敛到目标 membership 的 removed state 与新 version，且只提交一次状态变化与 outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 membership 与 receipt 身份，不重复推进 version 或 outbox。
+- THEN BOLA、owner 保护、version、状态或幂等冲突返回 canonical typed failure，owner state、receipt 与 outbox 不产生部分成功。
+
+<a id="gwt-010"></a>
+### GWT-010 更新 CircleGroup 成员角色
+
+- GIVEN 调用 Persona 是目标 CircleGroup owner，目标 membership 存在且目标角色合法。
+- WHEN 调用 Persona 使用稳定幂等键提交 canonical `UpdateCircleGroupMemberRole`。
+- THEN command receipt 与 owner authoritative readback 收敛到目标 membership 的新 role 与 version，且只提交一次状态变化与 outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 membership 与 receipt 身份，不重复推进 version 或 outbox。
+- THEN BOLA、非法角色、version、状态或幂等冲突返回 canonical typed failure，owner state、receipt 与 outbox 不产生部分成功。
+
+以下 CircleGroup aggregate operation 级 GWT 只裁定 owner command/query 终态；它们不替代 GWT-001/GWT-002 对 Chat durable binding、Conversation/成员与 Inbox 可达性、realtime 清理、重复/乱序、reclaim、DLQ 与 health 的跨服务终态要求。
+
+<a id="gwt-011"></a>
+### GWT-011 创建 CircleGroup
+
+- GIVEN 调用 Persona 是 active Circle member，且创建权限、父层级、群组类型、可见性与加入策略均有效。
+- WHEN Persona 使用稳定幂等键提交 canonical `CreateCircleGroup`。
+- THEN command receipt 与 fresh `GetCircleGroup` authoritative readback 收敛到同一 active group identity、初始 version 与创建策略，且只提交一次 CircleGroup 状态变化与 `CircleGroupCreated` outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 group 与 receipt 身份，不创建第二个 group，不重复推进 version 或 outbox。
+- THEN BOLA、父层级、默认公共群唯一性、存储或幂等冲突返回 canonical typed failure，CircleGroup state、receipt 与 outbox 不产生部分成功。
+
+<a id="gwt-012"></a>
+### GWT-012 归档 CircleGroup
+
+- GIVEN 调用 Persona 是目标 CircleGroup owner，目标不是受保护的默认公共群且仍处于可归档状态。
+- WHEN Persona 使用稳定幂等键提交 canonical `ArchiveCircleGroup`。
+- THEN command receipt 与 fresh `GetCircleGroup` authoritative readback 收敛到同一 group identity、archived state 与新 version，且只提交一次状态变化与 `CircleGroupArchived` outbox。
+- THEN 相同幂等键重放同一语义命令返回同一 group 与 receipt 身份，不重复推进 version 或 outbox。
+- THEN BOLA、默认公共群保护、group 不存在、version 或幂等冲突返回 canonical typed failure，CircleGroup state、receipt 与 outbox 不产生部分成功。
 
 ## 6. 依赖
 
@@ -92,3 +187,93 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：Redis + Mongo 双服务 API integration 覆盖完整状态机、重复/乱序、realtime 与 Inbox readback。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 申请加入 CircleGroup 的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `ApplyJoinCircleGroup` 独立证明 owner 收敛、幂等重放与失败原子性的完整直接证据。
+- 完成判定：`GWT-003.t1`、`GWT-003.t2` 与 `GWT-003.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-004"></a>
+### OPEN-004 分页读取 CircleGroup 成员关系的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `ListCircleGroupMemberships` 独立证明 nonempty typed page、稳定分页与 BOLA/canonical failure 的完整直接证据。
+- 完成判定：`GWT-004.t1`、`GWT-004.t2` 与 `GWT-004.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-005"></a>
+### OPEN-005 读取本人 CircleGroup 成员关系的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `GetMyCircleGroupMembership` 独立证明 nonempty typed slice、self-only BOLA 边界与 canonical failure 的完整直接证据。
+- 完成判定：`GWT-005.t1`、`GWT-005.t2` 与 `GWT-005.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-006"></a>
+### OPEN-006 离开 CircleGroup 的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `LeaveCircleGroup` 独立证明 owner 收敛、幂等重放与失败原子性的完整直接证据。
+- 完成判定：`GWT-006.t1`、`GWT-006.t2` 与 `GWT-006.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-007"></a>
+### OPEN-007 审批 CircleGroup 加入申请的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `ApproveCircleGroupMember` 独立证明 owner 收敛、幂等重放与失败原子性的完整直接证据。
+- 完成判定：`GWT-007.t1`、`GWT-007.t2` 与 `GWT-007.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-008"></a>
+### OPEN-008 拒绝 CircleGroup 加入申请的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `RejectCircleGroupMember` 独立证明 owner 收敛、幂等重放与失败原子性的完整直接证据。
+- 完成判定：`GWT-008.t1`、`GWT-008.t2` 与 `GWT-008.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-009"></a>
+### OPEN-009 移除 CircleGroup 成员的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `RemoveCircleGroupMember` 独立证明 owner 收敛、幂等重放与失败原子性的完整直接证据。
+- 完成判定：`GWT-009.t1`、`GWT-009.t2` 与 `GWT-009.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-010"></a>
+### OPEN-010 更新 CircleGroup 成员角色的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `UpdateCircleGroupMemberRole` 独立证明 owner 收敛、幂等重放与失败原子性的完整直接证据。
+- 完成判定：`GWT-010.t1`、`GWT-010.t2` 与 `GWT-010.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-011"></a>
+### OPEN-011 创建 CircleGroup 的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `CreateCircleGroup` 独立证明 owner readback 收敛、幂等重放与失败原子性的完整直接证据；本 OPEN 关闭不代表 GWT-001 的 Chat durable binding、reclaim、DLQ 与 health 已闭合。
+- 完成判定：`GWT-011.t1`、`GWT-011.t2` 与 `GWT-011.t3` 各自被真实测试 `spec_ref` 绑定。
+
+<a id="open-012"></a>
+### OPEN-012 归档 CircleGroup 的 owner 合同证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 `ArchiveCircleGroup` 独立证明 owner readback 收敛、幂等重放与失败原子性的完整直接证据；本 OPEN 关闭不代表 GWT-002 的 Chat 名册、Inbox/realtime 清理、reclaim、DLQ 与 health 已闭合。
+- 完成判定：`GWT-012.t1`、`GWT-012.t2` 与 `GWT-012.t3` 各自被真实测试 `spec_ref` 绑定。

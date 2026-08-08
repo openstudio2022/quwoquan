@@ -8,18 +8,18 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign_external_inputs import (
+from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )
-from content.execution.campaign_process import CAMPAIGN_CARRIERS
-from content.execution.campaign_submission import campaign_root, load_submissions
-from content.execution.campaign_submission_reconciliation import (
+from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.submission import campaign_root, load_submissions
+from content.execution.campaign.submission_reconciliation import (
     load_reconciliation_reference,
     predecessor_campaign_root_execution_id,
 )
 from content.execution.identity import parse_execution_id
-from content.execution.reviewed_closure_adoption_campaign_contract import (
+from content.execution.closure.adoption_campaign_contract import (
     ADOPTION_OPERATIONS,
     CAMPAIGN_ADOPTION_FIELD,
     validate_adoption_task_binding,

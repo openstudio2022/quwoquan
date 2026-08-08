@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
 // readiness_case: resolve-capability-grant-local
 package capability_grant_test
 
@@ -47,21 +47,22 @@ func TestCapabilityGrantSessionFacadeIsTheSoleTypedRuntimeEntryPoint(t *testing.
 			grantmodel.Requirement,
 		) ([]grantapp.DomainOperationCandidate, error) {
 			return []grantapp.DomainOperationCandidate{{
-				CapabilityKey: "travel.route.open",
+				CapabilityKey: "circle.gathering_plan.propose",
 				Binding: grantmodel.DomainOperationBinding{
-					OwnerOperationID: "travel.route.OpenRoute",
-					ContractDigest:   digest("travel-open-route-contract"),
+					OwnerOperationID: "circle.gathering_plan.ProposeGatheringPlan",
+					ContractDigest:   digest("gathering-plan-proposal-contract"),
 				},
 			}}, nil
 		}),
 		func() time.Time { return now },
 	)
-	facade := grantapp.NewCapabilityGrantSessionFacade(resolver)
+	store := &recordingSessionStore{}
+	facade := grantapp.NewCapabilityGrantSessionFacade(resolver, store)
 	resolved, err := facade.Resolve(
 		context.Background(),
 		grantmodel.Requirement{
 			ResolutionID:    "resolution-domain-operation-1",
-			CapabilityKey:   "travel.route.open",
+			CapabilityKey:   "circle.gathering_plan.propose",
 			BindingPriority: []grantmodel.BindingKind{grantmodel.BindingDomainOperation},
 		},
 	)
@@ -71,6 +72,9 @@ func TestCapabilityGrantSessionFacadeIsTheSoleTypedRuntimeEntryPoint(t *testing.
 	if resolved.BindingKind != grantmodel.BindingDomainOperation ||
 		resolved.DomainOperation == nil || !resolved.ResolvedAt.Equal(now) {
 		t.Fatalf("resolved=%+v", resolved)
+	}
+	if store.count() != 1 {
+		t.Fatalf("persisted sessions=%d want=1", store.count())
 	}
 }
 
@@ -271,6 +275,7 @@ func TestResolutionPrioritySelectsDeviceAndNeverFallsBackAfterDenial(t *testing.
 		AccountID:                    "account-1",
 		ConnectionID:                 "connection-1",
 		ConnectorID:                  "google_calendar",
+		ContractDigest:               digest("google-calendar-contract"),
 		GrantedCapabilities:          []string{"calendar.event.delete"},
 		GrantState:                   grantmodel.ConnectorGrantActive,
 		ProviderAccountSubjectDigest: digest("provider-account-subject"),

@@ -31,7 +31,7 @@ import time
 import urllib.error
 import urllib.request
 import urllib.parse
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -192,6 +192,7 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     active_consumer_leases,
     release_consumer_lease,
 )
+from quwoquan_ops.cli.lib import orphan_compose_teardown
 from quwoquan_ops.cli.lib.startup_attempt_receipt import (
     image_composition_from_candidate_oci,
     load_startup_attempt,
@@ -240,6 +241,7 @@ from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     write_candidate_manifest,
 )
 from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
     validate_provider_runtime_composition,
 )
 from quwoquan_ops.cli.lib.nonprod_business_data import NONPROD_TARGETS
@@ -376,6 +378,12 @@ APP_CONTENT_UAT_ENVELOPE_ARGUMENTS = (
     ("imageWorkId", "--data-release-image-work-id"),
     ("imageTitle", "--data-release-image-title"),
     ("creatorName", "--data-release-creator-name"),
+    ("creatorUserHandle", "--data-release-creator-user-handle"),
+    ("creatorPersonaId", "--data-release-creator-persona-id"),
+    (
+        "creatorAvatarAssetId",
+        "--data-release-creator-avatar-asset-id",
+    ),
     ("tagLabel", "--data-release-tag-label"),
     ("videoAttribution", "--data-release-video-attribution"),
 )
@@ -1178,14 +1186,7 @@ def _load_package_bound_local_image_composition(
     ).hexdigest()
     if actual_set_digest != manifest["imageDigest"]:
         raise ValueError("package OCI image set digest mismatch")
-    configuration_digest = (
-        str(candidate.get("runtimeConfigDigest") or "").strip()
-        if candidate_snapshot is not None
-        else packaged_configuration_digest(
-            env_name,
-            target=target_name,
-        )
-    )
+    configuration_digest = str(candidate.get("configurationDigest") or "").strip()
     if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
         raise ValueError("package OCI candidate configuration digest is invalid")
     if configuration_digest != manifest["configurationDigest"]:
@@ -1193,7 +1194,7 @@ def _load_package_bound_local_image_composition(
     if (
         candidate.get("imageDigest") != manifest["imageDigest"]
         or candidate.get("buildInputDigest") != manifest["buildInputDigest"]
-        or candidate.get("runtimeConfigDigest") != configuration_digest
+        or candidate.get("configurationDigest") != configuration_digest
     ):
         raise ValueError("package OCI runtime differs from the active candidate")
     startup_image_composition = image_composition_from_candidate_oci(
@@ -2676,7 +2677,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dev_session_parser = subparsers.add_parser(
         "dev-session",
-        help="幂等编排本地候选、full runtime、健康检查与可选 App handoff。",
+        help="实时编排可变非生产 handoff、健康诊断与可选 App 启动。",
     )
     dev_session_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     dev_session_parser.add_argument(
@@ -2690,8 +2691,6 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
     )
     dev_session_parser.add_argument("--all-nonprod", action="store_true")
-    dev_session_parser.add_argument("--release-attestation", required=True)
-    dev_session_parser.add_argument("--rollback-release-attestation", required=True)
     dev_session_parser.add_argument("--device-id", default="")
     dev_session_parser.add_argument("--launch-app", action="store_true")
 
@@ -3148,6 +3147,7 @@ def build_parser() -> argparse.ArgumentParser:
             "rebuild-packages",
             "reclaim-build-cache",
             "reclaim-orphaned-processes",
+            "reclaim-orphaned-compose",
             "restart-stack",
             "reclaim-ports",
             "reconcile-nonprod-data",
@@ -3160,6 +3160,23 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Confirm termination of ledger-less Alpha process groups only after "
             "their target-scoped wrapper and canonical port signatures match."
+        ),
+    )
+    repair_parser.add_argument(
+        "--orphaned-compose-attestation",
+        default="",
+        help=(
+            "Canonical create-once attestation path below the target environment "
+            "runs root. Planning creates it without removing resources; consuming "
+            "it also requires --confirm-orphaned-compose-teardown."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-orphaned-compose-teardown",
+        action="store_true",
+        help=(
+            "Confirm exact-ID removal of the containers and networks sealed in a "
+            "fresh orphan Compose attestation; named volumes remain preserved."
         ),
     )
     repair_parser.add_argument(
@@ -6808,6 +6825,7 @@ def _wait_for_network_ports_released(
     *,
     timeout_seconds: float = 45.0,
     poll_interval_seconds: float = 0.5,
+    port_reporter: Callable[[str], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Wait for target-owned host forwards to converge after compose down.
 
@@ -6819,10 +6837,26 @@ def _wait_for_network_ports_released(
     """
 
     deadline = time.monotonic() + timeout_seconds
+    reporter = port_reporter or _network_report
     while True:
         occupied = [
-            item for item in _network_report(target_name)["ports"] if item["open"]
+            item for item in reporter(target_name)["ports"] if item["open"]
         ]
+        if not occupied or time.monotonic() >= deadline:
+            return occupied
+        time.sleep(poll_interval_seconds)
+
+
+def _wait_for_exact_tcp_ports_released(
+    ports: Sequence[int],
+    *,
+    timeout_seconds: float = 45.0,
+    poll_interval_seconds: float = 0.5,
+) -> list[int]:
+    exact_ports = sorted(set(ports))
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        occupied = [port for port in exact_ports if socket_probe(port)]
         if not occupied or time.monotonic() >= deadline:
             return occupied
         time.sleep(poll_interval_seconds)
@@ -7776,7 +7810,7 @@ def _command_package_unlocked(
         for service in services:
             svc_cmd = [
                 "bash",
-                "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+                "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh",
                 "--service",
                 service,
                 "--env",
@@ -11702,7 +11736,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             args.scope,
             workload=workload,
         )
-    except (TypeError, ValueError) as error:
+    except (RuntimeError, TypeError, ValueError) as error:
         checks = []
         check_resolution_issue = f"health check resolution blocked: {error}"
     policy = _health_request_policy(args.target, args.scope)
@@ -13886,7 +13920,7 @@ def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
 
 
 def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
-    """Fail closed before Debug launch without mutating environment lifecycle."""
+    """Validate a mutable non-production launch without owning runtime health."""
 
     target_name = str(args.target)
     topology = load_environment_topology()
@@ -13898,36 +13932,59 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         else repo_run_dir("app-debug-preflight", target=target_name)
     )
     details: list[str] = []
+    warnings: list[str] = []
+    mutable_workspace_warnings: list[str] = []
     startup: dict[str, Any] = {}
     provider_runtime_binding: dict[str, Any] | None = None
+
+    if environment not in {"alpha", "beta", "gamma"}:
+        details.append("app-debug-preflight only supports non-production test_live")
+    public_bases = target.get("publicBases") or {}
+    expected_host = f"{environment}.quwoquan.com"
+    for role, raw_url in sorted(public_bases.items()):
+        parsed = urllib.parse.urlparse(str(raw_url))
+        hostname = str(parsed.hostname or "").lower()
+        if hostname != expected_host and not hostname.endswith(f".{expected_host}"):
+            details.append(
+                f"test_live {role} endpoint escapes the selected {environment} namespace"
+            )
+
     try:
-        provider_runtime_binding = _active_provider_runtime(
-            environment,
-            target_name,
+        current_composition = compile_provider_runtime_composition(
+            environment=environment,
+            target=target_name,
         )
-    except (OSError, TypeError, ValueError) as exc:
-        details.append(f"package-bound Provider runtime is unavailable: {exc}")
+        provider_runtime_binding = {"composition": current_composition}
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        details.append(f"current Provider safety contract is invalid: {exc}")
+    try:
+        _active_provider_runtime(environment, target_name)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        warning = f"active candidate is absent or stale: {exc}"
+        warnings.append(warning)
+        mutable_workspace_warnings.append(warning)
+
     try:
         startup = load_startup_attempt(target_name) or {}
     except (OSError, ValueError) as exc:
-        details.append(f"startup receipt unreadable: {exc}")
+        warnings.append(f"startup receipt unreadable: {exc}")
     if not startup:
-        details.append("target has no startup receipt")
+        warnings.append("target has no startup receipt")
     else:
         if startup.get("status") != "running":
-            details.append(
+            warnings.append(
                 "target startup status is not running: "
                 + str(startup.get("status") or "missing")
             )
         if startup.get("env") != environment or startup.get("target") != target_name:
-            details.append("startup receipt target/environment mismatch")
+            warnings.append("startup receipt target/environment mismatch")
         if startup.get("workload") != "full":
-            details.append("Debug login requires a full workload runtime")
+            warnings.append("full runtime is not running")
         if re.fullmatch(
             r"sha256:[0-9a-f]{64}",
             str(startup.get("configurationDigest") or ""),
         ) is None:
-            details.append("startup receipt has no canonical configuration digest")
+            warnings.append("startup receipt has no canonical configuration digest")
         expected_provider_digest = str(
             (provider_runtime_binding or {}).get("composition", {}).get(
                 "runtimeCompositionDigest"
@@ -13938,15 +13995,17 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             not expected_provider_digest
             or startup.get("providerRuntimeDigest") != expected_provider_digest
         ):
-            details.append(
-                "startup receipt Provider runtime differs from the active candidate"
+            warning = (
+                "startup receipt Provider runtime differs from current test_live source"
             )
+            warnings.append(warning)
+            mutable_workspace_warnings.append(warning)
 
     try:
         tls_evidence = verify_certificate(target_name)
     except (OSError, PublicDomainTlsError, ValueError) as exc:
         tls_evidence = {"status": "gate_block"}
-        details.append(f"target TLS is not ready: {exc}")
+        warnings.append(f"target TLS is not ready: {exc}")
 
     profile_name = str(target.get("portProfile") or "")
     ports = profile_ports(load_port_manifest(), profile_name) if profile_name else {}
@@ -13983,7 +14042,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     check_receipts: list[dict[str, Any]] = []
     for name, url, ca_file in checks:
         if url.endswith(":0/healthz") or url == "/healthz":
-            details.append(f"{name} topology is incomplete")
+            warnings.append(f"{name} topology is incomplete")
             continue
         ok, status_code, body, _ = fetch_url(
             url,
@@ -13996,16 +14055,16 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             {"name": name, "ready": ok, "statusCode": status_code}
         )
         if not ok:
-            details.append(f"{name} is not ready: {status_code or 'network_error'}")
+            warnings.append(f"{name} is not ready: {status_code or 'network_error'}")
             continue
         if name in sms_capture_roles:
             try:
                 decoded = json.loads(body)
             except json.JSONDecodeError:
-                details.append("SMS substitute health readback is not JSON")
+                warnings.append("SMS substitute health readback is not JSON")
                 continue
             if not isinstance(decoded, dict):
-                details.append("SMS substitute health readback is invalid")
+                warnings.append("SMS substitute health readback is invalid")
                 continue
             provider_readback = {
                 "adapterId": str(decoded.get("adapterId") or ""),
@@ -14032,26 +14091,17 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 "failure",
                 "timeout",
             }:
-                details.append("SMS substitute adapter/environment/readiness mismatch")
+                warnings.append("SMS substitute adapter/environment/readiness mismatch")
 
-    content_result = command_app_content_preflight(
-        argparse.Namespace(
-            target=target_name,
-            report_dir=str(report_dir / "content"),
-        )
-    )
-    if int(content_result.get("exitCode", 2)) != 0:
-        details.append(
-            "content preflight failed: "
-            + str((content_result.get("details") or ["unknown"])[0])
-        )
-
-    passed = not details
+    content_result: dict[str, Any] = {}
+    status = "gate_block" if details else "warning" if warnings else "passed"
     payload = {
         "schema": "quwoquan_ops.app_debug_preflight",
         "target": target_name,
         "environment": environment,
-        "status": "passed" if passed else "gate_block",
+        "launchPolicy": "test_live",
+        "contentBindingState": "unbound",
+        "status": status,
         "configurationDigest": str(startup.get("configurationDigest") or ""),
         "providerRuntimeDigest": str(
             startup.get("providerRuntimeDigest") or ""
@@ -14063,6 +14113,12 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         },
         "provider": provider_readback,
         "details": details,
+        "warnings": warnings,
+        "mutableWorkspaceWarnings": mutable_workspace_warnings,
+        "contentAvailability": {
+            "state": "unbound",
+            "emptyReason": "no_active_release",
+        },
         "packageBaseline": content_result.get("packageBaseline", ""),
         "sourceRevision": content_result.get("sourceRevision", ""),
         "releaseId": content_result.get("releaseId", ""),
@@ -14079,14 +14135,17 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         ),
     }
     write_json(report_dir / "report.json", payload)
-    write_json(report_dir / "findings.json", {"issues": details})
+    write_json(
+        report_dir / "findings.json",
+        {"issues": details, "warnings": warnings},
+    )
     return {
         **payload,
-        "exitCode": 0 if passed else 2,
+        "exitCode": 2 if details else 0,
         "summary": (
-            f"App Debug preflight passed for {target_name}"
-            if passed
-            else f"App Debug preflight is GATE_BLOCK for {target_name}"
+            f"App Debug preflight is GATE_BLOCK for {target_name}"
+            if details
+            else f"App Debug preflight is {status.upper()} for {target_name}"
         ),
         "reportDir": relpath(report_dir),
     }
@@ -15553,6 +15612,506 @@ def _reconcile_nonprod_data(
     }
 
 
+def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
+    """Return the stopped receipt when normal candidate-bound down cannot apply."""
+
+    leases = active_consumer_leases(target_name)
+    if leases:
+        identities = ", ".join(
+            f"{item.get('device')}:{item.get('consumer')}" for item in leases
+        )
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            "orphan Compose teardown requires zero active consumer leases"
+            + (f": {identities}" if identities else "")
+        )
+    try:
+        startup = load_startup_attempt(target_name)
+    except (OSError, ValueError) as exc:
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            f"canonical startup receipt is unreadable: {exc}"
+        ) from exc
+    if startup is None:
+        return None
+    status = str(startup.get("status") or "").strip()
+    if status != "stopped":
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            "orphan Compose teardown requires an absent or stopped startup receipt; "
+            f"status={status or '<missing>'} must use candidate-bound normal down"
+        )
+    return startup
+
+
+def _wait_for_attested_orphan_compose_ports_released(
+    target_name: str,
+    attestation: Mapping[str, Any],
+) -> None:
+    canonical_occupied = _wait_for_network_ports_released(
+        target_name,
+        port_reporter=_canonical_port_occupancy_report,
+    )
+    if canonical_occupied:
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            "canonical target ports remain occupied after bounded teardown wait: "
+            + ", ".join(
+                f"{item['name']}:{item['port']}" for item in canonical_occupied
+            )
+        )
+    snapshot = attestation.get("snapshot")
+    if not isinstance(snapshot, Mapping):
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            "orphan Compose attestation snapshot is missing"
+        )
+    noncanonical_ports = snapshot.get("nonCanonicalPublishedHostPorts")
+    if not isinstance(noncanonical_ports, list) or any(
+        isinstance(item, bool) or not isinstance(item, int)
+        for item in noncanonical_ports
+    ):
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            "attested non-canonical port inventory is invalid"
+        )
+    noncanonical_occupied = _wait_for_exact_tcp_ports_released(
+        noncanonical_ports
+    )
+    if noncanonical_occupied:
+        raise orphan_compose_teardown.OrphanComposeTeardownError(
+            "attested non-canonical TCP ports remain occupied after bounded teardown wait: "
+            + ", ".join(str(item) for item in noncanonical_occupied)
+        )
+
+
+def _complete_orphan_compose_audit_convergence(
+    *,
+    target_name: str,
+    attestation_path: Path,
+    attestation: Mapping[str, Any],
+    consumption: Mapping[str, Any],
+    canonical_ports: Sequence[Mapping[str, Any]],
+    other_target_port_blocks: Sequence[Mapping[str, Any]],
+    report_dir: Path,
+    startup: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    _wait_for_attested_orphan_compose_ports_released(target_name, attestation)
+    post_snapshot = orphan_compose_teardown.sample_snapshot(
+        target=target_name,
+        canonical_ports=canonical_ports,
+        run_command=run,
+        require_removable=False,
+        other_target_port_blocks=other_target_port_blocks,
+        port_probe=socket_probe,
+    )
+    orphan_compose_teardown.assert_post_teardown_state(
+        attestation,
+        post_snapshot,
+        port_probe=socket_probe,
+    )
+    convergence_path = orphan_compose_teardown.write_convergence_create_once(
+        attestation_path,
+        attestation=attestation,
+        consumption=consumption,
+        current_snapshot=post_snapshot,
+    )
+    details = [
+        "audit-only convergence completed; no Docker removal command was executed",
+        f"partialConsumptionDigest={consumption['consumptionDigest']}",
+        f"convergence={relpath(convergence_path)}",
+    ]
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "repair",
+            "target": target_name,
+            "fix": "reclaim-orphaned-compose",
+            "status": "passed",
+            "auditOnly": True,
+            "destructiveRepairPerformed": False,
+            "startupAttempt": startup,
+            "attestation": relpath(attestation_path),
+            "attestationDigest": attestation["attestationDigest"],
+            "consumptionDigest": consumption["consumptionDigest"],
+            "convergence": relpath(convergence_path),
+            "details": details,
+        },
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="repair",
+        target=target_name,
+        status="ok",
+        summary=f"stackctl orphan Compose audit convergence passed for {target_name}",
+        details=details,
+    )
+    return {
+        "exitCode": 0,
+        "summary": f"stackctl orphan Compose audit convergence passed for {target_name}",
+        "details": details,
+        "reportDir": relpath(report_dir),
+        "convergence": relpath(convergence_path),
+    }
+
+
+def _repair_orphaned_compose(
+    args: argparse.Namespace,
+    *,
+    environment: str,
+    report_dir: Path,
+) -> dict[str, Any]:
+    target_name = str(args.target)
+    attestation_value = str(
+        getattr(args, "orphaned_compose_attestation", "") or ""
+    ).strip()
+    if not attestation_value:
+        details = [
+            "--orphaned-compose-attestation is required; arbitrary Compose project input is not accepted"
+        ]
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl orphan Compose repair is GATE_BLOCK for {target_name}",
+            "details": details,
+            "reportDir": relpath(report_dir),
+        }
+    attestation_path = Path(attestation_value)
+    allowed_root = env_runs_root(environment)
+    confirmed = bool(
+        getattr(args, "confirm_orphaned_compose_teardown", False)
+    )
+    active_attestation: dict[str, Any] | None = None
+    execution_journal: Path | None = None
+    attempted_command: list[str] = []
+    confirmed_container_ids: list[str] = []
+    confirmed_network_ids: list[str] = []
+    destructive_steps: list[dict[str, Any]] = []
+    try:
+        with _local_stack_operation_lock(target_name):
+            startup = _orphan_compose_runtime_gate(target_name)
+            canonical_ports = _canonical_port_occupancy_report(target_name)["ports"]
+            other_target_port_blocks = _other_local_target_port_blocks(target_name)
+            if not confirmed:
+                snapshot = orphan_compose_teardown.sample_snapshot(
+                    target=target_name,
+                    canonical_ports=canonical_ports,
+                    run_command=run,
+                    other_target_port_blocks=other_target_port_blocks,
+                    port_probe=socket_probe,
+                )
+                attestation = orphan_compose_teardown.seal_attestation(snapshot)
+                written_path = orphan_compose_teardown.write_attestation_create_once(
+                    attestation_path,
+                    attestation,
+                    allowed_root=allowed_root,
+                )
+                details = [
+                    f"created read-only attestation={relpath(written_path)}",
+                    f"project={attestation['project']}",
+                    f"containers={len(snapshot['containers'])}",
+                    f"networks={len(snapshot['networks'])}",
+                    f"preservedVolumes={len(snapshot['volumes'])}",
+                    "no Compose resource was removed; rerun with the same path and --confirm-orphaned-compose-teardown after review",
+                ]
+                write_json(
+                    report_dir / "report.json",
+                    {
+                        "command": "repair",
+                        "target": target_name,
+                        "fix": args.fix,
+                        "status": "planned",
+                        "destructiveRepairPerformed": False,
+                        "startupAttempt": startup,
+                        "attestation": relpath(written_path),
+                        "attestationDigest": attestation["attestationDigest"],
+                        "details": details,
+                    },
+                )
+                write_json(
+                    report_dir / "repair_plan.json",
+                    {
+                        "target": target_name,
+                        "fix": args.fix,
+                        "project": attestation["project"],
+                        "attestation": relpath(written_path),
+                        "attestationDigest": attestation["attestationDigest"],
+                        "containerIds": [
+                            item["id"] for item in snapshot["containers"]
+                        ],
+                        "networkIds": [item["id"] for item in snapshot["networks"]],
+                        "preservedVolumeNames": [
+                            item["name"] for item in snapshot["volumes"]
+                        ],
+                        "actions": [
+                            "review the create-once exact-resource attestation",
+                            "rerun repair with the same attestation path and explicit confirmation",
+                        ],
+                    },
+                )
+                _write_summary_bundle(
+                    report_dir,
+                    command="repair",
+                    target=target_name,
+                    status="ok",
+                    summary=f"stackctl orphan Compose teardown planned for {target_name}",
+                    details=details,
+                )
+                return {
+                    "exitCode": 0,
+                    "summary": f"stackctl orphan Compose teardown planned for {target_name}",
+                    "details": details,
+                    "reportDir": relpath(report_dir),
+                    "attestation": relpath(written_path),
+                }
+
+            consumption_exists = (
+                attestation_path.with_name(
+                    "orphaned-compose-teardown-consumption.json"
+                ).exists()
+                or attestation_path.with_name(
+                    "orphaned-compose-teardown-consumption.json"
+                ).is_symlink()
+            )
+            attestation = orphan_compose_teardown.load_attestation(
+                attestation_path,
+                allowed_root=allowed_root,
+                expected_target=target_name,
+                allow_expired=consumption_exists,
+            )
+            active_attestation = attestation
+            if consumption_exists:
+                consumption = (
+                    orphan_compose_teardown.load_partial_consumption_for_convergence(
+                        attestation_path,
+                        attestation=attestation,
+                    )
+                )
+                orphan_compose_teardown.validate_execution_evidence_for_convergence(
+                    attestation_path,
+                    attestation=attestation,
+                )
+                return _complete_orphan_compose_audit_convergence(
+                    target_name=target_name,
+                    attestation_path=attestation_path,
+                    attestation=attestation,
+                    consumption=consumption,
+                    canonical_ports=canonical_ports,
+                    other_target_port_blocks=other_target_port_blocks,
+                    report_dir=report_dir,
+                    startup=startup,
+                )
+            orphan_compose_teardown.assert_not_consumed(attestation_path)
+            current_snapshot = orphan_compose_teardown.sample_snapshot(
+                target=target_name,
+                canonical_ports=canonical_ports,
+                run_command=run,
+                other_target_port_blocks=other_target_port_blocks,
+                port_probe=socket_probe,
+            )
+            orphan_compose_teardown.assert_snapshot_unchanged(
+                attestation,
+                current_snapshot,
+            )
+            commands = orphan_compose_teardown.exact_removal_commands(attestation)
+            execution_journal = (
+                orphan_compose_teardown.write_execution_journal_create_once(
+                    attestation_path,
+                    attestation=attestation,
+                    commands=commands,
+                )
+            )
+            for index, command in enumerate(commands, start=1):
+                attempted_command = command
+                result = run(command)
+                destructive_steps.append(
+                    {
+                        "argv": command,
+                        "exitCode": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                    }
+                )
+                if result.returncode != 0:
+                    raise orphan_compose_teardown.OrphanComposeTeardownError(
+                        "exact orphan Compose resource removal failed: "
+                        + " ".join(command[:3])
+                    )
+                if command[:3] == ["docker", "rm", "--force"]:
+                    confirmed_container_ids.append(command[-1])
+                else:
+                    confirmed_network_ids.append(command[-1])
+                orphan_compose_teardown.write_step_receipt_create_once(
+                    attestation_path,
+                    attestation=attestation,
+                    index=index,
+                    command=command,
+                )
+                attempted_command = []
+            _wait_for_attested_orphan_compose_ports_released(
+                target_name,
+                attestation,
+            )
+            post_snapshot = orphan_compose_teardown.sample_snapshot(
+                target=target_name,
+                canonical_ports=_canonical_port_occupancy_report(target_name)["ports"],
+                run_command=run,
+                require_removable=False,
+                other_target_port_blocks=other_target_port_blocks,
+                port_probe=socket_probe,
+            )
+            orphan_compose_teardown.assert_post_teardown_state(
+                attestation,
+                post_snapshot,
+                port_probe=socket_probe,
+            )
+            snapshot = attestation["snapshot"]
+            container_ids = [item["id"] for item in snapshot["containers"]]
+            network_ids = [item["id"] for item in snapshot["networks"]]
+            consumption_path = orphan_compose_teardown.write_consumption_create_once(
+                attestation_path,
+                attestation=attestation,
+                removed_containers=container_ids,
+                removed_networks=network_ids,
+                status="passed",
+                removal_outcome="complete",
+            )
+            details = [
+                f"removed exact attested containers={','.join(container_ids) or 'none'}",
+                f"removed exact attested networks={','.join(network_ids) or 'none'}",
+                "preserved named volumes="
+                + (
+                    ",".join(item["name"] for item in snapshot["volumes"])
+                    or "none"
+                ),
+                f"consumption={relpath(consumption_path)}",
+            ]
+            write_json(
+                report_dir / "report.json",
+                {
+                    "command": "repair",
+                    "target": target_name,
+                    "fix": args.fix,
+                    "status": "passed",
+                    "destructiveRepairPerformed": True,
+                    "startupAttempt": startup,
+                    "attestation": relpath(attestation_path),
+                    "attestationDigest": attestation["attestationDigest"],
+                    "consumption": relpath(consumption_path),
+                    "executionJournal": relpath(execution_journal),
+                    "steps": destructive_steps,
+                    "details": details,
+                },
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="repair",
+                target=target_name,
+                status="ok",
+                summary=f"stackctl removed exact orphan Compose resources for {target_name}",
+                details=details,
+            )
+            return {
+                "exitCode": 0,
+                "summary": f"stackctl removed exact orphan Compose resources for {target_name}",
+                "details": details,
+                "reportDir": relpath(report_dir),
+                "consumption": relpath(consumption_path),
+            }
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        orphan_compose_teardown.OrphanComposeTeardownError,
+    ) as exc:
+        consumption_path: Path | None = None
+        consumption_issue = ""
+        removal_outcome = "none"
+        destructive_performed: bool | None = False
+        if active_attestation is not None and execution_journal is not None:
+            removal_outcome = (
+                "partial_failure"
+                if confirmed_container_ids or confirmed_network_ids
+                else "unknown_after_attempt"
+                if attempted_command
+                else "aborted_before_attempt"
+            )
+            destructive_performed = (
+                True
+                if confirmed_container_ids or confirmed_network_ids
+                else None
+                if attempted_command
+                else False
+            )
+            try:
+                consumption_path = (
+                    orphan_compose_teardown.write_consumption_create_once(
+                        attestation_path,
+                        attestation=active_attestation,
+                        removed_containers=confirmed_container_ids,
+                        removed_networks=confirmed_network_ids,
+                        status="partial_failure",
+                        failed_command=attempted_command,
+                        removal_outcome=removal_outcome,
+                    )
+                )
+            except (OSError, RuntimeError, TypeError, ValueError) as receipt_exc:
+                consumption_issue = str(receipt_exc)
+        details = [str(exc)]
+        if confirmed_container_ids or confirmed_network_ids:
+            details.append(
+                "confirmed removed exact resources before failure: "
+                + ",".join(confirmed_container_ids + confirmed_network_ids)
+            )
+        if attempted_command:
+            details.append(
+                "failed command may have changed its exact resource; inspect the execution journal before any new attestation: "
+                + " ".join(attempted_command)
+            )
+        if consumption_path is not None:
+            details.append(f"partial consumption={relpath(consumption_path)}")
+        if consumption_issue:
+            details.append(f"partial consumption receipt failure={consumption_issue}")
+        write_json(
+            report_dir / "report.json",
+            {
+                "command": "repair",
+                "target": target_name,
+                "fix": args.fix,
+                "status": "gate_block",
+                "destructiveRepairPerformed": destructive_performed,
+                "destructiveRepairOutcome": removal_outcome,
+                "executionJournal": (
+                    relpath(execution_journal) if execution_journal else ""
+                ),
+                "consumption": (
+                    relpath(consumption_path) if consumption_path else ""
+                ),
+                "steps": destructive_steps,
+                "details": details,
+            },
+        )
+        write_json(
+            report_dir / "repair_plan.json",
+            {
+                "target": target_name,
+                "fix": args.fix,
+                "actions": [
+                    "resolve the recorded identity, receipt, lease, expiry, or live-resource drift",
+                    "create a new attestation only after the prior path is preserved for audit",
+                ],
+            },
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=target_name,
+            status="failed",
+            summary=f"stackctl orphan Compose repair is GATE_BLOCK for {target_name}",
+            details=details,
+        )
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl orphan Compose repair is GATE_BLOCK for {target_name}",
+            "details": details,
+            "reportDir": relpath(report_dir),
+        }
+
+
 def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     topology = load_environment_topology()
     target = get_target(topology, args.target)
@@ -15564,6 +16123,12 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             args,
             environment=env_name,
             target_name=args.target,
+            report_dir=report_dir,
+        )
+    if args.fix == "reclaim-orphaned-compose":
+        return _repair_orphaned_compose(
+            args,
+            environment=env_name,
             report_dir=report_dir,
         )
     if args.fix == "reclaim-orphaned-processes":
@@ -15924,7 +16489,12 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": relpath(report_dir),
         }
     if args.fix == "reclaim-ports":
-        ports = _network_report(args.target)["ports"]
+        # Port reclaim is deliberately diagnostic-only.  It must remain usable
+        # when the active candidate is stale or invalid, because that is the
+        # exact state in which operators need an inventory before a supported
+        # teardown.  Health inspection continues to use _network_report and
+        # therefore still requires a current candidate/startup identity.
+        ports = _canonical_port_occupancy_report(args.target)["ports"]
         occupied = [item for item in ports if item["open"]]
         write_json(report_dir / "report.json", {"command": "repair", "target": args.target, "occupied": occupied})
         write_json(
@@ -17579,7 +18149,7 @@ def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, A
     started_monotonic, started_at = _start_timing()
     package_command = [
         "bash",
-        "quwoquan_service/scripts/runtime/build_service_env_package.sh",
+        "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh",
         "--service",
         args.service,
         "--env",
@@ -18828,6 +19398,43 @@ def _network_report(target_name: str) -> dict[str, Any]:
     }
 
 
+def _canonical_port_occupancy_report(target_name: str) -> dict[str, Any]:
+    """Inspect the complete canonical target block without trusting runtime state."""
+
+    topology = load_environment_topology()
+    target = get_target(topology, target_name)
+    profile_name = str(target.get("portProfile") or "").strip()
+    if not profile_name:
+        return {"profile": "", "ports": [], "publicEndpoints": []}
+    manifest = load_port_manifest()
+    ports = [
+        {"name": role, "port": port, "open": socket_probe(port)}
+        for role, port in profile_ports(manifest, profile_name).items()
+    ]
+    return {"profile": profile_name, "ports": ports, "publicEndpoints": []}
+
+
+def _other_local_target_port_blocks(target_name: str) -> list[dict[str, Any]]:
+    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
+        raise ValueError(f"local target port blocks do not support {target_name!r}")
+    manifest = load_port_manifest()
+    blocks: list[dict[str, Any]] = []
+    for candidate in ("alpha-local", "beta-local", "gamma-local"):
+        if candidate == target_name:
+            continue
+        profile = manifest.get("profiles", {}).get(candidate)
+        if not isinstance(profile, dict):
+            raise ValueError(f"canonical port block is missing for {candidate}")
+        blocks.append(
+            {
+                "target": candidate,
+                "blockStart": int(profile["blockStart"]),
+                "blockEnd": int(profile["blockEnd"]),
+            }
+        )
+    return blocks
+
+
 def _expected_local_roles(
     target_name: str,
     *,
@@ -19984,144 +20591,205 @@ def _dev_session_workload_conflict(
     }
 
 
+def _mutable_workspace_snapshot() -> dict[str, Any]:
+    """Return a fast warning-only identity for a mutable test session.
+
+    Immutable package hashing intentionally walks every deployment input.  A
+    test-live launch must not inherit that cost, so this identity binds HEAD,
+    porcelain status, and the size/mtime of every currently dirty path.  It is
+    sufficient to detect an in-session mutation and is never accepted as a
+    production package identity.
+    """
+
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    status = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            "quwoquan_app",
+            "quwoquan_service",
+            "quwoquan_ops",
+        ],
+        cwd=ROOT,
+        text=False,
+        capture_output=True,
+        check=False,
+        timeout=15,
+    )
+    if revision.returncode != 0 or status.returncode != 0:
+        raise RuntimeError(
+            revision.stderr.strip()
+            or os.fsdecode(status.stderr).strip()
+            or "mutable workspace identity command failed"
+        )
+    state_digest = hashlib.sha256(status.stdout)
+    for raw_record in status.stdout.split(b"\0"):
+        if len(raw_record) < 4:
+            continue
+        relative = os.fsdecode(raw_record[3:])
+        path = ROOT / relative
+        try:
+            metadata = path.stat()
+        except OSError:
+            continue
+        state_digest.update(relative.encode("utf-8"))
+        state_digest.update(str(metadata.st_size).encode("ascii"))
+        state_digest.update(str(metadata.st_mtime_ns).encode("ascii"))
+    return {
+        "sourceRevision": revision.stdout.strip(),
+        "workspaceStatusDigest": "sha256:" + hashlib.sha256(status.stdout).hexdigest(),
+        "mutableStateDigest": "sha256:" + state_digest.hexdigest(),
+    }
+
+
 def _run_dev_session_target(
     *,
     environment: str,
     target: str,
-    release_attestation: str,
-    rollback_release_attestation: str,
     device_id: str,
     launch_app_requested: bool,
     report_dir: Path,
 ) -> dict[str, Any]:
+    """Render one mutable non-production session without immutable packaging."""
+
     phases: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    mutable_workspace_warnings: list[str] = []
+    beginning_snapshot: dict[str, Any] = {}
+    ending_snapshot: dict[str, Any] = {}
     try:
         active_attempt, conflict = _dev_session_runtime_preflight(
             topology=load_environment_topology(),
             target=target,
         )
     except (OSError, RuntimeError, ValueError) as exc:
-        return {
-            "exitCode": 2,
-            "sessionKind": "cold",
-            "blockerKind": "runtime_receipt_unreadable",
-            "details": [f"runtime startup receipt preflight failed: {exc}"],
-            "fullRuntimeSelected": False,
-            "phases": phases,
-        }
+        active_attempt = None
+        conflict = None
+        warnings.append(f"stale runtime receipt ignored for test_live: {exc}")
     if conflict is not None:
         return _dev_session_workload_conflict(conflict)
 
-    package_payload = command_package(
-        _dev_session_child_args(
-            "package",
-            report_dir=report_dir / "package",
-            argv=[
-                "--env",
-                environment,
-                "--target",
-                target,
-                "--include-services",
-                "--release-attestation",
-                release_attestation,
-                "--rollback-release-attestation",
-                rollback_release_attestation,
-            ],
+    try:
+        beginning_snapshot = _mutable_workspace_snapshot()
+    except (OSError, RuntimeError, ValueError) as exc:
+        warning = f"mutable workspace start digest unavailable: {exc}"
+        warnings.append(warning)
+        mutable_workspace_warnings.append(warning)
+
+    report_dir.mkdir(parents=True, exist_ok=True)
+    handoff_command = [
+        sys.executable,
+        str(ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"),
+        "--env",
+        environment,
+        "--target",
+        target,
+        "--launch-mode",
+        "canonical_launcher",
+        "--launch-policy",
+        "test_live",
+        "--app-instance-namespace",
+        f"{environment}-test-live",
+    ]
+    try:
+        handoff_result = subprocess.run(
+            handoff_command,
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
         )
-    )
-    phases.append(_dev_session_phase("package", package_payload))
-    if int(package_payload.get("exitCode", 1)) != 0:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         return {
-            "exitCode": int(package_payload.get("exitCode", 1)),
-            "sessionKind": "cold",
-            "blockerKind": "package_failed",
-            "details": list(package_payload.get("details") or []),
+            "exitCode": 2,
+            "sessionKind": "mutable",
+            "blockerKind": "launcher_handoff_invalid",
+            "details": [f"test_live launcher handoff failed: {exc}"],
             "fullRuntimeSelected": False,
             "phases": phases,
         }
-
-    session_kind = (
-        "hot"
-        if active_attempt
-        and active_attempt.get("status") == "running"
-        and active_attempt.get("workload") == "full"
-        else "cold"
+    if handoff_result.returncode != 0:
+        return {
+            "exitCode": 2,
+            "sessionKind": "mutable",
+            "blockerKind": "launcher_handoff_invalid",
+            "details": [
+                handoff_result.stderr.strip()
+                or handoff_result.stdout.strip()
+                or "test_live launcher handoff failed"
+            ],
+            "fullRuntimeSelected": False,
+            "phases": phases,
+        }
+    try:
+        handoff_payload = json.loads(handoff_result.stdout)
+    except json.JSONDecodeError as exc:
+        return {
+            "exitCode": 2,
+            "sessionKind": "mutable",
+            "blockerKind": "launcher_handoff_invalid",
+            "details": [f"test_live launcher handoff is not JSON: {exc}"],
+            "fullRuntimeSelected": False,
+            "phases": phases,
+        }
+    if (
+        not isinstance(handoff_payload, dict)
+        or handoff_payload.get("launchPolicy") != "test_live"
+        or handoff_payload.get("contentBindingState") != "unbound"
+    ):
+        return {
+            "exitCode": 2,
+            "sessionKind": "mutable",
+            "blockerKind": "launcher_handoff_invalid",
+            "details": ["test_live launcher handoff policy/binding mismatch"],
+            "fullRuntimeSelected": False,
+            "phases": phases,
+        }
+    handoff_path = report_dir / "test-live-launcher-handoff.json"
+    write_json(handoff_path, handoff_payload)
+    phases.append(
+        {
+            "name": "mutable-render",
+            "exitCode": 0,
+            "summary": "current workspace test_live handoff rendered",
+            "details": [f"handoff={relpath(handoff_path)}"],
+            "reportDir": relpath(report_dir),
+        }
     )
 
-    if session_kind == "cold":
-        up_argv = [
-            "--env",
-            environment,
-            "--workload",
-            "full",
-        ]
-        if device_id:
-            up_argv.extend(("--device-id", device_id))
-        if not launch_app_requested:
-            up_argv.append("--skip-app")
-        up_payload = command_up(
-            _dev_session_child_args(
-                "up",
-                report_dir=report_dir / "up",
-                argv=up_argv,
-            )
+    preflight_payload = command_app_debug_preflight(
+        _dev_session_child_args(
+            "app-debug-preflight",
+            report_dir=report_dir / "preflight",
+            argv=["--target", target],
         )
-        phases.append(_dev_session_phase("up", up_payload))
-        if int(up_payload.get("exitCode", 1)) != 0:
-            return {
-                "exitCode": int(up_payload.get("exitCode", 1)),
-                "sessionKind": session_kind,
-                "blockerKind": "runtime_up_failed",
-                "details": list(up_payload.get("details") or []),
-                "fullRuntimeSelected": False,
-                "phases": phases,
-            }
-    else:
-        phases.append(
-            {
-                "name": "up",
-                "exitCode": 0,
-                "summary": "healthy full runtime reused",
-                "details": [
-                    f"attemptId={active_attempt.get('attemptId')}",
-                    "compose up was not repeated",
-                ],
-                "reportDir": "",
-            }
-        )
-        if launch_app_requested:
-            selected_device = device_id or resolve_device_id(
-                include_mobile=True,
-                include_web=False,
-                include_desktop=False,
-                label="[stackctl dev-session]",
-            )
-            try:
-                process = launch_app(
-                    environment,
-                    selected_device,
-                    topology=load_environment_topology(),
-                    rollout_mode="",
-                    log_path=report_dir / f"app-launch-{selected_device.replace('/', '_')}.log",
-                )
-            except RuntimeError as exc:
-                return {
-                    "exitCode": 1,
-                    "sessionKind": session_kind,
-                    "blockerKind": "app_launch_failed",
-                    "details": [str(exc)],
-                    "fullRuntimeSelected": True,
-                    "phases": phases,
-                }
-            phases.append(
-                {
-                    "name": "app-launch",
-                    "exitCode": 0,
-                    "summary": f"App launch started with pid={process.pid}",
-                    "details": [f"device={selected_device}"],
-                    "reportDir": relpath(report_dir),
-                }
-            )
+    )
+    phases.append(_dev_session_phase("preflight", preflight_payload))
+    if int(preflight_payload.get("exitCode", 1)) != 0:
+        return {
+            "exitCode": int(preflight_payload.get("exitCode", 2)),
+            "sessionKind": "mutable",
+            "blockerKind": "test_live_safety_failed",
+            "details": list(preflight_payload.get("details") or []),
+            "fullRuntimeSelected": False,
+            "phases": phases,
+        }
+    warnings.extend(str(item) for item in preflight_payload.get("warnings") or [])
+    mutable_workspace_warnings.extend(
+        str(item) for item in preflight_payload.get("mutableWorkspaceWarnings") or []
+    )
 
     health_payload = command_health(
         _dev_session_child_args(
@@ -20132,27 +20800,97 @@ def _run_dev_session_target(
     )
     phases.append(_dev_session_phase("health", health_payload))
     if int(health_payload.get("exitCode", 1)) != 0:
-        return {
-            "exitCode": int(health_payload.get("exitCode", 1)),
-            "sessionKind": session_kind,
-            "blockerKind": "runtime_health_failed",
-            "details": list(health_payload.get("details") or []),
-            "fullRuntimeSelected": True,
-            "phases": phases,
-        }
+        warnings.extend(
+            "runtime health warning: " + str(item)
+            for item in list(
+                health_payload.get("details") or [health_payload.get("summary")]
+            )
+            if item
+        )
+
+    if launch_app_requested:
+        selected_device = device_id or resolve_device_id(
+            include_mobile=True,
+            include_web=False,
+            include_desktop=False,
+            label="[stackctl dev-session]",
+        )
+        launch_log = report_dir / f"app-launch-{selected_device.replace('/', '_')}.log"
+        launch_log.parent.mkdir(parents=True, exist_ok=True)
+        with launch_log.open("a", encoding="utf-8") as log_handle:
+            process = subprocess.Popen(
+                ["bash", "run.sh", "--env", environment, "-d", selected_device],
+                cwd=ROOT / "quwoquan_app",
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+        time.sleep(1.5)
+        if process.poll() is not None:
+            return {
+                "exitCode": 1,
+                "sessionKind": "mutable",
+                "blockerKind": "app_launch_failed",
+                "details": [summarize_output(launch_log.read_text(encoding="utf-8"))],
+                "fullRuntimeSelected": False,
+                "phases": phases,
+            }
+        phases.append(
+            {
+                "name": "app-launch",
+                "exitCode": 0,
+                "summary": f"test_live App launch started with pid={process.pid}",
+                "details": [f"device={selected_device}"],
+                "reportDir": relpath(report_dir),
+            }
+        )
+
+    try:
+        ending_snapshot = _mutable_workspace_snapshot()
+    except (OSError, RuntimeError, ValueError) as exc:
+        warning = f"mutable workspace end digest unavailable: {exc}"
+        warnings.append(warning)
+        mutable_workspace_warnings.append(warning)
+    if beginning_snapshot and ending_snapshot:
+        changed = [
+            field
+            for field in (
+                "sourceRevision",
+                "workspaceStatusDigest",
+                "mutableStateDigest",
+            )
+            if beginning_snapshot.get(field) != ending_snapshot.get(field)
+        ]
+        if changed:
+            warning = "mutable workspace changed during dev-session: " + ", ".join(changed)
+            warnings.append(warning)
+            mutable_workspace_warnings.append(warning)
 
     handoff = ["./run.sh", "--env", environment]
     if device_id:
         handoff.extend(("-d", device_id))
     return {
         "exitCode": 0,
-        "sessionKind": session_kind,
+        "status": "warning" if warnings else "passed",
+        "launchPolicy": "test_live",
+        "contentBindingState": "unbound",
+        "sessionKind": "mutable",
         "blockerKind": "",
         "details": [
             "App handoff: cd quwoquan_app && "
             + " ".join(shlex.quote(item) for item in handoff)
         ],
-        "fullRuntimeSelected": True,
+        "warnings": sorted(set(warnings)),
+        "mutableWorkspaceWarnings": sorted(set(mutable_workspace_warnings)),
+        "workspaceStart": beginning_snapshot,
+        "workspaceEnd": ending_snapshot,
+        "fullRuntimeSelected": bool(
+            active_attempt
+            and active_attempt.get("status") == "running"
+            and active_attempt.get("workload") == "full"
+        ),
         "phases": phases,
     }
 
@@ -20200,8 +20938,6 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
         report_target = requested_target
 
     report_dir = resolve_report_dir(args, report_env, report_target)
-    release_attestation = str(args.release_attestation)
-    rollback_release_attestation = str(args.rollback_release_attestation)
     sessions: list[dict[str, Any]] = []
     terminal_exit = 0
     blocker_kind = ""
@@ -20212,8 +20948,6 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
             session = _run_dev_session_target(
                 environment=environment,
                 target=target,
-                release_attestation=release_attestation,
-                rollback_release_attestation=rollback_release_attestation,
                 device_id=str(getattr(args, "device_id", "") or ""),
                 launch_app_requested=bool(getattr(args, "launch_app", False)),
                 report_dir=report_dir / target,
@@ -20229,24 +20963,20 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
             if terminal_exit != 0:
                 blocker_kind = str(session.get("blockerKind") or "session_failed")
                 details = list(session.get("details") or [])
-            if all_nonprod and bool(session.get("fullRuntimeSelected", False)):
-                down_payload = command_down(
-                    _dev_session_child_args(
-                        "down",
-                        report_dir=report_dir / target / "down",
-                        argv=["--target", target, "--workload", "full"],
-                    )
-                )
-                sessions[-1]["down"] = _dev_session_phase("down", down_payload)
-                if terminal_exit == 0 and int(down_payload.get("exitCode", 1)) != 0:
-                    terminal_exit = int(down_payload.get("exitCode", 1))
-                    blocker_kind = "post_down_failed"
-                    details = list(down_payload.get("details") or [])
             if terminal_exit != 0:
                 break
 
     timing = _finish_timing(started_monotonic, started_at)
-    status = "ok" if terminal_exit == 0 else "gate_block" if terminal_exit == 2 else "failed"
+    has_warnings = any(session.get("warnings") for session in sessions)
+    status = (
+        "warning"
+        if terminal_exit == 0 and has_warnings
+        else "passed"
+        if terminal_exit == 0
+        else "gate_block"
+        if terminal_exit == 2
+        else "failed"
+    )
     summary = (
         f"stackctl dev-session completed for {report_target}"
         if terminal_exit == 0

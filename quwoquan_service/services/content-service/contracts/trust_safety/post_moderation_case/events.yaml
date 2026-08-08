@@ -22,6 +22,7 @@ events:
 - name: PostModerationCaseDecided
   description: 审核员批准或拒绝绑定版本与摘要的 Case；Post lifecycle 只消费此事实。
   delivery_semantics: transactional_outbox
+  wire_event_type: content.post_moderation_case.PostModerationCaseDecided
   payload_entity: PostModerationCaseDecidedPayload
   payload_shape: exact
   payload_fields:

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
+// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -2274,17 +2274,6 @@ CloudOperationRequestPayload encodeContentMediaAssetSelectManualVideoCoverGenera
   );
 }
 
-CloudOperationRequestPayload encodeContentMediaOriginalAccessFactRequestOriginalImageAccessGeneratedRequest(RequestContentMediaOriginalAccessCommand request) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "mediaId": request.mediaId,
-    },
-    body: <String, Object?>{
-      "purpose": request.purpose.wireName,
-    },
-  );
-}
-
 CloudOperationRequestPayload encodeContentMediaUploadSessionAbortMediaUploadGeneratedRequest(AbortContentMediaUploadCommand request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
@@ -2324,7 +2313,18 @@ CloudOperationRequestPayload encodeContentMediaUploadSessionInitMediaUploadGener
   );
 }
 
-CloudOperationRequestPayload encodeContentOutboundShareFactCreateOutboundShareGeneratedRequest(CreateContentOutboundShareCommand request) {
+CloudOperationRequestPayload encodeContentOriginalAccessQuotaReserveOriginalImageAccessGrantGeneratedRequest(RequestContentMediaOriginalAccessCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "mediaId": request.mediaId,
+    },
+    body: <String, Object?>{
+      "purpose": request.purpose.wireName,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeContentOutboundShareFactAppendOutboundShareFactGeneratedRequest(CreateContentOutboundShareCommand request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "postId": request.postId,
@@ -2506,7 +2506,7 @@ CloudOperationRequestPayload encodeContentProfileInteractionActivityViewListProf
   );
 }
 
-CloudOperationRequestPayload encodeContentProfileInteractionReadFactUpdateProfileInteractionStateGeneratedRequest(AppendContentProfileInteractionReadFactCommand request) {
+CloudOperationRequestPayload encodeContentProfileInteractionReadFactAppendProfileInteractionReadFactGeneratedRequest(AppendContentProfileInteractionReadFactCommand request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "personaId": request.personaId,

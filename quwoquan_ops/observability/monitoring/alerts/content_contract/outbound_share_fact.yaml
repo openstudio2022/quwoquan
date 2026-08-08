@@ -8,7 +8,7 @@ groups:
           sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/posts/[^/]+/outbound-shares$"})
         labels:
           service: "content-service"
-          operation: "content.outbound_share_fact.CreateOutboundShare"
+          operation: "content.outbound_share_fact.AppendOutboundShareFact"
           contract_metric: "content_outbound_share_append"
           commercial_status: "blocked"
           slo_latency_p95_ms: "800"
@@ -18,7 +18,7 @@ groups:
           sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/posts/[^/]+/outbound-shares$"})
         labels:
           service: "content-service"
-          operation: "content.outbound_share_fact.CreateOutboundShare"
+          operation: "content.outbound_share_fact.AppendOutboundShareFact"
           contract_metric: "content_outbound_share_append"
           commercial_status: "blocked"
           slo_latency_p95_ms: "800"

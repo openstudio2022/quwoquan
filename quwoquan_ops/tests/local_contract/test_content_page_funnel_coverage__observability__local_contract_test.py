@@ -60,6 +60,24 @@ class ContentPageFunnelCoverageTest(unittest.TestCase):
                     page_contract=contract_path
                 )
 
+    def test_storage_contract_key_drift_is_rejected_by_canonical_view(self) -> None:
+        storage = coverage.load_storage_contract_view(
+            coverage.STORAGE_CONTRACT
+        )
+        raw = storage["logstores"]["raw"]
+        raw["index_fields"] = raw.pop("indexed_fields")
+
+        with tempfile.TemporaryDirectory() as directory:
+            storage_path = Path(directory) / "storage.yaml"
+            storage_path.write_text(
+                yaml.safe_dump(storage, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "storage-contract-view failed"):
+                coverage.verify_content_page_funnels(
+                    storage_contract=storage_path
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

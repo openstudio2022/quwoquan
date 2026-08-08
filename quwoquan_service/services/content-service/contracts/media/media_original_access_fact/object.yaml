@@ -1,7 +1,7 @@
 kind: append_only_fact
-description: 'MediaAsset、引用 Post 可见性与按 viewer/media/purpose 限流判定后追加的原始媒体访问审计事实。
+description: 'MediaAsset、引用 Post 可见性与 OriginalAccessQuota 额度判定之后追加的原始媒体访问审计事实。
 
-  事实、幂等 receipt 与 grant 额度保留在同一 Mongo transaction 落盘；重放不得延长授权有效期。
+  事实与幂等 receipt 同一 Mongo transaction 落盘；事实只记录决策，不持有额度、TTL 等实例级可变状态。
 
   '
 identity:
@@ -31,14 +31,26 @@ relationships:
   reference_fields:
   - viewerId
   target_object: user.Persona
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
-- ready image 的 grant、访问策略/可见性拒绝和 rate-limit 拒绝都必须产生不可变审计事实
-- viewer 必须通过 MediaAsset 访问策略、已发布引用 Post 的可见性和 BOLA 校验
-- 限流键为 viewerId + assetId + purpose；窗口与额度只由 original_access_policy 声明，拒绝请求不签发 URL
+- ready image 的 grant、访问策略/可见性拒绝和额度拒绝都必须产生不可变审计事实
+- 事实只记录已经由 OriginalAccessQuota 决定的结果；额度计数与 grant TTL 不得在本对象内计算或保存
 - 同一 idempotencyKey 只产生一个 auditId、一个 outcome、一个 reason 和一条 outbox 事件
-- granted replay 返回原绝对 expiresAt，禁止刷新或延长签名 URL 生命周期；非 granted 的 expiresAt 为空
+- granted 事实的 expiresAt 由 OriginalAccessQuota 预留时给定并原样记录，禁止在追加路径上刷新或延长；非 granted 的 expiresAt 为空
+- 本对象不开放公开写 API，只作为 OriginalAccessQuota 事务内的审计追加端口
 lifecycle:
   states:
   - granted

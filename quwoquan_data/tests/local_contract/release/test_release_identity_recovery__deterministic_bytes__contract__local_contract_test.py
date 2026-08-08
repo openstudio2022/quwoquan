@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from content.execution.reviewed_closure_adoption_identity import (
+from content.execution.closure.adoption_identity import (
     ReviewedClosureAdoptionError,
     canonical_digest,
     validate_release_identity_incident,

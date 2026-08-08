@@ -30,6 +30,23 @@ local_identity_reasons:
   rollbackAuditId: immutable rollback audit record correlation; never used as aggregate identity
   rollbackRequestId: trusted request correlation for the rolling_back checkpoint; never used as aggregate identity
   rollbackTraceId: trusted trace correlation for the rolling_back checkpoint; never used as aggregate identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "审核与举报对象受 trust and safety 约束，禁止进入任何检索面。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.profile_update_proposal.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.user.profile_update_proposal.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.profile_update_proposal.write
 business_rules:
 - target persona、source、proposedChanges、reason、evidenceRefs、impactScope 与创建归因创建后不可变
 - proposedChanges 必须是允许字段的强类型 change set，不接受动态 Map

@@ -95,6 +95,32 @@
   identity；receipt 缺失、停止、损坏或 identity 漂移必须 fail-closed 到 full scope，禁止读取
   环境专用状态文件或父运行报告作为 fallback。
 
+<a id="req-005"></a>
+### REQ-005 本地孤儿 Compose 栈的精确恢复
+
+- Alpha、Beta、Gamma 的 canonical startup receipt 缺失或已停止、但 target canonical Compose
+  project 仍有残留资源时，只能先生成一次性、短时有效的只读 teardown attestation；项目名必须
+  从 target 派生，CLI 不接受任意 Compose project 或项目前缀。
+- attestation 必须绑定 target、完整 canonical 端口清单、精确 project/Compose labels，以及当次
+  容器、网络、volume 的 ID/name/labels/config digest 与容器 image digest；同一路径只能创建一次。
+- 旧栈发布的非 canonical host port 必须一并进入 project/non-canonical port 清单；只有该端口不在
+  其他 target canonical block、实时 socket 已占用且 Docker publisher 恰为 attested container 时
+  才可纳入恢复。删除后必须逐端口证明已释放；若被其他进程接管则保留现场并 `GATE_BLOCK`。
+- 执行前必须显式确认并重采全部资源；attestation 过期、资源增删或配置漂移、存在 active
+  consumer lease、startup receipt 正在运行或仍可走 candidate-bound normal down 时一律
+  `GATE_BLOCK`。
+- 执行只允许按 attestation 中的精确 ID 删除容器与网络；named volume 默认保留，额外 live
+  resource、旧 attestation、任意项目名、Compose project 级模糊 down 或自动 plan-to-execute
+  均禁止。
+- 每个删除步骤必须先写一次性 execution journal，并在成功后写精确 resource ID step receipt；
+  中途失败必须把已确认删除项、失败命令与 unknown/partial outcome 写入消费回执，禁止报告为
+  “未执行破坏性动作”或用同一 attestation 静默重放。
+- 全部删除命令成功后，须有界等待 canonical 与 attested non-canonical TCP ports 释放再做最终
+  postcheck。若 create-once partial consumption 已精确记录全部容器/网络删除成功、failedCommand
+  为空且失败仅来自该即时 postcheck，则允许同一 confirm 做 audit-only convergence：不得重跑删除，
+  只重采零容器/网络、volume 全等和端口全释放，并写绑定原 attestation/consumption digest 的
+  create-once convergence receipt；其他 partial/unknown 形状一律禁止收敛。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_ops/environments/gamma/validation_suites.json`
@@ -104,6 +130,7 @@
 - canonical：`quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml` 与 `quwoquan_service/services/*/deploy/compose.yaml`
 - canonical：`quwoquan_ops/environments`
 - canonical：`quwoquan_ops/gate/verify_service_architecture.py`
+- canonical：`quwoquan_ops/cli/lib/orphan_compose_teardown.py`
 
 ## 5. 验收场景
 
@@ -160,6 +187,26 @@
 - THEN candidate-bound readiness、通用 Feed、视频书与 premium Feed 均只读取当前
   release，`premiumPlayableVideos > 0`；任何身份、事件、投影或候选摘要不一致均
   `GATE_BLOCK`，不得使用历史 receipt 代替。
+
+<a id="gwt-005"></a>
+### GWT-005 本地孤儿 Compose 栈只按一次性精确清单恢复
+
+- GIVEN Alpha、Beta 或 Gamma 没有 active consumer lease，canonical startup receipt 不存在或
+  状态为 stopped，且 canonical target project 仍有带完整 Compose labels 的残留资源。
+- WHEN 运维先以显式 canonical attestation path 运行 orphan Compose repair plan。
+- THEN 只生成 create-once、短时有效、带自身 digest 的完整资源清单和人工复核计划，不删除任何
+  容器、网络或 volume。
+- WHEN 运维使用同一路径和显式 teardown confirmation 再次执行，且实时重采与 attestation
+  完全一致。
+- THEN 只删除 attestation 列出的容器 ID 与网络 ID，保留全部 named volumes，并写入一次性消费
+  回执；运行中 receipt、active lease、过期/重放、额外资源或任一 identity/config/image/port
+  漂移均在删除前 `GATE_BLOCK`；中途失败则以 create-once journal、逐步 success receipt 与
+  partial-failure consumption 保存实际成功 ID 和未确定命令，禁止把部分删除记为零变更。
+  非 canonical published host port 还必须绑定唯一实时 Docker publisher，且不得落入另一环境的
+  canonical block；执行后 canonical 与该项目全部 published TCP ports 均须实测释放。
+  全删除成功但即时端口转发尚未释放时必须保留 partial receipt；仅在全部 success step、完整 removed
+  ID、空 failedCommand、零资源重现、volume 全等且有界端口复验通过时，后续同一 confirm 才可写
+  audit-only convergence receipt，且不得再次执行任何删除命令。
 
 ## 6. 依赖
 

@@ -43,11 +43,15 @@
 ### REQ-003 他人主页交集列表入口 GWT（S2a）
 
 - 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
+- 对象交集列表只经 production Remote 读取 canonical `recommendation_feature_profile_view` 投影；页面只负责 typed 展示、导航与行为归因，不拥有或端侧拼装交集事实。
+- 空结果与 Remote failure 必须可区分，失败提供可重试终态且不得回退到本地 reason、旧句子或无归因跳转。
 
 <a id="req-004"></a>
 ### REQ-004 我的主页交集与打动 GWT（S2b）
 
 - 红点聚合进「查看更多」；主标题固定为「我的交集」，时间窗口不写死为“今日”。
+- “我的交集”列表按 production Remote 返回的事实、维度与时间桶展示，并在成功读取后经 `content.intersection_visit_state` 的公开写面推进访问水位。
+- 访问水位或反馈写入失败不得隐藏已读到的交集事实或伪造红点已清零；页面保留可恢复状态并允许后续幂等重放。
 
 <a id="req-005"></a>
 ### REQ-005 林墨「我的交集」旅行三元组 inbox 渲染 + lifecycle 单源显隐 GWT
@@ -80,16 +84,21 @@
 <a id="gwt-003"></a>
 ### GWT-003 他人主页交集列表入口
 
-- GIVEN 用户访问他人主页且存在可展示的交集。
-- WHEN 用户打开交集或打动的人列表入口。
-- THEN 文案与交集定义一致，且入口展示同一对象事实。
+- GIVEN 用户访问他人主页且存在对当前 viewer 可见的 typed 交集，App 使用 production Remote composition。
+- WHEN 用户打开对象交集列表、刷新结果或点击其中一条可行动交集。
+- THEN 列表只展示 canonical projection 返回且满足 Display Contract 的事实与证据，不在端侧拼句、补 reason 或混入另一个对象的结果。
+- THEN 点击只经 typed target 导航，并把同一 intersection attribution 写入公开行为入口；页面不写交集事实或目标对象状态。
+- THEN 空结果呈现明确空态；Remote failure 保留对象上下文并提供重试，禁止回退到 fixture、旧缓存句子或无归因跳转。
 
 <a id="gwt-004"></a>
 ### GWT-004 我的主页交集与打动
 
-- GIVEN 用户访问自己的主页。
-- WHEN 用户查看交集、打动的人或更多入口。
-- THEN 主标题为“我的交集”，红点聚合到“查看更多”，且时间窗口按用户节奏解释。
+- GIVEN 已认证用户访问自己的主页，production Remote 返回可见交集、打动摘要与当前访问水位。
+- WHEN 用户打开“我的交集”，按维度或时间桶查看列表，并触发访问水位或负反馈写入。
+- THEN 主标题为“我的交集”，红点聚合到“查看更多”，时间窗口按用户节奏解释；列表只展示 Remote 返回且满足 Display Contract 的事实交集。
+- THEN 维度筛选、时间桶与深链 intersection identity 保持同源，点击目标携带同一 attribution，不由页面把 object kind、dimension 或 route 拼成第二套事实。
+- THEN 列表读取成功后才推进访问水位；水位或反馈写入失败不隐藏已读结果、不伪造红点清零，并保留遥测与后续幂等重放路径。
+- THEN 列表 Remote failure 保留当前筛选和入口上下文并提供重试，不以空态、旧缓存或本地合成的打动事实降级。
 
 ## 6. 依赖
 
@@ -115,9 +124,10 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：尚缺同一 candidate 的 production Remote 双真机证据，不能由 Provider override、Widget 或列表源码存在证明对象事实、归因导航与失败恢复已闭合。
+- 目标：对象交集列表只展示 canonical projection，typed target 与 attribution 同源，空态和 Remote failure 可区分且可恢复。
+- 完成判定：`GWT-003` 每条结果在物理 Android 与物理 iPhone 上通过，且两类 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
+- 依赖：真实 viewer/object 可见性、production Remote projection、行为写入与对象级 `user_acceptance` runner；skip 不计通过。
 
 <a id="open-004"></a>
 ### OPEN-004 我的主页交集与打动 GWT（S2b）
@@ -125,6 +135,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：红点聚合进「查看更多」；主标题固定为「我的交集」，时间窗口不写死为“今日”。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：尚缺 production Remote 列表、访问水位、反馈和失败恢复的同 candidate 双真机 CaseResult；页面显示或本地状态变化不能证明服务端红点已单调收敛。
+- 目标：红点聚合进“查看更多”，交集与打动事实来自 canonical projection，访问水位和反馈经公开写面幂等收敛，失败不丢失已确认结果。
+- 完成判定：`GWT-004` 每条结果在物理 Android 与物理 iPhone 上通过，且两类 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
+- 依赖：真实 persona、production Remote 列表与访问水位/行为写面、对象级 `user_acceptance` runner；Widget、fixture、模拟器或 skip 不计通过。

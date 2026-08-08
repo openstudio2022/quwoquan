@@ -1,6 +1,15 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — runArtifacts 是协议开放 JSON。
 part of 'personal_assistant_stream_controller.dart';
 
+const Set<String> _assistantTerminalRunStatuses = <String>{
+  'completed',
+  'failed',
+  'cancelled',
+};
+
+bool _isAssistantTerminalRunStatus(String status) =>
+    _assistantTerminalRunStatuses.contains(status.trim().toLowerCase());
+
 extension PersonalAssistantRunActions on PersonalAssistantStreamController {
   Future<String?> resolvePresentationMedia(
     AssistantPresentationMediaRefWire media,
@@ -146,6 +155,7 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
       );
       return;
     }
+    final capturedGeneration = _captureCurrentRunGeneration(normalizedRunId);
     try {
       final intent = _actionIntentConsumer.consume(
         action,
@@ -153,9 +163,22 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
       );
       switch (intent.kind) {
         case 'ApproveTool':
-          await _approveToolIntent(intent.approveTool!);
+          if (capturedGeneration == null) {
+            throw const AssistantActionIntentRejected(
+              AssistantActionIntentRejection.targetMismatch,
+            );
+          }
+          await _approveToolIntent(intent.approveTool!, capturedGeneration);
         case 'ExecuteDeviceAction':
-          await _executeDeviceActionIntent(intent.executeDeviceAction!);
+          if (capturedGeneration == null) {
+            throw const AssistantActionIntentRejected(
+              AssistantActionIntentRejection.targetMismatch,
+            );
+          }
+          await _executeDeviceActionIntent(
+            intent.executeDeviceAction!,
+            capturedGeneration,
+          );
         case 'Navigate':
           final navigate = intent.navigate!;
           final handler = _actionsRef.read(
@@ -186,15 +209,26 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
         error: error,
         stackTrace: stackTrace,
       );
-      _actionsState = _actionsState.copyWith(
-        errorMessage: runtimeErrorDisplayMessage(error),
-        errorFailure: runtimeFailureFromError(error),
-        retryAvailable: false,
-      );
+      final stillCurrent = capturedGeneration == null
+          ? _actionsState.runId.trim() == normalizedRunId
+          : _isRunStreamGenerationCurrent(
+              capturedGeneration,
+              runId: normalizedRunId,
+            );
+      if (stillCurrent) {
+        _actionsState = _actionsState.copyWith(
+          errorMessage: runtimeErrorDisplayMessage(error),
+          errorFailure: runtimeFailureFromError(error),
+          retryAvailable: false,
+        );
+      }
     }
   }
 
-  Future<void> _approveToolIntent(AssistantApproveToolIntentWire intent) async {
+  Future<void> _approveToolIntent(
+    AssistantApproveToolIntentWire intent,
+    _AssistantRunStreamGeneration capturedGeneration,
+  ) async {
     final binding = _actionsRef.read(deviceCalendarLocalBindingProvider);
     final result = await _actionsRef
         .read(assistantRunControlFacetProvider)
@@ -212,7 +246,12 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
         AssistantActionIntentRejection.targetMismatch,
       );
     }
-    _actionsState = _actionsState.copyWith(runStatus: result.state);
+    if (_isRunStreamGenerationCurrent(
+      capturedGeneration,
+      runId: intent.runId.trim(),
+    )) {
+      _actionsState = _actionsState.copyWith(runStatus: result.state);
+    }
     if (intent.decision == 'rejected') {
       return;
     }
@@ -244,14 +283,16 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
           idempotencyKey: permit.idempotencyKey,
           deviceActionPermit: permit.permit,
         ),
+        capturedGeneration,
       );
       return;
     }
-    await _watchContinuedRun(intent.runId.trim());
+    await _continueRunAfterAction(intent.runId.trim(), capturedGeneration);
   }
 
   Future<void> _executeDeviceActionIntent(
     AssistantExecuteDeviceActionIntentWire intent,
+    _AssistantRunStreamGeneration capturedGeneration,
   ) async {
     _actionIntentConsumer.validateDeviceActionIntent(intent);
     final binding = _actionsRef.read(deviceCalendarLocalBindingProvider);
@@ -275,7 +316,7 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
       execution = AssistantDeviceActionExecutionResult(
         outcome: 'unavailable',
         executedAt: DateTime.now().toUtc(),
-        failureCode: 'ASSISTANT.SYSTEM.device_action_unavailable',
+        failureCode: AssistantErrorCode.deviceActionUnavailable.code,
       );
     } else {
       try {
@@ -284,15 +325,15 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
         execution = AssistantDeviceActionExecutionResult(
           outcome: 'failed',
           executedAt: DateTime.now().toUtc(),
-          failureCode: 'ASSISTANT.SYSTEM.device_action_failed',
+          failureCode: AssistantErrorCode.deviceActionFailed.code,
         );
       }
     }
     final canonicalFailureCode = switch (execution.outcome) {
       'completed' => null,
-      'unavailable' => 'ASSISTANT.SYSTEM.device_action_unavailable',
-      'denied' => 'ASSISTANT.USER.device_action_permission_denied',
-      'failed' => 'ASSISTANT.SYSTEM.device_action_failed',
+      'unavailable' => AssistantErrorCode.deviceActionUnavailable.code,
+      'denied' => AssistantErrorCode.deviceActionPermissionDenied.code,
+      'failed' => AssistantErrorCode.deviceActionFailed.code,
       _ => throw const FormatException(
         'Device action executor returned an unsupported outcome',
       ),
@@ -326,112 +367,18 @@ extension PersonalAssistantRunActions on PersonalAssistantStreamController {
             failureCode: canonicalFailureCode,
           ),
         );
-    _actionsState = _actionsState.copyWith(runStatus: run.status);
-    await _watchContinuedRun(intent.runId.trim());
-  }
-
-  Future<void> _watchContinuedRun(String runId) async {
-    final repository = _actionsRef.read(assistantSessionRunFacetProvider);
-    AssistantAnswerTranscriptRow? assistantRow;
-    for (final row
-        in _actionsState.transcript.whereType<AssistantAnswerTranscriptRow>()) {
-      if (row.anchor.runId == runId) {
-        assistantRow = row;
-      }
+    if (run.runId.trim() != intent.runId.trim()) {
+      throw const AssistantActionIntentRejected(
+        AssistantActionIntentRejection.targetMismatch,
+      );
     }
-    if (assistantRow == null) {
-      return;
-    }
-    var lastSeq = _actionsState.events.fold<int>(
-      0,
-      (maximum, event) => event.seq > maximum ? event.seq : maximum,
-    );
-    var answer = _actionsState.answer;
-    var processSummary = _actionsState.processSummary;
-    var presentationDocument = _presentationDocumentFromRow(assistantRow);
-    final presentationProjection = AssistantPresentationStreamProjection();
-    if (presentationDocument != null &&
-        presentationDocument.committedAt.isNotEmpty) {
-      presentationProjection.seedCommitted(presentationDocument);
-    }
-    final events = <AssistantStreamEventWire>[..._actionsState.events];
-    var transcript = <AssistantTranscriptTimelineRow>[
-      ..._actionsState.transcript,
-    ];
-    var runStatus = _actionsState.runStatus;
-    var terminalObserved = false;
-    _actionsState = _actionsState.copyWith(running: true);
-    await for (final event in repository.watchAssistantRunEvents(
-      runId: runId,
-      lastEventId: lastSeq.toString(),
+    if (_isRunStreamGenerationCurrent(
+      capturedGeneration,
+      runId: intent.runId.trim(),
     )) {
-      if (event.seq <= lastSeq) {
-        continue;
-      }
-      lastSeq = event.seq;
-      events.add(event);
-      final streamEvent = AssistantRunStreamEvent.fromWire(event);
-      if (streamEvent.type ==
-              AssistantRunStreamEventType.presentationSnapshot ||
-          streamEvent.type == AssistantRunStreamEventType.presentationPatch ||
-          streamEvent.type == AssistantRunStreamEventType.presentationCommit) {
-        presentationDocument = presentationProjection.apply(event);
-      }
-      answer = _projectAnswer(answer, streamEvent);
-      processSummary = _projectProcessSummary(
-        processSummary,
-        streamEvent,
-        elapsedMs: processSummary.elapsedMs,
-      );
-      if (streamEvent.runStatus.isNotEmpty) {
-        runStatus = streamEvent.runStatus;
-      } else if (streamEvent.type == AssistantRunStreamEventType.completed) {
-        runStatus = 'completed';
-      } else if (streamEvent.type == AssistantRunStreamEventType.failed) {
-        runStatus = 'failed';
-      } else if (streamEvent.type == AssistantRunStreamEventType.cancelled) {
-        runStatus = 'cancelled';
-      }
-      terminalObserved = terminalObserved || streamEvent.type.isTerminal;
-      transcript = _upsertAssistantTranscript(
-        transcript,
-        assistantRow.id,
-        text: answer,
-        runId: runId,
-        traceId: assistantRow.anchor.traceId,
-        sourceQuery: assistantRow.anchor.sourceQuery,
-        eventType: event.eventType.wireName,
-        streaming: !streamEvent.type.isTerminal,
-        processSummary: processSummary,
-        presentationDocument: presentationDocument,
-      );
-      _actionsState = _actionsState.copyWith(
-        running: !terminalObserved,
-        runStatus: runStatus,
-        answer: answer,
-        transcript: transcript,
-        processSummary: processSummary,
-        events: List<AssistantStreamEventWire>.unmodifiable(events),
-        answerGateOpen: _actionsState.answerGateOpen || answer.isNotEmpty,
-      );
+      _actionsState = _actionsState.copyWith(runStatus: run.status);
+      await _continueRunAfterAction(intent.runId.trim(), capturedGeneration);
     }
-    if (!terminalObserved) {
-      throw const FormatException(
-        'Continued AssistantRun stream ended without a terminal event',
-      );
-    }
-  }
-
-  AssistantPresentationDocumentWire? _presentationDocumentFromRow(
-    AssistantAnswerTranscriptRow row,
-  ) {
-    final raw = row.runArtifacts['presentationDocument'];
-    if (raw is! Map) {
-      return null;
-    }
-    return AssistantPresentationDocumentWire.fromJson(
-      raw.cast<String, dynamic>(),
-    );
   }
 
   Future<void> refreshManagementSummary() async {

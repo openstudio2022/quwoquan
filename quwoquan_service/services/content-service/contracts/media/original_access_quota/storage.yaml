@@ -1,0 +1,31 @@
+backend: mongodb
+description: 额度行按 viewer/media/purpose/窗口起点摘要做主键，预留使用条件 $inc 原子提交；物理集合名沿用既有 media_original_access_rate_limits，归属改变不需要数据迁移。
+collections:
+  media_original_access_rate_limits:
+    entity: OriginalAccessQuota
+    role: authoritative
+    description: viewer/media/purpose 固定窗口的 hash 化额度行；由 OriginalAccessQuota Facade 独占写入，windowExpiresAt TTL 后自动清理。
+    indexes:
+    - name: idx_media_original_access_rate_limit_expire
+      keys:
+        windowExpiresAt: 1
+      expire_after_seconds: 0
+  media_original_access_quota_reservations:
+    entity: OriginalAccessQuota
+    role: idempotency_receipt
+    description: 按 idempotencyKey 记录已生效的额度预留与 grant 绝对到期时间；重放只读取该行，既不再计数也不刷新到期时间。
+    indexes:
+    - name: idx_media_original_access_quota_reservation_expire
+      keys:
+        windowExpiresAt: 1
+      expire_after_seconds: 0
+transaction:
+  scope:
+  - media_original_access_rate_limits
+  - media_original_access_quota_reservations
+  isolation: mongo_transaction
+  guarantees:
+  - viewer_media_purpose_rate_window_serialization
+  - grant_reservation_atomic_commit
+  - grant_expiry_never_extended_on_replay
+role: authoritative

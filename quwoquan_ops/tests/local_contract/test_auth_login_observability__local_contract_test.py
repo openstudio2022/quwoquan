@@ -6,6 +6,8 @@ import unittest
 
 import yaml
 
+from quwoquan_ops.cli.lib.storage_contract_view import load_storage_contract_view
+
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -71,7 +73,7 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
             / "quwoquan_service/services/product-ops-service/contracts/product_ops/"
             "event_record/storage.yaml"
         )
-        storage = yaml.safe_load(storage_path.read_text(encoding="utf-8"))
+        storage = load_storage_contract_view(storage_path)
         jobs = {item["row_kind"]: item for item in rollups["jobs"]}
         dimensions = jobs["event_dimensions"]["dimensions"]
         for dimension in ("journey", "action", "result"):

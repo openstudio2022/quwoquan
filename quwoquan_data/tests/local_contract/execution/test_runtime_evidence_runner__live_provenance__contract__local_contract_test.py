@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from content.execution.campaign_runtime import (
+from content.execution.campaign.runtime import (
     CampaignFenceError,
     lane_checkpoint_path,
     runtime_root,
     runtime_snapshot_path,
 )
-from content.execution.campaign_workspace import CampaignRuntimePaths
-from content.execution.runtime_evidence_contract import (
+from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.runtime_evidence.contract import (
     CARRIERS,
     FaultProviderBinding,
     ProcessObservation,
@@ -26,15 +26,15 @@ from content.execution.runtime_evidence_contract import (
     create_runtime_evidence_session,
     session_root,
 )
-from content.execution.runtime_evidence_fault_adapters import unavailable_fault_adapter
-from content.execution.runtime_evidence_faults import (
+from content.execution.runtime_evidence.fault_adapters import unavailable_fault_adapter
+from content.execution.runtime_evidence.faults import (
     CampaignWorkerTerminator,
     FaultActionResult,
     FaultActionTarget,
     finalize_fault_cases,
     inject_fault,
 )
-from content.execution.runtime_evidence_sampling import (
+from content.execution.runtime_evidence.sampling import (
     FaultQueueEvent,
     QueueObservation,
     capture_resource_sample,
@@ -235,6 +235,7 @@ def _fixture(tmp_path: Path) -> Fixture:
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
+        "scale": "M100",
         "gitBranch": "dev1.0",
         "gitCommitSha": "1" * 40,
         "sourceRevision": source_revision,
@@ -808,7 +809,7 @@ def test_builtin_worker_terminator_uses_fixed_registered_checkpoint(
         return "terminated"
 
     monkeypatch.setattr(
-        "content.execution.runtime_evidence_faults.terminate_lane_process",
+        "content.execution.runtime_evidence.faults.terminate_lane_process",
         fake_terminate,
     )
     target = FaultActionTarget(

@@ -678,7 +678,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       return articlePaperTextureFromString(topLevelTexture);
     }
     return articlePaperTextureFromString(
-      ContentUIConfig.articleDarkPaperDefaultTheme,
+      _contentMediaViewerPolicy.articleDarkPaperDefaultTheme,
     );
   }
 

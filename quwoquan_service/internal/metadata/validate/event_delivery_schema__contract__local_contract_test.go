@@ -29,15 +29,48 @@ func TestEventsSchemaEnforcesDeliverySemanticsValueDomain(t *testing.T) {
 		"受控取值通过": {
 			event: map[string]any{
 				"name": "PostChanged", "delivery_semantics": "transactional_outbox",
-				"payload_entity": "Post", "payload_fields": []any{"postId"},
+				"wire_event_type": "PostChanged",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
 			},
 		},
 		"受控取值可带 topic": {
 			event: map[string]any{
 				"name": "UserSuspended", "delivery_semantics": "transactional_outbox",
-				"topic": "events.user.account", "payload_entity": "UserAccount",
+				"wire_event_type": "events.user.UserSuspended",
+				"topic":           "events.user.account", "payload_entity": "UserAccount",
 				"payload_fields": []any{"userId"},
 			},
+		},
+		"outbox 缺 wire identity 被拒": {
+			event: map[string]any{
+				"name": "PostChanged", "delivery_semantics": "transactional_outbox",
+				"payload_entity": "Post", "payload_fields": []any{"postId"},
+			},
+			wantReject: true,
+		},
+		"非 outbox 不得冒充 wire identity owner": {
+			event: map[string]any{
+				"name": "PostChanged", "delivery_semantics": "transactional_event_log",
+				"wire_event_type": "PostChanged",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
+			},
+			wantReject: true,
+		},
+		"wire identity 禁止空白与路径字符": {
+			event: map[string]any{
+				"name": "PostChanged", "delivery_semantics": "transactional_outbox",
+				"wire_event_type": "content/post changed",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
+			},
+			wantReject: true,
+		},
+		"wire identity 禁止未出现于 production 的分隔符": {
+			event: map[string]any{
+				"name": "PostChanged", "delivery_semantics": "transactional_outbox",
+				"wire_event_type": "content:post-changed",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
+			},
+			wantReject: true,
 		},
 		"缺 delivery_semantics 被拒": {
 			event: map[string]any{
@@ -71,7 +104,8 @@ func TestEventsSchemaEnforcesDeliverySemanticsValueDomain(t *testing.T) {
 		"channel 回流被拒": {
 			event: map[string]any{
 				"name": "PostChanged", "delivery_semantics": "transactional_outbox",
-				"payload_entity": "Post", "payload_fields": []any{"postId"},
+				"wire_event_type": "PostChanged",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
 				"channel": "transactional_outbox",
 			},
 			wantReject: true,
@@ -79,7 +113,8 @@ func TestEventsSchemaEnforcesDeliverySemanticsValueDomain(t *testing.T) {
 		"producer-side consumers 回流被拒": {
 			event: map[string]any{
 				"name": "PostChanged", "delivery_semantics": "transactional_outbox",
-				"payload_entity": "Post", "payload_fields": []any{"postId"},
+				"wire_event_type": "PostChanged",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
 				"consumers": []any{"post-projector"},
 			},
 			wantReject: true,
@@ -87,7 +122,8 @@ func TestEventsSchemaEnforcesDeliverySemanticsValueDomain(t *testing.T) {
 		"非 PascalCase 事件名被拒": {
 			event: map[string]any{
 				"name": "content.post.changed", "delivery_semantics": "transactional_outbox",
-				"payload_entity": "Post", "payload_fields": []any{"postId"},
+				"wire_event_type": "PostChanged",
+				"payload_entity":  "Post", "payload_fields": []any{"postId"},
 			},
 			wantReject: true,
 		},
@@ -107,7 +143,8 @@ func TestEventsSchemaEnforcesDeliverySemanticsValueDomain(t *testing.T) {
 	if err := schema.Validate(map[string]any{
 		"events": []any{map[string]any{
 			"name": "PostChanged", "delivery_semantics": "transactional_outbox",
-			"payload_entity": "Post", "payload_fields": []any{"postId"},
+			"wire_event_type": "PostChanged",
+			"payload_entity":  "Post", "payload_fields": []any{"postId"},
 		}},
 		"consumption": []any{},
 	}); err == nil {

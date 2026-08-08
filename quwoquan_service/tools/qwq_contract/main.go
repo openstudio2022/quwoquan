@@ -31,7 +31,7 @@ func main() {
 func run(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return errors.New(
-			"expected validate, generate, check, generate-openapi, check-openapi or coverage",
+			"expected validate, generate, check, generate-openapi, check-openapi, coverage or review-object",
 		)
 	}
 	switch args[0] {
@@ -47,6 +47,8 @@ func run(args []string, stdout io.Writer) error {
 		return runCheckOpenAPI(args[1:], stdout)
 	case "coverage":
 		return runCoverage(args[1:], stdout)
+	case "review-object":
+		return runReviewObject(args[1:], stdout)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

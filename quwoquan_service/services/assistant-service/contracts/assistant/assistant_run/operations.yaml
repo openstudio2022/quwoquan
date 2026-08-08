@@ -286,7 +286,7 @@ api_routes:
     injected: [{name: Idempotency-Key, field: idempotencyKey}]
   response_entity: AssistantRunEnvelopeWire
   reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.USER.device_action_permit_invalid, ASSISTANT.USER.device_action_permit_expired, ASSISTANT.USER.device_action_permit_replayed, ASSISTANT.SYSTEM.device_action_unavailable, ASSISTANT.USER.device_action_permission_denied, ASSISTANT.SYSTEM.device_action_failed, ASSISTANT.SYSTEM.run_storage_unavailable]
+  error_codes: [ASSISTANT.USER.run_not_found, ASSISTANT.USER.run_unauthorized, ASSISTANT.USER.run_invalid_argument, ASSISTANT.USER.run_state_conflict, ASSISTANT.USER.device_action_permit_invalid, ASSISTANT.USER.device_action_permit_expired, ASSISTANT.USER.device_action_permit_replayed, ASSISTANT.SYSTEM.run_storage_unavailable]
   privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: assistant_device_action_receipt, trace: true, attributes: [operation, outcome, error_code, capability]}
   slo: {latency_p95_ms: 500, availability_percent: 99.9}
@@ -568,3 +568,75 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_run/run_event_stream_budget__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: assistant_run_start_assistant_run_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-002
+  producer: app
+  target: {kind: operation, id: StartAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_get_assistant_run_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: app
+  target: {kind: operation, id: GetAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_pause_assistant_run_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: app
+  target: {kind: operation, id: PauseAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_resume_assistant_run_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: app
+  target: {kind: operation, id: ResumeAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_steer_assistant_run_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-002
+  producer: app
+  target: {kind: operation, id: SteerAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_cancel_assistant_run_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/durable-agent-run-orchestration/spec.md#gwt-003
+  producer: app
+  target: {kind: operation, id: CancelAssistantRun}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_approve_assistant_tool_use_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+  producer: app
+  target: {kind: operation, id: ApproveAssistantToolUse}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_submit_device_action_receipt_app_local
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
+  producer: app
+  target: {kind: operation, id: SubmitDeviceActionReceipt}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_stream_assistant_run_events_app_local
+  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-005
+  producer: app
+  target: {kind: operation, id: StreamAssistantRunEvents}
+  layer: local_contract
+  runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

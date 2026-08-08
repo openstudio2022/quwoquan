@@ -54,6 +54,21 @@ relationships:
   reference_fields:
   - uploaderPersonaId
   target_object: user.Persona
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.circle.circle_file.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.circle.circle_file.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - circleId、groupId、fileType、assetId 与 uploaderPersonaId 创建后不可变
 - file 必须绑定同一 Persona 所有且 processingStatus=ready 的 MediaAsset；folder 禁止绑定 assetId

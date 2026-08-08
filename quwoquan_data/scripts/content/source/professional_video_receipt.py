@@ -179,7 +179,7 @@ def assert_observed_popularity_signals(
     percentile = signals.get("popularityPercentile")
     score = signals.get("popularityScore")
     ranking_eligible = signals.get("rankingEligible")
-    reason = str(signals.get("rankingIneligibleReason") or "").strip()
+    reason = str(signals.get("ineligibleReason") or "").strip()
     counts_complete = all(isinstance(signals.get(field), int) for field in count_fields)
     score_is_number = not isinstance(score, bool) and isinstance(score, (int, float))
     if ranking_eligible is True:
@@ -254,7 +254,7 @@ def assert_publishable_popularity_signals(
     if (
         signals.get("rankingEligible") is not True
         or int(signals.get("comparisonCandidateCount") or 0) < 2
-        or bool(str(signals.get("rankingIneligibleReason") or "").strip())
+        or bool(str(signals.get("ineligibleReason") or "").strip())
         or isinstance(percentile, bool)
         or not isinstance(percentile, (int, float))
         or not 0 <= float(percentile) <= 1

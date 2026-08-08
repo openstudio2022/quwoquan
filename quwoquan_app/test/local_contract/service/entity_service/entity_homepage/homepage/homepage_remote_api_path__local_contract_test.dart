@@ -1,6 +1,8 @@
 /// 对象级端云契约：Remote adapter 的 HTTP path 与 generated metadata 对齐。
 library;
 
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-discovery-and-attach/homepage-search-and-picker/spec.md#gwt-001
+// readiness_case: homepage_search_homepages_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
@@ -85,7 +87,20 @@ http.Response _responseFor(http.Request request) {
           canonicalRemoteApiPath(
             AppCloudOperationIds.entityHomepageSearchHomepages,
           )) {
-    return remoteApiPathJsonResponse('{"items":[]}');
+    return remoteApiPathJsonResponse({
+      'items': <Object?>[
+        <String, Object?>{
+          'homepageId': 'hp-search-1',
+          'canonicalEntityId': 'entity:hp-search-1',
+          'title': '深圳实验学校',
+          'homepageType': 'school',
+          'city': '深圳',
+          'status': 'published',
+          'averageRating': 4.8,
+          'ratingCount': 128,
+        },
+      ],
+    });
   }
   return remoteApiPathJsonResponse({
     'items': <dynamic>[],
@@ -112,13 +127,18 @@ void main() {
     });
 
     test('searchHomepages → GET /homepages/search', () async {
-      await repo.searchHomepages(
+      final results = await repo.searchHomepages(
         query: '书店',
-        homepageType: 'storefront',
+        homepageType: 'school',
         city: '深圳',
         status: 'published',
         limit: 7,
       );
+      expect(results.single.title, '深圳实验学校');
+      expect(results.single.homepageType, 'school');
+      expect(results.single.city, '深圳');
+      expect(results.single.averageRating, 4.8);
+      expect(results.single.ratingCount, 128);
       expect(log.last.method, 'GET');
       expect(
         log.last.path,
@@ -127,7 +147,7 @@ void main() {
         ),
       );
       expect(log.last.query['query'], '书店');
-      expect(log.last.query['homepageType'], 'storefront');
+      expect(log.last.query['homepageType'], 'school');
       expect(log.last.query['city'], '深圳');
       expect(log.last.query['status'], 'published');
       expect(log.last.query['limit'], '7');

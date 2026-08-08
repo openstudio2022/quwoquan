@@ -24,8 +24,6 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	rtobs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
-	admissiondecision "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/application"
-	admissiondecisioninfra "quwoquan_service/services/api-edge/internal/edge_security/operation_admission_decision/infrastructure"
 	httpadapter "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/adapters/inbound/http"
 	admissionapp "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
 	admissionmetrics "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/observability"
@@ -139,10 +137,7 @@ func run() error {
 		admission,
 		httpadapter.SubjectResolver{TrustedNetworkHeader: config.Edge.TrustedNetworkHeader},
 	)(ownerProxy)
-	operationAdmission := admissiondecision.NewFacade(
-		admissiondecisioninfra.NewGeneratedOperationPort(descriptors),
-	)
-	businessHandler = operationAdmission.Wrap(businessHandler)
+	businessHandler = rtauth.RequireGeneratedOperationAuthorization(descriptors)(businessHandler)
 	businessHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier:      accessVerifier,
 		DeviceTicketVerifier:     deviceVerifier,
@@ -249,7 +244,7 @@ func run() error {
 }
 
 func buildOwnerRoutes(upstreams map[string]string) ([]httpadapter.OwnerRoute, error) {
-	bindings := application.OperationOwnerBindings()
+	bindings := admissionapp.OperationOwnerBindings()
 	routes := make([]httpadapter.OwnerRoute, 0, len(bindings))
 	for _, binding := range bindings {
 		origin, err := parseOrigin(upstreams[binding.UpstreamName])

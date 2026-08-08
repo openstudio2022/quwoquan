@@ -20,6 +20,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from shutil import rmtree
 
 _TMP = Path(tempfile.mkdtemp(prefix="content_obj_"))
 
@@ -35,6 +36,8 @@ _BATCH = _TASK
 
 
 def setup_function() -> None:
+    rmtree(execution_root(_TASK), ignore_errors=True)
+    rmtree(execution_root(_IMAGE_TASK), ignore_errors=True)
     build_execution_fixture(_TASK)
     build_execution_fixture(_IMAGE_TASK)
 

@@ -864,6 +864,13 @@ readiness_cases:
   target: {kind: operation, id: ReportEventBatch}
   runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/event_record_batch_remote__local_contract_test.dart
   executions: [{env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}]
+- case_id: event_record_report_event_batch_app_api
+  spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ReportEventBatch}
+  runner_source_path: quwoquan_app/test/api_integration/service/product_ops_service/product_ops/event_record/event_record_remote__api_integration_test.dart
+  executions: [{env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}]
 - case_id: event_record_report_startup_event_batch_app_api
   spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
   producer: app
@@ -871,6 +878,13 @@ readiness_cases:
   target: {kind: operation, id: ReportStartupEventBatch}
   runner_source_path: quwoquan_app/test/api_integration/service/product_ops_service/product_ops/event_record/event_record_remote__api_integration_test.dart
   executions: [{env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}]
+- case_id: event_record_report_startup_event_batch_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportStartupEventBatch}
+  runner_source_path: quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/startup_telemetry_remote__local_contract_test.dart
+  executions: [{env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}]
 - case_id: event_record_report_runtime_log_batch_app_local
   spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
   producer: app

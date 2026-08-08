@@ -29,6 +29,10 @@
     "creatorImportReportRef": {"type": "string"},
     "contentImportReportRef": {"type": "string"},
     "homepageImportReportRef": {"type": "string"},
+    "coverageReceiptRef": {
+      "type": "string",
+      "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/coverage-receipt\\.json$"
+    },
     "postApiVerificationRef": {"type": "string"},
     "releaseReadinessRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
     "researchIsolationVerificationRef": {

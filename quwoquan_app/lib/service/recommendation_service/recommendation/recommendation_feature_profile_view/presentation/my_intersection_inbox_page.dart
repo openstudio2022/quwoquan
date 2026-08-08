@@ -22,6 +22,7 @@ import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
 import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_state.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_impact_timeline.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_timeline.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';

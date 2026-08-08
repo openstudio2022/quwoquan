@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -98,6 +99,11 @@ func (s *PersonaService) CreatePersona(
 	normalizePersonaPersistence(p)
 	result, err := s.commands.CommitCreate(ctx, p, meta)
 	if err != nil {
+		if errors.Is(err, personaports.ErrPersonaQuotaReached) {
+			return nil, personagenerated.AppErrorFromPersonaQuotaReached(
+				"owner reached the Persona quota limit",
+			)
+		}
 		if isPersonaHandleConflict(err) {
 			return nil, ErrPersonaHandleTaken
 		}

@@ -5,6 +5,7 @@ package api_integration
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -81,6 +82,15 @@ func TestFeedbackEndpointRejectsInvalidEnvelope(t *testing.T) {
 					response.Code,
 					response.Body.String(),
 				)
+			}
+			var errorResponse struct {
+				Code string `json:"code"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &errorResponse); err != nil {
+				t.Fatalf("decode runtime error: %v", err)
+			}
+			if errorResponse.Code != "SEARCH.USER.feedback_invalid_argument" {
+				t.Fatalf("code=%q", errorResponse.Code)
 			}
 		})
 	}

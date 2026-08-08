@@ -22,7 +22,22 @@ relationships:
   - entity.Homepage
   - circle.Circle
   - circle.CircleGroup
-  - user.Persona
+  - user.UserAccount
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.search.search_index_view.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.search.search_index_view.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 索引只消费各 owner 发布的 typed public projection，不跨库读取源集合或补齐私有字段。
 - objectType 与 objectId 唯一定位一条索引文档，版本和 tombstone 必须单调应用。
@@ -35,6 +50,7 @@ lifecycle:
   checkpoint: per_source_event_sequence
   rebuild: replay_profile_search_outbox_account_security_and_experiment_policy
   tombstone: delete_index_document_keep_source_checkpoint
+  idempotency: event_id
   event_consumers:
   - name: ApplySearchExperimentPolicy
     kind: projector

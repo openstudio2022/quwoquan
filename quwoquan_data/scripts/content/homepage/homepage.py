@@ -169,7 +169,7 @@ def homepage_runtime_spec(execution_id: str, spec: dict[str, Any]) -> dict[str, 
     no replacement target is introduced and an incomplete ready pool remains
     blocking instead of being silently narrowed.
     """
-    from content.execution.source_ready_scope import source_ready_runtime_spec
+    from content.execution.planning.source_ready_scope import source_ready_runtime_spec
 
     runtime_spec = deepcopy(spec or {})
     quotas = (

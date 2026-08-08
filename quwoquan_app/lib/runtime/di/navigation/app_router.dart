@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -8,15 +7,13 @@ import 'package:quwoquan_app/runtime/shell/navigation/native_back_navigation.dar
 import 'package:quwoquan_app/runtime/shell/state/welcome_state_provider.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/startup_recovery_page.dart';
-import 'package:quwoquan_app/runtime/di/shell/main_app_shell.dart';
+import 'package:quwoquan_app/runtime/shell/main_app_shell.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/other_profile_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_motion_timeline.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
-import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
-import 'package:quwoquan_app/runtime/auth/auth_legal_config.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_circle_facets.dart'
@@ -45,30 +42,30 @@ import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
 import 'package:quwoquan_app/runtime/di/navigation/route_source_appearance_mapping.dart';
 import 'package:quwoquan_app/runtime/di/navigation/app_router_gathering_routes.dart';
 import 'package:quwoquan_app/runtime/models/visit_models.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/work_browser_entry_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_detail_page.dart';
-import 'package:quwoquan_app/runtime/di/presentation/circle_shell.dart'
-    show buildCircleMembershipApprovalPage;
+import 'package:quwoquan_app/runtime/di/circle_shell_presentation_slots.dart'
+    show buildCircleMembershipApprovalPage, buildCircleShellParticipantSlots;
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_stats_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circles_page.dart';
-import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_sheet.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_route_host.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/runtime/di/navigation/create_entry_navigation_arguments.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/local_draft_page.dart';
-import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_about_page.dart';
+import 'package:quwoquan_app/runtime/shell/settings/settings_about_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/settings_account_security_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_calls_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_notifications_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_page.dart';
-import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_permissions_page.dart';
+import 'package:quwoquan_app/runtime/shell/settings/settings_permissions_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/settings_privacy_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/presentation/blocked_keywords_page.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/presentation/my_reports_page.dart';
@@ -102,7 +99,9 @@ import 'package:quwoquan_app/service/user_service/relationship/persona_relations
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/contact_search_result_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/career_interest_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/edit_profile_page.dart';
-import 'package:quwoquan_app/runtime/shell/legal/legal_document_page.dart';
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show editProfileParticipantSlots, profileQrSharePresenter;
+import 'package:quwoquan_app/runtime/shell/legal/legal_document_route_host.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_code_page.dart';
 import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/presentation/phone_contacts_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/scan_contact_qr_page.dart';
@@ -116,6 +115,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/page_context/ap
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_preference/presentation/assistant_management_page.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_catalog/presentation/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_run_deep_link_route_host.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/personal_assistant_session_page.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/outgoing_call_page.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/incoming_call_page.dart';
@@ -124,7 +124,6 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/v
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_participant_picker_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_screen.dart';
-part 'app_router_create_entry_route.dart';
 part 'app_router_chat_routes.dart';
 part 'app_router_contact_routes.dart';
 part 'app_router_helpers.dart';
@@ -204,7 +203,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     errorPageBuilder: (context, state) =>
-        appRoutePage<void>(state: state, child: const _RouterRecoveryPage()),
+        appRoutePage<void>(state: state, child: _buildRouterRecoveryPage()),
     routes: [
       GoRoute(
         path: AppRoutePaths.welcome,
@@ -236,7 +235,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      ..._legalDocumentRoutes(),
+      ..._legalDocumentRoutes(ref),
       GoRoute(
         path: AppRoutePaths.interestOnboarding,
         pageBuilder: (context, state) => appRoutePage<void>(
@@ -532,7 +531,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             key: state.pageKey,
             opaque: false,
             barrierColor: Colors.transparent,
-            child: const _CreateEntryRoutePage(),
+            child: Consumer(
+              builder: (context, widgetRef, _) => CreateEntryRouteHost(
+                onSelect: (navigationContext, action) {
+                  GlobalQuickActionSheet.openCreateAction(
+                    navigationContext,
+                    action.name,
+                  );
+                },
+                onStartGathering: (navigationContext) =>
+                    GlobalQuickActionSheet.openGatedStartGathering(
+                      navigationContext,
+                      widgetRef,
+                    ),
+                onStartGroupChat: (navigationContext) =>
+                    GlobalQuickActionSheet.openGatedStartGroupChat(
+                      navigationContext,
+                      widgetRef,
+                    ),
+              ),
+            ),
             transitionDuration: const Duration(milliseconds: 280),
             reverseTransitionDuration: const Duration(milliseconds: 220),
             transitionsBuilder:
@@ -661,14 +679,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               groupMembershipAccess: hasAuthenticatedOwner
                   ? ref.read(circleDetailGroupMembershipAccessProvider)
                   : null,
-              membershipApprovalPageBuilder: buildCircleMembershipApprovalPage(
-                pendingMemberships: ref.read(
-                  circleDetailPendingMembershipQueryProvider,
-                ),
-                moderationWriter: ref.read(
-                  circleDetailMembershipModerationWriterProvider,
-                ),
-                journeyEventTracker: ref.read(journeyEventTrackerProvider),
+              participantSlots: buildCircleShellParticipantSlots(
+                membershipApprovalPageBuilder:
+                    buildCircleMembershipApprovalPage(
+                      pendingMemberships: ref.read(
+                        circleDetailPendingMembershipQueryProvider,
+                      ),
+                      moderationWriter: ref.read(
+                        circleDetailMembershipModerationWriterProvider,
+                      ),
+                      journeyEventTracker: ref.read(
+                        journeyEventTrackerProvider,
+                      ),
+                    ),
               ),
               referralSource:
                   circleExtra?.referralSource ?? ReferralSource.organicFeed,
@@ -772,18 +795,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final assistantOpenContext = state.extra is AssistantOpenContext
               ? state.extra as AssistantOpenContext
               : null;
+          final runId = state.uri.queryParameters['runId']?.trim() ?? '';
+          final assistantPage = PersonalAssistantSessionPage(
+            assistantOpenContext: assistantOpenContext,
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(AppRoutePaths.home);
+              }
+            },
+          );
           return appRoutePage<void>(
             state: state,
-            child: PersonalAssistantSessionPage(
-              assistantOpenContext: assistantOpenContext,
-              onBack: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go(AppRoutePaths.home);
-                }
-              },
-            ),
+            child: runId.isEmpty
+                ? assistantPage
+                : AssistantRunDeepLinkRouteHost(
+                    runId: runId,
+                    child: assistantPage,
+                  ),
           );
         },
       ),
@@ -913,8 +943,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.profileEdit,
-        pageBuilder: (context, state) =>
-            appRoutePage<void>(state: state, child: const EditProfilePage()),
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: const EditProfilePage(
+            participantSlots: editProfileParticipantSlots,
+          ),
+        ),
       ),
       GoRoute(
         path: AppRoutePaths.profileCareerInterests,

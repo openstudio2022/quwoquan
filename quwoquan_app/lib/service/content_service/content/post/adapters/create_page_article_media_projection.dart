@@ -58,7 +58,7 @@ ResolvedArticleMediaPayload projectResolvedArticleMediaPayload({
   required List<String> tagRefs,
   required List<String> entityRefs,
   required String visibility,
-  required String assistantUsePolicy,
+  required AssistantUsePolicy assistantUsePolicy,
 }) {
   final manifestRows = <PostArticleAssetInput>[];
   final seen = <String>{};

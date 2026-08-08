@@ -19,8 +19,20 @@ relationships:
   reference_fields:
   - environment
   - service
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "运营与控制面对象，只由运营台按 operator scope 访问，不进入用户检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - 只有已验证的 service principal 可上报，principal 必须绑定 service@environment，instanceId 必须位于该 service namespace。
 - releaseManifestDigest 必须等于控制面当前候选清单摘要；desiredHash 由 ConfigSnapshot 读取并覆盖调用方值。

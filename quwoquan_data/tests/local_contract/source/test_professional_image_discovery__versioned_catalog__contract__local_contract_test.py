@@ -44,8 +44,8 @@ def test_professional_image_discovery_is_pinterest_first_and_tuchong_supplementa
         if row["provider"] == "wikimedia_commons"
     ]
     assert all(row["priority"] == 0 for row in pinterest)
-    assert all(row["manualSearchRequired"] is False for row in pinterest)
-    assert all(row["discoveryUrl"].startswith("https://www.pinterest.com/search/pins/?q=") for row in pinterest)
+    assert all(row["manualSearchRequired"] is True for row in pinterest)
+    assert all(row["discoveryUrl"] == "https://www.pinterest.com/" for row in pinterest)
     assert all(row["priority"] == 1 for row in tuchong)
     assert all(row["manualSearchRequired"] is True for row in tuchong)
     assert all(row["discoveryUrl"] == "https://tuchong.com/explore/" for row in tuchong)
@@ -58,9 +58,17 @@ def test_professional_image_discovery_is_pinterest_first_and_tuchong_supplementa
         for row in commons
     )
     assert all(
-        row["acquisitionPaths"] == ["public_direct", "supported_api", "manual_file"]
-        for row in [*pinterest, *tuchong]
+        row["acquisitionPaths"] == ["supported_api", "manual_file"]
+        for row in pinterest
     )
+    assert all(
+        row["acquisitionPaths"] == ["public_direct", "supported_api", "manual_file"]
+        for row in tuchong
+    )
+    assert classify_image_provider(source_id="pinterest")["acquisitionPaths"] == [
+        "manual_file",
+        "supported_api",
+    ]
     assert all(
         row["acquisitionPaths"] == ["supported_api", "manual_file"]
         for row in commons

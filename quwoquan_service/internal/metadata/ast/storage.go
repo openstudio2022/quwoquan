@@ -43,6 +43,21 @@ type StorageColumn struct {
 	Default     any      `json:"default,omitempty" yaml:"default,omitempty"`
 }
 
+// HasConstraint keeps storage code generators and validators on the same
+// canonical column shape instead of giving each consumer a private decoder.
+func (column StorageColumn) HasConstraint(constraint string) bool {
+	for _, candidate := range column.Constraints {
+		if candidate == constraint {
+			return true
+		}
+	}
+	return false
+}
+
+func (column StorageColumn) IsPrimaryKey() bool { return column.HasConstraint("PK") }
+func (column StorageColumn) IsNotNull() bool    { return column.HasConstraint("NOT_NULL") }
+func (column StorageColumn) IsUnique() bool     { return column.HasConstraint("UNIQUE") }
+
 type StorageTableIndex struct {
 	Name        string   `json:"name" yaml:"name"`
 	Columns     []string `json:"columns" yaml:"columns"`

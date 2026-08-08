@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
+	recoverygenerated "quwoquan_service/services/product-ops-service/generated/product_ops/recovery_failure"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
 )
 
@@ -37,35 +39,39 @@ func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.service == nil {
-		h.writeError(w, r, http.StatusServiceUnavailable, "异常记录暂未接收", "recovery failure service unavailable")
+		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureUnavailable("recovery failure service unavailable"))
 		return
 	}
 	if !h.limiter.allow(sourceAddress(r), time.Now()) {
-		h.writeError(w, r, http.StatusServiceUnavailable, "异常记录暂未接收", "recovery failure rate limit exceeded")
+		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureUnavailable("recovery failure rate limit exceeded"))
 		return
 	}
 	var failure application.Failure
 	decoder := json.NewDecoder(io.LimitReader(r.Body, maxRecoveryFailureBytes+1))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&failure); err != nil {
-		h.writeError(w, r, http.StatusBadRequest, "异常记录无效", err.Error())
+		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureInvalid(err.Error()))
 		return
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		h.writeError(w, r, http.StatusBadRequest, "异常记录无效", "request body must contain exactly one JSON object")
+		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureInvalid("request body must contain exactly one JSON object"))
 		return
 	}
 	if err := h.service.Report(r.Context(), failure); err != nil {
 		if errors.Is(err, application.ErrInvalidRecoveryFailure) {
-			h.writeError(w, r, http.StatusBadRequest, "异常记录无效", err.Error())
+			h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureInvalid(err.Error()))
 			return
 		}
-		h.writeError(w, r, http.StatusServiceUnavailable, "异常记录暂未接收", err.Error())
+		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureUnavailable(err.Error()))
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) writeAppError(w http.ResponseWriter, r *http.Request, err *rterr.AppError) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 type rateWindow struct {

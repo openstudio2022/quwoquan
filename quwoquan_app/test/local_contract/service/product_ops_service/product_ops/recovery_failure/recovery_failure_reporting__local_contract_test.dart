@@ -60,7 +60,9 @@ void main() {
       executor.operation?.canonicalOperationId,
       AppCloudOperationIds.opsRecoveryFailureReportRecoveryFailure,
     );
-    expect(executor.context?.surfaceId, AppUiSurfaces.appShell.id);
+    // canonical 契约只把恢复上报绑定在 `welcome` 面；换成其他 surface 会被
+    // header 工厂 fail-closed 拒绝。
+    expect(executor.context?.surfaceId, AppUiSurfaces.welcome.id);
     expect(
       executor.context?.clientPageId,
       OpsRequestPageIds.reportRecoveryFailure,
@@ -229,7 +231,7 @@ RecoveryOperationGateway _gateway(_RecoveryFailureExecutor executor) {
       RemoteRecoveryFailureWriter(
         client: GeneratedCloudOperationClient(executor),
         invocationContext: () => CloudOperationInvocationContext(
-          surfaceId: AppUiSurfaces.appShell.id,
+          surfaceId: AppUiSurfaces.welcome.id,
           clientPageId: OpsRequestPageIds.reportRecoveryFailure,
           actor: const CloudOperationActorContext(
             deviceActorId: 'recovery-device-actor',

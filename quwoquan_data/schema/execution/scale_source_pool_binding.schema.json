@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/scale_source_pool_binding.schema.json",
+  "type": "object",
+  "required": [
+    "poolId", "targetScale", "sourceRevision", "sourceDigest",
+    "entityCatalogDigest", "planRef", "planDigest", "planFileSha256"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "poolId": {"type": "string", "minLength": 1},
+    "targetScale": {"enum": ["M100", "M1000", "M10000"]},
+    "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "planRef": {"type": "string", "minLength": 1},
+    "planDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "planFileSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

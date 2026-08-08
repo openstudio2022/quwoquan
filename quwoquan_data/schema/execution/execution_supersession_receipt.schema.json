@@ -45,6 +45,11 @@
     },
     "observedSourceDigest": {"$ref": "#/$defs/sourceDigest"},
     "previousStatus": {"type": "string", "minLength": 1},
+    "rootInventoryDigest": {"$ref": "#/$defs/digest"},
+    "rootInventoryEntryCount": {"type": "integer", "minimum": 1},
+    "stateEvidence": {
+      "enum": ["missing_pre_controller", "settled_snapshot"]
+    },
     "processEvidence": {
       "type": "object",
       "additionalProperties": false,
@@ -61,7 +66,8 @@
         "observedProcessGroupAlive": {"type": "boolean"},
         "identityMatched": {"const": false},
         "pidAlive": {"const": false},
-        "processGroupAlive": {"const": false}
+        "processGroupAlive": {"const": false},
+        "livenessProbe": {"const": "pid_pgid_only_no_argv"}
       }
     },
     "retryPolicy": {"const": "new_execution_with_retryOf"},

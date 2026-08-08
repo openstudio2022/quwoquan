@@ -10,7 +10,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from core.paths import DATA_ROOT, SOURCE_ACQUISITION_ROOT
+from core.paths import (
+    CONTENT_CAMPAIGN_CAPSULES_ROOT,
+    DATA_ROOT,
+    SOURCE_ACQUISITION_ROOT,
+)
 from core.runtime_policy import active_runtime_policy
 from content.source.fetch_http import _http_get_bytes
 from content.source.fetch_image_candidates import candidate_image_urls, page_image_candidate_urls
@@ -118,6 +122,7 @@ def _fetch_image_payload_once(url: str, *, min_bytes: int = 3000, max_bytes: int
             allowed_roots = (
                 DATA_ROOT.resolve(),
                 (SOURCE_ACQUISITION_ROOT / "cas").resolve(),
+                CONTENT_CAMPAIGN_CAPSULES_ROOT.resolve(),
             )
             if not any(path.is_relative_to(root) for root in allowed_roots) or not path.is_file():
                 return None
@@ -189,6 +194,7 @@ def _fetch_page_image_payload_once(
             allowed_roots = (
                 DATA_ROOT.resolve(),
                 (SOURCE_ACQUISITION_ROOT / "cas").resolve(),
+                CONTENT_CAMPAIGN_CAPSULES_ROOT.resolve(),
             )
             if not any(path.is_relative_to(root) for root in allowed_roots) or not path.is_file():
                 return PageImageFetchResult(

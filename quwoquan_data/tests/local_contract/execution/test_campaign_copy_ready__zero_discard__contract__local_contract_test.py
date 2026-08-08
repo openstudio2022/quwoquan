@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from content.execution.campaign_copy_ready import maybe_write_copy_ready_receipt
-from content.execution.campaign_receipt import lane_receipt_path
+from content.execution.campaign.copy_ready import maybe_write_copy_ready_receipt
+from content.execution.campaign.receipt import lane_receipt_path
 from core.io import write_json
 
 

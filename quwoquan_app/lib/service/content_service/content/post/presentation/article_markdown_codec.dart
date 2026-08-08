@@ -3,6 +3,8 @@ import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/qwq_markdown_ast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/qwq_markdown_parser.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show AssistantUsePolicy;
 
 const MediaAssetManifestResolver _articleAssetManifestResolver =
     MediaAssetManifestResolver(resolveReference: _resolveArticleMediaReference);
@@ -21,7 +23,7 @@ class ArticleMarkdownCodec {
     List<String> tagRefs = const <String>[],
     List<String> entityRefs = const <String>[],
     String visibility = '',
-    String assistantUsePolicy = '',
+    AssistantUsePolicy? assistantUsePolicy,
     String coverAssetId = '',
     String coverImageUrl = '',
   }) {
@@ -44,8 +46,8 @@ class ArticleMarkdownCodec {
     if (visibility.trim().isNotEmpty) {
       buffer.writeln('visibility: ${visibility.trim()}');
     }
-    if (assistantUsePolicy.trim().isNotEmpty) {
-      buffer.writeln('assistantUsePolicy: ${assistantUsePolicy.trim()}');
+    if (assistantUsePolicy != null) {
+      buffer.writeln('assistantUsePolicy: ${assistantUsePolicy.wireName}');
     }
     buffer
       ..writeln('---')

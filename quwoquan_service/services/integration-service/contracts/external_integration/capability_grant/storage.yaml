@@ -7,5 +7,6 @@ redis_cache:
   scene: general
   description: >-
     ResolvedCapabilityGrant 短期运行时会话；SET 时固定 EX 300，读取禁止刷新 TTL。
-    仅保存 resolutionId、capabilityKey、bindingKind 与脱敏 binding digest，
+    仅保存 resolutionId、account/service actor digest、capabilityKey、bindingKind、
+    final-input/confirmation/permit/idempotency digest 与脱敏 binding digest，
     禁止写入 credentialRef、endpoint、proof 或原始 permit/confirmation。

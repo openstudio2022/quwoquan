@@ -11,11 +11,19 @@ import ast
 import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-import yaml
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.storage_contract_view import (
+    StorageContractViewError,
+    load_storage_contract_view,
+)
 
 
 _SQL_TABLE = re.compile(
@@ -393,9 +401,7 @@ def load_storage_owners(root: Path) -> dict[tuple[str, str], list[StorageOwner]]
     services_root = root / "quwoquan_service" / "services"
     owners: dict[tuple[str, str], list[StorageOwner]] = {}
     for path in sorted(services_root.glob("*/contracts/**/storage.yaml")):
-        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        if not isinstance(document, dict):
-            continue
+        document = load_storage_contract_view(path)
         service = _service_name(path, services_root)
         relative = path.relative_to(root).as_posix()
         for kind, field in (
@@ -471,10 +477,10 @@ def scan_storage_references(root: Path) -> list[StorageReference]:
 
 
 def collect_storage_governance_issues(root: Path) -> list[str]:
-    owners = load_storage_owners(root)
     try:
+        owners = load_storage_owners(root)
         references = scan_storage_references(root)
-    except RuntimeError as exc:
+    except (RuntimeError, StorageContractViewError) as exc:
         return [str(exc)]
     issues: list[str] = []
 

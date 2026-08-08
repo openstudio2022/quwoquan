@@ -56,6 +56,24 @@ local_identity_reasons:
   suggestedActionId: Run 冻结建议动作中的局部标识，不是独立聚合 identity
   surfaceId: 可信请求上下文中的界面标识，不是业务对象 identity
   traceId: 可信请求上下文中的可观测关联键，不是业务对象 identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.assistant_learning_fact.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.assistant.assistant_learning_fact.cite
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.assistant.assistant_learning_fact.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.assistant.assistant_learning_fact.write
 business_rules:
 - eventId 是唯一事实身份；相同 eventId 与 payload digest 重放返回同一 receipt
 - 相同 eventId 但 payload digest 不同必须冲突，不得静默吞掉或覆盖
@@ -75,3 +93,10 @@ lifecycle:
     facet: AssistantLearningFactAppender
     method: appendTerminalRun
     idempotency: event_id
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - AppendAssistantLearningFact
+    rationale: 追加助手学习事实；写入只按 (personaId, factKey, sourceRunId) 幂等去重，事实行一经写入不再更新，没有需要事务保护的实例级可变计数或额度。
+    evaluated_at: '2026-08-07'

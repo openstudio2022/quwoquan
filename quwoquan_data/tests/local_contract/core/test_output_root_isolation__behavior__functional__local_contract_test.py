@@ -57,6 +57,19 @@ def test_output_root_has_tasks_releases_and_disposable_local_only(tmp_path, monk
     assert loaded.RELEASE_ROOT == output / "data/releases"
     assert loaded.DATA_LOCAL_ROOT == output / "data/local"
     assert loaded.OUTPUT_ARTIFACTS_ROOT == output / "data/local/workspace/reports"
+    assert loaded.CAMPAIGN_SCALE_EVIDENCE_ROOT == (
+        output / "data/local/workspace/research-scale/campaign-evidence"
+    )
+    assert loaded.RESEARCH_SCALE_PROMOTIONS_ROOT == (
+        output / "data/local/workspace/research-scale/promotions"
+    )
+    alternate_output = tmp_path / "alternate-output"
+    assert loaded.campaign_scale_evidence_root(output_root=alternate_output) == (
+        alternate_output / "data/local/workspace/research-scale/campaign-evidence"
+    )
+    assert loaded.research_scale_promotions_root(output_root=alternate_output) == (
+        alternate_output / "data/local/workspace/research-scale/promotions"
+    )
     assert loaded.PUBLISH_ROOT == loaded._REPO_DATA_ROOT / "publish"
 
 

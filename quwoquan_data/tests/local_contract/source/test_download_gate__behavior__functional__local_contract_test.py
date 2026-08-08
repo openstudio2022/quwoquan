@@ -52,7 +52,7 @@ from content.execution.recovery.download_research_gate import (  # noqa: E402
     _commercial_video_candidate_issues,
     _download_research_lane_issues,
 )
-from content.execution.recovery.download_unresolved import absorb_download_shortfall_if_quota_met  # noqa: E402
+from content.execution.recovery.download_unresolved import absorb_download_shortfall_if_any_ready  # noqa: E402
 from content.execution.controller.content_plan_prep import _content_capacity_gate_for_entity  # noqa: E402
 from content.execution.context import ExecutionContext  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
@@ -640,7 +640,7 @@ def test_article_capacity_requires_quality_receipts_not_rejects_cache_or_manual_
     }
 
 
-def test_article_source_shortfall_is_absorbed_when_ready_pool_meets_quota():
+def test_article_source_shortfall_is_absorbed_when_any_object_is_ready():
     entity = "文章短缺景区"
     fixture = ExecutionFixtureBuilder(
         ARTICLE_TASK,
@@ -657,7 +657,7 @@ def test_article_source_shortfall_is_absorbed_when_ready_pool_meets_quota():
         spec=fixture.spec(),
     )
 
-    absorbed = absorb_download_shortfall_if_quota_met(
+    absorbed = absorb_download_shortfall_if_any_ready(
         context,
         {"readyTargetCount": 1, "ineligibleTargetCount": 1},
         stage=DataIssueStage.DOWNLOAD_FETCH,
@@ -668,6 +668,32 @@ def test_article_source_shortfall_is_absorbed_when_ready_pool_meets_quota():
 
     assert absorbed is not None
     assert absorbed.status is StageStatus.DONE
+
+
+def test_download_shortfall_blocks_when_zero_objects_are_ready():
+    entity = "全量缺源景区"
+    fixture = ExecutionFixtureBuilder(
+        ARTICLE_TASK,
+        targets=({"entityType": "地点/景区", "name": entity},),
+        approved_quota=1,
+    )
+    fixture.build()
+    context = ExecutionContext(
+        execution_id=ARTICLE_TASK,
+        entity_ids=(entity,),
+        spec=fixture.spec(),
+    )
+
+    absorbed = absorb_download_shortfall_if_any_ready(
+        context,
+        {"readyTargetCount": 0, "ineligibleTargetCount": 1},
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        stage_enum=ExecutionStage.DOWNLOAD_FETCH,
+        auto_mode=StageKind.AUTO,
+        done_status=StageStatus.DONE,
+    )
+
+    assert absorbed is None
 
 
 def test_gate_download_blocks_missing_homepage_lane_text_unit():

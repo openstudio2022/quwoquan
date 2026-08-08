@@ -35,6 +35,20 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.AssistantPolicyLearningContextDefinition
+search_policy:
+  exposed: none
+  not_exposed_reason: "运营与控制面对象，只由运营台按 operator scope 访问，不进入用户检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - policyId、releaseDigest、templates、routingRules、learningContextPolicy 和 defaultTemplateId 在 Stage 后不可变
 - templateId 与 ruleId 在 release 内唯一，defaultTemplateId 必须引用同 release 内模板
@@ -48,16 +62,23 @@ lifecycle:
 members:
   AssistantPolicyTemplateDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [templateId]
+    cardinality: many
     max_cardinality: 128
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内不可变的执行模板。
   AssistantPolicyRoutingRule:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [ruleId]
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: release 内按优先级求值的强类型路由规则。
   AssistantPolicyLearningContextDefinition:
-    kind: owned_entity
-    cardinality: 1:1
+    kind: value_object
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: release 内不可变的聚合反馈注入边界。

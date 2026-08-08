@@ -15,6 +15,7 @@ func requirePostOwner(
 	post *postmodel.Post,
 	actorPersonaID string,
 	action string,
+	ownerMismatch func(string) *rterr.AppError,
 ) error {
 	if post == nil {
 		return generated.AppErrorFromPostNotFound("post aggregate missing for " + action)
@@ -26,9 +27,7 @@ func requirePostOwner(
 		)
 	}
 	if strings.TrimSpace(post.AuthorId) != actorPersonaID {
-		return generated.AppErrorFromForbiddenEdit(
-			"persona owner mismatch for " + action,
-		)
+		return ownerMismatch("persona owner mismatch for " + action)
 	}
 	return nil
 }
@@ -54,7 +53,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	if !ok {
 		return nil, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
-	if err := requirePostOwner(post, userID, "更新内容设置"); err != nil {
+	if err := requirePostOwner(post, userID, "更新内容设置", generated.AppErrorFromForbiddenEdit); err != nil {
 		return nil, err
 	}
 	expectedVersion := post.Version
@@ -88,7 +87,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if !ok {
 		return nil, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
-	if err := requirePostOwner(post, userID, "升级内容"); err != nil {
+	if err := requirePostOwner(post, userID, "升级内容", generated.AppErrorFromForbiddenEdit); err != nil {
 		return nil, err
 	}
 	expectedVersion := post.Version
@@ -209,7 +208,7 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) (Po
 	if !ok {
 		return PostDeletionReceipt{}, contentgenerated.AppErrorFromPostNotFound("post not found")
 	}
-	if err := requirePostOwner(post, userID, "删除内容"); err != nil {
+	if err := requirePostOwner(post, userID, "删除内容", generated.AppErrorFromForbiddenDelete); err != nil {
 		return PostDeletionReceipt{}, err
 	}
 	statusBeforeDelete := post.Status

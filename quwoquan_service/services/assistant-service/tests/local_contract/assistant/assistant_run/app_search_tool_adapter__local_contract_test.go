@@ -32,6 +32,7 @@ func TestAppSearchAdapterUsesOnlyCanonicalToolInputAndReturnsEvidenceAssessment(
 		_ = json.NewEncoder(writer).Encode(rtsearch.RetrieveResponse{
 			Hits: []rtsearch.RetrieveHit{{
 				Target:      rtsearch.TargetArticle,
+				ObjectType:  rtsearch.ObjectTypeContentPost,
 				ObjectID:    "post-1",
 				Title:       "西湖行程",
 				MatchedTags: []string{"Topic/旅行"},
@@ -65,9 +66,20 @@ func TestAppSearchAdapterUsesOnlyCanonicalToolInputAndReturnsEvidenceAssessment(
 		t.Fatalf("execute app_search adapter: %v", err)
 	}
 	wire := <-received
-	if len(wire) != 3 || wire["query"] != "西湖行程" ||
+	if len(wire) != 4 || wire["query"] != "西湖行程" ||
 		wire["mode"] != "result" || wire["limit"] != float64(10) {
 		t.Fatalf("search request used a non-canonical input path: %#v", wire)
+	}
+	// objectTypes is part of the canonical input: app_search may only ask for the
+	// types the object contracts open to 小趣.
+	requested, ok := wire["objectTypes"].([]any)
+	if !ok || len(requested) != len(searchclient.AssistantReadableObjectTypes()) {
+		t.Fatalf("objectTypes=%#v", wire["objectTypes"])
+	}
+	for index, allowed := range searchclient.AssistantReadableObjectTypes() {
+		if requested[index] != allowed {
+			t.Fatalf("objectTypes[%d]=%v want %q", index, requested[index], allowed)
+		}
 	}
 	assessment, ok := result.Output["evidenceAssessment"].(map[string]any)
 	if !ok || assessment["status"] != "accepted" ||

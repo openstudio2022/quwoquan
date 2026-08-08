@@ -232,6 +232,7 @@ final class AppUserRecoveryContract {
     String? sourceOperationId,
     String? requestId,
     String? traceId,
+    String? secondaryMessage,
   }) {
     final copy = copyFor(group, retryAfterSeconds: retryAfterSeconds);
     return UiErrorSemantic(
@@ -239,6 +240,7 @@ final class AppUserRecoveryContract {
       scope: scope,
       title: copy.title,
       message: copy.message,
+      secondaryMessage: secondaryMessage,
       primaryAction: copy.action,
       dismissible:
           scope == UiErrorScope.global ||

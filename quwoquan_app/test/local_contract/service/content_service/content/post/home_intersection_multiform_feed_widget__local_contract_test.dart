@@ -34,6 +34,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/di
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
+        AssistantUsePolicy,
         BehaviorEventType,
         ContentFeedEmptyReason,
         IntersectionActionHint,
@@ -50,6 +51,8 @@ import '../../../../../support/service/content_service/content/content_behavior_
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import 'package:http/testing.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
 TextSpan _spanByText(RichText richText, String text) {
   TextSpan? result;
@@ -285,7 +288,7 @@ IntersectionReason _photoSpotReason() {
     intersectionId: 'ix_post_photo_spot',
     intersectionClass: 'fact',
     objectKind: 'photo_spot',
-    source: 'alpha_showcase',
+    source: 'home_showcase',
     actionTargetId: 'fixture_homepage_photo_spot_hengshu_studio',
     pointSummarySnapshotId: 'snap_photo_spot',
     displayBinding: 'explicit_link',
@@ -358,7 +361,7 @@ ContentPostViewData _microPost({
     authorRoleLabel: '旅行创作者',
     authorIdentityTags: const <String>['摄影', '川西'],
     authorVerified: true,
-    assistantUsePolicy: 'allow',
+    assistantUsePolicy: AssistantUsePolicy.inherit,
     likeCount: 12,
     commentCount: 3,
     shareCount: 1,
@@ -388,7 +391,7 @@ ContentPostViewData _photoPost({
     type: 'image',
     identity: 'work',
     displayFormat: 'image',
-    assistantUsePolicy: 'allow',
+    assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_photo',
     displayName: '影像作者',
     avatarUrl: '',
@@ -418,7 +421,7 @@ ContentPostViewData _videoPost({required int width, required int height}) {
     type: 'video',
     identity: 'work',
     displayFormat: 'video',
-    assistantUsePolicy: 'allow',
+    assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_video',
     displayName: '视频作者',
     avatarUrl: '',
@@ -446,7 +449,7 @@ ContentPostViewData _videoPost({required int width, required int height}) {
   );
 }
 
-ContentPostViewData _alphaShowcaseHomePost() {
+ContentPostViewData _homeShowcasePost() {
   return _microPost();
 }
 
@@ -460,7 +463,7 @@ ContentPostViewData _articleLayoutPost({
     type: 'article',
     identity: 'work',
     displayFormat: 'note',
-    assistantUsePolicy: 'allow',
+    assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_article',
     displayName: '文章作者',
     avatarUrl: '',
@@ -478,7 +481,19 @@ ContentPostViewData _articleLayoutPost({
   );
 }
 
+/// 该 double 覆写了全部网络入口，因此数据面 client 永不应被触达；
+/// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
+CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
+  client: MockClient(
+    (request) async => throw StateError(
+      'MediaDownloadCache double must not perform network IO',
+    ),
+  ),
+);
+
 class _NoopMediaDownloadCache extends MediaDownloadCache {
+  _NoopMediaDownloadCache() : super(client: _unreachableDataPlaneClient());
+
   @override
   Future<String?> getCachedFilePath(String url) async => null;
 }
@@ -1130,7 +1145,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final showcasePost = _alphaShowcaseHomePost();
+    final showcasePost = _homeShowcasePost();
     final reason = showcasePost.intersectionReasons!.first;
     expect(reason.actorEvidenceTotalCount, 3);
     expect(reason.actorEvidenceCompleteness, 'complete');

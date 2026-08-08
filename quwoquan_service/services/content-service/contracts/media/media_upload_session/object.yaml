@@ -32,8 +32,20 @@ relationships:
   reference_fields:
   - assetId
   target_object: content.MediaAsset
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "上传与再处理会话是短时传输状态，不是可被检索的内容对象。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "上传会话只承载短时凭据与传输进度，助手读取无价值且扩大凭据面。"
 business_rules:
 - objectKey 只能由 Media Facade 分配且在会话生命周期内不可变
 - CompleteMediaUpload 必须在 expiresAt 前验证对象存在、大小与 expectedSha256

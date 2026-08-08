@@ -58,10 +58,7 @@ errors:
     en: The assistant run state has changed; refresh and try again
 - code: ASSISTANT.SYSTEM.device_action_unavailable
   reason: device_action_unavailable
-  http_status: 503
-  emitted_by:
-  - surface: http
-    operations: [SubmitDeviceActionReceipt]
+  emitted_by: [app]
   recovery_action: fallback
   disruption_level: inlineCard
   dart_const: deviceActionUnavailable
@@ -71,10 +68,7 @@ errors:
     en: This action is unavailable on this device; complete it manually
 - code: ASSISTANT.USER.device_action_permission_denied
   reason: device_action_permission_denied
-  http_status: 403
-  emitted_by:
-  - surface: http
-    operations: [SubmitDeviceActionReceipt]
+  emitted_by: [app]
   recovery_action: surface
   disruption_level: permissionCard
   dart_const: deviceActionPermissionDenied
@@ -84,10 +78,7 @@ errors:
     en: Allow this device action in system settings and try again
 - code: ASSISTANT.SYSTEM.device_action_failed
   reason: device_action_failed
-  http_status: 500
-  emitted_by:
-  - surface: http
-    operations: [SubmitDeviceActionReceipt]
+  emitted_by: [app]
   recovery_action: retry
   disruption_level: snackbar
   dart_const: deviceActionFailed
@@ -215,6 +206,17 @@ errors:
   user_message:
     zh: 助手策略暂不可用，请稍后重试
     en: Assistant policy is temporarily unavailable
+- code: ASSISTANT.SYSTEM.run_reasoning_profile_unavailable
+  reason: run_reasoning_profile_unavailable
+  emitted_by:
+  - surface: terminal_snapshot
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: runReasoningProfileUnavailable
+  go_const: ErrRunReasoningProfileUnavailable
+  user_message:
+    zh: 当前推理配置无法满足本次任务要求
+    en: The current reasoning profile cannot satisfy this task
 - code: ASSISTANT.SYSTEM.run_skill_package_unavailable
   reason: unavailable
   http_status: 503

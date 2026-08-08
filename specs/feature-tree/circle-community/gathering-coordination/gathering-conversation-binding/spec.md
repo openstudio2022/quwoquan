@@ -86,9 +86,9 @@
 <a id="gwt-001"></a>
 ### GWT-001 room-ready Publish 与有效参与后默认进入群聊
 
-- GIVEN 一个尚未发布的 Gathering，Chat room ensure 首次失败后恢复，且一名受邀者尚无 room access。
-- WHEN Host 重试发布，受邀者从 Notification typed 邀请调用 Circle accept，另一参与者经申请审批成为有效 Participation 并打开活动。
-- THEN room ensure 幂等只产生一个 contextual Conversation，Publish 只在 binding ready 后成功，参与者在 access ready 后默认进入消息。
+- GIVEN Host 以同一创建意图提交尚未发布的 Gathering，CreateGatheringDraft 首次返回 room binding 未就绪或 canonical 依赖失败，且一名受邀者尚无 room access。
+- WHEN Host 通过 generated client 与 production Remote 重试同一创建意图，仅在 draft 响应同时给出 binding ready 与非空 conversationId 后提交 Publish；受邀者再从 Notification typed 邀请调用 Circle accept，另一参与者经申请审批成为有效 Participation 并打开活动。
+- THEN binding 未就绪时 Gathering 保持 draft、不公开也不接受响应；恢复后 Circle 通过受信同步 Chat operation 取得唯一 contextual Conversation 并原子绑定响应 conversationId，同一意图重放不创建第二 room，Publish 才成功，参与者在 access ready 后默认进入消息。
 - AND 邀请待响应与待审批者都不能进入或读取群内容，群通话复用 Chat，Participation 与关系事实不由 Notification 或 membership 反向改变。
 
 <a id="gwt-002"></a>
@@ -121,6 +121,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Publish 前唯一 contextual room、Participation/Organizer 双投影、默认消息入口、Board typed projection、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全移除撤权、普通群聊并列语义与 App 消息可靠性验收。
+- 影响或价值：尚缺 CreateGatheringDraft 返回 room readiness 后再 Publish 的 production Remote 页面验收，以及 Participation/Organizer 双投影、默认消息入口、Board typed projection、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全移除撤权、普通群聊并列语义与 App 消息可靠性验收；不得由 App 伪造 EnsureRoom operation 或在 binding pending 时发布。
 - 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 在 local_contract、真实 api_integration、杀进程/重连/重复事件与跨域 user_acceptance 中通过；未授权 room access、重复 room/membership、Workspace 第二真相和 direct 复用为零。
 - 依赖：父 L2 `OPEN-003`、Chat message reliability、后续 route/surface/Board contracts 与 production Remote App。

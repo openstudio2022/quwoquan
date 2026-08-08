@@ -97,7 +97,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
                 } catch (error, stackTrace) {
                   // 保存失败时留在编辑器，顶栏显示失败状态；独立记录已处理异常。
                   unawaited(
-                    AppExceptionTelemetryService.instance
+                    ref.read(exceptionTelemetryPortProvider)
                         .recordHandledException(
                           source: 'content.create.save_and_exit',
                           error: error,

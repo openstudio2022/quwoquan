@@ -467,3 +467,11 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification_delivery_job/incoming_call_lifecycle__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: notification_delivery_job_ack_incoming_call_presentation_app_local
+    spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: AckIncomingCallPresentation}
+    runner_source_path: quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification_delivery_job/incoming_call_presentation_acknowledger__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

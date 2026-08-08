@@ -41,6 +41,23 @@ relationships:
   reference_fields:
   - reviewerAccountId
   target_object: user.UserAccount
+search_policy:
+  exposed: none
+  not_exposed_reason: "审核与举报对象受 trust and safety 约束，禁止进入任何检索面。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.entity.homepage_claim_request.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.entity.homepage_claim_request.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.entity.homepage_claim_request.write
 business_rules:
 - requester persona 与 homepageId 创建后不可变
 - 同一 requester 对同一 homepage 只能有一个 pending 申请

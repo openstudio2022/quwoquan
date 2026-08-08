@@ -24,8 +24,20 @@ relationships:
   target_object: user.UserAccount
 local_identity_reasons:
   sourceId: producer-scoped provenance key; the Notification target carries the typed business destination
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.notification.notification.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - recipient、messageType、source 与 payload digest 创建后不可变
 - 同一 idempotencyKey 只创建一个 Notification
@@ -76,12 +88,12 @@ lifecycle:
   - name: ProjectGatheringInvitation
     kind: event_handler
     facet: GatheringInvitationProjection
-    method: project
+    method: handle
     idempotency: identity_payload_digest
   - name: CancelGatheringInvitations
     kind: event_handler
     facet: GatheringInvitationProjection
-    method: cancelGathering
+    method: handle
     idempotency: event_id
   - name: ApplyNotificationAccountRestriction
     kind: event_handler

@@ -4,6 +4,7 @@ events:
 
     非 canonical 结构字段迁移注记：recommend_impact="hot_path_signal"。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ContentReactionSet
   payload_entity: ContentReactionChangedPayload
   payload_shape: exact
   payload_fields:
@@ -22,6 +23,7 @@ events:
 
     非 canonical 结构字段迁移注记：recommend_impact="hot_path_signal"。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ContentReactionCleared
   payload_entity: ContentReactionChangedPayload
   payload_shape: exact
   payload_fields:

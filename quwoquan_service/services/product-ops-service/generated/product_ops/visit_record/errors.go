@@ -19,23 +19,23 @@ var (
 // AppErrorFromVisitInvalidArgument returns *AppError for OPS.USER.visit_invalid_argument (user_message from errors.yaml).
 func AppErrorFromVisitInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrVisitInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "访问记录请求参数无效", debugMessage).WithMetadata("visit_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "访问记录请求参数无效", debugMessage).WithMetadata("visit_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromVisitStorageReadFailed returns *AppError for OPS.SYSTEM.visit_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromVisitStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrVisitStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "访问统计读取失败，请稍后重试", debugMessage).WithMetadata("visit_storage_read_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "访问统计读取失败，请稍后重试", debugMessage).WithMetadata("visit_storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }
 
 // AppErrorFromVisitIdempotencyConflict returns *AppError for OPS.USER.visit_idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromVisitIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrVisitIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "该访问请求标识已用于其他目标", debugMessage).WithMetadata("visit_idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "该访问请求标识已用于其他目标", debugMessage).WithMetadata("visit_idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromVisitStorageWriteFailed returns *AppError for OPS.SYSTEM.visit_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromVisitStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrVisitStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "访问记录写入失败，请稍后重试", debugMessage).WithMetadata("visit_storage_write_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "访问记录写入失败，请稍后重试", debugMessage).WithMetadata("visit_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }

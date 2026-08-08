@@ -142,7 +142,6 @@ api_routes:
       max_attempts: 2
       idempotency: required
     error_codes:
-      - SEARCH.USER.recent_entry_not_found
       - SEARCH.USER.recent_version_conflict
       - SEARCH.USER.recent_idempotency_conflict
       - SEARCH.SYSTEM.recent_storage_failed
@@ -316,3 +315,67 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/recent_search_state/recent_search_state_store__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: recent_search_state_list_recent_searches_app_local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ListRecentSearches}
+  runner_source_path: quwoquan_app/test/local_contract/service/search_service/search/recent_search_state/recent_search_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: recent_search_state_upsert_recent_search_app_local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: UpsertRecentSearch}
+  runner_source_path: quwoquan_app/test/local_contract/service/search_service/search/recent_search_state/recent_search_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: recent_search_state_delete_recent_search_app_local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: DeleteRecentSearch}
+  runner_source_path: quwoquan_app/test/local_contract/service/search_service/search/recent_search_state/recent_search_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: recent_search_state_clear_recent_searches_app_local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ClearRecentSearches}
+  runner_source_path: quwoquan_app/test/local_contract/service/search_service/search/recent_search_state/recent_search_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: recent_search_state_list_recent_searches_app_api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListRecentSearches}
+  runner_source_path: quwoquan_app/test/api_integration/service/search_service/search/recent_search_state/recent_search_state_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: recent_search_state_upsert_recent_search_app_api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: UpsertRecentSearch}
+  runner_source_path: quwoquan_app/test/api_integration/service/search_service/search/recent_search_state/recent_search_state_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: recent_search_state_delete_recent_search_app_api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: DeleteRecentSearch}
+  runner_source_path: quwoquan_app/test/api_integration/service/search_service/search/recent_search_state/recent_search_state_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: recent_search_state_clear_recent_searches_app_api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ClearRecentSearches}
+  runner_source_path: quwoquan_app/test/api_integration/service/search_service/search/recent_search_state/recent_search_state_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

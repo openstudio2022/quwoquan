@@ -702,10 +702,20 @@ class DevUpTest(unittest.TestCase):
             gamma_script,
         )
         self.assertIn(
-            'find "$ROOT/quwoquan_service/services" -mindepth 3 -maxdepth 3 '
-            "-path '*/deploy/compose.yaml' -type f | sort",
+            "from quwoquan_ops.cli.lib.immutable_image_composition import "
+            "first_party_service_names",
             gamma_script,
         )
+        self.assertIn(
+            "active = set(first_party_service_names(root))",
+            gamma_script,
+        )
+        self.assertIn(
+            'services_root.glob("*/deploy/compose.yaml")',
+            gamma_script,
+        )
+        self.assertIn("if path.parents[1].name in active", gamma_script)
+        self.assertNotIn('find "$ROOT/quwoquan_service/services"', gamma_script)
         self.assertIn("probe_one notification-service", gamma_script)
         self.assertIn(
             'local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"',

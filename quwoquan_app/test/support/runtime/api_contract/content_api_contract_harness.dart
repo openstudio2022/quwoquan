@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_command_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_publication_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/post_delete_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_command_remote.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
@@ -29,6 +30,7 @@ final class ContentApiContractHarness {
     required this.telemetry,
     required this.feed,
     required this.posts,
+    required this.postDeletion,
     required this.publication,
     required this.behaviors,
     required this.reports,
@@ -37,7 +39,7 @@ final class ContentApiContractHarness {
 
   static Future<ContentApiContractHarness> create() async {
     if (_apiBase.isEmpty) {
-      throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
+      throw StateError('L3: API_CONTRACT_BASE_URL not set');
     }
     final tokenProvider = _MutableAccessTokenProvider();
     final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);
@@ -90,6 +92,8 @@ final class ContentApiContractHarness {
           ContentRequestPageIds.reportBehaviors =>
             AppUiSurfaces.interestOnboarding,
           ContentRequestPageIds.getPost => AppUiSurfaces.workBrowser,
+          ContentRequestPageIds.listUserPosts => AppUiSurfaces.userProfile,
+          ContentRequestPageIds.deletePost => AppUiSurfaces.workBrowser,
           ContentRequestPageIds.createReport => AppUiSurfaces.homeFeed,
           _ => throw StateError(
             'Unsupported Content API contract clientPageId: $clientPageId',
@@ -111,10 +115,12 @@ final class ContentApiContractHarness {
         String clientPageId,
         String idempotencyKey,
       ) {
-        final surface =
-            clientPageId == ContentRequestPageIds.submitPostPublication
-            ? AppUiSurfaces.createWorkspace
-            : AppUiSurfaces.homeFeed;
+        final surface = switch (clientPageId) {
+          ContentRequestPageIds.submitPostPublication =>
+            AppUiSurfaces.createWorkspace,
+          ContentRequestPageIds.deletePost => AppUiSurfaces.workBrowser,
+          _ => AppUiSurfaces.homeFeed,
+        };
         final base = queryContext(
           clientPageId == ContentRequestPageIds.submitPostPublication
               ? ContentRequestPageIds.getFeed
@@ -141,6 +147,10 @@ final class ContentApiContractHarness {
           client: client,
           invocationContext: queryContext,
         ),
+        postDeletion: RemoteContentPostDeleteCommandWriter(
+          client: client,
+          invocationContext: commandContext,
+        ),
         publication: RemoteContentPostPublicationWriter(
           client: client,
           invocationContext: commandContext,
@@ -166,6 +176,7 @@ final class ContentApiContractHarness {
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final RemoteContentDiscoveryFeedQuery feed;
   final RemoteContentPostReaderAdapter posts;
+  final RemoteContentPostDeleteCommandWriter postDeletion;
   final RemoteContentPostPublicationWriter publication;
   final RemoteContentBehaviorCommandAdapter behaviors;
   final RemoteContentReportAdapter reports;

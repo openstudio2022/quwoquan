@@ -15,7 +15,8 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
+from _common.paths import APP_ROOT, REPO_ROOT
+from _common.storage_contract_view import load_storage_contract_view
 
 import re
 
@@ -143,9 +144,11 @@ def mapping_keys(value: object) -> set[str]:
     return set()
 
 
-def event_storage_logstore_retentions() -> dict[str, int]:
+def event_storage_logstore_retentions(
+    storage_path: Path = EVENT_STORAGE,
+) -> dict[str, int]:
     """读取 EventRecord 对象拥有的物理保留合同，禁止在 App gate 复制 TTL。"""
-    storage = load_yaml(EVENT_STORAGE)
+    storage = load_storage_contract_view(storage_path)
     logstores = storage.get("logstores")
     if not isinstance(logstores, dict):
         raise ValueError("EventRecord storage.logstores must be a mapping")
@@ -576,7 +579,7 @@ def verify_app_single_egress(errors: list[str]) -> None:
     )
     require_source(
         "quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/"
-        "content_behavior_repository.dart",
+        "public/content_behavior_repository.dart",
         ["implements BehaviorReporter"],
         errors,
     )
@@ -589,7 +592,7 @@ def verify_app_single_egress(errors: list[str]) -> None:
 
 
 def verify_elasticsearch_single_track(errors: list[str]) -> None:
-    storage = load_yaml(EVENT_STORAGE)
+    storage = load_storage_contract_view(EVENT_STORAGE)
     backends = storage.get("environment_backends", {})
     if set(backends) != {"alpha", "beta", "gamma", "prod"}:
         errors.append("Elasticsearch bindings must cover alpha/beta/gamma/prod")

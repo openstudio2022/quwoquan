@@ -43,6 +43,12 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn("QWQ_CONSUMER_LEASE_ID", script)
         self.assertIn("QWQ_ANDROID_REVERSE_RECEIPT_DIGEST", script)
         self.assertIn("QWQ_ANDROID_REVERSE_OWNED_PORTS", script)
+        self.assertIn("QWQ_ANDROID_VM_FORWARD_PREEXISTING", script)
+        self.assertIn("forward --remove tcp:8888", script)
+        self.assertIn('"compileStatus": "passed" if exit_code == 0', script)
+        self.assertIn('"launchStatus": "completed" if exit_code == 0', script)
+        self.assertIn('"contentAvailability": preflight.get', script)
+        self.assertIn('"providerAvailability": provider_availability', script)
         self.assertIn('DEVICE_TRUST_PLATFORM="android-emulator"', script)
         self.assertIn(r'r"tcp:(\d+)\s+tcp:\d+"', script)
         self.assertNotIn("exec flutter run", script)
@@ -50,6 +56,49 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             script.index("consumer-lease acquire"),
             script.index("flutter run \\\n"),
         )
+
+    def test_launcher_rejects_unknown_or_nonmobile_device_before_runtime_preflight(
+        self,
+    ) -> None:
+        script = APP_RUN.read_text(encoding="utf-8")
+        device_guard = "a connected iOS/Android device is required before runtime preflight"
+        self.assertIn("Flutter device {device_id!r} is not currently connected", script)
+        self.assertIn("unsupported platform {platform!r}", script)
+        self.assertIn(device_guard, script)
+        self.assertLess(
+            script.index(device_guard),
+            script.index('app-debug-preflight --target "$QWQ_LAUNCH_TARGET"'),
+        )
+
+    def test_launcher_blocks_unknown_device_before_runtime_preflight_or_flutter_run(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            fake_flutter = Path(temporary_dir) / "flutter"
+            fake_flutter.write_text(
+                "#!/usr/bin/env bash\n"
+                "if [[ \"$*\" == \"pub get --offline\" ]]; then exit 0; fi\n"
+                "if [[ \"$*\" == \"devices --machine\" ]]; then echo '[]'; exit 0; fi\n"
+                "echo \"unexpected fake flutter invocation: $*\" >&2\n"
+                "exit 97\n",
+                encoding="utf-8",
+            )
+            fake_flutter.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{temporary_dir}{os.pathsep}{environment['PATH']}"
+            result = subprocess.run(
+                ["bash", str(APP_RUN), "--env", "alpha", "-d", "offline-device"],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("a connected iOS/Android device is required", result.stderr)
+        self.assertNotIn("validating full Debug runtime", result.stdout)
+        self.assertNotIn("flutter run", result.stdout)
 
     def test_android_gradle_requires_canonical_transport_receipts(self) -> None:
         script = ANDROID_APP_BUILD.read_text(encoding="utf-8")
@@ -65,7 +114,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('"consumer-lease",', launcher_gate)
         self.assertIn('"direct-flutter-run"', launcher_gate)
         self.assertIn("handoffLocalPorts(directDebugHandoff)", launcher_gate)
-        self.assertIn('"--readiness-receipt-digest"', launcher_gate)
+        self.assertIn('if (appLaunchPolicy == "prod_release")', launcher_gate)
+        self.assertIn("contentReadinessReceiptDigest.matches", launcher_gate)
 
     def test_build_grace_blocks_without_adb_probe(self) -> None:
         with tempfile.TemporaryDirectory() as output_root, patch.dict(

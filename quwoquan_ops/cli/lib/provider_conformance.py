@@ -723,12 +723,12 @@ def _nonprod_active_candidate_issues(
     ):
         issues.append("active candidate ContractGraph does not match the executed cell")
 
-    runtime_config = str(manifest.get("runtimeConfigDigest") or "")
+    service_configuration = str(manifest.get("configurationDigest") or "")
     startup_config = str(startup.get("configurationDigest") or "")
     if (
         SHA256_PATTERN.fullmatch(startup_config) is None
-        or startup_config != runtime_config
-        or oci.get("configurationDigest") != runtime_config
+        or startup_config != service_configuration
+        or oci.get("configurationDigest") != service_configuration
     ):
         issues.append("startup receipt configuration digest is stale")
     if (

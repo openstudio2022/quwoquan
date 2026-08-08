@@ -1,0 +1,1 @@
+"""Planning Recipe concern."""

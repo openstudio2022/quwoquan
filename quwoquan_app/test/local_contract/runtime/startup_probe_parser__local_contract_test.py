@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 APP_DIR = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(APP_DIR / "scripts/device"))
 sys.path.insert(0, str(APP_DIR / "scripts/runtime/platform"))
+sys.path.insert(0, str(APP_DIR / "test/support/runtime/launcher"))
 
 from verify_startup_first_frame import (
     ScreenshotAnalysis,
@@ -37,8 +38,8 @@ from verify_startup_first_frame import (
 from build_launcher_handoff import (
     dart_defines_digest,
     effective_launch_manifest_digest,
-    runtime_config_digest,
 )
+from launcher_package_fixture import fixture_runtime_config_digest
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_startup_ttid_baseline import main as verify_startup_ttid_main
 from verify_startup_ttid_baseline import validate_commercial_uat
@@ -686,7 +687,10 @@ class StartupProbeParserContractTest(unittest.TestCase):
                 target="prod-sim",
                 entrypoint="lib/main_prod.dart",
                 defines_digest=dart_defines_digest(defines),
-                runtime_config_digest=runtime_config_digest("prod"),
+                runtime_config_digest=fixture_runtime_config_digest(
+                    "prod",
+                    "prod-sim",
+                ),
             ),
             [],
         )
@@ -702,7 +706,10 @@ class StartupProbeParserContractTest(unittest.TestCase):
                 target="alpha-local",
                 entrypoint="lib/main_prod.dart",
                 defines_digest=dart_defines_digest(alpha_defines),
-                runtime_config_digest=runtime_config_digest("alpha"),
+                runtime_config_digest=fixture_runtime_config_digest(
+                    "alpha",
+                    "alpha-local",
+                ),
             ),
             [],
         )

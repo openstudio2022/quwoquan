@@ -1,0 +1,22 @@
+schema: quwoquan_data.professional_video_popular_provider_catalog
+catalogRevision: popular-video-metadata-v1
+providerOrder: [bilibili, youtube]
+providers:
+  - provider: bilibili
+    displayName: Bilibili
+    priority: 0
+    sourceHosts: [bilibili.com]
+    metadataDiscoveryPaths: [supported_api]
+    mediaAcquisitionPaths: [manual_file]
+    manualFileRequired: true
+    automaticStreamParsing: false
+    automaticVideoDownload: false
+  - provider: youtube
+    displayName: YouTube
+    priority: 1
+    sourceHosts: [youtube.com, youtu.be]
+    metadataDiscoveryPaths: [supported_api]
+    mediaAcquisitionPaths: [manual_file]
+    manualFileRequired: true
+    automaticStreamParsing: false
+    automaticVideoDownload: false

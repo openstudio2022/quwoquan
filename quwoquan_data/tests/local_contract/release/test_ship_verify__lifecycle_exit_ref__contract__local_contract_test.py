@@ -190,6 +190,7 @@ def _dependencies(
         run_creator_importer=lambda **_kwargs: Path("unused"),
         run_content_importer=lambda **_kwargs: None,
         run_homepage_importer=lambda **_kwargs: None,
+        write_environment_coverage_receipt=lambda **_kwargs: Path("unused"),
         write_release_evidence=lambda **_kwargs: None,
         write_verification_result=_write_result,
         write_tag_consumer_verification=_write_report,

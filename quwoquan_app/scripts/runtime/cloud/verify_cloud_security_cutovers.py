@@ -253,7 +253,7 @@ def main() -> int:
 
     require(
         "quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/"
-        "content_behavior_repository.dart",
+        "public/content_behavior_repository.dart",
         "implements BehaviorReporter",
         "clearPendingForLogout",
     )
@@ -415,7 +415,7 @@ def main() -> int:
     )
     require(
         profile_object_uploader,
-        "ContentMediaUploadCoordinator",
+        "ContentMediaUploadService",
         "ContentMediaSourceReader",
         "ContentMediaStreamObjectUpload",
         "uploadPreparedSource",
@@ -460,13 +460,17 @@ def main() -> int:
     )
 
     require(
-        "quwoquan_service/tools/codegen_app_metadata/metadata_types.go",
-        'return "required"',
-        "禁止 fail-open",
+        "quwoquan_service/tools/codegen_app_metadata/contract_graph_source.go",
+        'AuthMode             string',
+        '`json:"authMode"`',
     )
     require(
-        "quwoquan_service/tools/codegen_app_metadata/api_metadata_codegen.go",
-        "duplicate short operation id",
+        "quwoquan_service/tools/codegen_app_metadata/operation_contract_codegen.go",
+        '{"authMode", operation.AuthMode}',
+    )
+    require(
+        "quwoquan_service/internal/metadata/openapi/generate.go",
+        "duplicate local operationId",
     )
     require(
         "quwoquan_app/scripts/runtime/auth/verify_auth_policy_contract.py",

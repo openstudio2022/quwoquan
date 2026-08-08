@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/di/presentation/conversation_avatar.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_avatar.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';

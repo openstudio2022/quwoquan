@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
+import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/runtime/observability/generated/runtime_log_catalog.g.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_log_record.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
@@ -27,7 +28,7 @@ class AppExceptionTelemetryFailureState {
 
 /// 全局异常只负责稳定错误语义与去重；写入由统一 RuntimeLogger 的加密环形缓冲
 /// 承担，不再向产品行为遥测或助手本地文件双写。
-class AppExceptionTelemetryService {
+class AppExceptionTelemetryService implements ExceptionTelemetryPort {
   AppExceptionTelemetryService({RuntimeLogger? logger}) : _logger = logger;
 
   static final AppExceptionTelemetryService instance =
@@ -49,6 +50,7 @@ class AppExceptionTelemetryService {
     }
   }
 
+  @override
   Future<void> recordGlobalException({
     required String source,
     required String exceptionText,
@@ -102,6 +104,7 @@ class AppExceptionTelemetryService {
   /// 与全局未捕获入口共用稳定指纹和缓冲，但额外把
   /// [CloudErrorMapper.runtimeFailureFromException] 的 code/kind/reason 写入
   /// runtime log allowlist 字段，避免只有 `error.toString()` 而无法聚合恢复语义。
+  @override
   Future<void> recordHandledException({
     required String source,
     required Object error,
@@ -127,6 +130,7 @@ class AppExceptionTelemetryService {
     );
   }
 
+  @override
   Future<void> flushPending() async {
     final logger = _logger;
     if (logger == null) return;

@@ -23,6 +23,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         UserSyncPatch,
         UserSyncPatchKind;
 
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/explicit_test_local_database_path_resolver.dart';
 
 class _FakeUserSyncRepository implements UserSyncRepository {
@@ -301,6 +302,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // ConversationSync 会经 chatRepositoryComposition 触达 generated
+          // operation client：先封死边界，再给对象级会话读写替身。
+          ...sealedCloudBoundaryOverrides(),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           userSyncRepositoryProvider.overrideWithValue(
             _FakeUserSyncRepository(),
           ),
@@ -365,6 +372,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // ConversationSync 会经 chatRepositoryComposition 触达 generated
+          // operation client：先封死边界，再给对象级会话读写替身。
+          ...sealedCloudBoundaryOverrides(),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           userSyncRepositoryProvider.overrideWithValue(
             _UserAvatarPatchRepository(),
           ),
@@ -425,6 +438,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
           chatRepositoryCompositionProvider.overrideWithValue(
             _ResyncChatRepository(),
           ),
@@ -489,6 +503,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // ConversationSync 会经 chatRepositoryComposition 触达 generated
+          // operation client：先封死边界，再给对象级会话读写替身。
+          ...sealedCloudBoundaryOverrides(),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           userSyncRepositoryProvider.overrideWithValue(syncRepository),
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
@@ -551,6 +571,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          // ConversationSync 会经 chatRepositoryComposition 触达 generated
+          // operation client：先封死边界，再给对象级会话读写替身。
+          ...sealedCloudBoundaryOverrides(),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
           userSyncRepositoryProvider.overrideWithValue(
             _InvalidAvatarPatchRepository(),
           ),

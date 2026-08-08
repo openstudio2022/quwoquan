@@ -21,7 +21,7 @@ void main() {
       await patrolGoTo($, AppRoutePaths.assistantSkills);
 
       final toggle = find.byKey(
-        const ValueKey<String>('assistant_skill_toggle_travel_planning'),
+        const ValueKey<String>('assistant_skill_toggle_travel_companion'),
       );
       await $(toggle).waitUntilVisible(timeout: const Duration(seconds: 30));
       expect(

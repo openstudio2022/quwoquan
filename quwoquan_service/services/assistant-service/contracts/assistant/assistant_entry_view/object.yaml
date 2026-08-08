@@ -10,6 +10,20 @@ access:
 relationships:
 - {name: preference, target_object: assistant.AssistantPreference, reference_fields: [preferenceId], kind: projection_source, cardinality: '1:1', consistency: eventual, access: event, on_delete: tombstone}
 - {name: pageContext, target_object: assistant.PageContext, reference_fields: [accountId], kind: projection_source, cardinality: '1:1', consistency: runtime, access: named_reader, on_delete: detach}
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.assistant_entry_view.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 欢迎语、chips 与页面动作必须在同一 checkpoint 上生成并由一个响应返回，不允许拆成两个读取轨道。
 - 个性化只消费显式偏好和受信页面上下文，缺失时返回同一 contract 的非个性化结果而非 fallback 路由。

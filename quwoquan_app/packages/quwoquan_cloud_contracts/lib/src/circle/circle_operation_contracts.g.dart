@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 99a8a52d1ede68d6295d252a5c3cfd90ce40fa7e11b50e9fee2dad7a7afdf2b2
+// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
 
 library;
 
@@ -1049,7 +1049,7 @@ final class CircleFeedItemView {
   final String postId;
   final String contentType;
   final String? contentIdentity;
-  final String? assistantUsePolicy;
+  final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
@@ -1089,7 +1089,7 @@ final class CircleFeedItemView {
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
       contentIdentity: map["contentIdentity"] == null ? null : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
-      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : _requiredString(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
+      assistantUsePolicy: map["assistantUsePolicy"] == null ? null : AssistantUsePolicy.fromWire(map["assistantUsePolicy"], '$path.assistantUsePolicy'),
       authorId: map["authorId"] == null ? null : _requiredString(map["authorId"], '$path.authorId'),
       authorDisplayName: map["authorDisplayName"] == null ? null : _requiredString(map["authorDisplayName"], '$path.authorDisplayName'),
       authorAvatarUrl: map["authorAvatarUrl"] == null ? null : _requiredString(map["authorAvatarUrl"], '$path.authorAvatarUrl'),
@@ -1129,7 +1129,7 @@ final class CircleFeedItemView {
     "postId": postId,
     "contentType": contentType,
     if (contentIdentity != null) "contentIdentity": contentIdentity!,
-    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!,
+    if (assistantUsePolicy != null) "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
     if (authorDisplayName != null) "authorDisplayName": authorDisplayName!,
     if (authorAvatarUrl != null) "authorAvatarUrl": authorAvatarUrl!,
@@ -2129,7 +2129,7 @@ final class GatheringApplicationQuestion {
       questionId: _requiredNonBlankString(map["questionId"], '$path.questionId'),
       prompt: _requiredNonBlankString(map["prompt"], '$path.prompt'),
       kind: GatheringApplicationQuestionKind.fromWire(map["kind"], '$path.kind'),
-      options: List<GatheringApplicationQuestionOption>.unmodifiable(_requiredList(map["options"], '$path.options').asMap().entries.map((entry) => GatheringApplicationQuestionOption.fromWire(_requiredObject(entry.value, '$path.options' + '[${entry.key}]'), '$path.options' + '[${entry.key}]'))),
+      options: List<GatheringApplicationQuestionOption>.unmodifiable(_requiredBoundedList(map["options"], '$path.options', max: 10).asMap().entries.map((entry) => GatheringApplicationQuestionOption.fromWire(_requiredObject(entry.value, '$path.options' + '[${entry.key}]'), '$path.options' + '[${entry.key}]'))),
       required: _requiredBool(map["required"], '$path.required'),
     );
   }
@@ -2357,7 +2357,7 @@ final class GatheringOutcome {
     return GatheringOutcome(
       status: GatheringOutcomeStatus.fromWire(map["status"], '$path.status'),
       independentEvidenceCount: _requiredInt(map["independentEvidenceCount"], '$path.independentEvidenceCount'),
-      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_requiredList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_requiredObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
+      evidenceRefs: List<CanonicalObjectRef>.unmodifiable(_requiredBoundedList(map["evidenceRefs"], '$path.evidenceRefs', max: 32).asMap().entries.map((entry) => CanonicalObjectRef.fromWire(_requiredObject(entry.value, '$path.evidenceRefs' + '[${entry.key}]'), '$path.evidenceRefs' + '[${entry.key}]'))),
       calculatedAt: _requiredTimestamp(map["calculatedAt"], '$path.calculatedAt'),
       calculationDigest: _requiredNonBlankString(map["calculationDigest"], '$path.calculationDigest'),
     );
@@ -2437,7 +2437,7 @@ final class GatheringPolicySet {
       admissionPolicy: GatheringAdmissionPolicy.fromWire(map["admissionPolicy"], '$path.admissionPolicy'),
       capacityPolicy: GatheringCapacityPolicy.fromWire(_requiredObject(map["capacityPolicy"], '$path.capacityPolicy'), '$path.capacityPolicy'),
       disclosurePolicy: GatheringDisclosurePolicy.fromWire(_requiredObject(map["disclosurePolicy"], '$path.disclosurePolicy'), '$path.disclosurePolicy'),
-      applicationQuestions: List<GatheringApplicationQuestion>.unmodifiable(_requiredList(map["applicationQuestions"], '$path.applicationQuestions').asMap().entries.map((entry) => GatheringApplicationQuestion.fromWire(_requiredObject(entry.value, '$path.applicationQuestions' + '[${entry.key}]'), '$path.applicationQuestions' + '[${entry.key}]'))),
+      applicationQuestions: List<GatheringApplicationQuestion>.unmodifiable(_requiredBoundedList(map["applicationQuestions"], '$path.applicationQuestions', max: 5).asMap().entries.map((entry) => GatheringApplicationQuestion.fromWire(_requiredObject(entry.value, '$path.applicationQuestions' + '[${entry.key}]'), '$path.applicationQuestions' + '[${entry.key}]'))),
       riskControlPolicyRef: _requiredNonBlankString(map["riskControlPolicyRef"], '$path.riskControlPolicyRef'),
       policyDecisionRef: map["policyDecisionRef"] == null ? null : _requiredString(map["policyDecisionRef"], '$path.policyDecisionRef'),
       policyDigest: map["policyDigest"] == null ? null : _requiredString(map["policyDigest"], '$path.policyDigest'),
@@ -2807,9 +2807,9 @@ final class GatheringPurpose {
       title: map["title"] == null ? null : _requiredString(map["title"], '$path.title'),
       summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
       coverRef: map["coverRef"] == null ? null : CanonicalObjectRef.fromWire(_requiredObject(map["coverRef"], '$path.coverRef'), '$path.coverRef'),
-      topicRefs: List<String>.unmodifiable(_requiredList(map["topicRefs"], '$path.topicRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.topicRefs' + '[${entry.key}]'))),
-      requirementRefs: List<String>.unmodifiable(_requiredList(map["requirementRefs"], '$path.requirementRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.requirementRefs' + '[${entry.key}]'))),
-      sourceObjectRefs: List<GatheringSourceRef>.unmodifiable(_requiredList(map["sourceObjectRefs"], '$path.sourceObjectRefs').asMap().entries.map((entry) => GatheringSourceRef.fromWire(_requiredObject(entry.value, '$path.sourceObjectRefs' + '[${entry.key}]'), '$path.sourceObjectRefs' + '[${entry.key}]'))),
+      topicRefs: List<String>.unmodifiable(_requiredBoundedList(map["topicRefs"], '$path.topicRefs', max: 32).asMap().entries.map((entry) => _requiredString(entry.value, '$path.topicRefs' + '[${entry.key}]'))),
+      requirementRefs: List<String>.unmodifiable(_requiredBoundedList(map["requirementRefs"], '$path.requirementRefs', max: 32).asMap().entries.map((entry) => _requiredString(entry.value, '$path.requirementRefs' + '[${entry.key}]'))),
+      sourceObjectRefs: List<GatheringSourceRef>.unmodifiable(_requiredBoundedList(map["sourceObjectRefs"], '$path.sourceObjectRefs', max: 16).asMap().entries.map((entry) => GatheringSourceRef.fromWire(_requiredObject(entry.value, '$path.sourceObjectRefs' + '[${entry.key}]'), '$path.sourceObjectRefs' + '[${entry.key}]'))),
       costNotice: GatheringCostNotice.fromWire(map["costNotice"], '$path.costNotice'),
       costDescription: map["costDescription"] == null ? null : _requiredString(map["costDescription"], '$path.costDescription'),
     );
@@ -3309,4 +3309,16 @@ List<Object?> _requiredList(Object? value, String path) {
     throw FormatException('$path must be a list');
   }
   return value;
+}
+
+List<Object?> _requiredBoundedList(
+  Object? value,
+  String path, {
+  required int max,
+}) {
+  final result = _requiredList(value, path);
+  if (result.length > max) {
+    throw FormatException('$path must not contain more than $max items');
+  }
+  return result;
 }

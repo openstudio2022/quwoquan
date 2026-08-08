@@ -17,6 +17,9 @@ import 'package:quwoquan_app/service/content_service/content/post/application/cr
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_draft_local_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/service/integration_service/external_integration/location/location_typed_double.dart';
+import '../../../../../support/service/user_service/account/account_session/account_session_typed_double.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/runtime/transport/recording_content_media_facet.dart';
 import '../../../../../support/service/content_service/content/post/recording_content_post_publication_writer.dart';
@@ -34,10 +37,14 @@ const _resolvedActivePersona = ActivePersonaContextViewData(
 );
 
 class _AuthedSessionStore implements AuthSessionStore {
-  const _AuthedSessionStore();
+  _AuthedSessionStore();
+
+  /// 本用例的前置是「刚刚刷新过的活跃会话」：restore 期不得再触发
+  /// `refreshSessionIfNeeded`，否则会话会被判过期、发布入口退回登录门。
+  final int _lastRefreshAtEpochMs = DateTime.now().millisecondsSinceEpoch;
 
   @override
-  Future<StoredAuthSession> read() async => const StoredAuthSession(
+  Future<StoredAuthSession> read() async => StoredAuthSession(
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
@@ -45,7 +52,7 @@ class _AuthedSessionStore implements AuthSessionStore {
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
-    lastRefreshAtEpochMs: 0,
+    lastRefreshAtEpochMs: _lastRefreshAtEpochMs,
     lastForegroundAuthCheckAtEpochMs: 0,
     manualLoggedOut: false,
     launchPromptDismissed: true,
@@ -155,6 +162,7 @@ Widget _buildApp(
 
   return ProviderScope(
     overrides: [
+      ...sealedCloudBoundaryOverrides(),
       currentUserIdProvider.overrideWithValue('user_001'),
       activePersonaContextProvider.overrideWith(
         (_) async => _resolvedActivePersona,
@@ -178,7 +186,18 @@ Widget _buildApp(
       ),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
-      authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      authSessionStoreProvider.overrideWithValue(_AuthedSessionStore()),
+      // 创建页壳还会拉起会话生命周期与「附近地点」读面：给对象级 typed double，
+      // 否则 provider 图会一路走到被封死的 generated operation client。
+      accountSessionCommandWriterProvider.overrideWithValue(
+        InMemoryAccountSessionFacet(),
+      ),
+      createLocationNearbyReaderProvider.overrideWithValue(
+        LocationQueryTypedDouble(),
+      ),
+      createLocationSearchReaderProvider.overrideWithValue(
+        LocationQueryTypedDouble(),
+      ),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),

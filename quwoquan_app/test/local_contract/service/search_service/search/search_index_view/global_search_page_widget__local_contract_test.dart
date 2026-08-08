@@ -132,7 +132,7 @@ Widget _buildApp({
       recentSearchCommandWriterProvider.overrideWithValue(
         recentSearchCommandWriter ?? recentSearches,
       ),
-      searchFeedbackCommandWriterProvider.overrideWithValue(
+      searchFeedbackFactAppenderProvider.overrideWithValue(
         SearchFeedbackTypedDouble(),
       ),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),

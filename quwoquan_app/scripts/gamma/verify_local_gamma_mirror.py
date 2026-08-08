@@ -125,11 +125,13 @@ def _candidate_identity(
         raise ValueError("Gamma Green requires workload=full")
 
     package_digest = str(candidate.get("packageDigest") or "")
+    configuration_digest_candidate = str(candidate.get("configurationDigest") or "")
     runtime_config_digest = str(candidate.get("runtimeConfigDigest") or "")
     image_digest = str(candidate.get("imageDigest") or "")
     build_input_digest = str(candidate.get("buildInputDigest") or "")
     for label, digest in (
         ("packageDigest", package_digest),
+        ("configurationDigest", configuration_digest_candidate),
         ("runtimeConfigDigest", runtime_config_digest),
         ("imageDigest", image_digest),
         ("buildInputDigest", build_input_digest),
@@ -162,8 +164,8 @@ def _candidate_identity(
     if startup.get("candidateDigest") != baseline_id:
         raise ValueError("startup candidate differs from active candidate")
     if (
-        startup.get("configurationDigest") != runtime_config_digest
-        or configuration_digest != runtime_config_digest
+        startup.get("configurationDigest") != configuration_digest_candidate
+        or configuration_digest != configuration_digest_candidate
     ):
         raise ValueError("startup configuration differs from active candidate")
     if startup.get("providerRuntimeDigest") != provider_digest:
@@ -177,7 +179,7 @@ def _candidate_identity(
     )
     oci = load_json(oci_path)
     if (
-        oci.get("configurationDigest") != runtime_config_digest
+        oci.get("configurationDigest") != configuration_digest_candidate
         or oci.get("buildInputDigest") != build_input_digest
         or oci.get("imageDigest") != image_digest
     ):
@@ -200,7 +202,7 @@ def _candidate_identity(
         "baselineId": baseline_id,
         "attemptId": str(startup["attemptId"]),
         "packageDigest": package_digest,
-        "configurationDigest": runtime_config_digest,
+        "configurationDigest": configuration_digest_candidate,
         "providerRuntimeDigest": provider_digest,
         "observabilityLogSinkDigest": log_sink_digest,
         "imageDigest": image_digest,

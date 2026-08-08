@@ -156,9 +156,9 @@ void main() {
         ? Directory('lib')
         : Directory('quwoquan_app/lib');
     for (final relative in const <String>[
-      'content/content/post/presentation/article_reader/content/article_reader_page_surfaces.dart',
-      'content/content/post/presentation/article_reader/content/article_reader_page_surfaces_blocks.dart',
-      'content/content/post/presentation/article_reader/content/article_reader_page_surfaces_backdrops.dart',
+      'service/content_service/content/post/presentation/article_reader/content/article_reader_page_surfaces.dart',
+      'service/content_service/content/post/presentation/article_reader/content/article_reader_page_surfaces_blocks.dart',
+      'service/content_service/content/post/presentation/article_reader/content/article_reader_page_surfaces_backdrops.dart',
     ]) {
       final file = File('${appLib.path}/$relative');
       expect(file.existsSync(), isTrue, reason: relative);
@@ -175,7 +175,7 @@ void main() {
         ? Directory('lib')
         : Directory('quwoquan_app/lib');
     final hostDir = Directory(
-      '${appLib.path}/content/content/post/presentation/article_reader/pageflip/host',
+      '${appLib.path}/service/content_service/content/post/presentation/article_reader/pageflip/host',
     );
     final deckFiles =
         hostDir
@@ -206,7 +206,7 @@ void main() {
         ? Directory('lib')
         : Directory('quwoquan_app/lib');
     final hostDir = Directory(
-      '${appLib.path}/content/content/post/presentation/article_reader/pageflip/host',
+      '${appLib.path}/service/content_service/content/post/presentation/article_reader/pageflip/host',
     );
     final hostSources = hostDir
         .listSync()

@@ -13,11 +13,13 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import content.source.fetch_text as fetch_mod  # noqa: E402
 import content.source.fetch_payload as payload_mod  # noqa: E402
+import content.source.fetch_text as fetch_mod  # noqa: E402
 import content.source.mediawiki_page as mediawiki_mod  # noqa: E402
 from content.source.mediawiki_page import MediaWikiPageBundle  # noqa: E402
-from content.source.research.text_match import _wiki_resolved_title_matches_entity  # noqa: E402
+from content.source.research.text_match import (
+    _wiki_resolved_title_matches_entity,  # noqa: E402
+)
 
 
 def _mediawiki_bundle(
@@ -504,6 +506,7 @@ def test_wikivoyage_payload_exposes_rights_bound_same_page_images(monkeypatch):
         "File:Five Flower Lake.jpg",
     )
     assert observed["entity_id"] == "九寨沟"
+    assert observed["limit"] is None
     assert observed["require_metadata_entity_match"] is False
     assert payload["inlineImages"][0]["license"] == "CC BY-SA 4.0"
     assert payload["inlineImages"][0]["placeholderId"] == "source-inline-001"

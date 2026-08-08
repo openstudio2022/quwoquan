@@ -306,7 +306,7 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		LocationName:              fp.LocationName,
 		Status:                    "published",
 		Visibility:                "public",
-		AssistantUsePolicy:        "allow",
+		AssistantUsePolicy:        "inherit",
 		Summary:                   fp.Summary,
 		LikeCount:                 fp.LikeCount,
 		CommentCount:              fp.CommentCount,

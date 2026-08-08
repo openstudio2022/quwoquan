@@ -104,7 +104,8 @@ def _gamma_candidate(
     candidate = {
         "baselineId": startup["candidateDigest"],
         "packageDigest": "sha256:" + "7" * 64,
-        "runtimeConfigDigest": startup["configurationDigest"],
+        "configurationDigest": startup["configurationDigest"],
+        "runtimeConfigDigest": "sha256:" + "8" * 64,
         "buildInputDigest": oci["buildInputDigest"],
         "imageDigest": oci["imageDigest"],
         "providerRuntime": {
@@ -231,7 +232,8 @@ class StackctlRuntimeReceiptSingleTrackContractTest(unittest.TestCase):
                         "baselineId": baseline_id,
                         "imageDigest": image_set_digest,
                         "buildInputDigest": build_input_digest,
-                        "runtimeConfigDigest": configuration_digest,
+                        "configurationDigest": configuration_digest,
+                        "runtimeConfigDigest": "sha256:" + "a" * 64,
                         "providerRuntime": {
                             "images": {provider_role: provider_descriptor}
                         },

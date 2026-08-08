@@ -14,7 +14,9 @@
 
 ### In Scope
 
-- `ConnectorDefinition`、`ConnectorAuthorization`、`ConnectorConnection`、`ConnectorInvocation`、OAuth/native grant 状态、受保护 credentialRef、capability readiness、调用/撤权/刷新/重试/幂等与审计。
+- `integration.connector_definition`、`integration.connector_authorization`、`integration.connector_connection`、`integration.capability_grant` 与 `integration.connector_invocation` 五个对象的单轨协作，以及 OAuth/native grant 状态、受保护 credentialRef、capability readiness、调用/撤权/刷新/重试/幂等与审计。
+- `integration.capability_grant` 只解析 `public_provider`、`user_connector`、`device_capability`、`domain_operation` 四类 typed binding；调用方显式提交有序 `bindingPriority`，解析结果 exactly-one、固定五分钟过期且读取不续期。
+- final input 冻结后的 capability 授权、input digest/confirmation/permit/idempotency 绑定，以及真正调用 Provider、设备桥或 owner operation 前的 authority revalidation。
 - 首期 capability：系统日历/提醒、地图导航、酒店/餐饮/交通受控公开外链。
 
 ### Out of Scope
@@ -24,11 +26,12 @@
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 Connector 状态、凭证与调用回执由 Integration Service 唯一拥有
+### REQ-001 五对象分别拥有目录、授权、连接、短期解析与调用事实
 
-- Definition 必须声明厂商无关 capability、授权方式、数据分类、确认/幂等/超时/恢复与环境可用性；Skill 只引用 capability。
-- Connection 必须属于 account，凭证只存 protected store 并以 credentialRef 关联；Assistant 只读取 connectionRef、capability/state/freshness，不得获取 secret/token。
-- Invocation 必须绑定 connection、capability、调用主体、幂等键、确认/continuation 和脱敏结果；撤权或过期后 fail-closed。
+- `integration.connector_definition` 声明厂商无关 capability、授权方式、数据分类、确认/幂等/超时/恢复与环境可用性；Skill 只引用 capability。
+- `integration.connector_authorization` 拥有一次性 grant proof 与 Provider subject，`integration.connector_connection` 拥有 account 连接、授权状态与 protected credentialRef；Assistant 只能读取 connectionRef、capability/state/freshness，不得获取 secret/token。
+- `integration.capability_grant` 是四类 binding 的易失 `runtime_session`，只保存脱敏 exactly-one 解析结果，不拥有 Provider、设备、operation 或 credential 的长期事实。
+- `integration.connector_invocation` 拥有调用主体、final input digest、幂等键、确认/continuation、执行状态和脱敏 receipt；撤权、过期、binding 漂移或 input 不一致均 fail-closed。
 
 <a id="req-002"></a>
 ### REQ-002 首期旅行动作必须限制为受控只读或用户确认
@@ -37,9 +40,26 @@
 - 酒店、餐饮、交通 URL 必须经过公开 HTTPS 与来源策略校验，不携带 Cookie/Authorization，不提交表单、不预订、不支付。
 - 日历/提醒必须 ActionProposal→用户确认→native/external receipt→Assistant continuation；群内不显示个人详情。
 
+<a id="req-003"></a>
+### REQ-003 四类 binding 必须按显式优先级解析为固定五分钟的 exactly-one 结果
+
+- `bindingPriority` 是调用上下文提交的完整有序序列，不存在全局隐藏顺序；resolver 只能选择第一个满足 capability、region、状态、probe、scope、permission 与 owner contract digest 的候选。
+- 四类 binding 的事实来源分别为：`public_provider` 只引用环境 adapter/config/contract digest 与 probe，`user_connector` 只来自当前 account 已验证且未撤销的 Connection，`device_capability` 只来自当前 installation 的 bridge attestation/permission，`domain_operation` 只引用 owner operationId 与 contract digest。
+- 高优先候选一旦 unavailable、denied、revoked 或配置无效必须结构化失败，不得静默回退到次优 binding；四类 payload 必须 exactly-one，禁止 universal Connector map。
+- `ResolvedCapabilityGrant` 自 `resolvedAt` 起固定 300 秒失效，读取不得刷新 TTL；过期只能重新解析全部 authority 与 capability signals，禁止沿用旧 session 或只续时间。
+
+<a id="req-004"></a>
+### REQ-004 final input 授权必须绑定解析结果并在执行边界重验
+
+- capability resolution 必须发生在 final input 已冻结之后，绑定 account、capability、selected binding、input digest、confirmation、permit 与 idempotency；解析后任何输入或 binding identity 变化都必须重新解析。
+- `integration.connector_invocation`、设备 bridge 与 owner operation 只接受同一 `resolutionId` 和 input digest 的 typed authorization，不得从 ConnectorConnection、Tool metadata 或请求 body 重新推导第二份授权。
+- 真正产生外部副作用前必须复核 Connection revoke/expiry、设备 permission/attestation、permit consumption、Provider probe 与 owner contract digest；五分钟未过不代表这些事实可以跳过重验。
+- 执行 receipt 必须绑定 resolution、Invocation、最终输入和实际 Provider/device/owner 结果；失败、取消与 continuation 不得伪造成功或泄露 credential、proof、permit 与原始输入。
+
 ## 4. 契约引用
 
-- object / projection：`integration.ConnectorDefinition`、`integration.ConnectorConnection`、`integration.ConnectorInvocation`
+- object：`integration.connector_definition`、`integration.connector_authorization`、`integration.connector_connection`、`integration.capability_grant`、`integration.connector_invocation`
+- capability binding：`CapabilityBindingKind.public_provider`、`CapabilityBindingKind.user_connector`、`CapabilityBindingKind.device_capability`、`CapabilityBindingKind.domain_operation`
 - surface / route：`runtime.OpenRouteIntent`、`assistant.ActionProposal`
 
 ## 5. 验收场景
@@ -47,9 +67,9 @@
 <a id="gwt-001"></a>
 ### GWT-001 连接撤销立即阻止旅行日历动作且不泄露凭证
 
-- GIVEN 用户连接系统日历并授权 `calendar.event.create`，AssistantRun 已生成待确认提案。
-- WHEN 用户在确认前撤销 Connector，再尝试继续动作。
-- THEN invocation fail-closed 并返回重新连接恢复动作，日历无事件；Run 在安全边界记录脱敏失败并可续接。
+- GIVEN 用户连接系统日历并授权 `calendar.event.create`，AssistantRun 已生成待确认提案，final input 已绑定一个尚未过期的 `ResolvedCapabilityGrant`。
+- WHEN 用户在确认前撤销 Connector，再尝试继续同一动作。
+- THEN 执行边界重新验证 Connection 后 fail-closed，不得因五分钟 TTL 尚有效而继续；Invocation 返回重新连接恢复动作，日历无事件，Run 只记录脱敏失败并可续接。
 - AND credential/token 不出现在 Assistant context、App DTO、群消息、日志、trace、metric label 或 evidence 正文。
 
 <a id="gwt-002"></a>
@@ -59,11 +79,19 @@
 - WHEN 用户确认打开路线或外链。
 - THEN App 只按 typed intent 选择已安装地图，外链经公共 HTTPS policy 代理/验证；私网、危险协议、重定向逃逸、认证继承或写操作均被拒绝。
 
+<a id="gwt-003"></a>
+### GWT-003 四类 binding 的优先级、过期与 final-input 绑定保持单轨
+
+- GIVEN 同一 capability 存在多个不同 kind 的候选，调用方提交显式 `bindingPriority`，且 final input、confirmation、permit 与 idempotency 已冻结。
+- WHEN resolver 解析、缓存并在 Invocation/设备/owner 执行边界消费结果。
+- THEN 只返回优先序列中第一个合法候选的 exactly-one typed binding，固定 300 秒且读取不续期；优先候选失败时结构化拒绝而不静默 fallback。
+- AND 输入 digest、selected binding、revoke/permission/permit/probe/contract digest 任一漂移，或 session 过期，均要求重新解析并拒绝旧授权；receipt 只确认实际执行的同一 final input 与结果。
+
 ## 6. 依赖
 
 - 前置要求：integration-service protected credential store、Provider adapters、Public Web policy 与 App native continuation。
-- 上游事实：account、Consent、connection grant、ActionProposal 和 canonical object reference。
-- 下游结果：capability state、Invocation receipt、native continuation 与 audit activity。
+- 上游事实：account、Consent、ConnectorAuthorization、ConnectorConnection、ActionProposal、device attestation 和 canonical owner operation。
+- 下游结果：短期 ResolvedCapabilityGrant、Invocation receipt、native continuation 与 audit activity。
 - 父级设计：`DEC-001`
 
 ## 7. 开放事项
@@ -74,8 +102,21 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前尚缺正式 Provider/native adapter 与双端 continuation，不能把本地对象、worker、capability 求交或 App typed UI 测试误报为用户可用。ConnectorDefinition、ConnectorAuthorization、ConnectorConnection、ConnectorInvocation 四对象的 canonical contract 已声明权限边界、一次性 grant receipt、凭证隔离、幂等与审计。Authorization/Connection/Invocation 已有 HTTP composition、Mongo authoritative store、transactional outbox 和真实 Mongo API integration。Connection 消费一次性 grant，撤权同步终止 authorization/credential lifecycle。Invocation worker 具备 lease/CAS claim、执行前授权复核、脱敏终态与 protected payloadRef 事务清理。Assistant 已在每次 PreToolUse 通过 service-auth internal query 求交 Tool metadata、SkillConsent、SkillUserSetting、surface 与当前 Connector grant，失败按 canonical error fail closed。
-- 尚缺实现：ConnectorAuthorization 当前 native attestation/OAuth callback verifier 默认明确不可用，仍缺真实 Provider adapter、credential refresh worker 和真实 adapter API integration；Invocation capability executor 仍缺正式 Provider adapter与进程装配。App 仍缺连接创建/重连的 native continuation、地图 typed intent 与旅行外链 policy。Integration internal capability operation 保持 commercial blocked，不能据本地 runtime wiring 提升状态。
-- 尚缺验收证据：四对象的本地/真实 Mongo transaction tests 与 Assistant capability gateway local_contract 已存在；仍缺 Alpha/Beta/Gamma binding/conformance、真实 Provider/native receipt、并发撤权竞态、Android/iPhone continuation、SLI/SLO、告警和回滚收据。
-- 完成判定：`GWT-001`、`GWT-002` 具有 Integration/Assistant/App local_contract、真实 adapter api_integration 与 Android/iPhone user_acceptance 直接 `spec_ref`；四环境 binding/conformance、撤权、审计和回滚收据成立。
+- 影响或价值：尚缺 production delegation、Invocation worker 与真实 receipt 链的单轨闭合；五对象 contract 已声明边界，但本地 resolver、Mongo store 或 typed UI 存在均不得误报为用户可用或 commercial-ready。
+- 尚缺 production delegation：ConnectorConnection 的旧 internal capability 解析必须原子委托 `CapabilityGrantSessionFacade`，Assistant/Tool Fabric 只能传递同一 final-input typed authorization；旧 resolver、body accountId 赋权或并行求交路径必须为零。
+- 尚缺 production worker：ConnectorInvocation 必须消费同一 `ResolvedCapabilityGrant`，在外部副作用前完成 revoke/permission/permit/probe/contract-digest revalidation，并由正式 Provider、device bridge 或 owner-operation executor 执行；credential refresh、continuation、取消与受控重试必须由唯一 composition 装配。
+- 尚缺真实 receipt：仍需 Alpha/Beta/Gamma binding/conformance、真实 Provider/native execution receipt、并发撤权与过期竞态、Android/iPhone continuation、SLI/SLO、告警、回滚与同候选 digest 绑定；失败、跳过或本地替代均不计通过。
+- 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 具有 Integration/Assistant/App local_contract、真实 adapter api_integration 与 Android/iPhone user_acceptance 直接 `spec_ref`；四环境 delegation/binding/conformance、执行 receipt、撤权、审计和回滚收据绑定同一候选。
 - 依赖：Integration contracts/persistence/provider adapter、Assistant Tool Fabric 和 App native bridge。
+
+<a id="open-002"></a>
+### OPEN-002 ConnectorInvocation 长流程缺取消与失败恢复入口
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺取消与失败恢复入口使 `integration.ConnectorInvocation` 无法履行长流程编排器（`process_manager`）语义。它当前只有发起（`InvokeConnectorCapability`）、确认续跑（`ContinueConnectorInvocation`）与状态读取（`GetConnectorInvocation`、`ListConnectorInvocations`）四个 operation，用户无法终止一次已发起的 Provider 调用，运营也无法在 Provider 瞬时故障后受控重放。
+- 尚缺实现：`object.yaml#lifecycle.states` 与 `domain/model.StatusCancelled` 均声明了 `cancelled` 终态，但全服务没有任何写入路径，该状态在契约面不可达。`StatusFailed` 由 worker 单向写入后即终态，`ContinueConnectorInvocation` 只接受 `awaiting_confirmation`，不覆盖失败重放。缺 `CancelConnectorInvocation` 与失败重放入口，以及对已提交 Provider 副作用的补偿约定。
+- 尚缺验收证据：缺「执行中取消到达 `cancelled` 并释放 lease、清理 protected payloadRef」与「Provider 瞬时故障后受控重放且不重复产生外部副作用」两条路径的 local_contract 与真实 adapter api_integration。
+- 完成判定：`cancelled` 由至少一个声明入口可达，`failed` 具备声明的恢复入口或显式不可恢复裁定，两条路径各有 `spec_ref` 直接绑定的 local_contract 与 api_integration 收据。
+- 依赖：正式 Provider adapter（本节点 `OPEN-001`），补偿语义取决于 Provider 是否提供可撤销的调用面。

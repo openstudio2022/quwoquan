@@ -28,9 +28,20 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/media/fake_video_player_platform.dart';
+import 'package:http/testing.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+
+/// 该 double 覆写了全部网络入口，因此数据面 client 永不应被触达；
+/// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
+CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
+  client: MockClient(
+    (request) async =>
+        throw StateError('MediaDownloadCache double must not perform network IO'),
+  ),
+);
 
 final class _NoopMediaDownloadCache extends MediaDownloadCache {
-  _NoopMediaDownloadCache() : super();
+  _NoopMediaDownloadCache() : super(client: _unreachableDataPlaneClient());
 
   final List<String> lookedUpUrls = <String>[];
 

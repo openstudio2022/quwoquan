@@ -12,7 +12,7 @@ _ROOT = Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
     "eval_content_flywheel_loop",
     _ROOT
-    / "quwoquan_service/scripts/tools/product_ops/eval_content_flywheel_loop.py",
+    / "quwoquan_service/scripts/product-ops-service/tools/eval_content_flywheel_loop.py",
 )
 flywheel = importlib.util.module_from_spec(_SPEC)
 assert _SPEC.loader is not None

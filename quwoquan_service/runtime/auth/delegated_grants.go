@@ -22,15 +22,15 @@ const (
 )
 
 var (
-	ErrDelegatedGrantInvalid          = errors.New("AUTH.DELEGATED_GRANT.invalid")
-	ErrDelegatedGrantAudienceMismatch = errors.New("AUTH.DELEGATED_GRANT.audience_mismatch")
-	ErrDelegatedGrantActorMismatch    = errors.New("AUTH.DELEGATED_GRANT.actor_mismatch")
-	ErrDelegatedGrantScopeMismatch    = errors.New("AUTH.DELEGATED_GRANT.scope_mismatch")
-	ErrDelegatedGrantDigestMismatch   = errors.New("AUTH.DELEGATED_GRANT.digest_mismatch")
-	ErrDelegatedGrantTargetMismatch   = errors.New("AUTH.DELEGATED_GRANT.target_mismatch")
-	ErrDelegatedGrantAuthEpoch        = errors.New("AUTH.DELEGATED_GRANT.auth_epoch_mismatch")
-	ErrDelegatedGrantReplay           = errors.New("AUTH.DELEGATED_GRANT.replay")
-	ErrDelegatedGrantStoreUnavailable = errors.New("AUTH.DELEGATED_GRANT.store_unavailable")
+	ErrDelegatedGrantInvalid          = errors.New("AUTH.DELEGATEDGRANT.invalid")
+	ErrDelegatedGrantAudienceMismatch = errors.New("AUTH.DELEGATEDGRANT.audience_mismatch")
+	ErrDelegatedGrantActorMismatch    = errors.New("AUTH.DELEGATEDGRANT.actor_mismatch")
+	ErrDelegatedGrantScopeMismatch    = errors.New("AUTH.DELEGATEDGRANT.scope_mismatch")
+	ErrDelegatedGrantDigestMismatch   = errors.New("AUTH.DELEGATEDGRANT.digest_mismatch")
+	ErrDelegatedGrantTargetMismatch   = errors.New("AUTH.DELEGATEDGRANT.target_mismatch")
+	ErrDelegatedGrantAuthEpoch        = errors.New("AUTH.DELEGATEDGRANT.auth_epoch_mismatch")
+	ErrDelegatedGrantReplay           = errors.New("AUTH.DELEGATEDGRANT.replay")
+	ErrDelegatedGrantStoreUnavailable = errors.New("AUTH.DELEGATEDGRANT.store_unavailable")
 )
 
 type DelegatedGrantType string

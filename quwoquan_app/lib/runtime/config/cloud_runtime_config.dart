@@ -193,6 +193,31 @@ class CloudRuntimeConfig {
     return value.isEmpty ? 'unknown' : value;
   }
 
+  /// 测试环境使用 test_live，正式发布唯一使用 prod_release。
+  static const String testLiveLaunchPolicy = 'test_live';
+  static const String prodReleaseLaunchPolicy = 'prod_release';
+
+  static const String _compiledLaunchPolicy = String.fromEnvironment(
+    'APP_LAUNCH_POLICY',
+    defaultValue: '',
+  );
+  static String get launchPolicy {
+    final value = _runtimeValue('APP_LAUNCH_POLICY', _compiledLaunchPolicy);
+    return value.isEmpty ? 'unknown' : value;
+  }
+
+  static const String _compiledContentBindingState = String.fromEnvironment(
+    'CONTENT_BINDING_STATE',
+    defaultValue: '',
+  );
+  static String get declaredContentBindingState {
+    final value = _runtimeValue(
+      'CONTENT_BINDING_STATE',
+      _compiledContentBindingState,
+    );
+    return value.isEmpty ? 'unknown' : value;
+  }
+
   /// 当前 prod rollout 诊断阶段，仅用于演练/观测，不参与环境枚举。
   static const String appRolloutMode = String.fromEnvironment(
     'APP_ROLLOUT_MODE',
@@ -236,6 +261,8 @@ class CloudRuntimeConfig {
       _compiledMediaVideoCdnBaseUrl,
       _compiledMediaUploadBaseUrl,
       _compiledRtcMediaConnectionUrl,
+      _compiledLaunchPolicy,
+      _compiledContentBindingState,
     ].every((value) => value.isEmpty);
   }
 
@@ -252,6 +279,8 @@ class CloudRuntimeConfig {
     'MEDIA_UPLOAD_BASE_URL',
     'RTC_MEDIA_CONNECTION_URL',
     'QWQ_APP_LAUNCH_MODE',
+    'APP_LAUNCH_POLICY',
+    'CONTENT_BINDING_STATE',
   };
 
   static Map<String, String> get _compiledRuntimePackage => <String, String>{
@@ -267,6 +296,8 @@ class CloudRuntimeConfig {
     'MEDIA_UPLOAD_BASE_URL': _compiledMediaUploadBaseUrl,
     'RTC_MEDIA_CONNECTION_URL': _compiledRtcMediaConnectionUrl,
     'QWQ_APP_LAUNCH_MODE': _compiledLaunchMode,
+    'APP_LAUNCH_POLICY': _compiledLaunchPolicy,
+    'CONTENT_BINDING_STATE': _compiledContentBindingState,
   };
 
   static void hydrateFromNativeRuntimePackage(
@@ -344,9 +375,7 @@ class CloudRuntimeConfig {
   }
 
   static bool get requiresReleaseBoundContent =>
-      _enforceNativeLaunchBinding &&
-      (launchMode == 'direct_flutter_run' ||
-          launchMode == 'canonical_launcher');
+      _enforceNativeLaunchBinding && launchPolicy == prodReleaseLaunchPolicy;
 
   /// 返回有效 runtime package 中缺失或非法的键，不包含任何 endpoint 值。
   static List<String> get missingRequiredDefineKeys {
@@ -367,6 +396,19 @@ class CloudRuntimeConfig {
       if (!_isValidHttpsBaseUrl(mediaUploadBaseUrl)) 'MEDIA_UPLOAD_BASE_URL',
       if (!_isValidSecureWebSocketUrl(rtcMediaConnectionUrl))
         'RTC_MEDIA_CONNECTION_URL',
+      if (launchPolicy != testLiveLaunchPolicy &&
+          launchPolicy != prodReleaseLaunchPolicy)
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == testLiveLaunchPolicy && appRuntimeEnv == 'prod')
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == prodReleaseLaunchPolicy && appRuntimeEnv != 'prod')
+        'APP_LAUNCH_POLICY',
+      if (launchPolicy == testLiveLaunchPolicy &&
+          declaredContentBindingState != 'unbound')
+        'CONTENT_BINDING_STATE',
+      if (launchPolicy == prodReleaseLaunchPolicy &&
+          declaredContentBindingState != 'bound')
+        'CONTENT_BINDING_STATE',
       if (requiresReleaseBoundContent && contentReleaseId.isEmpty)
         'contentReleaseId',
       if (requiresReleaseBoundContent && launchTarget != '$appRuntimeEnv-local')
@@ -402,10 +444,15 @@ class CloudRuntimeConfig {
     return <String, String>{
       'runtimeEnv': appRuntimeEnv.isEmpty ? 'unknown' : appRuntimeEnv,
       'launchMode': launchMode,
+      'launchPolicy': launchPolicy,
       'configurationState': missingRequiredDefineKeys.isEmpty
           ? 'complete'
           : 'invalid',
-      'contentBindingState': hasCompleteContentBinding ? 'complete' : 'invalid',
+      'contentBindingState': launchPolicy == 'test_live'
+          ? 'unbound'
+          : hasCompleteContentBinding
+          ? 'bound'
+          : 'invalid',
       if (contentReleaseId.isNotEmpty) 'contentReleaseId': contentReleaseId,
       if (contentManifestDigest.isNotEmpty)
         'contentManifestDigest': contentManifestDigest,

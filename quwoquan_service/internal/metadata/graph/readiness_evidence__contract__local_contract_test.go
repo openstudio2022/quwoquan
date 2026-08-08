@@ -239,7 +239,7 @@ func TestDuplicateEvidenceCannotPromoteObject(t *testing.T) {
 			Kind: ast.ObjectKindProjection, KindExplicit: true,
 			Lifecycle: &ast.LifecycleDefinition{
 				SourceEvents: []string{"test.sample_source.SampleObserved"},
-				Checkpoint: "sample_sequence", Rebuild: "replay_sample_events",
+				Checkpoint:   "sample_sequence", Rebuild: "replay_sample_events",
 				Tombstone: "delete_sample_keep_checkpoint",
 				EventConsumers: []ast.LifecycleEventConsumer{{
 					Name: "ProjectSample", Kind: "projector", Facet: "SampleProjector",
@@ -385,6 +385,7 @@ func completeImplementationEvidence(operationIDs ...string) ast.ObjectReadinessE
 		Service: ast.ServiceStructureEvidence{
 			Domain: []ast.EvidenceArtifact{validEvidenceArtifact("domain.go")},
 			Store:  []ast.EvidenceArtifact{validEvidenceArtifact("store.go")},
+			Reader: []ast.EvidenceArtifact{validEvidenceArtifact("application.go")},
 			// 发布 seam 证据是「存储名 → 写入位置」绑定：归属声明与事务性追加缺一不可。
 			Outbox: []ast.StorageEvidence{
 				publicationArtifact("store.go", "sample_outbox"),

@@ -269,13 +269,14 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
 }
 
 class _QrCardBody extends StatelessWidget {
-  const _QrCardBody({required this.card});
+  const _QrCardBody({required this.card, required this.builder});
 
   final ProfileQrCardData card;
+  final EditProfileQrCardSlotBuilder builder;
 
   @override
   Widget build(BuildContext context) {
-    return MyQrCardView(
+    return builder(
       card: card,
       onScanPressed: () => context.push(AppRoutePaths.addContactScan),
     );

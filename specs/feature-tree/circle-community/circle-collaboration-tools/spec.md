@@ -13,6 +13,7 @@
 ### In Scope
 
 - CircleGroup 到 Chat Conversation 的 durable 绑定、成员投影、容量、终态清理和治理边界
+- 圈子资料的 typed 分页列表、单项读取、创建、更新、删除与 BOLA/幂等边界
 
 ### Out of Scope
 
@@ -38,6 +39,7 @@
 
 
 - [`circle-group-chat-binding-sync`](./circle-group-chat-binding-sync/spec.md)：Circle HTTP create -> Redis Stream -> Chat Mongo -> reverse Stream -> Circle Mongo 的真实 API integration 通过。
+- [`circle-file-collaboration`](./circle-file-collaboration/spec.md)：圈子资料按 Circle owner contract 完成 typed 读取、幂等变更、权限拒绝与存储脱敏。
 
 ## 5. 能力要求
 

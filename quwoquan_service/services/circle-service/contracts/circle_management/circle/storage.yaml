@@ -8,31 +8,32 @@ collections:
     - name: idx_circles_owner
       keys:
         ownerId: 1
-    - name: idx_circles_category
-      keys:
-        category: 1
-        memberCount: -1
-    - name: idx_circles_tags
-      keys:
-        tags: 1
-    - name: idx_circles_status
+    - name: idx_circle_discovery_recommended_page
       keys:
         status: 1
-        createdAt: -1
-    - name: idx_circles_weekly_active
-      keys:
+        visibility: 1
+        category: 1
+        subCategory: 1
+        memberCount: -1
         weeklyActiveCount: -1
-    - name: search_circles_text
-      source: search_circles_text
-      type: text
-      fields:
-      - name
-      - description
-      - tags
-      weights:
-        name: 10
-        tags: 5
-        description: 1
+        _id: -1
+    - name: idx_circle_discovery_active_page
+      keys:
+        status: 1
+        visibility: 1
+        category: 1
+        subCategory: 1
+        weeklyActiveCount: -1
+        memberCount: -1
+        _id: -1
+    - name: idx_circle_discovery_latest_page
+      keys:
+        status: 1
+        visibility: 1
+        category: 1
+        subCategory: 1
+        createdAt: -1
+        _id: -1
   circle_command_receipts:
     publication_role: not_published
     entity: CircleCommandReceipt

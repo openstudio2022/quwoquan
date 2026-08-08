@@ -9,18 +9,20 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
 	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/storagecontract"
 
 	"gopkg.in/yaml.v3"
 )
 
 var objectTopLevelKeys = stringSet(
-	"kind", "description", "identity", "access", "relationships",
-	"taggable", "vector_enabled", "members",
+	"kind", "description", "identity", "access", "relationships", "members",
+	"search_policy", "assistant_access",
 	"counter_strategy", "relation_signal", "business_rules", "lifecycle",
 	"local_identity_reasons", "external_authority",
 )
@@ -37,7 +39,8 @@ var operationsTopLevelKeys = stringSet(
 type Option func(*settings)
 
 type settings struct {
-	repoRoot string
+	repoRoot     string
+	contractView *contractViewProvenance
 }
 
 // WithRepoRoot 打开派生式 readiness evidence：loader 会从 repoRoot 之下的云侧、端侧
@@ -53,6 +56,11 @@ func Load(metadataDir string, options ...Option) (*ast.Catalog, error) {
 	for _, option := range options {
 		option(&resolved)
 	}
+	contractView, provenanceErr := loadContractViewProvenance(metadataDir)
+	if provenanceErr != nil {
+		return nil, provenanceErr
+	}
+	resolved.contractView = contractView
 	catalog := &ast.Catalog{}
 	var loadErrors []error
 
@@ -104,6 +112,7 @@ func Load(metadataDir string, options ...Option) (*ast.Catalog, error) {
 					operations,
 					runtimeEntrypoints,
 					resolved.repoRoot,
+					resolved.contractView,
 				)
 				if readinessErr != nil {
 					loadErrors = append(loadErrors, readinessErr)
@@ -131,6 +140,9 @@ func Load(metadataDir string, options ...Option) (*ast.Catalog, error) {
 	if governanceErr := loadMetadataGovernance(metadataDir, catalog); governanceErr != nil {
 		loadErrors = append(loadErrors, governanceErr)
 	}
+	if lifecycleRepoRoot := lifecycleImplementationRepoRoot(resolved); lifecycleRepoRoot != "" {
+		bindLifecycleEntrypointImplementations(catalog, lifecycleRepoRoot, &loadErrors)
+	}
 	if resolved.repoRoot != "" {
 		deriveReadinessEvidence(catalog, resolved.repoRoot, &loadErrors)
 	}
@@ -138,6 +150,36 @@ func Load(metadataDir string, options ...Option) (*ast.Catalog, error) {
 		return nil, errors.Join(loadErrors...)
 	}
 	return catalog, nil
+}
+
+// lifecycleImplementationRepoRoot returns the canonical physical source root
+// used to bind authored lifecycle consumers. A validated contract-view
+// provenance manifest already identifies that root, so repository-backed
+// compiler/tests must not silently emit a graph without implementation
+// evidence merely because they omitted WithRepoRoot. Readiness evidence stays
+// explicitly opt-in through settings.repoRoot; this fallback only closes the
+// required lifecycle implementation field.
+func lifecycleImplementationRepoRoot(resolved settings) string {
+	if resolved.repoRoot != "" {
+		return resolved.repoRoot
+	}
+	if resolved.contractView != nil {
+		return resolved.contractView.repositoryRoot
+	}
+	return ""
+}
+
+// bindLifecycleEntrypointImplementations binds every authored lifecycle
+// consumer to one object-local production implementation. The graph remains
+// responsible for deciding whether that implementation is the sole ingress of
+// a non-HTTP projection; having an HTTP/runtime entrypoint must not weaken the
+// authored lifecycle edge itself into an unchecked facet+method string.
+func bindLifecycleEntrypointImplementations(
+	catalog *ast.Catalog,
+	repoRoot string,
+	errs *[]error,
+) {
+	bindLifecycleImplementations(catalog, repoRoot, errs)
 }
 
 func collectSourceDigests(catalog *ast.Catalog, metadataDir string, errs *[]error) {
@@ -203,12 +245,19 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 			return ast.Object{}, fmt.Errorf("%s: lifecycle: %w", path, err)
 		}
 	}
-	if storage, storageErr := loadOptionalStorageDocument(filepath.Join(filepath.Dir(path), "storage.yaml")); storageErr != nil {
+	if storage, storageErr := storagecontract.LoadOptional(filepath.Join(filepath.Dir(path), "storage.yaml")); storageErr != nil {
 		return ast.Object{}, storageErr
 	} else if storage != nil {
 		object.StorageBackend = strings.TrimSpace(storage.Backend)
 	}
 	if members := top["members"]; members != nil {
+		if object.Kind != ast.ObjectKindAggregateRoot {
+			return ast.Object{}, fmt.Errorf(
+				"%s: members are only allowed on aggregate_root, got %q",
+				path,
+				object.Kind,
+			)
+		}
 		object.Members, err = decodeMembers(members)
 		if err != nil {
 			return ast.Object{}, fmt.Errorf("%s: members: %w", path, err)
@@ -234,6 +283,7 @@ func resolveObjectKind(top map[string]*yaml.Node) (ast.ObjectKind, bool, error) 
 func validObjectKind(kind ast.ObjectKind) bool {
 	switch kind {
 	case ast.ObjectKindAggregateRoot,
+		ast.ObjectKindProcessManager,
 		ast.ObjectKindProjection,
 		ast.ObjectKindExternalReference,
 		ast.ObjectKindAppendOnlyFact,
@@ -252,542 +302,153 @@ func decodeMembers(node *yaml.Node) ([]ast.Member, error) {
 		return nil, fmt.Errorf("must be a mapping keyed by member name")
 	}
 	members := make([]ast.Member, 0, len(node.Content)/2)
+	seenNames := make(map[string]struct{}, len(node.Content)/2)
 	for index := 0; index < len(node.Content); index += 2 {
 		name := strings.TrimSpace(node.Content[index].Value)
+		if !memberTypeNamePattern.MatchString(name) {
+			return nil, fmt.Errorf("member name %q must be canonical PascalCase", name)
+		}
+		if _, duplicate := seenNames[name]; duplicate {
+			return nil, fmt.Errorf("duplicate member name %q", name)
+		}
+		seenNames[name] = struct{}{}
 		mapping, err := mappingFromNode(node.Content[index+1])
+		if err != nil {
+			return nil, err
+		}
+		if err := rejectUnknownMemberFields(name, mapping); err != nil {
+			return nil, err
+		}
+		identity, err := decodeMemberIdentity(name, mapping["identity"])
 		if err != nil {
 			return nil, err
 		}
 		member := ast.Member{
 			Name:        name,
+			Identity:    identity,
 			Cardinality: scalarString(mapping["cardinality"]),
+			Ownership:   scalarString(mapping["ownership"]),
+			WriteAccess: scalarString(mapping["write_access"]),
+			Description: scalarString(mapping["description"]),
 		}
-		if raw := scalarString(mapping["kind"]); raw != "" {
-			member.Kind = ast.ObjectKind(raw)
-			if member.Kind != ast.ObjectKindOwnedEntity && member.Kind != ast.ObjectKindValueObject {
-				return nil, fmt.Errorf("member %q has invalid object_kind %q", member.Name, raw)
+		rawKind := scalarString(mapping["kind"])
+		member.Kind = ast.ObjectKind(rawKind)
+		if member.Kind != ast.ObjectKindOwnedEntity && member.Kind != ast.ObjectKindValueObject {
+			return nil, fmt.Errorf("member %q has invalid object_kind %q", member.Name, rawKind)
+		}
+		rawMaximum := scalarString(mapping["max_cardinality"])
+		value, parseErr := strconv.Atoi(rawMaximum)
+		if parseErr != nil {
+			return nil, fmt.Errorf("member %q max_cardinality: %w", member.Name, parseErr)
+		}
+		member.MaxCardinality = value
+		if member.Description == "" {
+			return nil, fmt.Errorf("member %q description is required", member.Name)
+		}
+		if !validMemberCardinality(member.Cardinality) {
+			return nil, fmt.Errorf("member %q has invalid cardinality %q", member.Name, member.Cardinality)
+		}
+		if member.Ownership != "aggregate" {
+			return nil, fmt.Errorf("member %q ownership must be aggregate, got %q", member.Name, member.Ownership)
+		}
+		if member.MaxCardinality <= 0 ||
+			(member.Cardinality == "many" && member.MaxCardinality < 2) ||
+			((member.Cardinality == "one" || member.Cardinality == "zero_or_one") && member.MaxCardinality != 1) {
+			requiredMaximum := "at least 2"
+			if member.Cardinality == "one" || member.Cardinality == "zero_or_one" {
+				requiredMaximum = "1"
 			}
+			return nil, fmt.Errorf(
+				"member %q cardinality %q requires canonical max_cardinality %s",
+				member.Name,
+				member.Cardinality,
+				requiredMaximum,
+			)
 		}
-		if raw := scalarString(mapping["max_cardinality"]); raw != "" {
-			value, parseErr := strconv.Atoi(raw)
-			if parseErr != nil {
-				return nil, fmt.Errorf("member %q max_cardinality: %w", member.Name, parseErr)
+		_, identityDeclared := mapping["identity"]
+		_, writeAccessDeclared := mapping["write_access"]
+		appendOnlyNode, appendOnlyDeclared := mapping["append_only"]
+		if member.Kind == ast.ObjectKindOwnedEntity {
+			if len(member.Identity) == 0 {
+				return nil, fmt.Errorf("owned member %q must declare identity", member.Name)
 			}
-			member.MaxCardinality = value
-		}
-		if member.Name == "" {
-			return nil, fmt.Errorf("member entity is required")
+			if member.WriteAccess != "aggregate_facade_only" {
+				return nil, fmt.Errorf("owned member %q write_access must be aggregate_facade_only", member.Name)
+			}
+			if appendOnlyDeclared {
+				return nil, fmt.Errorf("owned member %q cannot declare append_only", member.Name)
+			}
+		} else {
+			if identityDeclared || writeAccessDeclared {
+				return nil, fmt.Errorf("value member %q cannot declare identity or write_access", member.Name)
+			}
+			if appendOnlyDeclared {
+				if appendOnlyNode.Kind != yaml.ScalarNode || appendOnlyNode.Tag != "!!bool" ||
+					strings.TrimSpace(appendOnlyNode.Value) != "true" {
+					return nil, fmt.Errorf("value member %q append_only, when declared, must be true", member.Name)
+				}
+				member.AppendOnly = true
+			}
 		}
 		members = append(members, member)
 	}
 	return members, nil
 }
 
-type serviceDocument struct {
-	CommercialDefaults commercialDocument          `yaml:"commercial_defaults"`
-	APIRoutes          []routeDocument             `yaml:"api_routes"`
-	RuntimeEntrypoints []runtimeEntrypointDocument `yaml:"runtime_entrypoints"`
-}
+var (
+	memberTypeNamePattern  = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+	memberFieldNamePattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
+)
 
-type commercialDocument struct {
-	Status      string `yaml:"status"`
-	BlockReason string `yaml:"block_reason"`
-	GapID       string `yaml:"gap_id"`
-	TargetStory string `yaml:"target_story"`
-}
-
-type runtimeEntrypointDocument struct {
-	Name          string   `yaml:"name"`
-	RuntimeKind   string   `yaml:"kind"`
-	Phase         string   `yaml:"phase"`
-	SourceObjects []string `yaml:"source_objects"`
-	Idempotency   string   `yaml:"idempotency"`
-	Application   struct {
-		Kind        string `yaml:"kind"`
-		Facet       string `yaml:"facet"`
-		Method      string `yaml:"method"`
-		ObjectOwner string `yaml:"object_owner"`
-	} `yaml:"application"`
-}
-
-type routeDocument struct {
-	Method          string `yaml:"method"`
-	Path            string `yaml:"path"`
-	Operation       string `yaml:"operation"`
-	RequestEntity   string `yaml:"request_entity"`
-	RequestBodyKind string `yaml:"request_body_kind"`
-	Transport       string `yaml:"transport"`
-	Streaming       *struct {
-		ResumeRequestField  string   `yaml:"resume_request_field"`
-		ResumeResponseField string   `yaml:"resume_response_field"`
-		TerminalField       string   `yaml:"terminal_field"`
-		TerminalValues      []string `yaml:"terminal_values"`
-	} `yaml:"streaming"`
-	RequestBindings   *requestBindingsDocument  `yaml:"request_bindings"`
-	RequestConstants  *requestConstantsDocument `yaml:"request_constants"`
-	PathParams        any                       `yaml:"path_params"`
-	QueryParams       any                       `yaml:"query_params"`
-	RequestFields     any                       `yaml:"request_fields"`
-	Headers           any                       `yaml:"headers"`
-	ResponseEntity    string                    `yaml:"response_entity"`
-	ResponseEntityRef string                    `yaml:"response_entity_ref"`
-	ResponseBody      string                    `yaml:"response_body"`
-	ResponseBodyKind  string                    `yaml:"response_body_kind"`
-	SuccessStatus     int                       `yaml:"success_status"`
-	Actor             string                    `yaml:"actor"`
-	Security          map[string]string         `yaml:"security"`
-	Authorization     struct {
-		Principal       string   `yaml:"principal"`
-		Scopes          []string `yaml:"scopes"`
-		Permissions     []string `yaml:"permissions"`
-		OwnershipPolicy string   `yaml:"ownership_policy"`
-	} `yaml:"authorization"`
-	Commercial  commercialDocument `yaml:"commercial"`
-	Reliability struct {
-		TimeoutMilliseconds *int `yaml:"timeout_ms"`
-		StreamBudget        *struct {
-			HandshakeMilliseconds   int `yaml:"handshake_ms"`
-			IdleMilliseconds        int `yaml:"idle_ms"`
-			MaxDurationMilliseconds int `yaml:"max_duration_ms"`
-		} `yaml:"stream_budget"`
-		Cancellation string `yaml:"cancellation"`
-		RetryMode    string `yaml:"retry_mode"`
-		MaxAttempts  int    `yaml:"max_attempts"`
-		Idempotency  string `yaml:"idempotency"`
-	} `yaml:"reliability"`
-	Pagination *struct {
-		DefaultItems int `yaml:"default_items"`
-		MaximumItems int `yaml:"maximum_items"`
-	} `yaml:"pagination"`
-	ResponseAdmission *struct {
-		MaximumBodyBytes int `yaml:"maximum_body_bytes"`
-	} `yaml:"response_admission"`
-	Concurrency struct {
-		VersionPrecondition string `yaml:"version_precondition"`
-	} `yaml:"concurrency"`
-	ErrorCodes []string `yaml:"error_codes"`
-	Privacy    struct {
-		RequestClassification  string `yaml:"request_classification"`
-		ResponseClassification string `yaml:"response_classification"`
-		LogPolicy              string `yaml:"log_policy"`
-	} `yaml:"privacy"`
-	Telemetry struct {
-		Metric     string   `yaml:"metric"`
-		Trace      bool     `yaml:"trace"`
-		Attributes []string `yaml:"attributes"`
-	} `yaml:"telemetry"`
-	SLO struct {
-		LatencyP95Milliseconds int     `yaml:"latency_p95_ms"`
-		AvailabilityPercent    float64 `yaml:"availability_percent"`
-	} `yaml:"slo"`
-	ClientContract *struct {
-		DartImport      string `yaml:"dart_import"`
-		ResponseType    string `yaml:"response_type"`
-		ResponseDecoder string `yaml:"response_decoder"`
-		RequestType     any    `yaml:"request_type"`
-		RequestEncoder  any    `yaml:"request_encoder"`
-		PathBindings    any    `yaml:"path_bindings"`
-		QueryBindings   any    `yaml:"query_bindings"`
-		HeaderBindings  any    `yaml:"header_bindings"`
-	} `yaml:"client_contract"`
-	Application struct {
-		Kind            string `yaml:"kind"`
-		Facet           string `yaml:"facet"`
-		Method          string `yaml:"method"`
-		AggregateOwner  string `yaml:"aggregate_owner"`
-		AppendSink      string `yaml:"append_sink"`
-		LifecycleOwner  string `yaml:"lifecycle_owner"`
-		MutationTarget  string `yaml:"mutation_target"`
-		InvariantTarget string `yaml:"invariant_target"`
-		SessionOwner    string `yaml:"session_owner"`
-		Reader          string `yaml:"reader"`
-		Slice           string `yaml:"slice"`
-	} `yaml:"application"`
-}
-
-type requestBindingsDocument struct {
-	Path     []requestBindingDocument `yaml:"path"`
-	Query    []requestBindingDocument `yaml:"query"`
-	Header   []requestBindingDocument `yaml:"header"`
-	Injected []requestBindingDocument `yaml:"injected"`
-}
-
-type requestBindingDocument struct {
-	Name     string `yaml:"name"`
-	Field    string `yaml:"field"`
-	Required *bool  `yaml:"required"`
-}
-
-type requestConstantsDocument struct {
-	Body []requestConstantDocument `yaml:"body"`
-}
-
-type requestConstantDocument struct {
-	Name  string `yaml:"name"`
-	Value any    `yaml:"value"`
-}
-
-func loadService(
-	metadataDir,
-	path string,
-	object ast.Object,
-) ([]ast.Operation, []ast.RuntimeEntrypoint, error) {
-	top, err := loadTopLevelMapping(path)
-	if err != nil {
-		return nil, nil, err
+func decodeMemberIdentity(memberName string, node *yaml.Node) ([]string, error) {
+	if node == nil {
+		return nil, nil
 	}
-	if err := rejectUnknownTopLevel(path, top, operationsTopLevelKeys); err != nil {
-		return nil, nil, err
+	if node.Kind != yaml.SequenceNode || len(node.Content) == 0 {
+		return nil, fmt.Errorf("member %q identity must be a non-empty sequence", memberName)
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, nil, err
+	seen := make(map[string]struct{}, len(node.Content))
+	identity := make([]string, 0, len(node.Content))
+	for _, item := range node.Content {
+		name := strings.TrimSpace(item.Value)
+		if item.Kind != yaml.ScalarNode || !memberFieldNamePattern.MatchString(name) {
+			return nil, fmt.Errorf("member %q identity field %q must be canonical lowerCamelCase", memberName, name)
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return nil, fmt.Errorf("member %q has duplicate identity field %q", memberName, name)
+		}
+		seen[name] = struct{}{}
+		identity = append(identity, name)
 	}
-	var document serviceDocument
-	if err := yaml.Unmarshal(data, &document); err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", path, err)
-	}
-	operations := make([]ast.Operation, 0, len(document.APIRoutes))
-	for index, route := range document.APIRoutes {
-		localID := strings.TrimSpace(route.Operation)
-		if localID == "" {
-			return nil, nil, fmt.Errorf("%s: api_routes[%d].operation is required", path, index)
-		}
-		kind, explicit, kindErr := resolveOperationKind(route.Method, route.Application.Kind)
-		if kindErr != nil {
-			return nil, nil, fmt.Errorf("%s: operation %s: %w", path, localID, kindErr)
-		}
-		actor := strings.TrimSpace(route.Actor)
-		if actor == "" {
-			actor = inferActorRequirement(route.Security)
-		}
-		commercial := mergeCommercialBinding(
-			document.CommercialDefaults,
-			route.Commercial,
-		)
-		commercialStatus := strings.TrimSpace(commercial.Status)
-		commercialExplicit := commercialStatus != ""
-		commercialBlockReason := strings.TrimSpace(commercial.BlockReason)
-		if commercialStatus == "" {
-			commercialStatus = "blocked"
-			commercialBlockReason = "missing commercial operation binding"
-		}
-		var clientContract *ast.ClientContract
-		var clientBindingOverrides []string
-		if route.ClientContract != nil {
-			if route.ClientContract.PathBindings != nil {
-				clientBindingOverrides = append(clientBindingOverrides, "path_bindings")
-			}
-			if route.ClientContract.QueryBindings != nil {
-				clientBindingOverrides = append(clientBindingOverrides, "query_bindings")
-			}
-			if route.ClientContract.HeaderBindings != nil {
-				clientBindingOverrides = append(clientBindingOverrides, "header_bindings")
-			}
-			if route.ClientContract.RequestType != nil {
-				clientBindingOverrides = append(clientBindingOverrides, "request_type")
-			}
-			if route.ClientContract.RequestEncoder != nil {
-				clientBindingOverrides = append(clientBindingOverrides, "request_encoder")
-			}
-			clientContract = &ast.ClientContract{
-				DartImport:      strings.TrimSpace(route.ClientContract.DartImport),
-				ResponseType:    strings.TrimSpace(route.ClientContract.ResponseType),
-				ResponseDecoder: strings.TrimSpace(route.ClientContract.ResponseDecoder),
-			}
-		}
-		var requestBindings *ast.RequestBindings
-		if route.RequestBindings != nil {
-			requestBindings = &ast.RequestBindings{
-				Path:  normalizeRequestBindings(route.RequestBindings.Path),
-				Query: normalizeRequestBindings(route.RequestBindings.Query),
-				Header: normalizeRequestBindings(
-					route.RequestBindings.Header,
-				),
-				Injected: normalizeRequestBindings(
-					route.RequestBindings.Injected,
-				),
-			}
-		}
-		var requestConstants *ast.RequestConstants
-		if route.RequestConstants != nil {
-			requestConstants = &ast.RequestConstants{
-				Body: normalizeRequestConstants(route.RequestConstants.Body),
-			}
-		}
-		legacyRequestKeys := make([]string, 0, 4)
-		if route.PathParams != nil {
-			legacyRequestKeys = append(legacyRequestKeys, "path_params")
-		}
-		if route.QueryParams != nil {
-			legacyRequestKeys = append(legacyRequestKeys, "query_params")
-		}
-		if route.RequestFields != nil {
-			legacyRequestKeys = append(legacyRequestKeys, "request_fields")
-		}
-		if route.Headers != nil {
-			legacyRequestKeys = append(legacyRequestKeys, "headers")
-		}
-		var pagination *ast.PaginationPolicy
-		if route.Pagination != nil {
-			pagination = &ast.PaginationPolicy{
-				DefaultItems: route.Pagination.DefaultItems,
-				MaximumItems: route.Pagination.MaximumItems,
-			}
-		}
-		var responseAdmission *ast.ResponseAdmissionPolicy
-		if route.ResponseAdmission != nil {
-			responseAdmission = &ast.ResponseAdmissionPolicy{
-				MaximumBodyBytes: route.ResponseAdmission.MaximumBodyBytes,
-			}
-		}
-		transport := strings.ToLower(strings.TrimSpace(route.Transport))
-		if transport == "" {
-			transport = "json"
-		}
-		var streaming *ast.StreamingPolicy
-		if route.Streaming != nil {
-			streaming = &ast.StreamingPolicy{
-				ResumeRequestField:  strings.TrimSpace(route.Streaming.ResumeRequestField),
-				ResumeResponseField: strings.TrimSpace(route.Streaming.ResumeResponseField),
-				TerminalField:       strings.TrimSpace(route.Streaming.TerminalField),
-				TerminalValues:      trimStrings(route.Streaming.TerminalValues),
-			}
-		}
-		reliability := ast.ReliabilityPolicy{
-			Cancellation: strings.TrimSpace(route.Reliability.Cancellation),
-			RetryMode:    strings.TrimSpace(route.Reliability.RetryMode),
-			MaxAttempts:  route.Reliability.MaxAttempts,
-			Idempotency:  strings.TrimSpace(route.Reliability.Idempotency),
-		}
-		if route.Reliability.TimeoutMilliseconds != nil {
-			reliability.TimeoutMilliseconds = *route.Reliability.TimeoutMilliseconds
-			reliability.TimeoutExplicit = true
-		}
-		if budget := route.Reliability.StreamBudget; budget != nil {
-			reliability.StreamBudget = &ast.StreamBudgetPolicy{
-				HandshakeMilliseconds:   budget.HandshakeMilliseconds,
-				IdleMilliseconds:        budget.IdleMilliseconds,
-				MaxDurationMilliseconds: budget.MaxDurationMilliseconds,
-			}
-			// The connection ceiling is the streaming form of the whole-request
-			// budget, so every existing timeout consumer keeps reading one
-			// number instead of learning a streaming special case. Authoring
-			// timeout_ms next to a stream_budget is rejected by validate.
-			if !reliability.TimeoutExplicit {
-				reliability.TimeoutMilliseconds = budget.MaxDurationMilliseconds
-			}
-		}
-		operations = append(operations, ast.Operation{
-			ID:                     object.ID + "." + localID,
-			LocalID:                localID,
-			Domain:                 object.Domain,
-			ObjectID:               object.ID,
-			Method:                 strings.ToUpper(strings.TrimSpace(route.Method)),
-			PathTemplate:           strings.TrimSpace(route.Path),
-			Kind:                   kind,
-			KindExplicit:           explicit,
-			Facet:                  strings.TrimSpace(route.Application.Facet),
-			FacadeMethod:           strings.TrimSpace(route.Application.Method),
-			AggregateOwner:         strings.TrimSpace(route.Application.AggregateOwner),
-			AppendSink:             strings.TrimSpace(route.Application.AppendSink),
-			LifecycleOwner:         strings.TrimSpace(route.Application.LifecycleOwner),
-			MutationTarget:         strings.TrimSpace(route.Application.MutationTarget),
-			InvariantTarget:        strings.TrimSpace(route.Application.InvariantTarget),
-			SessionOwner:           strings.TrimSpace(route.Application.SessionOwner),
-			Reader:                 strings.TrimSpace(route.Application.Reader),
-			Slice:                  strings.TrimSpace(route.Application.Slice),
-			ActorRequirement:       actor,
-			RequestEntity:          strings.TrimSpace(route.RequestEntity),
-			RequestBodyKind:        strings.TrimSpace(route.RequestBodyKind),
-			Transport:              transport,
-			Streaming:              streaming,
-			RequestBindings:        requestBindings,
-			RequestConstants:       requestConstants,
-			LegacyRequestKeys:      legacyRequestKeys,
-			ClientBindingOverrides: clientBindingOverrides,
-			ResponseEntity:         strings.TrimSpace(route.ResponseEntity),
-			ResponseEntityRef:      strings.TrimSpace(route.ResponseEntityRef),
-			ResponseBody:           strings.TrimSpace(route.ResponseBody),
-			ResponseBodyKind:       strings.TrimSpace(route.ResponseBodyKind),
-			SuccessStatus:          route.SuccessStatus,
-			SourcePath:             relativePath(metadataDir, path),
-			Security:               route.Security,
-			AuthMode:               resolveAuthMode(route.Security),
-			Principal: strings.TrimSpace(
-				route.Authorization.Principal,
-			),
-			Scopes:      trimStrings(route.Authorization.Scopes),
-			Permissions: trimStrings(route.Authorization.Permissions),
-			OwnershipPolicy: strings.TrimSpace(
-				route.Authorization.OwnershipPolicy,
-			),
-			Commercial: ast.CommercialBinding{
-				Status:      commercialStatus,
-				Explicit:    commercialExplicit,
-				BlockReason: commercialBlockReason,
-				GapID:       strings.TrimSpace(commercial.GapID),
-				TargetStory: strings.TrimSpace(commercial.TargetStory),
-			},
-			Reliability:       reliability,
-			Pagination:        pagination,
-			ResponseAdmission: responseAdmission,
-			Concurrency: ast.ConcurrencyPolicy{
-				VersionPrecondition: ast.VersionPrecondition(strings.TrimSpace(
-					route.Concurrency.VersionPrecondition,
-				)),
-			},
-			ErrorCodes: trimStrings(route.ErrorCodes),
-			Privacy: ast.PrivacyPolicy{
-				RequestClassification: strings.TrimSpace(
-					route.Privacy.RequestClassification,
-				),
-				ResponseClassification: strings.TrimSpace(
-					route.Privacy.ResponseClassification,
-				),
-				LogPolicy: strings.TrimSpace(route.Privacy.LogPolicy),
-			},
-			Telemetry: ast.TelemetryPolicy{
-				Metric:     strings.TrimSpace(route.Telemetry.Metric),
-				Trace:      route.Telemetry.Trace,
-				Attributes: trimStrings(route.Telemetry.Attributes),
-			},
-			SLO: ast.SLOPolicy{
-				LatencyP95Milliseconds: route.SLO.LatencyP95Milliseconds,
-				AvailabilityPercent:    route.SLO.AvailabilityPercent,
-			},
-			ClientContract:         clientContract,
-			ClientContractExplicit: route.ClientContract != nil,
-		})
-	}
-	runtimeEntrypoints := make(
-		[]ast.RuntimeEntrypoint,
-		0,
-		len(document.RuntimeEntrypoints),
-	)
-	for index, entrypoint := range document.RuntimeEntrypoints {
-		localID := strings.TrimSpace(entrypoint.Name)
-		if localID == "" {
-			return nil, nil, fmt.Errorf(
-				"%s: runtime_entrypoints[%d].name is required",
-				path,
-				index,
-			)
-		}
-		applicationKind, _, kindErr := resolveOperationKind(
-			"",
-			strings.TrimSpace(entrypoint.Application.Kind),
-		)
-		if kindErr != nil {
-			return nil, nil, fmt.Errorf(
-				"%s: runtime entrypoint %s: %w",
-				path,
-				localID,
-				kindErr,
-			)
-		}
-		runtimeEntrypoints = append(runtimeEntrypoints, ast.RuntimeEntrypoint{
-			ID:              object.ID + "." + localID,
-			LocalID:         localID,
-			Domain:          object.Domain,
-			ObjectID:        object.ID,
-			RuntimeKind:     strings.TrimSpace(entrypoint.RuntimeKind),
-			Phase:           strings.TrimSpace(entrypoint.Phase),
-			ApplicationKind: applicationKind,
-			Facet:           strings.TrimSpace(entrypoint.Application.Facet),
-			FacadeMethod:    strings.TrimSpace(entrypoint.Application.Method),
-			ObjectOwner:     strings.TrimSpace(entrypoint.Application.ObjectOwner),
-			SourceObjects:   trimStrings(entrypoint.SourceObjects),
-			Idempotency:     strings.TrimSpace(entrypoint.Idempotency),
-			SourcePath:      relativePath(metadataDir, path),
-		})
-	}
-	return operations, runtimeEntrypoints, nil
+	return identity, nil
 }
 
-func normalizeRequestBindings(values []requestBindingDocument) []ast.RequestBinding {
-	result := make([]ast.RequestBinding, 0, len(values))
-	for _, value := range values {
-		result = append(result, ast.RequestBinding{
-			Name:     strings.TrimSpace(value.Name),
-			Field:    strings.TrimSpace(value.Field),
-			Required: value.Required,
-		})
-	}
-	return result
-}
+var memberDeclarationKeys = stringSet(
+	"kind", "identity", "cardinality", "max_cardinality", "ownership",
+	"write_access", "append_only", "description",
+)
 
-func normalizeRequestConstants(values []requestConstantDocument) []ast.RequestConstant {
-	result := make([]ast.RequestConstant, 0, len(values))
-	for _, value := range values {
-		result = append(result, ast.RequestConstant{
-			Name:  strings.TrimSpace(value.Name),
-			Value: value.Value,
-		})
-	}
-	return result
-}
-
-func mergeCommercialBinding(
-	defaults commercialDocument,
-	override commercialDocument,
-) commercialDocument {
-	result := defaults
-	if strings.TrimSpace(override.Status) != "" {
-		result.Status = override.Status
-		result.BlockReason = override.BlockReason
-		result.GapID = override.GapID
-		result.TargetStory = override.TargetStory
-	}
-	return result
-}
-
-func resolveOperationKind(method, explicit string) (ast.OperationKind, bool, error) {
-	if explicit != "" {
-		kind := ast.OperationKind(explicit)
-		if kind != ast.OperationKindCommand &&
-			kind != ast.OperationKindQuery &&
-			kind != ast.OperationKindSession {
-			return "", true, fmt.Errorf("invalid application.kind %q", explicit)
+func rejectUnknownMemberFields(name string, mapping map[string]*yaml.Node) error {
+	unknown := make([]string, 0)
+	for key := range mapping {
+		if _, ok := memberDeclarationKeys[key]; !ok {
+			unknown = append(unknown, key)
 		}
-		return kind, true, nil
 	}
-	if strings.EqualFold(strings.TrimSpace(method), "GET") {
-		return ast.OperationKindQuery, false, nil
+	if len(unknown) == 0 {
+		return nil
 	}
-	return ast.OperationKindCommand, false, nil
+	sort.Strings(unknown)
+	return fmt.Errorf("member %q has unknown fields: %s", name, strings.Join(unknown, ", "))
 }
 
-func inferActorRequirement(security map[string]string) string {
-	authMode := resolveAuthMode(security)
-	switch authMode {
-	case "required":
-		return "persona"
-	case "optional":
-		return "persona_or_device"
+func validMemberCardinality(cardinality string) bool {
+	switch cardinality {
+	case "one", "zero_or_one", "many":
+		return true
 	default:
-		return "unspecified"
+		return false
 	}
-}
-
-func resolveAuthMode(security map[string]string) string {
-	authMode := strings.TrimSpace(security["auth_mode"])
-	switch strings.ToLower(authMode) {
-	case "public", "optional", "required":
-		return strings.ToLower(authMode)
-	default:
-		return "deny"
-	}
-}
-
-func trimStrings(values []string) []string {
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		if trimmed := strings.TrimSpace(value); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
 }
 
 func loadProjections(metadataDir, objectDir string, object ast.Object) ([]ast.Projection, []string, error) {
@@ -1023,6 +684,9 @@ func SourceDocuments(
 	root string,
 	relativePaths []string,
 ) ([]ast.SourceDocument, error) {
+	if _, err := loadContractViewProvenance(root); err != nil {
+		return nil, err
+	}
 	catalog := &ast.Catalog{}
 	var errs []error
 	for _, relative := range relativePaths {

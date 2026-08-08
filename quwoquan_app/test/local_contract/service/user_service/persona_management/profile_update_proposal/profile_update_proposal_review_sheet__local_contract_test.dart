@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/profile_update_proposal/application/public/profile_update_proposal_ports.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_update_proposal_review_sheet.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/profile_update_proposal/presentation/profile_update_proposal_review_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -134,14 +134,24 @@ Future<void> _pumpReview(
         initialRoute: '/review',
         routes: <String, WidgetBuilder>{
           '/': (_) => const SizedBox.shrink(),
-          '/review': (_) =>
-              ProfileUpdateProposalReviewSheet(proposal: proposal),
+          '/review': (_) => ProfileUpdateProposalReviewSheet(
+            proposal: proposal,
+            commandWriter: writer,
+            trackAction: _ignoreProposalAction,
+          ),
         },
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
+
+Future<void> _ignoreProposalAction({
+  required String action,
+  required String proposalId,
+  String? result,
+  String? failReasonCode,
+}) async {}
 
 ProfileUpdateProposalView _proposal({
   ProposalStatus status = ProposalStatus.pending,

@@ -16,6 +16,13 @@ runtime_entrypoints:
   source_objects: [content.Post]
   idempotency: transaction_identity
   application: {kind: command, facet: DeletedPostTombstonePort, method: appendIfAbsent, object_owner: DeletedPostTombstone}
+  telemetry:
+    metric: content_deleted_post_tombstone_append
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    failure_ratio_percent: 0.5
 consumers:
 - name: content-service
   capabilities:

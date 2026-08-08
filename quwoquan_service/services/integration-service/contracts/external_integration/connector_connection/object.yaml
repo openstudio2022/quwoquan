@@ -13,8 +13,20 @@ access:
 relationships:
 - {name: accountOwner, kind: reference, target_object: user.UserAccount, cardinality: 'N:1', reference_fields: [accountId], access: named_reader, consistency: eventual, on_delete: cascade}
 - {name: connectorDefinition, kind: reference, target_object: integration.ConnectorDefinition, cardinality: 'N:1', reference_fields: [connectorId], access: named_reader, consistency: strong, on_delete: restrict}
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.integration.connector_connection.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 同一 accountId + connectorId 最多一个未撤销连接；连接不得跨账号或共享 surface 暴露
 - credentialRef 仅由 protected credential store 写入和解析，禁止进入 HTTP DTO、Assistant context、日志、trace、metric label 或 evidence 正文

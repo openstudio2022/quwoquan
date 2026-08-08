@@ -23,6 +23,18 @@ DIGEST_B = "sha256:" + "b" * 64
 DIGEST_C = "sha256:" + "c" * 64
 
 
+def test_migration_help_renders_parity_requirements(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        stackctl.build_parser().parse_args(
+            ["migration", "travel-to-gathering", "--help"]
+        )
+
+    assert exit_info.value.code == 0
+    assert "100% parity migration receipt" in capsys.readouterr().out
+
+
 def _target_contract() -> control_plane.TargetContractBinding:
     fields = load_json_yaml(
         ROOT

@@ -326,6 +326,12 @@ _IMAGE_SOURCE_FIELDS = (
     "termsUrl",
     "authorizationProof",
 )
+_RETIRED_IMAGE_SOURCE_ALIASES = {
+    "collectionId": "sourceCollectionId",
+    "credit": "creator",
+    "page": "collectionPageUrl",
+    "licenseProof": "termsUrl/authorizationProof",
+}
 
 
 def _source_fact(value: Any) -> Any:
@@ -353,6 +359,19 @@ def _image_source_contract(
 ) -> dict[str, Any]:
     """Resolve one work-level source identity and reject mixed-source image sets."""
     from governance.coverage.license import rights_proof_required
+
+    retired_aliases = {
+        alias: canonical
+        for payload in (compose_payload, *assets)
+        for alias, canonical in _RETIRED_IMAGE_SOURCE_ALIASES.items()
+        if alias in payload
+    }
+    if retired_aliases:
+        aliases = ", ".join(
+            f"{alias}->{canonical}"
+            for alias, canonical in sorted(retired_aliases.items())
+        )
+        raise RuntimeError(f"{ref}: retired image source aliases are forbidden: {aliases}")
 
     resolved: dict[str, Any] = {}
     require_rights_proof = rights_proof_required(vertical)

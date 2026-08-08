@@ -59,6 +59,86 @@ def _pick_safe_image(candidates: Sequence[Mapping[str, Any]], chosen: Sequence[P
     return fallback
 
 
+def _canonical_image_conflict(candidate: Mapping[str, Any]) -> str:
+    """Return the canonical duplicate reason for one article candidate.
+
+    Canonical image identity is global across executions.  Compose therefore
+    skips an already-published exact or perceptual image instead of waiting for
+    the object transaction worker to exhaust its retry policy on an immutable
+    collision.
+    """
+    from core.paths import PUBLISH_ROOT
+
+    from content.release.canonical.canonical_inventory import (
+        assert_canonical_image_unique,
+    )
+    from content.release.canonical.image_identity import (
+        canonical_asset_manifest_row,
+    )
+    from content.release.canonical.object_transaction_contract import (
+        ObjectTransactionError,
+    )
+
+    path = Path(str(candidate.get("path") or ""))
+    digest = str(candidate.get("sha256") or "").strip().lower()
+    if digest and not digest.startswith("sha256:"):
+        digest = f"sha256:{digest}"
+    if not path.is_file() or not digest:
+        return ""
+    mime_type = {
+        ".gif": "image/gif",
+        ".jpeg": "image/jpeg",
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(path.suffix.lower(), "application/octet-stream")
+    identity = canonical_asset_manifest_row(
+        {
+            "assetId": str(candidate.get("sourceAssetId") or path.name),
+            "kind": "image",
+            "sha256": digest,
+        },
+        asset_source=path,
+        mime_type=mime_type,
+        object_key=f"candidate/{digest.removeprefix('sha256:')}",
+    )
+    try:
+        assert_canonical_image_unique(
+            publish_root=PUBLISH_ROOT,
+            manifest={"contentType": "article", "assets": [identity]},
+            excluded_manifest_path=(
+                "posts/__candidate__/"
+                f"{digest.removeprefix('sha256:')}/manifest.json"
+            ),
+        )
+    except ObjectTransactionError as exc:
+        message = str(exc)
+        if "canonical image identity duplicated by " in message:
+            return message
+        raise RuntimeError(
+            f"canonical image admission unavailable for {path.name}: {message}"
+        ) from exc
+    return ""
+
+
+def _pick_unique_article_image(
+    candidates: Sequence[Mapping[str, Any]],
+    chosen: Sequence[Path],
+    conflicts: dict[Path, str],
+):
+    """Pick a safe image that is also unique in canonical publish."""
+    eligible: list[Mapping[str, Any]] = []
+    for candidate in candidates:
+        path = Path(str(candidate.get("path") or ""))
+        issue = conflicts.get(path)
+        if issue is None:
+            issue = _canonical_image_conflict(candidate)
+            conflicts[path] = issue
+        if not issue:
+            eligible.append(candidate)
+    return _pick_safe_image(eligible, chosen)
+
+
 def _image_plan_layouts(image_plan: Sequence[Mapping[str, Any]]) -> list[str]:
     layouts: list[str] = []
     for slot in image_plan:
@@ -281,9 +361,14 @@ def _build_route_assets(
         if len(collection_ids) != 1 or "" in collection_ids:
             raise RuntimeError(f"{ref}: image work must resolve exactly one sourceCollectionId")
         return assets
-    # RC1/RC4 去实体键控：文章配图 100% 同源——只用 baseSourceRef 指向的底稿来源自身
-    # assets，汇聚成单一 base_pool；不再按 routeNodes 实体位置(entity_names[0]/[-1])
-    # 键控选 cover/closing，避免 base 源不在首/末节点时漏图，也杜绝跨源替代图。
+    # RC1/RC4 去实体键控：文章配图 100% 同源——只用 content_plan 已冻结在
+    # baseSourceRef 下的 assetRefs。assetRefs 是语义规划后的视觉相关性选择，若在
+    # compose 时重新扩张为来源页全部图片，会把城市门户里的车站/楼宇误投到景区文章。
+    declared_refs = {
+        str(asset_ref).strip()
+        for asset_ref in (brief.get("assetRefs") or [])
+        if str(asset_ref).strip()
+    }
     base_pool = sorted(
         (
             candidate
@@ -294,15 +379,30 @@ def _build_route_assets(
             and str(candidate.get("sourceAssetRef") or "").startswith(
                 base_source_ref.rsplit("/", 1)[0] + "/assets/"
             )
+            and (
+                not declared_refs
+                or str(candidate.get("sourceAssetRef") or "") in declared_refs
+            )
         ),
         key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""),
     )
+    if declared_refs:
+        matched_refs = {
+            str(candidate.get("sourceAssetRef") or "") for candidate in base_pool
+        }
+        missing_refs = sorted(declared_refs - matched_refs)
+        if missing_refs:
+            raise RuntimeError(
+                f"{ref}: article assetRefs missing source assets "
+                f"{len(missing_refs)}/{len(declared_refs)}: {missing_refs[:3]}"
+            )
     if not base_pool:
         raise RuntimeError(f"{ref}: article base draft source has no usable source images")
     primary_entity = entity_names[0]
+    canonical_conflicts: dict[Path, str] = {}
 
     cover_layout = layouts[0] if layouts else "fullWidth"
-    cover = _pick_safe_image(base_pool, chosen)
+    cover = _pick_unique_article_image(base_pool, chosen, canonical_conflicts)
     if cover is not None:
         chosen.append(cover[0]["path"])
         assets.append(
@@ -322,7 +422,11 @@ def _build_route_assets(
     # node 数仍以 routeNodes 长度 bound（保留线路推进感），但全部从同一 base_pool
     # 去重取图（同源）；池耗尽即止，不再 per-entity 键控。
     for position, name in enumerate(entity_names):
-        node_image = _pick_safe_image(base_pool, chosen)
+        node_image = _pick_unique_article_image(
+            base_pool,
+            chosen,
+            canonical_conflicts,
+        )
         if node_image is None:
             break
         chosen.append(node_image[0]["path"])
@@ -340,7 +444,11 @@ def _build_route_assets(
             )
         )
 
-    closing = _pick_safe_image(base_pool, chosen)
+    closing = _pick_unique_article_image(
+        base_pool,
+        chosen,
+        canonical_conflicts,
+    )
     if closing is not None:
         chosen.append(closing[0]["path"])
         assets.append(
@@ -357,6 +465,12 @@ def _build_route_assets(
             )
         )
 
+    if not assets and any(canonical_conflicts.values()):
+        reasons = [reason for reason in canonical_conflicts.values() if reason]
+        raise RuntimeError(
+            f"{ref}: all frozen article images collide with canonical publish: "
+            f"{reasons[:3]}"
+        )
     return assets
 
 __all__ = [name for name in globals() if not name.startswith("__")]

@@ -18,6 +18,7 @@ from content.execution.support import (
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
+from content.execution.queue.reliabletask.attempt import latest_attempt_report_path
 
 
 @canonical_publish_serialized
@@ -147,7 +148,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.post_recovery import _purge_stale_author_queue
     from content.post import object_index as content_object
     if _is_homepage_only_execution(ctx):
-        from content.execution.qualification import finalize_execution_qualification
+        from content.execution.planning.qualification import finalize_execution_qualification
 
         try:
             qualification = finalize_execution_qualification(
@@ -185,7 +186,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
     homepage_only = _is_homepage_only_execution(ctx)
     qualified_post_refs: set[str] | None = None
     if not homepage_only:
-        from content.execution.post_review_closure import (
+        from content.execution.closure.post_review import (
             indexed_post_targets,
             load_post_review_closure,
         )
@@ -246,32 +247,35 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
         )
     from core.io import read_json
 
-    from content.execution.reliabletask_jobs import prepare_reliable_publish_jobs
+    from content.execution.queue.reliabletask.jobs import prepare_reliable_publish_jobs
     from content.execution.spec_contract import approved_quota
-    from content.execution.workspace import execution_root as _execution_root
-
     reliable_jobs = prepare_reliable_publish_jobs(
         ctx,
         homepage_refs=homepage_refs if homepage_only else None,
     )
     if reliable_jobs:
-        fleet_report_path = (
-            _execution_root(ctx.execution_id)
-            / "evidence/reliabletask/publish_fleet_report.json"
-        )
+        fleet_report_path = latest_attempt_report_path(ctx.execution_id, "publish")
         fleet_report = (
-            read_json(fleet_report_path) if fleet_report_path.is_file() else None
+            read_json(fleet_report_path)
+            if fleet_report_path is not None and fleet_report_path.is_file()
+            else None
         )
         # Idempotent re-apply can leave local jobs DEAD while canonical objects
-        # already satisfy quota. Fleet.passed already encodes commercialAccepted
+        # already satisfy quota. Fleet.passed already encodes lifecycle-accepted
         # or finalizedObjectCount ≥ requiredQuota (see data_content_report.go).
         required = approved_quota(ctx.execution_id)
+        fleet_canonical_accepted = (
+            int((fleet_report or {}).get("researchAcceptedCount") or 0)
+            + int((fleet_report or {}).get("commercialAcceptedCount") or 0)
+            if isinstance(fleet_report, dict)
+            else 0
+        )
         fleet_quota_met = bool(
             isinstance(fleet_report, dict)
             and fleet_report.get("passed") is True
             and (
                 int(fleet_report.get("finalizedObjectCount") or 0) >= required
-                or int(fleet_report.get("commercialAcceptedCount") or 0) >= required
+                or fleet_canonical_accepted >= required
             )
         )
         terminal_failures = [

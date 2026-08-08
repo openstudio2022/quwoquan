@@ -13,12 +13,6 @@ enum CreationWorkFormat { all, image, video, note }
 /// 创作可见性过滤。
 enum CreationVisibility { all, public_, private_ }
 
-/// 互动子维度。
-enum InteractionSubTab { likes, comments, shares }
-
-/// 互动方向。
-enum InteractionDirection { received, sent }
-
 extension ProfileTabMetadata on ProfileTab {
   String get id => switch (this) {
     ProfileTab.creations => 'creations',
@@ -32,14 +26,6 @@ extension CreationSubTabMetadata on CreationSubTab {
     CreationSubTab.image => 'image',
     CreationSubTab.video => 'video',
     CreationSubTab.article => 'article',
-  };
-}
-
-extension InteractionSubTabMetadata on InteractionSubTab {
-  String get id => switch (this) {
-    InteractionSubTab.likes => 'likes',
-    InteractionSubTab.comments => 'comments',
-    InteractionSubTab.shares => 'shares',
   };
 }
 
@@ -57,15 +43,6 @@ CreationSubTab creationSubTabFromId(String id) {
     'video' => CreationSubTab.video,
     'article' => CreationSubTab.article,
     _ => CreationSubTab.all,
-  };
-}
-
-InteractionSubTab interactionSubTabFromId(String id) {
-  return switch (id) {
-    'comments' => InteractionSubTab.comments,
-    'likes' => InteractionSubTab.likes,
-    'shares' => InteractionSubTab.shares,
-    _ => InteractionSubTab.likes,
   };
 }
 

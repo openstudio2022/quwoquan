@@ -34,7 +34,7 @@
 - 被否决方案：在文件中重复 domain/context/object、使用 alias 消歧、保留全局对象注册表、按 DDD layer 建服务级大桶。
 - 约束：同一 domain/object 不得跨 context 重名，声明 API route 的对象必须拥有同路径真实源码，禁止把实现集中到“主对象”目录；对象 adapters/infrastructure 不得被兄弟对象直接导入，多对象 adapter 仅在 cmd 组合。
 - 影响：跨对象协作经 typed port/event，跨服务禁止导入 `internal` 或 `generated`。
-- 关联要求：`REQ-001`、`REQ-002`
+- 关联要求：服务自治与目录反向映射对应 `REQ-001`、`REQ-002`
 - 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md)、[`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)、[`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)
 - 关联验收：`SIT-001`
 
@@ -216,12 +216,12 @@
 <a id="dec-018"></a>
 ### DEC-018 App 以能力驱动的对象纵切承接端云业务模型
 
-- 决策：App 业务实现的 canonical 位置是 `lib/<domain>/<context>/<object>/{domain,application,adapters,presentation}`；domain/context/object 取自 ContractGraph 与 L1 稳定工程归属，`runtime`、`design_system`、`l10n` 只承接横切能力。
+- 决策：App 业务实现的 canonical 位置是 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 取自 ContractGraph 与 L1 稳定工程归属，`runtime`、`design_system`、`l10n` 只承接横切能力。
 - 决策：目录层不是固定四层脚手架。对象存在 App-exposed operation 时要求 application/adapters，被页面对象契约认领时要求 application/presentation，只有 App 自己维护不变式或状态机时要求 domain；纯云对象没有端侧能力时不创建 App 对象目录，append-only fact 不直接拥有 presentation。
 - 理由：用云侧 kind 无条件要求全部 App 层会生成空 facade 和占位实现，而继续按 `ui/cloud/core` 技术大桶组织又无法从路径反向定位对象、规格和测试 owner；能力事实驱动的纵切同时避免两种失真。
 - 被否决方案：为每个云对象生成四个空 App 层、按页面或网络/缓存技术类型建顶层大桶、以文件名或手工映射表推测 owner、保留旧目录作为长期兼容入口。
 - 约束：层义务只能从所属服务 contracts、页面对象契约与所属规格的端侧不变式派生，不另建 App capability registry；缺少归属或能力事实时 fail-closed，不以空文件、re-export 或路径 alias 补齐。
-- 影响：旧 `ui/cloud/core/app/application/infrastructure` 仅作为待删除迁移源，不是有效架构；迁移完成后业务文件、测试和 readiness 结构证据均可由同一对象身份反向定位。
+- 影响：旧 `ui/cloud/core/app/application/infrastructure` 大桶已不在 App 生产树内，不得以任何形式重建；业务文件、测试和 readiness 结构证据均由同一对象身份反向定位。
 - 关联要求：`REQ-002`
 - 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 承接 App 对象纵切与能力层义务。
 - 关联验收：`SIT-002`
@@ -232,6 +232,7 @@
 - 决策：每个页面在页面对象契约中保留唯一 source owner 与全部 participant object；物理页面位于 source owner 的 presentation，participant 只通过各自 `application/public/**` 下的 port/facade/event/read view 参与，文件归档不得改写页面的语义参与集合。
 - 决策：App 对象内依赖方向为 presentation 指向自身 application/domain、application 指向自身 domain、adapters 实现自身 application port 并使用自身 domain；具体 adapter 仅由 `runtime/di` 组合，presentation 不导入具体 adapter，domain 不依赖 Flutter、IO、generated transport 或其他层。
 - 决策：跨对象 import 的唯一代码入口是目标对象的 `application/public/**`；该公开子边界只暴露纯 port/facade/event/read view，并且自身只能依赖所属对象 domain 与纯 generated value type。对象私有 application、domain、adapters、presentation、barrel re-export、旧路径 shim、双轨 import 与 compatibility fallback 均不构成公开边界。
+- 决策：每个 `clientContract` 必须有唯一真实消费身份。页面消费以 `object_ids` 与 `query_slices/command_operations` 绑定，非页面后台/runtime 消费以 `runtime_execution` 绑定 object、operation、production path 与 symbol；仅存在 generated adapter/DI 不算消费，同一 object/operation 不得同时登记页面 participant 与 runtime execution。
 - 理由：多对象页面若按单一物理路径覆盖参与关系，会把真实跨对象依赖藏进 UI import；若 presentation 直接拿 concrete adapter，则测试 double 隔离、错误恢复和 Remote composition 都无法在对象边界验证。
 - 被否决方案：把多对象页面放回全局 pages 大桶、让 `runtime/shell` 成为业务页面 owner、允许 presentation 直接导入 adapter、以 barrel 或旧路径 export 维持迁移期双轨。
 - 约束：`runtime/di` 是唯一业务装配例外，其他 runtime/design_system/l10n 代码不得反向拥有或导入业务对象私有实现。
@@ -270,6 +271,53 @@
 - 约束与影响：consumer 身份与投递路径是两件事，后者归 `delivery_semantics` 受控枚举，不得合回一个字段。
 - 关联要求：`REQ-001`
 - 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的 `OPEN-010` 据本条改写。存在性与投递路径两项已消解，该 OPEN 仅继续承载可达性：反向边只证明消费对象声明了这条边，不证明运行时 handler 真的收到，`no_consumer_reason` 亦是自由散文而无结构判据。
+- 关联验收：`SIT-001`
+
+### DEC-022 平台级拒绝码归 `runtime_failure_codes.yaml`，并在该文件引入用户面字段集
+
+- 决策：`GATEWAY.USER.route_not_found` / `unauthorized` / `forbidden` / `invalid_argument` 与 `GATEWAY.MIDDLEWARE.unavailable` 的唯一声明位是 `quwoquan_service/contracts/runtime_errors/errors/runtime_failure_codes.yaml`，不归任何单一服务对象。
+- 决策：该文件新增一组仅对「会直接返回给用户」的码声明的可选键 `httpStatus` / `userMessage` / `recoveryAction` / `recoveryAfterSeconds` / `disruptionLevel` / `goConst` / `reason`；纯内部诊断码不写这组键。`recoveryAction` 与 `disruptionLevel` 的值域沿用 `runtime_recovery_policy.schema.yaml` 的 `RuntimeRecoveryAction` / `UserDisruptionLevel`，不另立词表。
+- 理由：这些码由 `runtime/auth` 的 generated operation guard 与 `runtime/streaming` 在任何 owner handler 之前产出，而 `runtime/auth` 被全部 14 个服务链接，任一服务都可能发射它们。把它们挂到某一个服务对象名下会让声明位与发射面不一致，构成按目录归属的假属主。
+- 理由：扩字段而非另立文件，是因为该文件已是平台级码的既有归属地，只缺用户面维度；再建一处会与它构成第二真相源。
+- 被否决方案：在 `api-edge` 建 `edge_security/operation_admission_decision` 对象承载——api-edge 只是众多链接方之一，且该对象无自有 HTTP operation，其本地层只能薄包装 `runtime/auth`，属为满足目录门禁而造的属主。
+- 被否决方案：维持 `operation_guard.go` 内的文案 map 为事实真相源——运行时镜像不可作为声明位，且端侧无法消费。
+- 约束与影响：`runtime/auth` 仍保留本地文案镜像，因为它不得 import 任一服务的 generated 错误包；镜像的非权威性由 `TestOperationGuardUserMessagesMatchContract` 双向断言强制，该测试已验负例（改文案即报漂移）。
+- 约束与影响：这五个码经本文件的 Dart codegen 进入 `runtime_failure_codes.g.dart`，端侧由此持有码常量；服务对象 `errors.yaml` 一侧受 `codegen_app_metadata` 域白名单约束，`gateway` 不在其内，故该路径不承载这些码。
+- 关联要求：`REQ-001`
+- 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的 `OPEN-013` 据本条更新声明位。
+- 关联验收：`SIT-001`
+
+<a id="dec-023"></a>
+### DEC-023 `process_manager` 以专用写入口与 checkpoint 版本源承载长流程，端侧读写面与聚合物理分离
+
+- 决策：`process_manager` 的 `access.commands` 使用专用 `process_facade`，不得复用 `aggregate_facade`。调用方向长流程投递的是「推进、取消、恢复」这一次编排意图，与向聚合提交一次状态变更不是同一语义。
+- 决策：`identity.version_source` 恒为 `checkpoint`，且对象必须声明 `lifecycle.state_field` 与至少两个 `states`。长流程的进度真相是它推进到哪个检查点，不是某个聚合字段的版本号。
+- 决策：云侧必需层是 domain、application 与 infrastructure 三层，缺一即阻断。domain 承载状态机与补偿规则，application 承载编排，infrastructure 承载 checkpoint 持久化。
+- 决策：`access.queries` 是条件规则而不是硬性 `named_reader`。经公开合同暴露的流程必须给出具名状态读取面，只经事件参与的内部 saga（`cross_context: event_only`）没有外部调用方，允许 `none`。
+- 决策：`storage_role` 复用既有的 `authoritative`，不为该 kind 新增枚举值。`storage_role` 描述的是存储 seam 的性质而不是对象 kind，saga 的 checkpoint 存储与聚合存储同为持久、权威、按 CAS 提交，再造一个值只会让同一性质出现两个名字。
+- 决策：端侧读写面必须按 `*ProcessQuery` 与 `*ProcessCommandWriter` 两个命名族物理分离，禁止与 aggregate 共用 `*CommandWriter`。长流程命令只表示一次推进意图被受理，真实终态要回读 checkpoint，共用一个 port 会让调用方无法区分「命令已受理」与「流程已完成」。
+- 决策：`process_manager` 通常不是 PageOwned，长流程由发起它的页面组合；是否拥有 presentation 仍由页面对象契约的 `source_path` 这一唯一信号决定，因此它不进端侧禁止层表。
+- 理由：长流程与聚合的失败语义根本不同。聚合命令要么成功要么失败并留下一致状态，长流程会在中途留下已提交的外部副作用，必须能从 checkpoint 续跑或补偿，这一差别必须在写入口、版本源与端侧 port 三处同时可见，否则调用方会按聚合语义误用。
+- 被否决方案：让长流程继续以 `aggregate_root` 建模并靠命名约定区分——kind 是门禁的唯一输入，靠命名区分等于没有判据，必需层、写入口与端侧禁止层都无法按真实语义派生。
+- 被否决方案：对全部 `process_manager` 硬性要求 `named_reader`——纯事件驱动的内部 saga 没有外部调用方，强制给读取面会造出无人调用的 operation，属为满足门禁而造的接口。
+- 约束与影响：边界候选 `media_upload_session`、`account_session`、`assistant_session` 与 `rtc.call_session` 保持 `aggregate_root`。判据是四条同时成立：状态迁移属该业务事实自身的合法演进、失败即终态、无已提交的外部副作用需要补偿、没有「从 checkpoint 续跑」语义。
+- 约束与影响：端侧 port 改名会穿透 `runtime/di` 与 generated client，因此命名族只在架构门禁的层规则中登记并随其输出，实际标识符扫描由端侧 kind 对齐门禁承担，两处不得各自定义命名族。
+- 关联要求：对象种类与端侧分层对应 `REQ-001`、`REQ-002`
+- 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的 `REQ-012` 按本条派生端侧层义务与 port 命名族。
+- 关联验收：`SIT-001`
+
+<a id="dec-024"></a>
+### DEC-024 对象级隐私、事件线上身份与 storage 实现必须从 canonical authoring 派生并反向对帐
+
+- 决策：对象 `privacy.yaml` 的字段策略是日志字段治理的唯一 authoring source；生成器从当前对象身份派生 `fieldPrivacyPolicies` 到 Go、Dart、Python 与运营端 catalog，运行时按 `operationId -> objectId` 选择策略。App 不保留手写敏感键表或第二套字段策略。
+- 决策：`first_party_service_internal` 表达仅第一方服务内部可见的字段。事件载荷字段与消费对象的 lifecycle 反向边必须逐字段通过该可见性约束；`content.post.moderationStatus` 属于该内部类别，不因对 App 不可见而从安全关键事件中删除。
+- 决策：`transactional_outbox` 事件的线上身份由 `events.yaml.wire_event_type` 唯一 authoring，并由服务端与 Python 生成器产出常量；production producer/consumer 不得长期持有并行字面量。
+- 决策：所有读取 object-local `storage.yaml` 的 Go、App 与 Ops production/governance consumer 必须经 canonical `storagecontract.Decode` 或其 strict JSON view；启动失败、超时、非零退出、空/非 JSON/stderr、键集漂移与 source TOCTOU 均 fail-closed。Python 不得直接 `safe_load` storage authoring、复制键表或保留 fallback。
+- 决策：`storage.yaml.indexes` 只有在声明的键集与 production 建立、查询或唯一性守卫语义等价时才成立。门禁按键、顺序、唯一性、partial predicate 与真实 create/use 语义比对，不以索引名字相等作为判据，也不允许声明但无人建立或建立但无人使用的索引通过。
+- 理由：字段隐私、事件线上身份与索引都曾出现「声明存在但运行时不消费」或「运行时硬编码但声明不拥有」的第二真相源；从 authoring 单向生成并对 production 使用反向核验，才能同时发现欠覆盖、过覆盖与 stale 声明。
+- 约束：source generator、校验器与模板完成只证明 authoring/implementation 机制成立；generated catalog、运行时常量和环境证据必须来自同一稳定 source hash 的唯一 fresh generation，不能由移动中的生成物或手改产物替代。
+- 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 承接 fresh generation、双端运行时消费、Data 冻结项与全链漂移门的剩余准出。
+- 关联要求：`REQ-001`、`REQ-002`
 - 关联验收：`SIT-001`
 
 ## 5. 失败与恢复

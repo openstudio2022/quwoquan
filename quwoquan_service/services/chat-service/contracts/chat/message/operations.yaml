@@ -519,3 +519,43 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/message/message_commercial_ready_facets__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: message_send_message_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SendMessage}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/message/message_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: message_send_message_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: SendMessage}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: message_recall_message_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: RecallMessage}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: message_list_messages_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListMessages}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: message_sync_messages_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: SyncMessages}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

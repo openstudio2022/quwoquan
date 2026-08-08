@@ -40,14 +40,6 @@ collections:
         illustrationAssetId: 1
         status: 1
       sparse: true
-    - name: idx_posts_semantic_candidate
-      keys:
-        semanticMentions.candidateId: 1
-      sparse: true
-    - name: idx_posts_semantic_target
-      keys:
-        semanticMentions.targetRef: 1
-      sparse: true
     - name: idx_posts_location
       keys:
         location: 2dsphere
@@ -70,12 +62,6 @@ collections:
         canonicalEntityId: 1
         publishedAt: -1
       sparse: true
-    - name: idx_posts_geo_visited
-      keys:
-        geoTagRef: 1
-        visitedAt: -1
-      sparse: true
-      description: 「同地同期到访」交集召回：按行政区 tagRef + 作者声明到访时间取交，只覆盖同时具备两者的带定位发布
     - name: idx_posts_publish_intent
       keys:
         authorId: 1
@@ -97,28 +83,6 @@ collections:
         _id: 1
         version: 1
       unique: true
-    - name: search_posts_text
-      source: search_posts_text
-      type: text
-      fields:
-      - title
-      - body
-      - locationName
-      - tagRefs
-      - entityRefs
-      - articleMarkdown
-      weights:
-        title: 10
-        tagRefs: 5
-        entityRefs: 5
-        locationName: 3
-        body: 1
-        articleMarkdown: 1
-    - name: vector_posts_embedding
-      type: vector
-      field: embedding
-      dimensions: 1536
-      similarity: cosine
   post_command_receipts:
     publication_role: not_published
     entity: Post
@@ -145,11 +109,10 @@ collections:
       keys:
         _id: 1
       unique: true
-    - name: idx_content_outbox_replay
+    - name: idx_content_outbox_sequence
       keys:
-        aggregateType: 1
-        occurredAt: 1
-        _id: 1
+        outboxSequence: 1
+      unique: true
     - name: idx_content_outbox_aggregate_version
       keys:
         aggregateType: 1
@@ -191,8 +154,6 @@ collections:
       unique: true
       partial_filter:
         status: pending
-    - name: idx_post_import_task_outbox_execution
-      keys: {payload.executionId: 1, payload.stage: 1, status: 1, startAt: 1}
   post_import_task:
     publication_role: not_published
     entity: Post
@@ -204,8 +165,6 @@ collections:
       unique: true
       partial_filter:
         status: {in: [ready, processing, retry_wait]}
-    - name: idx_post_import_task_execution
-      keys: {payload.executionId: 1, payload.jobId: 1}
   post_import_task_recovery_receipt:
     publication_role: not_published
     entity: Post

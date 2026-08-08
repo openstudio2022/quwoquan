@@ -1,11 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/storagecontract"
 )
 
 func TestSourceRoutesGeneratedOwnershipToObjectPacket(t *testing.T) {
@@ -42,23 +46,187 @@ func TestFieldTypeToGoTypeAcceptsCanonicalStringSlice(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-003
+func TestEventConstantValueUsesAuthoredOutboxWireIdentity(t *testing.T) {
+	t.Parallel()
+
+	got, err := (eventDef{
+		Name:              "MediaUploadCompleted",
+		DeliverySemantics: "transactional_outbox",
+		WireEventType:     "content.media_upload.completed",
+	}).ConstantValue()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "content.media_upload.completed" {
+		t.Fatalf("wire value = %q, want authored wire_event_type", got)
+	}
+}
+
+func TestEventConstantValueFailsClosedForMissingOutboxWireIdentity(t *testing.T) {
+	t.Parallel()
+
+	if _, err := (eventDef{
+		Name:              "MediaUploadCompleted",
+		DeliverySemantics: "transactional_outbox",
+	}).ConstantValue(); err == nil {
+		t.Fatal("missing wire_event_type must fail")
+	}
+	got, err := (eventDef{
+		Name:              "LocalAuditRecorded",
+		DeliverySemantics: "transactional_event_log",
+	}).ConstantValue()
+	if err != nil || got != "LocalAuditRecorded" {
+		t.Fatalf("non-outbox wire value = %q, err=%v", got, err)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-003
+func TestGenerateMergedEventConstantsEmitsAuthoredWireIdentity(t *testing.T) {
+	t.Parallel()
+
+	const metadataPath = "media/media_upload_session"
+	outputDir := t.TempDir()
+	manifest := &Manifest{
+		Service: "content-service", OutputDir: outputDir,
+		ModulePath: "quwoquan_service/services/content-service/generated",
+		Sources: []Source{{
+			Metadata: metadataPath, ObjectPath: metadataPath,
+			DomainPkg: "media_upload_session",
+		}},
+	}
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "content.media_upload_session", Name: "MediaUploadSession",
+			SourcePath: metadataPath + "/object.yaml",
+		}},
+		Governance: ast.MetadataGovernance{Objects: []ast.ObjectGovernance{{
+			ObjectID: "content.media_upload_session",
+			Events: []ast.EventDefinition{{
+				ObjectID: "content.media_upload_session", Name: "MediaUploadCompleted",
+				DeliverySemantics: "transactional_outbox",
+				WireEventType:     "content.media_upload.completed",
+				SourcePath:        metadataPath + "/events.yaml",
+			}},
+		}}},
+		Documents: []ast.SourceDocument{{
+			Path: metadataPath + "/events.yaml",
+			Content: json.RawMessage(`{
+				"events":[{
+					"name":"MediaUploadCompleted",
+					"delivery_semantics":"transactional_outbox",
+					"wire_event_type":"content.media_upload.completed"
+				}]
+			}`),
+		}},
+	}
+	if err := generateMergedEventConstants(manifest, contractGraph); err != nil {
+		t.Fatal(err)
+	}
+	generated, err := os.ReadFile(filepath.Join(
+		outputDir,
+		metadataPath,
+		"contract",
+		"media_upload_session",
+		"event",
+		"events.g.go",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(
+		string(generated),
+		`MediaUploadCompleted = "content.media_upload.completed"`,
+	) {
+		t.Fatalf("generated event constant did not preserve wire_event_type:\n%s", generated)
+	}
+}
+
 func TestStorageYAMLAcceptsCanonicalPrimaryKeyList(t *testing.T) {
 	t.Parallel()
 
-	var storage StorageYAML
-	if err := yaml.Unmarshal([]byte(`
+	storage, err := storagecontract.DecodeYAML([]byte(`
 backend: postgres
+role: authoritative
 tables:
   user_profiles:
     entity: UserAccount
     pk:
       - user_id
-`), &storage); err != nil {
+`))
+	if err != nil {
 		t.Fatal(err)
 	}
 	primaryKey := storage.Tables["user_profiles"].PK
 	if len(primaryKey) != 1 || primaryKey[0] != "user_id" {
 		t.Fatalf("primary key = %#v, want [user_id]", primaryKey)
+	}
+}
+
+func TestGeneratedStoreForeignKeyUsesCanonicalForeignKeysShape(t *testing.T) {
+	t.Parallel()
+	table := TableDef{ForeignKeys: []ForeignKeyDef{{
+		Columns: []string{"owner_id"}, References: "owners(id)", OnDelete: "CASCADE",
+	}}}
+	foreignKey := generatedStoreForeignKey(table)
+	if foreignKey == nil || len(foreignKey.Columns) != 1 || foreignKey.Columns[0] != "owner_id" {
+		t.Fatalf("foreign key = %#v", foreignKey)
+	}
+	if got := generatedStoreForeignKey(TableDef{ForeignKeys: []ForeignKeyDef{{
+		Columns: []string{"owner_id", "device_id"}, References: "owners(owner_id, device_id)",
+	}}}); got != nil {
+		t.Fatalf("composite foreign key must require an object-owned query facade, got %#v", got)
+	}
+}
+
+func TestMongoStoreGenerationPreservesCanonicalTTLIndex(t *testing.T) {
+	t.Parallel()
+	expiration := int64(0)
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: t.TempDir(), ModulePath: "example/generated"},
+		source:   Source{ObjectPath: "catalog/item", DomainPkg: "catalog"},
+		fields: &FieldsYAML{Entities: map[string]EntityFieldsDef{
+			"Item": {},
+		}},
+	}
+	collection := CollectionDef{
+		Entity: "Item",
+		Indexes: []MongoIdx{{
+			Name: "idx_item_expire", Keys: map[string]any{"expireAt": 1},
+			ExpireAfterSeconds: &expiration,
+		}},
+	}
+	if err := generateMongoStore(ctx, "items", collection); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(
+		ctx.outputDir(), ctx.source.infrastructurePath("persistence"), "mongo_item_store.g.go",
+	)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), ".SetExpireAfterSeconds(0)") {
+		t.Fatalf("generated index dropped expire_after_seconds:\n%s", data)
+	}
+}
+
+func TestMongoStoreGenerationRejectsUnsupportedIndexUnion(t *testing.T) {
+	t.Parallel()
+	ctx := &genContext{
+		manifest: &Manifest{OutputDir: t.TempDir(), ModulePath: "example/generated"},
+		source:   Source{ObjectPath: "catalog/item", DomainPkg: "catalog"},
+		fields:   &FieldsYAML{Entities: map[string]EntityFieldsDef{"Item": {}}},
+	}
+	for name, index := range map[string]MongoIdx{
+		"text":    {Name: "idx_text", Type: "text", Fields: []string{"title"}},
+		"partial": {Name: "idx_partial", Keys: map[string]any{"status": 1}, PartialFilter: map[string]any{"status": "open"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := generateMongoStore(ctx, "items", CollectionDef{Entity: "Item", Indexes: []MongoIdx{index}}); err == nil {
+				t.Fatal("generator silently accepted an index shape it cannot preserve")
+			}
+		})
 	}
 }
 

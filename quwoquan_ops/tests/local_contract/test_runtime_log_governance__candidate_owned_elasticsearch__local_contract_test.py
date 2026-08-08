@@ -6,6 +6,9 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+from quwoquan_ops.cli.lib.storage_contract_view import StorageContractViewError
 
 ROOT = Path(__file__).resolve().parents[3]
 GATE_PATH = ROOT / "quwoquan_ops/gate/verify_runtime_log_governance.py"
@@ -16,6 +19,42 @@ SPEC.loader.exec_module(GATE)
 
 
 class CandidateOwnedElasticsearchGovernanceTest(unittest.TestCase):
+    def test_runtime_log_storage_uses_the_exact_canonical_view_keyset(self) -> None:
+        issues: list[str] = []
+        expected_payload = {
+            key: object()
+            for key in GATE.RUNTIME_LOG_STORAGE_KEYS
+        }
+
+        with mock.patch.object(
+            GATE,
+            "load_storage_contract_view",
+            return_value=expected_payload,
+        ) as loader:
+            payload = GATE._load_storage(GATE.STORAGE, issues)
+
+        self.assertIs(payload, expected_payload)
+        self.assertEqual(issues, [])
+        loader.assert_called_once_with(
+            GATE.STORAGE,
+            expected_keys=GATE.RUNTIME_LOG_STORAGE_KEYS,
+        )
+
+    def test_runtime_log_storage_view_drift_is_a_gate_failure(self) -> None:
+        issues: list[str] = []
+
+        with mock.patch.object(
+            GATE,
+            "load_storage_contract_view",
+            side_effect=StorageContractViewError("keyset drifted"),
+        ):
+            payload = GATE._load_storage(GATE.STORAGE, issues)
+
+        self.assertEqual(payload, {})
+        self.assertEqual(len(issues), 1)
+        self.assertIn("canonical storage view", issues[0])
+        self.assertIn("keyset drifted", issues[0])
+
     def test_data_controller_uses_data_owned_run_manifest_writer(self) -> None:
         issues: list[str] = []
 

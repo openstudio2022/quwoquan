@@ -89,8 +89,8 @@ field_visibility:
 - field: moderationStatus
   visibility:
   - platform-ops
-  - content-service-internal
-  description: 审核状态仅运营后台和服务内部可见，app 端不返回此字段
+  - first_party_service_internal
+  description: 审核状态仅运营后台和第一方服务内部消费者可见，app 端不返回此字段
 - field: authorId
   visibility:
   - all

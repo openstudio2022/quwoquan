@@ -3,6 +3,8 @@ from pathlib import Path
 
 import yaml
 
+from quwoquan_ops.cli.lib.storage_contract_view import load_storage_contract_view
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -39,11 +41,9 @@ class VideoPlaybackQoeObservabilityContractTest(unittest.TestCase):
         self.assertIn("decoderQueueMode", qoe_job["dimensions"])
         self.assertNotIn("sessionId", qoe_job["dimensions"])
         self.assertNotIn("postId", qoe_job["dimensions"])
-        storage = yaml.safe_load(
-            (
-                REPO_ROOT
-                / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/storage.yaml"
-            ).read_text(encoding="utf-8")
+        storage = load_storage_contract_view(
+            REPO_ROOT
+            / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/storage.yaml"
         )
         indexed_fields = set(storage["logstores"]["raw"]["indexed_fields"])
         self.assertIn("devicePlatform", indexed_fields)

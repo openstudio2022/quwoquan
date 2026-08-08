@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+// readiness_case: content_behavior_fact_report_behaviors_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_command_remote.dart';
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';

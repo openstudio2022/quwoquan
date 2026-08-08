@@ -158,7 +158,7 @@ class _BasicSuggestionTile extends StatelessWidget {
   }
 }
 
-class _ChatRecordTile extends StatelessWidget {
+class _ChatRecordTile extends ConsumerWidget {
   const _ChatRecordTile({
     required this.suggestion,
     required this.query,
@@ -172,7 +172,7 @@ class _ChatRecordTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -188,7 +188,7 @@ class _ChatRecordTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ConversationAvatar(
+          ref.watch(conversationAvatarBuilderProvider)(
             conversationId: suggestion.conversationId,
             conversationType: suggestion.conversationType,
             title: suggestion.conversationTitle,

@@ -13,8 +13,24 @@ access:
   cross_context: public_contract_only
   queries: external_port
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: remote_provider
+  object_type_refs:
+  - integration.location_poi
+  provider_egress_ref: quwoquan_service/services/integration-service/internal/external_integration/location/application/location_service.go#Search
+  privacy_filter_ref: quwoquan_service/services/integration-service/internal/external_integration/location/application/location_service.go#coarseCoordinate
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.integration.location.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.integration.location.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - provider 响应必须先映射到 canonical LocationPoi，业务域不得消费第三方原始字段。
 - locationRef 由 provider authority 与稳定外部标识派生，展示名或坐标变化不得改变引用身份。

@@ -17,7 +17,6 @@ var delegatedPersonaCompatibilityScopes = map[string]struct{}{
 	"circle.members.self":               {},
 	"content.my_intersections.read":     {},
 	"content.object_intersections.read": {},
-	"travel.trip.read":                  {},
 	"user.relationship.read":            {},
 }
 
@@ -27,6 +26,18 @@ var delegatedPersonaCompatibilityScopes = map[string]struct{}{
 // strings are intentionally not part of this contract.
 type ServiceAuthorizationProvider interface {
 	AuthorizationHeader(ctx context.Context) (string, error)
+}
+
+// ServiceAccountAuthorizationProvider signs one short-lived internal request
+// with two distinct actors: the account remains the JWT subject while the
+// calling service is carried by the signed act claim. This is intentionally a
+// different port from ServiceAuthorizationProvider so callers cannot pass a
+// service subject where an account owner is required.
+type ServiceAccountAuthorizationProvider interface {
+	AuthorizationHeaderForAccount(
+		ctx context.Context,
+		accountID string,
+	) (string, error)
 }
 
 // DelegatedPersonaAuthorizationProvider 为服务间只读调用签发带真实 persona actor
@@ -41,6 +52,59 @@ type DelegatedPersonaAuthorizationProvider interface {
 type HS256ServiceAuthorizationProvider struct {
 	signer  *Signer
 	subject TokenSubject
+}
+
+type HS256ServiceAccountAuthorizationProvider struct {
+	signer      *Signer
+	serviceName string
+	scopes      []string
+}
+
+func NewHS256ServiceAccountAuthorizationProvider(
+	config TokenConfig,
+	serviceName string,
+	scopes []string,
+) (*HS256ServiceAccountAuthorizationProvider, error) {
+	normalizedService := strings.TrimSpace(serviceName)
+	if normalizedService == "" || strings.HasPrefix(normalizedService, "service:") {
+		return nil, fmt.Errorf("service account credential actor is required")
+	}
+	normalizedScopes := normalizedGrants(scopes)
+	if len(normalizedScopes) == 0 {
+		return nil, fmt.Errorf("service account credential scope is required")
+	}
+	signer, err := NewHS256Signer(config)
+	if err != nil {
+		return nil, fmt.Errorf("service account credential signer invalid: %w", err)
+	}
+	return &HS256ServiceAccountAuthorizationProvider{
+		signer:      signer,
+		serviceName: normalizedService,
+		scopes:      normalizedScopes,
+	}, nil
+}
+
+func (p *HS256ServiceAccountAuthorizationProvider) AuthorizationHeaderForAccount(
+	_ context.Context,
+	accountID string,
+) (string, error) {
+	if p == nil || p.signer == nil {
+		return "", fmt.Errorf("service account credential provider is not initialized")
+	}
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" || strings.HasPrefix(accountID, "service:") {
+		return "", fmt.Errorf("service account credential requires a real account subject")
+	}
+	token, err := p.signer.Sign(TokenSubject{
+		AccountID:      accountID,
+		ServiceActorID: p.serviceName,
+		Scopes:         append([]string(nil), p.scopes...),
+		Roles:          []string{"service"},
+	})
+	if err != nil {
+		return "", err
+	}
+	return "Bearer " + token, nil
 }
 
 func NewHS256ServiceAuthorizationProvider(

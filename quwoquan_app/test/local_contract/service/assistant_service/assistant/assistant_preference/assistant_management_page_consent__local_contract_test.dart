@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-003.t1
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-003.t2
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +12,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_preference/presentation/assistant_management_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -25,12 +29,21 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
   _AssistantPreferenceFacet({
     List<AssistantPreference> initial = const <AssistantPreference>[],
     this.listFailuresRemaining = 0,
+    this.setFailuresRemaining = 0,
+    this.revokeFailuresRemaining = 0,
+    this.restoreFailuresRemaining = 0,
   }) : _items = <AssistantPreference>[...initial];
 
   final List<AssistantPreference> _items;
   int listFailuresRemaining;
+  int setFailuresRemaining;
+  int revokeFailuresRemaining;
+  int restoreFailuresRemaining;
   final List<AssistantPreferenceStatus> requestedStatuses =
       <AssistantPreferenceStatus>[];
+  final List<({AssistantPreferenceKind kind, String value})> setAttempts = [];
+  final List<String> revokeAttempts = [];
+  final List<String> restoreAttempts = [];
 
   @override
   Future<List<AssistantPreference>> listAssistantPreferences({
@@ -61,8 +74,20 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
     String sourceSessionId = '',
     bool confirmed = false,
   }) async {
+    setAttempts.add((kind: kind, value: value));
+    if (setFailuresRemaining > 0) {
+      setFailuresRemaining -= 1;
+      throw StateError('set preference unavailable');
+    }
+    final existingIndex = _items.indexWhere(
+      (item) =>
+          item.scope == scope &&
+          item.sessionId == (sessionId.isEmpty ? null : sessionId) &&
+          item.kind == kind,
+    );
+    final existing = existingIndex < 0 ? null : _items[existingIndex];
     final preference = AssistantPreference(
-      preferenceId: 'preference_${_items.length + 1}',
+      preferenceId: existing?.preferenceId ?? 'preference_${_items.length + 1}',
       userId: 'owner',
       scope: scope,
       sessionId: sessionId.isEmpty ? null : sessionId,
@@ -74,7 +99,7 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
       status: AssistantPreferenceStatus.active,
       createdAt: '2026-07-20T08:00:00Z',
       updatedAt: '2026-07-20T08:00:00Z',
-      version: 1,
+      version: (existing?.version ?? 0) + 1,
     );
     _items
       ..removeWhere(
@@ -91,6 +116,11 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
   Future<AssistantPreference> revokeAssistantPreference({
     required String preferenceId,
   }) async {
+    revokeAttempts.add(preferenceId);
+    if (revokeFailuresRemaining > 0) {
+      revokeFailuresRemaining -= 1;
+      throw StateError('revoke preference unavailable');
+    }
     final index = _items.indexWhere(
       (item) => item.preferenceId == preferenceId,
     );
@@ -118,6 +148,11 @@ class _AssistantPreferenceFacet implements AssistantPreferenceFacet {
   Future<AssistantPreference> restoreAssistantPreference({
     required String preferenceId,
   }) async {
+    restoreAttempts.add(preferenceId);
+    if (restoreFailuresRemaining > 0) {
+      restoreFailuresRemaining -= 1;
+      throw StateError('restore preference unavailable');
+    }
     final index = _items.indexWhere(
       (item) => item.preferenceId == preferenceId,
     );
@@ -160,6 +195,40 @@ Widget _buildApp({
       home: AssistantManagementPage(onBack: () {}),
     ),
   );
+}
+
+AssistantPreference _testPreference({
+  String preferenceId = 'preference_retry',
+  String value = 'concise',
+  AssistantPreferenceStatus status = AssistantPreferenceStatus.active,
+}) {
+  return AssistantPreference(
+    preferenceId: preferenceId,
+    userId: 'owner',
+    scope: AssistantPreferenceScope.longTerm,
+    kind: AssistantPreferenceKind.replyLength,
+    value: value,
+    sourceType: AssistantPreferenceSourceType.management,
+    status: status,
+    revokedAt: status == AssistantPreferenceStatus.revoked
+        ? '2026-07-20T08:01:00Z'
+        : null,
+    revocationDeadline: status == AssistantPreferenceStatus.revoked
+        ? '2099-07-20T08:11:00Z'
+        : null,
+    createdAt: '2026-07-20T08:00:00Z',
+    updatedAt: '2026-07-20T08:01:00Z',
+    version: 1,
+  );
+}
+
+Future<void> _retryVisiblePreferenceMutation(WidgetTester tester) async {
+  final errorCard = tester.widget<AppSectionErrorCard>(
+    find.byType(AppSectionErrorCard).first,
+  );
+  expect(errorCard.semantic.primaryAction?.type, UiErrorActionType.retry);
+  await errorCard.onAction!(errorCard.semantic.primaryAction!);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -364,6 +433,155 @@ void main() {
       find.text(AssistantText.assistantPreferenceConcise),
       findsNWidgets(2),
     );
+    expect(find.text(AssistantText.assistantPreferenceForget), findsOneWidget);
+  });
+
+  testWidgets('设置失败保留已确认列表和exact意图，重新读取后可重试同一参数', (tester) async {
+    final facet = _AssistantPreferenceFacet(
+      initial: [_testPreference()],
+      setFailuresRemaining: 1,
+    );
+    await tester.pumpWidget(
+      _buildApp(
+        visitRecorder: _CapturingVisitRecorder(),
+        preferenceFacet: facet,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(AssistantText.assistantPreferenceDetailed));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppSectionErrorCard), findsOneWidget);
+    expect(
+      find.text(AssistantText.assistantPreferenceConcise),
+      findsNWidgets(2),
+      reason: '失败不得覆盖最后一次已确认列表',
+    );
+    expect(facet.setAttempts, [
+      (kind: AssistantPreferenceKind.replyLength, value: 'detailed'),
+    ]);
+    final unrelatedAction = tester.widget<CupertinoButton>(
+      find.widgetWithText(
+        CupertinoButton,
+        AssistantText.assistantPreferenceCasual,
+      ),
+    );
+    expect(unrelatedAction.onPressed, isNull, reason: 'pending期间不得覆盖意图');
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('assistant_preference_reread_after_failure'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AppSectionErrorCard), findsOneWidget);
+    expect(facet.setAttempts, hasLength(1), reason: '重新读取不得重放mutation');
+
+    await _retryVisiblePreferenceMutation(tester);
+    expect(find.byType(AppSectionErrorCard), findsNothing);
+    expect(
+      find.text(AssistantText.assistantPreferenceDetailed),
+      findsNWidgets(2),
+    );
+    expect(facet.setAttempts, [
+      (kind: AssistantPreferenceKind.replyLength, value: 'detailed'),
+      (kind: AssistantPreferenceKind.replyLength, value: 'detailed'),
+    ], reason: '重试必须复用exact typed参数');
+  });
+
+  testWidgets('typed设置成功但权威回读失败时保留pending直到同意图重试闭合', (tester) async {
+    final facet = _AssistantPreferenceFacet(initial: [_testPreference()]);
+    await tester.pumpWidget(
+      _buildApp(
+        visitRecorder: _CapturingVisitRecorder(),
+        preferenceFacet: facet,
+      ),
+    );
+    await tester.pumpAndSettle();
+    facet.listFailuresRemaining = 1;
+
+    await tester.tap(find.text(AssistantText.assistantPreferenceDetailed));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppSectionErrorCard), findsOneWidget);
+    expect(
+      find.text(AssistantText.assistantPreferenceConcise),
+      findsNWidgets(2),
+      reason: 'mutation ACK不能在authoritative read失败时替换已确认列表',
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('assistant_preference_reread_after_failure'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(AssistantText.assistantPreferenceDetailed),
+      findsNWidgets(2),
+      reason: '只读恢复可以刷新canonical列表',
+    );
+    expect(
+      find.byType(AppSectionErrorCard),
+      findsOneWidget,
+      reason: '缺typed mutation闭环时pending仍不得静默清除',
+    );
+
+    await _retryVisiblePreferenceMutation(tester);
+    expect(find.byType(AppSectionErrorCard), findsNothing);
+    expect(facet.setAttempts, hasLength(2));
+  });
+
+  testWidgets('遗忘失败后只允许同preferenceId重试并以revoked列表收敛', (tester) async {
+    final facet = _AssistantPreferenceFacet(
+      initial: [_testPreference(preferenceId: 'preference_revoke')],
+      revokeFailuresRemaining: 1,
+    );
+    await tester.pumpWidget(
+      _buildApp(
+        visitRecorder: _CapturingVisitRecorder(),
+        preferenceFacet: facet,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(AssistantText.assistantPreferenceForget));
+    await tester.pumpAndSettle();
+    expect(find.text(AssistantText.assistantPreferenceForget), findsOneWidget);
+    expect(facet.revokeAttempts, ['preference_revoke']);
+
+    await _retryVisiblePreferenceMutation(tester);
+    expect(facet.revokeAttempts, ['preference_revoke', 'preference_revoke']);
+    expect(find.text(AssistantText.assistantPreferenceForget), findsNothing);
+    expect(find.text(AssistantText.assistantPreferenceUndo), findsOneWidget);
+  });
+
+  testWidgets('恢复失败后只允许同preferenceId重试并以active列表收敛', (tester) async {
+    final facet = _AssistantPreferenceFacet(
+      initial: [
+        _testPreference(
+          preferenceId: 'preference_restore',
+          status: AssistantPreferenceStatus.revoked,
+        ),
+      ],
+      restoreFailuresRemaining: 1,
+    );
+    await tester.pumpWidget(
+      _buildApp(
+        visitRecorder: _CapturingVisitRecorder(),
+        preferenceFacet: facet,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(AssistantText.assistantPreferenceUndo));
+    await tester.pumpAndSettle();
+    expect(find.text(AssistantText.assistantPreferenceUndo), findsOneWidget);
+    expect(facet.restoreAttempts, ['preference_restore']);
+
+    await _retryVisiblePreferenceMutation(tester);
+    expect(facet.restoreAttempts, ['preference_restore', 'preference_restore']);
+    expect(find.text(AssistantText.assistantPreferenceUndo), findsNothing);
     expect(find.text(AssistantText.assistantPreferenceForget), findsOneWidget);
   });
 }

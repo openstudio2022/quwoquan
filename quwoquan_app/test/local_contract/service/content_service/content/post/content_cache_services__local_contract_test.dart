@@ -1202,7 +1202,7 @@ ContentPostViewData _videoPostDto(
       postId: id,
       contentType: 'video',
       contentIdentity: 'work',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'user_1',
       authorDisplayName: '用户一',
       authorAvatarUrl: '',

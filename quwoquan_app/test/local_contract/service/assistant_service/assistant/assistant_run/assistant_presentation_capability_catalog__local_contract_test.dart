@@ -5,30 +5,34 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/runtime_enums.dart';
 
 void main() {
-  test('rich personal surface exposes every implemented structural node', () {
-    final snapshot = _snapshot(
-      surfacePolicy: AssistantPresentationSurfacePolicy.personal,
-      mediaEnabled: true,
-      actionsEnabled: true,
-    );
+  test(
+    'rich personal surface advertises only production-owned action intents',
+    () {
+      final snapshot = _snapshot(
+        surfacePolicy: AssistantPresentationSurfacePolicy.personal,
+        mediaEnabled: true,
+        actionsEnabled: true,
+      );
 
-    expect(
-      snapshot.supportedNodeKinds,
-      containsAll(<AssistantPresentationNodeKind>[
-        AssistantPresentationNodeKind.routeMap,
-        AssistantPresentationNodeKind.comparisonTable,
-        AssistantPresentationNodeKind.media,
-        AssistantPresentationNodeKind.confirmationCard,
-      ]),
-    );
-    expect(snapshot.viewportClass.wireName, isNot('any'));
-    expect(snapshot.supportedActionIntents, <String>[
-      'Navigate',
-      'ApproveTool',
-      'ExecuteDeviceAction',
-      'ProvideInput',
-    ]);
-  });
+      expect(
+        snapshot.supportedNodeKinds,
+        containsAll(<AssistantPresentationNodeKind>[
+          AssistantPresentationNodeKind.routeMap,
+          AssistantPresentationNodeKind.comparisonTable,
+          AssistantPresentationNodeKind.media,
+          AssistantPresentationNodeKind.confirmationCard,
+        ]),
+      );
+      expect(snapshot.viewportClass.wireName, isNot('any'));
+      expect(snapshot.supportedActionIntents, const <String>['ApproveTool']);
+      expect(snapshot.supportedActionIntents, isNot(contains('Navigate')));
+      expect(
+        snapshot.supportedActionIntents,
+        isNot(contains('ExecuteDeviceAction')),
+      );
+      expect(snapshot.supportedActionIntents, isNot(contains('ProvideInput')));
+    },
+  );
 
   test('offline personal surface fails closed for media and action nodes', () {
     final snapshot = _snapshot(
@@ -50,6 +54,7 @@ void main() {
       snapshot.supportedNodeKinds,
       isNot(contains(AssistantPresentationNodeKind.confirmationCard)),
     );
+    expect(snapshot.supportedActionIntents, isEmpty);
   });
 
   test('network surface rejects optional capability advertisement', () {
@@ -60,6 +65,7 @@ void main() {
     );
 
     expect(snapshot.supportedNodeKinds, isEmpty);
+    expect(snapshot.supportedActionIntents, isEmpty);
   });
 
   test('viewport classification rejects unavailable runtime geometry', () {

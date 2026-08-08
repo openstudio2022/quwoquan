@@ -1,6 +1,13 @@
 kind: append_only_fact
 lifecycle:
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - ReportRecoveryFailure
+    rationale: 匿名恢复失败诊断事实追加；匿名来源限流已归属 inbound HTTP adapter 准入层，fact 存储层不持有任何限流窗口或额度状态。
+    evaluated_at: '2026-08-07'
 description: 启动或运行时不可恢复异常的匿名十字段诊断事实；复用现有 runtime log store，不生成客户端诊断标识或异常指纹。
 identity:
   fields: [occurredAt, buildNumber, errorSource, errorType]
@@ -10,8 +17,20 @@ access:
   cross_context: event_only
   queries: named_reader
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 只接受固定匿名字段，禁止错误消息、堆栈、账号、设备广告标识或动态诊断编号。
 - 同一启动或运行时失败按 canonical identity 幂等追加，不修改历史事实。

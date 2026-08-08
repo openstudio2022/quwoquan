@@ -2,7 +2,9 @@ description: 四类能力绑定与短期 ResolvedCapabilityGrant tagged result�
 fields:
 - {name: resolutionId, source: resolutionId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: accountId, source: trustedAccountId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none, role: authoritative_state, reference: true}
+- {name: serviceActorDigest, source: verifiedServiceActorDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: surfaceKind, source: surfaceKind, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: bindingKind, source: bindingKind, type: enum, enum_ref: CapabilityBindingKind, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: publicProviderBinding, source: publicProviderBinding, type: PublicProviderBinding, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: userConnectorConnection, source: userConnectorConnection, type: UserConnectorConnection, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: none, role: authoritative_state}
@@ -12,6 +14,9 @@ fields:
 - {name: requiresPermit, source: requiresPermit, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: requiresIdempotency, source: requiresIdempotency, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: inputDigest, source: inputDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: confirmationDigest, source: confirmationDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: permitDigest, source: permitDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none, role: authoritative_state}
+- {name: idempotencyDigest, source: idempotencyDigest, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none, role: authoritative_state}
 - {name: resolvedAt, source: resolvedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: authoritative_state}
 types:
@@ -34,9 +39,10 @@ types:
     - {name: accountId, source: trustedAccountId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: connectionId, source: connectionId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: connectorId, source: connectorId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: contractDigest, source: connectorDefinitionReleaseDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: grantedCapabilities, source: grantedCapabilities, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
     - {name: grantState, source: grantState, type: enum, enum_ref: UserConnectorGrantState, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
-    - {name: providerAccountSubjectDigest, source: providerAccountSubjectDigest, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
+    - {name: providerAccountSubjectDigest, source: providerAccountSubjectDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
     - {name: freshnessAt, source: freshnessAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
     - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
     - {name: revision, source: revision, type: int64, constraints: [NOT_NULL, POSITIVE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
@@ -44,6 +50,7 @@ types:
     description: 当前 installation 的 PlatformCapabilities/NativeBridge attestation；不存云端 OAuth credential。
     fields:
     - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: bridgeCapability, source: bridgeCapability, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: availability, source: availability, type: enum, enum_ref: DeviceCapabilityAvailability, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: permission, source: permission, type: enum, enum_ref: DeviceCapabilityPermission, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
@@ -58,24 +65,28 @@ types:
     fields:
     - {name: resolutionId, source: resolutionId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: accountId, source: trustedAccountId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none}
+    - {name: serviceActorDigest, source: verifiedServiceActorDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: regionCode, source: regionCode, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: connectionRefs, source: connectionRefs, type: '[]string', constraints: [NOT_NULL], classification: PRIVATE, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
     - {name: bindingPriority, source: bindingPriority, type: '[]CapabilityBindingKind', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: write, source: write, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: confirmationRef, source: confirmationRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
     - {name: permitRef, source: permitRef, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
     - {name: idempotencyKey, source: idempotencyKey, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: inputDigest, source: inputDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
-    - {name: publicProviders, source: publicProviders, type: '[]PublicProviderBinding', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
-    - {name: userConnectors, source: userConnectors, type: '[]UserConnectorConnection', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
-    - {name: deviceBindings, source: deviceBindings, type: '[]DeviceCapabilityBinding', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
-    - {name: domainOperations, source: domainOperations, type: '[]DomainOperationBinding', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
+    - {name: confirmationDigest, source: confirmationDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
+    - {name: permitDigest, source: permitDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
+    - {name: idempotencyDigest, source: idempotencyDigest, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none}
   ResolvedCapabilityGrant:
     description: exactly-one tagged 解析结果；五分钟内仍需在执行边界重验 revoke、permission、permit 与 owner contract digest。
     fields:
     - {name: resolutionId, source: resolutionId, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: accountId, source: trustedAccountId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none}
+    - {name: serviceActorDigest, source: verifiedServiceActorDigest, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: capabilityKey, source: capabilityKey, type: string, constraints: [NOT_NULL, NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: surfaceKind, source: surfaceKind, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: bindingKind, source: bindingKind, type: enum, enum_ref: CapabilityBindingKind, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: publicProviderBinding, source: publicProviderBinding, type: PublicProviderBinding, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
     - {name: userConnectorConnection, source: userConnectorConnection, type: UserConnectorConnection, constraints: [NULLABLE], classification: SENSITIVE, log_policy: metadata_only, api_exposure: none, ops_exposure: none}
@@ -85,6 +96,9 @@ types:
     - {name: requiresPermit, source: requiresPermit, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: requiresIdempotency, source: requiresIdempotency, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: inputDigest, source: inputDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
+    - {name: confirmationDigest, source: confirmationDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
+    - {name: permitDigest, source: permitDigest, type: string, constraints: [NULLABLE], classification: SECRET, log_policy: drop, api_exposure: none, ops_exposure: none}
+    - {name: idempotencyDigest, source: idempotencyDigest, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: resolvedAt, source: resolvedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
     - {name: expiresAt, source: expiresAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
 enums:

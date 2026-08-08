@@ -19,10 +19,6 @@ MIN_SOAK_SECONDS = 60 * 60
 MIN_SOAK_SAMPLES = 61
 MAX_SAMPLE_GAP_SECONDS = 90
 MIN_SEMANTIC_JOBS_PER_LANE = 10
-MIN_RECOVERY_CASES = 20
-MIN_RECOVERY_CASES_PER_LANE = 5
-MIN_AUTOMATIC_RECOVERED = 19
-MIN_AUTOMATIC_RECOVERY_RATE = 0.95
 
 # Canonical scale budgets are code-owned until a governed policy field exists.
 # They cannot be inflated by the raw sample producer.

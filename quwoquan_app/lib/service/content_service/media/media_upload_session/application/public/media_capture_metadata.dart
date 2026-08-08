@@ -209,5 +209,5 @@ class ExtractedMediaCaptureMetadata {
 ///
 /// EXIF parsing libraries and platform details remain in the object's adapter.
 abstract interface class MediaCaptureMetadataExtractor {
-  ExtractedMediaCaptureMetadata extract(Uint8List bytes);
+  ExtractedMediaCaptureMetadata extractMediaCaptureMetadata(Uint8List bytes);
 }

@@ -63,6 +63,11 @@ var appRetiredGeneratedOutputRoots = []string{
 // exact files prevents the next single-track generation from deleting mixed,
 // packaged, or separately retired outputs in those roots.
 var appRetiredGeneratedExactOutputs = []string{
+	"lib/service/content_service/content/post/adapters/generated/content_post_immersive_wire_keys.g.dart",
+	"lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
+	"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_kind_metadata.g.dart",
+	"lib/service/search_service/search/search_index_view/application/generated/search_contract.g.dart",
+	"lib/service/search_service/search/search_index_view/application/generated/search_registry.g.dart",
 	"lib/cloud/content/generated/content_behaviors.g.dart",
 	"lib/cloud/content/generated/content_errors.g.dart",
 	"lib/cloud/content/generated/content_privacy_policy.g.dart",

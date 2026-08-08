@@ -6,30 +6,47 @@ import 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-/// Circle generated handoff 尚未覆盖目标 port 时的唯一 production 终态。
-///
-/// 调用方必须 override 对象级 typed port 做 local_contract；环境 App 不得回退到
-/// legacy vertical source、测试专用数据源或本地合成结果。
-T requireGatheringRemoteAdapter<T>(String portName) {
-  throw RuntimeFailure(
+typedef GatheringCreateBootstrapRequest = ({
+  String activePersonaId,
+  GatheringCreateNavigationRequest? navigationRequest,
+});
+
+/// Host authority composition is fail-closed until the production authority
+/// adapter supplies the complete Gathering create seed.
+final gatheringCreateInitialValueProvider =
+    Provider.family<
+      GatheringCreateInitialValue,
+      GatheringCreateBootstrapRequest
+    >(
+      (ref, request) => throw _gatheringCompositionFailure(),
+      retry: (_, _) => null,
+    );
+
+RuntimeFailure _gatheringCompositionFailure() {
+  return const RuntimeFailure(
     code: RuntimeFailureCodes.appSystemUnknownError,
-    semanticReason: 'gathering_remote_adapter_unavailable',
+    semanticReason: 'gathering_host_authority_adapter_unavailable',
     origin: RuntimeFailureOrigin.environment,
     kind: RuntimeFailureKind.unavailable,
     nature: RuntimeFailureNature.permanent,
-    location: const RuntimeFailureLocation(
+    location: RuntimeFailureLocation(
       businessObject: 'circle.gathering',
       functionModule: 'gathering_dependencies',
     ),
     context: RuntimeFailureContext(
       attributes: <RuntimeContextAttribute>[
-        RuntimeContextAttribute(key: 'port', value: portName),
+        RuntimeContextAttribute(
+          key: 'port',
+          value: 'GatheringHostAuthorityComposer',
+        ),
       ],
     ),
-    recovery: const RuntimeRecoveryDirective(
+    recovery: RuntimeRecoveryDirective(
       action: 'surface',
       disruptionLevel: 'fullPage',
     ),
@@ -60,8 +77,7 @@ CloudOperationInvocationContext _gatheringInvocationContext(
 AppUiSurface _gatheringSurfaceForPageId(String clientPageId) {
   return switch (clientPageId) {
     CircleRequestPageIds.createGatheringDraft ||
-    CircleRequestPageIds.publishGathering =>
-      AppUiSurfaces.gatheringCreate,
+    CircleRequestPageIds.publishGathering => AppUiSurfaces.gatheringCreate,
     _ => AppUiSurfaces.gatheringDetail,
   };
 }
@@ -70,14 +86,13 @@ T _gatheringPort<T>(Ref ref, CircleProductionAdapter adapter) {
   return CircleProductionComposition.generatedAdapter<T>(
     adapter,
     client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext:
-        (String clientPageId, {String? idempotencyKey}) =>
-            _gatheringInvocationContext(
-              ref,
-              surface: _gatheringSurfaceForPageId(clientPageId),
-              clientPageId: clientPageId,
-              idempotencyKey: idempotencyKey,
-            ),
+    invocationContext: (String clientPageId, {String? idempotencyKey}) =>
+        _gatheringInvocationContext(
+          ref,
+          surface: _gatheringSurfaceForPageId(clientPageId),
+          clientPageId: clientPageId,
+          idempotencyKey: idempotencyKey,
+        ),
   );
 }
 

@@ -76,7 +76,8 @@
 - GIVEN product-ops 已写入 global scope、qualityAdmission=approved、未过期且未下架的精品条目。
 - GIVEN recommendation-service 已消费精品池事件并重建候选投影，Content 拥有 Post 当前 published/approved/visible 事实。
 - WHEN 用户进入 premium_stream/similar 精品流。
-- THEN recommendation-service 从本地 `RecommendationCandidateIndexView` 装配 `RecallPath=premium_pool` 候选并交给 `RankedRecommendationWindow` 统一过滤和排序；Content 只对返回 Post ID 做当前权限 hydration、页面交付和交付曝光事实回传。
+- THEN recommendation-service 从本地 `RecommendationCandidateIndexView` 装配 `RecallPath=premium_pool` 候选并交给 `RankedRecommendationWindow` 统一过滤和排序。
+- THEN Content 只对返回 Post ID 做当前权限 hydration、页面交付和交付曝光事实回传。
 - AND 健康零 eligible 视频返回 canonical 成功空结果；依赖异常返回 canonical failure 及闭集 `failureStage`。商业准出另行强制至少一条通过 release-bound supply、负反馈/隐藏/拉黑、published/safety、playable-video 与 same-release hydration 检查的当前 canonical release 视频。
 
 ## 6. 依赖

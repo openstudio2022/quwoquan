@@ -10,10 +10,6 @@ collections:
         policyId: 1
         releaseDigest: 1
       unique: true
-    - name: idx_assistant_policy_release_staged
-      keys:
-        policyId: 1
-        stagedAt: -1
   assistant_policy_release_receipts:
     publication_role: not_published
     entity: AssistantPolicyRelease

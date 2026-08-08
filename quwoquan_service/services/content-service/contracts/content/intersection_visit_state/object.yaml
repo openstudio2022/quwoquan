@@ -9,8 +9,20 @@ access:
   cross_context: public_contract_only
   queries: named_reader
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.content.intersection_visit_state.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - userId 唯一（一 user 一文档）
 - 维度集合固定为 identity/location/content/interest/relationship

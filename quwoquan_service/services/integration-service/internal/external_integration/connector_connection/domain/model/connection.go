@@ -90,7 +90,7 @@ type MutationResult struct {
 }
 
 type ResolveCapabilityInput struct {
-	AccountID      string
+	ResolutionID   string
 	CapabilityKey  string
 	SurfaceKind    string
 	ConnectionRefs []string
@@ -117,11 +117,11 @@ const (
 )
 
 func NormalizeResolveCapabilityInput(input ResolveCapabilityInput) (ResolveCapabilityInput, error) {
-	input.AccountID = strings.TrimSpace(input.AccountID)
+	input.ResolutionID = strings.TrimSpace(input.ResolutionID)
 	input.CapabilityKey = strings.TrimSpace(input.CapabilityKey)
 	input.SurfaceKind = strings.TrimSpace(input.SurfaceKind)
 	input.ConnectionRefs = normalizeUnique(input.ConnectionRefs)
-	if input.AccountID == "" || input.CapabilityKey == "" ||
+	if input.ResolutionID == "" || input.CapabilityKey == "" ||
 		!oneOf(input.SurfaceKind, "personal", "conversation", "circle") ||
 		len(input.ConnectionRefs) == 0 || len(input.ConnectionRefs) > 32 {
 		return ResolveCapabilityInput{}, ErrInvalidArgument

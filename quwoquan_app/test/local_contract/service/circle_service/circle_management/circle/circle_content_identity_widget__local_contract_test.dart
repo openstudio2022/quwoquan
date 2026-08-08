@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/circle_creations_presentation_slots.dart'
+    show circleCreationsParticipantSlots;
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/circle_state_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/section_creations.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/section_creations.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/circle_service/circle_management/circle/typed_circle_query_test_double.dart';
@@ -60,6 +62,7 @@ void main() {
             circleId: 'fixture_circle_photo',
             isDark: false,
             role: CircleRole.owner,
+            participantSlots: circleCreationsParticipantSlots,
           ),
         ),
       ),
@@ -88,6 +91,7 @@ void main() {
             circleId: 'fixture_circle_photo',
             isDark: false,
             role: CircleRole.owner,
+            participantSlots: circleCreationsParticipantSlots,
           ),
         ),
         circleQuery: circleQuery,

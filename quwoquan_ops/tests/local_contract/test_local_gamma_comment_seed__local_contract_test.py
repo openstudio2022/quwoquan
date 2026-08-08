@@ -75,6 +75,7 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
 
         command = run.call_args.args[0]
         self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["mutationPolicy"], "read_only")
         self.assertEqual(
             command[command.index("--release-id") + 1],
             "release-gamma-a",
@@ -118,7 +119,11 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
                 mock.patch.object(
                     local_gamma_release_consumer,
                     "run_release_consumer",
-                    return_value={"status": "passed", "exitCode": 0},
+                    return_value={
+                        "status": "passed",
+                        "mutationPolicy": "read_only",
+                        "exitCode": 0,
+                    },
                 ),
                 mock.patch.object(
                     local_gamma_release_consumer.sys,

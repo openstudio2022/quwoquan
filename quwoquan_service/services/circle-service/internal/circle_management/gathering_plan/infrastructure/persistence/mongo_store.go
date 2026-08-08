@@ -44,9 +44,6 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 func (store *MongoAggregateStore) EnsureIndexes(ctx context.Context) error {
 	if _, err := store.plans.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "gatheringId", Value: 1}}, Options: options.Index().SetName("uq_gathering_plan_gathering").SetUnique(true)},
-		{Keys: bson.D{{Key: "_id", Value: 1}, {Key: "currentRevisionNumber", Value: -1}}, Options: options.Index().SetName("idx_gathering_plan_current_revision")},
-		{Keys: bson.D{{Key: "_id", Value: 1}, {Key: "proposals.proposalId", Value: 1}}, Options: options.Index().SetName("idx_gathering_plan_proposal")},
-		{Keys: bson.D{{Key: "updatedAt", Value: -1}, {Key: "_id", Value: 1}}, Options: options.Index().SetName("idx_gathering_plan_updated")},
 	}); err != nil {
 		return err
 	}

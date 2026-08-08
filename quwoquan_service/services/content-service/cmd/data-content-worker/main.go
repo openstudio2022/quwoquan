@@ -33,7 +33,7 @@ import (
 // pythonWorkerModule is an internal adapter, not a public qwq-data command.
 // The worker process imports its callable explicitly so the Python module has
 // no second executable entrypoint alongside scripts/cli.py.
-const pythonWorkerModule = "from content.execution.reliabletask_worker import run_process_worker; run_process_worker()"
+const pythonWorkerModule = "from content.execution.queue.reliabletask.worker import run_process_worker; run_process_worker()"
 
 func main() {
 	if err := run(); err != nil {
@@ -73,10 +73,40 @@ func run() error {
 		"",
 		"--observe-execution 绑定的四载体类型",
 	)
+	observeStage := flag.String(
+		"observe-stage",
+		"",
+		"--observe-execution 绑定的 author/publish stage",
+	)
 	observeBindingDigest := flag.String(
 		"observe-binding-digest",
 		"",
 		"Data 冻结 execution-envelope 集合的 sha256 绑定",
+	)
+	observeCampaignBinding := flag.String(
+		"observe-campaign-binding",
+		"",
+		"Data 冻结 campaign generation/fence/source JSON 绑定",
+	)
+	observeExecutionEnvelopeDigest := flag.String(
+		"observe-execution-envelope-digest",
+		"",
+		"Data 冻结 execution queue backend envelope 的 sha256 绑定",
+	)
+	observeJobSetEnvelopeDigest := flag.String(
+		"observe-job-set-envelope-digest",
+		"",
+		"Data create-once stage job-set envelope 的 sha256 绑定",
+	)
+	observeJobSetDigest := flag.String(
+		"observe-job-set-digest",
+		"",
+		"Data stage expectedTasks 的 sha256 绑定",
+	)
+	observeActualTaskDigest := flag.String(
+		"observe-actual-task-digest",
+		"",
+		"Data stage 实际物化 tasks 的 sha256 绑定",
 	)
 	flag.Parse()
 	if strings.TrimSpace(*observeExecutionID) != "" {
@@ -90,13 +120,25 @@ func run() error {
 		return observeExecutionState(
 			strings.TrimSpace(*observeExecutionID),
 			strings.TrimSpace(*observeCarrier),
+			strings.TrimSpace(*observeStage),
 			strings.TrimSpace(*observeBindingDigest),
+			strings.TrimSpace(*observeExecutionEnvelopeDigest),
+			strings.TrimSpace(*observeJobSetEnvelopeDigest),
+			strings.TrimSpace(*observeJobSetDigest),
+			strings.TrimSpace(*observeActualTaskDigest),
+			strings.TrimSpace(*observeCampaignBinding),
 		)
 	}
 	if strings.TrimSpace(*observeCarrier) != "" ||
-		strings.TrimSpace(*observeBindingDigest) != "" {
+		strings.TrimSpace(*observeStage) != "" ||
+		strings.TrimSpace(*observeBindingDigest) != "" ||
+		strings.TrimSpace(*observeExecutionEnvelopeDigest) != "" ||
+		strings.TrimSpace(*observeJobSetEnvelopeDigest) != "" ||
+		strings.TrimSpace(*observeJobSetDigest) != "" ||
+		strings.TrimSpace(*observeActualTaskDigest) != "" ||
+		strings.TrimSpace(*observeCampaignBinding) != "" {
 		return errors.New(
-			"--observe-carrier and --observe-binding-digest require --observe-execution",
+			"observer identity flags require --observe-execution",
 		)
 	}
 	if strings.TrimSpace(*discardExecutionID) != "" {
@@ -224,10 +266,19 @@ func run() error {
 	if stageErr != nil {
 		return stageErr
 	}
-	outboxCount, countErr := store.CountDataContentOutboxes(
+	idempotencyKeys := make([]string, 0, len(request.Jobs))
+	for _, job := range request.Jobs {
+		key, keyErr := job.ValidateIdentity()
+		if keyErr != nil {
+			return keyErr
+		}
+		idempotencyKeys = append(idempotencyKeys, key)
+	}
+	outboxCount, countErr := store.CountDataContentOutboxesByIdempotencyKeys(
 		context.Background(),
 		request.ExecutionID,
 		stage,
+		idempotencyKeys,
 	)
 	if countErr != nil {
 		return fmt.Errorf("count data content outboxes: %w", countErr)
@@ -257,8 +308,30 @@ func run() error {
 		request.RequiredQuota,
 		finalizedObjectCount,
 	)
+	actualTaskDigest, actualDigestErr := reliabletask.DataContentAsyncTaskDigest(tasks)
+	if actualDigestErr != nil {
+		return fmt.Errorf("digest actual data content tasks: %w", actualDigestErr)
+	}
+	report, err = reliabletask.BindDataContentFleetReport(
+		report,
+		request.ExecutionID,
+		stage,
+		request.JobSetEnvelopeDigest,
+		request.JobSetDigest,
+		actualTaskDigest,
+	)
+	if err != nil {
+		return err
+	}
 	if err := writeJSONAtomically(*reportPath, report); err != nil {
 		return err
+	}
+	if actualTaskDigest != request.ActualTaskDigest {
+		return fmt.Errorf(
+			"actual task digest drift: observed=%s expected=%s",
+			actualTaskDigest,
+			request.ActualTaskDigest,
+		)
 	}
 	if runErr != nil {
 		return runErr
@@ -359,6 +432,12 @@ func runWorkers(
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	checkpointStore, ok := fleet.Store.(reliabletask.DataContentCheckpointStore)
+	if !ok {
+		return nil, errors.New("data content fleet requires durable checkpoint store")
+	}
+	checkpointEpoch := time.Now().UTC()
+	checkpointTracker := reliabletask.NewDataContentCheckpointTracker(checkpointEpoch)
 	errorsCh := make(chan error, workers)
 	var group sync.WaitGroup
 	for index := 0; index < workers; index++ {
@@ -419,7 +498,19 @@ func runWorkers(
 				terminal++
 			}
 		}
-		if len(tasks) == len(request.Jobs) && terminal == len(tasks) {
+		allTerminal := len(tasks) == len(request.Jobs) && terminal == len(tasks)
+		if err := flushDuePartitionCheckpoints(
+			ctx,
+			checkpointStore,
+			checkpointTracker,
+			request,
+			tasks,
+			time.Now().UTC(),
+			allTerminal,
+		); err != nil {
+			return tasks, err
+		}
+		if allTerminal {
 			return tasks, nil
 		}
 		select {
@@ -439,6 +530,44 @@ func runWorkers(
 			}
 		}
 	}
+}
+
+func flushDuePartitionCheckpoints(
+	ctx context.Context,
+	store reliabletask.DataContentCheckpointStore,
+	tracker *reliabletask.DataContentCheckpointTracker,
+	request importer.FleetRequest,
+	tasks []reliabletask.ReliableAsyncTask,
+	now time.Time,
+	force bool,
+) error {
+	stage, err := request.Stage()
+	if err != nil {
+		return err
+	}
+	due, err := tracker.Due(
+		request.ExecutionID,
+		stage,
+		request.JobSetDigest,
+		tasks,
+		request.CheckpointPolicy.EveryFinalizedObjects,
+		time.Duration(request.CheckpointPolicy.EverySeconds)*time.Second,
+		now,
+		force,
+	)
+	if err != nil {
+		return err
+	}
+	for _, checkpoint := range due {
+		if err := store.FlushDataContentPartitionCheckpoint(
+			ctx,
+			checkpoint,
+		); err != nil {
+			return fmt.Errorf("flush data content partition checkpoint: %w", err)
+		}
+		tracker.Commit(checkpoint)
+	}
+	return nil
 }
 
 func loadExecutionTasks(

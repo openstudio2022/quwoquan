@@ -139,6 +139,70 @@
 - THEN Notification 主消息收件箱只出现一张 typed 邀请卡，未泄露群内容、名单或 after_join 精确信息，重放不重复，终态或过期后 action 被移除。
 - AND 只有收件人能以卡片携带的 owner versions 调用 Circle accept/decline；接受后 Participation 先成为 active，再由 membership projection 入群，取消后点击返回 canonical invitation inactive。
 
+<a id="gwt-007"></a>
+### GWT-007 公开详情主动作与 Host Console 经 Remote 事实收敛
+
+- GIVEN 已认证访客与有权 Host 通过 production Remote 打开同一 Gathering 公开详情，服务端投影返回按披露裁剪的详情、唯一 primaryAction、当前 aggregate/participation versions 与 Host authority capabilities。
+- WHEN 访客执行服务端给出的加入、申请、接受邀请、候补或进入群聊动作，Host 在 Console 审批、邀请、移除、调整容量/准入、更新重大信息、取消、开始或记录 Outcome。
+- THEN 每个可写动作只调用 Circle 对应 typed operation 并携带当前 owner versions 与幂等身份，成功后重新读取详情、Participation、容量和 Console 权限；进入群聊只使用详情返回且已授权的 conversationId。
+- AND 越权、陈旧版本、满员、准入关闭或依赖失败保留最后确认的 owner 事实并展示 canonical 恢复终态，不开放敏感详情、room access 或本地伪成功动作。
+
+<a id="gwt-008"></a>
+### GWT-008 JoinOpenGathering 原子创建唯一有效 Participation
+
+- GIVEN published Gathering 处于开放准入且仍有席位，同一 Persona 尚无当前有效 Participation。
+- WHEN Persona 以当前 owner versions 调用 `JoinOpenGathering` 并重放同一意图。
+- THEN 只创建或推进该 Persona 的一条 Participation 为 active，席位计数不超过容量且 room access 只由该 owner 结果投影。
+- AND 满员、准入关闭、越权或陈旧 version 返回 canonical failure，完全重放返回同一结果且不形成半加入或第二 Participation。
+
+<a id="gwt-009"></a>
+### GWT-009 ReviewGatheringApplication 只裁决指定待审批申请
+
+- GIVEN approval admission 下存在指定 application_pending Participation，Organizer 持有当前 Gathering 与 Participation versions。
+- WHEN Organizer 以 approve 或 reject 调用 `ReviewGatheringApplication` 并重放同一意图。
+- THEN approve 在容量边界内把该 Participation 推进为 active，reject 以独立原因关闭该申请且不授予 room access。
+- AND 越权、容量不足、非 pending 或陈旧 version 返回 canonical failure，重放不重复占席、不改写其他申请或泄露申请答案。
+
+<a id="gwt-010"></a>
+### GWT-010 LeaveGathering 在开场前释放席位与访问
+
+- GIVEN Persona 在尚未开场的 Gathering 拥有有效 Participation 与当前 version。
+- WHEN Persona 调用 `LeaveGathering` 并重放同一意图。
+- THEN 该 Participation 以普通退出原因关闭，席位释放且 room、文件、计划和精确地点访问按 owner projection 撤销。
+- AND 开场后请求必须改用提前离开语义，越权或陈旧 version 返回 canonical failure，重放不改变 Follow、mutual 或 CircleMembership。
+
+<a id="gwt-011"></a>
+### GWT-011 DeclareGatheringLeaveEarly 只记录开场后个人提前离开
+
+- GIVEN 已经开场的 Gathering 中一名 active participant 持有当前 Participation version 与 typed attendance evidence。
+- WHEN participant 调用 `DeclareGatheringLeaveEarly` 并重放同一意图。
+- THEN 该 Participation 保留 identity 与 active state 供 Outcome/reconciliation 使用，但 attendance 进入 `left_early`；Circle 对该 Persona 的 room、文件、计划与精确地点访问立即变为 revoked，并发出唯一 owner revocation intent，不取消 Gathering、不结束其他 Participation。
+- AND 同一 Participation 不得凭原 version 重新获得上述访问；开场前、无 active Participation、越权或陈旧 version 返回 canonical failure，重放不产生第二出席事实、第二撤权意图或关系变化。
+
+<a id="gwt-012"></a>
+### GWT-012 WatchGatheringAvailability 只创建名额提醒
+
+- GIVEN published Gathering 当前没有可加入席位，Persona 尚无 active Participation 或有效 AvailabilityWatch。
+- WHEN Persona 调用 `WatchGatheringAvailability` 并重放同一意图。
+- THEN typed command result 与 owner readback 只创建或恢复该 Persona 的一个 `active` AvailabilityWatch 并推进 watch version，不占席、不创建 Participation、不授予 room access。
+- AND Gathering 不可提醒、越权或陈旧 version 返回 canonical failure，重放不创建第二 watch 或改变 admission 状态。
+
+<a id="gwt-013"></a>
+### GWT-013 UnwatchGatheringAvailability 只取消本人提醒
+
+- GIVEN Persona 在目标 Gathering 拥有有效 AvailabilityWatch，Participation 与 admission 状态保持独立。
+- WHEN Persona 调用 `UnwatchGatheringAvailability` 并重放同一意图。
+- THEN typed command result 与 owner readback 只把本人的 AvailabilityWatch 推进为 `cancelled` 并推进 watch version，不释放或占用席位、不改变 Participation、admission 或其他 viewer 的提醒。
+- AND 越权或陈旧 version 返回 canonical failure，已关闭意图的重放保持同一结果且不恢复提醒。
+
+<a id="gwt-014"></a>
+### GWT-014 WithdrawGatheringApplication 只撤回本人待审批申请
+
+- GIVEN published Gathering 的 approval admission 下，已认证申请人拥有 application-source 的 `application_pending` Participation 与当前 Gathering/Participation versions，且 room binding、admission 和其他 Participation 已有 owner 确认事实。
+- WHEN 申请人调用 `WithdrawGatheringApplication` 并重放同一幂等意图，同时以错误 actor、陈旧 root/child version、非 application source、非 published 或 terminal root、非 pending Participation 及同 key 不同 payload 分别尝试撤回。
+- THEN 首次成功只把目标 Participation 以 `withdrawn` 原因关闭，保留同一 identity、attempt 与申请答案，并由 canonical owner readback、事务 receipt 和唯一 `GatheringParticipationChanged` outbox 共同确认；room binding、admission、其他 Participation/AvailabilityWatch 与关系事实不变。
+- AND 完全重放返回同一 owner 结果且不重复写入；所有越权、冲突、来源或状态非法请求返回 canonical failure，aggregate/version、receipt、outbox 与非目标事实均不产生部分副作用。
+
 ## 6. 依赖
 
 - 前置要求：[`gathering-coordination`](../spec.md) 的范围、要求与 SIT。
@@ -153,6 +217,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 App generated accept/decline、名单/审批/退出交互与真实账号 Remote UAT，以及重大变更确认、出席和跨域撤权的最终准出证据；root-owned Participation、seat hold、Organizer 席位分离、安全不可重入及邀请 outbox 到 Notification AppMessage 的幂等投影已有 local_contract/api_integration 证据。
-- 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004`、`GWT-005`、`GWT-006` 对应跨域 user_acceptance 通过；App 只调用 generated typed operation，邀请重放只保留一张卡、终态 action 不复活、接受前不授予 room access，且超员、同人多记录、半加入、未授权申请答案、自动 mutual 与撤权超时为零。
+- 影响或价值：尚缺 App generated accept/decline、名单/审批/退出交互与真实账号 Remote UAT，以及重大变更确认、出席和跨域撤权的最终准出证据；公开详情与 Host Console 虽已有 typed 页面边界，但 production Remote 的开始生命周期动作仍返回 unavailable，因此 `GWT-007` 与完整页面 UAT 继续 BLOCK。root-owned Participation、seat hold、Organizer 席位分离、安全不可重入及邀请 outbox 到 Notification AppMessage 的幂等投影已有 local_contract/api_integration 证据。
+- 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004`、`GWT-005`、`GWT-006`、`GWT-007`、`GWT-008`、`GWT-009`、`GWT-010`、`GWT-011`、`GWT-012`、`GWT-013`、`GWT-014` 对应跨域 user_acceptance 通过；App 只调用 generated typed operation，开始生命周期动作具备 canonical production Remote 实现，邀请重放只保留一张卡、终态 action 不复活、接受前不授予 room access，且超员、同人多记录、半加入、未授权申请答案、自动 mutual 与撤权超时为零。Android 与 iPhone physical 结果只由绑定同一候选的 ResultBundle 计入通过。
 - 依赖：父 L2 `OPEN-001`、`OPEN-003`，批准后的 App ContractGraph handoff，以及后续真实账号 Remote UAT。

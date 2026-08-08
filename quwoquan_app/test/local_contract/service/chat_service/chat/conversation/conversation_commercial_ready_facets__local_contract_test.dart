@@ -1,6 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-006
-// readiness_case: conversation_batch_get_conversations_app_local
 // readiness_case: conversation_list_contact_home_app_local
 // readiness_case: conversation_list_contacts_app_local
 // readiness_case: conversation_list_group_candidates_app_local
@@ -234,6 +233,10 @@ const Map<String, Object?> _conversation = <String, Object?>{
   'creatorId': 'persona-1',
   'circleId': '',
   'circleGroupId': '',
+  'gatheringId': '',
+  'gatheringSourceVersion': 0,
+  'accessMode': 'active',
+  'postingPolicy': 'member_chat',
   'entityId': '',
   'originType': 'ad_hoc_group',
   'maxSeq': 9,

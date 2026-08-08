@@ -1436,6 +1436,50 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             ],
         )
 
+    def test_reclaim_ports_inspects_canonical_block_without_active_candidate(self) -> None:
+        args = argparse.Namespace(
+            target="gamma-local",
+            fix="reclaim-ports",
+            report_dir="",
+        )
+        manifest = {
+            "profiles": {"gamma-local": {"blockStart": 19000, "blockEnd": 19999}},
+            "roles": {
+                "api-edge": {"slotOffset": 0},
+                "mongodb": {"slotOffset": 410},
+            },
+        }
+        with (
+            tempfile.TemporaryDirectory() as temporary_dir,
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(
+                stackctl,
+                "get_target",
+                return_value={"env": "gamma", "portProfile": "gamma-local"},
+            ),
+            mock.patch.object(
+                stackctl,
+                "resolve_report_dir",
+                return_value=Path(temporary_dir),
+            ),
+            mock.patch.object(stackctl, "load_port_manifest", return_value=manifest),
+            mock.patch.object(
+                stackctl,
+                "socket_probe",
+                side_effect=lambda port: port == 19410,
+            ),
+            mock.patch.object(
+                stackctl,
+                "_network_report",
+                side_effect=AssertionError("reclaim-ports must not load active candidate"),
+            ),
+            mock.patch.object(stackctl, "_write_summary_bundle"),
+        ):
+            payload = stackctl.command_repair(args)
+
+        self.assertEqual(payload["exitCode"], 0)
+        self.assertEqual(payload["details"], ["mongodb listens on 19410"])
+
     def test_reclaim_build_cache_accepts_failed_pre_inventory_after_recovery(
         self,
     ) -> None:
@@ -2372,7 +2416,8 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 "baselineId": "sha256:" + "f" * 64,
                 "imageDigest": image_set_digest,
                 "buildInputDigest": "sha256:" + "b" * 64,
-                "runtimeConfigDigest": "sha256:" + "c" * 64,
+                "configurationDigest": "sha256:" + "c" * 64,
+                "runtimeConfigDigest": "sha256:" + "a" * 64,
                 "providerRuntime": {
                     "images": {provider_role: provider_descriptor}
                 },
@@ -2407,6 +2452,41 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 composition = stackctl._bind_gamma_packaged_service_image_refs(
                     "gamma",
                     environment,
+                )
+
+            drifted_candidate = {
+                **candidate,
+                "configurationDigest": "sha256:" + "d" * 64,
+            }
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "deployment_candidate_dir",
+                    return_value=candidate_root,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_packaged_service_source_image_ref",
+                    side_effect=lambda _env, service: build_refs[service],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "active_deployment_candidate",
+                    return_value={"baselineId": candidate["baselineId"]},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "load_candidate_manifest",
+                    return_value=drifted_candidate,
+                ),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "package OCI configuration digest mismatch",
+                ),
+            ):
+                stackctl._bind_gamma_packaged_service_image_refs(
+                    "gamma",
+                    {"QWQ_LOCAL_RELEASE_TARGET": "gamma-local"},
                 )
 
             self.assertEqual(composition["imageDigest"], image_set_digest)
@@ -2451,7 +2531,8 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                     "baselineId": "sha256:" + "1" * 64,
                     "imageDigest": "sha256:" + "9" * 64,
                     "buildInputDigest": "sha256:" + "b" * 64,
-                    "runtimeConfigDigest": "sha256:" + "c" * 64,
+                    "configurationDigest": "sha256:" + "c" * 64,
+                    "runtimeConfigDigest": "sha256:" + "a" * 64,
                     "providerRuntime": {"images": {}},
                 },
                 "package OCI runtime differs from the active candidate",

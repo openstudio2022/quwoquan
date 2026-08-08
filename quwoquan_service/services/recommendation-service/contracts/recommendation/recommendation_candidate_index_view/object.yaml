@@ -12,6 +12,20 @@ relationships:
 - {name: author, target_object: user.Persona, reference_fields: [authorId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: detach}
 - {name: primary_homepage, target_object: entity.Homepage, reference_fields: [primaryHomepageId], kind: projection_source, cardinality: 'N:1', consistency: eventual, access: event, on_delete: detach}
 - {name: tags, target_object: tag.TagNodeView, reference_fields: [entityTagIds], kind: projection_source, cardinality: 'N:N', consistency: eventual, access: event, on_delete: detach}
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "服务内部投影与编排状态不构成小趣可用上下文，只服务所属域自身推进。"
 business_rules:
 - 候选只由上游 typed 事件构建，不跨库读取 Content、Entity、Circle 或 Tag 私有集合。
 - scenario 与 contentId 唯一定位 Post 候选；Gathering 子投影以 gatheringId 作为 sourceKey、aggregateVersion 作为 sourceVersion，任一旧事件都不得覆盖较新状态或复活 tombstone。
@@ -45,6 +59,7 @@ lifecycle:
   checkpoint: per_source_partition_sequence
   rebuild: recreate_candidate_indexes_then_replay_all_source_events
   tombstone: remove_candidate_and_auxiliary_indexes_keep_checkpoint
+  idempotency: aggregate_version
   event_consumers:
   - name: ProjectRecommendationCandidatePostLifecycle
     kind: projector

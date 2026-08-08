@@ -250,3 +250,27 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/authentication_challenge/postgres_challenge__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: protocol-substitute, digest_binding: candidate}
+  - case_id: authentication_challenge_send_otp_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: SendOtp}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/authentication_challenge/authentication_challenge_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: authentication_challenge_create_alipay_authorization_request_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CreateAlipayAuthorizationRequest}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/authentication_challenge/authentication_challenge_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: authentication_challenge_resolve_one_tap_login_hint_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ResolveOneTapLoginHint}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/authentication_challenge/authentication_challenge_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +10,7 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/app
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/image_pick_gateway.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
@@ -14,6 +18,8 @@ import 'package:quwoquan_app/service/user_service/account/user_account/presentat
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/contact_qr_image_analyzer.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
 
 Future<void> _pumpScanPage(
   WidgetTester tester, {
@@ -59,8 +65,22 @@ Future<void> _pumpScanPage(
   await tester.pump();
 }
 
+Future<void> _pumpAsyncWork(WidgetTester tester) async {
+  for (var frame = 0; frame < 8; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
 void main() {
-  tearDown(AppToast.dismiss);
+  setUp(() {
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+      'PUBLIC_WEB_BASE_URL': 'https://quwoquan.com',
+    }, enforceNativeLaunchBinding: false);
+  });
+  tearDown(() {
+    AppToast.dismiss();
+    CloudRuntimeConfig.clearNativeRuntimePackageForTest();
+  });
 
   testWidgets('无相机能力时使用自有 iOS 错误态，不暴露 mobile_scanner 默认英文文案', (tester) async {
     await _pumpScanPage(
@@ -90,12 +110,175 @@ void main() {
     );
 
     await tester.tap(find.text(ContactText.scanQrAlbum));
-    await tester.pumpAndSettle();
+    await _pumpAsyncWork(tester);
 
     expect(analyzer.lastPath, '/tmp/alice_qr.png');
     expect(repository.lastToken, 'token_alice');
     expect(repository.lastHandle, 'alice');
     expect(find.text('confirm:user_alice:alice:scan'), findsOneWidget);
+  });
+
+  testWidgets('非规范 public payload 在 Remote 前拒绝', (tester) async {
+    final repository = _ResolvingUserProfileRepository();
+    await _pumpScanPage(
+      tester,
+      capabilities: CapabilityProfile.mobile.copyWith(camera: false),
+      imagePicker: const _FakeImagePickGateway('/tmp/untrusted_qr.png'),
+      imageAnalyzer: const _FakeContactQrImageAnalyzer(
+        raw: 'https://evil.example/u/alice?qr=token_alice',
+      ),
+      profileEditQuery: repository,
+    );
+
+    await tester.tap(find.text(ContactText.scanQrAlbum));
+    await _pumpAsyncWork(tester);
+
+    expect(repository.callCount, 0);
+    expect(find.text(ContactText.scanQrInvalidCode), findsOneWidget);
+    expect(find.textContaining('confirm:'), findsNothing);
+    AppToast.dismiss();
+    await tester.pump();
+  });
+
+  final invalidResolutions =
+      <({String description, ProfileQrResolveWire resolution})>[
+        (
+          description: '非 accepted scanStatus',
+          resolution: _resolution(scanStatus: 'rejected'),
+        ),
+        (description: '空 personaId', resolution: _resolution(personaId: '')),
+        (
+          description: '不一致 userHandle',
+          resolution: _resolution(userHandle: 'mallory'),
+        ),
+        (
+          description: '不一致 publicProfileUrl',
+          resolution: _resolution(
+            publicProfileUrl: 'https://quwoquan.com/u/mallory',
+          ),
+        ),
+      ];
+  for (final scenario in invalidResolutions) {
+    testWidgets('Remote ${scenario.description} 时 fail-closed 且可重新尝试', (
+      tester,
+    ) async {
+      final repository = _ResolvingUserProfileRepository(
+        resolution: scenario.resolution,
+      );
+      await _pumpScanPage(
+        tester,
+        capabilities: CapabilityProfile.mobile.copyWith(camera: false),
+        imagePicker: const _FakeImagePickGateway('/tmp/alice_qr.png'),
+        imageAnalyzer: const _FakeContactQrImageAnalyzer(
+          raw: 'https://quwoquan.com/u/alice?qr=token_alice',
+        ),
+        profileEditQuery: repository,
+      );
+
+      await tester.tap(find.text(ContactText.scanQrAlbum));
+      await _pumpAsyncWork(tester);
+
+      expect(repository.callCount, 1);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.textContaining('confirm:'), findsNothing);
+
+      Navigator.of(tester.element(find.byType(CupertinoAlertDialog))).pop();
+      await _pumpAsyncWork(tester);
+      await tester.tap(find.text(ContactText.scanQrAlbum));
+      await _pumpAsyncWork(tester);
+
+      expect(repository.callCount, 2);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.textContaining('confirm:'), findsNothing);
+      Navigator.of(tester.element(find.byType(CupertinoAlertDialog))).pop();
+      await _pumpAsyncWork(tester);
+    });
+  }
+
+  testWidgets('canonical Remote failure 提供显式 retry 并在成功后唯一导航', (tester) async {
+    final repository = _ResolvingUserProfileRepository(
+      onResolve: (token, handle, callCount) async {
+        if (callCount == 1) {
+          throw StateError('canonical failure');
+        }
+        return _resolution();
+      },
+    );
+    await _pumpScanPage(
+      tester,
+      capabilities: CapabilityProfile.mobile.copyWith(camera: false),
+      imagePicker: const _FakeImagePickGateway('/tmp/alice_qr.png'),
+      imageAnalyzer: const _FakeContactQrImageAnalyzer(
+        raw: 'https://quwoquan.com/u/alice?qr=token_alice',
+      ),
+      profileEditQuery: repository,
+    );
+
+    await tester.tap(find.text(ContactText.scanQrAlbum));
+    await _pumpAsyncWork(tester);
+    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+
+    await tester.tap(find.byType(CupertinoDialogAction).last);
+    await tester.pumpAndSettle();
+
+    expect(repository.callCount, 2);
+    expect(find.text('confirm:user_alice:alice:scan'), findsOneWidget);
+  });
+
+  testWidgets('同一进行中 attempt 忽略重复相册触发并只导航一次', (tester) async {
+    final pending = Completer<ProfileQrResolveWire>();
+    final repository = _ResolvingUserProfileRepository(
+      onResolve: (_, _, _) => pending.future,
+    );
+    await _pumpScanPage(
+      tester,
+      capabilities: CapabilityProfile.mobile.copyWith(camera: false),
+      imagePicker: const _FakeImagePickGateway('/tmp/alice_qr.png'),
+      imageAnalyzer: const _FakeContactQrImageAnalyzer(
+        raw: 'https://quwoquan.com/u/alice?qr=token_alice',
+      ),
+      profileEditQuery: repository,
+    );
+
+    await tester.tap(find.text(ContactText.scanQrAlbum));
+    await tester.pump();
+    await tester.tap(find.text(ContactText.scanQrAlbum));
+    await tester.pump();
+    expect(repository.callCount, 1);
+
+    pending.complete(_resolution());
+    await tester.pumpAndSettle();
+
+    expect(repository.callCount, 1);
+    expect(find.text('confirm:user_alice:alice:scan'), findsOneWidget);
+  });
+
+  testWidgets('页面退出后的 late Remote completion 不再导航', (tester) async {
+    final pending = Completer<ProfileQrResolveWire>();
+    final repository = _ResolvingUserProfileRepository(
+      onResolve: (_, _, _) => pending.future,
+    );
+    await _pumpScanPage(
+      tester,
+      capabilities: CapabilityProfile.mobile.copyWith(camera: false),
+      imagePicker: const _FakeImagePickGateway('/tmp/alice_qr.png'),
+      imageAnalyzer: const _FakeContactQrImageAnalyzer(
+        raw: 'https://quwoquan.com/u/alice?qr=token_alice',
+      ),
+      profileEditQuery: repository,
+    );
+
+    await tester.tap(find.text(ContactText.scanQrAlbum));
+    await tester.pump();
+    expect(repository.callCount, 1);
+
+    await tester.pumpWidget(const MaterialApp(home: Text('replacement')));
+    pending.complete(_resolution());
+    await tester.pumpAndSettle();
+
+    expect(find.text('replacement'), findsOneWidget);
+    expect(find.textContaining('confirm:'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('从相册选择非联系人二维码时，明确提示提供联系人二维码', (tester) async {
@@ -158,21 +341,45 @@ class _FakeContactQrImageAnalyzer implements ContactQrImageAnalyzer {
 }
 
 class _ResolvingUserProfileRepository extends MockUserProfileRepository {
+  _ResolvingUserProfileRepository({
+    ProfileQrResolveWire? resolution,
+    this.onResolve,
+  }) : resolution = resolution ?? _resolution();
+
+  final ProfileQrResolveWire resolution;
+  final Future<ProfileQrResolveWire> Function(
+    String token,
+    String handle,
+    int callCount,
+  )?
+  onResolve;
   String? lastToken;
   String? lastHandle;
+  int callCount = 0;
 
   @override
   Future<ProfileQrResolveWire> resolveProfileQrToken({
     required String token,
     String handle = '',
   }) async {
+    callCount += 1;
     lastToken = token;
     lastHandle = handle;
-    return ProfileQrResolveWire(
-      personaId: 'user_alice',
-      userHandle: 'alice',
-      publicProfileUrl: 'https://quwoquan.com/u/alice',
-      scanStatus: 'accepted',
-    );
+    final handler = onResolve;
+    return handler == null ? resolution : handler(token, handle, callCount);
   }
+}
+
+ProfileQrResolveWire _resolution({
+  String personaId = 'user_alice',
+  String userHandle = 'alice',
+  String publicProfileUrl = 'https://quwoquan.com/u/alice',
+  String scanStatus = 'accepted',
+}) {
+  return ProfileQrResolveWire(
+    personaId: personaId,
+    userHandle: userHandle,
+    publicProfileUrl: publicProfileUrl,
+    scanStatus: scanStatus,
+  );
 }

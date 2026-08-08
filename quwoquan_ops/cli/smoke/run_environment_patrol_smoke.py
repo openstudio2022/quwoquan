@@ -105,6 +105,12 @@ RELEASE_APP_UAT_DEFINES = (
     ("data_release_image_work_id", "DATA_RELEASE_IMAGE_WORK_ID"),
     ("data_release_image_title", "DATA_RELEASE_IMAGE_TITLE"),
     ("data_release_creator_name", "DATA_RELEASE_CREATOR_NAME"),
+    ("data_release_creator_user_handle", "DATA_RELEASE_CREATOR_USER_HANDLE"),
+    ("data_release_creator_persona_id", "DATA_RELEASE_CREATOR_PERSONA_ID"),
+    (
+        "data_release_creator_avatar_asset_id",
+        "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
+    ),
     ("data_release_tag_label", "DATA_RELEASE_TAG_LABEL"),
     ("data_release_video_attribution", "DATA_RELEASE_VIDEO_ATTRIBUTION"),
 )
@@ -189,12 +195,12 @@ LOCAL_ENVIRONMENT_ALIAS_TARGETS = {
     "local-prod-sim": "prod-sim",
 }
 RUNTIME_ANONYMOUS_SESSION_MODES = {
-    "local-beta": "beta_local_anonymous_runtime",
-    "beta-local": "beta_local_anonymous_runtime",
-    "local-gamma": "gamma_local_anonymous_runtime",
-    "gamma-local": "gamma_local_anonymous_runtime",
-    "local-prod-sim": "prod_sim_anonymous_runtime",
-    "prod-sim": "prod_sim_anonymous_runtime",
+    "local-beta": "runtime_anonymous_session",
+    "beta-local": "runtime_anonymous_session",
+    "local-gamma": "runtime_anonymous_session",
+    "gamma-local": "runtime_anonymous_session",
+    "local-prod-sim": "runtime_anonymous_session",
+    "prod-sim": "runtime_anonymous_session",
 }
 FORBIDDEN_PROD_PLAYBACK_CANARY_TOKENS = frozenset(
     {"fixture", "mock", "seed", "test"}
@@ -490,9 +496,9 @@ def _runtime_anonymous_session_mode(args: argparse.Namespace) -> str:
 def _public_video_canary_session_mode(args: argparse.Namespace) -> str:
     target_name = _local_target_for_environment_alias(args.env_name)
     if target_name == "beta-local":
-        return "beta_local_anonymous_public_video"
+        return "anonymous_public_video_session"
     if target_name == "gamma-local":
-        return "gamma_local_anonymous_public_video"
+        return "anonymous_public_video_session"
     raise ValueError(f"{target_name} does not support anonymous public video canary")
 
 
@@ -1734,7 +1740,14 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
     payload = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "quwoquan_app" / "scripts" / "device" / "discover_flutter_mobile_devices.py"),
+            str(
+                REPO_ROOT
+                / "quwoquan_app"
+                / "scripts"
+                / "tools"
+                / "device"
+                / "discover_flutter_mobile_devices.py"
+            ),
         ],
         cwd=str(REPO_ROOT),
         text=True,

@@ -78,7 +78,7 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 		),
 		publicObjectDescriptor(
 			"circle.circle_context",
-			CircleContextResolverRef,
+			"circle.current_context",
 			"circle-service",
 			"circle.circle.GetCircle",
 			"circle.CircleDetailQuery",
@@ -88,7 +88,7 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 		),
 		publicObjectDescriptor(
 			"content.post_context",
-			ContentContextResolverRef,
+			"content.current_context",
 			"content-service",
 			"content.post.GetPost",
 			"content.ContentPostDetailQuery",
@@ -98,7 +98,7 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 		),
 		publicObjectDescriptor(
 			"entity.homepage_context",
-			EntityContextResolverRef,
+			"entity.current_context",
 			"entity-service",
 			"entity.homepage.GetHomepageDetail",
 			"entity.HomepageByIdQuery",
@@ -125,7 +125,7 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 			descriptors[index].OwnerOperationRefs = []string{
 				"user.user_account.GetUserInterestProfile",
 			}
-			descriptors[index].ObjectTypeRefs = []string{"account.UserAccount"}
+			descriptors[index].ObjectTypeRefs = []string{"user.UserAccount"}
 		case "conversation.current_context":
 			descriptors[index].MaxFreshnessSeconds = 15 * 60
 			descriptors[index].OwnerOperationRefs = []string{

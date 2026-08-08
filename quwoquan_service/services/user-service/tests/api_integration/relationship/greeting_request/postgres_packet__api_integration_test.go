@@ -18,6 +18,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"quwoquan_service/runtime/operation"
+	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
 	greetinghttp "quwoquan_service/services/user-service/internal/relationship/greeting_request/adapters/inbound/http"
 	greetingapp "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
 	greetingmodel "quwoquan_service/services/user-service/internal/relationship/greeting_request/domain/model"
@@ -98,6 +99,7 @@ func TestGreetingRequestPostgresStateReceiptAndOutboxAreAtomic(t *testing.T) {
 			apiConversationGateway{},
 			apiEventPublisher{},
 			apiGreetingStream{},
+			personapersistence.NewOwnerReader(pool),
 			apiGreetingPolicy{},
 		)
 		handler, err := greetinghttp.NewHandler(service)

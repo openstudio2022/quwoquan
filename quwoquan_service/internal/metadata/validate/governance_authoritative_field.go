@@ -22,7 +22,10 @@ func validateAuthoritativeFieldOwnership(contractGraph *graph.ContractGraph) []I
 	owners := map[string][]owner{}
 	for _, objectMap := range contractGraph.BusinessObjectMaps {
 		for _, object := range objectMap.Objects {
-			if object.ObjectKind != ast.ObjectKindAggregateRoot {
+			// process_manager 与 aggregate_root 同为权威状态所有者，同一 domain 的
+			// 两个上下文不得各自持有同名业务状态。
+			if object.ObjectKind != ast.ObjectKindAggregateRoot &&
+				object.ObjectKind != ast.ObjectKindProcessManager {
 				continue
 			}
 			for _, field := range object.FieldRoles["authoritative_state"] {

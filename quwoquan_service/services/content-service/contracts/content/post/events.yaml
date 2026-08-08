@@ -2,6 +2,7 @@ events:
 - name: PostSubmittedForReview
   description: PublishIntent 已被接收为不可公开 pending_review revision；审核 Case opener 消费本事实，只有 allow 或后续 approved 才可产生 PostPublished。
   delivery_semantics: transactional_outbox
+  wire_event_type: PostSubmittedForReview
   payload_entity: Post
   payload_fields:
   - postId
@@ -18,6 +19,7 @@ events:
   description: 一次性 PublishIntent 被接受并完成发布；引用发布时 payload 自包含 sourcePostId 与源帖作者（sourcePostAuthorId），"被引用"通知由此驱动，不设第二个 PostQuoted
     事实。
   delivery_semantics: transactional_outbox
+  wire_event_type: PostPublished
   payload_entity: Post
   payload_fields:
   - postId
@@ -66,6 +68,7 @@ events:
 - name: PostModerationRejected
   description: 当前 Post revision 被人工审核拒绝；公开读模型必须下架，作者站内信展示结构化原因和复制为新草稿动作。
   delivery_semantics: transactional_outbox
+  wire_event_type: PostModerationRejected
   payload_entity: Post
   payload_fields:
   - postId
@@ -78,6 +81,7 @@ events:
 - name: PostUpdated
   description: 内容更新；携带 Circle/Search/Recommendation 可重建读投影所需的当前公开 Post 快照。
   delivery_semantics: transactional_outbox
+  wire_event_type: PostUpdated
   payload_entity: Post
   payload_fields:
   - postId
@@ -116,6 +120,7 @@ events:
 - name: PostSettingsUpdated
   description: 发布后可变设置更新（可见性 / 小趣排除 / Homepage 引用）
   delivery_semantics: transactional_outbox
+  wire_event_type: PostSettingsUpdated
   payload_entity: Post
   payload_fields:
   - postId
@@ -153,6 +158,7 @@ events:
 - name: PostPromotedToWork
   description: 点滴原地升级为作品
   delivery_semantics: transactional_outbox
+  wire_event_type: PostPromotedToWork
   payload_entity: Post
   payload_fields:
   - postId
@@ -193,6 +199,7 @@ events:
 - name: PostDeleted
   description: 内容删除；content-comment-tombstone-projector 消费本事实将该 Post 全部评论级联 tombstoned。
   delivery_semantics: transactional_outbox
+  wire_event_type: PostDeleted
   payload_entity: Post
   payload_fields:
   - postId
@@ -204,6 +211,7 @@ events:
 - name: PostPrivacyRedacted
   description: 隐私删除第一阶段完成，个人字段已脱敏
   delivery_semantics: transactional_outbox
+  wire_event_type: PostPrivacyRedacted
   payload_entity: Post
   payload_fields:
   - postId
@@ -213,6 +221,7 @@ events:
 - name: PostPurged
   description: retention 到期后 Post 与墓碑硬清除
   delivery_semantics: transactional_outbox
+  wire_event_type: PostPurged
   payload_entity: Post
   payload_fields:
   - postId
@@ -220,6 +229,7 @@ events:
 - name: PostImported
   description: 签名不可变 Data release 经 Post release importer 写入权威 Post 并发布生命周期事实
   delivery_semantics: transactional_outbox
+  wire_event_type: PostImported
   payload_entity: Post
   payload_fields:
   - postId

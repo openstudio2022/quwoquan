@@ -100,7 +100,7 @@ func (h *RecentSearchHandler) handleUpsert(w http.ResponseWriter, r *http.Reques
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		status = "invalid"
-		writeErr(w, requestID, rterrors.NewInvalidArgument(moduleSearch, "最近搜索请求格式不正确。", "decode recent upsert body: "+err.Error()))
+		writeErr(w, requestID, recentInvalidArgument("decode recent upsert body: "+err.Error()))
 		return
 	}
 	result, err := h.facade.Upsert(r.Context(), recentsearch.UpsertCommand{
@@ -195,4 +195,13 @@ func requiredPersona(w http.ResponseWriter, r *http.Request, requestID string) (
 
 func idempotencyKeyFrom(r *http.Request) string {
 	return strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+}
+
+func recentInvalidArgument(debug string) error {
+	return rterrors.NewAppError(
+		rterrors.NewCode(moduleSearch, rterrors.KindUser, "recent_invalid_argument"),
+		"最近搜索请求格式不正确。",
+		debug,
+	).WithMetadata("recent_invalid_argument", http.StatusBadRequest).
+		WithRecoveryDirective("surface", "inlineCard", 0)
 }

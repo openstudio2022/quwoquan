@@ -1,5 +1,4 @@
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
-// readiness_case: weather-provider-protocol-api
 package api_integration
 
 import (

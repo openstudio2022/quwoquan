@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/publish_settings_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('CreateDraft', () {
@@ -138,7 +139,7 @@ void main() {
         tagLabels: <String>['城市漫步'],
         entityRefs: <String>['entity:sight:west_lake'],
         entityNames: <String>['西湖景区'],
-        assistantUsePolicy: 'allow_summary',
+        assistantUsePolicy: AssistantUsePolicy.exclude,
       );
 
       final restored = PublishSettings.fromMap(settings.toMap());
@@ -148,7 +149,7 @@ void main() {
       expect(restored.tagLabels, <String>['城市漫步']);
       expect(restored.entityRefs, <String>['entity:sight:west_lake']);
       expect(restored.entityNames, <String>['西湖景区']);
-      expect(restored.assistantUsePolicy, 'allow_summary');
+      expect(restored.assistantUsePolicy, AssistantUsePolicy.exclude);
     });
   });
 }

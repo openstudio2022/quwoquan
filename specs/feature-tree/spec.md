@@ -118,10 +118,10 @@
 ### REQ-009 当前全部跨对象 Journey 商用准出
 
 - 当前全部 Journey 的 page/surface/operation/object/store/event/behavior/metric 节点可正向追踪，且无反向孤儿。
-- command 经过 aggregate owner，query 读取 named Slice；App 只访问 generated Gateway operation。
+- command 经过该事实唯一 write owner，query 读取 named Slice；App 只访问 generated Gateway operation。
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
-- alpha/beta/gamma/prod 均使用同一个 production Remote composition；内容、Creator、实体与发布媒体只来自对应环境已激活的 canonical immutable release，用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效。Alpha/Beta/Gamma 可创建候选绑定的真实非生产验收数据，Prod 只接受真实用户或正式运营行为。
+- alpha/beta/gamma/prod 均使用同一个 production Remote composition。Alpha/Beta/Gamma test-live 允许在无 active content release 时编译启动并只呈现 canonical `no_active_release`/typed unavailable，不注入 Mock、fixture 或 seed。凡宣称内容、Creator、实体或发布媒体可用的验收仍必须来自 canonical immutable release。Prod 只接受 immutable release、真实用户或正式运营行为。
 - 环境名不再隐含内容分发成熟度；`productLifecycleState=research|commercial` 必须由受治理配置、immutable release、activation receipt 与 App readback 同源显式声明。
 - `research` 可在内部四环境消费权利尚未验证但可合法取得的素材，前提是身份白名单、匿名访问关闭、私有短签媒体、禁止分享/导出/索引与审计日志全部有证据。
 - `commercial` 只接受逐资产商业分发授权闭合的独立新 release。
@@ -132,15 +132,29 @@
 ### REQ-010 以业务对象为中心的端云 Object Facade、统一公共 URL、存储无关 Data Ports、页面 Query Slice、错误恢复和三层测试合同
 
 - 以业务对象为中心的端云 Object Facade、统一公共 URL、存储无关 Data Ports、页面 Query Slice、错误恢复和三层测试合同。
-- App 业务实现按 canonical `domain/context/object` 身份形成纵切，业务源码只位于该对象的 `domain/application/adapters/presentation` 层；共享 runtime、设计系统与本地化不承担业务对象 owner，旧 `ui/cloud/core/app/application/infrastructure` 大桶不得成为并行入口。
+- App 业务实现按 canonical `service/context/object` 身份形成纵切，业务源码只位于 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`，对象测试位于 `test/<layer>/service/<service>/<context>/<object>`；共享 runtime、设计系统与本地化不承担业务对象 owner，旧 `ui/cloud/core/app/application/infrastructure` 大桶不得成为并行入口。
 - App 层义务由对象的真实端侧能力决定：被 App operation 消费才要求 application/adapters，被页面认领才要求 application/presentation，只有端侧承担不变式或状态机才要求 domain；未被 App 消费的纯云对象不得以空目录或占位 facade 冒充实现。
 - 每个页面必须有唯一 source owner，并完整保留其参与对象；多对象页面由 source owner 的 presentation 组合其他对象公开 application port，不得因物理归档而丢失参与对象或直接导入兄弟对象私有层。
 - App 依赖方向保持 `presentation -> application -> domain` 与 `adapters -> application/domain`，具体 adapter 只在唯一 composition root 装配；跨对象只经公开 port/facade/event，禁止 barrel re-export、旧路径 shim、双轨 import 或为错误目录提供 fallback。
-- command 必须经过唯一 write owner 的聚合根；query 直接读取强类型 Slice，不为形式统一加载聚合。
+- 业务对象 kind 是闭集：
+  - `aggregate_root` 拥有一致性边界内的状态与不变式。
+  - `append_only_fact` 是不可变事实流。
+  - `projection` 是可由源事实重建的读模型。
+  - `external_reference` 是外部系统身份与元数据的本地引用。
+  - `runtime_session` 是会话生命周期内的运行态。
+  - `process_manager` 编排跨对象长流程（saga）。
+- 六类均已入仓；`process_manager` 的对象层、写入口与禁止层由架构门禁按真实对象树派生和验证，不得用其他 kind 顶替。
+- `owned_entity` 与 `value_object` 只允许作为 `aggregate_root` 的成员，不得独立成为 object root：owned entity 的 identity、version 与生命周期由聚合继承，禁止独立 Facade、Store 或 operation；value object 无 identity、不可变且按结构相等，由所属聚合的唯一 factory 规范化。
+- 任何状态变更必须经该事实唯一 write owner 的 `aggregate_root` 或 `process_manager`；跨对象写只经目标 owner 的公开 command，不得绕过 owner 直写其存储或投影。
+- `append_only_fact` 只能经其自身 append sink 追加，不得有 update 或 mutate 语义；纠正只能追加新事实，不得就地改写或删除历史。
+- `projection` 与 `external_reference` 不得有任何写操作：projection 只由源事实重建，external_reference 只随外部系统同步刷新，二者均不作为写入口或真相源。
+- `runtime_session` 不是持久化业务聚合，只在会话生命周期内存在；会话结束即失效，不得承载需要跨会话保留的业务事实。
+- `process_manager` 承载长流程编排，拥有自身状态、进度、取消与恢复语义；它不复制被编排对象的事实，只按公开 command 推进并记录编排进度。
+- query 直接读取强类型 Slice，不为形式统一加载聚合。
 - App 只访问统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL。
 - 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
 - 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
-- alpha/beta/gamma/prod 的内容对象均绑定 release/import receipt，非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
+- Alpha/Beta/Gamma test-live 的编译与启动不要求内容 release/import receipt；一旦验证内容对象或形成环境 Green 结论，仍必须绑定 release/import receipt。非生产交易对象绑定真实主体、公开 command receipt 与清理回执，Prod 交易对象只来自真实行为。
 - 测试 double 只存在于 local_contract 测试树，四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
 
 <a id="req-011"></a>
@@ -856,6 +870,16 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 travel-service 的逐对象 target-only 迁移、切流和退役已经完成。尚缺实现：Gathering + optional Plan/Map/Calendar/Experience 在 activity room/Board 的 production Remote 体验与真实 Provider/Connector。尚缺验收证据：跨域 API integration、离线/隐私恢复及 Android/iPhone UAT。
+- 影响或价值：尚缺实现：Gathering + optional Plan/Map/Calendar/Experience 在 activity room/Board 的 production Remote 体验与真实 Provider/Connector；尚缺验收证据：跨域 API integration、离线/隐私恢复及 Android/iPhone UAT。travel-service 生产主链已经静态退役，历史数据迁移由 `OPEN-011` 独立阻断。
 - 完成判定：Circle/Assistant/Chat/Content/Integration 的 local_contract 与真实跨域 api_integration 通过，Alpha/Beta/Gamma 同一候选完成 `travel_companion`、Board Plan Revision 提醒、Experience 归档、地图/日历、回顾草稿和分享 readback，Android/iPhone CaseResult 直接引用 `UAT-012`；Prod 另行完成正式 Provider、灰度和回滚。
 - 依赖：[`travel-journey`](./travel-journey/spec.md)、[`assistant-run-learning`](./assistant-run-learning/spec.md)、[`runtime`](./runtime/spec.md)、[`chat-conversation`](./chat-conversation/spec.md)、[`circle-community`](./circle-community/spec.md) 与 [`discovery-content`](./discovery-content/spec.md)。
+
+<a id="open-011"></a>
+### OPEN-011 travel-service 四环境历史数据 target-only 迁移准出
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺验收证据：alpha、beta、gamma、prod 真实历史 Trip 对象的 source inventory、canonical owner import/readback、parity、cutover 与 target-only rollback receipt。服务源码、契约、生成客户端、路由和运行拓扑已归零，现有仓内证据只验证合成快照上的迁移控制面合同。
+- 完成判定：四环境分别完成真实 source inventory、owner-command import、target readback、100% parity 与永久 target-only cutover；Prod 另有目标备份和不恢复源服务的 rollback 演练。全部历史对象计数守恒、orphan/collision 为零、原始 PII 零输出，receipt 绑定同一 crosswalk、ContractGraph、mapping、候选、审批和配置激活摘要。
+- 依赖：[`travel-journey OPEN-001`](./travel-journey/spec.md#open-001)、Circle/Chat/Content target owner、四环境受保护 inventory 与审批证据。

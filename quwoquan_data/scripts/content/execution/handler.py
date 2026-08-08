@@ -8,23 +8,26 @@ from __future__ import annotations
 
 import argparse
 
-from content.execution.acquire_images import register_acquire_images_parser
-from content.execution.acquire_videos import register_acquire_videos_parser
-from content.execution.campaign_submission_reconciliation import (
+from content.execution.controller.execute.acquire_images import register_acquire_images_parser
+from content.execution.controller.execute.acquire_videos import register_acquire_videos_parser
+from content.execution.campaign.submission_reconciliation import (
     register_reconcile_submissions_parser,
 )
-from content.execution.discard import register_task_discard_parser
+from content.execution.campaign.failed_execution_reconciliation import (
+    register_reconcile_failed_campaign_parser,
+)
+from content.execution.controller.execute.discard import register_task_discard_parser
 from content.execution.execution_supersession import (
     register_supersede_execution_parser,
 )
-from content.execution.plan_images import register_plan_images_parser
+from content.execution.planning.plan_images import register_plan_images_parser
 from content.execution.preflight.handler import register_task_preflight_parser
-from content.execution.prepare_campaign import register_prepare_campaign_parser
-from content.execution.probe_images import register_probe_images_parser
-from content.execution.recipe import register_recipe_parser
-from content.execution.reconcile import register_reconcile_stale_parser
-from content.execution.review_asset import register_review_asset_parser
-from content.execution.runtime_evidence_cli import (
+from content.execution.campaign.prepare import register_prepare_campaign_parser
+from content.execution.controller.execute.probe_images import register_probe_images_parser
+from content.execution.planning.recipe.model import register_recipe_parser
+from content.execution.controller.execute.reconcile import register_reconcile_stale_parser
+from content.execution.controller.execute.review_asset import register_review_asset_parser
+from content.execution.runtime_evidence.cli import (
     register_runtime_evidence_parser,
 )
 
@@ -46,5 +49,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_acquire_videos_parser(commands)
     register_review_asset_parser(commands)
     register_reconcile_stale_parser(commands)
+    register_reconcile_failed_campaign_parser(commands)
     register_reconcile_submissions_parser(commands)
     register_runtime_evidence_parser(commands)

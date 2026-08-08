@@ -76,6 +76,11 @@ func validateCanonicalContentMetadata(
 			)
 		}
 	}
+	// 空限额表意味着 App 本地 QuerySnapshot 的逐字段 byte admission 完全失效，
+	// 只剩整页预算兜底。生成期直接 fail-closed，不允许再退化成空 map。
+	if len(postSnapshotFieldByteLimits) == 0 {
+		return fmt.Errorf("canonical Content post snapshot policy has no field byte limits")
+	}
 	for field, limit := range postSnapshotFieldByteLimits {
 		if strings.TrimSpace(field) == "" || limit <= 0 {
 			return fmt.Errorf(

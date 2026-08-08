@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/adapters/recent_search_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/application/recent_search_ports.dart';
 import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/adapters/search_feedback_remote.dart';
-import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/remote_search_repository.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/search_query_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
@@ -62,7 +62,7 @@ final class SearchProductionComposition {
     );
   }
 
-  static SearchFeedbackCommandWriter feedbackCommandWriter({
+  static SearchFeedbackFactAppender feedbackFactAppender({
     required GeneratedCloudOperationClient client,
     required SearchFeedbackInvocationContextFactory invocationContext,
   }) {

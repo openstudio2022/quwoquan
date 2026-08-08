@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from core.schema import assert_valid
 from core.media_asset_url import materialize_release_media
 from core.release_media_binding import bind_release_object_media_assets
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes
@@ -21,6 +22,14 @@ def _write(path: Path, payload: dict | str | bytes) -> None:
         path.write_text(payload, encoding="utf-8")
     else:
         path.write_bytes(payload)
+
+
+def _tree_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, Path]:
@@ -148,6 +157,16 @@ def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) 
         release_root=release,
     )
     assert report["status"] == "passed"
+    unrelated = canonical / "posts/article/攻略/无关/1"
+    _write(
+        unrelated / "manifest.json",
+        {
+            "contentType": "article",
+            "publishTitle": "不属于 release",
+            "tagRefs": ["Topic/旅行"],
+        },
+    )
+    canonical_before = _tree_bytes(canonical)
     first = build_publish_lookup_indexes(
         release_id="release-a",
         canonical_root=canonical,
@@ -159,6 +178,26 @@ def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) 
         release_root=tmp_path / "release",
     )
     assert first["indexHash"] == second["indexHash"]
+    assert first["posts"] == 1
+    lookup_root = release / "payload/index/lookups"
+    first_bytes = _tree_bytes(lookup_root)
+    build_publish_lookup_indexes(
+        release_id="release-a",
+        canonical_root=canonical,
+        release_root=tmp_path / "release",
+    )
+    assert _tree_bytes(lookup_root) == first_bytes
+    assert _tree_bytes(canonical) == canonical_before
+    assert not (release / "index").exists()
+    manifest = json.loads(
+        (lookup_root / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert_valid(
+        manifest,
+        "release",
+        "release_lookup_index",
+        label="release lookup manifest",
+    )
     media = json.loads((release / "payload" / "media_manifest.json").read_text(encoding="utf-8"))
     assert "cdnUrl" not in json.dumps(media)
     assert "objectKey" not in json.dumps(media)
@@ -184,6 +223,92 @@ def test_release_consumer_rejects_noncanonical_schema_and_create_once_drift(tmp_
             canonical_root=canonical,
             release_root=tmp_path / "release",
         )
+
+
+def test_release_lookup_rejects_extra_file_and_path_escape(tmp_path: Path) -> None:
+    canonical, release = _fixture(tmp_path)
+    build_publish_lookup_indexes(
+        release_id="release-a",
+        canonical_root=canonical,
+        release_root=tmp_path / "release",
+    )
+    _write(release / "payload/index/lookups/unexpected.txt", "drift\n")
+    with pytest.raises(FileExistsError, match="immutable release index conflict"):
+        build_publish_lookup_indexes(
+            release_id="release-a",
+            canonical_root=canonical,
+            release_root=tmp_path / "release",
+        )
+
+    with pytest.raises(ValueError, match="release_id"):
+        build_publish_lookup_indexes(
+            release_id="../escape",
+            canonical_root=canonical,
+            release_root=tmp_path / "release",
+        )
+
+    desired_path = release / "payload/desired_state.json"
+    desired = json.loads(desired_path.read_text(encoding="utf-8"))
+    desired["desiredRefs"]["posts"] = ["../escape"]
+    _write(desired_path, desired)
+    shutil.rmtree(release / "payload/index/lookups")
+    with pytest.raises(ValueError, match="desiredRefs.posts"):
+        build_publish_lookup_indexes(
+            release_id="release-a",
+            canonical_root=canonical,
+            release_root=tmp_path / "release",
+        )
+
+
+def test_release_lookup_missing_desired_state_and_partial_write_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    canonical, release = _fixture(tmp_path)
+    desired_path = release / "payload/desired_state.json"
+    desired_bytes = desired_path.read_bytes()
+    desired_path.unlink()
+    with pytest.raises(FileNotFoundError, match="desired_state missing"):
+        build_publish_lookup_indexes(
+            release_id="release-a",
+            canonical_root=canonical,
+            release_root=tmp_path / "release",
+        )
+
+    desired_path.write_bytes(desired_bytes)
+    original_write_bytes = Path.write_bytes
+
+    def _fail_posts(path: Path, payload: bytes) -> int:
+        if path.name == "posts.ndjson":
+            raise OSError("injected lookup write failure")
+        return original_write_bytes(path, payload)
+
+    monkeypatch.setattr(Path, "write_bytes", _fail_posts)
+    with pytest.raises(OSError, match="injected lookup write failure"):
+        build_publish_lookup_indexes(
+            release_id="release-a",
+            canonical_root=canonical,
+            release_root=tmp_path / "release",
+        )
+    assert not (release / "payload/index/lookups").exists()
+
+
+def test_release_lookup_rejects_first_write_after_attestation(
+    tmp_path: Path,
+) -> None:
+    canonical, release = _fixture(tmp_path)
+    _write(
+        release / "attestations/release.json",
+        {"schema": "quwoquan_data.release_attestation"},
+    )
+
+    with pytest.raises(ValueError, match="attested release"):
+        build_publish_lookup_indexes(
+            release_id="release-a",
+            canonical_root=canonical,
+            release_root=tmp_path / "release",
+        )
+    assert not (release / "payload/index/lookups").exists()
 
 
 def test_release_consumer_rejects_unrelated_canonical_media(tmp_path: Path) -> None:

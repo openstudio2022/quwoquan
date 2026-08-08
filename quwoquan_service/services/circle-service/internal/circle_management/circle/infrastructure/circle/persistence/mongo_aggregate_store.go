@@ -50,6 +50,12 @@ func NewMongoAggregateStore(database *mongo.Database) *MongoAggregateStore {
 }
 
 func (store *MongoAggregateStore) EnsureIndexes(ctx context.Context) error {
+	if _, err := store.circles.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "ownerId", Value: 1}},
+		Options: options.Index().SetName("idx_circles_owner"),
+	}); err != nil {
+		return err
+	}
 	if _, err := store.receipts.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
 		Options: options.Index().SetName("idx_circle_receipt_expiry").SetExpireAfterSeconds(0),

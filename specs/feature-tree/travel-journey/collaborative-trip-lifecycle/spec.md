@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-把多人多日 Gathering 组合成可共同修订、可在活动群聊 Board 协作、可行中服务、可按 Experience 沉淀并可回顾分享的旅行体验，同时保留已退役 Trip 对象到当前 owner 的历史 crosswalk。
+把多人多日 Gathering 组合成可共同修订、可在活动群聊 Board 协作、可行中服务、可按 Experience 沉淀并可回顾分享的旅行体验，同时用 target-only crosswalk 治理已静态退役 Trip 对象的历史数据处置。
 
 ## 2. 范围与非目标
 
@@ -16,7 +16,7 @@
 - Chat activity room/Board 中的明确 Gathering/Plan reference 与多目标消歧。
 - Gathering/Plan item 上的 Experience、Post、MediaAsset、Place/Route canonical reference。
 - Timeline/Map/Calendar projection、隐私裁剪、Content LocalPostDraft 请求，以及模板来源、任务 assignee 与专业署名引用。
-- legacy TripPlan/Revision/Membership/Placement/Moment/ShareSnapshot/Template/GuideAssignment 到当前 owner 的只读历史 crosswalk。
+- legacy TripPlan/Revision/Membership/Placement/Moment/ShareSnapshot/Template/GuideAssignment 到当前 owner 的 target-only 历史 crosswalk、环境 inventory 与签名迁移 receipt。
 
 ### Out of Scope
 
@@ -54,12 +54,13 @@
 - 公开分享、地图和群内投递按最小可见范围裁剪；个人 Connector、私人记忆和个人动作结果不进入共享事实。
 
 <a id="req-003"></a>
-### REQ-003 历史 Trip crosswalk 只用于审计
+### REQ-003 历史 Trip crosswalk 只用于 target-only 迁移与审计
 
 - legacy TripPlan 与 lifecycle 映射到 Gathering + optional GatheringPlan；TripPlanRevision/Item 映射到 GatheringPlanRevision/typed item。
 - TripMembership 映射到 GatheringParticipation 或 Organizer authority，TripPlanPlacement 映射到 Chat Board/card 中的 canonical Gathering/Plan reference；二者都不形成目标写对象。
 - TripMoment/ContentLink/ShareSnapshot 映射到 Experience/Content references 与草稿来源；Template/GuideAssignment 映射到计划来源、task item assignee 和 User 公开专业声明。
 - crosswalk 与签名 receipt 不得进入 production read/write mainline，不得恢复 Travel runtime、页面、Facade、store 或双读 fallback。
+- 静态删除、合成快照测试与控制面协议通过均不得冒充环境历史数据迁移完成；每个环境必须以真实 source inventory、owner-command import、target readback 和 parity receipt 独立准出。
 
 ## 6. 契约与依赖
 
@@ -87,6 +88,16 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 travel-service 退役已经完成。尚缺实现：五个 Story 在同一 production Remote composition 中贯通 Circle owner、Assistant、Chat Board、Content/Media 与 Integration Provider/Connector。尚缺验收证据：可发布的跨域 API integration、durable event/投影恢复和 Android/iPhone 旅行体验。
+- 影响或价值：尚缺实现：五个 Story 在同一 production Remote composition 中贯通 Circle owner、Assistant、Chat Board、Content/Media 与 Integration Provider/Connector；尚缺验收证据：可发布的跨域 API integration、durable event/投影恢复和 Android/iPhone 旅行体验。travel-service 生产主链已经静态退役，历史数据迁移由 `OPEN-002` 独立阻断。
 - 完成判定：`SIT-001` 由目标 owner local_contract、真实跨域 api_integration 与 [AppRoot 双端共同旅行验收](../../spec.md#uat-012) 直接引用并通过；同一候选完成 Alpha/Beta/Gamma 读写、durable event 重放、Board/Timeline/Map 投影恢复、Provider unavailable 降级和 Android/iPhone UAT。
 - 依赖：五个 L3 阻断 OPEN、Circle GatheringPlan production Remote、Assistant `travel_companion`、Chat Board、Content draft/media 与 Integration Provider/Connector。
+
+<a id="open-002"></a>
+### OPEN-002 四环境历史 Trip 数据处置与切流证据未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前仅有合成快照驱动的 mapping、parity、cutover 与 target-only rollback 控制面合同，尚无 alpha、beta、gamma、prod 真实历史对象全集的 owner-command import、目标 readback 和受保护切流证据。
+- 完成判定：四环境逐一证明全部 legacy 类型的 sourceCount 守恒、目标 orphan/collision 为零、PII 原值零输出、parity 为 100%；切流永久关闭源 route/credential/image/config/write，Prod 的 target backup 与 target-only rollback 演练通过且不恢复源 runtime。
+- 依赖：[`travel-journey OPEN-001`](../spec.md#open-001)、四环境源 inventory、目标 owner import/readback 和受保护审批。

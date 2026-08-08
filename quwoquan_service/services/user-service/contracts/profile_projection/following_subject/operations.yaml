@@ -128,3 +128,11 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/profile_projection/following_subject/following_subject_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: following_subject_list_following_subjects_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListFollowingSubjects}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/profile_projection/following_subject/following_subject_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

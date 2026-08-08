@@ -63,7 +63,7 @@ void main() {
     final client = GeneratedCloudOperationClient(executor);
 
     final result = await client
-        .contentMediaOriginalAccessFactRequestOriginalImageAccess(
+        .contentOriginalAccessQuotaReserveOriginalImageAccessGrant(
           RequestContentMediaOriginalAccessCommand(
             mediaId: 'mas-1',
             purpose: MediaOriginalAccessPurpose.save,
@@ -77,7 +77,7 @@ void main() {
     expect(
       executor.operation?.canonicalOperationId,
       AppCloudOperationIds
-          .contentMediaOriginalAccessFactRequestOriginalImageAccess,
+          .contentOriginalAccessQuotaReserveOriginalImageAccessGrant,
     );
     expect(executor.pathParameters, <String, String>{'mediaId': 'mas-1'});
     expect(executor.body, <String, Object?>{'purpose': 'save'});

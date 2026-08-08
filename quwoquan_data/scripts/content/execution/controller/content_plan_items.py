@@ -13,6 +13,105 @@ from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
 from content.post.object_index import write_brief_object
 
 
+def canonical_article_plan_title(*, target: str, draft_title: str) -> str:
+    """Freeze an entity-specific title before authoring.
+
+    Source pages often describe a wider city or province than the selected
+    entity.  Reusing that wider page title as the immutable object coordinate
+    makes an unrelated canonical article look like the same object.  Preserve
+    a source title only when it names the exact target; otherwise freeze one
+    deterministic target-scoped guide title.
+    """
+    normalized_target = str(target or "").strip()
+    normalized_title = str(draft_title or "").strip()
+    if not normalized_target:
+        raise ValueError("article target is required for immutable object routing")
+    if normalized_target in normalized_title:
+        return normalized_title
+    return f"{normalized_target}攻略"
+
+
+def bind_article_plan_source_unit_freezes(ctx: ExecutionContext) -> list[str]:
+    """Complete deterministic illustrated-article bindings after semantic planning."""
+    from core.io import write_json
+    from core.paths import execution_root
+    from content.execution.workspace import execution_content_plan_packet_path
+    from content.post import object_index as content_object
+    from content.post.article.source_unit_freeze import (
+        validate_article_source_unit_freeze,
+    )
+    from content.post.content_plan_state import load_content_plan_packet
+
+    packet = load_content_plan_packet(ctx.execution_id)
+    if not isinstance(packet, dict):
+        return []
+    root = execution_root(ctx.execution_id)
+    items = packet.get("items")
+    if not isinstance(items, list):
+        return []
+    changed = False
+    issues: list[str] = []
+    for raw in items:
+        if not isinstance(raw, dict) or str(raw.get("carrier") or "") != "article":
+            continue
+        ref = str(raw.get("ref") or "").strip()
+        asset_refs = [
+            str(item).strip()
+            for item in raw.get("assetRefs") or []
+            if str(item).strip()
+        ]
+        media_mode = str(raw.get("publishMediaMode") or "").strip()
+        binding = raw.get("articleSourceUnitFreeze")
+        if media_mode == "text_only":
+            if asset_refs or binding is not None:
+                issues.append(f"{ref}: text-only article carries illustrated source binding")
+            continue
+        if not asset_refs:
+            issues.append(f"{ref}: illustrated article has no source assets")
+            continue
+        try:
+            if isinstance(binding, dict):
+                resolved = validate_article_source_unit_freeze(
+                    binding,
+                    execution_id=ctx.execution_id,
+                )
+            else:
+                source_ref = str(raw.get("baseSourceRef") or "").strip()
+                source_path = (root / source_ref).resolve()
+                sources_root = (root / "sources").resolve()
+                if (
+                    not source_ref
+                    or source_path.name != "source.md"
+                    or sources_root not in source_path.parents
+                ):
+                    raise ValueError(
+                        "illustrated article baseSourceRef must identify one execution source unit"
+                    )
+                resolved = write_article_source_unit_freeze(
+                    execution_id=ctx.execution_id,
+                    source_dir=source_path.parent,
+                    asset_refs=asset_refs,
+                )
+                raw["articleSourceUnitFreeze"] = resolved
+                changed = True
+            brief = content_object.read_brief_object(ctx.execution_id, ref) or {}
+            if not brief:
+                raise ValueError("content-plan brief is missing")
+            if brief.get("articleSourceUnitFreeze") != resolved:
+                brief["articleSourceUnitFreeze"] = resolved
+                write_brief_object(
+                    ctx.execution_id,
+                    ref,
+                    brief,
+                    content_type="article",
+                )
+        except (OSError, TypeError, ValueError) as exc:
+            issues.append(f"{ref}: article source-unit freeze invalid: {exc}")
+    if changed:
+        write_json(execution_content_plan_packet_path(ctx.execution_id), packet)
+    return issues
+
+
 def append_article_plan_items(
     *,
     ctx: ExecutionContext,
@@ -24,7 +123,10 @@ def append_article_plan_items(
 ) -> None:
     for candidate in candidates:
         intent = str(candidate.get("writingIntent") or "")
-        title = str(candidate.get("draftTitle") or "").strip()
+        title = canonical_article_plan_title(
+            target=target,
+            draft_title=str(candidate.get("draftTitle") or ""),
+        )
         source_id = str(candidate.get("sourceId") or "")
         ref = f"{target}__{source_id}".replace("/", "_")
         entity_ref = f"/entity/{entity_type}/{target}"
@@ -75,7 +177,7 @@ def append_article_plan_items(
             "evidenceRefs": [candidate["sourceRef"]],
             "rationale": (
                 "底稿中心配额选源：单一 sourceRole=base 来源单元"
-                f"（正文≥{ARTICLE_MIN_BASE_DRAFT_CHARS}），标题取自底稿，实体作多标签"
+                f"（正文≥{ARTICLE_MIN_BASE_DRAFT_CHARS}），对象标题精确绑定目标实体，实体作多标签"
             ),
             "mustIncludeFacts": brief["mustIncludeFacts"],
             "writingIntent": intent,

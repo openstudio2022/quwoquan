@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_execution_values.dart';
@@ -78,7 +78,7 @@ Widget _buildApp({
   return ProviderScope(
     overrides: [
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
-      searchFeedbackCommandWriterProvider.overrideWithValue(
+      searchFeedbackFactAppenderProvider.overrideWithValue(
         SearchFeedbackTypedDouble(),
       ),
     ],
@@ -93,14 +93,14 @@ Widget _buildAppWithSearchRepository({
   required SearchRepository repository,
   AssistantSearchRunFacade? xiaoquFacet,
   ContentPostDetailReader? postDetailReader,
-  SearchFeedbackCommandWriter? feedbackWriter,
+  SearchFeedbackFactAppender? feedbackWriter,
   RecordingAppTelemetryRecorder? telemetryRecorder,
 }) {
   return ProviderScope(
     overrides: [
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
       searchRepositoryProvider.overrideWithValue(repository),
-      searchFeedbackCommandWriterProvider.overrideWithValue(
+      searchFeedbackFactAppenderProvider.overrideWithValue(
         feedbackWriter ?? SearchFeedbackTypedDouble(),
       ),
       if (telemetryRecorder != null)

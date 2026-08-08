@@ -27,7 +27,7 @@ void main() {
                 'skillId': 'travel_companion',
                 'activityKind': 'data_control',
                 'status': 'failed',
-                'displayKey': 'data_control_failed',
+                'displayKey': 'assistant.skill_activity.data_control.failed',
                 'sourceObjectRef':
                     'assistant.SkillDataControlRequest:control-1',
                 'sourceRevision': 2,

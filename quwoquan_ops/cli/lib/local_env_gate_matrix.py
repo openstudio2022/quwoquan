@@ -80,6 +80,7 @@ def _matrix_lease_path() -> Path:
         / "env"
         / "repo"
         / "local"
+        / "repo-gate"
         / "process"
         / "local-env-gate.lock"
     )

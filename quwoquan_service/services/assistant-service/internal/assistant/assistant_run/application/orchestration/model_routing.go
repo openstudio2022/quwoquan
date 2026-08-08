@@ -17,6 +17,11 @@ type ModelRoutingInput struct {
 // ResolveModelTier 按运行阶段与问题类型决定档位。同一输入必须得到同一档位，便于回放
 // 与成本核算。
 func ResolveModelTier(input ModelRoutingInput) ports.ModelTier {
+	// 完成条件验收是独立的语义判断阶段。它不能因 Run 使用 fast profile
+	// 而退化为分类档位，也不能伪装成 reasoning/final 来绕过阶段策略。
+	if input.Stage == ports.ModelStageVerification {
+		return ports.ModelTierReasoning
+	}
 	if input.Stage != ports.ModelStageSkillSelection {
 		switch input.ReasoningProfile {
 		case assistantgenerated.AssistantReasoningProfileFast:

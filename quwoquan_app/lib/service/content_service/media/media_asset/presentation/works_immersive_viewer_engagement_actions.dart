@@ -446,7 +446,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   Set<String> get _effectiveFilterContentTypes {
     final types = <String>{};
-    for (final filter in ContentUIConfig.workFormatFilters) {
+    for (final filter in _contentMediaViewerPolicy.workFormatFilters) {
       if (_effectiveFilterIds.contains(filter.id) &&
           filter.contentType != null) {
         types.add(filter.contentType!);
@@ -650,7 +650,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         ?.value;
     final canDelete = _canDeletePost(post, activePersonaContext);
     final filterOptions = <WorksViewerMoreActionOption>[
-      for (final filter in ContentUIConfig.workFormatFilters)
+      for (final filter in _contentMediaViewerPolicy.workFormatFilters)
         WorksViewerMoreActionOption(
           id: filter.id,
           label: UITextConstants.contentLabelForKey(filter.labelKey),
@@ -666,7 +666,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         : null;
     final readingOptions = isArticle
         ? <WorksViewerMoreActionOption>[
-            for (final option in ContentUIConfig.articlePaperThemeOptions)
+            for (final option
+                in _contentMediaViewerPolicy.articlePaperThemeOptions)
               WorksViewerMoreActionOption(
                 id: option.id,
                 label: UITextConstants.contentLabelForKey(option.labelKey),

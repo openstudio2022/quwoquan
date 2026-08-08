@@ -183,6 +183,12 @@ func indexGoLifecycleSource(path string, index *lifecycleSourceIndex) error {
 			if typed.Recv == nil || typed.Name == nil || len(typed.Recv.List) != 1 {
 				continue
 			}
+			// A declaration or comment-only/empty method is not a production
+			// handler. Keep it out of the implementation index so authored
+			// lifecycle consumers fail closed instead of binding to a marker.
+			if typed.Body == nil || len(typed.Body.List) == 0 {
+				continue
+			}
 			receiver := goReceiverName(typed.Recv.List[0].Type)
 			if receiver == "" {
 				continue
@@ -227,11 +233,14 @@ func indexPythonLifecycleSource(path string, index *lifecycleSourceIndex) error 
 	}
 	defer file.Close()
 	type pythonClass struct {
-		name        string
-		indent      int
-		isInterface bool
-		methods     map[string]struct{}
-		bases       []string
+		name         string
+		indent       int
+		isInterface  bool
+		methods      map[string]struct{}
+		methodBodies map[string][]string
+		method       string
+		methodIndent int
+		bases        []string
 	}
 	var current *pythonClass
 	flush := func() {
@@ -247,6 +256,16 @@ func indexPythonLifecycleSource(path string, index *lifecycleSourceIndex) error 
 				path:        path,
 			},
 		)
+		for method, body := range current.methodBodies {
+			if current.isInterface || !pythonLifecycleMethodBodySubstantive(body) {
+				continue
+			}
+			index.methods = append(index.methods, lifecycleMethodDefinition{
+				receiver: current.name,
+				method:   method,
+				path:     path,
+			})
+		}
 		current = nil
 	}
 	scanner := bufio.NewScanner(file)
@@ -257,11 +276,13 @@ func indexPythonLifecycleSource(path string, index *lifecycleSourceIndex) error 
 			bases := pythonBaseNames(match[3])
 			lowerBases := strings.ToLower(match[3])
 			current = &pythonClass{
-				name:        match[2],
-				indent:      len(match[1]),
-				isInterface: strings.Contains(lowerBases, "protocol") || strings.Contains(lowerBases, "abc"),
-				methods:     map[string]struct{}{},
-				bases:       bases,
+				name:         match[2],
+				indent:       len(match[1]),
+				isInterface:  strings.Contains(lowerBases, "protocol") || strings.Contains(lowerBases, "abc"),
+				methods:      map[string]struct{}{},
+				methodBodies: map[string][]string{},
+				methodIndent: -1,
+				bases:        bases,
 			}
 			continue
 		}
@@ -275,22 +296,50 @@ func indexPythonLifecycleSource(path string, index *lifecycleSourceIndex) error 
 			continue
 		}
 		methodMatch := pythonMethodPattern.FindStringSubmatch(line)
-		if methodMatch == nil {
+		if methodMatch != nil {
+			method := methodMatch[2]
+			current.methods[method] = struct{}{}
+			current.methodBodies[method] = nil
+			current.method = method
+			current.methodIndent = indent
 			continue
 		}
-		method := methodMatch[2]
-		current.methods[method] = struct{}{}
-		index.methods = append(index.methods, lifecycleMethodDefinition{
-			receiver: current.name,
-			method:   method,
-			path:     path,
-		})
+		if current.method != "" && indent > current.methodIndent {
+			current.methodBodies[current.method] = append(
+				current.methodBodies[current.method],
+				strings.TrimSpace(line),
+			)
+		} else if indent <= current.methodIndent {
+			current.method = ""
+			current.methodIndent = -1
+		}
 	}
 	flush()
 	if err := scanner.Err(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func pythonLifecycleMethodBodySubstantive(lines []string) bool {
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || line == "pass" ||
+			line == "..." || line == "return None" ||
+			line == "raise NotImplementedError" ||
+			line == "raise NotImplementedError()" {
+			continue
+		}
+		// A one-line docstring is descriptive metadata, not an executable
+		// handler body. Multi-line docstrings still require executable code
+		// after the closing delimiter to become substantive.
+		if (strings.HasPrefix(line, `"""`) && strings.HasSuffix(line, `"""`)) ||
+			(strings.HasPrefix(line, `'''`) && strings.HasSuffix(line, `'''`)) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func pythonBaseNames(raw string) []string {

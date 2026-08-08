@@ -33,6 +33,7 @@ func loadReadinessCases(
 	operations []ast.Operation,
 	runtimeEntrypoints []ast.RuntimeEntrypoint,
 	repoRoot string,
+	contractView *contractViewProvenance,
 ) ([]ast.ReadinessCaseContract, error) {
 	top, err := loadTopLevelMapping(path)
 	if err != nil {
@@ -147,6 +148,7 @@ func loadReadinessCases(
 		}
 		if runnerErr := validateReadinessRunnerSource(
 			repoRoot, path, runnerSourcePath, object, producer, layer, specRef, caseID,
+			contractView,
 		); runnerErr != nil {
 			return nil, fmt.Errorf("%s: %s.runner_source_path: %w", path, context, runnerErr)
 		}
@@ -181,6 +183,7 @@ func validateReadinessRunnerSource(
 	layer ast.ReadinessLayer,
 	specRef,
 	caseID string,
+	contractView *contractViewProvenance,
 ) error {
 	if runnerSourcePath == "" || strings.Contains(runnerSourcePath, "\\") ||
 		filepath.IsAbs(runnerSourcePath) {
@@ -193,14 +196,41 @@ func validateReadinessRunnerSource(
 		}
 	}
 
-	resolvedContractPath, err := filepath.EvalSymlinks(contractPath)
-	if err != nil {
-		return fmt.Errorf("resolve owning operations source: %w", err)
-	}
-	if strings.TrimSpace(repoRoot) == "" {
-		repoRoot, err = inferReadinessRepositoryRoot(resolvedContractPath)
+	resolvedContractPath := ""
+	var err error
+	if contractView != nil {
+		canonicalSource, provenanceErr := contractView.canonicalSourceFor(contractPath)
+		if provenanceErr != nil {
+			return provenanceErr
+		}
+		if !isCanonicalObjectLocalOperationsSource(canonicalSource) {
+			return fmt.Errorf(
+				"owning operations provenance is not a canonical object-local Cloud contract: %s",
+				canonicalSource,
+			)
+		}
+		resolvedContractPath, err = filepath.EvalSymlinks(filepath.Join(
+			contractView.repositoryRoot,
+			filepath.FromSlash(canonicalSource),
+		))
 		if err != nil {
-			return err
+			return fmt.Errorf("resolve canonical owning operations source: %w", err)
+		}
+		if strings.TrimSpace(repoRoot) == "" {
+			repoRoot = contractView.repositoryRoot
+		} else if !samePhysicalPath(repoRoot, contractView.repositoryRoot) {
+			return fmt.Errorf("repository root does not match contract view provenance")
+		}
+	} else {
+		resolvedContractPath, err = filepath.EvalSymlinks(contractPath)
+		if err != nil {
+			return fmt.Errorf("resolve owning operations source: %w", err)
+		}
+		if strings.TrimSpace(repoRoot) == "" {
+			repoRoot, err = inferReadinessRepositoryRoot(resolvedContractPath)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(repoRoot)
@@ -307,6 +337,21 @@ func validateReadinessRunnerSource(
 		return fmt.Errorf("runner does not declare exact readiness_case %q", caseID)
 	}
 	return nil
+}
+
+func isCanonicalObjectLocalOperationsSource(path string) bool {
+	parts := strings.Split(path, "/")
+	return len(parts) == 7 &&
+		parts[0] == "quwoquan_service" &&
+		(parts[1] == "services" || parts[1] == "control-plane") &&
+		parts[2] != "" && parts[3] == "contracts" &&
+		parts[4] != "" && parts[5] != "" && parts[6] == "operations.yaml"
+}
+
+func samePhysicalPath(left, right string) bool {
+	resolvedLeft, leftErr := filepath.EvalSymlinks(left)
+	resolvedRight, rightErr := filepath.EvalSymlinks(right)
+	return leftErr == nil && rightErr == nil && filepath.Clean(resolvedLeft) == filepath.Clean(resolvedRight)
 }
 
 func isCanonicalServiceTestFile(name string) bool {

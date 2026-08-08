@@ -14,9 +14,16 @@ runtime_entrypoints:
     facet: CapabilityGrantSessionFacade
     method: resolve
     object_owner: CapabilityGrant
+  telemetry:
+    metric: integration_capability_grant_resolve
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 50
+    failure_ratio_percent: 0.1
 readiness_cases:
 - case_id: resolve-capability-grant-local
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: local_contract
   target: {kind: operation, id: ResolveCapabilityGrant}
@@ -24,10 +31,10 @@ readiness_cases:
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
 - case_id: resolve-capability-grant-api
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: api_integration
   target: {kind: operation, id: ResolveCapabilityGrant}
   runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/capability_grant/runtime_entrypoint__api_integration_test.go
   executions:
-  - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}

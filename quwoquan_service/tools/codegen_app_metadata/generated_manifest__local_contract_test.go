@@ -125,6 +125,41 @@ func TestGeneratedManifestRetiresLegacyAPIMetadataAndPolicyOutputs(t *testing.T)
 	}
 }
 
+func TestGeneratedManifestRetiresZeroConsumerMixedOutputs(t *testing.T) {
+	appRoot := t.TempDir()
+	beginGeneratedManifestForTest(t, appRoot, "canonical-graph")
+	retired := []string{
+		"lib/service/content_service/content/post/adapters/generated/content_post_immersive_wire_keys.g.dart",
+		"lib/service/content_service/content/post/application/generated/content_metadata.g.dart",
+		"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated/intersection_kind_metadata.g.dart",
+		"lib/service/search_service/search/search_index_view/application/generated/search_contract.g.dart",
+		"lib/service/search_service/search/search_index_view/application/generated/search_registry.g.dart",
+	}
+	for _, relative := range retired {
+		path := filepath.Join(appRoot, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(
+			path,
+			[]byte("// Code generated. DO NOT EDIT.\n"),
+			0o644,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := removeUntrackedGeneratedOutputs(); err != nil {
+		t.Fatal(err)
+	}
+	for _, relative := range retired {
+		path := filepath.Join(appRoot, filepath.FromSlash(relative))
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("retired zero-consumer output still exists at %s: %v", path, err)
+		}
+	}
+}
+
 func beginGeneratedManifestForTest(t *testing.T, appRoot, graphSHA256 string) {
 	t.Helper()
 	previousRoot := generatedManifestAppRoot

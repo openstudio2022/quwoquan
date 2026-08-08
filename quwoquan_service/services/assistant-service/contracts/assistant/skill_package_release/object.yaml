@@ -31,6 +31,20 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.SkillCapabilityGrant
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - packageId、packageVersion、releaseDigest、assets、runtimeCompatibility、provenance、signature 与 capabilityGrants 在 Stage 后不可改写
 - releaseDigest 必须等于 canonical package descriptor 的 SHA-256，所有 assetDigest 必须在暴露资产前逐项复算
@@ -47,26 +61,35 @@ lifecycle:
 members:
   SkillPackageAsset:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [assetId]
+    cardinality: many
     max_cardinality: 512
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 发布内按 assetId 唯一、以 digest 固定的不可变资产。
   SkillCapabilityGrant:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [capabilityId]
+    cardinality: many
     max_cardinality: 256
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 发布可请求的最小能力集合；平台策略与用户 Consent 仍可进一步收紧。
   SkillRuntimeCompatibility:
     kind: value_object
-    cardinality: 1:1
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: Skill runtime API 与最低/最高运行时版本边界。
   SkillPackageProvenance:
     kind: value_object
-    cardinality: 1:1
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: 可追溯到源码 revision 与构建身份的发布来源。
   SkillPackageSignature:
     kind: value_object
-    cardinality: 1:1
+    cardinality: one
     max_cardinality: 1
+    ownership: aggregate
     description: 由受信 key 对 releaseDigest 签名的发布证明。

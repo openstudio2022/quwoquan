@@ -45,15 +45,15 @@ api_routes:
   request_entity: InvokeConnectorCapabilityRequest
   request_body_kind: object
   response_entity: ConnectorInvocationMutationReceipt
-  authorization: {principal: service, ownership_policy: caller_supplies_verified_account_scope}
+  authorization: {principal: service, scopes: [integration.connector_invocation.write], ownership_policy: signed_account_subject_with_service_actor}
   security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
   reliability: {timeout_ms: 5000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-  error_codes: [INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.USER.invocation_connector_connection_not_found, INTEGRATION.USER.connector_connection_inactive, INTEGRATION.USER.invocation_connector_capability_denied, INTEGRATION.USER.connector_confirmation_required, INTEGRATION.USER.connector_invocation_idempotency_conflict, INTEGRATION.MIDDLEWARE.connector_provider_unavailable, INTEGRATION.SYSTEM.connector_invocation_unavailable]
+  error_codes: [INTEGRATION.USER.connector_invocation_unauthorized, INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.USER.invocation_connector_connection_not_found, INTEGRATION.USER.connector_connection_inactive, INTEGRATION.USER.invocation_connector_capability_denied, INTEGRATION.USER.connector_confirmation_required, INTEGRATION.USER.connector_invocation_idempotency_conflict, INTEGRATION.SYSTEM.connector_invocation_unavailable]
   privacy: {request_classification: SECRET, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: integration_connector_invocation_command, trace: true, attributes: [operation, capability, outcome, error_code, replayed]}
   slo: {latency_p95_ms: 2000, availability_percent: 99.5}
   application: {kind: command, facet: ConnectorInvocationCommandFacade, method: invokeCapability, aggregate_owner: ConnectorInvocation, mutation_target: ConnectorInvocation, invariant_target: ConnectorInvocation}
-  description: Assistant 使用受保护 payloadRef 调用厂商无关 capability；每次执行前重新校验连接、授权、确认和运行可用性。
+  description: Assistant 以验签真实账号 subject、独立 service actor、final-input digest、confirmation、permit 与 idempotency 创建同一 resolutionId 的调用；执行前重新校验完整授权。
 - method: POST
   path: /internal/integrations/invocations/{invocationId}/continue
   operation: ContinueConnectorInvocation
@@ -62,10 +62,10 @@ api_routes:
   request_body_kind: object
   request_bindings: {path: [{name: invocationId, field: invocationId}]}
   response_entity: ConnectorInvocationMutationReceipt
-  authorization: {principal: service, ownership_policy: caller_supplies_verified_account_scope}
+  authorization: {principal: service, scopes: [integration.connector_invocation.write], ownership_policy: signed_account_subject_with_service_actor}
   security: {anonymous_policy: deny, auth_mode: required, principal: service, token_transport: bearer, visibility: internal}
   reliability: {timeout_ms: 3000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: required}
-  error_codes: [INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.USER.connector_invocation_not_found, INTEGRATION.USER.connector_connection_inactive, INTEGRATION.USER.invocation_connector_capability_denied, INTEGRATION.USER.connector_invocation_revision_conflict, INTEGRATION.USER.connector_invocation_idempotency_conflict, INTEGRATION.SYSTEM.connector_invocation_unavailable]
+  error_codes: [INTEGRATION.USER.connector_invocation_unauthorized, INTEGRATION.USER.connector_invocation_invalid_argument, INTEGRATION.USER.connector_invocation_not_found, INTEGRATION.USER.connector_connection_inactive, INTEGRATION.USER.invocation_connector_capability_denied, INTEGRATION.USER.connector_invocation_revision_conflict, INTEGRATION.USER.connector_invocation_idempotency_conflict, INTEGRATION.SYSTEM.connector_invocation_unavailable]
   privacy: {request_classification: SECRET, response_classification: SENSITIVE, log_policy: metadata_only}
   telemetry: {metric: integration_connector_invocation_command, trace: true, attributes: [operation, capability, outcome, error_code, replayed]}
   slo: {latency_p95_ms: 1000, availability_percent: 99.9}
@@ -110,7 +110,7 @@ readiness_cases:
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: invoke-connector-capability-local
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: local_contract
   target: {kind: operation, id: InvokeConnectorCapability}
@@ -118,7 +118,7 @@ readiness_cases:
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
 - case_id: invoke-connector-capability-api
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: api_integration
   target: {kind: operation, id: InvokeConnectorCapability}
@@ -126,7 +126,7 @@ readiness_cases:
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: continue-connector-invocation-local
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: local_contract
   target: {kind: operation, id: ContinueConnectorInvocation}
@@ -134,7 +134,7 @@ readiness_cases:
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
 - case_id: continue-connector-invocation-api
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
   producer: service
   layer: api_integration
   target: {kind: operation, id: ContinueConnectorInvocation}
@@ -157,3 +157,19 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/connector_invocation/connector_invocation_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: connector_invocation_list_connector_invocations_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListConnectorInvocations}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_invocation/connector_invocation_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connector_invocation_get_connector_invocation_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetConnectorInvocation}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/connector_invocation/connector_invocation_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

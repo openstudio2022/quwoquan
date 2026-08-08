@@ -11,6 +11,9 @@ enum ContactAddState {
 
   /// 本人 → 不展示添加动作。
   isSelf,
+
+  /// 当前 capability 不允许关注；保留候选但禁用动作，不泄露屏蔽原因。
+  unavailable,
 }
 
 extension ContactAddStateX on ContactAddState {
@@ -61,7 +64,12 @@ class ContactCandidateVm {
     required String relationState,
     required bool canFollow,
     required bool canUnfollow,
+    bool isBlocked = false,
+    bool isBlockedBy = false,
   }) {
+    if (isBlocked || isBlockedBy) {
+      return ContactAddState.unavailable;
+    }
     switch (relationState) {
       case 'self':
         return ContactAddState.isSelf;
@@ -69,14 +77,16 @@ class ContactCandidateVm {
       case 'mutual':
         return ContactAddState.added;
       case 'followed_by':
-        return ContactAddState.canFollowBack;
+        return canFollow
+            ? ContactAddState.canFollowBack
+            : ContactAddState.unavailable;
       case 'not_following':
       default:
         // 关系态缺省时回退到能力位：仍可关注 → 可添加。
         if (canUnfollow && !canFollow) {
           return ContactAddState.added;
         }
-        return ContactAddState.canAdd;
+        return canFollow ? ContactAddState.canAdd : ContactAddState.unavailable;
     }
   }
 }

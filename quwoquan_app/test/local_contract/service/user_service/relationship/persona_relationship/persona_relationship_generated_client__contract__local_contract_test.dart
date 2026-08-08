@@ -41,7 +41,7 @@ void main() {
     expect(executor.pathParameters, <String, String>{
       'personaId': 'persona-target',
     });
-    expect(result.relationState, 'mutual');
+    expect(result.relationState, RelationshipState.mutual);
     expect(result.canStartVideoCall, isTrue);
   });
 }

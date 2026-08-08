@@ -11,11 +11,12 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/object_page/object_page_shell.dart';
-import 'package:quwoquan_app/runtime/di/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
@@ -35,8 +36,6 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show journeyEventTrackerProvider;
-import 'package:quwoquan_app/runtime/di/app_providers_circle_facets.dart'
-    show userProfileCircleMembershipQueryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show personaManagementFeatureFlagProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
@@ -56,7 +55,7 @@ import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/runtime/shell/actions/content_report_reason_sheet.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/loading/app_page_load_arbiter.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_tab.dart';
@@ -67,18 +66,16 @@ import 'package:quwoquan_app/service/content_service/content/profile_interaction
 import 'package:quwoquan_app/runtime/di/profile_interaction_activity_dependencies.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_action_bar.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/author_impact_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/my_intersection_inbox_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/other_profile_intersection_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_completeness_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_header.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_stats_row.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_completeness_card.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_header.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_interaction_tab_host.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_stats_row.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart';
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_slogan_card.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_slogan_card.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_works_tab.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_footprint_tab.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_circles_tab.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_participant_slots.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_recommendation_slots.dart';
 part 'profile_shell_builders.dart';
 part 'profile_shell_builders_parts.dart';
 part 'profile_shell_builders_more.dart';
@@ -90,6 +87,8 @@ part 'profile_shell_builders_more.dart';
 class ProfileShell extends ConsumerStatefulWidget {
   const ProfileShell({
     super.key,
+    required this.recommendationSlots,
+    required this.participantSlots,
     required this.mode,
     required this.userId,
     this.initialAvatarUrl,
@@ -100,6 +99,8 @@ class ProfileShell extends ConsumerStatefulWidget {
     this.greetingIntersectionRef,
   });
 
+  final ProfileRecommendationSlots recommendationSlots;
+  final ProfileParticipantSlots participantSlots;
   final ProfileMode mode;
   final String userId;
   final String? initialAvatarUrl;

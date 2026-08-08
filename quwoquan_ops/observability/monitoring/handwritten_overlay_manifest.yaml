@@ -1,0 +1,997 @@
+# 手写 PromQL overlay 登记表（唯一真相源：本文件 + 告警树实时扫描）
+#
+# `quwoquan_ops/observability/monitoring/alerts/` 下的告警分两类：
+#
+# * ContractGraph 派生：`<domain>_contract/*.yaml`、`contract_object_coverage.yaml`、
+#   `contract_pending_commercial_coverage.yaml`。由 codegen 生成并做字节级漂移检测。
+# * overlay：本文件登记的手写规则。每一条都必须写明「ContractGraph 为什么无法表达这个口径」。
+#
+# 新增一条手写 PromQL 而不在此登记，`verify_contract_alert_overlay.py` 立刻 BLOCK；
+# 反过来，一条规则如果被判定为可派生（P95 延迟 / 5xx 比率 + selector 能解析到 ContractGraph
+# operation），也 BLOCK，必须迁进 codegen 而不是在这里登记理由。
+#
+# 这不是 allowlist：reason 是封闭枚举，且判定完全由 ContractGraph 现场推导，
+# 契约一旦补齐相应声明（例如给某个 operation 加上限流 SLO 维度），对应条目会立即变成
+# 「可派生残留」并阻断，逼迫迁移。
+schema: alert-overlay
+rules:
+  - file: quwoquan_ops/observability/monitoring/alerts/content_report_lifecycle.yaml
+    group: quwoquan_content_report_lifecycle
+    rule: content_report_valid_create_rate
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher =~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/content_report_lifecycle.yaml
+    group: quwoquan_content_report_lifecycle
+    rule: content_report_closure_within_72h_rate
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_report_closure_slo_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/content_report_lifecycle.yaml
+    group: quwoquan_content_report_lifecycle
+    rule: content_feed_blocked_keyword_filter_rate
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_feed_blocked_keyword_candidates_total', 'content_feed_blocked_keyword_filtered_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/content_report_lifecycle.yaml
+    group: quwoquan_content_report_lifecycle
+    rule: ContentReportCreateErrorRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_report_valid_create_rate']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/content_report_lifecycle.yaml
+    group: quwoquan_content_report_lifecycle
+    rule: ContentReportClosureSLOBreached
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_report_closure_within_72h_rate']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_runtime_message_transport_recording
+    rule: qwq_message_transport_publish_p95
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['qwq_message_transport_publish_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_runtime_message_transport_recording
+    rule: qwq_message_transport_consume_p95
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['qwq_message_transport_consume_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: AuthProviderErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: LoginClientStateStalled
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_funnel_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: LoginTerminalDuplicateSuppressed
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_funnel_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: LoginClientOperationFailureRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_operation_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: LoginPhoneBindingAbandonmentHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_funnel_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: UserAccountCloseOutboxFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['user_account_close_outbox_delivery_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: AccountSecurityAuthorityUnavailable
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_auth_account_security_authority_checks_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: AccountSecurityAuthorityDeniedSpike
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_auth_account_security_authority_checks_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: AccountSecurityAuthorityLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_auth_account_security_authority_check_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: AccountSecurityAuthorityLatencyErrorBudgetBurn
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_auth_account_security_authority_check_duration_seconds_bucket', 'runtime_auth_account_security_authority_check_duration_seconds_count']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: UserAccountClosedConsumerRetrying
+    reason: first_party_series_not_contract_operation
+    justification: "只消费 [] 这类 recording rule / 派生 series，没有落到任何契约 operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: UserAccountClosedDeadLetterPresent
+    reason: first_party_series_not_contract_operation
+    justification: "只消费 [] 这类 recording rule / 派生 series，没有落到任何契约 operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: UserAccountClosedCleanupP95High
+    reason: first_party_series_not_contract_operation
+    justification: "只消费 [] 这类 recording rule / 派生 series，没有落到任何契约 operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_mq
+    rule: MQConsumeLagHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['mq_consume_total', 'mq_publish_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: ProductTelemetryIngestUnavailableRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_telemetry_ingest_batches_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: ProductTelemetryLogSinkWriteErrors
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_telemetry_logstore_operation_duration_seconds_count']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: ProductTelemetryLogSinkWriteP95High
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_telemetry_logstore_operation_duration_seconds_bucket']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: RuntimeLogSpoolBacklogHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_log_export_spool_pending']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: RuntimeLogDeadLetterPresent
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_log_export_dead_letter_pending']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: RuntimeLogCriticalCapacityEviction
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_log_export_batches_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: AppANREventRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_app_experience_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: AppJankFrameRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_app_frame_samples_total', 'ops_app_janky_frames_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: AppFrameSampleDenominatorMissing
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_app_frame_samples_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: VideoBookPlaybackReadyP95High
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_video_playback_events_total', 'ops_video_playback_ready_duration_seconds_bucket']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: VideoBookRebufferRatioHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_video_playback_effective_seconds_total', 'ops_video_playback_rebuffer_seconds_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_ops_pipeline
+    rule: AppExperienceTelemetryMissing
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_app_experience_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_startup_welcome
+    rule: StartupFlutterFirstFrameP95High
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_startup_phase_duration_seconds_bucket']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_startup_welcome
+    rule: StartupShellFirstPaintP95High
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_startup_phase_duration_seconds_bucket']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_startup_welcome
+    rule: StartupRecoveryRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_startup_phase_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_startup_welcome
+    rule: StartupTerminalFunnelIncomplete
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_startup_phase_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l1_startup_welcome
+    rule: StartupTelemetryJournalDrop
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_startup_phase_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_mongo
+    rule: MongoSlowCommandRate
+    reason: infrastructure_exporter_series
+    justification: "消费 ['mongo_command_total']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_mongo
+    rule: MongoCommandLatencyHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['mongo_command_duration_seconds_bucket']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_mq_publish
+    rule: MQPublishFailureRate
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['mq_publish_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_service
+    rule: HighErrorRate
+    reason: service_level_golden_signal
+    justification: "selector 只约束 status 等运行时维度，没有落到任何 service/route/operation（服务级金信号）；这是跨 operation 的服务级金信号，契约只声明 per-operation SLO，无法派生。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_service
+    rule: HighP95Latency
+    reason: service_level_golden_signal
+    justification: "契约 series 没有任何 label selector（服务级金信号）；这是跨 operation 的服务级金信号，契约只声明 per-operation SLO，无法派生。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_service
+    rule: HighInflight
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['http_server_inflight_requests']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_redis
+    rule: RedisHighErrorRate
+    reason: infrastructure_exporter_series
+    justification: "消费 ['redis_operations_total']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_redis
+    rule: RedisHighLatency
+    reason: infrastructure_exporter_series
+    justification: "消费 ['redis_duration_seconds_bucket']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projector
+    rule: ProjectorFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['projector_events_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projector
+    rule: EventStorePublishFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['mq_publish_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecModelFallbackRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['rec_pipeline_model_fallback_total', 'rec_pipeline_requests_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecPipelineLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['rec_pipeline_total_latency_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecModelTimeoutRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['rec_pipeline_model_hits_total', 'rec_pipeline_model_timeouts_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecEmptyFeedRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_terminal_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecInitialRecommendTerminalFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_terminal_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RankedFeedWindowAtomicUnavailable
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_ranked_feed_window_create_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RankedFeedWindowPayloadRejectionRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_ranked_feed_window_create_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RankedFeedWindowShardKeyQuotaRejected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_ranked_feed_window_create_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RankedFeedWindowShardByteQuotaRejected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_ranked_feed_window_create_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RankedFeedWindowRepairBoundRejected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_ranked_feed_window_create_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: FeedDeliveryPageAtomicUnavailable
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_feed_delivery_page_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: FeedDeliveryPageFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_feed_delivery_page_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: FeedDeliveryPageShardKeyQuotaRejected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_feed_delivery_page_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: FeedDeliveryPageShardByteQuotaRejected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_feed_delivery_page_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: FeedDeliveryPageRepairBoundRejected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_feed_delivery_page_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationRepeatExposureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_duplicate_exposure_total', 'recommendation_feed_served_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationABValidityLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_ab_experiment_validity_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationBehaviorIngestDropHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_behavior_ingest_dropped_total', 'recommendation_behavior_ingest_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationHotPathBufferDropHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['rec_hotpath_dropped_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationClickThroughRateLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_engagement_total', 'recommendation_feed_impressed_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationCompletionRateLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_completion_total', 'recommendation_feed_impressed_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationNegativeFeedbackRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_impressed_total', 'recommendation_feed_negative_feedback_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: TagFeedbackConsumerLagHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_tag_feedback_fact_consumer_lag_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: TagFeedbackConsumerFailuresSustained
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_tag_feedback_fact_consumer_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationAttributionUnknownRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_behavior_by_attribution_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationAttributionNegativeFeedbackBySupplySourceHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_behavior_by_attribution_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationAttributionCTRByRecallPathLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_behavior_by_attribution_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationScenarioConsumptionRateLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_behavior_by_attribution_total', 'recommendation_feed_served_by_attribution_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_rec_model
+    rule: RecommendationSupplySourceShareImbalance
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['recommendation_feed_served_by_attribution_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchRetrieveLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_retrieve_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchZeroResultRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_retrieve_requests_total', 'search_retrieve_zero_results_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchDegradeRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_retrieve_degraded_total', 'search_retrieve_requests_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchAvailabilityLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_retrieve_requests_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchLoadShedRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_retrieve_load_shed_total', 'search_retrieve_requests_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchInflightSaturationHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_retrieve_inflight']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchFeedbackSignalDeliveryLagHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_feedback_signal_relay_oldest_pending_age_seconds']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_search
+    rule: SearchFeedbackSignalRelayFailuresSustained
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['search_feedback_signal_relay_outcomes_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_intersection
+    rule: IntersectionRepeatExposureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['intersection_feed_candidates_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_intersection
+    rule: IntersectionFreshnessFilterRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['intersection_feed_candidates_total', 'intersection_feed_filtered_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_intersection
+    rule: IntersectionDisplayIncompleteRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['intersection_feed_candidates_total', 'intersection_feed_filtered_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_intersection
+    rule: IntersectionRedisDegradedHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['intersection_redis_degraded_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_intersection
+    rule: IntersectionVisitClearErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_ops_objects
+    rule: OpsVisitRecordErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_ops_objects
+    rule: PgOutboxDispatchFailuresSustained
+    reason: infrastructure_exporter_series
+    justification: "消费 ['pg_outbox_dispatch_failures_total']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_ops_objects
+    rule: ControlPlaneConfigWriteErrorRateHigh
+    reason: service_outside_contract_graph
+    justification: "服务 'platform-ops-service' 不在 ContractGraph 运行分母内；该服务没有 contracts/domain.yaml，ContractGraph 无法为它派生 operation 级 SLO 告警。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HighGoroutineCount
+    reason: infrastructure_exporter_series
+    justification: "消费 ['go_goroutines']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HighMemoryUsage
+    reason: infrastructure_exporter_series
+    justification: "消费 ['process_resident_memory_bytes']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HighFDUsage
+    reason: infrastructure_exporter_series
+    justification: "消费 ['process_max_fds', 'process_open_fds']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HostCPUHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['node_cpu_seconds_total']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HostCPUSpike
+    reason: infrastructure_exporter_series
+    justification: "消费 ['node_cpu_seconds_total']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HostMemoryHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['node_memory_MemAvailable_bytes', 'node_memory_MemTotal_bytes']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HostDiskAlmostFull
+    reason: infrastructure_exporter_series
+    justification: "消费 ['node_filesystem_avail_bytes', 'node_filesystem_size_bytes']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: HostNetworkErrorSpike
+    reason: infrastructure_exporter_series
+    justification: "消费 ['node_network_receive_errs_total', 'node_network_transmit_errs_total']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ContainerMemoryHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['podman_container_mem_limit_bytes', 'podman_container_mem_usage_bytes']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: DataPlaneExporterDown
+    reason: infrastructure_exporter_series
+    justification: "消费 ['up']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: MongoConnectionsHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['mongodb_ss_connections']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: PostgresConnectionsHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['pg_stat_activity_count']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: RedisMemoryHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 ['redis_memory_max_bytes', 'redis_memory_used_bytes']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_content_flywheel
+    rule: InterestRecomputeErrorRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_interest_profile_recompute_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_content_flywheel
+    rule: InterestProjectionFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_interest_projection_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_content_flywheel
+    rule: InterestProjectionFreshnessLagHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_interest_projection_freshness_lag_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_entity_homepage
+    rule: HomepageImportIssuesPresent
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_homepage_import_objects']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_entity_homepage
+    rule: HomepageImportStale
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_homepage_import_last_success_timestamp_seconds']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_recordings
+    rule: assistant_grounding_success_rate
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_grounding_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantConsentUnavailable
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher =\"503\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantSubscriptionCronStalled
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_subscription_cron_tick_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantSubscriptionDeliveryFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_subscription_delivery_attempt_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantMentionedConsumerDLQBacklog
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_mentioned_consumer_dlq_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantGroundingSuccessRateLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_grounding_success_rate']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantFirstVisibleResponseP95High
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_first_visible_response_ms_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantRunWorkerRecoveryFailed
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_run_worker_claim_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantRunCheckpointStale
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_run_checkpoint_age_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantRunCancelP95High
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_run_cancel_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantPublicWebAvailabilityLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_public_web_tool_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantPublicWebEvidenceUnavailable
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_public_web_policy_boundary_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantPublicWebSafetyRejectionSpike
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_public_web_policy_boundary_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantRunLeaseContentionHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_run_lease_contention_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantRunCompletionRejectedHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_run_completion_rejected_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantPresentationProjectionFailed
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_presentation_projection_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantPresentationFallbackRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_presentation_projection_total', 'ops_app_experience_events_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantContextDependencyUnavailable
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_context_resolution_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantContextConsentFailClosed
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_context_privacy_rejection_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_assistant_objects
+    rule: AssistantWrongDestinationIncident
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['assistant_wrong_destination_incidents_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatMessageSendErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatMessageListErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatProjectionOrOutboxRelayUnhealthy
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_status']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatMentionCommandFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['chat_mention_command_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatReadWatermarkCommandFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['chat_read_watermark_command_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatInboxProjectionLagHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['chat_inbox_projection_event_lag_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatInboxProjectionDrainFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['chat_inbox_projection_drain_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatProjectionOrOutboxSignalStale
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_last_success_timestamp_seconds']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatSyncHintToPullLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_runtime_media_sync_hint_to_pull_delay_ms_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatSyncPatchFanoutFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_runtime_media_sync_patch_fanout_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_chat_objects
+    rule: ChatSyncRequiresResync
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_runtime_media_sync_requires_resync_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_notification_inbox
+    rule: AppMessageCreateErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_notification_inbox
+    rule: InteractionNotificationDLQGrowing
+    reason: infrastructure_exporter_series
+    justification: "消费 ['redis_stream_length']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_integration_external
+    rule: ExternalInteractionSubmitErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_integration_external
+    rule: ExternalInteractionDeadLettersPresent
+    reason: infrastructure_exporter_series
+    justification: "消费 ['reliable_task_dead_letters']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_rtc_call
+    rule: RtcCallInitiateErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_rtc_call
+    rule: RtcAccountSecurityConsumerDeadLettered
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['rtc_account_security_consumer_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_rtc_call
+    rule: LiveKitMetricsUnavailable
+    reason: infrastructure_exporter_series
+    justification: "消费 ['up']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_rtc_call
+    rule: LiveKitPacketLossP95High
+    reason: infrastructure_exporter_series
+    justification: "消费 ['livekit_packet_loss_percent_bucket']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_rtc_call
+    rule: LiveKitMedianQualityLow
+    reason: infrastructure_exporter_series
+    justification: "消费 ['livekit_quality_score_bucket', 'livekit_quality_score_count']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_realtime_gateway
+    rule: RealtimeTicketRejectRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_realtime_gateway
+    rule: RealtimeConnectionUpgradeErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_realtime_gateway
+    rule: RealtimeAccountSecurityConsumerDeadLettered
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['realtime_account_security_consumer_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_realtime_gateway
+    rule: RealtimeAccountSecurityEvictionPathUnhealthy
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_status']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: PersonaFollowCommandErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: PersonaRelationshipCommandLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_persona_relationship_command_latency_ms_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: PersonaRelationshipCounterProjectionLagHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_persona_relationship_counter_projection_lag_ms_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: PersonaRelationshipConsistencyMismatchDetected
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_persona_relationship_events_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: ProfileSubjectReadLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_profile_subject_public_read_latency_ms_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: PersonaSwitchLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['quwoquan_persona_switch_latency_ms_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: SubjectFollowCommandErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: FollowingSubjectReadErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"2..\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_relationship_objects
+    rule: GreetingCommandErrorRateHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher !~\"(2..|409|429)\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentFilterCatalogAvailabilityLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_filter_catalog_get_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentFilterCatalogReadLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_filter_catalog_operation_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentFilterCatalogPublishStorageUnavailable
+    reason: first_party_series_not_contract_operation
+    justification: "只消费 [] 这类 recording rule / 派生 series，没有落到任何契约 operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentOriginalAccessQuotaGrantServerErrors
+    reason: absolute_count_not_ratio_slo
+    justification: "只统计 5xx 绝对量而没有比率分母，契约只声明 availabilityPercent 错误预算比率。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentOutboundShareFactAppendServerErrors
+    reason: absolute_count_not_ratio_slo
+    justification: "只统计 5xx 绝对量而没有比率分母，契约只声明 availabilityPercent 错误预算比率。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingJobFailureRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_jobs_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingJobLatencyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaHLSCMAFPackagingFallbackRateHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_hls_cmaf_packaging_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingCompleteToReadyHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_complete_to_ready_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingOldestOutboxEventHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_outbox_oldest_event_age_seconds']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingDLQAdmissionAgeHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_dlq_event_age_seconds']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentPublicationRetryExhausted
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_content_publication_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ArticleReaderEnterLatencyHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_article_reader_enter_duration_seconds_bucket']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ArticleReaderErrorRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_article_reader_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ArticleReaderRecoveryFailure
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_article_reader_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: VideoPreviewTrackLoadFailureRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_video_preview_track_loads_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingWorkerUnhealthy
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_status']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingInfrastructureErrors
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_jobs_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingOutboxBacklog
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_outbox_consecutive_full_batches']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingPoisonEvent
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_poison_events_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentMediaProcessingPoisonQuarantineFailed
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_media_processing_poison_quarantine_failures_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentProjectionCheckpointUnhealthy
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_status']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_objects
+    rule: ContentProjectionCheckpointSignalStale
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_last_success_timestamp_seconds']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_comment_compliance
+    rule: CommentIPLocationResolverErrors
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_comment_ip_location_lookup_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_comment_compliance
+    rule: CommentIPLocationCoverageLow
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_comment_ip_location_lookup_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_comment_compliance
+    rule: CommentIPLocationDatabaseNearExpiry
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['content_comment_ip_location_data_age_days']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_comment_compliance
+    rule: CommentCreateRateLimitedRatioHigh
+    reason: status_class_not_in_contract_slo
+    justification: "status matcher =\"429\" 不在契约 slo.availabilityPercent 的 5xx 口径内；ContractGraph 的 slo 只有 availabilityPercent（5xx 错误预算）与 latencyP95Milliseconds 两个维度。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_content_comment_compliance
+    rule: CommentProjectionRelayUnhealthy
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['runtime_health_check_status']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_api_edge_admission
+    rule: ApiEdgeAdmissionStateUnavailableDenied
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['api_edge_admission_decisions_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_api_edge_admission
+    rule: ApiEdgeAdmissionFailOpenObserved
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['api_edge_admission_decisions_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_api_edge_admission
+    rule: ApiEdgeAdmissionLatencySLOBreach
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['api_edge_admission_duration_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_api_edge_admission
+    rule: ApiEdgeRateLimitedRatioHigh
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['api_edge_admission_decisions_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"

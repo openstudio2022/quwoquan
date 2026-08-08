@@ -57,11 +57,11 @@ CloudOperationInvocationContext rtcOperationInvocationContext(
   command: command,
 );
 
-final incomingCallPresentationAcknowledgerProvider =
-    Provider<IncomingCallPresentationAcknowledger>(
+final notificationDeliveryJobProcessCommandWriterProvider =
+    Provider<NotificationDeliveryJobProcessCommandWriter>(
       (ref) =>
           NotificationProductionComposition.generatedAdapter<
-            IncomingCallPresentationAcknowledger
+            NotificationDeliveryJobProcessCommandWriter
           >(
             NotificationProductionAdapter.incomingCallPresentation,
             client: ref.watch(generatedCloudOperationClientProvider),

@@ -8,14 +8,14 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/forward_share_dependencies.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_external_share_service.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_share_models.dart';
-import 'package:quwoquan_app/runtime/di/share/forward_confirm_sheet.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_recipient_picker_route.dart';
 import 'package:quwoquan_app/runtime/shell/share/forward_recipient_widgets.dart';
 
@@ -48,12 +48,11 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
   }
 
   Future<List<AppForwardRecipient>> _loadRecentRecipients() async {
-    final repo = ref.read(chatConversationRepositoryProvider);
-    final conversations = await repo.listConversations(limit: 30);
+    final conversations = await ref
+        .read(forwardShareDependenciesProvider)
+        .loadRecentRecipients(limit: 30);
     return uniqueForwardRecipients(
-      sortForwardRecipientsByRecent(
-        conversations.map(AppForwardRecipient.fromConversation),
-      ),
+      sortForwardRecipientsByRecent(conversations),
     ).take(AppForwardLimits.recentRecipients).toList(growable: false);
   }
 

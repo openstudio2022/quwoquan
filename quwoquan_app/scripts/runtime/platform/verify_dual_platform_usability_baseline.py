@@ -177,6 +177,10 @@ def main() -> int:
         "video-player-ready",
         "chat-inbox-row-",
         "AppRoutePaths.profile",
+        "DATA_RELEASE_CREATOR_USER_HANDLE",
+        "DATA_RELEASE_CREATOR_PERSONA_ID",
+        "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
+        "profile-header-avatar-image",
         "startupRecoveryTitle",
     ):
         if needle not in patrol:
@@ -204,7 +208,7 @@ def main() -> int:
             failures,
             f"{SMOKE.relative_to(ROOT)}: must declare CORE_READBACK_TARGET",
         )
-    if '"local-gamma"' not in smoke or "gamma_local_anonymous_runtime" not in smoke:
+    if '"local-gamma"' not in smoke or "runtime_anonymous_session" not in smoke:
         fail(
             failures,
             f"{SMOKE.relative_to(ROOT)}: runtime anonymous session must support local-gamma",

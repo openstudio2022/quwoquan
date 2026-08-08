@@ -5,16 +5,20 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/runtime/platform/storage/media_cache_file_storage_gateway.dart';
 
 /// LRU download cache for media files (voice, images, etc.).
 /// Manages local file cache with configurable size limit.
+///
+/// 网络出站走 `mediaDataPlaneHttpClientProvider` 注入的 [CloudHttpClient]，
+/// 与 Gateway 调用共享超时预算、传输失败分类与 API 延迟观测；媒体 CDN 的
+/// 授权由 URL 承载，因此该 client 不附带 bearer。
 class MediaDownloadCache {
   MediaDownloadCache({
-    http.Client? client,
+    required CloudHttpClient client,
     int maxCacheSizeMb = 200,
     int maxConcurrentDownloads = 4,
     Future<String> Function()? cacheDirectoryPathProvider,
@@ -22,7 +26,7 @@ class MediaDownloadCache {
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(
       name: 'MediaDownloadCache',
     ),
-  }) : _client = client ?? http.Client(),
+  }) : _client = client,
        _maxCacheSize = maxCacheSizeMb * 1024 * 1024,
        _maxConcurrent = maxConcurrentDownloads,
        _cacheDirectoryPathProvider = cacheDirectoryPathProvider,
@@ -31,7 +35,7 @@ class MediaDownloadCache {
            requireMediaCacheFileStorageGateway(createFileStorageGateway()),
        _telemetrySink = telemetrySink;
 
-  final http.Client _client;
+  final CloudHttpClient _client;
   final int _maxCacheSize;
   final int _maxConcurrent;
   final Future<String> Function()? _cacheDirectoryPathProvider;

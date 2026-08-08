@@ -1,21 +1,14 @@
+import 'package:quwoquan_app/runtime/observability/generated/runtime_log_catalog.g.dart';
+
 class AppLogRedactor {
   const AppLogRedactor();
 
   static const String _masked = '***';
-  static const List<String> _sensitiveKeyTokens = <String>[
-    'authorization',
-    'api_key',
-    'apikey',
-    'token',
-    'secret',
-    'password',
-    'cookie',
-    'phone',
-    'mobile',
-    'email',
-  ];
 
-  Map<String, dynamic> redactMap(Map<String, dynamic> input) {
+  Map<String, dynamic> redactMap(
+    Map<String, dynamic> input, {
+    String operationId = '',
+  }) {
     final out = <String, dynamic>{};
     input.forEach((key, value) {
       out[key] = _redactValue(key: key, value: value);
@@ -74,14 +67,16 @@ class AppLogRedactor {
   }
 
   bool _isSensitiveKey(String key) {
-    final lowered = key.toLowerCase();
-    for (final token in _sensitiveKeyTokens) {
-      if (lowered.contains(token)) {
-        return true;
-      }
-    }
-    return false;
+    final normalized = _normalizeKey(key);
+    return RuntimeLogCatalog.forbiddenAttributeKeys.any((blocked) {
+      final normalizedBlocked = _normalizeKey(blocked);
+      return normalized == normalizedBlocked ||
+          (normalizedBlocked != 'ip' && normalized.contains(normalizedBlocked));
+    });
   }
+
+  String _normalizeKey(String value) =>
+      value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 
   bool _looksSensitiveText(String text) {
     final lowered = text.toLowerCase();

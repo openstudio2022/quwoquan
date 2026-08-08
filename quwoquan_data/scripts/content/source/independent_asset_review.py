@@ -28,6 +28,28 @@ from content.source.independent_asset_review_contract import (
 )
 
 _ACCEPTED_DECISIONS = {"research_allowed", "commercial_allowed"}
+_POPULAR_BINDING_FIELDS = (
+    "popularCandidateId", "popularCatalogRef", "popularCatalogDigest",
+    "popularCatalogFileSha256",
+)
+
+
+def _asset_snapshot(
+    asset: Mapping[str, Any],
+    *,
+    asset_kind: str,
+) -> dict[str, Any]:
+    snapshot = asset_snapshot(asset)
+    if asset_kind != "video":
+        return snapshot
+    values = [str(asset.get(field) or "").strip() for field in _POPULAR_BINDING_FIELDS]
+    if any(values) and not all(values):
+        raise IndependentAssetReviewError(
+            "video popular-catalog acquisition binding is incomplete"
+        )
+    if all(values):
+        snapshot.update(zip(_POPULAR_BINDING_FIELDS, values, strict=True))
+    return snapshot
 
 
 def _author_evidence_issues(
@@ -264,7 +286,10 @@ def _prepare_stable(
                 "acquisitionReceiptSha256": receipt_sha,
                 "executionManifestRef": manifest_ref,
                 "executionManifestSha256": manifest_sha,
-                "assetSnapshot": asset_snapshot(_one_asset(receipt, asset_id=asset_id)),
+                "assetSnapshot": _asset_snapshot(
+                    _one_asset(receipt, asset_id=asset_id),
+                    asset_kind=asset_kind,
+                ),
                 "acquisitionExecution": {
                     "executionId": acquisition_run_id,
                     "objectRef": f"assets/{asset_kind}/{asset_id}",
@@ -321,7 +346,7 @@ def _prepare_stable(
         )
 
     asset = _one_asset(receipt, asset_id=asset_id)
-    snapshot = asset_snapshot(asset)
+    snapshot = _asset_snapshot(asset, asset_kind=asset_kind)
     safety = asset.get("safetyReview")
     safety = safety if isinstance(safety, Mapping) else {}
     review_decision = _review_decision(

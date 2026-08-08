@@ -23,6 +23,7 @@ import (
 func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
 	t *testing.T,
 ) {
+	resetIntegrationState(t)
 	ctx := context.Background()
 	service := newIntegrationAssistantService()
 	session, err := service.CreateSession(
@@ -122,6 +123,7 @@ func TestAssistantRunExpiredMongoClaimIsRecoveredByAnotherWorker(
 }
 
 func TestAssistantRunSSEFollowsJournalUntilWorkerTerminalEvent(t *testing.T) {
+	resetIntegrationState(t)
 	ctx := context.Background()
 	const userID = "worker-stream-owner"
 	service := newIntegrationAssistantService()
@@ -212,6 +214,7 @@ func TestAssistantRunSSEFollowsJournalUntilWorkerTerminalEvent(t *testing.T) {
 }
 
 func TestAssistantRunFailedSSECarriesStructuredRuntimeFailure(t *testing.T) {
+	resetIntegrationState(t)
 	ctx := context.Background()
 	const userID = "worker-failure-owner"
 	service := newIntegrationAssistantService()

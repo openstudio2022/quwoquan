@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Environment homepage coverage receipt",
+  "type": "object",
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "runId",
+    "dryRun",
+    "rows"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.environment_coverage_receipt"
+    },
+    "environment": {
+      "enum": ["alpha", "beta", "gamma", "prod"]
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entityRef", "imported"],
+        "additionalProperties": false,
+        "properties": {
+          "entityRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "imported": {
+            "type": "boolean"
+          },
+          "homepageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "introductionUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    }
+  }
+}

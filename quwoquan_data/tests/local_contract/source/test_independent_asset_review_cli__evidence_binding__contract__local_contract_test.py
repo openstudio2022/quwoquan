@@ -6,7 +6,7 @@ from argparse import Namespace
 from pathlib import Path
 
 import pytest
-from content.execution import review_asset
+from content.execution.controller.execute import review_asset
 from content.source.independent_asset_review import IndependentAssetReviewError
 from core.io import write_json
 

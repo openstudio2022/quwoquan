@@ -4,10 +4,6 @@ collections:
     entity: TagTaxonomyRelease
     role: authoritative
     indexes:
-    - name: idx_tag_taxonomy_release_status_activated
-      keys:
-        status: 1
-        activatedAt: -1
     - name: uq_tag_taxonomy_release_single_active
       keys:
         status: 1

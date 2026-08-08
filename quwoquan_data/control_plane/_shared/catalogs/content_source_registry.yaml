@@ -476,9 +476,9 @@ common:
       defaultRole: publish_candidate
       fetchMode: attribution_manifest
       rightsPolicy: attribution_no_watermark
-      researchAcquisitionPaths: [public_direct, supported_api, manual_file]
+      researchAcquisitionPaths: [supported_api, manual_file]
       rateLimit: conservative
-      promptFacts: [视觉发现和单源图片作品候选, research 可通过公开直链、平台支持接口或人工文件取得并记录 unverified 权利缺口, commercial 必须补齐逐图授权, 逐图记录 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt]
+      promptFacts: [视觉发现和单源图片作品候选, Pinterest robots 禁止自动 search 抓取；research 只能通过平台支持接口或人工文件取得并记录 unverified 权利缺口, commercial 必须补齐逐图授权, 逐图记录 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt]
     - sourceId: five_hundred_px
       platform: 500px
       sourceClass: photography_community

@@ -354,6 +354,19 @@ groups:
         annotations:
           summary: "circle ready operation P95 超出 SLO（900ms）"
           description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=900。"
+      - alert: CircleContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service="circle-service",operation=~"circle\\..+",contract_metric=~"circle_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: circle
+        annotations:
+          summary: "circle ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
   - name: quwoquan_content_contract_object_coverage
     rules:
       - alert: ContentContractOperationAvailabilityBelow99p9Percent

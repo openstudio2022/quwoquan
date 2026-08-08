@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/generated/content_media_post_projection_keys.g.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_media_viewer_policy.dart';
+import 'package:quwoquan_app/runtime/di/content_media_viewer_policy_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -80,14 +82,16 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/app
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_viewer_article_hydration_admission.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_video_episode_identity.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/runtime/di/presentation/works_viewer_content_actions_composition.dart';
+import 'package:quwoquan_app/runtime/di/works_viewer_content_action_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/works_viewer_content_action_contract.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
 import 'package:quwoquan_app/design_system/formatters/content_time_label.dart';
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
-import 'package:quwoquan_app/runtime/di/presentation/works_viewer_article_composition.dart';
+import 'package:quwoquan_app/runtime/di/works_viewer_article_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/works_article_events.dart';
 import 'package:quwoquan_app/runtime/di/works_viewer_feed_bridge.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/home_feed_video_autoplay_policy.dart';
@@ -193,6 +197,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   static const double _edgeDismissMinDistance = 56;
   static const double _edgeDismissMinVelocity = 520;
   static const Duration _externalEmptyExitDelay = Duration(seconds: 6);
+
+  ContentMediaViewerPolicy get _contentMediaViewerPolicy =>
+      ref.read(contentMediaViewerPolicyProvider);
 
   Set<String> _selectedWorkFilterIds = <String>{'all'};
   int _currentPage = 0;

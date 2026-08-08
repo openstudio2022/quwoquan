@@ -1,6 +1,6 @@
 description: 'Post 对象与 content 域共享的结构化错误码声明。格式：MODULE.KIND.REASON。
 
-  对象专属错误码位于各对象目录（comment、media_asset、media_original_access_fact、
+  对象专属错误码位于各对象目录（comment、media_asset、original_access_quota、
 
   report、post_moderation_case 的 errors.yaml）；codegen 与端云 parity 门禁按
 
@@ -97,10 +97,10 @@ errors:
     - content.content_reaction.ReactToComment
     - content.content_reaction.UnlikePost
     - content.intersection_visit_state.MarkIntersectionsVisited
-    - content.outbound_share_fact.CreateOutboundShare
+    - content.outbound_share_fact.AppendOutboundShareFact
     - content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
     - content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
-    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.profile_interaction_read_fact.AppendProfileInteractionReadFact
     - content.media_asset.RecordMediaProcessingResult
     - content.media_asset.DiscardMediaAsset
     - content.media_asset.GetMediaAssetDeliveryReference
@@ -109,7 +109,7 @@ errors:
     - content.media_asset.SelectAutoVideoCover
     - content.media_asset.SelectManualVideoCover
     - content.media_asset.UpdateMediaAssetAccessPolicy
-    - content.media_original_access_fact.RequestOriginalImageAccess
+    - content.original_access_quota.ReserveOriginalImageAccessGrant
     - content.media_upload_session.AbortMediaUpload
     - content.media_upload_session.CompleteMediaUpload
     - content.media_upload_session.GetMediaUploadSession
@@ -164,10 +164,10 @@ errors:
     - content.content_reaction.ReactToComment
     - content.content_reaction.UnlikePost
     - content.intersection_visit_state.MarkIntersectionsVisited
-    - content.outbound_share_fact.CreateOutboundShare
+    - content.outbound_share_fact.AppendOutboundShareFact
     - content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
     - content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
-    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.profile_interaction_read_fact.AppendProfileInteractionReadFact
     - content.media_asset.RecordMediaProcessingResult
     - content.media_asset.SelectAutoVideoCover
     - content.media_asset.SelectManualVideoCover
@@ -317,14 +317,14 @@ errors:
     - content.content_reaction.LikePost
     - content.content_reaction.ReactToComment
     - content.content_reaction.UnlikePost
-    - content.outbound_share_fact.CreateOutboundShare
-    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.outbound_share_fact.AppendOutboundShareFact
+    - content.profile_interaction_read_fact.AppendProfileInteractionReadFact
     - content.media_asset.DiscardMediaAsset
     - content.media_asset.RecordMediaProcessingResult
     - content.media_asset.SelectAutoVideoCover
     - content.media_asset.SelectManualVideoCover
     - content.media_asset.UpdateMediaAssetAccessPolicy
-    - content.media_original_access_fact.RequestOriginalImageAccess
+    - content.original_access_quota.ReserveOriginalImageAccessGrant
     - content.media_upload_session.AbortMediaUpload
     - content.media_upload_session.CompleteMediaUpload
     - content.media_upload_session.InitMediaUpload
@@ -365,8 +365,8 @@ errors:
     - content.content_reaction.UnlikePost
     - content.content_behavior_fact.ReportBehaviors
     - content.intersection_visit_state.MarkIntersectionsVisited
-    - content.outbound_share_fact.CreateOutboundShare
-    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.outbound_share_fact.AppendOutboundShareFact
+    - content.profile_interaction_read_fact.AppendProfileInteractionReadFact
     - content.media_asset.DiscardMediaAsset
     - content.media_asset.RecordMediaProcessingResult
     - content.media_asset.SelectAutoVideoCover
@@ -419,7 +419,7 @@ errors:
     - content.media_asset.GetMediaAssetDeliveryReference
     - content.media_asset.GetMediaAssetReference
     - content.media_asset.GetOwnedMediaAsset
-    - content.media_original_access_fact.RequestOriginalImageAccess
+    - content.original_access_quota.ReserveOriginalImageAccessGrant
     - content.media_upload_session.GetMediaUploadSession
     - content.post_moderation_case.GetCurrentPostModerationCase
     - content.post_moderation_case.GetPostPublicationEligibility

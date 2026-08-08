@@ -246,6 +246,7 @@ abstract final class AssistantText {
   static const String assistantPanelTitleSuffix = '智能助手';
   static const String assistantPanelSubtitle = '可总结图片与评论，给出推荐与标注信息';
   static const String assistantAskPlaceholder = '可以问：这张图有什么亮点？';
+  static const String assistantSteerPlaceholder = '补充新的约束，任务将在安全边界调整';
   static const String assistantSuggestedQuestionsTitle = '推荐问题';
   static const String assistantAskAboutSummary = '帮我总结这张图片';
   static const String assistantAskAboutOutfit = '分析人物穿搭/风格';

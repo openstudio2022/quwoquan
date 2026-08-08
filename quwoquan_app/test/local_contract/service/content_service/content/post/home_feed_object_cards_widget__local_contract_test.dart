@@ -16,10 +16,12 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentPostProjection, FeedObjectCard;
+    show AssistantUsePolicy, ContentPostProjection, FeedObjectCard;
 
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import 'package:http/testing.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
 ContentPostViewData _post(int index) {
   return ContentPostViewData.fromWire(
@@ -34,7 +36,7 @@ ContentPostViewData _post(int index) {
       authorRoleLabel: '旅行创作者',
       authorIdentityTags: const <String>['摄影'],
       authorVerified: false,
-      assistantUsePolicy: 'allow',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       likeCount: 0,
       commentCount: 0,
       shareCount: 0,
@@ -73,7 +75,18 @@ class _ObjectCardsFeedMapNotifier extends DiscoveryFeedMapNotifier {
   );
 }
 
+/// 该 double 覆写了全部网络入口，因此数据面 client 永不应被触达；
+/// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
+CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
+  client: MockClient(
+    (request) async =>
+        throw StateError('MediaDownloadCache double must not perform network IO'),
+  ),
+);
+
 class _NoopMediaDownloadCache extends MediaDownloadCache {
+  _NoopMediaDownloadCache() : super(client: _unreachableDataPlaneClient());
+
   @override
   Future<String?> getCachedFilePath(String url) async => null;
 }

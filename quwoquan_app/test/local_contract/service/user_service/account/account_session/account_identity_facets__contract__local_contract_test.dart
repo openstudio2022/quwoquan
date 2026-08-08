@@ -1,3 +1,15 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+// readiness_case: account_session_login_with_phone_app_local
+// readiness_case: account_session_login_with_wechat_app_local
+// readiness_case: account_session_login_with_alipay_app_local
+// readiness_case: account_session_login_with_qq_app_local
+// readiness_case: account_session_login_one_tap_app_local
+// readiness_case: account_session_login_anonymous_app_local
+// readiness_case: account_session_refresh_token_app_local
+// readiness_case: account_session_logout_app_local
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
@@ -23,7 +35,7 @@ void main() {
         invocationContext: _context,
       );
 
-      await login.loginWithPhone(
+      final phoneGrant = await login.loginWithPhone(
         LoginWithPhoneCommand(
           phone: '13800000000',
           otpCode: '123456',
@@ -34,7 +46,7 @@ void main() {
           privacyVersion: '2026-07',
         ),
       );
-      await login.loginWithWechat(
+      final wechatOutcome = await login.loginWithWechat(
         LoginWithWechatCommand(
           wechatCode: 'wechat-code',
           deviceId: 'device-1',
@@ -43,7 +55,7 @@ void main() {
           privacyVersion: '2026-07',
         ),
       );
-      await login.loginWithAlipay(
+      final alipayOutcome = await login.loginWithAlipay(
         LoginWithAlipayCommand(
           alipayAuthCode: 'alipay-code',
           deviceId: 'device-1',
@@ -52,7 +64,7 @@ void main() {
           privacyVersion: '2026-07',
         ),
       );
-      await login.loginWithQq(
+      final qqOutcome = await login.loginWithQq(
         LoginWithQqCommand(
           qqAuthCode: 'qq-code',
           deviceId: 'device-1',
@@ -61,7 +73,7 @@ void main() {
           privacyVersion: '2026-07',
         ),
       );
-      await login.loginOneTap(
+      final oneTapGrant = await login.loginOneTap(
         LoginOneTapCommand(
           vendor: 'aliyun',
           carrierToken: 'carrier-token',
@@ -71,7 +83,7 @@ void main() {
           privacyVersion: 'privacy-current',
         ),
       );
-      await login.loginAnonymous(
+      final anonymousGrant = await login.loginAnonymous(
         LoginAnonymousCommand(
           installId: 'install-1',
           deviceFingerprintHash: 'fingerprint-hash',
@@ -79,10 +91,12 @@ void main() {
           appVersion: '1.0.0',
         ),
       );
-      await session.refreshToken(
+      final refreshGrant = await session.refreshToken(
         RefreshTokenCommand(refreshToken: 'refresh-token'),
       );
-      await session.logout(LogoutCommand(refreshToken: 'refresh-token'));
+      final logoutAck = await session.logout(
+        LogoutCommand(refreshToken: 'refresh-token'),
+      );
 
       expect(
         executor.calls.map((call) => call.operation.canonicalOperationId),
@@ -106,6 +120,61 @@ void main() {
         'agreementVersion': '2026-07',
         'privacyVersion': '2026-07',
       });
+      expect(executor.calls[1].payload.body, <String, Object?>{
+        'wechatCode': 'wechat-code',
+        'deviceId': 'device-1',
+        'platform': 'ios',
+        'agreementVersion': '2026-07',
+        'privacyVersion': '2026-07',
+      });
+      expect(executor.calls[2].payload.body, <String, Object?>{
+        'alipayAuthCode': 'alipay-code',
+        'deviceId': 'device-1',
+        'platform': 'ios',
+        'agreementVersion': '2026-07',
+        'privacyVersion': '2026-07',
+      });
+      expect(executor.calls[3].payload.body, <String, Object?>{
+        'qqAuthCode': 'qq-code',
+        'deviceId': 'device-1',
+        'platform': 'ios',
+        'agreementVersion': '2026-07',
+        'privacyVersion': '2026-07',
+      });
+      expect(executor.calls[4].payload.body, <String, Object?>{
+        'vendor': 'aliyun',
+        'carrierToken': 'carrier-token',
+        'deviceId': 'device-1',
+        'platform': 'ios',
+        'agreementVersion': 'agreement-current',
+        'privacyVersion': 'privacy-current',
+      });
+      expect(executor.calls[5].payload.body, <String, Object?>{
+        'installId': 'install-1',
+        'deviceFingerprintHash': 'fingerprint-hash',
+        'platform': 'ios',
+        'appVersion': '1.0.0',
+      });
+      expect(executor.calls[6].payload.body, <String, Object?>{
+        'refreshToken': 'refresh-token',
+      });
+      expect(executor.calls[7].payload.body, <String, Object?>{
+        'refreshToken': 'refresh-token',
+      });
+      expect(phoneGrant.ownerId, 'owner-1');
+      expect(oneTapGrant.activePersona?.personaId, 'sub-1');
+      expect(anonymousGrant.identityOrigin, 'phone');
+      expect(
+        <FederatedLoginOutcome>[wechatOutcome, alipayOutcome, qqOutcome].every(
+          (outcome) =>
+              outcome.status == FederatedLoginStatus.authenticated &&
+              outcome.session?.ownerId == 'owner-1',
+        ),
+        isTrue,
+      );
+      expect(refreshGrant.accessToken, 'access-token-next');
+      expect(refreshGrant.refreshToken, 'refresh-token-next');
+      expect(logoutAck.revoked, isTrue);
       expect(
         executor.calls.every(
           (call) => call.context.clientPageId.startsWith('user.'),

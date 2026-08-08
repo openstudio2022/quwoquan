@@ -32,6 +32,23 @@ relationships:
   - entity.Homepage
   - circle.Circle
   - integration.Location
+search_policy:
+  exposed: none
+  not_exposed_reason: "成员与关系记录只在所属对象的授权 Reader 内可见，不作为独立检索对象。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.subject_follow.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.user.subject_follow.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.subject_follow.write
 business_rules:
 - subjectType 不得为 persona，persona 间关系只能写 PersonaRelationship
 - personaId + subjectType + subjectId 全局唯一

@@ -104,14 +104,6 @@ func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
 				SetSparse(true),
 		},
 		{
-			Keys:    bson.D{{Key: "semanticMentions.candidateId", Value: 1}},
-			Options: options.Index().SetName("idx_posts_semantic_candidate").SetSparse(true),
-		},
-		{
-			Keys:    bson.D{{Key: "semanticMentions.targetRef", Value: 1}},
-			Options: options.Index().SetName("idx_posts_semantic_target").SetSparse(true),
-		},
-		{
 			Keys:    bson.D{{Key: "location", Value: "2dsphere"}},
 			Options: options.Index().SetName("idx_posts_location").SetSparse(true),
 		},

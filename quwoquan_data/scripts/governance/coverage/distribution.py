@@ -60,21 +60,61 @@ class ContentDistributionPolicy:
     text_only_rate_target: float
     m100_targets: tuple[tuple[str, int], ...]
     m1000_targets: tuple[tuple[str, int], ...]
+    m10000_targets: tuple[tuple[str, int], ...]
+    require_m100_promotion_before_m1000: bool
+    require_m1000_promotion_before_m10000: bool
+    milestone_attainment_required: bool
+    attainment_counting_mode: str
     automatic_recovery_rate_target: float
+    automatic_recovery_statistical: bool
+    automatic_recovery_non_blocking: bool
     image_provider_priority: tuple[str, ...]
     video_popularity_signals: tuple[str, ...]
+    video_popularity_statistical: bool
+    video_popularity_non_blocking: bool
 
     def __post_init__(self) -> None:
         if self.release_class.value != self.product_lifecycle_state.value:
             raise ValueError("releaseClass must equal productLifecycleState")
         if not self.image_provider_priority or self.image_provider_priority[0] != "pinterest":
             raise ValueError("research image provider priority must start with pinterest")
+        if self.image_generation_allowed or self.video_generation_allowed:
+            raise ValueError("governed image/video generation must remain disabled")
+        if not (
+            self.require_m100_promotion_before_m1000
+            and self.require_m1000_promotion_before_m10000
+            and self.milestone_attainment_required
+        ):
+            raise ValueError("governed scale promotion and attainment gates are mandatory")
+        if self.attainment_counting_mode != "cumulative_unique_finalized_objects":
+            raise ValueError("milestone attainment must count cumulative unique finalized objects")
+        if (
+            not self.automatic_recovery_statistical
+            or self.automatic_recovery_non_blocking
+        ):
+            raise ValueError("automatic recovery statistics must remain an M100+ promotion gate")
+        if self.video_popularity_non_blocking or not self.video_popularity_statistical:
+            raise ValueError("video popularity statistics must remain an M100+ promotion gate")
+        target_rows = (
+            dict(self.m100_targets),
+            dict(self.m1000_targets),
+            dict(self.m10000_targets),
+        )
+        for carrier in ("homepage", "article", "image", "video"):
+            if not (
+                target_rows[0][carrier]
+                < target_rows[1][carrier]
+                < target_rows[2][carrier]
+            ):
+                raise ValueError(f"scale targets must increase monotonically: {carrier}")
 
     def scale_target(self, scale: str, carrier: str) -> int:
         if scale == "M100":
             rows = self.m100_targets
         elif scale == "M1000":
             rows = self.m1000_targets
+        elif scale == "M10000":
+            rows = self.m10000_targets
         else:
             raise ValueError(f"unsupported governed scale: {scale}")
         targets = dict(rows)
@@ -107,6 +147,8 @@ def load_content_distribution_policy(
     research_discovery = raw["researchDiscovery"]
     article_media = raw["articleMedia"]
     scale_milestones = raw["scaleMilestones"]
+    automatic_recovery = scale_milestones["automaticRecovery"]
+    video_popularity = research_discovery["videoPopularity"]
     return ContentDistributionPolicy(
         policy_id=str(raw["policyId"]),
         product_lifecycle_state=lifecycle,
@@ -123,11 +165,27 @@ def load_content_distribution_policy(
             (carrier, int(scale_milestones["m1000Targets"][carrier]))
             for carrier in ("homepage", "article", "image", "video")
         ),
-        automatic_recovery_rate_target=float(
-            scale_milestones["automaticRecoveryRateTarget"]
+        m10000_targets=tuple(
+            (carrier, int(scale_milestones["m10000Targets"][carrier]))
+            for carrier in ("homepage", "article", "image", "video")
         ),
+        require_m100_promotion_before_m1000=bool(
+            scale_milestones["requireM100PromotionBeforeM1000"]
+        ),
+        require_m1000_promotion_before_m10000=bool(
+            scale_milestones["requireM1000PromotionBeforeM10000"]
+        ),
+        milestone_attainment_required=bool(
+            scale_milestones["milestoneAttainmentRequired"]
+        ),
+        attainment_counting_mode=str(scale_milestones["attainmentCountingMode"]),
+        automatic_recovery_rate_target=float(automatic_recovery["targetRate"]),
+        automatic_recovery_statistical=bool(automatic_recovery["statistical"]),
+        automatic_recovery_non_blocking=bool(automatic_recovery["nonBlocking"]),
         image_provider_priority=tuple(research_discovery["imageProviderPriority"]),
-        video_popularity_signals=tuple(research_discovery["videoPopularitySignals"]),
+        video_popularity_signals=tuple(video_popularity["signals"]),
+        video_popularity_statistical=bool(video_popularity["statistical"]),
+        video_popularity_non_blocking=bool(video_popularity["nonBlocking"]),
     )
 
 

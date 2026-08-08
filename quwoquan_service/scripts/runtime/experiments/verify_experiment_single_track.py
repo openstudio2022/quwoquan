@@ -3,12 +3,14 @@
 
 当前商用契约只有一条分桶轨：
   runtime/experiments.AssignBucket
-    -> recommendation recpolicy / search HashResolver
+    -> recommendation recpolicy / search search_index_view experiments
     -> 实际曝光或查询事实中的 experiment bucket
 
-Product Ops Experiment / ExperimentAssignmentFact 尚未接入该热路径，因此必须
-default-deny，且 Portal 不得展示其统计。未来启用控制面必须先完成 durable runtime
-binding 和实际流量对账，而不能再增加第二个 resolver。
+Product Ops Experiment 聚合的创建 / 目录 / rollout 是策略发布的现行唯一轨（经
+公开 command + 事务 outbox 发布 ExperimentPolicyActivated），因此不再冻结；
+冻结的是 ExperimentAssignmentFact：它尚未由线上 runtime 分桶结果回写，必须
+default-deny，且 Portal 不得展示其统计。未来启用 assignment 控制面必须先完成
+durable runtime binding 和实际流量对账，而不能再增加第二个 resolver。
 """
 
 from __future__ import annotations
@@ -44,12 +46,24 @@ def _assert_control_plane_frozen() -> None:
     experiment = _read(experiment_path)
     assignment = _read(assignment_path)
 
-    for source, text in (
-        (experiment_path, experiment),
-        (assignment_path, assignment),
+    # 冻结声明只属于 ExperimentAssignmentFact 对象；Experiment 聚合的
+    # create/list/rollout 是现行策略发布轨，不得被要求声明 blocked。
+    _require(assignment, FROZEN_GAP, assignment_path)
+    _require(assignment, "status: blocked", assignment_path)
+
+    # 反向单轨约束：Experiment 对象不得把冻结的 assignment / stats 读写面
+    # 搬到自己身上来绕开冻结。
+    for forbidden in (
+        "GetExperimentAssignment",
+        "AssignExperimentVariant",
+        "GetExperimentStats",
+        "/assignment",
     ):
-        _require(text, FROZEN_GAP, source)
-        _require(text, "status: blocked", source)
+        if forbidden in experiment:
+            raise AssertionError(
+                f"{experiment_path}: Experiment 控制面不得承载冻结的 assignment 面 "
+                f"{forbidden!r}；该面只属于 ExperimentAssignmentFact 且保持 default-deny"
+            )
 
     if "name: recommendation-engine" in assignment:
         raise AssertionError(
@@ -81,7 +95,7 @@ def _assert_canonical_runtime_track() -> None:
     rec_engine_path = "quwoquan_service/runtime/recommendation/engine.go"
     search_path = (
         "quwoquan_service/services/search-service/"
-        "internal/search/search_request_fact/application/experiments.go"
+        "internal/search/search_index_view/application/experiments.go"
     )
     search_main_path = "quwoquan_service/services/search-service/cmd/api/main.go"
     search_config_path = (
@@ -107,7 +121,7 @@ def _assert_canonical_runtime_track() -> None:
     _require(recpolicy, "runtimeexperiments.AssignBucket(", recpolicy_path)
     _require(rec_engine, "ResolveBucketOr(recpolicy.ExpScoringWeights", rec_engine_path)
     _require(rec_engine, "ExperimentBucket:   scoringBucket", rec_engine_path)
-    _require(search, "runtimeexperiments.NewHashResolver()", search_path)
+    _require(search, "runtimeexperiments.AssignBucket(", search_path)
     _require(search_signal, '"experimentBucket"', search_signal_path)
 
     for fragment in (
@@ -136,12 +150,19 @@ def _assert_canonical_runtime_track() -> None:
             raise AssertionError(
                 f"{source}: manual runtime assignment policy version remains"
             )
+    # 分桶权重与开关只能来自 durable ExperimentPolicyActivated 事实；服务私有
+    # config 一旦重新声明这些键，就是第二个策略真相源。
     for key in (
         "sys.search-service.ranking.experiment.enabled",
         "sys.search-service.ranking.experiment.controlWeightPct",
         "sys.search-service.ranking.experiment.termHeatWeightPct",
     ):
-        _require(search_config, key, search_config_path)
+        if key in search_config:
+            raise AssertionError(
+                f"{search_config_path}: search must not read experiment bucket policy "
+                f"from service-private config via {key!r}; the only policy track is "
+                "ExperimentPolicyActivated"
+            )
 
     # Product Ops 只冻结 Experiment 聚合的并发修订序号；它不是独立 policy
     # 内容身份，也不导入 runtime hot path。

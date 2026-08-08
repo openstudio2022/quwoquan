@@ -50,8 +50,9 @@ class ChannelProducer:
     channel: str
     # 生产侧必须调用的符号。None 表示该通道连解析器都还没有实现。
     symbol: str | None
-    # 符号的定义文件，相对仓库根。判定引用时排除它自身。
-    defined_in: str | None
+    # 符号的全部定义点（抽象声明与实现），相对仓库根。判定接通时必须排除它们：
+    # 只有定义点之外的调用才能证明通道真的被生产代码消费。
+    defined_in: tuple[str, ...]
     note: str
 
 
@@ -59,19 +60,24 @@ PRODUCERS: tuple[ChannelProducer, ...] = (
     ChannelProducer(
         channel="poi",
         symbol="GeoTagRefResolver",
-        defined_in="quwoquan_app/lib/service/content_service/content/post/application/geo_tag_ref_resolver.dart",
+        defined_in=(
+            "quwoquan_app/lib/service/content_service/content/post/application/geo_tag_ref_resolver.dart",
+        ),
         note="发布确认页选中 POI 后必须解析出 Topic/地理/行政区 路径写入 PublishSettings.geoTagRef",
     ),
     ChannelProducer(
         channel="exif",
         symbol="extractMediaCaptureMetadata",
-        defined_in="quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/media_capture_metadata_extractor.dart",
+        defined_in=(
+            "quwoquan_app/lib/service/content_service/media/media_upload_session/application/public/media_capture_metadata.dart",
+            "quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/exif_media_capture_metadata_extractor.dart",
+        ),
         note="选中素材后必须解析拍摄事实写入 PublishSettings.captureMetadata",
     ),
     ChannelProducer(
         channel="creator_chip",
         symbol=None,
-        defined_in=None,
+        defined_in=(),
         note="创作页尚无打标 chip；正文内联 mention 属 semanticMentions 通道，不能顶替 chip",
     ),
 )
@@ -111,16 +117,29 @@ def _code_only(text: str) -> str:
     )
 
 
-def production_references(symbol: str, defined_in: str | None) -> list[str]:
-    """符号在 App 生产代码中、定义文件之外的引用位置。"""
-    excluded = (ROOT / defined_in).resolve() if defined_in else None
+def production_references(symbol: str, defined_in: tuple[str, ...]) -> list[str]:
+    """符号在 App 生产代码中、定义点之外的引用位置。"""
+    excluded = {(ROOT / rel).resolve() for rel in defined_in}
     hits: list[str] = []
     for path in sorted(APP_LIB_ROOT.rglob("*.dart")):
-        if excluded is not None and path.resolve() == excluded:
+        if path.resolve() in excluded:
             continue
         if symbol in _code_only(path.read_text(encoding="utf-8")):
             hits.append(str(path.relative_to(ROOT)))
     return hits
+
+
+def stale_definition_paths(producers: tuple[ChannelProducer, ...]) -> list[str]:
+    """登记的定义点必须真实存在，否则排除失效、定义点会被误算成生产引用。"""
+    issues: list[str] = []
+    for producer in producers:
+        for rel in producer.defined_in:
+            if not (ROOT / rel).is_file():
+                issues.append(
+                    f"通道 {producer.channel} 登记的定义点不存在：{rel}"
+                    "（排除失效会把定义点误判成生产引用，掩盖通道未接通）"
+                )
+    return issues
 
 
 def validate(
@@ -176,7 +195,8 @@ def main() -> int:
         )
         for producer in PRODUCERS
     }
-    issues = validate(schema_channels, used, PRODUCERS, UNWIRED_BASELINE, wired)
+    issues = stale_definition_paths(PRODUCERS)
+    issues += validate(schema_channels, used, PRODUCERS, UNWIRED_BASELINE, wired)
 
     if issues:
         print("[verify_tag_collection_wiring] FAIL")

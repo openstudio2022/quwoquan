@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"encoding/json"
 	"sort"
 	"strings"
 
@@ -57,36 +56,6 @@ func derivePublicationDuties(packets []ast.ObjectGovernance) map[string]publicat
 		duties[packet.ObjectID] = duty
 	}
 	return duties
-}
-
-type Coverage struct {
-	Sources                  int            `json:"sources"`
-	Documents                int            `json:"documents"`
-	Objects                  int            `json:"objects"`
-	ExplicitObjectKinds      int            `json:"explicitObjectKinds"`
-	Operations               int            `json:"operations"`
-	RuntimeEntrypoints       int            `json:"runtimeEntrypoints"`
-	ExplicitOperationKinds   int            `json:"explicitOperationKinds"`
-	BoundOperations          int            `json:"boundOperations"`
-	Projections              int            `json:"projections"`
-	PublicOperations         int            `json:"publicOperations"`
-	OpenAPIOperations        int            `json:"openapiOperations"`
-	OpenAPIMatched           int            `json:"openapiMatched"`
-	OpenAPIOrphans           int            `json:"openapiOrphans"`
-	RegisteredDomains        int            `json:"registeredDomains"`
-	BoundedContexts          int            `json:"boundedContexts"`
-	RegisteredObjects        int            `json:"registeredObjects"`
-	ObjectRelationships      int            `json:"objectRelationships"`
-	ReadinessCases           int            `json:"readinessCases"`
-	ReadinessEvidencePackets int            `json:"readinessEvidencePackets"`
-	ReadinessEvidenceObjects int            `json:"readinessEvidenceObjects"`
-	ReadinessModeled         int            `json:"readinessModeled"`
-	ReadinessContractReady   int            `json:"readinessContractReady"`
-	ReadinessImplemented     int            `json:"readinessImplemented"`
-	ReadinessCommercialReady int            `json:"readinessCommercialReady"`
-	ObjectsByKind            map[string]int `json:"objectsByKind"`
-	OperationsByKind         map[string]int `json:"operationsByKind"`
-	ObjectsByReadiness       map[string]int `json:"objectsByReadiness"`
 }
 
 func Build(catalog *ast.Catalog) *ContractGraph {
@@ -252,217 +221,6 @@ func Build(catalog *ast.Catalog) *ContractGraph {
 	})
 	result.ObjectReadiness = deriveObjectReadiness(result)
 	return result
-}
-
-// deriveClientContracts binds the App wire ABI to the canonical response
-// entity. Operation packets are not allowed to become a second registry of
-// Dart imports, response aliases, or decoder names: those values follow the
-// response type and the owning domain's generated operation library.
-//
-// During the repository-wide hard cut, an explicit legacy ClientContract is
-// left untouched until that domain is migrated. A missing binding is derived
-// only when the response entity can be proven from object-local types, a named
-// projection, the aggregate root, or a schema-owned wire contract.
-func deriveClientContracts(contractGraph *ContractGraph) {
-	if contractGraph == nil {
-		return
-	}
-	appExposed := appExposedOperationIDs(contractGraph)
-	projectionTypes := make(map[string]string, len(contractGraph.Projections))
-	for _, projection := range contractGraph.Projections {
-		responseEntity := strings.TrimSpace(projection.ReadModel)
-		dartClass := strings.TrimSpace(projection.DartClass)
-		if responseEntity == "" {
-			continue
-		}
-		// A named projection without a custom Dart class already owns its
-		// canonical wire identity. Falling back to the read-model name keeps
-		// operation packets from restating a response alias solely to satisfy
-		// App generation.
-		if dartClass == "" {
-			dartClass = responseEntity
-		}
-		projectionTypes[responseEntity] = dartClass
-	}
-	schemaTypes := clientSchemaTypes(contractGraph.Documents)
-	declaredTypes := make(map[string]map[string]struct{})
-	uniqueDeclaredTypeOwner := make(map[string]string)
-	duplicateDeclaredTypes := make(map[string]struct{})
-	for _, definition := range contractGraph.Governance.Types {
-		objectID := strings.TrimSpace(definition.ObjectID)
-		name := strings.TrimSpace(definition.Name)
-		if objectID == "" || name == "" {
-			continue
-		}
-		if declaredTypes[objectID] == nil {
-			declaredTypes[objectID] = map[string]struct{}{}
-		}
-		declaredTypes[objectID][name] = struct{}{}
-		if previous, exists := uniqueDeclaredTypeOwner[name]; !exists {
-			uniqueDeclaredTypeOwner[name] = objectID
-		} else if previous != objectID {
-			duplicateDeclaredTypes[name] = struct{}{}
-		}
-	}
-	for index := range contractGraph.Operations {
-		operation := &contractGraph.Operations[index]
-		if operation.ClientContract != nil {
-			continue
-		}
-		if _, exposed := appExposed[operation.ID]; !exposed {
-			continue
-		}
-		responseEntity := strings.TrimSpace(operation.ResponseEntity)
-		responseBodyKind := strings.TrimSpace(operation.ResponseBodyKind)
-		if responseEntity == "" &&
-			(responseBodyKind == "ack" || responseBodyKind == "upgrade") {
-			operation.ClientContract = &ast.ClientContract{
-				DartImport: "../" + operation.Domain + "/" + operation.Domain +
-					"_operation_contracts.g.dart",
-				ResponseType:    "void",
-				ResponseDecoder: "decodeEmptyResponse",
-			}
-			continue
-		}
-		if responseEntity == "" {
-			continue
-		}
-		responseType := ""
-		if candidate := strings.TrimSpace(projectionTypes[responseEntity]); candidate != "" {
-			// Generic domain clients are generated from response_entity and must
-			// not inherit a second Dart type name from client_projection. The
-			// Assistant domain still has one schema-owned specialized generator;
-			// keep that bounded mapping until the Assistant owner hard-cuts it.
-			if operation.Domain == "assistant" {
-				responseType = candidate
-			} else {
-				responseType = responseEntity
-			}
-		} else if candidate := strings.TrimSpace(schemaTypes[responseEntity]); candidate != "" {
-			responseType = candidate
-		} else if _, exists := declaredTypes[operation.ObjectID][responseEntity]; exists {
-			responseType = responseEntity
-		} else if _, duplicated := duplicateDeclaredTypes[responseEntity]; !duplicated &&
-			strings.TrimSpace(uniqueDeclaredTypeOwner[responseEntity]) != "" {
-			// A composition operation may return another object packet's named
-			// canonical type (for example credential binding returns an
-			// AccountSession grant). Accept only a repository-unique declared
-			// owner; ambiguity remains fail-closed and must be resolved in source.
-			responseType = responseEntity
-		} else if responseEntity == objectResponseType(operation.ObjectID) {
-			responseType = responseEntity
-		}
-		if responseType == "" {
-			continue
-		}
-		operation.ClientContract = &ast.ClientContract{
-			DartImport: "../" + operation.Domain + "/" + operation.Domain +
-				"_operation_contracts.g.dart",
-			ResponseType:    responseType,
-			ResponseDecoder: "decode" + responseType,
-		}
-	}
-}
-
-func appExposedOperationIDs(contractGraph *ContractGraph) map[string]struct{} {
-	result := map[string]struct{}{}
-	if contractGraph == nil {
-		return result
-	}
-	var surfaceDocument struct {
-		Surfaces []struct {
-			Owner        string   `json:"owner"`
-			OperationIDs []string `json:"operation_ids"`
-		} `json:"surfaces"`
-	}
-	found := false
-	for _, document := range contractGraph.Documents {
-		if document.Path != "_shared/ui_surfaces.yaml" {
-			continue
-		}
-		if json.Unmarshal(document.Content, &surfaceDocument) == nil {
-			found = true
-		}
-		break
-	}
-	if !found {
-		return result
-	}
-	byLocalID := map[string][]*ast.Operation{}
-	for index := range contractGraph.Operations {
-		operation := &contractGraph.Operations[index]
-		localID := strings.TrimSpace(operation.LocalID)
-		if localID != "" {
-			byLocalID[localID] = append(byLocalID[localID], operation)
-		}
-	}
-	for _, surface := range surfaceDocument.Surfaces {
-		owner := strings.TrimSpace(surface.Owner)
-		for _, localIDValue := range surface.OperationIDs {
-			localID := strings.TrimSpace(localIDValue)
-			candidates := byLocalID[localID]
-			owned := make([]*ast.Operation, 0, len(candidates))
-			for _, candidate := range candidates {
-				if candidate.Domain == owner {
-					owned = append(owned, candidate)
-				}
-			}
-			selected := candidates
-			if len(owned) == 1 {
-				selected = owned
-			}
-			if len(selected) == 1 {
-				result[selected[0].ID] = struct{}{}
-			}
-		}
-	}
-	return result
-}
-
-func clientSchemaTypes(documents []ast.SourceDocument) map[string]string {
-	result := map[string]string{}
-	for _, document := range documents {
-		if !strings.HasSuffix(document.Path, "/schema.yaml") {
-			continue
-		}
-		var header struct {
-			Contract  string `json:"contract"`
-			DartClass string `json:"dart_class"`
-		}
-		if err := json.Unmarshal(document.Content, &header); err != nil {
-			continue
-		}
-		dartClass := strings.TrimSpace(header.DartClass)
-		if dartClass == "" {
-			continue
-		}
-		result[dartClass] = dartClass
-		result[strings.TrimSuffix(strings.TrimSuffix(dartClass, "Wire"), "Dto")] = dartClass
-		if contract := upperCamel(strings.TrimSpace(header.Contract)); contract != "" {
-			result[contract] = dartClass
-		}
-	}
-	return result
-}
-
-func objectResponseType(objectID string) string {
-	segments := strings.Split(strings.TrimSpace(objectID), ".")
-	return upperCamel(segments[len(segments)-1])
-}
-
-func upperCamel(value string) string {
-	parts := strings.FieldsFunc(value, func(current rune) bool {
-		return current == '_' || current == '-' || current == '.' || current == '/'
-	})
-	var result strings.Builder
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		result.WriteString(strings.ToUpper(part[:1]))
-		result.WriteString(part[1:])
-	}
-	return result.String()
 }
 
 func sortEvidenceArtifacts(values []ast.EvidenceArtifact) {
@@ -720,6 +478,20 @@ func objectContractReady(
 			}
 			return true
 		}
+		// 非 HTTP projection 的入口不是伪造的 operation/runtime_entrypoint，
+		// 而是 object.yaml#lifecycle 唯一 authored 的 typed projector consumer。
+		// loader 已把每个 facet+method 解析到对象自身 application/adapters 中的
+		// 唯一生产实现，并绑定 repo-relative path + SHA256；graph 必须逐条消费这份
+		// 编译证据，不能把 consumer 的声明存在本身当成实现，也不能要求作者再复制
+		// 一份 runtime_entrypoints 形成双轨。
+		if lifecycleProjectorEntrypointsReady(object) {
+			return true
+		}
+		if object.Kind == ast.ObjectKindProjection && object.Lifecycle != nil &&
+			len(object.Lifecycle.EventConsumers) > 0 {
+			missing["lifecycle.event_consumer"] = struct{}{}
+			return false
+		}
 		missing["operation.entrypoint"] = struct{}{}
 		return false
 	}
@@ -784,6 +556,25 @@ func objectContractReady(
 	return ready
 }
 
+func lifecycleProjectorEntrypointsReady(object ast.Object) bool {
+	if object.Kind != ast.ObjectKindProjection || object.Lifecycle == nil ||
+		len(object.Lifecycle.EventConsumers) == 0 ||
+		strings.TrimSpace(object.Lifecycle.Checkpoint) == "" ||
+		strings.TrimSpace(object.Lifecycle.Rebuild) == "" ||
+		strings.TrimSpace(object.Lifecycle.Tombstone) == "" ||
+		strings.TrimSpace(object.Lifecycle.Idempotency) == "" ||
+		!lifecycleEventConsumersReady(object) {
+		return false
+	}
+	for _, consumer := range object.Lifecycle.EventConsumers {
+		if consumer.Kind != "projector" || consumer.Implementation == nil ||
+			!evidenceArtifactReady(*consumer.Implementation) {
+			return false
+		}
+	}
+	return true
+}
+
 func runtimeEntrypointApplicationReady(
 	object ast.Object,
 	entrypoint ast.RuntimeEntrypoint,
@@ -808,7 +599,8 @@ func runtimeEntrypointMatchesObject(
 			entrypoint.ApplicationKind == ast.OperationKindCommand &&
 			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
 	case "event_handler":
-		return object.Kind == ast.ObjectKindAggregateRoot &&
+		return (object.Kind == ast.ObjectKindAggregateRoot ||
+			object.Kind == ast.ObjectKindProcessManager) &&
 			entrypoint.Phase == "event_command" &&
 			entrypoint.ApplicationKind == ast.OperationKindCommand &&
 			lifecycleConsumerMatchesEntrypoint(object, entrypoint)
@@ -857,12 +649,21 @@ func lifecycleEventConsumersReady(object ast.Object) bool {
 				consumer.Kind != "subscription") {
 			return false
 		}
-		expectedKind := map[string]ast.ObjectKind{
-			"projector":     ast.ObjectKindProjection,
-			"event_handler": ast.ObjectKindAggregateRoot,
-			"subscription":  ast.ObjectKindAppendOnlyFact,
+		// event_handler 的宿主可以是 aggregate_root 或 process_manager；saga 靠消费
+		// 领域事件推进状态机，与 validate.eventConsumerOwnerKinds 保持同一闭集。
+		expectedKinds := map[string][]ast.ObjectKind{
+			"projector":     {ast.ObjectKindProjection},
+			"event_handler": {ast.ObjectKindAggregateRoot, ast.ObjectKindProcessManager},
+			"subscription":  {ast.ObjectKindAppendOnlyFact},
 		}[consumer.Kind]
-		if object.Kind != expectedKind {
+		matched := false
+		for _, expected := range expectedKinds {
+			if object.Kind == expected {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			return false
 		}
 		if _, duplicate := seenConsumers[consumer.Name]; duplicate {
@@ -920,21 +721,32 @@ func implementationEvidenceReady(
 		missing["implementation.operation_coverage"] = struct{}{}
 		ready = false
 	}
-	require("service.domain", evidence.Service.Domain)
-	require("service.transport", evidence.Service.Transport)
+	// Reader is the existing producer-separated slot for the Cloud application
+	// layer. Every root kind owns an application seam; Domain is a distinct
+	// obligation only for kinds that own domain state/rules.
+	require("service.reader", evidence.Service.Reader)
+	if objectRequiresDomainEvidence(object.Kind) {
+		require("service.domain", evidence.Service.Domain)
+	}
+	if objectRequiresStoreEvidence(object.Kind) {
+		require("service.store", evidence.Service.Store)
+	}
+	if object.Kind == ast.ObjectKindExternalReference &&
+		!evidenceArtifactsReady(evidence.Service.Store) &&
+		!evidenceArtifactsReady(evidence.Service.Transport) {
+		missing["implementation.service.store_or_transport"] = struct{}{}
+		ready = false
+	}
+	if objectHasTransportIngress(operations, runtimeEntrypoints) {
+		require("service.transport", evidence.Service.Transport)
+	}
 	require("service.local_contract", evidence.Service.LocalContract)
 	require("service.api_integration", evidence.Service.APIIntegration)
 	hasCommand := false
-	hasQuery := false
 	hasClient := false
 	for _, operation := range operations {
 		hasCommand = hasCommand || operation.Kind == ast.OperationKindCommand
-		hasQuery = hasQuery || operation.Kind == ast.OperationKindQuery
 		hasClient = hasClient || operation.ClientContract != nil
-	}
-	if object.Kind == ast.ObjectKindAggregateRoot || object.Kind == ast.ObjectKindRuntimeSession ||
-		object.Kind == ast.ObjectKindAppendOnlyFact {
-		require("service.store", evidence.Service.Store)
 	}
 	// outbox 的必需性由对象自己声明的领域事件**投递保证**派生，既不由 kind 派生，也不由
 	// 「是否声明了事件」一刀切：发件箱存在的唯一理由是「状态已提交、事件却可能丢失」这一
@@ -950,13 +762,12 @@ func implementationEvidenceReady(
 	// CONTRACT.EVENT.UNKNOWN_PRODUCER 与 projector 的 source_events 解析都会拦住）。聚合
 	// 完全没有 events.yaml（既没声明也没否认）由
 	// `quwoquan_ops/gate/verify_object_evidence_closure.py` 在契约侧报独立缺口。
-	if hasCommand && object.Kind == ast.ObjectKindAggregateRoot && publishesDomainEvents {
+	if hasCommand && publishesDomainEvents &&
+		(object.Kind == ast.ObjectKindAggregateRoot ||
+			object.Kind == ast.ObjectKindProcessManager) {
 		if !requirePublicationSeam(evidence, missing) {
 			ready = false
 		}
-	}
-	if hasQuery {
-		require("service.reader", evidence.Service.Reader)
 	}
 	if hasClient {
 		require("app.application", evidence.App.Application)
@@ -1002,6 +813,39 @@ func implementationEvidenceReady(
 	return ready
 }
 
+func objectRequiresDomainEvidence(kind ast.ObjectKind) bool {
+	switch kind {
+	case ast.ObjectKindAggregateRoot,
+		ast.ObjectKindAppendOnlyFact,
+		ast.ObjectKindProcessManager,
+		ast.ObjectKindRuntimeSession:
+		return true
+	default:
+		return false
+	}
+}
+
+func objectRequiresStoreEvidence(kind ast.ObjectKind) bool {
+	return objectRequiresDomainEvidence(kind) || kind == ast.ObjectKindProjection
+}
+
+func objectHasTransportIngress(
+	operations []ast.Operation,
+	runtimeEntrypoints []ast.RuntimeEntrypoint,
+) bool {
+	if len(operations) != 0 {
+		return true
+	}
+	for _, entrypoint := range runtimeEntrypoints {
+		// external_port is the object's outbound implementation seam. It may
+		// physically live in adapters, but it is not an inbound transport.
+		if entrypoint.RuntimeKind != "external_port" {
+			return true
+		}
+	}
+	return false
+}
+
 func evidenceArtifactsReady(values []ast.EvidenceArtifact) bool {
 	if len(values) == 0 {
 		return false
@@ -1044,113 +888,4 @@ func sameStringSet(left, right []string) bool {
 		}
 	}
 	return true
-}
-
-func (g *ContractGraph) Coverage() Coverage {
-	result := Coverage{
-		Sources:            len(g.Sources),
-		Documents:          len(g.Documents),
-		Objects:            len(g.Objects),
-		Operations:         len(g.Operations),
-		RuntimeEntrypoints: len(g.RuntimeEntrypoints),
-		Projections:        len(g.Projections),
-		ReadinessCases:     len(g.ReadinessCases),
-		ObjectsByKind:      map[string]int{},
-		OperationsByKind:   map[string]int{},
-		ObjectsByReadiness: map[string]int{},
-	}
-	for _, object := range g.Objects {
-		result.ObjectsByKind[string(object.Kind)]++
-		if object.KindExplicit {
-			result.ExplicitObjectKinds++
-		}
-	}
-	result.RegisteredDomains = len(g.BusinessObjectMaps)
-	result.ReadinessEvidencePackets = len(g.ReadinessEvidence)
-	knownObjects := make(map[string]struct{}, len(g.Objects))
-	for _, object := range g.Objects {
-		knownObjects[object.ID] = struct{}{}
-	}
-	evidenceObjects := map[string]struct{}{}
-	for _, evidence := range g.ReadinessEvidence {
-		if _, exists := knownObjects[evidence.ObjectID]; exists {
-			evidenceObjects[evidence.ObjectID] = struct{}{}
-		}
-	}
-	result.ReadinessEvidenceObjects = len(evidenceObjects)
-	for _, readiness := range g.ObjectReadiness {
-		result.ObjectsByReadiness[readiness.Stage]++
-		if readiness.Modeled {
-			result.ReadinessModeled++
-		}
-		if readiness.ContractReady {
-			result.ReadinessContractReady++
-		}
-		if readiness.Implemented {
-			result.ReadinessImplemented++
-		}
-		if readiness.CommercialReady {
-			result.ReadinessCommercialReady++
-		}
-	}
-	for _, objectMap := range g.BusinessObjectMaps {
-		result.BoundedContexts += len(objectMap.BoundedContexts)
-		result.RegisteredObjects += len(objectMap.Objects)
-		for _, object := range objectMap.Objects {
-			result.ObjectRelationships += len(object.Relationships)
-		}
-	}
-	for _, operation := range g.Operations {
-		result.OperationsByKind[string(operation.Kind)]++
-		if operation.KindExplicit {
-			result.ExplicitOperationKinds++
-		}
-		if operation.Facet != "" && operation.FacadeMethod != "" {
-			switch operation.Kind {
-			case ast.OperationKindCommand:
-				if operation.AggregateOwner != "" || operation.AppendSink != "" ||
-					operation.LifecycleOwner != "" {
-					result.BoundOperations++
-				}
-			case ast.OperationKindQuery:
-				if operation.Reader != "" && operation.Slice != "" {
-					result.BoundOperations++
-				}
-			case ast.OperationKindSession:
-				if operation.SessionOwner != "" {
-					result.BoundOperations++
-				}
-			}
-		}
-		if isPublicTransportPath(operation.PathTemplate) {
-			result.PublicOperations++
-		}
-	}
-	openAPITransports, err := g.OpenAPITransports()
-	if err == nil {
-		result.OpenAPIOperations = len(openAPITransports)
-		operationTransports := map[string]struct{}{}
-		for _, operation := range g.Operations {
-			operationTransports[operation.Method+" "+operation.PathTemplate] = struct{}{}
-		}
-		for _, transport := range openAPITransports {
-			if _, exists := operationTransports[transport.Method+" "+transport.Path]; exists {
-				result.OpenAPIMatched++
-			} else {
-				result.OpenAPIOrphans++
-			}
-		}
-	}
-	return result
-}
-
-func isPublicTransportPath(path string) bool {
-	switch path {
-	case "", "/health", "/healthz", "/readyz", "/metrics", "/livez", "/startupz":
-		return false
-	}
-	if strings.HasPrefix(path, "/internal/") || strings.HasPrefix(path, "/callbacks/") {
-		return false
-	}
-	return strings.HasPrefix(path, "/")
 }

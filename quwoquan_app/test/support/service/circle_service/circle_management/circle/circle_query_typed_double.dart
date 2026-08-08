@@ -311,7 +311,12 @@ CircleFeedItemView _feedItem({
     postId: _text(raw['postId']),
     contentType: contentType,
     contentIdentity: _optionalText(raw['contentIdentity']),
-    assistantUsePolicy: _optionalText(raw['assistantUsePolicy']),
+    assistantUsePolicy: raw['assistantUsePolicy'] == null
+        ? null
+        : AssistantUsePolicy.fromWire(
+            raw['assistantUsePolicy'],
+            'CircleFeedItemView.assistantUsePolicy',
+          ),
     authorId: _optionalText(raw['authorId']),
     authorDisplayName: _optionalText(raw['authorDisplayName']),
     authorAvatarUrl: _optionalText(raw['authorAvatarUrl']),

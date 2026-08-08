@@ -16,7 +16,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_
 import 'package:quwoquan_app/runtime/di/navigation/citation_destination_navigation_mapper.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/design_system/chat/conversation_timeline.dart';
-import 'package:quwoquan_app/runtime/di/presentation/customizable_chat_input_bar.dart';
+import 'package:quwoquan_app/runtime/di/chat_presentation_slots.dart';
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
@@ -143,8 +143,27 @@ class _PersonalAssistantSessionPageState
         .send(trimmed);
   }
 
-  Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
-    await _sendText(payload.text.trim());
+  Future<void> _submitChatInput(String text) async {
+    final instruction = text.trim();
+    if (instruction.isEmpty) {
+      return;
+    }
+    final runState = ref.read(personalAssistantStreamControllerProvider);
+    if (!runState.running) {
+      await _sendText(instruction);
+      return;
+    }
+    final accepted = await ref
+        .read(personalAssistantStreamControllerProvider.notifier)
+        .steerCurrentRun(instruction);
+    if (!mounted || accepted) {
+      return;
+    }
+    _controller.value = TextEditingValue(
+      text: instruction,
+      selection: TextSelection.collapsed(offset: instruction.length),
+    );
+    _inputFocusNode.requestFocus();
   }
 
   Future<void> _sendInitialQueryIfNeeded() async {
@@ -285,7 +304,7 @@ class _PersonalAssistantSessionBody extends ConsumerWidget {
   final TextEditingController controller;
   final ScrollController scrollController;
   final FocusNode focusNode;
-  final Future<void> Function(ChatInputSubmitPayload payload) onSend;
+  final Future<void> Function(String text) onSend;
   final bool showScrollFab;
   final VoidCallback onScrollToBottom;
   final Future<void> Function(AssistantCitation citation) onReferenceTap;
@@ -598,17 +617,18 @@ class _PersonalAssistantSessionBody extends ConsumerWidget {
                 ),
                 child: Material(
                   type: MaterialType.transparency,
-                  child: CustomizableChatInputBar(
+                  child: ref.watch(assistantChatInputBuilderProvider)(
                     controller: controller,
                     focusNode: focusNode,
                     textFieldKey: TestKeys.assistantChatInputField,
-                    hintText: AssistantText.assistantAskPlaceholder,
+                    hintText: state.running
+                        ? AssistantText.assistantSteerPlaceholder
+                        : AssistantText.assistantAskPlaceholder,
                     maxTextLength: 5000,
                     maxVisibleLines: 5,
-                    onSend: state.running ? (_) async {} : onSend,
+                    onSend: onSend,
                     sendButtonKey: TestKeys.assistantSendButton,
                     showEmojiButton: true,
-                    extraPanelItems: const <ChatInputExtraPanelItem>[],
                   ),
                 ),
               ),

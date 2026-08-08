@@ -38,6 +38,13 @@
 - 已下线主页不得直接物理删除。
 - 搜索与推荐可降级，但不可阻断记录访问。
 
+<a id="req-003"></a>
+### REQ-003 状态上报页通过 production Remote 提交待审事实并保留恢复上下文
+
+- 页面必须先读取当前主页可上报状态，未登录时只续接同一主页与同一未提交表单。
+- 上报只经 `entity.homepage_status_report` 的公开写入口创建；typed receipt 与待审 readback 成立后才可表达提交成功。
+- 页面不拥有审核或下线决定；重复提交、主页已下线、身份拒绝或 Remote 失败均不得清空有效输入、创建重复事实或伪造已下线结果。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/entity-service/contracts/entity_homepage/homepage_status_report/operations.yaml`
@@ -48,9 +55,10 @@
 <a id="gwt-001"></a>
 ### GWT-001 状态上报进入待审并在确认后下线保留记录
 
-- GIVEN 已登录 persona 在已发布主页发现状态异常。
-- WHEN 提交 reason+描述；治理 operator 审核 confirmed_offline 或 dismissed。
+- GIVEN persona 在已发布主页发现状态异常，App 使用 production Remote composition；未登录时可在登录后续接同一主页和未提交表单。
+- WHEN persona 提交原因与描述，随后治理 operator 审核 confirmed_offline 或 dismissed。
 - THEN 上报以可信 persona 落库 pending_review；同 reporter 同 reason 去重。
+- THEN 页面只在 typed receipt 与 canonical pending readback 一致后表达提交成功；输入无效、身份拒绝、Remote 失败或主页已下线时保留可恢复终态，且不新增重复上报。
 - THEN confirmed_offline 后主页 status=offline、搜索投影删除、详情呈现下线语义。
 - THEN 历史评价与挂载记录保留（禁止回退为硬删除）。
 - THEN 同 actor/idempotency-key/digest 重放返回同一结果，审核终态不可互改。
@@ -61,3 +69,15 @@
 - 前置要求：[`homepage-claim-maintain-and-offline`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 状态上报 production Remote 双真机验收
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：当前缺少从真实页面提交、待审回读到治理终态投影的同 candidate 端云 Journey 证据，不能由本地 receipt、Widget 或 Ops 单侧审核结果代替。
+- 完成判定：`GWT-001` 的页面提交、失败恢复、幂等重放与 confirmed_offline/dismissed 分支均有可信 CaseResult，且物理 Android 与物理 iPhone 的 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
+- 依赖：对象级 `user_acceptance` runner、真实 persona/operator、可回读待审与审核结果的 production Remote 环境；skipped 或仅本地证据均不计通过。

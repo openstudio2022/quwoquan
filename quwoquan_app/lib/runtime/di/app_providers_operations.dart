@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/author_impact_query.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/author_impact_query.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/application/public/content_report_ports.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
@@ -14,7 +14,7 @@ import 'package:quwoquan_app/service/user_service/account/authentication_challen
 import 'package:quwoquan_app/service/user_service/account/credential_binding/application/public/credential_binding_ports.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/application/blocked_keyword_writer.dart';
 import 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.dart';
-import 'package:quwoquan_app/service/tag_service/tag/tag_feedback_fact/application/tag_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/tag_service/tag/tag_feedback_fact/application/tag_feedback_fact_appender.dart';
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_review/application/public/homepage_review_operation_ports.dart';
@@ -37,7 +37,7 @@ import 'package:quwoquan_app/service/product_ops_service/product_ops/visit_recor
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/application/recent_search_ports.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/adapters/search_recent_history_store.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/application/public/recent_search_history_store.dart';
-import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/service/search_service/search/search_request_fact/application/search_hot_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
@@ -683,7 +683,7 @@ CloudOperationInvocationContext _profileInteractionInvocationContext(
   Ref ref,
   String clientPageId,
 ) {
-  if (clientPageId == ContentRequestPageIds.updateProfileInteractionState) {
+  if (clientPageId == ContentRequestPageIds.appendProfileInteractionReadFact) {
     return _reportInvocationContext(
       ref,
       surface: AppUiSurfaces.profileHome,
@@ -762,23 +762,24 @@ final recentSearchHistoryStoreProvider = Provider.autoDispose
     });
 
 /// SearchFeedbackFact typed append 写面：搜索结果页 click/impression 归因上报。
-final searchFeedbackCommandWriterProvider =
-    Provider<SearchFeedbackCommandWriter>((ref) {
-      return SearchProductionComposition.feedbackCommandWriter(
-        client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _reportInvocationContext(
-          ref,
-          surface: AppUiSurfaces.globalSearchNetworkResults,
-          clientPageId: clientPageId,
-        ),
-      );
-    });
+final searchFeedbackFactAppenderProvider = Provider<SearchFeedbackFactAppender>(
+  (ref) {
+    return SearchProductionComposition.feedbackFactAppender(
+      client: ref.watch(generatedCloudOperationClientProvider),
+      invocationContext: (clientPageId) => _reportInvocationContext(
+        ref,
+        surface: AppUiSurfaces.globalSearchNetworkResults,
+        clientPageId: clientPageId,
+      ),
+    );
+  },
+);
 
 /// TagFeedbackFact typed append 写面：标签编辑页添加/移除动作产出反馈事实。
-final tagFeedbackCommandWriterProvider = Provider<TagFeedbackCommandWriter>((
+final tagFeedbackFactAppenderProvider = Provider<TagFeedbackFactAppender>((
   ref,
 ) {
-  return TagProductionComposition.feedbackCommandWriter(
+  return TagProductionComposition.feedbackFactAppender(
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (clientPageId) => _reportInvocationContext(
       ref,

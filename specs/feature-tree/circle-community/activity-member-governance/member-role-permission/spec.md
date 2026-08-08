@@ -48,6 +48,8 @@
 ### REQ-004 成员角色、审批与退出状态机
 
 - 系统必须圈子成员角色与权限治理：加入（open/approval 双策略）、圈子级审批、角色变更与退出的对象状态机及页面承载，且失败时不得写入成功事实。
+- approval 策略圈子的加入意图必须落为 pending 成员事实，等待审批后才收敛为 active；审批通过与拒绝都以服务端成员事实为准。
+- 待审批队列的读取与审批、拒绝命令只对圈主或 active admin 开放；其他调用方必须收到 canonical 权限拒绝，且不得产生成员状态变化。
 
 ## 4. 契约引用
 
@@ -79,6 +81,14 @@
 - THEN 每个 actor 只改变并读取自己的 canonical CircleMembership，重放不新增成员或重复推进版本，退出后状态按服务端事实收敛。
 - AND actor 缺失、身份错配、环境配置缺失或依赖不可达时 fail closed，不共享测试身份、不直写存储且不返回伪成功成员状态。
 
+<a id="gwt-004"></a>
+### GWT-004 审批页按 actor、版本与幂等事实收敛
+
+- GIVEN approval 策略圈子已有 pending CircleMembership，圈主或 active admin 与普通成员使用彼此独立的认证身份通过 production Remote 打开审批页。
+- WHEN 授权 actor 分页读取待审批队列并通过或拒绝申请，同时发生同一意图重放、另一管理员并发处理或普通成员尝试读取与审批。
+- THEN 只有授权 actor 可见并改变 pending 事实；成功与重放按 canonical CircleMembership version 收敛为唯一 active 或 rejected 结果，active memberCount 至多增加一次，页面以刷新后的 Remote 队列为准。
+- AND 越权、版本冲突、已处理申请或依赖失败返回 canonical failure，普通成员看不到申请数据，页面保留或刷新真实队列且不删除未确认行、不产生伪成功成员状态。
+
 ## 6. 依赖
 
 - 前置要求：[`activity-member-governance`](../spec.md) 的范围、要求与 SIT。
@@ -88,13 +98,13 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 approval 圈子加入进入 pending 并由 owner/admin 审批
+### OPEN-001 成员角色权限结果子句尚未逐条绑定
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：圈子级 Approve/Reject 命令经 metadata→codegen→circle-service 落地，审批页可达且权限受限于 owner/admin。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：缺 `GWT-001` 两条结果子句的逐条证据，且两条绑定测试均无失败路径断言，t2 的 canonical failure 语义没有证据支撑。
+- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。
 
 <a id="open-002"></a>
 ### OPEN-002 open 圈子加入即 active 且游客走登录续接
@@ -105,11 +115,11 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：加入/退出乐观更新 + 失败回滚 + 行为事实链路在 local_contract 有断言。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-003"></a>
-### OPEN-003 成员角色权限 验收证据
+<a id="open-004"></a>
+### OPEN-004 圈子审批页 production Remote UAT 尚未闭合
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“成员角色权限”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 准出影响：`block`
+- 影响或价值：尚缺验收证据：真实 owner/admin/member 身份、并发处理、幂等重放与失败恢复的同一候选页面结果；现有 typed Remote 边界不能替代该结果。
+- 完成判定：`GWT-004` 由 production Remote user_acceptance 直接绑定，并取得 Android 与 iPhone physical ResultBundle；缺少独立 actor、真实版本冲突或 Remote readback 时保持 BLOCK。

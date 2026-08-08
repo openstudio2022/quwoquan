@@ -1,30 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contacts_row.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contact_home_filter.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
-import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
+export 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contact_home_filter.dart';
+
 final chatContactsRowsForSubTabProvider =
-    FutureProvider.family<List<ChatContactsRow>, String>((ref, subTab) async {
+    FutureProvider.family<List<ChatContactsRow>, ChatContactHomeFilter>((
+      ref,
+      filter,
+    ) async {
       final repo = ref.watch(chatContactRepositoryProvider);
       final rows = await repo.listContactHome(
-        filter: _contactHomeFilterForSubTab(subTab),
+        filter: filter.wireValue,
         limit: 500,
       );
       return rows.map(chatContactsRowFromContactHome).toList(growable: false);
     });
-
-String _contactHomeFilterForSubTab(String subTab) {
-  return switch (subTab) {
-    ChatText.contactsTabMutualFollow => 'mutual',
-    ChatText.contactsTabCircles => 'circle',
-    ChatText.contactsTabGroups => 'group',
-    _ => 'all',
-  };
-}
 
 ChatContactsRow chatContactsRowFromContactView(
   ChatContactRowViewData dto, {

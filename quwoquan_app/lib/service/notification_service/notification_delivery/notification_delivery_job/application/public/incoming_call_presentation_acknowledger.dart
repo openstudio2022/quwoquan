@@ -21,9 +21,12 @@ final class IncomingCallPresentationReceipt {
   final DateTime presentedAt;
 }
 
-/// 来电展示成功后的 typed ACK 注入点。
+/// NotificationDeliveryJob（process_manager）的端侧写端口：来电展示成功后回执，
+/// 推进这一次投递任务的流程状态。
 ///
-/// Remote adapter 只调用 generated operation client；本接口不接收 path / operationId。
-abstract interface class IncomingCallPresentationAcknowledger {
+/// 命名遵循 `APP_PROCESS_PORT_NAMING` 的 `*ProcessCommandWriter`，与聚合的
+/// `*CommandWriter` 在类型上不可混用。Remote adapter 只调用 generated operation
+/// client；本接口不接收 path / operationId。
+abstract interface class NotificationDeliveryJobProcessCommandWriter {
   Future<void> acknowledge(IncomingCallPresentationReceipt receipt);
 }

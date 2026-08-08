@@ -129,9 +129,11 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
         ),
         importer / "loader.go": (
             "PosterAssetID",
-            "validateVideoAssets",
             "LoadReleaseMediaAssets",
             "PublicSliceKey",
+        ),
+        importer / "post_manifest_validation.go": (
+            "validateVideoAssets",
             "BindPostAssetURLs",
         ),
         importer / "runtime.go": (

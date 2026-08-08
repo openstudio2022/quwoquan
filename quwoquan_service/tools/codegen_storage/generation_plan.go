@@ -8,29 +8,13 @@ import (
 	"sort"
 	"strings"
 
+	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/storagecontract"
+
 	"gopkg.in/yaml.v3"
 )
 
 var goPackagePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-
-type storageCodegenYAML struct {
-	Enabled             bool                         `yaml:"enabled"`
-	RootEntity          string                       `yaml:"root_entity"`
-	Package             string                       `yaml:"package"`
-	DomainPath          string                       `yaml:"domain_path"`
-	EventsOnly          bool                         `yaml:"events_only"`
-	Tables              []string                     `yaml:"tables"`
-	MigrationSkipTables []string                     `yaml:"migration_skip_tables"`
-	NameOverrides       map[string]string            `yaml:"name_overrides"`
-	TypeOverrides       map[string]map[string]string `yaml:"type_overrides"`
-	CacheOverrides      map[string]cacheOverrideYAML `yaml:"cache_overrides"`
-}
-
-type cacheOverrideYAML struct {
-	Entity string `yaml:"entity"`
-	Name   string `yaml:"name"`
-	Skip   bool   `yaml:"skip"`
-}
 
 type domainContractYAML struct {
 	Domain string `yaml:"domain"`
@@ -80,30 +64,25 @@ func deriveGenerationPlan(serviceDir string) (*Manifest, error) {
 		if err != nil {
 			return err
 		}
-		var hints struct {
-			Codegen storageCodegenYAML `yaml:"codegen"`
-		}
-		if err := yaml.Unmarshal(raw, &hints); err != nil {
+		storage, err := storagecontract.DecodeYAML(raw)
+		if err != nil {
 			return fmt.Errorf("decode %s: %w", filepath.ToSlash(rel), err)
 		}
-		if !hints.Codegen.Enabled {
+		hints := storage.Codegen
+		if hints == nil || !hints.Enabled {
 			return nil
 		}
-		var storage StorageYAML
-		if err := yaml.Unmarshal(raw, &storage); err != nil {
-			return fmt.Errorf("decode %s: %w", filepath.ToSlash(rel), err)
-		}
 		contextName, objectName := parts[0], parts[1]
-		pkg := strings.TrimSpace(hints.Codegen.Package)
+		pkg := strings.TrimSpace(hints.Package)
 		if pkg == "" {
 			pkg = strings.ReplaceAll(contextName, "-", "_")
 		}
-		rootEntity := strings.TrimSpace(hints.Codegen.RootEntity)
-		if rootEntity == "" && !hints.Codegen.EventsOnly {
+		rootEntity := strings.TrimSpace(hints.RootEntity)
+		if rootEntity == "" && !hints.EventsOnly {
 			rootEntity = deriveRootEntity(storage)
 		}
-		cacheOverrides := make(map[string]CacheOverride, len(hints.Codegen.CacheOverrides))
-		for key, override := range hints.Codegen.CacheOverrides {
+		cacheOverrides := make(map[string]CacheOverride, len(hints.CacheOverrides))
+		for key, override := range hints.CacheOverrides {
 			cacheOverrides[key] = CacheOverride{
 				Entity: override.Entity,
 				Name:   override.Name,
@@ -115,12 +94,12 @@ func deriveGenerationPlan(serviceDir string) (*Manifest, error) {
 			ObjectPath:          filepath.ToSlash(filepath.Join(contextName, objectName)),
 			RootEntity:          rootEntity,
 			DomainPkg:           pkg,
-			DomainPath:          filepath.ToSlash(strings.TrimSpace(hints.Codegen.DomainPath)),
-			EventsOnly:          hints.Codegen.EventsOnly,
-			Tables:              hints.Codegen.Tables,
-			MigrationSkipTables: hints.Codegen.MigrationSkipTables,
-			NameOverrides:       hints.Codegen.NameOverrides,
-			TypeOverrides:       hints.Codegen.TypeOverrides,
+			DomainPath:          filepath.ToSlash(strings.TrimSpace(hints.DomainPath)),
+			EventsOnly:          hints.EventsOnly,
+			Tables:              hints.Tables,
+			MigrationSkipTables: hints.MigrationSkipTables,
+			NameOverrides:       hints.NameOverrides,
+			TypeOverrides:       hints.TypeOverrides,
 			CacheOverrides:      cacheOverrides,
 		}
 		if err := validateDerivedSource(source, storage); err != nil {
@@ -141,7 +120,7 @@ func deriveGenerationPlan(serviceDir string) (*Manifest, error) {
 	return plan, nil
 }
 
-func deriveRootEntity(storage StorageYAML) string {
+func deriveRootEntity(storage ast.StorageDocument) string {
 	entities := map[string]struct{}{}
 	for _, table := range storage.Tables {
 		if table.Entity != "" {
@@ -162,7 +141,7 @@ func deriveRootEntity(storage StorageYAML) string {
 	return ""
 }
 
-func validateDerivedSource(source Source, storage StorageYAML) error {
+func validateDerivedSource(source Source, storage ast.StorageDocument) error {
 	objectPath := filepath.Clean(source.ObjectPath)
 	domainPath := filepath.Clean(source.domainPath())
 	if objectPath == "." || filepath.IsAbs(objectPath) ||

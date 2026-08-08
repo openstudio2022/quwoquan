@@ -8,6 +8,7 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -41,6 +42,23 @@ class ObjectIntersectionListPage extends ConsumerWidget {
     return trimmed.isEmpty
         ? ObjectHomepageText.objectIntersectionsTitle
         : trimmed;
+  }
+
+  Future<UiRecoveryOutcome> _retry(
+    WidgetRef ref,
+    ObjectIntersectionQuery query,
+    UiErrorAction action,
+  ) async {
+    if (action.type != UiErrorActionType.retry &&
+        action.type != UiErrorActionType.resubmit) {
+      return UiRecoveryOutcome.cancelled;
+    }
+    try {
+      final _ = await ref.refresh(objectSharedReasonsProvider(query).future);
+      return UiRecoveryOutcome.recovered;
+    } catch (_) {
+      return UiRecoveryOutcome.stillBlocked;
+    }
   }
 
   void _openObject(BuildContext context, IntersectionReason reason) {
@@ -89,16 +107,30 @@ class ObjectIntersectionListPage extends ConsumerWidget {
       kind: AppListPageKind.singleList,
       title: _title,
       onBack: () => context.pop(),
+      trailing: query.isResolvable
+          ? CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () {
+                ref.invalidate(objectSharedReasonsProvider(query));
+              },
+              child: Text(SearchText.refresh),
+            )
+          : null,
       body: asyncReasons.when(
         loading: () => AppRequestFeedback.section(),
         error: (error, _) {
-          final resolved = runtimeErrorSemantic(
-            context,
-            error: error,
-            category: UiErrorCategory.pageLoad,
-            scope: UiErrorScope.page,
+          final resolved = ensureRetryUiErrorSemantic(
+            runtimeErrorSemantic(
+              context,
+              error: error,
+              category: UiErrorCategory.pageLoad,
+              scope: UiErrorScope.page,
+            ),
           );
-          return AppPageErrorState(semantic: resolved);
+          return AppPageErrorState(
+            semantic: resolved,
+            onRecovery: (action) => _retry(ref, query, action),
+          );
         },
         data: (reasons) {
           final card = ObjectIntersectionCard.fromReasons(

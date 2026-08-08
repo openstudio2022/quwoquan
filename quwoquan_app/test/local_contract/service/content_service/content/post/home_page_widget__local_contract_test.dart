@@ -16,7 +16,7 @@ import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
@@ -926,8 +926,17 @@ void main() {
       await _scrollUntilFinderVisible(tester, scrollable, textOnlyCard);
       await tester.pumpAndSettle();
       expect(textOnlyCard, findsOneWidget);
+      // 「礼记」既是 articleTemplate 标签也出现在本条标题里：分别断言 eyebrow
+      // 与标题，避免用子串匹配把两处混成一处。
       expect(
-        find.descendant(of: textOnlyCard, matching: find.textContaining('礼记')),
+        find.descendant(of: textOnlyCard, matching: find.text('文章 · 礼记')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: textOnlyCard,
+          matching: find.text('晨间复盘的十分钟礼记'),
+        ),
         findsOneWidget,
       );
       expect(

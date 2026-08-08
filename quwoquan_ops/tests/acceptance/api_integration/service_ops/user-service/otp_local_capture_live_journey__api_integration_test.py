@@ -171,7 +171,7 @@ def _load_package_bound_runtime(
         or startup.get("env") != environment
         or startup.get("target") != target_name
         or startup.get("candidateDigest") != baseline_id
-        or startup.get("configurationDigest") != manifest.get("runtimeConfigDigest")
+        or startup.get("configurationDigest") != manifest.get("configurationDigest")
         or startup.get("providerRuntimeDigest")
         != composition.get("runtimeCompositionDigest")
         or not str(startup.get("attemptId") or "").strip()

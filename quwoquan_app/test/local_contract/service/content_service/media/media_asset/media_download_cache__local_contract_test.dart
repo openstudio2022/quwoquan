@@ -9,7 +9,13 @@ import 'package:http/testing.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_download_cache.dart';
 import 'package:quwoquan_app/runtime/platform/video_player_controller_factory.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:video_player/video_player.dart';
+
+/// 媒体数据面 client 的测试装配：与 `mediaDataPlaneHttpClientProvider` 同形，
+/// 只把最内层传输替换成 object 级 typed double。
+CloudHttpClient _dataPlaneClient(http.Client inner) =>
+    CloudHttpClient(client: inner);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -30,10 +36,10 @@ void main() {
         const url = 'https://cdn.example.com/video/post_1/preview.mp4';
         final expectedKey = sha1.convert(utf8.encode(url)).toString();
         final firstCache = MediaDownloadCache(
-          client: MockClient((request) async {
+          client: _dataPlaneClient(MockClient((request) async {
             requestCount += 1;
             return http.Response.bytes(<int>[1, 2, 3, 4], 200);
-          }),
+          })),
           cacheDirectoryPathProvider: () async => tempDir.path,
           telemetrySink: const NoopCacheTelemetrySink(),
         );
@@ -45,10 +51,10 @@ void main() {
         expect(requestCount, 1);
 
         final restartedCache = MediaDownloadCache(
-          client: MockClient((request) async {
+          client: _dataPlaneClient(MockClient((request) async {
             requestCount += 1;
             return http.Response.bytes(<int>[], 500);
-          }),
+          })),
           cacheDirectoryPathProvider: () async => tempDir.path,
           telemetrySink: const NoopCacheTelemetrySink(),
         );
@@ -71,9 +77,9 @@ void main() {
       });
       final telemetry = _RecordingCacheTelemetrySink();
       final cache = MediaDownloadCache(
-        client: MockClient((request) async {
+        client: _dataPlaneClient(MockClient((request) async {
           return http.Response.bytes(<int>[9, 8, 7], 200);
-        }),
+        })),
         cacheDirectoryPathProvider: () async => tempDir.path,
         telemetrySink: telemetry,
       );
@@ -100,11 +106,11 @@ void main() {
       var requestCount = 0;
       final responseGate = Completer<void>();
       final cache = MediaDownloadCache(
-        client: MockClient((request) async {
+        client: _dataPlaneClient(MockClient((request) async {
           requestCount += 1;
           await responseGate.future;
           return http.Response.bytes(<int>[1, 1, 2, 3], 200);
-        }),
+        })),
         cacheDirectoryPathProvider: () async => tempDir.path,
         telemetrySink: const NoopCacheTelemetrySink(),
       );
@@ -137,10 +143,10 @@ void main() {
         final responseGate = Completer<void>();
         final cache = MediaDownloadCache(
           maxConcurrentDownloads: 1,
-          client: MockClient((request) async {
+          client: _dataPlaneClient(MockClient((request) async {
             await responseGate.future;
             return http.Response.bytes(<int>[4, 5, 6], 200);
-          }),
+          })),
           cacheDirectoryPathProvider: () async => tempDir.path,
           telemetrySink: const NoopCacheTelemetrySink(),
         );

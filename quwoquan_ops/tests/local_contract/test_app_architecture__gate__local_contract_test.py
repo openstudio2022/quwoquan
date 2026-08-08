@@ -1,13 +1,15 @@
 """`verify_app_architecture.py`（端侧对象化架构门禁 v1）的本地契约。
 
-本测试锁定四件事：
+本测试锁定五件事：
 
 1. 规则来源单一：顶层白名单与对象归属都必须从 `object_path_map.py` 与
    `quwoquan_app/l10n.yaml` 派生，门禁不得内置第二套路径反推或 domain 名单。
 2. 跨对象只能依赖目标对象 `application/public/**`；同对象与横切代码不得误报。
-3. ratchet 语义：新违规与陈旧基线条目都必须阻断，`--domain` 只收窄 R2/R3/R4
-   的比对范围，共享的顶层规则在任何 scope 下都全量求值；R4 绝不进入基线。
-4. 仓库基线只减不增：基线里不得残留陈旧条目，也不得引用磁盘上已不存在的路径。
+3. strict-zero 语义：任一 R1-R5 违规都必须阻断，`--domain` 只收窄 R2/R3/R4
+   的检查范围，共享的 R1/R5 在任何 scope 下都全量求值。
+4. 迁移期 baseline 已退休：文件必须不存在，CLI 不得提供重建或吸收入口。
+5. `runtime/di/**` 只做装配：Provider/factory/typed WidgetBuilder/composition
+   合法，Widget 类、业务文案与业务状态是不可基线化的共享绝对违规。
 
 这里刻意不绑定
 `specs/feature-tree/runtime/runtime-control-plane-foundation/`
@@ -16,6 +18,7 @@
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -32,6 +35,7 @@ from quwoquan_ops.gate import object_path_map as opm
 from quwoquan_ops.gate import verify_app_architecture as vaa
 
 GATE_REPO_PATH = ROOT / "quwoquan_ops/gate/gate_repo.sh"
+GATE_SOURCE_PATH = ROOT / "quwoquan_ops/gate/verify_app_architecture.py"
 APP_ARCHITECTURE_COMMAND = (
     "python3 quwoquan_ops/gate/verify_app_architecture.py || exit 1"
 )
@@ -70,6 +74,56 @@ def test_top_level_whitelist_is_derived_and_not_hardcoded(
     }
     # 现状按技术角色分层的顶层目录一律不在白名单内。
     assert not {"ui", "core", "cloud", "components", "app", "application"} & allowed
+
+
+def test_lib_top_level_whitelist_and_attribution_roots_are_the_same_set(
+    roster: opm.ObjectRoster,
+) -> None:
+    """R1 白名单与派生器的横切根必须是同一份集合，不允许第二份「合法顶层」清单。
+
+    分叉的后果不是本门禁误报，而是下游归属整批塌陷：l10n 根曾经只登记在这里，
+    `object_path_map` 不认识它，于是 `lib/l10n/**` 同时是「R1 合法顶层」与
+    「待搬去 lib/runtime/l10n 的横切件」，status 停在 `cross_cutting`，
+    `verify_canonical_coverage` 把它们连同顶层入口共 28 个文件判成无主源码，
+    App 覆盖率 scope 一个单元都发现不了。收敛前本断言失败，收敛后才通过。
+    """
+    allowed = vaa.allowed_top_level_directories(roster)
+
+    assert allowed == {opm.APP_SERVICE_ROOT_SEGMENT} | set(
+        opm.APP_CROSS_CUTTING_ROOTS
+    )
+    # l10n 根仍必须由 l10n.yaml 派生，只是它现在经 APP_CROSS_CUTTING_ROOTS 表达。
+    assert vaa.l10n_top_level_segment() in opm.APP_CROSS_CUTTING_ROOTS
+
+
+def test_entry_file_rule_has_exactly_one_definition() -> None:
+    """入口文件形态只能有一处定义；本门禁复用派生器的常量而不是另写一份正则。
+
+    两份正则会让「R1 认可的顶层入口」与「派生器认可的终态位置」再次分叉，
+    重演 `lib/main*.dart` 被推去 `lib/runtime/main.dart` 的无主源码事故。
+
+    这里必须断言**源码形态**而不是 `vaa.TOP_LEVEL_ENTRY_RE is opm.APP_ENTRY_FILE_RE`：
+    `re.compile` 对同一 pattern 返回缓存里的同一个对象，所以两处各写一遍
+    `re.compile(r"^main...")` 也会通过 `is` 断言，那样的测试没有鉴别力。
+    """
+    tree = ast.parse(GATE_SOURCE_PATH.read_text(encoding="utf-8"))
+    bindings = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "TOP_LEVEL_ENTRY_RE"
+            for target in node.targets
+        )
+    ]
+
+    assert len(bindings) == 1, "TOP_LEVEL_ENTRY_RE 必须只被赋值一次"
+    value = bindings[0]
+    assert isinstance(value, ast.Attribute) and value.attr == "APP_ENTRY_FILE_RE", (
+        "TOP_LEVEL_ENTRY_RE 必须直接复用 object_path_map.APP_ENTRY_FILE_RE，"
+        "不得在本门禁里另行 re.compile 一份入口正则"
+    )
+    assert vaa.TOP_LEVEL_ENTRY_RE is opm.APP_ENTRY_FILE_RE
 
 
 def test_only_entry_files_are_allowed_at_the_lib_top_level() -> None:
@@ -217,6 +271,73 @@ def test_composition_root_exemption_is_limited_to_entry_and_runtime_di() -> None
     assert not vaa.is_composition_root(
         "app_bootstrap.dart", "quwoquan_app/lib/runtime/app_bootstrap.dart"
     )
+
+
+def test_runtime_di_purity_allows_provider_factory_builder_and_composition(
+    tmp_path: Path,
+) -> None:
+    runtime_di = tmp_path / "runtime/di"
+    runtime_di.mkdir(parents=True)
+    (runtime_di / "feature_dependencies.dart").write_text(
+        """// class FakeCard extends StatelessWidget {}
+const fakeSource = 'ProfileText.title Text( business State';
+final featureProvider = Provider<FeatureService>((ref) => createFeatureService());
+FeatureService createFeatureService() => FeatureService();
+typedef FeatureWidgetBuilder = Widget Function(BuildContext context);
+final class FeatureComposition {
+  const FeatureComposition(this.pageBuilder);
+  final WidgetBuilder pageBuilder;
+}
+abstract final class ContentMediaCreationComposition {
+  static Widget camera({required CameraCaptureModePolicy modePolicy}) {
+    return CameraCapturePage(modePolicy: modePolicy);
+  }
+  static Widget mediaPicker({required MediaPickerPort mediaPickerPort}) {
+    return CreateMediaPickerPage(mediaPickerPort: mediaPickerPort);
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert vaa.scan_runtime_di_presentation_purity_violations(runtime_di) == []
+
+
+def test_runtime_di_purity_rejects_widgets_business_copy_and_state(
+    tmp_path: Path,
+) -> None:
+    runtime_di = tmp_path / "runtime/di"
+    runtime_di.mkdir(parents=True)
+    (runtime_di / "feature_presentation.dart").write_text(
+        """class FeatureCard extends StatelessWidget {}
+class FeaturePage extends StatefulWidget {}
+class FeaturePanel extends ConsumerWidget {}
+class FeatureFlow extends ConsumerStatefulWidget {}
+class FeatureState {}
+enum LoadingState { idle }
+const heading = ProfileText.featureTitle;
+Widget buildCopy() => Text('hello');
+final spec = FeatureSpec(title: 'literal title');
+""",
+        encoding="utf-8",
+    )
+
+    assert vaa.scan_runtime_di_presentation_purity_violations(runtime_di) == [
+        (
+            "runtime/di/feature_presentation.dart: business_copy "
+            "[literal, text_catalog, text_widget]"
+        ),
+        (
+            "runtime/di/feature_presentation.dart: business_state "
+            "[class FeatureState, enum LoadingState]"
+        ),
+        (
+            "runtime/di/feature_presentation.dart: widget_class "
+            "[FeatureCard extends StatelessWidget, "
+            "FeatureFlow extends ConsumerStatefulWidget, "
+            "FeaturePage extends StatefulWidget, FeaturePanel extends ConsumerWidget]"
+        ),
+    ]
 
 
 def _identity(
@@ -574,60 +695,58 @@ def test_repository_cross_object_findings_are_real_private_edges(
 
 
 # ---------------------------------------------------------------------------
-# ratchet 语义
+# strict-zero 语义
 # ---------------------------------------------------------------------------
 
 
-def _document(shared: list[str], domains: dict[str, list[str]]) -> dict:
-    return vaa._normalized(
+def test_strict_zero_reports_every_observed_violation() -> None:
+    current = vaa._normalized(
         {
-            "shared": {vaa.RULE_TOP_LEVEL: shared},
+            "shared": {vaa.RULE_TOP_LEVEL: ["legacy/"]},
             "domains": {
-                domain: {vaa.RULE_TARGET_REVERSE_IMPORT: edges}
-                for domain, edges in domains.items()
+                "content": {
+                    vaa.RULE_TARGET_REVERSE_IMPORT: [
+                        "runtime/a.dart -> content/b.dart"
+                    ]
+                }
             },
         }
     )
 
-
-def test_ratchet_blocks_both_new_violations_and_stale_baseline_entries() -> None:
-    baseline = _document(["ui/"], {"content": ["runtime/a.dart -> content/b.dart"]})
-    current = _document(
-        ["ui/", "legacy/"], {"content": ["runtime/a.dart -> content/c.dart"]}
-    )
-
-    new_violations, stale_entries = vaa.diff(current, baseline, None)
-
-    assert new_violations == [
+    assert vaa.violation_entries(current, None) == [
         f"{vaa.RULE_TOP_LEVEL}: legacy/",
-        f"{vaa.RULE_TARGET_REVERSE_IMPORT}[content]: runtime/a.dart -> content/c.dart",
+        f"{vaa.RULE_TARGET_REVERSE_IMPORT}[content]: "
+        "runtime/a.dart -> content/b.dart",
     ]
-    # 违规消失后必须显式收敛基线，不允许长期挂账。
-    assert stale_entries == [
-        f"{vaa.RULE_TARGET_REVERSE_IMPORT}[content]: runtime/a.dart -> content/b.dart"
-    ]
-    assert vaa.diff(baseline, baseline, None) == ([], [])
 
 
-def test_domain_scope_narrows_domain_rules_but_keeps_the_shared_top_level_rule() -> None:
-    baseline = _document([], {})
-    current = _document(
-        ["legacy/"],
+def test_domain_scope_narrows_domain_rules_but_keeps_shared_rules() -> None:
+    current = vaa._normalized(
         {
-            "content": ["runtime/a.dart -> content/b.dart"],
-            "chat": ["runtime/a.dart -> chat/b.dart"],
-        },
+            "shared": {vaa.RULE_TOP_LEVEL: ["legacy/"]},
+            "domains": {
+                "content": {
+                    vaa.RULE_TARGET_REVERSE_IMPORT: [
+                        "runtime/a.dart -> content/b.dart"
+                    ]
+                },
+                "chat": {
+                    vaa.RULE_TARGET_REVERSE_IMPORT: [
+                        "runtime/a.dart -> chat/b.dart"
+                    ]
+                },
+            },
+        }
     )
 
-    new_violations, _ = vaa.diff(current, baseline, "content")
-
-    assert new_violations == [
+    assert vaa.violation_entries(current, "content") == [
         f"{vaa.RULE_TOP_LEVEL}: legacy/",
-        f"{vaa.RULE_TARGET_REVERSE_IMPORT}[content]: runtime/a.dart -> content/b.dart",
+        f"{vaa.RULE_TARGET_REVERSE_IMPORT}[content]: "
+        "runtime/a.dart -> content/b.dart",
     ]
 
 
-def test_absolute_cross_object_rule_cannot_be_suppressed_by_a_baseline() -> None:
+def test_cross_object_rule_is_strict_zero() -> None:
     edge = (
         "import: chat/chat/a/presentation/a.dart -> "
         "content/content/b/domain/b.dart"
@@ -638,13 +757,25 @@ def test_absolute_cross_object_rule_cannot_be_suppressed_by_a_baseline() -> None
             "domains": {"chat": {vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT: [edge]}},
         }
     )
-    # 即使调用方手工构造同名 baseline 条目，diff 仍把 observed R4 视为新违规。
-    forged_baseline = vaa._normalized(current)
+    assert vaa.violation_entries(current, None) == [
+        f"{vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT}[chat]: {edge}"
+    ]
 
-    assert vaa.diff(current, forged_baseline, None) == (
-        [f"{vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT}[chat]: {edge}"],
-        [],
+
+def test_runtime_di_purity_is_shared_strict_zero() -> None:
+    finding = (
+        "runtime/di/presentation/card.dart: widget_class "
+        "[Card extends StatelessWidget]"
     )
+    current = vaa._normalized(
+        {
+            "shared": {vaa.RULE_RUNTIME_DI_PRESENTATION_PURITY: [finding]},
+            "domains": {},
+        }
+    )
+    assert vaa.violation_entries(current, "content") == [
+        f"{vaa.RULE_RUNTIME_DI_PRESENTATION_PURITY}: {finding}"
+    ]
 
 
 def test_domain_scope_attributes_r4_to_the_consumer_source_domain() -> None:
@@ -658,231 +789,50 @@ def test_domain_scope_attributes_r4_to_the_consumer_source_domain() -> None:
             "domains": {"chat": {vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT: [edge]}},
         }
     )
-    baseline = _document([], {})
-
-    assert vaa.diff(current, baseline, "chat") == (
-        [f"{vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT}[chat]: {edge}"],
-        [],
-    )
-    assert vaa.diff(current, baseline, "content") == ([], [])
+    assert vaa.violation_entries(current, "chat") == [
+        f"{vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT}[chat]: {edge}"
+    ]
+    assert vaa.violation_entries(current, "content") == []
 
 
-def test_baseline_writer_never_persists_the_absolute_cross_object_rule(
+def test_retired_baseline_must_remain_absent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     baseline_path = tmp_path / "app_architecture_baseline.json"
     monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-    current = vaa._normalized(
-        {
-            "shared": {vaa.RULE_TOP_LEVEL: ["cloud/"]},
-            "domains": {
-                "content": {
-                    vaa.RULE_TARGET_REVERSE_IMPORT: [
-                        "runtime/a.dart -> content/content/b/domain/b.dart"
-                    ],
-                    vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT: [
-                        (
-                            "import: chat/chat/a/presentation/a.dart -> "
-                            "content/content/b/domain/b.dart"
-                        )
-                    ],
-                }
-            },
-        }
-    )
+    vaa.verify_retired_baseline_absent()
 
-    vaa.write_baseline(current, domain=None)
-
-    written = json.loads(baseline_path.read_text(encoding="utf-8"))
-    assert vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT not in json.dumps(written)
-    assert written["domains"]["content"][vaa.RULE_TARGET_REVERSE_IMPORT]
+    baseline_path.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="retired baseline must remain absent"):
+        vaa.verify_retired_baseline_absent()
 
 
-def test_baseline_loader_rejects_a_handwritten_absolute_rule_allowance(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    baseline_path = tmp_path / "app_architecture_baseline.json"
-    monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-    baseline_path.write_text(
-        json.dumps(
-            {
-                "ruleId": vaa.RULE_ID,
-                "shared": {},
-                "domains": {
-                    "content": {vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT: []}
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+def test_cli_has_no_baseline_write_or_allowance_path() -> None:
+    source = GATE_SOURCE_PATH.read_text(encoding="utf-8")
 
-    with pytest.raises(ValueError, match="不得进入 baseline/allowance"):
-        vaa.load_baseline()
+    assert "--write-baseline" not in source
+    assert "def write_baseline" not in source
+    assert "def load_baseline" not in source
 
 
-def test_write_baseline_cli_refuses_while_absolute_violations_exist(
+def test_strict_zero_cli_blocks_observed_violations(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     roster: opm.ObjectRoster,
 ) -> None:
-    baseline_path = tmp_path / "app_architecture_baseline.json"
-    monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-    edge = (
-        "import: chat/chat/a/presentation/a.dart -> "
-        "content/content/b/domain/b.dart"
-    )
+    monkeypatch.setattr(vaa, "BASELINE_PATH", tmp_path / "retired.json")
     monkeypatch.setattr(vaa, "load_roster", lambda: roster)
     monkeypatch.setattr(
         vaa,
         "evaluate",
         lambda _: {
-            "shared": {vaa.RULE_TOP_LEVEL: []},
-            "domains": {"chat": {vaa.RULE_CROSS_OBJECT_PRIVATE_IMPORT: [edge]}},
+            "shared": {vaa.RULE_TOP_LEVEL: ["legacy/"]},
+            "domains": {},
         },
     )
 
-    assert vaa.main(["--write-baseline"]) == 1
-    assert not baseline_path.exists()
-
-
-def test_domain_scoped_baseline_write_preserves_other_domains(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    baseline_path = tmp_path / "app_architecture_baseline.json"
-    monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-
-    original = _document(
-        ["ui/"],
-        {
-            "content": ["runtime/a.dart -> content/b.dart"],
-            "chat": ["runtime/a.dart -> chat/b.dart"],
-        },
-    )
-    original["_governance"] = {
-        "owner": "runtime-client-foundation",
-        "reason": "temporary ratchet",
-        "expires_when": "legacy roots are empty",
-    }
-    vaa.write_baseline(original, domain=None)
-    first = baseline_path.read_text(encoding="utf-8")
-    vaa.write_baseline(original, domain=None)
-    assert baseline_path.read_text(encoding="utf-8") == first
-
-    fixed_content = _document(["ui/"], {"chat": ["runtime/a.dart -> chat/b.dart"]})
-    vaa.write_baseline(fixed_content, domain="content")
-
-    written = json.loads(baseline_path.read_text(encoding="utf-8"))
-    assert written["ruleId"] == vaa.RULE_ID
-    assert "content" not in written["domains"]
-    # 其他并行流的分区与共享分区不得被顺带改写。
-    assert written["domains"]["chat"][vaa.RULE_TARGET_REVERSE_IMPORT] == [
-        "runtime/a.dart -> chat/b.dart"
-    ]
-    assert written["shared"][vaa.RULE_TOP_LEVEL] == ["ui/"]
-    assert written["_governance"] == original["_governance"]
-
-
-def test_domain_scoped_baseline_write_initializes_only_when_file_is_missing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    baseline_path = tmp_path / "app_architecture_baseline.json"
-    monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-    current = _document(
-        [], {"content": ["runtime/a.dart -> content/content/post/domain/post.dart"]}
-    )
-
-    vaa.write_baseline(current, domain="content")
-
-    written = json.loads(baseline_path.read_text(encoding="utf-8"))
-    assert written["ruleId"] == vaa.RULE_ID
-    assert written["domains"]["content"][vaa.RULE_TARGET_REVERSE_IMPORT]
-
-
-@pytest.mark.parametrize(
-    "invalid_baseline",
-    [
-        "{not-json",
-        json.dumps(
-            {
-                "ruleId": "wrong-rule",
-                "shared": {vaa.RULE_TOP_LEVEL: ["cloud/"]},
-                "domains": {
-                    "chat": {
-                        vaa.RULE_TARGET_REVERSE_IMPORT: [
-                            "runtime/a.dart -> chat/chat/conversation/domain/id.dart"
-                        ]
-                    }
-                },
-            }
-        ),
-        json.dumps(
-            {
-                "ruleId": vaa.RULE_ID,
-                "shared": {},
-                "domains": {},
-                "unknownMetadata": {"must": "not be silently dropped"},
-            }
-        ),
-        json.dumps(
-            {
-                "ruleId": vaa.RULE_ID,
-                "shared": {},
-                "domains": {"chat": {"unknown_rule": ["kept"]}},
-            }
-        ),
-        json.dumps(
-            {"ruleId": vaa.RULE_ID, "shared": [], "domains": {}}
-        ),
-        json.dumps(
-            {"ruleId": vaa.RULE_ID, "shared": {}, "domains": False}
-        ),
-    ],
-)
-def test_domain_scoped_write_never_replaces_an_invalid_existing_baseline(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    invalid_baseline: str,
-) -> None:
-    baseline_path = tmp_path / "app_architecture_baseline.json"
-    baseline_path.write_text(invalid_baseline, encoding="utf-8")
-    monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-    current = _document(
-        [], {"content": ["runtime/a.dart -> content/content/post/domain/post.dart"]}
-    )
-
-    with pytest.raises(ValueError):
-        vaa.write_baseline(current, domain="content")
-    assert baseline_path.read_text(encoding="utf-8") == invalid_baseline
-
-
-def test_domain_scoped_write_cli_reports_invalid_baseline_without_overwriting(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    roster: opm.ObjectRoster,
-) -> None:
-    baseline_path = tmp_path / "app_architecture_baseline.json"
-    original = json.dumps(
-        {
-            "ruleId": "wrong-rule",
-            "shared": {vaa.RULE_TOP_LEVEL: ["cloud/"]},
-            "domains": {"chat": {vaa.RULE_TARGET_REVERSE_IMPORT: ["kept"]}},
-        }
-    )
-    baseline_path.write_text(original, encoding="utf-8")
-    monkeypatch.setattr(vaa, "BASELINE_PATH", baseline_path)
-    monkeypatch.setattr(vaa, "load_roster", lambda: roster)
-    monkeypatch.setattr(
-        vaa,
-        "evaluate",
-        lambda _: {"shared": {vaa.RULE_TOP_LEVEL: []}, "domains": {}},
-    )
-
-    assert vaa.main(["--domain", "content", "--write-baseline"]) == 1
-    assert baseline_path.read_text(encoding="utf-8") == original
+    assert vaa.main([]) == 1
 
 
 def test_unknown_domain_is_rejected_instead_of_silently_passing() -> None:
@@ -969,55 +919,20 @@ def test_repo_gate_app_static_executes_architecture_once(
 
 
 # ---------------------------------------------------------------------------
-# 仓库基线只减不增
+# 仓库 strict-zero 事实
 # ---------------------------------------------------------------------------
 
 
-def _baseline_referenced_library_paths(recorded: dict) -> set[str]:
-    """基线条目里出现的全部 `lib/` 相对路径。
-
-    R1 条目是顶层名字（目录带 `/` 后缀），R2/R3 条目是 `source -> target` 依赖边。
-    """
-    referenced: set[str] = set()
-    for entry in recorded.get("shared", {}).get(vaa.RULE_TOP_LEVEL, []) or []:
-        referenced.add(entry.rstrip("/"))
-    for section in (recorded.get("domains") or {}).values():
-        for rule in vaa.DOMAIN_RULES:
-            for edge in section.get(rule, []) or []:
-                referenced.update(edge.split(" -> "))
-    return referenced
+def test_repository_has_no_architecture_baseline() -> None:
+    assert not vaa.BASELINE_PATH.exists()
 
 
-def test_baseline_never_references_a_path_that_left_the_disk() -> None:
-    """陈旧条目会让 ratchet 悄悄失效，必须在测试层就拦住堆积。
-
-    搬迁会把违规源文件挪到新路径。旧条目留着既不阻断任何东西，又会掩盖同一条违规
-    在新路径上的复现，因此基线只允许引用磁盘上真实存在的路径。
-    """
-    library_root = vaa.ROOT / opm.APP_LIB_ROOT
-    missing = sorted(
-        reference
-        for reference in _baseline_referenced_library_paths(vaa.load_baseline())
-        if not (library_root / reference).exists()
-    )
-    assert missing == []
-
-
-def test_baseline_holds_no_stale_entry_and_domain_scope_runs(
+def test_repository_is_strict_zero_in_all_and_domain_scope(
     evaluation: dict,
 ) -> None:
-    """基线不得记录已经消失的违规。
-
-    这里刻意不断言 `vaa.main([]) == 0`：搬迁把违规源文件搬到新路径后，同一条违规会
-    以新路径进入 new 列表，此时门禁 BLOCK 是正确行为，必须靠解耦消除，不能靠
-    `--write-baseline` 把新路径吸收进基线来换取绿灯。
-    """
-    recorded = vaa.load_baseline()
-    assert recorded["ruleId"] == vaa.RULE_ID
-
-    _, stale_entries = vaa.diff(evaluation, recorded, None)
-    assert stale_entries == []
-    assert vaa.main(["--domain", "content"]) in {0, 1}
+    assert vaa.violation_entries(evaluation, None) == []
+    assert vaa.main([]) == 0
+    assert vaa.main(["--domain", "content"]) == 0
 
 
 def test_evaluation_is_idempotent(roster: opm.ObjectRoster, evaluation: dict) -> None:

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/scale_source_pool_snapshot.schema.json",
+  "title": "Selected-only scale source-pool capsule snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "planDigest",
+    "laneSourcePoolSelections",
+    "selectedCandidates",
+    "snapshotDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.scale_source_pool_snapshot"},
+    "planDigest": {"$ref": "#/$defs/sha256"},
+    "laneSourcePoolSelections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homepage", "article", "image", "video"],
+      "properties": {
+        "homepage": {"$ref": "scale_source_pool_selection.schema.json"},
+        "article": {"$ref": "scale_source_pool_selection.schema.json"},
+        "image": {"$ref": "scale_source_pool_selection.schema.json"},
+        "video": {"$ref": "scale_source_pool_selection.schema.json"}
+      }
+    },
+    "selectedCandidates": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "object", "minProperties": 1}
+    },
+    "snapshotDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -276,7 +276,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   Future<void> _refreshChatEntryLists() async {
     await ref.read(chatInboxListCommandsProvider).refresh();
     ref.invalidate(
-      chatContactsRowsForSubTabProvider(ChatText.contactsTabGroups),
+      chatContactsRowsForSubTabProvider(ChatContactHomeFilter.group),
     );
   }
 
@@ -679,7 +679,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                         AppRoutePaths.userProfile(userHandle: userHandle),
                         extra: UserProfileRouteExtra(
                           personaId: personaId,
-                          avatarUrl: m.avatarUrl.isNotEmpty ? m.avatarUrl : null,
+                          avatarUrl: m.avatarUrl.isNotEmpty
+                              ? m.avatarUrl
+                              : null,
                           displayName: m.displayName.isNotEmpty
                               ? m.displayName
                               : null,

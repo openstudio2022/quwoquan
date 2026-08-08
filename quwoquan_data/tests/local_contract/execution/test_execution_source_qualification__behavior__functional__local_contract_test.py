@@ -12,7 +12,7 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.execution import qualification  # noqa: E402
+from content.execution.planning import qualification
 
 
 EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--pilot-901"

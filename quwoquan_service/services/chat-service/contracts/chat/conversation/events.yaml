@@ -2,6 +2,7 @@ events:
 - name: ConversationCreated
   description: 会话创建
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationCreated
   payload_entity: Conversation
   payload_fields:
   - conversationId
@@ -23,6 +24,7 @@ events:
 
     或投递失败时不得确认 source event，禁止用同步 RPC 或客户端字段替代此链路。'
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupConversationProvisioned
   payload_entity: Conversation
   payload_fields:
   - conversationId
@@ -35,6 +37,7 @@ events:
 
     membersRosterRevision 和 updatedAt 定点拉取会话与成员，而不消费逐成员事件。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationRosterUpdated
   topic: rt:user:{recipientId}
   payload_entity: ConversationRosterUpdatedEventPayload
   payload_fields:
@@ -62,6 +65,7 @@ events:
 
     用于统一 sync patch `conversation.avatar.updated` 的上游事件输入。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationAvatarUpdated
   topic: rt:user:{recipientId}
   payload_entity: ConversationAvatarUpdatedEventPayload
   payload_fields:
@@ -77,6 +81,7 @@ events:
 
     成员端收到后收敛会话入口；投影据此下线群相关行。'
   delivery_semantics: transactional_outbox
+  wire_event_type: ConversationDissolved
   topic: rt:user:{recipientId}
   payload_entity: ConversationDissolvedEventPayload
   payload_fields:

@@ -23,7 +23,7 @@ runtime_execution:
       - path: lib/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart
         symbols:
           - IncomingCallCoordinator
-          - incomingCallPresentationAcknowledgerProvider
+          - notificationDeliveryJobProcessCommandWriterProvider
   - object_id: ops.event_record
     operation_ids:
       - ops.event_record.ReportEventBatch
@@ -62,25 +62,6 @@ runtime_execution:
         symbols:
           - VisitRecorderService
           - recordVisit
-  - object_id: realtime.connection
-    operation_ids:
-      - realtime.connection.IssueConnectionTicket
-      - realtime.connection.LongPoll
-      - realtime.connection.WebSocketUpgrade
-    production_evidence:
-      - path: lib/service/realtime_gateway/realtime/connection/adapters/realtime_connection_operation_remote.dart
-        symbols:
-          - RemoteRealtimeConnectionOperationGateway
-          - realtimeConnectionIssueConnectionTicket
-          - realtimeConnectionLongPoll
-      - path: lib/service/realtime_gateway/realtime/connection/adapters/realtime_config.dart
-        symbols:
-          - RealtimeConfig
-          - realtimeConnectionWebSocketUpgrade
-      - path: lib/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart
-        symbols:
-          - RealtimeConnectionNotifier
-          - onAppForeground
   - object_id: user.device_registration
     operation_ids:
       - user.device_registration.RemoveDevicePushEndpoint
@@ -96,31 +77,6 @@ runtime_execution:
           - DevicePushEndpointCoordinator
           - syncAfterLogin
           - removeForLogout
-  - object_id: ops.app_release
-    operation_ids:
-      - ops.app_release.GetAppRecoveryVersion
-    production_evidence:
-      - path: lib/service/product_ops_service/product_ops/app_release/adapters/remote_app_release_recovery_reader.dart
-        symbols:
-          - RemoteAppReleaseRecoveryReader
-          - opsAppReleaseGetAppRecoveryVersion
-      - path: lib/runtime/shell/recovery/recovery_version_client.dart
-        symbols:
-          - RecoveryVersionClient
-          - getAppRecoveryVersion
-  - object_id: ops.recovery_failure
-    operation_ids:
-      - ops.recovery_failure.ReportRecoveryFailure
-    production_evidence:
-      - path: lib/service/product_ops_service/product_ops/recovery_failure/adapters/remote_recovery_failure_writer.dart
-        symbols:
-          - RemoteRecoveryFailureWriter
-          - opsRecoveryFailureReportRecoveryFailure
-      - path: lib/runtime/shell/recovery/recovery_failure_reporter.dart
-        symbols:
-          - RecoveryFailureReporter
-          - reportRecoveryFailure
-
 pages:
   - page_id: app.bottom_navigation
     source_path: lib/runtime/shell/bottom_navigation.dart
@@ -137,10 +93,10 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: app.main_shell }
     entry_widget: BottomNavigationWidget
-    mount_evidence: [lib/runtime/di/shell/main_app_shell.dart]
+    mount_evidence: [lib/runtime/shell/main_app_shell.dart]
 
   - page_id: app.main_shell
-    source_path: lib/runtime/di/shell/main_app_shell.dart
+    source_path: lib/runtime/shell/main_app_shell.dart
     page_kind: shell
     route_id: home
     surface_ids: [appShell]
@@ -171,7 +127,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: circle.detail }
     entry_widget: ObjectDetailGlobalBottomNav
-    mount_evidence: [lib/runtime/di/presentation/circle_shell.dart]
+    mount_evidence: [lib/service/circle_service/circle_management/circle/presentation/circle_shell.dart]
 
   - page_id: app.web_install_banner
     source_path: lib/runtime/shell/web_app_install_banner.dart
@@ -188,10 +144,10 @@ pages:
     capability_requirements: { all_of: [promotesAppInstall], any_of: [] }
     telemetry_descriptor: { inherit_from: app.main_shell }
     entry_widget: WebAppInstallBanner
-    mount_evidence: [lib/runtime/di/shell/main_app_shell.dart]
+    mount_evidence: [lib/runtime/shell/main_app_shell.dart]
 
   - page_id: app.web_main_shell
-    source_path: lib/runtime/di/shell/web_main_app_shell.dart
+    source_path: lib/runtime/shell/web_main_app_shell.dart
     page_kind: shell
     parent_page_id: app.main_shell
     surface_ids: [appShell, homeFeed]
@@ -206,10 +162,10 @@ pages:
     capability_requirements: { all_of: [wideScreenLayout], any_of: [] }
     telemetry_descriptor: { inherit_from: app.main_shell }
     entry_widget: WebMainAppShell
-    mount_evidence: [lib/runtime/di/shell/main_app_shell.dart]
+    mount_evidence: [lib/runtime/shell/main_app_shell.dart]
 
   - page_id: app.web_main_shell_auth_helper
-    source_path: lib/runtime/di/shell/web_main_app_shell_auth.dart
+    source_path: lib/runtime/shell/web_main_app_shell_auth.dart
     page_kind: helper
     parent_page_id: app.web_main_shell
     surface_ids: [appShell]
@@ -224,7 +180,7 @@ pages:
     telemetry_descriptor: { inherit_from: app.web_main_shell }
 
   - page_id: app.web_main_shell_state_helper
-    source_path: lib/runtime/di/shell/web_main_app_shell_state.dart
+    source_path: lib/runtime/shell/web_main_app_shell_state.dart
     page_kind: helper
     parent_page_id: app.web_main_shell
     surface_ids: [appShell, homeFeed]
@@ -245,10 +201,12 @@ pages:
     additional_parent_page_ids: [media.create_picker]
     surface_ids: [createWorkspace]
     experience_owner: content
-    data_owners: [app]
-    object_ids: []
-    query_slices: [local.device_media_capture]
-    typed_presentation: [CameraCaptureResult, CreateMediaItem]
+    data_owners: [app, content]
+    object_ids: [content.filter_catalog_release]
+    query_slices:
+      - local.device_media_capture
+      - content.filter_catalog_release.projection.filter_catalog_slice
+    typed_presentation: [CameraCaptureResult, CreateMediaItem, FilterCatalogSlice]
     auth_requirement: inherited
     capability_requirements: { all_of: [camera], any_of: [] }
     telemetry_descriptor: { inherit_from: content.create }
@@ -281,10 +239,12 @@ pages:
     parent_page_id: content.create
     surface_ids: [createWorkspace]
     experience_owner: content
-    data_owners: [app]
-    object_ids: []
-    query_slices: [local.media_picker_selection]
-    typed_presentation: [CreateMediaPickerResult, CreateMediaItem]
+    data_owners: [app, content]
+    object_ids: [content.filter_catalog_release]
+    query_slices:
+      - local.media_picker_selection
+      - content.filter_catalog_release.projection.filter_catalog_slice
+    typed_presentation: [CreateMediaPickerResult, CreateMediaItem, FilterCatalogSlice]
     auth_requirement: inherited
     capability_requirements: { all_of: [], any_of: [mediaLibrary, hasLocalFileSystem] }
     telemetry_descriptor: { inherit_from: content.create }
@@ -464,12 +424,15 @@ pages:
     route_id: chatDetail
     surface_ids: [chatDetail]
     experience_owner: chat
-    data_owners: [chat, user]
+    data_owners: [chat, content, realtime, rtc, user]
     object_ids:
       - chat.conversation
       - chat.conversation_user_state
       - chat.message
       - chat.message_receipt_fact
+      - content.media_upload_session
+      - realtime.connection
+      - rtc.call_session
       - user.user_account
       - user.persona_relationship
     query_slices:
@@ -479,6 +442,10 @@ pages:
     command_operations:
       - chat.conversation_user_state.MarkAsRead
       - chat.conversation_user_state.UpdateConversationSettings
+      - content.media_upload_session.AbortMediaUpload
+      - content.media_upload_session.CompleteMediaUpload
+      - content.media_upload_session.InitMediaUpload
+      - rtc.call_session.InitiateCall
     typed_presentation: [ChatMessageViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -498,19 +465,20 @@ pages:
     surface_ids: [chatList]
     experience_owner: chat
     data_owners: [chat, user, notification]
-    object_ids: [chat.chat_inbox_view, chat.conversation, user.user_account, notification.notification]
+    object_ids: [chat.chat_inbox_view, chat.conversation, user.greeting_request, user.user_account, notification.notification]
     query_slices:
       - chat.conversation.projection.message_home_row
       - chat.conversation.projection.contact_home_row
       - notification.notification
-    typed_presentation: [MessageHomeRow, ContactHomeRow, AppMessage]
+      - user.greeting_request
+    typed_presentation: [MessageHomeRow, ContactHomeRow, AppMessage, GreetingRequestViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.chat.home, lifecycle: [enter, exit, refresh, failure] }
     entry_widget: ChatPage
     route_registration_evidence:
       - lib/runtime/di/navigation/app_router.dart
-      - lib/runtime/di/shell/main_app_shell.dart
+      - lib/runtime/shell/main_app_shell.dart
 
   - page_id: chat.greeting_inbox
     source_path: lib/service/user_service/relationship/greeting_request/presentation/greeting_inbox_page.dart
@@ -534,12 +502,13 @@ pages:
     route_id: chatSettings
     surface_ids: [chatSettings]
     experience_owner: chat
-    data_owners: [chat]
-    object_ids: [chat.conversation, chat.conversation_membership]
+    data_owners: [chat, rtc]
+    object_ids: [chat.conversation, chat.conversation_membership, rtc.call_session]
     query_slices:
       - chat.conversation.projection.group_home
       - chat.conversation
       - chat.conversation_membership.projection.conversation_member_list_row
+    command_operations: [rtc.call_session.InitiateCall]
     typed_presentation: [GroupHome, ChatGroupSettingsViewData, ConversationMemberListRow]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -708,7 +677,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: circle.detail }
     entry_widget: CircleEditSettingsPage
-    mount_evidence: [lib/runtime/di/presentation/circle_shell.dart]
+    mount_evidence: [lib/service/circle_service/circle_management/circle/presentation/circle_shell.dart]
 
   - page_id: circle.membership_approval
     source_path: lib/service/circle_service/circle_management/circle_membership/presentation/circle_membership_approval_page.dart
@@ -724,7 +693,7 @@ pages:
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { inherit_from: circle.detail }
     entry_widget: CircleMembershipApprovalPage
-    mount_evidence: [lib/runtime/di/presentation/circle_shell.dart]
+    mount_evidence: [lib/runtime/di/circle_shell_presentation_slots.dart]
 
   - page_id: circle.stats
     source_path: lib/service/circle_service/circle_management/circle/presentation/circle_stats_page.dart
@@ -733,10 +702,12 @@ pages:
     surface_ids: [circleStats]
     experience_owner: circle
     data_owners: [circle]
-    object_ids: [circle.circle]
+    object_ids: [circle.circle, circle.circle_group, circle.circle_membership]
     query_slices:
       - circle.circle.projection.circle_stats_wire
       - circle.circle.projection.circle_member_roster_row
+      - circle.circle_group
+      - circle.circle_membership
     typed_presentation:
       - CircleStatsMemberRowViewData
       - CircleStatsGroupRowViewData
@@ -746,21 +717,6 @@ pages:
     telemetry_descriptor: { event_namespace: page.circle.stats, lifecycle: [enter, exit, search, failure] }
     entry_widget: CircleStatsPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
-
-  - page_id: circle.hub_barrel
-    source_path: lib/service/circle_service/circle_management/circle/presentation/circles_hub_page.dart
-    page_kind: helper
-    parent_page_id: circle.hub
-    surface_ids: [circlesList]
-    experience_owner: circle
-    data_owners: [circle]
-    object_ids: []
-    query_slices: none
-    typed_presentation: none
-    data_contract_reason: T0 export barrel，所有数据绑定归入 CirclesHubPage。
-    auth_requirement: inherited
-    capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { inherit_from: circle.hub }
 
   - page_id: circle.list
     source_path: lib/service/circle_service/circle_management/circle/presentation/circles_page.dart
@@ -825,6 +781,7 @@ pages:
     data_owners: [content, circle, entity]
     object_ids:
       - content.post
+      - content.filter_catalog_release
       - content.media_upload_session
       - content.media_asset
       - circle.circle
@@ -832,10 +789,11 @@ pages:
     query_slices:
       - content.post
       - content.post.projection.post_read_presentation
+      - content.filter_catalog_release.projection.filter_catalog_slice
       - circle.circle
       - entity.homepage
       - local.create_draft_store
-    typed_presentation: [ContentPublishDraftComposite, ContentPostViewData]
+    typed_presentation: [ContentPublishDraftComposite, ContentPostViewData, FilterCatalogSlice]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.content.create, lifecycle: [enter, exit, publish, failure] }
@@ -848,8 +806,8 @@ pages:
     route_id: localDrafts
     surface_ids: [localDrafts]
     experience_owner: content
-    data_owners: [app]
-    object_ids: []
+    data_owners: [app, content]
+    object_ids: [content.post]
     query_slices: [local.create_draft_store]
     typed_presentation: [CreateDraftStoreState, CreateDraft]
     auth_requirement: required
@@ -973,7 +931,7 @@ pages:
     entry_widget: HomePage
     route_registration_evidence:
       - lib/runtime/di/navigation/app_router.dart
-      - lib/runtime/di/shell/main_app_shell.dart
+      - lib/runtime/shell/main_app_shell.dart
 
   - page_id: content.media_viewer
     source_path: lib/service/content_service/media/media_asset/presentation/unified_media_viewer_page.dart
@@ -981,7 +939,7 @@ pages:
     route_id: workBrowser
     surface_ids: [workBrowser]
     experience_owner: content
-    data_owners: [circle, content]
+    data_owners: [circle, content, user]
     object_ids:
       - circle.circle_post_placement
       - content.post
@@ -992,14 +950,21 @@ pages:
       - content.media_asset
       - content.media_upload_session
       - content.media_original_access_fact
+      - content.original_access_quota
       - content.outbound_share_fact
+      - user.persona_relationship
+      - user.user_settings
     query_slices:
       - content.post.projection.post_read_presentation
       - content.post.projection.content_post_detail_slice
+      - user.user_settings.projection.privacy_settings_view
     command_operations:
       - circle.circle_post_placement.PlacePostInCircle
       - content.content_behavior_fact.ReportBehaviors
-    typed_presentation: [ContentPostViewData, ContentPostDetailSlice, WorkBrowserViewData]
+      - content.original_access_quota.ReserveOriginalImageAccessGrant
+      - user.persona_relationship.BlockUser
+      - user.user_settings.UpdatePrivacySettings
+    typed_presentation: [ContentPostViewData, ContentPostDetailSlice, WorkBrowserViewData, BlockUserCommand, PrivacySettingsView, UpdatePrivacySettingsCommand]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor:
@@ -1471,7 +1436,7 @@ pages:
 
 
   - page_id: settings.about
-    source_path: lib/service/user_service/account/user_settings/presentation/settings_about_page.dart
+    source_path: lib/runtime/shell/settings/settings_about_page.dart
     page_kind: routed
     route_id: settingsAbout
     surface_ids: [settingsAbout]
@@ -1616,7 +1581,7 @@ pages:
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
 
   - page_id: settings.permissions
-    source_path: lib/service/user_service/account/user_settings/presentation/settings_permissions_page.dart
+    source_path: lib/runtime/shell/settings/settings_permissions_page.dart
     page_kind: routed
     route_id: settingsPermissions
     surface_ids: [settingsPermissions]
@@ -1655,9 +1620,10 @@ pages:
     surface_ids: [addContact]
     experience_owner: user
     data_owners: [user]
-    object_ids: [user.user_account]
-    query_slices: [user.user_account]
-    typed_presentation: [ProfileQrCardData]
+    object_ids: [user.user_account, user.contact_discovery_record]
+    query_slices: [user.user_account, user.contact_discovery_record]
+    command_operations: [user.contact_discovery_record.DismissContactDiscovery]
+    typed_presentation: [ProfileQrCardData, ContactDiscoveryResultView]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.add_contact, lifecycle: [enter, exit, entry_click, failure] }
@@ -1900,7 +1866,7 @@ pages:
             - product-content-report-action-failure-rate-high
     entry_widget: MyProfilePage
     route_registration_evidence:
-      - lib/runtime/di/shell/main_app_shell.dart
+      - lib/runtime/shell/main_app_shell.dart
       - lib/runtime/di/navigation/app_router_profile_routes.dart
 
   - page_id: user.my_qr_code
@@ -2004,13 +1970,14 @@ pages:
     route_id: profileStats
     surface_ids: [profileStats]
     experience_owner: user
-    data_owners: [user, circle]
-    object_ids: [user.user_account, user.persona_relationship, circle.circle]
+    data_owners: [user, circle, chat]
+    object_ids: [user.user_account, user.persona_relationship, circle.circle, chat.conversation]
     query_slices:
       - user.user_account.projection.user_profile_stats_wire
       - user.persona_relationship
       - circle.circle
-    typed_presentation: [ProfileSocialRelationRowViewData, PersonaCircleSlice]
+    command_operations: [chat.conversation.CreateConversation]
+    typed_presentation: [ProfileSocialRelationRowViewData, PersonaCircleSlice, ChatConversationCreatedViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.profile_stats, lifecycle: [enter, exit, search, paginate, failure] }
@@ -2039,20 +2006,19 @@ pages:
     page_kind: shell
     surface_ids: [welcome]
     experience_owner: app
-    data_owners: [app]
-    object_ids: []
-    query_slices: none
-    typed_presentation: none
-    data_contract_reason: 启动恢复面只消费本地 recovery 状态与 ops 版本查询，无业务对象读模型。
+    data_owners: [app, ops]
+    object_ids: [ops.app_release, ops.recovery_failure]
+    query_slices: [ops.app_release.projection.app_release_recovery_view]
+    typed_presentation: [RecoverySnapshot]
     auth_requirement: public
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.app.startup_recovery, lifecycle: [enter, retry, exit, failure] }
+    telemetry_descriptor: { event_namespace: page.app.startup_recovery, lifecycle: [enter, phase_change, external_action, runtime_reentry, exit, failure] }
     entry_widget: StartupRecoveryPage
     mount_evidence:
       - lib/runtime/shell/recovery/bootstrap_recovery.dart
       - lib/runtime/shell/recovery/runtime_recovery_host.dart
       - lib/runtime/di/navigation/app_router_recovery_page.dart
-      - lib/runtime/di/shell/composition/quwoquan_app_shell.dart
+      - lib/runtime/shell/composition/quwoquan_app_shell.dart
 
   - page_id: welcome.screen
     source_path: lib/runtime/shell/welcome/welcome_screen.dart

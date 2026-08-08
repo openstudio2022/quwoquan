@@ -214,7 +214,7 @@
           "fallbackPolicy": "omit"
         },
         {
-          "slotId": "trip_preferences",
+          "slotId": "travel_preferences",
           "acceptedSourceKinds": ["conversation", "memory"],
           "authority": "user_declared",
           "sensitivity": "private",
@@ -293,7 +293,7 @@
           "fallbackPolicy": "omit"
         }
       ],
-      "assetDigest": "sha256:96ec583cec497e645926ff948b30aecd1ad050e0502e82d281931be6bcfa8519"
+      "assetDigest": "sha256:829536976ef3aa94b90b5ace82af7e085b73c807d4f2f06dc1b4c0346aa0ed54"
     }
   ],
   "capabilityProfiles": [
@@ -465,7 +465,6 @@
         "tool_receipts_are_verified",
         "answer_has_an_actionable_next_step"
       ],
-      "subagentRefs": ["travel.plan_specialist", "travel.local_evidence_specialist", "travel.timeline_editor"],
       "checkpointPolicyRef": "checkpoint.background_long",
       "hookPolicyRefs": [
         "platform.audit",
@@ -484,7 +483,7 @@
         "platform.verifier.tool_receipt"
       ],
       "stopRules": ["definition_of_done_satisfied", "waiting_user_choice", "waiting_user_confirmation", "evidence_budget_exhausted", "blocked"],
-      "assetDigest": "sha256:b8d898ae64104afb432404a40ebfa5d28e93791f8e0a6531de88bf0eab1dcbc5"
+      "assetDigest": "sha256:c63546650310bd187c8ae850f90610c27fd55069fdb3b24eb714ba5a19d43b56"
     },
     {
       "profileId": "orchestration.gathering_coordinator",

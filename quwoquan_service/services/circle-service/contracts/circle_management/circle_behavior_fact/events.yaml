@@ -2,6 +2,7 @@ events:
 - name: CircleBehaviorFactAppended
   description: 非 canonical 结构字段迁移注记：recommend_impact="hot_path_signal"。
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleBehaviorFactAppended
   payload_entity: CircleBehaviorFact
   payload_fields:
   - _id

@@ -15,7 +15,7 @@ import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import '../../../../../support/runtime/patrol/patrol_test_support.dart';
-import '../../../../../support/runtime/release/gamma_homepage_uat_cases.dart';
+import '../../../../../support/runtime/release/release_homepage_uat_cases.dart';
 
 const _encodedUatCases = String.fromEnvironment(
   'QWQ_TWO_PROVINCE_UAT_CASES_B64',
@@ -37,7 +37,7 @@ void main() {
       printLogs: true,
     ),
     ($) async {
-      final homepages = parseGammaHomepageUatCases(_encodedUatCases);
+      final homepages = parseReleaseHomepageUatCases(_encodedUatCases);
       await launchPatrolAppOnce($);
 
       for (final homepage in homepages) {

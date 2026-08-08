@@ -40,8 +40,28 @@ local_identity_reasons:
     projection port
   sourceReleaseId: stable catalog or release key; resolved through its typed catalog reader and never
     used as an aggregate Store identity
-taggable: true
-vector_enabled: false
+search_policy:
+  exposed: remote_index
+  object_type_refs:
+  - entity.homepage
+  eligibility_ref: quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_search_projection.go#HomepageSearchEligible
+  index_projector_ref: quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_search_projection.go#ProjectHomepageToSearchDocument
+  privacy_filter_ref: quwoquan_service/runtime/search/core.go#isPrivateVisibility
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.entity.homepage.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.entity.homepage.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.entity.homepage.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.entity.homepage.write
 business_rules:
 - canonical identity 与 homepageType 创建后不可变
 - candidate 只能在必填主档、标签和来源证据齐全后发布

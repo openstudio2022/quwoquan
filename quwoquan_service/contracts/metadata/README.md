@@ -63,7 +63,7 @@ contracts/metadata/
 └── DESIGN.md       # ContractGraph/compiler 设计
 ```
 
-对象独立 kind 仅允许 `aggregate_root`、`append_only_fact`、`projection`、`external_reference`、`runtime_session`；`owned_entity` 和 `value_object` 只作为聚合成员。
+对象独立 kind 仅允许 `aggregate_root`、`append_only_fact`、`process_manager`、`projection`、`external_reference`、`runtime_session`；`owned_entity` 和 `value_object` 只作为聚合成员。判定边界见 [`DESIGN.md` §3](DESIGN.md)。
 
 服务根固定目录为 `contracts/`、`internal/`、`generated/`、`cmd/`、`config/`、
 `resources/`（按需）、`deploy/`、`environments/`、`tests/`、`build/`，以及仅在确有

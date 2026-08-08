@@ -1,4 +1,4 @@
-kind: aggregate_root
+kind: process_manager
 description: '助手执行契约入口。记录每次小趣助手执行的上下文与输入输出。
 
   会话、订阅、授权和 AssistantLearningFact 均有独立生命周期，不属于 AssistantRun 聚合成员；
@@ -13,9 +13,9 @@ description: '助手执行契约入口。记录每次小趣助手执行的上下
 identity:
   fields:
   - _id
-  version_source: store_commit
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: public_contract_only
   queries: named_reader
 relationships:
@@ -80,8 +80,27 @@ local_identity_reasons:
     an aggregate Store identity
   sourceSurfaceId: generated route, surface, or operation registry key used only for navigation or telemetry
     attribution
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: remote_provider
+  object_type_refs:
+  - web.document
+  provider_egress_ref: quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration/external_web_search_handler.go#NewPublicWebSearchHandler
+  privacy_filter_ref: quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration/citation_destination.go#normalizedHTTPSURL
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.assistant.assistant_run.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.assistant.assistant_run.cite
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.assistant.assistant_run.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.assistant.assistant_run.write
 business_rules:
 - StartAssistantRun 的 intent 是 answer、search、creation_assistance 三选一判别联合，只允许与 kind 对应的一份载荷。
 - 搜索与创作辅助必须进入同一 AssistantRun 状态机、事务 outbox、终态快照和 SSE journal，不存在独立模型执行路由。

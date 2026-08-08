@@ -110,13 +110,16 @@ run_static_check() {
       python3 -B quwoquan_ops/gate/verify_python_script_governance.py \
         --scope all --mode check
       ;;
+    entrypoint_script_paths)
+      python3 -B quwoquan_ops/gate/verify_entrypoint_script_paths.py
+      ;;
     service_architecture) make verify-service-architecture ;;
     app_generated_manifest) make verify-app-generated-manifest ;;
     app_contract_handoff) make verify-app-contract-handoff ;;
     verify-app-mock-isolation) make verify-app-mock-isolation ;;
     verify-app-cloud-package-boundaries) make verify-app-cloud-package-boundaries ;;
     verify-app-login-entry-loop) make verify-app-login-entry-loop-contract ;;
-    metadata_contract) bash quwoquan_service/scripts/verify/verify_contract_metadata.sh ;;
+    metadata_contract) bash quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh ;;
     commercial_contract) make verify-commercial-contract-generation ;;
     pageflip_backward_mainline) make verify-app-pageflip-back-mainline ;;
     data_verify) python3 quwoquan_data/scripts/cli.py verify all ;;

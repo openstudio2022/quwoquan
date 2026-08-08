@@ -1,13 +1,31 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 
 import '../../../../../support/service/realtime_gateway/realtime/connection/connection_typed_double.dart';
 
 void main() {
+  test('application notifier only consumes the typed delegate factory', () {
+    final source = File(
+      'lib/service/realtime_gateway/realtime/connection/application/'
+      'realtime_connection_notifier.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('required this._delegateFactory'));
+    expect(
+      source,
+      contains('final RealtimeConnectionDelegateFactory _delegateFactory'),
+    );
+    expect(source, isNot(contains('/adapters/')));
+    expect(source, isNot(contains('RemoteRealtimeConnectionDelegate')));
+    expect(source, isNot(contains('operationGatewayResolver')));
+  });
+
   test('app lifecycle reuses the explicitly composed realtime delegate', () {
     var delegateBuildCount = 0;
     final container = ProviderContainer(

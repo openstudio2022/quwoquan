@@ -19,14 +19,17 @@ import 'package:quwoquan_app/service/content_service/content/post/application/ho
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
+        AssistantUsePolicy,
         CloudOperationCancellationSignal,
-        ContentBehaviorCommandWriter,
+        ContentBehaviorFactAppender,
         ContentPostProjection,
         FeedObjectCard,
         ReportContentBehaviorsCommand;
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import 'package:http/testing.dart';
+import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
 ContentPostViewData _post(String channel, int index, {int bodyRepeats = 1}) {
   return ContentPostViewData.fromWire(
@@ -41,7 +44,7 @@ ContentPostViewData _post(String channel, int index, {int bodyRepeats = 1}) {
       authorRoleLabel: '',
       authorIdentityTags: const <String>[],
       authorVerified: false,
-      assistantUsePolicy: 'allow',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       likeCount: index,
       commentCount: index,
       shareCount: 0,
@@ -108,7 +111,18 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
   }
 }
 
+/// 该 double 覆写了全部网络入口，因此数据面 client 永不应被触达；
+/// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
+CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
+  client: MockClient(
+    (request) async =>
+        throw StateError('MediaDownloadCache double must not perform network IO'),
+  ),
+);
+
 class _NoopMediaDownloadCache extends MediaDownloadCache {
+  _NoopMediaDownloadCache() : super(client: _unreachableDataPlaneClient());
+
   @override
   Future<String?> getCachedFilePath(String url) async => null;
 }
@@ -158,9 +172,9 @@ final class _WidgetPagedDiscoveryFeedQuery
   }
 }
 
-final class _NoopContentBehaviorCommandWriter
-    implements ContentBehaviorCommandWriter {
-  const _NoopContentBehaviorCommandWriter();
+final class _NoopContentBehaviorFactAppender
+    implements ContentBehaviorFactAppender {
+  const _NoopContentBehaviorFactAppender();
 
   @override
   Future<void> reportBehaviors(ReportContentBehaviorsCommand command) async {}
@@ -170,7 +184,7 @@ List<Override> _boundaryOverrides({List<Override> extra = const <Override>[]}) {
   return <Override>[
     ...sealedCloudBoundaryOverrides(),
     contentBehaviorCommandWriterProvider.overrideWithValue(
-      const _NoopContentBehaviorCommandWriter(),
+      const _NoopContentBehaviorFactAppender(),
     ),
     ...extra,
   ];

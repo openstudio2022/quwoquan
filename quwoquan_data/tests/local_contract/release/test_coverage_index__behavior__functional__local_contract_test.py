@@ -1,9 +1,8 @@
 """覆盖账本契约（WP4-1/WP4-2，local_contract）：
 
-- coverage/{省}.ndjson 从主清单 × canonical objects × append-only env run 导入证据派生；
+- coverage/{省}.ndjson 只从主清单 × canonical objects 派生；
 - 跨省地点主/次省分片均出现（isPrimary 标注），全国汇总按 primary 去重；
-- introductionUrl 四环境 base 来自 environment_topology_manifest，path 来自
-  service.yaml；homepageId 有 v2 映射产物时展开真值，dryRun 导入不算生效；
+- homepageId、environment URL 与导入状态只进入 append-only environment receipt；
 - publish 有而主清单缺的实体补 masterListed=false 行。
 
 （WP4-2 标签→实体主页路由绑定的契约断言在 tests/publish/test_tag_link_targets.py。）
@@ -21,7 +20,6 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import json
-import os
 import tempfile
 
 _TMP = Path(tempfile.mkdtemp(prefix="coverage_index_"))
@@ -31,6 +29,7 @@ from governance.coverage import master_list as coverage_master_list  # noqa: E40
 from core.io import read_ndjson, write_json  # noqa: E402
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, RELEASE_ROOT  # noqa: E402
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes  # noqa: E402
+from content.release.environment.coverage_receipt import write_environment_coverage_receipt  # noqa: E402
 
 # 主清单目录注入：从 paths 进程级单例派生（桥壳二次 exec 幂等，不引第二套覆写链）。
 COVERAGE_ROOT = PUBLISH_ROOT.parent / "coverage" / "中国"
@@ -88,15 +87,13 @@ def _tag(ref: str, label: str) -> None:
     write_json(TAXONOMY_ROOT / ref / "_definition.json", {"label": label})
 
 
-def _env_release(release_id: str, env: str, *, entities: list[str], dry_run: bool,
-                 finished_at: str, mapping: dict[str, str] | None = None) -> None:
-    write_json(RELEASE_ROOT / release_id / "payload" / "desired_state.json", {
-        "schema": "quwoquan_data.release_desired_state",
-        "releaseId": release_id,
-        "desiredRefs": {"posts": [], "entities": entities},
-    })
-    run_dir = OUTPUT_ROOT / "env" / env / "runs" / "data-release" / release_id / "apply-1"
-    write_json(run_dir / "import-homepage.json", {
+def _homepage_import_report(
+    env: str,
+    *,
+    dry_run: bool,
+    mapping: dict[str, str] | None = None,
+) -> dict:
+    return {
         "schema": "quwoquan_service.homepage_import_report",
         "env": env,
         "dryRun": dry_run,
@@ -107,8 +104,8 @@ def _env_release(release_id: str, env: str, *, entities: list[str], dry_run: boo
         "offlined": [],
         "skipped": [],
         "entityRefToHomepageId": mapping or {},
-        "finishedAt": finished_at,
-    })
+        "finishedAt": "2026-07-07T10:00:00Z",
+    }
 
 
 def _seed() -> None:
@@ -148,16 +145,20 @@ def _seed() -> None:
         geo_ref="Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县",
         tag_refs=[],
     )
-    # gamma：旧 dryRun（应忽略）+ 新 apply（v2 映射产物展开真值）。
-    _env_release("rel_dry", "gamma", entities=["地点/景区/九寨沟"], dry_run=True,
-                 finished_at="2026-07-07T12:00:00Z")
-    _env_release("rel_apply", "gamma", entities=["地点/景区/九寨沟"], dry_run=False,
-                 finished_at="2026-07-07T10:00:00Z",
-                 mapping={"地点/景区/九寨沟": "homepage_9"})
+    _publish_entity(
+        "地点/景区/不属于当前发布",
+        geo_ref="Topic/地理/行政区/中国/四川省/成都市/武侯区",
+        tag_refs=[],
+    )
     write_json(RELEASE_ROOT / "coverage-index" / "payload" / "desired_state.json", {
         "schema": "quwoquan_data.release_desired_state",
         "releaseId": "coverage-index",
-        "desiredRefs": {"posts": [], "entities": ["地点/景区/九寨沟", "地点/景区/黄龙"]},
+        "desiredRefs": {
+            "posts": [],
+            "entities": ["地点/景区/九寨沟", "地点/景区/黄龙"],
+            "creators": [],
+            "tags": ["Entity/地点/景区/5A景区"],
+        },
     })
 
 
@@ -168,6 +169,46 @@ try:
     )
 finally:
     coverage_master_list.COVERAGE_MASTER_ROOT = _ORIGINAL_COVERAGE_MASTER_ROOT
+
+_SICHUAN_COVERAGE = (
+    RELEASE_ROOT
+    / "coverage-index"
+    / "payload"
+    / "index"
+    / "lookups"
+    / "coverage"
+    / "四川省.ndjson"
+)
+_COVERAGE_BYTES_BEFORE_RECEIPT = _SICHUAN_COVERAGE.read_bytes()
+_CANONICAL_BYTES_BEFORE_RECEIPTS = {
+    path.relative_to(PUBLISH_ROOT).as_posix(): path.read_bytes()
+    for path in sorted(PUBLISH_ROOT.rglob("*"))
+    if path.is_file()
+}
+_COVERAGE_RECEIPTS = {
+    environment: write_environment_coverage_receipt(
+        environment=environment,
+        release_id="coverage-index",
+        run_id="apply-1",
+        release_root=RELEASE_ROOT / "coverage-index",
+        run_root=(
+            OUTPUT_ROOT
+            / "env"
+            / environment
+            / "runs"
+            / "data-release"
+            / "coverage-index"
+            / "apply-1"
+        ),
+        importer_report=_homepage_import_report(
+            environment,
+            dry_run=False,
+            mapping={"地点/景区/九寨沟": f"homepage_{environment}"},
+        ),
+        api_base_url=f"https://api.{environment}.example",
+    )
+    for environment in ("alpha", "beta", "gamma", "prod")
+}
 
 
 def _coverage_rows(province: str) -> list[dict]:
@@ -192,8 +233,8 @@ def test_coverage_shards_by_province_with_homepage_and_promoted_at():
         "hasHomepage",
         "masterListed",
         "isPrimary",
-        "envImports",
     }.issubset(guanxian)
+    assert "envImports" not in guanxian
     assert all("readiness" not in key.lower() and "primarysource" not in key.lower() for key in guanxian)
 
 
@@ -218,15 +259,38 @@ def test_cross_province_leaf_appears_in_both_shards_dedup_by_primary():
     assert manifest["coverage"]["entitiesWithHomepage"] == 2
 
 
-def test_env_imports_use_latest_non_dry_run_and_expand_homepage_id():
-    jzg = {r["entityRef"]: r for r in _coverage_rows("四川省")}["地点/景区/九寨沟"]
-    gamma = jzg["envImports"]["gamma"]
-    assert gamma["imported"] is True
-    assert gamma["releaseId"] == "rel_apply"
-    # v2 映射产物展开真实 homepageId；base 来自 environment_topology_manifest。
-    assert gamma["introductionUrl"].endswith("/homepages/homepage_9/introduction")
-    assert gamma["introductionUrl"].startswith("https://api.gamma.")
-    assert jzg["envImports"]["prod"] == {"imported": False}
+def test_environment_receipt_expands_homepage_without_mutating_release():
+    for environment, receipt_path in _COVERAGE_RECEIPTS.items():
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        rows = {row["entityRef"]: row for row in receipt["rows"]}
+        projected = rows["地点/景区/九寨沟"]
+        assert projected["imported"] is True
+        assert projected["homepageId"] == f"homepage_{environment}"
+        assert projected["introductionUrl"] == (
+            f"https://api.{environment}.example/homepages/"
+            f"homepage_{environment}/introduction"
+        )
+    assert _SICHUAN_COVERAGE.read_bytes() == _COVERAGE_BYTES_BEFORE_RECEIPT
+    assert {
+        path.relative_to(PUBLISH_ROOT).as_posix(): path.read_bytes()
+        for path in sorted(PUBLISH_ROOT.rglob("*"))
+        if path.is_file()
+    } == _CANONICAL_BYTES_BEFORE_RECEIPTS
+    serialized_release = json.dumps(
+        [
+            json.loads(line)
+            for path in sorted(
+                (RELEASE_ROOT / "coverage-index/payload").rglob("*.ndjson")
+            )
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line
+        ],
+        ensure_ascii=False,
+    )
+    assert all(
+        f"https://api.{environment}.example" not in serialized_release
+        for environment in ("alpha", "beta", "gamma", "prod")
+    )
 
 
 def test_publish_only_entity_gets_master_listed_false_row():
@@ -234,6 +298,7 @@ def test_publish_only_entity_gets_master_listed_false_row():
     huanglong = rows["地点/景区/黄龙"]
     assert huanglong["masterListed"] is False
     assert huanglong["hasHomepage"] is True
+    assert "地点/景区/不属于当前发布" not in rows
 
 
 def _run_all() -> None:

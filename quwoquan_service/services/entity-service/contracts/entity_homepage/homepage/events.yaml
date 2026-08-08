@@ -2,6 +2,7 @@ events:
 - name: HomepageCandidateIntaken
   description: 候选共享主页创建
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepageCandidateIntaken
   payload_entity: Homepage
   payload_fields:
   - homepageId
@@ -13,6 +14,7 @@ events:
 - name: HomepagePublished
   description: 候选共享主页发布
   delivery_semantics: transactional_outbox
+  wire_event_type: HomepagePublished
   payload_entity: Homepage
   payload_fields:
   - homepageId

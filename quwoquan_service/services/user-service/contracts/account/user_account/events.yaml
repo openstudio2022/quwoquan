@@ -24,6 +24,7 @@ events:
 - name: UserProfileTagsChanged
   description: 用户职业/兴趣标签与资料状态原子提交后的 durable 投影事件；tag-service 独占 object_tag_index 写入
   delivery_semantics: transactional_outbox
+  wire_event_type: UserProfileTagsChanged
   payload_entity: UserProfileTagProjectionEvent
   payload_fields:
   - userId
@@ -34,6 +35,7 @@ events:
 - name: UserAvatarUpdated
   description: 用户头像已更新
   delivery_semantics: transactional_outbox
+  wire_event_type: UserAvatarUpdated
   payload_entity: UserAccount
   payload_fields:
   - userId
@@ -44,6 +46,7 @@ events:
 - name: UserSuspended
   description: 受信运营 Suspend decision 已原子生效。下游必须落可逆 restriction projection， 隐藏可见性/拒绝写入/抑制投递；不得调用 UserAccountClosed 的删除或匿名化路径。
   delivery_semantics: transactional_outbox
+  wire_event_type: UserSuspended
   topic: events.user.account
   payload_entity: UserAccountEnforcementPayload
   payload_fields:
@@ -56,6 +59,7 @@ events:
 - name: UserRestored
   description: 受信 Restore decision 已原子生效。下游只能恢复可逆 restriction projection； 不得恢复 closed 账号、旧 session/token、已删除数据或已过期通知。
   delivery_semantics: transactional_outbox
+  wire_event_type: UserRestored
   topic: events.user.account
   payload_entity: UserAccountEnforcementPayload
   payload_fields:
@@ -69,6 +73,7 @@ events:
   description: 账号已注销（closed 终态）；下游必须删除或匿名化该账号关联的可见数据与索引。 recommendation-service 独立形成 RecommendationSubjectClosureFact 并据此阻止推荐窗口、曝光、反馈与特征复活，不得再由
     content-service 代管推荐隐私状态。
   delivery_semantics: transactional_outbox
+  wire_event_type: UserAccountClosed
   topic: events.user.account
   payload_entity: UserAccountClosedPayload
   payload_fields:

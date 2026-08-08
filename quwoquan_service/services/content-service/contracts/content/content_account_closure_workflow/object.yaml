@@ -1,15 +1,29 @@
-kind: aggregate_root
+kind: process_manager
 description: Content 对 UserAccountClosed 的耐久消费、媒体与搜索物理撤销、审计以及永久防复活工作流。
 identity:
   fields:
   - _id
-  version_source: field
+  version_source: checkpoint
   version_field: accountVersion
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: event_only
   queries: none
 relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: "流程编排对象只表达内部推进状态与补偿进度，没有用户可检索语义。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "服务内部投影与编排状态不构成小趣可用上下文，只服务所属域自身推进。"
 business_rules:
 - 工作流只消费 canonical UserAccountClosed；不得从 DLQ 摘要或客户端请求重建原始主体 payload。
 - 工作流只清理 Content 服务拥有的聚合、事实、投影、发件箱记录、搜索文档与媒体对象；清理兄弟对象的发件箱集合不等于本工作流拥有发件箱，工作流自身不产出事件。Recommendation、User、Search 等服务必须独立消费同一事件并清理各自数据，Content 禁止跨库代删。

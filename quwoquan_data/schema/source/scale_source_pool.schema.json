@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/scale_source_pool.schema.json",
+  "title": "Immutable four-carrier scale source-ready pool",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "poolId",
+    "targetScale",
+    "sourceRevision",
+    "sourceDigest",
+    "entityCatalogDigest",
+    "createdAt",
+    "requiredNewCandidateCounts",
+    "candidates",
+    "planDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.scale_source_pool"},
+    "poolId": {"type": "string", "minLength": 1},
+    "targetScale": {"enum": ["M100", "M1000", "M10000"]},
+    "sourceRevision": {"$ref": "#/$defs/sha256"},
+    "sourceDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "createdAt": {"type": "string", "minLength": 1},
+    "requiredNewCandidateCounts": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/homepageRequiredCount"},
+        {"$ref": "#/$defs/articleRequiredCount"},
+        {"$ref": "#/$defs/imageRequiredCount"},
+        {"$ref": "#/$defs/videoRequiredCount"}
+      ],
+      "items": false
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "planDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "requiredCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["carrier", "minimumCandidateCount"],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "minimumCandidateCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "homepageRequiredCount": {
+      "allOf": [
+        {"$ref": "#/$defs/requiredCount"},
+        {"properties": {"carrier": {"const": "homepage"}}}
+      ]
+    },
+    "articleRequiredCount": {
+      "allOf": [
+        {"$ref": "#/$defs/requiredCount"},
+        {"properties": {"carrier": {"const": "article"}}}
+      ]
+    },
+    "imageRequiredCount": {
+      "allOf": [
+        {"$ref": "#/$defs/requiredCount"},
+        {"properties": {"carrier": {"const": "image"}}}
+      ]
+    },
+    "videoRequiredCount": {
+      "allOf": [
+        {"$ref": "#/$defs/requiredCount"},
+        {"properties": {"carrier": {"const": "video"}}}
+      ]
+    },
+    "comparisonBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "topic", "timeBucket", "candidateCount"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "topic": {"type": "string", "minLength": 1},
+        "timeBucket": {"type": "string", "minLength": 1},
+        "candidateCount": {"type": "integer", "minimum": 2}
+      }
+    },
+    "videoReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "playable",
+        "motion",
+        "premiumEligible",
+        "playCount",
+        "likeCount",
+        "commentCount",
+        "shareCount",
+        "favoriteCount",
+        "observedAt",
+        "popularityPercentile",
+        "comparisonBucket"
+      ],
+      "properties": {
+        "playable": {"const": true},
+        "motion": {"const": true},
+        "premiumEligible": {"const": true},
+        "playCount": {"type": "integer", "minimum": 0},
+        "likeCount": {"type": "integer", "minimum": 0},
+        "commentCount": {"type": "integer", "minimum": 0},
+        "shareCount": {"type": "integer", "minimum": 0},
+        "favoriteCount": {"type": "integer", "minimum": 0},
+        "observedAt": {"type": "string", "minLength": 1},
+        "popularityPercentile": {"type": "number", "minimum": 0, "maximum": 1},
+        "comparisonBucket": {"$ref": "#/$defs/comparisonBucket"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId",
+        "carrier",
+        "objectRef",
+        "entityRef",
+        "observedEntityRef",
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+        "sourceUnitRef",
+        "sourceUnitDigest",
+        "sourceUnitFileSha256",
+        "provider",
+        "contentSha256",
+        "acquisitionStatus",
+        "acquisitionRef",
+        "acquisitionDigest",
+        "acquisitionFileSha256",
+        "rightsStatus",
+        "distributionDecision",
+        "rightsRef",
+        "rightsDigest",
+        "rightsFileSha256",
+        "qualityStatus",
+        "qualityRef",
+        "qualityDigest",
+        "qualityFileSha256",
+        "generated",
+        "playabilityRef",
+        "playabilityDigest",
+        "playabilityFileSha256",
+        "videoReadiness"
+      ],
+      "properties": {
+        "candidateId": {"type": "string", "minLength": 1},
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "objectRef": {"type": "string", "minLength": 1},
+        "entityRef": {"type": "string", "minLength": 1},
+        "observedEntityRef": {"type": "string", "minLength": 1},
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "sourceUnitRef": {"type": "string", "minLength": 1},
+        "sourceUnitDigest": {"$ref": "#/$defs/sha256"},
+        "sourceUnitFileSha256": {"$ref": "#/$defs/sha256"},
+        "provider": {"type": "string", "minLength": 1},
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "acquisitionStatus": {"const": "acquired"},
+        "acquisitionRef": {"type": "string", "minLength": 1},
+        "acquisitionDigest": {"$ref": "#/$defs/sha256"},
+        "acquisitionFileSha256": {"$ref": "#/$defs/sha256"},
+        "rightsStatus": {"enum": ["verified", "unverified", "unknown"]},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed"]},
+        "rightsRef": {"type": "string", "minLength": 1},
+        "rightsDigest": {"$ref": "#/$defs/sha256"},
+        "rightsFileSha256": {"$ref": "#/$defs/sha256"},
+        "qualityStatus": {"const": "passed"},
+        "qualityRef": {"type": "string", "minLength": 1},
+        "qualityDigest": {"$ref": "#/$defs/sha256"},
+        "qualityFileSha256": {"$ref": "#/$defs/sha256"},
+        "generated": {"type": "boolean"},
+        "playabilityRef": {"type": ["string", "null"]},
+        "playabilityDigest": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
+        "playabilityFileSha256": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/sha256"}
+          ]
+        },
+        "videoReadiness": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/videoReadiness"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"carrier": {"const": "homepage"}}, "required": ["carrier"]},
+          "then": {"properties": {"objectRef": {"pattern": "^entities/"}}}
+        },
+        {
+          "if": {"properties": {"carrier": {"const": "article"}}, "required": ["carrier"]},
+          "then": {"properties": {"objectRef": {"pattern": "^posts/article/"}}}
+        },
+        {
+          "if": {"properties": {"carrier": {"const": "image"}}, "required": ["carrier"]},
+          "then": {"properties": {"objectRef": {"pattern": "^posts/image/"}}}
+        },
+        {
+          "if": {"properties": {"carrier": {"const": "video"}}, "required": ["carrier"]},
+          "then": {
+            "properties": {
+              "objectRef": {"pattern": "^posts/video/"},
+              "playabilityRef": {"type": "string", "minLength": 1},
+              "playabilityDigest": {"$ref": "#/$defs/sha256"},
+              "playabilityFileSha256": {"$ref": "#/$defs/sha256"},
+              "videoReadiness": {"$ref": "#/$defs/videoReadiness"}
+            }
+          },
+          "else": {
+            "properties": {
+              "playabilityRef": {"type": "null"},
+              "playabilityDigest": {"type": "null"},
+              "playabilityFileSha256": {"type": "null"},
+              "videoReadiness": {"type": "null"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

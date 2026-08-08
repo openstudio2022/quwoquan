@@ -21,40 +21,52 @@ connection_states:
       - discovery
       - intersection_tab
 
+# owner_object 是每个 object_type 的唯一登记归属：它必须指向磁盘上真实存在的业务对象，
+# 且该对象 object.yaml 的 search_policy.object_type_refs 必须回指同一个 id。execution_strategy
+# 与 owner_object 的 search_policy.exposed 是同一事实的两种投影（remote_only=remote /
+# hybrid_remote_fallback_local=hybrid / local_only=local_only / filter_only=filter_only），
+# 由 verify_object_search_policy_closure.py 双向校验，任何一侧新增或漂移都 BLOCK。
 object_types:
   - id: web.document
     label: 网页
     domain: external
+    owner_object: assistant.assistant_run
     execution_strategy: remote_only
     provider: web_search
   - id: chat.contact
     label: 联系人
     domain: messages
+    owner_object: user.persona_relationship
     execution_strategy: local_only
     provider: chat_local
   - id: chat.conversation
     label: 聊天会话
     domain: messages
+    owner_object: chat.conversation
     execution_strategy: local_only
     provider: chat_local
   - id: chat.message
     label: 聊天消息
     domain: messages
+    owner_object: chat.message
     execution_strategy: local_only
     provider: chat_local
   - id: circle.group
     label: 讨论
     domain: circle
+    owner_object: circle.circle_group
     execution_strategy: hybrid_remote_fallback_local
     provider: circle_remote_local
   - id: circle.circle
     label: 圈子
     domain: circle
+    owner_object: circle.circle
     execution_strategy: remote_only
     provider: circle_remote
   - id: content.post
     label: 内容
     domain: content
+    owner_object: content.post
     execution_strategy: remote_only
     provider: content_remote
   # 第一方地点对象（R-S05e）：被内容引用、尚未绑定 canonicalEntity 的自由文本地点聚合
@@ -62,21 +74,28 @@ object_types:
   - id: location.place
     label: 地点
     domain: content
+    owner_object: content.post
     execution_strategy: remote_only
     provider: content_remote
   - id: entity.homepage
     label: 主页
     domain: entity
+    owner_object: entity.homepage
     execution_strategy: remote_only
     provider: homepage_remote
+  # user.profile 的 owner 是 user.user_account：可搜索用户文档由 account 生命周期
+  # （accountState=active）决定，投影函数与 SearchIndexView 消费的
+  # user.user_account.UserSuspended/UserRestored 事件同源。它不是 user.persona。
   - id: user.profile
     label: 用户
     domain: user
+    owner_object: user.user_account
     execution_strategy: remote_only
     provider: user_profile_remote
   - id: tag
     label: 标签
     domain: tag
+    owner_object: tag.tag_node_view
     # TagNodeView 是 taxonomy/filter projection；没有独立结果落地页，因此不进入
     # RetrieveTarget 或结果 section。未来若提升为可导航对象，必须另行登记 route/surface。
     execution_strategy: filter_only
@@ -84,6 +103,7 @@ object_types:
   - id: integration.location_poi
     label: 位置
     domain: integration
+    owner_object: integration.location
     execution_strategy: remote_only
     provider: location_remote
 

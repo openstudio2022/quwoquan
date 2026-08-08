@@ -21,35 +21,35 @@ var (
 // AppErrorFromInvalidArgument returns *AppError for OPS.USER.experiment_invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "实验请求参数无效", debugMessage).WithMetadata("experiment_invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "实验请求参数无效", debugMessage).WithMetadata("experiment_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromExperimentNotFound returns *AppError for OPS.USER.experiment_not_found (user_message from errors.yaml).
 func AppErrorFromExperimentNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrExperimentNotFound.Error()))
-	return rerrors.NewAppError(code, "实验不存在", debugMessage).WithMetadata("experiment_not_found", 404).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "实验不存在", debugMessage).WithMetadata("experiment_not_found", 404).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromVersionConflict returns *AppError for OPS.USER.version_conflict (user_message from errors.yaml).
 func AppErrorFromVersionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrVersionConflict.Error()))
-	return rerrors.NewAppError(code, "实验已更新，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "实验已更新，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromIdempotencyConflict returns *AppError for OPS.USER.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原操作不一致", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "重复请求与原操作不一致", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromStorageReadFailed returns *AppError for OPS.SYSTEM.experiment_storage_read_failed (user_message from errors.yaml).
 func AppErrorFromStorageReadFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStorageReadFailed.Error()))
-	return rerrors.NewAppError(code, "实验读取失败，请稍后重试", debugMessage).WithMetadata("experiment_storage_read_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "实验读取失败，请稍后重试", debugMessage).WithMetadata("experiment_storage_read_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }
 
 // AppErrorFromStorageWriteFailed returns *AppError for OPS.SYSTEM.experiment_storage_write_failed (user_message from errors.yaml).
 func AppErrorFromStorageWriteFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "实验操作失败，请稍后重试", debugMessage).WithMetadata("experiment_storage_write_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "实验操作失败，请稍后重试", debugMessage).WithMetadata("experiment_storage_write_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }

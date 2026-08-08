@@ -50,6 +50,9 @@ policy:
     research: 1
     download: 4
     campaignLaneWorkers: 4
+    # ReliableTask job-set 按 worker 数扩展确定性分区；partition helper 与
+    # M1000/M10000 capacity planner 只读取这一处治理值。
+    partitionsPerWorker: 4
     # 主机级并发 bridge 上限，按 campaignLaneWorkers 对齐：每条 lane 在自己的
     # execution root 里独占一个 bridge。lane 内语义工作槽仍由 author 限为 1。
     cursorBridgeInstances: 4
@@ -68,14 +71,21 @@ policy:
     # 单 lane 保持一个语义槽。按 M100 实测，M1000 的 1800
     # 候选采集约 32 小时、1000 对象创作约 17 小时；72 小时给 review、
     # publish 与有界恢复留出余量，同时仍由 controller 超时硬终止。
-    campaignLaneTimeoutSeconds: 259200
+    campaignLaneTimeoutSeconds:
+      BELOW_M100: 86400
+      M100: 259200
+      M1000: 259200
+      M10000: 604800
     preflightNetworkTimeoutSeconds: 5
     agentTimeoutSeconds: 2400
     authRetryLimit: 3
     authRetryDelaySeconds: 30
     noProgressRoundLimit: 6
-    researchWaveSize: 1
-    researchMaxWavesPerRun: 0
+    # 12 个对象共享一个 research writer 生命周期；每个 lane 进程最多处理
+    # 4 waves（48 对象）后以 create-once checkpoint 让同一 execution resume。
+    # 四 lane × 每 lane 1 research worker = ReliableTask/host burst capacity 4。
+    researchWaveSize: 12
+    researchMaxWavesPerRun: 4
     sourcePlanRecoveryPasses: 1
     sourcePlanRecoveryWorkers: 1
     coldStartMaxWorkers: 1

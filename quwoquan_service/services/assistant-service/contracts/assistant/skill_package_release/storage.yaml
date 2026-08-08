@@ -9,8 +9,6 @@ collections:
     - name: uq_assistant_skill_package_release_identity
       keys: {packageId: 1, releaseDigest: 1}
       unique: true
-    - name: idx_assistant_skill_package_release_status
-      keys: {packageId: 1, status: 1, stagedAt: -1}
   assistant_skill_package_activations:
     publication_role: not_published
     entity: SkillPackageActivation

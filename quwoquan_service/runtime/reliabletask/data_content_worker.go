@@ -11,36 +11,43 @@ const dataContentResultSchema = "quwoquan.data_content_object_result"
 
 const (
 	DataContentAcceptanceCommercialCanonical = "commercial_canonical"
+	DataContentAcceptanceResearchCanonical   = "research_canonical"
 	DataContentAcceptanceStageCompleted      = "stage_completed"
 	DataContentAcceptanceContractFixture     = "contract_fixture"
 )
 
 var dataContentPayloadFields = map[string]struct{}{
-	"schema":         {},
-	"jobId":          {},
-	"executionId":    {},
-	"ref":            {},
-	"stage":          {},
-	"partitionKey":   {},
-	"entityRef":      {},
-	"carrier":        {},
-	"sourceRevision": {},
-	"idempotencyKey": {},
+	"schema":               {},
+	"jobId":                {},
+	"executionId":          {},
+	"ref":                  {},
+	"stage":                {},
+	"partitionKey":         {},
+	"entityRef":            {},
+	"carrier":              {},
+	"sourceRevision":       {},
+	"idempotencyKey":       {},
+	"jobSetEnvelopeDigest": {},
+	"jobSetDigest":         {},
+	"actualTaskDigest":     {},
 }
 
 // DataContentWorkItem is the single-track worker input decoded from object_job.
 type DataContentWorkItem struct {
-	RuntimeTaskID  string `json:"runtimeTaskId"`
-	LeaseToken     string `json:"leaseToken"`
-	JobID          string `json:"jobId"`
-	ExecutionID    string `json:"executionId"`
-	Ref            string `json:"ref"`
-	Stage          string `json:"stage"`
-	PartitionKey   string `json:"partitionKey"`
-	EntityRef      string `json:"entityRef"`
-	Carrier        string `json:"carrier"`
-	SourceRevision string `json:"sourceRevision"`
-	IdempotencyKey string `json:"idempotencyKey"`
+	RuntimeTaskID        string `json:"runtimeTaskId"`
+	LeaseToken           string `json:"leaseToken"`
+	JobID                string `json:"jobId"`
+	ExecutionID          string `json:"executionId"`
+	Ref                  string `json:"ref"`
+	Stage                string `json:"stage"`
+	PartitionKey         string `json:"partitionKey"`
+	EntityRef            string `json:"entityRef"`
+	Carrier              string `json:"carrier"`
+	SourceRevision       string `json:"sourceRevision"`
+	IdempotencyKey       string `json:"idempotencyKey"`
+	JobSetEnvelopeDigest string `json:"jobSetEnvelopeDigest"`
+	JobSetDigest         string `json:"jobSetDigest"`
+	ActualTaskDigest     string `json:"actualTaskDigest"`
 }
 
 func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, error) {
@@ -64,28 +71,34 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 		)
 	}
 	item := DataContentWorkItem{
-		RuntimeTaskID:  strings.TrimSpace(task.TaskID),
-		LeaseToken:     strings.TrimSpace(task.LeaseToken),
-		JobID:          strings.TrimSpace(task.Payload["jobId"]),
-		ExecutionID:    strings.TrimSpace(task.Payload["executionId"]),
-		Ref:            strings.TrimSpace(task.Payload["ref"]),
-		Stage:          strings.TrimSpace(task.Payload["stage"]),
-		PartitionKey:   strings.TrimSpace(task.Payload["partitionKey"]),
-		EntityRef:      strings.TrimSpace(task.Payload["entityRef"]),
-		Carrier:        strings.TrimSpace(task.Payload["carrier"]),
-		SourceRevision: strings.TrimSpace(task.Payload["sourceRevision"]),
-		IdempotencyKey: strings.TrimSpace(task.Payload["idempotencyKey"]),
+		RuntimeTaskID:        strings.TrimSpace(task.TaskID),
+		LeaseToken:           strings.TrimSpace(task.LeaseToken),
+		JobID:                strings.TrimSpace(task.Payload["jobId"]),
+		ExecutionID:          strings.TrimSpace(task.Payload["executionId"]),
+		Ref:                  strings.TrimSpace(task.Payload["ref"]),
+		Stage:                strings.TrimSpace(task.Payload["stage"]),
+		PartitionKey:         strings.TrimSpace(task.Payload["partitionKey"]),
+		EntityRef:            strings.TrimSpace(task.Payload["entityRef"]),
+		Carrier:              strings.TrimSpace(task.Payload["carrier"]),
+		SourceRevision:       strings.TrimSpace(task.Payload["sourceRevision"]),
+		IdempotencyKey:       strings.TrimSpace(task.Payload["idempotencyKey"]),
+		JobSetEnvelopeDigest: strings.TrimSpace(task.Payload["jobSetEnvelopeDigest"]),
+		JobSetDigest:         strings.TrimSpace(task.Payload["jobSetDigest"]),
+		ActualTaskDigest:     strings.TrimSpace(task.Payload["actualTaskDigest"]),
 	}
 	job := DataContentJob{
-		EntityRef:      item.EntityRef,
-		Carrier:        item.Carrier,
-		SourceRevision: item.SourceRevision,
-		JobID:          item.JobID,
-		ExecutionID:    item.ExecutionID,
-		Ref:            item.Ref,
-		Stage:          item.Stage,
-		PartitionKey:   item.PartitionKey,
-		IdempotencyKey: item.IdempotencyKey,
+		EntityRef:            item.EntityRef,
+		Carrier:              item.Carrier,
+		SourceRevision:       item.SourceRevision,
+		JobID:                item.JobID,
+		ExecutionID:          item.ExecutionID,
+		Ref:                  item.Ref,
+		Stage:                item.Stage,
+		PartitionKey:         item.PartitionKey,
+		IdempotencyKey:       item.IdempotencyKey,
+		JobSetEnvelopeDigest: item.JobSetEnvelopeDigest,
+		JobSetDigest:         item.JobSetDigest,
+		ActualTaskDigest:     item.ActualTaskDigest,
 	}
 	expectedKey, err := job.ValidateIdentity()
 	if err != nil {
@@ -138,10 +151,11 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		}
 	}
 	switch r.AcceptanceClass {
-	case DataContentAcceptanceCommercialCanonical:
+	case DataContentAcceptanceCommercialCanonical,
+		DataContentAcceptanceResearchCanonical:
 		if item.Stage != "publish" {
 			return fmt.Errorf(
-				"reliabletask commercial data result requires publish stage",
+				"reliabletask canonical data result requires publish stage",
 			)
 		}
 		for _, field := range []struct {
@@ -153,14 +167,14 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		} {
 			if strings.TrimSpace(field.value) == "" {
 				return fmt.Errorf(
-					"reliabletask commercial data result requires %s",
+					"reliabletask canonical data result requires %s",
 					field.name,
 				)
 			}
 		}
 		if !validDataContentSHA256(r.CanonicalObjectSHA256) {
 			return fmt.Errorf(
-				"reliabletask commercial data result requires canonicalObjectSha256",
+				"reliabletask canonical data result requires canonicalObjectSha256",
 			)
 		}
 	case DataContentAcceptanceStageCompleted:
@@ -185,7 +199,8 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 func (r DataContentExecutionResult) document() map[string]string {
 	status := "contract_fixture"
 	switch r.AcceptanceClass {
-	case DataContentAcceptanceCommercialCanonical:
+	case DataContentAcceptanceCommercialCanonical,
+		DataContentAcceptanceResearchCanonical:
 		status = "accepted"
 	case DataContentAcceptanceStageCompleted:
 		status = "stage_completed"
@@ -242,10 +257,11 @@ func (f DataContentFleet) ProcessOneContent(
 		if err := result.validate(item); err != nil {
 			return err
 		}
-		if result.AcceptanceClass == DataContentAcceptanceCommercialCanonical &&
+		if (result.AcceptanceClass == DataContentAcceptanceCommercialCanonical ||
+			result.AcceptanceClass == DataContentAcceptanceResearchCanonical) &&
 			f.ResultVerifier == nil {
 			return fmt.Errorf(
-				"reliabletask commercial data result requires evidence verifier",
+				"reliabletask canonical data result requires evidence verifier",
 			)
 		}
 		if f.ResultVerifier != nil {

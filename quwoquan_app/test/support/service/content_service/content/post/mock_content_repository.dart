@@ -6,19 +6,19 @@ library;
 
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/generated/content_metadata.g.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/generated/content_feed_category_policy.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
-import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
+    as app_feed;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/footprint_repository.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    hide ContentDiscoveryFeedQuery;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
 import '../../../../runtime/remote_api_path_test_harness.dart';
@@ -196,7 +196,7 @@ List<ContentPostViewData> _mergePostSeeds(
 
 class MockContentRepository
     implements
-        ContentDiscoveryFeedQuery,
+        app_feed.ContentDiscoveryFeedQuery,
         ContentPostDetailReader,
         ContentAuthorPostsReader,
         ContentPostDeleteCommandWriter,
@@ -241,9 +241,9 @@ class MockContentRepository
     String? identity,
     String? type,
     String? subCategory,
-    int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
+    int limit = ContentDiscoveryFeedQuery.defaultLimit,
     String? cursor,
-    String sort = kFeedSortRecommend,
+    String sort = app_feed.kFeedSortRecommend,
     String? sessionId,
     String? feedRequestId,
     CloudOperationCancellationSignal? cancellation,
@@ -356,9 +356,9 @@ class MockContentRepository
     String? identity,
     String? type,
     String? subCategory,
-    int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
+    int limit = ContentDiscoveryFeedQuery.defaultLimit,
     String? cursor,
-    String sort = kFeedSortRecommend,
+    String sort = app_feed.kFeedSortRecommend,
   }) async {
     final page = await listDiscoveryFeedPage(
       category: category,
@@ -836,7 +836,7 @@ extension _MockContentPosts on MockContentRepository {
 
   String? _mapCategoryToFeedType(String category) {
     final mapped =
-        GeneratedPostRuntimeMetadata.feedCategoryToRequestType[category];
+        ContentFeedCategoryPolicy.feedCategoryToRequestType[category];
     return _normalizeFeedType(mapped);
   }
 
@@ -864,7 +864,7 @@ class MockFootprintRepository implements FootprintRepository {
   Future<CursorPage<FootprintEntry>> getMyFootprint({
     String? type,
     String? cursor,
-    int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
+    int limit = ContentDiscoveryFeedQuery.defaultLimit,
   }) async {
     final seed = objectScenarioSeedReader.contentSeedSet('footprint_core');
     final rawItems = seed?['items'];

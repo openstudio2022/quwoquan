@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(APP_ROOT / "scripts" / "ios"))
+sys.path.insert(0, str(APP_ROOT / "scripts" / "tools" / "ios"))
 
-from run_ios_shortcut_log_hygiene import (
+from ios_shortcut_log_hygiene import (
     audit_ios_shortcut_sources,
     filter_shortcut_log_noise,
 )

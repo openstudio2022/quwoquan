@@ -153,7 +153,7 @@ def write_post_author_evidence(
         ],
         gates=[gate],
         provider=outcome.provider.value,
-        model=str(meta.get("model") or ctx.model or ""),
+        model=str(ctx.model or ""),
         run_id=outcome.run_id,
         prompt_sha256=prompt_sha,
         agent_id=outcome.agent_id or None,
@@ -179,4 +179,48 @@ def write_post_author_evidence(
     return envelope_path
 
 
-__all__ = ["write_post_author_evidence"]
+def refresh_post_author_evidence_from_durable_meta(
+    ctx: "ExecutionContext",
+    *,
+    ref: str,
+) -> Path:
+    """Rebind a settled author file when provider teardown completed after return.
+
+    Managed agents can flush their final local edit immediately after the SDK
+    reports completion.  The durable draft metadata is written from that final
+    file and remains bound to the same run; only in that case may the envelope
+    hash be refreshed without another semantic invocation.
+    """
+    from core.control_types import AgentProvider
+    from content.execution.agent.outcome import AgentRunOutcome
+
+    meta = read_draft_meta(ctx.execution_id, ref) or {}
+    if (
+        str(meta.get("executionId") or "") != ctx.execution_id
+        or str(meta.get("objectRef") or meta.get("ref") or "") != ref
+        or str(meta.get("status") or "") != "completed"
+    ):
+        raise ValueError(f"post author durable meta binding mismatch: {ref}")
+    run_id = str(meta.get("agentRunId") or "").strip()
+    provider_raw = str(meta.get("provider") or "").strip()
+    if not run_id or not provider_raw:
+        raise ValueError(f"post author durable meta provenance incomplete: {ref}")
+    try:
+        provider = AgentProvider(provider_raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"post author durable meta provider invalid: {provider_raw!r}"
+        ) from exc
+    outcome = AgentRunOutcome.finished(
+        provider=provider,
+        run_id=run_id,
+        agent_id=str(meta.get("agentId") or ""),
+        completion_mode="durable_output_rebind",
+    )
+    return write_post_author_evidence(ctx, ref=ref, outcome=outcome)
+
+
+__all__ = [
+    "refresh_post_author_evidence_from_durable_meta",
+    "write_post_author_evidence",
+]

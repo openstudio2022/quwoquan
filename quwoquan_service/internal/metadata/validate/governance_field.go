@@ -21,7 +21,8 @@ func validateFieldTypes(contractGraph *graph.ContractGraph) []Issue {
 	issues := validateTypeOwnership(contractGraph)
 	aggregateRootNames := make(map[string]string, len(contractGraph.Objects))
 	for _, object := range contractGraph.Objects {
-		if object.Kind == ast.ObjectKindAggregateRoot {
+		if object.Kind == ast.ObjectKindAggregateRoot ||
+			object.Kind == ast.ObjectKindProcessManager {
 			aggregateRootNames[object.ID] = object.Name
 		}
 	}

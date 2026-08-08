@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md#gwt-003
 package capability_grant_test
 
 import (
@@ -88,9 +88,13 @@ func TestCandidateResolverFailsClosedWithoutLowerPriorityFallback(t *testing.T) 
 		nil,
 		func() time.Time { return now },
 	)
-	facade := grantapp.NewCapabilityGrantSessionFacade(resolver)
+	facade := grantapp.NewCapabilityGrantSessionFacade(
+		resolver,
+		&recordingSessionStore{},
+	)
 	_, err := facade.Resolve(context.Background(), grantmodel.Requirement{
 		ResolutionID:  "resolution-provider-unavailable",
+		AccountID:     "account-1",
 		CapabilityKey: "weather.forecast.read",
 		BindingPriority: []grantmodel.BindingKind{
 			grantmodel.BindingPublicProvider,
@@ -119,6 +123,7 @@ func TestCandidateResolverPreservesRevokedAndDeviceDeniedFailures(t *testing.T) 
 					AccountID:                    "account-1",
 					ConnectionID:                 "connection-1",
 					ConnectorID:                  "calendar",
+					ContractDigest:               digest("calendar-contract"),
 					GrantedCapabilities:          []string{"calendar.event.create"},
 					GrantState:                   grantmodel.ConnectorGrantRevoked,
 					ProviderAccountSubjectDigest: digest("subject"),

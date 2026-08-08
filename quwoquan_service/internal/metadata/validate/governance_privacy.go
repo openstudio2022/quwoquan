@@ -465,7 +465,7 @@ func validAppLogParameters(policy ast.PrivacyAppLogPolicy) bool {
 func isPrivacyVisibility(value string) bool {
 	switch value {
 	case "never_expose", "all", "app", "self", "platform-ops",
-		"content-service-internal", "user-service-internal":
+		"first_party_service_internal", "content-service-internal", "user-service-internal":
 		return true
 	default:
 		return false

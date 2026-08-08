@@ -18,6 +18,20 @@ relationships:
   reference_fields:
   - accountId
   target_object: user.UserAccount
+search_policy:
+  exposed: none
+  not_exposed_reason: "认证、凭据与会话安全对象，任何检索暴露都会直接削弱账号安全。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "认证凭据、会话密钥与风控状态对小趣完全关闭，不存在可开放的子集。"
 business_rules:
 - purpose、channel、destinationHash、secretRef 与内部 bindingTicketRef 创建后不可变
 - secret 明文不得进入 aggregate、日志、事件或 API 响应

@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/spec.md#sit-001
+// readiness_case: account_session_login_anonymous_app_api
+// readiness_case: account_session_logout_app_api
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/create_media_models.dart';
+
 /// Identifies the host surface that launched media capture.
 enum CameraPhotoCaller { picker, create }
 
@@ -23,6 +25,24 @@ extension CameraPhotoCallerX on CameraPhotoCaller {
 }
 
 enum CameraCaptureModePolicy { photoOnly, videoOnly, switchable }
+
+/// Typed result returned by the media capture surface.
+///
+/// The result belongs to the upload-session application boundary so callers do
+/// not depend on the concrete camera presentation.
+class CameraCaptureResult {
+  const CameraCaptureResult({
+    required this.path,
+    required this.type,
+    this.filterPresetId = 'original',
+    this.entrySource = CameraPhotoEntrySource.photoPicker,
+  });
+
+  final String path;
+  final CreateMediaType type;
+  final String filterPresetId;
+  final CameraPhotoEntrySource entrySource;
+}
 
 class VideoEditorResult {
   const VideoEditorResult({

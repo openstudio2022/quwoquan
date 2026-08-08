@@ -149,12 +149,14 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 			targetType: "user", targetID: "actor-1",
 		},
 		{
-			name: "greeting notifies target when allowed",
+			name: "greeting notifies canonical target account when allowed",
 			event: flatEvent("GreetingRequestSent", "greeting:g-1:GreetingRequestSent", map[string]string{
 				"id": "g-1", "requesterPersonaId": "actor-1",
-				"targetPersonaId": "author-1", "targetAllowsStrangerGreeting": "true",
+				"targetPersonaId":              "author-persona-1",
+				"recipientAccountId":           "author-account-1",
+				"targetAllowsStrangerGreeting": "true",
 			}),
-			recipient: "author-1", messageType: "social", source: "greeting",
+			recipient: "author-account-1", messageType: "social", source: "greeting",
 			targetType: "greeting", targetID: "g-1",
 		},
 		{
@@ -380,7 +382,9 @@ func TestProjectionSkipsNonNotifiableEvents(t *testing.T) {
 			name: "greeting blocked by stranger policy",
 			event: flatEvent("GreetingRequestSent", "greeting:g-2:GreetingRequestSent", map[string]string{
 				"id": "g-2", "requesterPersonaId": "actor-1",
-				"targetPersonaId": "author-1", "targetAllowsStrangerGreeting": "false",
+				"targetPersonaId":              "author-persona-1",
+				"recipientAccountId":           "author-account-1",
+				"targetAllowsStrangerGreeting": "false",
 			}),
 		},
 		{
@@ -465,6 +469,14 @@ func TestProjectionFailsClosedOnIncompletePayload(t *testing.T) {
 			name: "report result rejects persona-only recipient",
 			event: contentEvent(t, "content.report.ReportResolved", "report-bad:3", map[string]any{
 				"reportId": "report-bad", "reporterId": "persona-only-reporter",
+			}),
+		},
+		{
+			name: "greeting rejects persona-only recipient",
+			event: flatEvent("GreetingRequestSent", "greeting:bad:GreetingRequestSent", map[string]string{
+				"id": "greeting-bad", "requesterPersonaId": "actor-persona",
+				"targetPersonaId":              "target-persona",
+				"targetAllowsStrangerGreeting": "true",
 			}),
 		},
 	}

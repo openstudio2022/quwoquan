@@ -23,8 +23,8 @@ class InMemoryAssistantSearchRunFacet implements AssistantSearchRunFacade {
   }
 }
 
-class InMemoryAssistantCreationRunCommandWriter
-    implements AssistantCreationRunCommandWriter {
+class InMemoryAssistantCreationRunProcessCommandWriter
+    implements AssistantCreationRunProcessCommandWriter {
   @override
   Future<AssistantRunEnvelopeWire> startCreationRun({
     required String sessionId,

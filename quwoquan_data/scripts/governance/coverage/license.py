@@ -101,6 +101,11 @@ def _normalized_license_kind(value: str) -> str:
     normalized = normalized.replace("_", " ").replace("-", " ")
     if not normalized:
         return ""
+    normalized = re.sub(r"\blicen[cs]e\b", "", normalized).strip()
+    if normalized.startswith("creative commons "):
+        normalized = "cc " + normalized.removeprefix("creative commons ")
+        normalized = re.sub(r"\battribution\b", "by", normalized)
+        normalized = re.sub(r"\bshare alike\b", "sa", normalized)
     if normalized == "attribution no watermark":
         return normalized
     if "cc0" in normalized:

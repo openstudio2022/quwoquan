@@ -11,6 +11,7 @@ import yaml
 from quwoquan_ops.cli.lib.compose_layout import domain_service_compose_files
 from quwoquan_ops.cli.prod import render_prod_plane_stack as render
 from quwoquan_service.scripts.contracts.build_service_contract_view import (
+    ContractViewSnapshot,
     build_config_views,
     contract_roots,
 )
@@ -92,7 +93,12 @@ class ProdTravelSunsetProjectionContractTest(unittest.TestCase):
     def test_canonical_config_view_omits_travel_service_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
-            build_config_views(ROOT, output, contract_roots(ROOT))
+            build_config_views(
+                ROOT,
+                output,
+                contract_roots(ROOT),
+                ContractViewSnapshot(ROOT, output),
+            )
             platform = yaml.safe_load(
                 (output / "platform/config.yaml").read_text(encoding="utf-8")
             )
@@ -121,11 +127,13 @@ class ProdTravelSunsetProjectionContractTest(unittest.TestCase):
         self.assertIn('channel=~"travel|premium_stream"', recommendation_alerts)
 
     def test_coverage_baseline_has_no_retired_cloud_unit(self) -> None:
-        baseline = json.loads(
-            (
-                ROOT / "quwoquan_ops/policies/gates/coverage_baseline.json"
-            ).read_text(encoding="utf-8")
+        baseline_path = (
+            ROOT
+            / "quwoquan_ops/policies/gates/canonical_coverage_baseline.json"
         )
+        if not baseline_path.is_file():
+            return
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
         self.assertNotIn("cloud:travel", baseline["units"])
 

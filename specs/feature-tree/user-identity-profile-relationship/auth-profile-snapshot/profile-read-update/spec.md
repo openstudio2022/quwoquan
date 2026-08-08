@@ -71,6 +71,14 @@
 - Error：无效、不在 `Topic/地理/行政区/中国/` 下或不存在的行政区引用统一使用 `USER.PROFILE.invalid_region`。
 - tag-service 可做只读缓存，但缓存只能从 Mongo warm；不得从 App 本地文件、user-service 配置或镜像配置维护第二份行政区树。
 
+<a id="req-006"></a>
+### REQ-006 我的二维码展示、物理扫码与服务端解析必须保持可撤销单轨
+
+- “我的二维码”只能展示 `GetProfileQrCard` 返回的公开 HTTPS payload，并由真实二维码 SDK 渲染；不得使用静态图案、ownerId、手机号或 bearer token 生成第二套二维码。
+- 相机与相册扫描必须先经严格 payload parser 提取受支持的公开 token，再由 `ResolveProfileQrToken` production Remote 校验当前有效性；端侧不得自行解析后直跳他人主页。
+- 失效、撤销、格式非法、权限拒绝、网络失败或 canonical failure 均不得创建关系事实；页面必须保留安全恢复或重试入口。
+- 服务端解析成功后只返回当前可公开资料与 relationship capability，后续关注或打招呼仍由对应 owning object 的公开 command 负责。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/operations.yaml`
@@ -130,6 +138,17 @@
 - THEN user-service 派生 region = 广东 深圳
 - THEN ProfileEditSnapshotWire 返回 region + regionTagRef
 
+<a id="gwt-004"></a>
+### GWT-004 我的二维码展示、物理扫码、撤销失效与失败恢复
+
+- GIVEN 用户以 active persona 登录 production Remote composition，且 user-service 返回当前有效、可撤销的 `ProfileQrCard`。
+- WHEN App 的“我的二维码”页面用真实二维码 SDK 渲染公开 HTTPS payload，并从物理相机或相册读取另一个真实账号的二维码。
+- WHEN 严格 parser 接受 payload 后，App 只经 `ResolveProfileQrToken` production Remote 解析目标，再读取 canonical 公开资料与 relationship capability。
+- THEN payload、日志、埋点和结果回执均不包含手机号、ownerId、bearer token 或内部身份映射；端侧不得绕过 Remote 直接导航到自解析目标。
+- AND 格式非法的 payload 在调用 Remote 前被拒绝；已撤销或不存在的 token、相机/相册权限拒绝、网络失败与 canonical failure 均停留在安全页面并提供恢复或重试，不得创建 follow、block 或 conversation 事实。
+- AND 解析成功只建立可继续操作的公开目标上下文，后续关系或会话写入仍由对应 owning object 的公开 command 完成。
+- AND 只有绑定同一 candidate、真实 Provider 与 production Remote 的 Android 物理设备及 iPhone 物理设备 `ReadinessResultBundle` 均通过时，本验收场景才计通过；Widget、模拟器、静态二维码、动态 skip 或 typed double 不计。
+
 ## 6. 依赖
 
 - 前置要求：[`auth-profile-snapshot`](../spec.md) 的范围、要求与 SIT。
@@ -146,3 +165,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：App local_contract 覆盖字段顺序、四区块分组、媒体预览同宽、未填写简短好处提示、性别默认不显示“不展示”且无 other 入口、单图选择返回、签名 60 字、趣我圈号只读纯文本、手机号绑定状态和 QR 页真实 SDK 渲染。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 二维码双真机解析与撤销恢复证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺能够证明 `GWT-004` 的 production Remote、严格 parser、撤销失效、失败恢复及同一 candidate 双物理相机/相册行为的结果回执。
+- 完成判定：职责匹配的真实 production runner 逐字声明 `GWT-004` `spec_ref`，并取得同一 candidate 的 Android 与 iPhone 物理设备 `ReadinessResultBundle`；failed、blocked、skipped、模拟器、静态二维码或测试 double 结果均不计通过。

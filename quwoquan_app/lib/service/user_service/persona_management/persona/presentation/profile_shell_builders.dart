@@ -42,7 +42,8 @@ extension _ProfileShellTabBuilders on _ProfileShellState {
     required AuthorImpactRequest impactRequest,
   }) {
     final content = switch (_activeTabId) {
-      'interaction' => ProfileInteractionTab(
+      'interaction' => ProfileInteractionTabHost(
+        participantSlots: widget.participantSlots,
         mode: widget.mode,
         userId: widget.userId,
         isDark: isDark,
@@ -51,18 +52,18 @@ extension _ProfileShellTabBuilders on _ProfileShellState {
         onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
         onDirectionSelected: _selectInteractionDirection,
       ),
-      'footprint' => ProfileFootprintTab(
+      'footprint' => widget.participantSlots.buildFootprint(
         isDark: isDark,
         onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
       ),
-      'circles' => ProfileCirclesTab(
+      'circles' => widget.participantSlots.buildCircles(
         mode: widget.mode,
         userId: widget.userId,
         isDark: isDark,
-        membershipQuery: ref.watch(userProfileCircleMembershipQueryProvider),
         inlineScroll: true,
       ),
       _ => ProfileWorksTab(
+        recommendationSlots: widget.recommendationSlots,
         mode: widget.mode,
         userId: widget.userId,
         isDark: isDark,

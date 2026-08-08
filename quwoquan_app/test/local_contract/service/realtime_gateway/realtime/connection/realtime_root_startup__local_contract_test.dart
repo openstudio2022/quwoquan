@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/di/shell/composition/quwoquan_app_shell.dart';
+import 'package:quwoquan_app/runtime/shell/composition/quwoquan_app_shell.dart';
 
 void main() {
   test('startup init foregrounds realtime without background side effects', () {

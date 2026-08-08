@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from quwoquan_service.scripts.runtime.service_image_build_input import (
+from quwoquan_service.scripts.runtime.packaging.lib.service_image_build_input import (
     SHARED_IMAGE_INPUTS,
     service_image_build_input_digest,
 )

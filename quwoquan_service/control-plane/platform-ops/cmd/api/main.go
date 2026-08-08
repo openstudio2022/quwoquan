@@ -595,28 +595,12 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
-	writeRuntimeError(w, r, http.StatusNotFound, "接口不存在", "route not found")
-}
-
-func writeRuntimeError(
-	w http.ResponseWriter,
-	r *http.Request,
-	status int,
-	userMessage string,
-	debugMessage string,
-) {
-	reason := "internal_error"
-	kind := rterr.KindSystem
-	if status == http.StatusBadRequest || status == http.StatusMethodNotAllowed || status == http.StatusNotFound {
-		reason = "invalid_argument"
-		kind = rterr.KindUser
-	}
 	rterr.WriteHTTPError(
 		w,
 		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleOps, kind, reason),
-			userMessage,
-			debugMessage,
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+			"接口不存在",
+			"route not found",
 		),
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)

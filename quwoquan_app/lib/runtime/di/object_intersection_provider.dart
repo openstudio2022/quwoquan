@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 
 /// post → 作者主页的交集高亮意图（§7.3 旅程无断点）。
 ///
@@ -52,48 +53,10 @@ final intersectionHighlightIntentProvider =
       IntersectionHighlightIntent?
     >(IntersectionHighlightNotifier.new);
 
-/// 对象页交集卡「对象对直打」查询参数（当前主体 A × 被看对象 B）。
-class ObjectIntersectionQuery {
-  const ObjectIntersectionQuery({
-    required this.objectAId,
-    required this.objectAType,
-    required this.objectBId,
-    required this.objectBType,
-    this.limit = 6,
-  });
-
-  final String objectAId;
-  final String objectAType;
-  final String objectBId;
-  final String objectBType;
-  final int limit;
-
-  bool get isResolvable =>
-      objectAId.isNotEmpty &&
-      objectBId.isNotEmpty &&
-      !(objectAId == objectBId && objectAType == objectBType);
-
-  @override
-  bool operator ==(Object other) =>
-      other is ObjectIntersectionQuery &&
-      other.objectAId == objectAId &&
-      other.objectAType == objectAType &&
-      other.objectBId == objectBId &&
-      other.objectBType == objectBType &&
-      other.limit == limit;
-
-  @override
-  int get hashCode =>
-      Object.hash(objectAId, objectAType, objectBId, objectBType, limit);
-}
-
 /// 对象页「你和这里 / 你们」的交集唯一来源：后端 intersectionRepository。
 /// App 不再在 provider 层把 tag-service/shared-tags 合并成第二条 reason 主链。
-final objectSharedReasonsProvider =
-    FutureProvider.family<List<IntersectionReason>, ObjectIntersectionQuery>((
-      ref,
-      q,
-    ) async {
+final objectSharedReasonsProvider = FutureProvider.autoDispose
+    .family<List<IntersectionReason>, ObjectIntersectionQuery>((ref, q) async {
       if (!q.isResolvable) {
         return const <IntersectionReason>[];
       }

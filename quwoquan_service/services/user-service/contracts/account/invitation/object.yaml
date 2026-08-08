@@ -22,8 +22,23 @@ relationships:
   target_object: user.Persona
 local_identity_reasons:
   inviterOwnerAccountId: immutable audit snapshot used for authorization evidence; never used as Invitation store identity
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "仅所属用户可见的私有状态，进入任何共享索引即构成越权披露。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.user.invitation.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.user.invitation.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.user.invitation.write
 business_rules:
 - inviterPersonaId 必须属于当前受信 Account，禁止由请求体切换邀请主体
 - 同一 inviterPersonaId、channel、inviteePhoneHash 的有效 generated 邀请必须复用

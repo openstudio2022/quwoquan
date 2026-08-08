@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from content.execution.campaign_external_input_runtime import (
+    from content.execution.campaign.external_input_runtime import (
         ExternalInputRuntimeContext,
     )
 
 
 def external_input_error(code: str, detail: str) -> ValueError:
-    from content.execution.campaign_external_inputs import CampaignExternalInputError
+    from content.execution.campaign.external_inputs import CampaignExternalInputError
 
     return CampaignExternalInputError(
         f"DATA.CAMPAIGN.EXTERNAL_INPUT_{code}",
@@ -30,7 +30,7 @@ def _required_context(
 ) -> ExternalInputRuntimeContext:
     context = explicit
     if context is None:
-        from content.execution.campaign_external_input_runtime import (
+        from content.execution.campaign.external_input_runtime import (
             bound_runtime_external_input_context,
         )
 
@@ -81,7 +81,7 @@ def professional_video_plan_binding(
     requested = _receipt_refs(data, media_kind="video")
     if not requested:
         return [], None
-    from content.execution.campaign_external_inputs import (
+    from content.execution.campaign.external_inputs import (
         PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     )
 
@@ -99,7 +99,7 @@ def professional_video_context_binding(
     """Return the complete frozen video receipt set, when one is declared."""
     if external_input_context is None:
         return [], None
-    from content.execution.campaign_external_inputs import (
+    from content.execution.campaign.external_inputs import (
         PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     )
 
@@ -168,7 +168,7 @@ def professional_image_specs_from_plan(
 
 
 def _professional_image_kind() -> str:
-    from content.execution.campaign_external_inputs import (
+    from content.execution.campaign.external_inputs import (
         PROFESSIONAL_IMAGE_ACQUISITION_KIND,
     )
 

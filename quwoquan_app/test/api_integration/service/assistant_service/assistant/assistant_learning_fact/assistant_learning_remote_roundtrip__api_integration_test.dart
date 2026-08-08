@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md#gwt-001
+// readiness_case: assistant_learning_fact_append_assistant_learning_fact_app_api
 import 'dart:convert';
 import 'dart:io';
 

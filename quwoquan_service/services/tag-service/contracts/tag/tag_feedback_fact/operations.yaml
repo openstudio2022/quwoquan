@@ -106,3 +106,19 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/tag-service/tests/api_integration/tag/tag_feedback_fact/tag_feedback_contract__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: tag_feedback_fact_report_tag_feedback_app_local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: ReportTagFeedback}
+  runner_source_path: quwoquan_app/test/local_contract/service/tag_service/tag/tag_feedback_fact/tag_feedback_fact_remote__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: tag_feedback_fact_report_tag_feedback_app_api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ReportTagFeedback}
+  runner_source_path: quwoquan_app/test/api_integration/service/tag_service/tag/tag_feedback_fact/tag_feedback_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

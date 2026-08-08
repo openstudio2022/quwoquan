@@ -57,13 +57,13 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 设备 Token 登记 验收证据
+### OPEN-001 设备令牌登记结果子句尚未逐条绑定
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺少能够证明“设备 Token 登记”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：缺 `GWT-001` 两条结果子句的逐条证据，未区分登记主路径与失败语义分别由哪条断言证明。
+- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。
 
 <a id="open-002"></a>
 ### OPEN-002 FCM registration token 到 Firebase Installation ID 的契约迁移

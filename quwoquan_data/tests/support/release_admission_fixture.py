@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.asset_review_adoption import _binding
+from content.release.canonical.asset_review_adoption import (
+    build_independent_asset_review_binding,
+)
 from content.source.independent_asset_review_contract import (
     canonical_digest,
     file_digest,
@@ -118,7 +120,7 @@ def publishable_video_review_receipt(
             "popularityScore": 9.2,
             "popularityPercentile": 1.0,
             "rankingEligible": True,
-            "rankingIneligibleReason": "",
+            "ineligibleReason": "",
             "comparisonCandidateCount": 2,
         },
     }
@@ -196,6 +198,7 @@ def publishable_video_review_receipt(
 def bind_publishable_video_review(
     *,
     object_root: Path,
+    output_root: Path,
     asset_id: str,
     content_sha256: str,
     object_ref: str,
@@ -210,8 +213,11 @@ def bind_publishable_video_review(
         source_digest=source_digest,
         entity_catalog_digest=entity_catalog_digest,
     )
-    receipt_ref = Path("asset_reviews/receipts") / f"{selected['reviewId']}.json"
-    receipt_path = object_root / receipt_ref
+    receipt_ref = (
+        Path("data/tasks/video/evidence/asset_reviews/receipts")
+        / f"{selected['reviewId']}.json"
+    )
+    receipt_path = output_root / receipt_ref
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(selected), encoding="utf-8")
     rights_path = object_root / "rights.json"
@@ -220,7 +226,7 @@ def bind_publishable_video_review(
     if len(matches) != 1:
         raise ValueError(f"video fixture rights asset is missing or ambiguous: {asset_id}")
     matches[0]["acquisitionReceiptRef"] = selected["acquisitionReceiptRef"]
-    matches[0]["independentAssetReview"] = _binding(
+    matches[0]["independentAssetReview"] = build_independent_asset_review_binding(
         selected,
         receipt_ref=receipt_ref.as_posix(),
         receipt_file_sha256=file_digest(receipt_path),

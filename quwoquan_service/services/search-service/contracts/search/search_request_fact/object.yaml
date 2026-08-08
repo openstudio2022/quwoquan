@@ -39,8 +39,27 @@ lifecycle:
     facet: UserAccountClosedConsumer
     method: processOnce
     idempotency: event_id
-taggable: false
-vector_enabled: false
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - RecoverSearchAccountClosureDeadLetter
+    rationale: 账号关闭死信重投；重投按死信 canonical identity 幂等追加补偿事实，不修改历史请求事实，也不持有实例级可变状态。
+    evaluated_at: '2026-08-07'
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 请求事实只记录 canonical query、筛选、可信 actor、实验 assignment 与时间，不拥有搜索执行或结果列表。
 - searchRequestId 在入口生成并幂等追加，重试不得产生第二条请求事实。

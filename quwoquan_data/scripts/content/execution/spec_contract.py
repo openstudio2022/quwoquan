@@ -11,9 +11,10 @@ from core.control_types import (
     ImageAssetStrategy,
     ImageCountPolicy,
     ModalityContract,
-    SelectionPolicy,
 )
 from content.source.contracts import QualifiedHomepageSource
+from content.execution.planning.spec_execution_policy import ExecutionPolicy
+from content.execution.planning.source_pool_policy import requires_scale_source_pool
 
 
 EXECUTION_SPEC_SCHEMA = "quwoquan.content.execution_spec"
@@ -328,60 +329,6 @@ class ExecutionAcceptance:
 
 
 @dataclass(frozen=True, slots=True)
-class ExecutionPolicy:
-    selection_policy: SelectionPolicy
-    target_entity_count: int
-    target_object_count: int
-    approved_quota: int
-    oversample_factor: float
-    execution_branch: str
-    git_commit_sha: str
-    article_commercial_closure: bool = False
-
-    def __post_init__(self) -> None:
-        if not 1 <= self.approved_quota <= self.target_entity_count:
-            raise ValueError(
-                "executionPolicy.approvedQuota must be between 1 and "
-                "targetEntityCount (the oversampled candidate pool)"
-            )
-        if self.oversample_factor < 1:
-            raise ValueError("executionPolicy.oversampleFactor must be >= 1")
-
-    @classmethod
-    def from_mapping(cls, payload: Mapping[str, Any]) -> "ExecutionPolicy":
-        raw_factor = payload.get("oversampleFactor")
-        if isinstance(raw_factor, bool) or not isinstance(raw_factor, (int, float)):
-            raise ValueError("executionPolicy.oversampleFactor must be a number")
-        raw_article_closure = payload.get("articleCommercialClosure", False)
-        if not isinstance(raw_article_closure, bool):
-            raise ValueError(
-                "executionPolicy.articleCommercialClosure must be boolean"
-            )
-        return cls(
-            selection_policy=SelectionPolicy(_string(payload, "selectionPolicy")),
-            target_entity_count=_non_negative_int(payload, "targetEntityCount"),
-            target_object_count=_non_negative_int(payload, "targetObjectCount"),
-            approved_quota=_non_negative_int(payload, "approvedQuota"),
-            oversample_factor=float(raw_factor),
-            execution_branch=_string(payload, "executionBranch"),
-            git_commit_sha=_string(payload, "gitCommitSha"),
-            article_commercial_closure=raw_article_closure,
-        )
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "selectionPolicy": self.selection_policy.value,
-            "targetEntityCount": self.target_entity_count,
-            "targetObjectCount": self.target_object_count,
-            "approvedQuota": self.approved_quota,
-            "oversampleFactor": self.oversample_factor,
-            "executionBranch": self.execution_branch,
-            "gitCommitSha": self.git_commit_sha,
-            "articleCommercialClosure": self.article_commercial_closure,
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class Provenance:
     created_at: str
     created_by: str
@@ -535,6 +482,12 @@ class ExecutionSpec:
         if self.queue_policy.heartbeat_seconds >= self.queue_policy.lease_seconds:
             raise ValueError(
                 "queuePolicy.heartbeatSeconds must be less than leaseSeconds"
+            )
+        scale_pool_required = requires_scale_source_pool(self.execution_id)
+        has_scale_pool = self.execution_policy.scale_source_pool is not None
+        if scale_pool_required != has_scale_pool:
+            raise ValueError(
+                "DATA.SOURCE.POOL_SHORTFALL: executionPolicy source pool intent drift"
             )
 
     @classmethod

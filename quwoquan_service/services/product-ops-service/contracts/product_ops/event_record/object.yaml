@@ -17,10 +17,31 @@ access:
   cross_context: event_only
   queries: named_reader
 relationships: []
-taggable: false
-vector_enabled: false
 lifecycle:
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - ReportEventBatch
+      - ReportRuntimeLogBatch
+      - ReportStartupEventBatch
+    rationale: 运营事件/运行日志/启动事件批量上报；三条命令均为固定字段匿名事实追加，约束只有 canonical identity 幂等，无实例级可变计数或额度。
+    evaluated_at: '2026-08-07'
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - eventType 必须存在于 canonical event catalog，未知事件拒绝写入且不得降级为 generic payload。
 - 公共九字段信封由可信 runtime context 补齐，客户端不得覆盖身份、环境或 trace 归属。

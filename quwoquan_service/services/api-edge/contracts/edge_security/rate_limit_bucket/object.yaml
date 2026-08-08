@@ -14,8 +14,20 @@ access:
 relationships: []
 local_identity_reasons:
   canonicalOperationId: generated ContractGraph operation ID 是授权与限流共同使用的协议标识，不是业务对象外键
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "易失运行时状态，过期即消失，没有可供检索的稳定对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "认证凭据、会话密钥与风控状态对小趣完全关闭，不存在可开放的子集。"
 business_rules:
 - bucketKeyDigest 只能由 environment、可信 subject 与 canonical operationId 派生，客户端不得指定。
 - admission 必须使用 Redis 原子计数与过期，任何副本不得持有第二份本地限流真相。

@@ -14,7 +14,7 @@
 - cross-domain proposal boundary：`ProfileUpdateProposal`、`Persona`、应用审计与回滚事实归 user-service 的用户身份画像领域所有；助手只通过该聚合的公开 command/event 提交可审核来源，不复制状态机、receipt、outbox 或存储。
 - 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
 - 非本域对象：不复制 metadata 中的字段、path、错误码和 wire 语义。
-- 非本域对象：Trip/Conversation/Circle/Post/Persona/Connector 连接与凭证仍由所属 L1/服务拥有；助手只保留 provenance、artifactRef、receiptRef 和运行时快照。
+- 非本域对象：Gathering/GatheringPlan/Conversation/Circle/Post/Persona/Connector 连接与凭证仍由所属 L1/服务拥有；助手只保留 provenance、artifactRef、receiptRef 和运行时快照。
 
 ## 3. 上下文边界与协作
 
@@ -24,9 +24,9 @@
 - [`JNY-009 / SCN-019`](../spec.md#scn-019) — 在“搜索 handoff 与统一 grounding”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
 - [`JNY-009 / SCN-020`](../spec.md#scn-020) — 在“小趣主动订阅与用户/会话投递”中，消费页面或会话上下文，创建或续接 AssistantSession、Run 与 Turn，并执行授权、策略和订阅门禁。
 - [`JNY-009 / SCN-034`](../spec.md#scn-034) — 以独立对象交付 Skill 发现、设置、授权、主动订阅、共享 Placement 和运行活动。
-- [`JNY-013 / SCN-030`](../spec.md#scn-030) — 以 `travel_companion` 组合 Trip/Chat/Content/Public Web 上下文，生成可确认计划提案。
+- [`JNY-013 / SCN-030`](../spec.md#scn-030) — 以 `travel_companion` 组合 Gathering/GatheringPlan、Chat、Content 与 Public Web 上下文，生成可确认计划提案。
 - [`JNY-013 / SCN-031`](../spec.md#scn-031) — 以标准 Trigger→Run 管线解释 Revision diff、风险、下一步和讲解，并按可见范围投递。
-- [`JNY-013 / SCN-032`](../spec.md#scn-032) — 建议 Moment 归属并用安全 Presentation 展示统一时间线/地图。
+- [`JNY-013 / SCN-032`](../spec.md#scn-032) — 建议 Experience reference 归属并用安全 Presentation 展示统一时间线/地图。
 - [`JNY-013 / SCN-033`](../spec.md#scn-033) — 生成可编辑游记与分段分享提案，确认后续接所属领域 command。
 
 ## 4. 架构与数据流
@@ -54,7 +54,7 @@
 ### DEC-002 Skill 资产发布与业务事实访问单轨
 - 决策：源码资产只由 publisher 读取并生成不可变 Skill package；生产 Catalog、Router、Context、Prompt、Capability、Presentation 与 Evaluation 只解析 active release，Run 冻结 digest。业务事实只通过 Descriptor 指向的公开 Reader/command/event 访问。
 - 理由：运行时文件扫描、巨型 profile 资产和 Skill 专用分支会让激活、回滚、恢复、权限和评测各自拥有不同真相；Skill 直接访问领域存储又会复制业务模型。
-- 被否决方案：生产扫描 Manifest、内置 catalog 硬编码、每个 Skill 增加 Go/Dart 路由、Skill 持有 Connector credential 或 Trip/Post 副本。
+- 被否决方案：生产扫描 Manifest、内置 catalog 硬编码、每个 Skill 增加 Go/Dart 路由、Skill 持有 Connector credential 或 GatheringPlan/Post 副本。
 - 约束与影响：新增普通 Skill 只能增加签名资产，新增领域事实能力只增加 Reader Adapter，新增外部协议只在 Integration Service 增加 Connector Adapter。权限在每个 Run 安全边界重新求交，被撤销能力立即失效。
 - 关联要求：`REQ-003`
 - 关联能力：[`skill-product-integration-platform`](./skill-product-integration-platform/spec.md)、[`world-class-trinity-experience-baseline`](./world-class-trinity-experience-baseline/spec.md)

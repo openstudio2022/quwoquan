@@ -18,7 +18,7 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.execution.selection_discovery import (  # noqa: E402
+from content.execution.planning.selection_discovery import (  # noqa: E402
     apply_master_list_fields,
     coverage_target_from_selection,
 )

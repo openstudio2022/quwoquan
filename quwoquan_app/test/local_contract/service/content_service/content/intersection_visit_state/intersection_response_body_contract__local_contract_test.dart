@@ -1,3 +1,8 @@
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md#gwt-001
+// readiness_case: intersection_visit_state_get_my_intersection_summary_app_local
+// readiness_case: intersection_visit_state_get_object_intersections_app_local
+// readiness_case: intersection_visit_state_list_my_intersections_app_local
+// readiness_case: intersection_visit_state_mark_intersections_visited_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_visit_writer.dart';

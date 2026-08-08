@@ -563,7 +563,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                             / "quwoquan_app"
                             / "scripts"
                             / "ios"
-                            / "prepare_dart_defines.sh"
+                            / "build_prepare_dart_defines.sh"
                         ),
                     ],
                     cwd=ROOT / "quwoquan_app",
@@ -629,7 +629,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         source = smoke._prepare_execution_session(args)
 
-        self.assertEqual(source, "gamma_local_anonymous_public_video")
+        self.assertEqual(source, "anonymous_public_video_session")
         self.assertEqual(args.test_auth_token, "")
         self.assertEqual(args.test_refresh_token, "")
         self.assertEqual(smoke._resolved_owner_id(args), "")
@@ -648,7 +648,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(command[:3], ["patrol", "test", "--verbose"])
         self.assertIn(
             "--dart-define=QWQ_PATROL_SESSION_MODE="
-            "gamma_local_anonymous_public_video",
+            "anonymous_public_video_session",
             command,
         )
         self.assertIn(
@@ -680,7 +680,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         source = smoke._prepare_execution_session(args)
 
-        self.assertEqual(source, "beta_local_anonymous_public_video")
+        self.assertEqual(source, "anonymous_public_video_session")
         self.assertEqual(smoke._missing_required_args(args), [])
         command = smoke.patrol_command(
             {"id": "android-beta", "targetPlatform": "android-arm64", "emulator": True},
@@ -690,7 +690,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         self.assertIn(
             "--dart-define=QWQ_PATROL_SESSION_MODE="
-            "beta_local_anonymous_public_video",
+            "anonymous_public_video_session",
             command,
         )
         self.assertNotIn("--dart-define-from-file=", command)
@@ -756,7 +756,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             joined,
         )
         self.assertIn(
-            "--dart-define=QWQ_PATROL_SESSION_MODE=gamma_local_anonymous_runtime",
+            "--dart-define=QWQ_PATROL_SESSION_MODE=runtime_anonymous_session",
             joined,
         )
         self.assertNotIn("--dart-define=APP_CURRENT_OWNER_ID=", joined)
@@ -867,9 +867,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self,
     ) -> None:
         cases = (
-            ("local-beta", "beta_local_anonymous_runtime"),
-            ("local-gamma", "gamma_local_anonymous_runtime"),
-            ("local-prod-sim", "prod_sim_anonymous_runtime"),
+            ("local-beta", "runtime_anonymous_session"),
+            ("local-gamma", "runtime_anonymous_session"),
+            ("local-prod-sim", "runtime_anonymous_session"),
         )
         for alias, expected_mode in cases:
             with self.subTest(alias=alias):

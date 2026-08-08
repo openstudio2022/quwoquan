@@ -1,7 +1,7 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
-from content.execution.support import Any, ExecutionContext, Mapping, _active_spec, read_json, store, write_json
+from content.execution.support import Any, ExecutionContext, Mapping, read_json, store, write_json
 from content.source.research.auto_plan_report import AUTO_RESEARCH_MERGE_ROW_KEYS
 from core.runtime_policy import active_runtime_policy
 
@@ -86,6 +86,14 @@ def _write_auto_research_report(
             aggregate.get("sourceAvailability"),
             wave_report.get("sourceAvailability"),
         )
+    completed_ids: list[str] = []
+    for source in (aggregate.get("completedEntityIds") or [], wave_report.get("completedEntityIds") or []):
+        for entity_id in source:
+            text = str(entity_id or "").strip()
+            if text and text not in completed_ids:
+                completed_ids.append(text)
+    aggregate["completedEntityIds"] = completed_ids
+    aggregate["completedEntityCount"] = len(completed_ids)
     wave = _auto_research_wave_summary(wave_report, scope=scope, entity_ids=entity_ids)
     waves = list(aggregate.get("waves") or [])
     waves.append(wave)
@@ -107,6 +115,11 @@ def _write_auto_research_report(
             aggregate[key] = wave_report.get(key)
         else:
             aggregate.pop(key, None)
+    aggregate["partialRun"] = bool(wave_report.get("partialRun"))
+    aggregate["remainingEntityIds"] = list(
+        wave_report.get("remainingEntityIds") or []
+    )
+    aggregate["remainingEntityCount"] = len(aggregate["remainingEntityIds"])
     aggregate["updatedAt"] = store.now_iso()
     write_json(path, aggregate)
     return aggregate
@@ -177,7 +190,7 @@ def _run_download_auto_research(
     from content.execution.recovery.download_unresolved import _auto_research_plan_path
     from content.execution.controller.control import _download_auto_research_progress_callback
     from content.source.research.auto_plan_public import write_auto_research_plans
-    from content.execution.campaign_external_input_runtime import (
+    from content.execution.campaign.external_input_runtime import (
         bound_runtime_external_input_context,
     )
     from content.execution.identity import parse_execution_id
@@ -211,12 +224,32 @@ def _run_download_auto_research(
     wave_size = _auto_research_wave_size(ctx, entity_count=len(ids), worker_count=worker_count)
     max_waves_per_run = runtime_policy.research_max_waves_per_run
     existing_wave_count = 0
+    completed_entity_ids: list[str] = []
+    existing: dict[str, Any] = {}
     if scope == "primary":
         path = _auto_research_plan_path(ctx)
         if path.is_file():
             try:
                 existing = read_json(path)
                 existing_wave_count = int(existing.get("waveCount") or 0)
+                completed_entity_ids = [
+                    str(entity_id).strip()
+                    for entity_id in (existing.get("completedEntityIds") or [])
+                    if str(entity_id or "").strip()
+                ]
+                if not completed_entity_ids:
+                    remaining = {
+                        str(entity_id).strip()
+                        for entity_id in (existing.get("remainingEntityIds") or [])
+                        if str(entity_id or "").strip()
+                    }
+                    for wave in existing.get("waves") or []:
+                        if not isinstance(wave, Mapping):
+                            continue
+                        for entity_id in wave.get("entityIds") or []:
+                            text = str(entity_id or "").strip()
+                            if text and text not in remaining and text not in completed_entity_ids:
+                                completed_entity_ids.append(text)
                 if existing.get("partialRun"):
                     interrupted_wave_remaining_ids = [
                         str(entity_id).strip()
@@ -236,7 +269,20 @@ def _run_download_auto_research(
                         ids = ids[min(pending_positions):]
             except (OSError, ValueError, TypeError):
                 existing_wave_count = 0
+                completed_entity_ids = []
+                existing = {}
+        completed_set = set(completed_entity_ids)
+        ids = [entity_id for entity_id in ids if entity_id not in completed_set]
+        if not ids and existing:
+            result = dict(existing)
+            result["partialRun"] = False
+            result["remainingEntityIds"] = []
+            result["remainingEntityCount"] = 0
+            result["completedEntityIds"] = completed_entity_ids
+            result["completedEntityCount"] = len(completed_entity_ids)
+            return result
     latest: dict[str, Any] = {}
+    completed_this_run = list(completed_entity_ids)
     for index in range(0, len(ids), wave_size):
         wave_ids = ids[index:index + wave_size]
         wave_index = index // wave_size + 1
@@ -270,13 +316,37 @@ def _run_download_auto_research(
         )
         if previous_aggregate is not None:
             write_json(aggregate_path, previous_aggregate)
-        remaining_ids = ids[index + wave_size:]
-        if max_waves_per_run and (wave_index % max_waves_per_run) == 0 and remaining_ids:
+        unstarted_ids = ids[index + wave_size:]
+        writer_remaining_ids = [
+            str(entity_id).strip()
+            for entity_id in (auto_report.get("remainingEntityIds") or [])
+            if str(entity_id or "").strip() in wave_ids
+        ]
+        for entity_id in wave_ids:
+            if entity_id not in writer_remaining_ids and entity_id not in completed_this_run:
+                completed_this_run.append(entity_id)
+        auto_report["completedEntityIds"] = list(completed_this_run)
+        auto_report["completedEntityCount"] = len(completed_this_run)
+        budget_exhausted = bool(
+            max_waves_per_run
+            and (wave_index % max_waves_per_run) == 0
+            and unstarted_ids
+        )
+        if auto_report.get("partialRun") or budget_exhausted:
+            remaining_ids = list(writer_remaining_ids)
+            for entity_id in unstarted_ids:
+                if entity_id not in remaining_ids:
+                    remaining_ids.append(entity_id)
             auto_report["partialRun"] = True
-            auto_report["partialReason"] = "max_auto_research_waves_per_run"
-            auto_report["maxAutoResearchWavesPerRun"] = max_waves_per_run
+            if budget_exhausted:
+                auto_report["partialReason"] = "max_auto_research_waves_per_run"
+                auto_report["maxAutoResearchWavesPerRun"] = max_waves_per_run
             auto_report["remainingEntityIds"] = remaining_ids
             auto_report["remainingEntityCount"] = len(remaining_ids)
+        else:
+            auto_report["partialRun"] = False
+            auto_report["remainingEntityIds"] = []
+            auto_report["remainingEntityCount"] = 0
         latest = _write_auto_research_report(
             ctx,
             auto_report,

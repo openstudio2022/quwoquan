@@ -392,3 +392,35 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_subscription/assistant_skill_subscription_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: skill_subscription_create_skill_subscription_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: CreateSkillSubscription}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_subscription/skill_subscription_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: skill_subscription_get_skill_subscription_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetSkillSubscription}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_subscription/skill_subscription_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: skill_subscription_list_skill_subscriptions_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListSkillSubscriptions}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_subscription/skill_subscription_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: skill_subscription_update_skill_subscription_status_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: UpdateSkillSubscriptionStatus}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_subscription/skill_subscription_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

@@ -15,7 +15,7 @@ func modelFailure(stage string, err error) rtfailures.Failure {
 		return rtfailures.FromCurrentAppError(appError)
 	}
 	return rtfailures.Failure{
-		Code:   "ASSISTANT.MIDDLEWARE.model_runtime_failed",
+		Code:   "ASSISTANT.MIDDLEWARE.model_provider_unavailable",
 		Origin: rtfailures.OriginRemoteDependency,
 		Kind:   rtfailures.KindModel,
 		Nature: rtfailures.NatureTransient,

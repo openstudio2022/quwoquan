@@ -109,10 +109,17 @@ func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T
 		t.Fatalf("terminal journal payload is not typed: %#v", completedEvent.Payload)
 	}
 	presentationEvents := []string{}
+	var presentationSnapshot, presentationCommit *runruntime.JournalEvent
 	for _, event := range events {
 		if event.Kind == "presentation_snapshot" ||
 			event.Kind == "presentation_commit" {
 			presentationEvents = append(presentationEvents, event.Kind)
+			eventCopy := event
+			if event.Kind == "presentation_snapshot" {
+				presentationSnapshot = &eventCopy
+			} else {
+				presentationCommit = &eventCopy
+			}
 		}
 	}
 	if len(presentationEvents) != 2 ||
@@ -120,6 +127,28 @@ func TestDurableWorkerPersistsTypedItemsAndVerifiedTerminalSnapshot(t *testing.T
 		presentationEvents[1] != "presentation_commit" {
 		t.Fatalf("presentation event lifecycle=%v", presentationEvents)
 	}
+	if presentationSnapshot == nil || presentationCommit == nil {
+		t.Fatalf("presentation events were not captured: %v", presentationEvents)
+	}
+	snapshotDocument, ok := presentationSnapshot.Payload["document"].(map[string]any)
+	if !ok || stringFieldForTest(snapshotDocument, "committedAt") != "" {
+		t.Fatalf("presentation snapshot must remain uncommitted: %#v", presentationSnapshot.Payload)
+	}
+	committedAt := stringFieldForTest(presentationCommit.Payload, "committedAt")
+	if _, err := time.Parse(time.RFC3339Nano, committedAt); err != nil ||
+		committedAt != stringFieldForTest(stored.PresentationDocument, "committedAt") {
+		t.Fatalf(
+			"presentation commit timestamp is not the persisted fact: payload=%#v stored=%#v err=%v",
+			presentationCommit.Payload,
+			stored.PresentationDocument,
+			err,
+		)
+	}
+}
+
+func stringFieldForTest(values map[string]any, key string) string {
+	value, _ := values[key].(string)
+	return value
 }
 
 func TestDurableWorkerPersistsModelDerivedTaskGraphPatches(t *testing.T) {

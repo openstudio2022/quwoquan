@@ -21,7 +21,7 @@
 - [`recommendation-platform`](./recommendation-platform/spec.md)：为训练、推理和评估提供统一模型生命周期，使推荐策略能够基于真实反馈安全晋升或回滚，并通过 HTTP 或不可变离线产物与 Go 推荐引擎协作。
 - [`runtime`](./runtime/spec.md)：runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integration-service 等独立机制 进程；部署边界不形成新的 L1，业务对象与 Vendor SDK 不得穿透。
 - [`shared-homepage-network`](./shared-homepage-network/spec.md)：让用户发现具体事物的长期主页、挂载内容和评价，并让可信主体通过认领、维护、状态上报与软下线保持主页事实可靠。
-- [`travel-journey`](./travel-journey/spec.md)：定义 Gathering 上 Plan、Map、Calendar、Experience 的旅行体验组合，并治理现有 travel-service 到 Circle 目标模型的 target-only 迁移；不再把 Trip 定义为长期公共独立根。
+- [`travel-journey`](./travel-journey/spec.md)：定义 Gathering 上 Plan、Map、Calendar、Experience 的旅行体验组合，并治理已退役 travel-service 的历史数据到 Circle 目标模型的 target-only 迁移；Trip 不是长期公共独立根，travel-service 不是现行能力。
 - [`user-identity-profile-relationship`](./user-identity-profile-relationship/spec.md)：让用户以默认账号或明确选择的 Persona 安全进入应用、维护公开资料和设置、建立或解除关系，并在所有业务领域获得一致的主体与权限语义。
 
 ## 3. 跨域协作与数据流
@@ -50,12 +50,12 @@
 - 关联要求：`REQ-001`
 
 <a id="dec-002"></a>
-### DEC-002 四环境 Remote、内容 release 与领域 command 单轨
-- 决策：alpha/beta/gamma/prod 的 App 使用同一 Remote composition；内容、Creator、实体与发布媒体只由环境已激活的 canonical immutable release 提供，用户、评论、圈子、会话与消息只由所属领域公开 command/event 产生。Alpha/Beta/Gamma 允许候选绑定的真实非生产验收数据，Prod 为真实数据专用。
+### DEC-002 四环境 Remote、测试启动、内容 release 与领域 command 单轨
+- 决策：alpha/beta/gamma/prod 的 App 使用同一 Remote composition。Alpha/Beta/Gamma test-live 从当前工作树与拓扑实时编译启动，source/config/generated/runtime/content/Provider 漂移只形成告警，不要求 immutable candidate。无 active content release 时只呈现 canonical `no_active_release`/typed unavailable。内容、Creator、实体与发布媒体的可用性验收仍只由 canonical immutable release 提供。Prod 发布必须使用稳定源码、immutable package、真实 Provider 与完整 release/rollback 证据。
 - 决策：`productLifecycleState` 独立于环境名；当前四环境可承载 `releaseClass=research` 的内部研究 release，但必须关闭匿名内容/媒体、公开 CDN、分享、导出与索引，并使用白名单身份、内部签名、研究态标识、短期签名 URL 和访问审计。切换 `commercial` 时冻结新 source digest 与 release，只投影 `rightsStatus=verified && distributionDecision=commercial_allowed`，不得就地改写或复用 research release/receipt。
 - 理由：环境内 Mock、fixture seed、数据库直写或派生投影预填会绕过 importer、媒体交付、鉴权、聚合不变量与事件恢复链路，产生无法晋级到生产的伪绿。
 - 被否决方案：Alpha runner 注入聚合 Mock、由环境名推断 lifecycle、T3/UAT 直写数据库、服务失败后返回 fixture、把评论或消息混入内容 release、把 research receipt 冒充 commercial readiness、在 Prod 创建测试业务对象。
-- 约束与影响：测试 double 只存在于 local_contract 测试树。Alpha/Beta/Gamma 的验收写入必须绑定真实非生产主体、公开 command receipt、候选摘要和受控清理；非 Prod 第三方 Provider substitute 只存在于服务防腐层并返回真实成功或结构化 unavailable。回滚仅允许上一 Remote artifact、service config 或 canonical release。
+- 约束与影响：测试 double 只存在于 local_contract 测试树。Alpha/Beta/Gamma 的 test-live 启动不得把告警升级成内容或环境 Green 证据；真实验收写入仍绑定非生产主体、公开 command receipt 与受控清理。非 Prod 第三方 Provider substitute 只存在于服务防腐层并返回真实成功或结构化 unavailable。Prod 回滚仅允许上一 Remote artifact、service config 或 canonical release。
 - 关联要求：`REQ-009`、`REQ-010`
 
 <a id="dec-003"></a>
@@ -63,7 +63,7 @@
 - 决策：共同旅行的活动身份、Host、Participation、准入、会话、生命周期与 Outcome 由 Circle 的 Gathering 单轨拥有；Plan、Map、Calendar 与 Experience 是可选能力组合。`travel_companion` 只通过 active Skill package、公开 Reader、受控 Tool/Connector 和 typed ActionIntent 读取或提议改变 owner 事实。
 - 理由：1:1、多人兴趣活动和多日旅行共享同一参与与协作不变量；继续让 Trip 成为公共独立根会复制成员、会话、取消与完成状态。聊天文本和 Assistant 状态同样不能承担不可变修订、主动提醒、地图与内容关联。
 - 被否决方案：Trip 与 Gathering 长期双根、Chat Message 充当当前计划、Assistant 保存活动副本、按旅行垂类建立专用 App/Agent 分支。
-- 约束与影响：现有 travel-service 只按逐对象 target-only 流迁移；切流后只读 Circle 目标，不双读、不双写、不保留兼容 fallback。Presentation 只通过安全语义 AST 与 canonical object reference 打开 owner 页面。
+- 约束与影响：travel-service 的进程、contracts、generated client 与 App 装配已删除，其历史数据只按逐对象 target-only 流迁移；生产读写只指向 Circle 目标，不双读、不双写、不保留兼容 fallback，也不得为迁移恢复源服务。Presentation 只通过安全语义 AST 与 canonical object reference 打开 owner 页面。
 - 关联要求：`REQ-008`、`REQ-012`
 
 <a id="dec-004"></a>

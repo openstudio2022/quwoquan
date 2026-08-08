@@ -103,6 +103,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         baseline = "sha256:" + "1" * 64
         runtime_image = "sha256:" + "2" * 64
         runtime_config = "sha256:" + "3" * 64
+        service_configuration = "sha256:" + "8" * 64
         package_image = "sha256:" + "4" * 64
         build_input = "sha256:" + "5" * 64
         provider_image = "sha256:" + "6" * 64
@@ -114,7 +115,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             "status": "running",
             "workload": "full",
             "candidateDigest": baseline,
-            "configurationDigest": runtime_config,
+            "configurationDigest": service_configuration,
             "imageTransportTag": provider_conformance.immutable_image_digest(
                 {"assistant-service": runtime_image}
             ),
@@ -126,6 +127,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         manifest = {
             "baselineId": baseline,
             "sourceRevision": commit,
+            "configurationDigest": service_configuration,
             "runtimeConfigDigest": runtime_config,
             "imageDigest": package_image,
             "buildInputDigest": build_input,
@@ -134,7 +136,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             "schema": "stackctl-package-oci-images",
             "environment": "alpha",
             "target": "alpha-local",
-            "configurationDigest": runtime_config,
+            "configurationDigest": service_configuration,
             "imageDigest": package_image,
             "buildInputDigest": build_input,
             "images": {
@@ -145,14 +147,18 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             },
         }
 
-        def issues(receipt: dict[str, object]) -> list[str]:
+        def issues(
+            receipt: dict[str, object],
+            *,
+            oci_payload: dict[str, object] = oci,
+        ) -> list[str]:
             return provider_conformance._nonprod_active_candidate_issues(
                 environment="alpha",
                 target="alpha-local",
                 startup=receipt,
                 active=active,
                 manifest=manifest,
-                oci=oci,
+                oci=oci_payload,
                 commit=commit,
                 image_digest=provider_image,
                 contract_graph_digest=contract_graph,
@@ -169,10 +175,17 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         )
         stale_config = {
             **startup,
-            "configurationDigest": "sha256:" + "8" * 64,
+            "configurationDigest": "sha256:" + "9" * 64,
         }
         self.assertTrue(
             any("configuration digest is stale" in issue for issue in issues(stale_config))
+        )
+        stale_oci = {**oci, "configurationDigest": "sha256:" + "a" * 64}
+        self.assertTrue(
+            any(
+                "configuration digest is stale" in issue
+                for issue in issues(startup, oci_payload=stale_oci)
+            )
         )
         stale_image = deepcopy(startup)
         stale_image["imageComposition"]["images"]["assistant-service"]["ref"] = (

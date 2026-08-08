@@ -20,8 +20,8 @@ import 'package:quwoquan_app/design_system/chat/conversation_timeline.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/message_action_menu_overlay.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/message_receipt_sheet.dart';
 import 'package:quwoquan_app/design_system/chat/chat_mention_text_editing_controller.dart';
-import 'package:quwoquan_app/runtime/di/presentation/customizable_chat_input_bar.dart';
-import 'package:quwoquan_app/runtime/di/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/customizable_chat_input_bar.dart';
+import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -58,15 +58,16 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/publi
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_mention_picker.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_bubble.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_voice_recorder.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_launch_contract.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         ChatGetMessageReceiptsQuery,
         ChatListConversationMembersQuery,
         ChatMessageReceipt;
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 part 'chat_conversation_page_actions.dart';
+part 'chat_conversation_page_media_actions.part.dart';
 part 'chat_conversation_page_selection_actions.dart';
 
 String formatChatTime(String? raw) {

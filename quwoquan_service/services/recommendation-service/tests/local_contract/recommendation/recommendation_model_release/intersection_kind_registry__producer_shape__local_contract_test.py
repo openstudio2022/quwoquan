@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -14,7 +15,9 @@ SCRIPT = (
     REPO_ROOT
     / "quwoquan_service"
     / "scripts"
+    / "recommendation-service"
     / "recommendation"
+    / "recommendation_model_release"
     / "verify_intersection_kind_registry.py"
 )
 
@@ -26,7 +29,13 @@ def load_verifier():
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # 源码树禁止 __pycache__；加载被测门禁脚本时不得写字节码。
+    previous = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
     return module
 
 

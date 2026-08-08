@@ -48,6 +48,26 @@ relationships:
 local_identity_reasons:
   clientMsgId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
     reference
+search_policy:
+  exposed: local_only
+  object_type_refs:
+  - chat.message
+  delegated_enforcement: "消息正文只在端侧本机索引内可检索，服务端不投影消息内容；跨设备检索缺失是有意的隐私边界，不得以服务端索引补齐。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.chat.message.read
+  cite:
+    mode: internal_reference
+    scopes:
+    - assistant.chat.message.cite
+  write:
+    mode: proposal_only
+    scopes:
+    - assistant.chat.message.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.chat.message.write
 business_rules:
 - clientMsgId 在 conversationId + sender persona 范围内唯一
 - sender 必须是 active ConversationMembership，actor 只能来自 trusted principal

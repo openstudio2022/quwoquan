@@ -371,6 +371,9 @@ def apply_inventory_delta(
     total_bytes = int(current["stats"]["totalBytes"])
     mutations: list[dict[str, Any]] = []
     ordered = list(reversed(entries)) if reverse else list(entries)
+    destinations = [str(row.get("destination") or "") for row in ordered]
+    if len(destinations) != len(set(destinations)):
+        raise ObjectTransactionError("canonical inventory delta contains duplicate paths")
     path = canonical_inventory_path(publish_root)
     with _connect(path) as connection:
         for raw in ordered:
@@ -379,19 +382,27 @@ def apply_inventory_delta(
             ).as_posix()
             operation = raw.get("operation")
             current_row = _entry(connection, destination)
-            after_row = _leaf(
-                destination,
-                str(raw.get("sha256") or ""),
-                int(raw.get("bytes") or 0),
+            after_row = (
+                _leaf(
+                    destination,
+                    str(raw.get("sha256") or ""),
+                    int(raw.get("bytes") or 0),
+                )
+                if operation in {"create", "replace"}
+                else None
             )
             before_row = None
-            if operation == "replace":
+            if operation in {"replace", "delete"}:
                 before_row = _leaf(
                     destination,
                     str(raw.get("beforeSha256") or ""),
                     int(raw.get("beforeBytes") or 0),
                 )
-            elif operation != "create":
+            if operation == "delete" and ("sha256" in raw or "bytes" in raw):
+                raise ObjectTransactionError(
+                    "canonical inventory delete must bind only before bytes"
+                )
+            if operation not in {"create", "replace", "delete"}:
                 raise ObjectTransactionError(
                     f"invalid canonical inventory operation: {operation}"
                 )
@@ -524,7 +535,12 @@ def validate_delta_materialization(
         destination = publish_root / _safe_rel(
             str(raw.get("destination") or ""), label="delta.destination"
         )
-        if reverse and raw.get("operation") == "create":
+        expects_absence = (
+            reverse and raw.get("operation") == "create"
+        ) or (
+            not reverse and raw.get("operation") == "delete"
+        )
+        if expects_absence:
             if destination.exists():
                 raise ObjectTransactionError(
                     f"rolled-back canonical path still exists: {destination}"

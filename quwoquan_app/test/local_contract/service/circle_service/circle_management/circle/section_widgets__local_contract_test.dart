@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/content/post_preview_list_tile.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/circle_creations_presentation_slots.dart'
+    show circleCreationsParticipantSlots;
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/circle_state_provider.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/application/public/circle_file_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_post_placement/application/public/circle_post_placement_commands.dart';
-import 'package:quwoquan_app/runtime/di/presentation/section_creations.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/section_creations.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/section_chat.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/presentation/section_storage.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -139,6 +141,7 @@ void main() {
               circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
+              participantSlots: circleCreationsParticipantSlots,
             ),
           ),
         ),
@@ -204,6 +207,7 @@ void main() {
               circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
+              participantSlots: circleCreationsParticipantSlots,
             ),
           ),
           feedQuery: feedQuery,
@@ -243,6 +247,7 @@ void main() {
               circleId: 'empty',
               isDark: false,
               role: CircleRole.member,
+              participantSlots: circleCreationsParticipantSlots,
             ),
           ),
         ),
@@ -271,6 +276,7 @@ void main() {
                 circleId: 'empty',
                 isDark: false,
                 role: CircleRole.owner,
+                participantSlots: circleCreationsParticipantSlots,
               ),
             ),
             textScaleFactor: 1.3,
@@ -299,6 +305,7 @@ void main() {
               circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
+              participantSlots: circleCreationsParticipantSlots,
             ),
           ),
           circleQuery: circleQuery,
@@ -333,6 +340,7 @@ void main() {
                 circleId: 'fixture_circle_photo',
                 isDark: false,
                 role: CircleRole.owner,
+                participantSlots: circleCreationsParticipantSlots,
               ),
             ),
             textScaleFactor: 1.4,
@@ -361,6 +369,7 @@ void main() {
               circleId: 'fixture_circle_photo',
               isDark: false,
               role: CircleRole.owner,
+              participantSlots: circleCreationsParticipantSlots,
             ),
           ),
           circleQuery: circleQuery,

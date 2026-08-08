@@ -1,4 +1,5 @@
 """Run and bind one read-only independent managed-SDK reviewer per post object."""
+
 from __future__ import annotations
 
 import hashlib
@@ -21,7 +22,7 @@ from core.io import read_json, write_json
 from core.prompt_render import render as render_prompt
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
-from governance.coverage.license import rights_enforcement_mode
+from governance.coverage.license import RightsEnforcementMode, rights_proof_required
 
 from content.execution import store
 from content.execution.context import ExecutionContext
@@ -96,7 +97,11 @@ def _media_policy(object_dir: Path, manifest: Mapping[str, Any]) -> str:
     vertical = str(manifest.get("vertical") or "").strip()
     if not vertical:
         raise ValueError("post manifest missing vertical rights policy owner")
-    mode = rights_enforcement_mode(vertical)
+    mode = (
+        RightsEnforcementMode.ENFORCE
+        if rights_proof_required(vertical)
+        else RightsEnforcementMode.AUDIT_ONLY
+    )
     assets: list[dict[str, object]] = []
     for raw in manifest.get("assets") or []:
         if not isinstance(raw, Mapping):
@@ -131,9 +136,7 @@ def _media_policy(object_dir: Path, manifest: Mapping[str, Any]) -> str:
                 else "missing rights proof is a blocking issue"
             ),
             "sourceUrls": [
-                str(url)
-                for url in manifest.get("sourceUrls") or []
-                if str(url).strip()
+                str(url) for url in manifest.get("sourceUrls") or [] if str(url).strip()
             ],
             "assets": assets,
         },
@@ -282,7 +285,9 @@ def _run_post_independent_reviews_serial(
             )
         output_path.unlink(missing_ok=True)
         if not outcome.succeeded or payload is None:
-            failure_root = execution_root(ctx.execution_id) / "evidence/reviewer_failures"
+            failure_root = (
+                execution_root(ctx.execution_id) / "evidence/reviewer_failures"
+            )
             failure_root.mkdir(parents=True, exist_ok=True)
             failure_path = failure_root / (
                 hashlib.sha256(ref.encode("utf-8")).hexdigest()[:20] + ".json"

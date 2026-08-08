@@ -11,14 +11,16 @@ import (
 
 func TestDataContentPublicPortIsReachableFromCanonicalLocalContract(t *testing.T) {
 	job := reliabletask.DataContentJob{
-		EntityRef:      "entity/地点/景区/001",
-		Carrier:        "homepage",
-		SourceRevision: "sha256:" + strings.Repeat("a", 64),
-		JobID:          "job-001",
-		ExecutionID:    "20260722--runtime-test-directory--cn-zhejiang--001",
-		Ref:            "entity/地点/景区/001",
-		Stage:          "author",
-		PartitionKey:   "entity/地点/景区/001",
+		EntityRef:            "entity/地点/景区/001",
+		Carrier:              "homepage",
+		SourceRevision:       "sha256:" + strings.Repeat("a", 64),
+		JobID:                "job-001",
+		ExecutionID:          "20260722--runtime-test-directory--cn-zhejiang--001",
+		Ref:                  "entity/地点/景区/001",
+		Stage:                "author",
+		PartitionKey:         "entity/地点/景区/001",
+		JobSetEnvelopeDigest: "sha256:" + strings.Repeat("e", 64),
+		JobSetDigest:         "sha256:" + strings.Repeat("f", 64),
 	}
 	key, err := job.ExpectedIdempotencyKey()
 	if err != nil {

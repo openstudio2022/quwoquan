@@ -3,6 +3,7 @@ package assistant_run_test
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -34,18 +35,40 @@ func TestCanonicalDomainResolverRegistrationUsesOneTrustedObjectTarget(t *testin
 		Value:        map[string]any{"postId": "post-1", "visibility": "public"},
 		Summary:      "content.Post post-1",
 	}}
-	registrations, err := contextinfra.NewCanonicalDomainResolverRegistrations(
-		runs,
-		domainreader.CanonicalReaders{
-			Circle: &canonicalObjectReaderStub{}, Content: content, Entity: &canonicalObjectReaderStub{},
+	descriptor := publicObjectReaderDescriptor(
+		t,
+		"content.post_context",
+		"content.current_context",
+		"content-service",
+		"content.post.GetPost",
+		"content.ContentPostDetailQuery",
+		"content.Post",
+	)
+	catalog, err := readerresource.NewCatalog([]readermodel.Descriptor{descriptor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readers, err := domainreader.NewCanonicalReaderRegistry(
+		catalog,
+		domainreader.ReaderRegistration{
+			DescriptorID: descriptor.DescriptorID,
+			Reader:       content,
 		},
 	)
-	if err != nil || len(registrations) != 3 {
+	if err != nil {
+		t.Fatal(err)
+	}
+	registrations, err := contextinfra.NewCanonicalDomainResolverRegistrations(
+		catalog,
+		runs,
+		readers,
+	)
+	if err != nil || len(registrations) != 1 {
 		t.Fatalf("registrations=%+v err=%v", registrations, err)
 	}
 	var contentResolver application.Resolver
 	for _, registration := range registrations {
-		if registration.ResolverRef == contextinfra.ContentContextResolverRef {
+		if registration.ResolverRef == "content.current_context" {
 			contentResolver = registration.Resolver
 		}
 	}
@@ -67,35 +90,115 @@ func TestCanonicalDomainResolverRegistrationUsesOneTrustedObjectTarget(t *testin
 	}
 }
 
-func TestCanonicalDomainReaderCompositionBuildsOneRuntimeRegistry(t *testing.T) {
+func TestDescriptorDrivenRegistryAddsFourthReaderWithoutRuntimeBranch(t *testing.T) {
 	descriptors, err := contextinfra.RuntimeDescriptors()
 	if err != nil {
 		t.Fatal(err)
 	}
+	gatheringDescriptor := publicObjectReaderDescriptor(
+		t,
+		"circle.gathering_context",
+		"gathering.current_context",
+		"circle-service",
+		"circle.gathering.GetPublicGathering",
+		"circle.PublicGatheringQuery",
+		"circle.Gathering",
+	)
+	descriptors = append(descriptors, gatheringDescriptor)
 	catalog, err := readerresource.NewCatalog(descriptors)
 	if err != nil {
 		t.Fatal(err)
 	}
 	reader := &canonicalObjectReaderStub{}
+	definitions := append(
+		domainreader.ProductionReaderDefinitions(),
+		domainreader.ReaderDefinition{
+			DescriptorID: gatheringDescriptor.DescriptorID,
+			SurfaceKinds: []string{"gathering"},
+			Build: func(
+				_ domainreader.ReaderTransport,
+				authority domainreader.ReaderAuthority,
+				_ func() time.Time,
+			) (domainreader.ObjectContextReader, error) {
+				if authority.ResolverRef != gatheringDescriptor.ResolverRef ||
+					authority.OperationRef != gatheringDescriptor.OwnerOperationRefs[0] ||
+					authority.ObjectTypeRef != gatheringDescriptor.ObjectTypeRefs[0] {
+					t.Fatalf("factory authority=%+v", authority)
+				}
+				return reader, nil
+			},
+		},
+	)
+	readers, err := domainreader.NewCanonicalReaders(domainreader.CanonicalReadersConfig{
+		Descriptors: catalog,
+		Definitions: definitions,
+		ServiceTransports: map[string]domainreader.ReaderTransport{
+			"circle-service":  {BaseURL: "http://circle.invalid", HTTPClient: http.DefaultClient},
+			"content-service": {BaseURL: "http://content.invalid", HTTPClient: http.DefaultClient},
+			"entity-service":  {BaseURL: "http://entity.invalid", HTTPClient: http.DefaultClient},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	registry, err := contextinfra.NewRuntimeRegistryWithCanonicalReaders(
 		catalog,
 		canonicalObjectRunReader{run: runruntime.Run{RunID: "run-composition"}},
 		nil,
 		nil,
-		domainreader.CanonicalReaders{Circle: reader, Content: reader, Entity: reader},
+		readers,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, resolverRef := range []string{
-		contextinfra.CircleContextResolverRef,
-		contextinfra.ContentContextResolverRef,
-		contextinfra.EntityContextResolverRef,
+		"circle.current_context",
+		"content.current_context",
+		"entity.current_context",
+		"gathering.current_context",
 	} {
 		descriptor, ok := registry.Describe(t.Context(), resolverRef)
 		if !ok || descriptor.ResolverRef != resolverRef {
 			t.Fatalf("resolver %q is absent from production registry: %+v", resolverRef, descriptor)
 		}
+	}
+}
+
+func TestDescriptorDrivenReaderRegistryFailsClosedForInvalidBindings(t *testing.T) {
+	descriptor := publicObjectReaderDescriptor(
+		t,
+		"content.post_context",
+		"content.current_context",
+		"content-service",
+		"content.post.GetPost",
+		"content.ContentPostDetailQuery",
+		"content.Post",
+	)
+	catalog, err := readerresource.NewCatalog([]readermodel.Descriptor{descriptor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &canonicalObjectReaderStub{}
+	valid := domainreader.ReaderRegistration{
+		DescriptorID: descriptor.DescriptorID,
+		Reader:       reader,
+	}
+	if _, err := domainreader.NewCanonicalReaderRegistry(catalog, valid, valid); err == nil {
+		t.Fatal("duplicate descriptor registration was accepted")
+	}
+	if _, err := domainreader.NewCanonicalReaderRegistry(catalog); err == nil {
+		t.Fatal("descriptor without adapter registration was accepted")
+	}
+	unknown := valid
+	unknown.DescriptorID = "content.unknown_context"
+	if _, err := domainreader.NewCanonicalReaderRegistry(catalog, unknown); err == nil {
+		t.Fatal("unknown adapter registration was accepted")
+	}
+	if _, err := domainreader.NewCanonicalReaderRegistry(catalog, domainreader.ReaderRegistration{}); err == nil {
+		t.Fatal("empty reader registration was accepted")
+	}
+	if reader.calls != 0 {
+		t.Fatalf("invalid registration executed Reader calls=%d", reader.calls)
 	}
 }
 
@@ -222,4 +325,41 @@ func (reader *canonicalObjectReaderStub) ReadObjectContext(
 	reader.calls++
 	reader.target = target
 	return reader.value, reader.err
+}
+
+func publicObjectReaderDescriptor(
+	t *testing.T,
+	descriptorID string,
+	resolverRef string,
+	ownerService string,
+	operationRef string,
+	inputSchemaRef string,
+	objectTypeRef string,
+) readermodel.Descriptor {
+	t.Helper()
+	descriptor, err := readermodel.NewDescriptor(readermodel.Descriptor{
+		DescriptorID:        descriptorID,
+		ResolverRef:         resolverRef,
+		OwnerService:        ownerService,
+		OwnerOperationRefs:  []string{operationRef},
+		InputSchemaRef:      inputSchemaRef,
+		OutputSchemaRef:     "assistant.ContextSegment",
+		ObjectTypeRefs:      []string{objectTypeRef},
+		AcceptedSourceKinds: []string{"domain"},
+		Authority:           generated.AssistantContextAuthorityDomainCanonical,
+		Sensitivity:         generated.AssistantContextSensitivityPublic,
+		MaxFreshnessSeconds: 300,
+		CacheTTLSeconds:     30,
+		SurfaceKinds: []readermodel.SurfaceKind{
+			readermodel.SurfacePersonal,
+			readermodel.SurfaceShared,
+			readermodel.SurfacePublic,
+		},
+		ArtifactPolicy: readermodel.ArtifactInlineBounded,
+		CitationPolicy: readermodel.CitationEntityReference,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return descriptor
 }

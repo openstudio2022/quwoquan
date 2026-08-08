@@ -108,6 +108,7 @@ def apply_release(
         creator_import_ref = ""
         content_import_ref = ""
         homepage_import_ref = ""
+        coverage_receipt_ref = ""
         if args.import_to_db:
             tag_receipt = dependencies.run_tag_importer(
                 release=release,
@@ -164,6 +165,20 @@ def apply_release(
             homepage_import_ref = (run / "homepage-import.json").relative_to(
                 dependencies.output_root
             ).as_posix()
+            coverage_receipt = (
+                dependencies.write_environment_coverage_receipt(
+                    environment=target.environment,
+                    release_id=release_id,
+                    run_id=run_id,
+                    release_root=release,
+                    run_root=run,
+                    importer_report=homepage_import_report,
+                    api_base_url=target.api_base_url,
+                )
+            )
+            coverage_receipt_ref = coverage_receipt.relative_to(
+                dependencies.output_root
+            ).as_posix()
             expected_entities = contract.get("desiredRefs", {}).get("entities", [])
             if not args.dry_run and expected_entities:
                 try:
@@ -211,6 +226,11 @@ def apply_release(
                 "creatorImportReportRef": creator_import_ref,
                 "contentImportReportRef": content_import_ref,
                 "homepageImportReportRef": homepage_import_ref,
+                **(
+                    {"coverageReceiptRef": coverage_receipt_ref}
+                    if coverage_receipt_ref
+                    else {}
+                ),
             },
             "environment_release_result",
         )
@@ -306,6 +326,7 @@ def rollback_release(
     creator_import_ref = ""
     content_import_ref = ""
     homepage_import_ref = ""
+    coverage_receipt_ref = ""
     if args.import_to_db:
         tag_receipt = dependencies.run_tag_importer(
             release=release,
@@ -360,6 +381,18 @@ def rollback_release(
         homepage_import_ref = (run / "homepage-import.json").relative_to(
             dependencies.output_root
         ).as_posix()
+        coverage_receipt = dependencies.write_environment_coverage_receipt(
+            environment=target.environment,
+            release_id=target_id,
+            run_id=run_id,
+            release_root=release,
+            run_root=run,
+            importer_report=homepage_import_report,
+            api_base_url=target.api_base_url,
+        )
+        coverage_receipt_ref = coverage_receipt.relative_to(
+            dependencies.output_root
+        ).as_posix()
         expected_entities = contract.get("desiredRefs", {}).get("entities", [])
         if not args.dry_run and expected_entities:
             try:
@@ -407,6 +440,11 @@ def rollback_release(
             "creatorImportReportRef": creator_import_ref,
             "contentImportReportRef": content_import_ref,
             "homepageImportReportRef": homepage_import_ref,
+            **(
+                {"coverageReceiptRef": coverage_receipt_ref}
+                if coverage_receipt_ref
+                else {}
+            ),
         },
         "environment_release_result",
     )

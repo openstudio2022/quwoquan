@@ -29,6 +29,20 @@ relationships:
 local_identity_reasons:
   deviceId: account-scoped stable device lookup key; the DeviceRegistration aggregate identity remains
     id
+search_policy:
+  exposed: none
+  not_exposed_reason: "认证、凭据与会话安全对象，任何检索暴露都会直接削弱账号安全。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "认证凭据、会话密钥与风控状态对小趣完全关闭，不存在可开放的子集。"
 business_rules:
 - identity 固定为 accountId + deviceId
 - DevicePushEndpoint identity 固定为 accountId + deviceId + endpointKind，不能独立于父聚合访问
@@ -54,6 +68,9 @@ lifecycle:
 members:
   DevicePushEndpoint:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [endpointRef]
+    cardinality: many
     max_cardinality: 2
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: 只能经 DeviceRegistration 命令维护的 APNs VoIP / FCM endpoint。

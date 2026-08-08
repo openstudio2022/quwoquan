@@ -1,11 +1,11 @@
-kind: aggregate_root
+kind: process_manager
 description: 具有独立租约、重试预算、频控与 DLQ 生命周期的通知投递作业。
 identity:
   fields:
   - id
-  version_source: store_commit
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: public_contract_only
   queries: named_reader
 relationships:
@@ -68,6 +68,20 @@ local_identity_reasons:
   deviceId: delivery routing key scoped to one NotificationDeliveryJob; authoritative device lifecycle
     remains in user.DeviceRegistration
   eventId: immutable source-event correlation key, not a standalone aggregate identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "流程编排对象只表达内部推进状态与补偿进度，没有用户可检索语义。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "服务内部投影与编排状态不构成小趣可用上下文，只服务所属域自身推进。"
 business_rules:
 - notificationId、channel 与 destinationRef 创建后不可变
 - 同一 delivery identity 只存在一个活动 Job

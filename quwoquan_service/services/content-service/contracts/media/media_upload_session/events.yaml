@@ -2,6 +2,7 @@ events:
 - name: MediaUploadInitialized
   description: 上传会话已创建，且已绑定 owner、objectKey、expectedSha256 和过期时间。
   delivery_semantics: transactional_outbox
+  wire_event_type: content.media_upload.initialized
   payload_entity: MediaUploadSession
   payload_fields:
   - id
@@ -12,6 +13,7 @@ events:
 - name: MediaUploadCompleted
   description: 上传会话完成；同一事务内物化 MediaAssetCreated 事实。
   delivery_semantics: transactional_outbox
+  wire_event_type: content.media_upload.completed
   payload_entity: MediaUploadSession
   payload_fields:
   - id
@@ -22,6 +24,7 @@ events:
 - name: MediaUploadAborted
   description: 上传会话已中止，后续完成回调必须拒绝。
   delivery_semantics: transactional_outbox
+  wire_event_type: content.media_upload.aborted
   payload_entity: MediaUploadSession
   payload_fields:
   - id

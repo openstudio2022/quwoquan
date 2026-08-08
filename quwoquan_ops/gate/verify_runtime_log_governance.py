@@ -17,6 +17,10 @@ from quwoquan_ops.cli.lib import external_provider_governance as provider_govern
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     local_elasticsearch_image_digest,
 )
+from quwoquan_ops.cli.lib.storage_contract_view import (
+    StorageContractViewError,
+    load_storage_contract_view,
+)
 
 CATALOG = ROOT / "quwoquan_service/contracts/metadata/_shared/runtime_observability.yaml"
 STORAGE = ROOT / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/storage.yaml"
@@ -48,12 +52,23 @@ LOG_SINK_RESOLVER = ROOT / "quwoquan_ops/cli/lib/product_telemetry_log_sink.py"
 CANDIDATE_MANIFEST = ROOT / "quwoquan_ops/cli/lib/deployment_candidate_manifest.py"
 STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
 SLS_TOKEN = re.compile(r"(?<![A-Za-z0-9])SLS(?![A-Za-z0-9])", re.IGNORECASE)
+RUNTIME_LOG_STORAGE_KEYS = frozenset(
+    {
+        "backend",
+        "role",
+        "collections",
+        "redis_cache",
+        "environment_backends",
+        "fallback",
+        "logstores",
+    }
+)
 
 
 def main() -> int:
     issues: list[str] = []
     catalog = _load(CATALOG, issues)
-    storage = _load(STORAGE, issues)
+    storage = _load_storage(STORAGE, issues)
     rollups = _load(ROLLUPS, issues)
     _verify_catalog(catalog, issues)
     _verify_elasticsearch(storage, rollups, issues)
@@ -156,6 +171,19 @@ def _load(path: Path, issues: list[str]) -> dict[str, object]:
         issues.append(f"{_rel(path)} must contain a mapping")
         return {}
     return payload
+
+
+def _load_storage(path: Path, issues: list[str]) -> dict[str, object]:
+    try:
+        return load_storage_contract_view(
+            path,
+            expected_keys=RUNTIME_LOG_STORAGE_KEYS,
+        )
+    except StorageContractViewError as exc:
+        issues.append(
+            f"{_rel(path)} cannot be decoded by canonical storage view: {exc}"
+        )
+        return {}
 
 
 def _verify_runtime_log_http_registration(

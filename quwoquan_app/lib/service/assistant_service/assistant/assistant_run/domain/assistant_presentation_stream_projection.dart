@@ -23,15 +23,20 @@ class AssistantPresentationStreamProjection {
   int get revision => _revision;
   bool get committed => _committed;
 
-  void seedCommitted(AssistantPresentationDocumentWire document) {
-    if (document.revision <= 0 || document.committedAt.trim().isEmpty) {
+  void seed(AssistantPresentationDocumentWire document) {
+    if (document.revision <= 0) {
+      throw const FormatException('seed presentation revision is invalid');
+    }
+    final committedAt = document.committedAt;
+    final committed = committedAt.isNotEmpty;
+    if (committed && _committedAtFromPayload(committedAt) == null) {
       throw const FormatException(
-        'seed presentation must be a committed document',
+        'seed presentation commit timestamp is invalid',
       );
     }
     _document = document;
     _revision = document.revision;
-    _committed = true;
+    _committed = committed;
     _eventPayloads.clear();
   }
 
@@ -81,9 +86,9 @@ class AssistantPresentationStreamProjection {
         final parsed = AssistantPresentationDocumentWire.fromJson(
           (payload['document'] as Map).cast<String, dynamic>(),
         );
-        if (parsed.revision != revision) {
+        if (parsed.revision != revision || parsed.committedAt.isNotEmpty) {
           throw const FormatException(
-            'presentation snapshot revision mismatch',
+            'presentation snapshot revision or commit state is invalid',
           );
         }
         _document = parsed;
@@ -106,7 +111,17 @@ class AssistantPresentationStreamProjection {
         if (_revision == 0 || current == null) {
           throw const FormatException('invalid presentation commit');
         }
-        _document = _copyDocument(current, revision: revision);
+        final committedAt = _committedAtFromPayload(payload['committedAt']);
+        if (committedAt == null) {
+          throw const FormatException(
+            'presentation commit timestamp is missing or invalid',
+          );
+        }
+        _document = _copyDocument(
+          current,
+          revision: revision,
+          committedAt: committedAt,
+        );
         _committed = true;
         break;
       default:
@@ -115,6 +130,19 @@ class AssistantPresentationStreamProjection {
     _revision = revision;
     _eventPayloads[revision] = encodedPayload;
     return _document;
+  }
+
+  String? _committedAtFromPayload(Object? rawValue) {
+    if (rawValue is! String) {
+      return null;
+    }
+    final value = rawValue.trim();
+    if (!RegExp(
+      r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$',
+    ).hasMatch(value)) {
+      return null;
+    }
+    return DateTime.tryParse(value) == null ? null : value;
   }
 
   List<AssistantPresentationNodeWire> _applyPatches(
@@ -225,6 +253,7 @@ AssistantPresentationDocumentWire _copyDocument(
   AssistantPresentationDocumentWire document, {
   required int revision,
   List<AssistantPresentationNodeWire>? nodes,
+  String? committedAt,
 }) {
   return AssistantPresentationDocumentWire(
     templateRef: document.templateRef,
@@ -236,8 +265,13 @@ AssistantPresentationDocumentWire _copyDocument(
     selectedVariant: document.selectedVariant,
     fallbackMarkdown: document.fallbackMarkdown,
     fallbackPlainText: document.fallbackPlainText,
-    committedAt: document.committedAt,
+    committedAt: committedAt ?? document.committedAt,
   );
 }
 
-int _wireInt(Object? value) => value is num ? value.toInt() : 0;
+int _wireInt(Object? value) {
+  if (value is! num || !value.isFinite || value != value.truncateToDouble()) {
+    return -1;
+  }
+  return value.toInt();
+}

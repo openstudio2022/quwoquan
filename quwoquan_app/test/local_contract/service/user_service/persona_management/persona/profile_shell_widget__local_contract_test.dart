@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -6,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/author_impact_query.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/author_impact_query.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/profile_query.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
@@ -18,7 +19,8 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
-import 'package:quwoquan_app/runtime/di/rtc_call_entry_presenter.dart';
+import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -28,19 +30,23 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/author_impact_card.dart';
-import 'package:quwoquan_app/runtime/di/presentation/other_profile_intersection_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/other_profile_intersection_card.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_permission_guard.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/user_service/persona_management/persona/profile_shell_scroll_utils.dart';
-import 'package:quwoquan_app/runtime/di/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
@@ -306,6 +312,20 @@ class _ResolvedAvatarProfileRepository
   }
 }
 
+class _CanonicalBlockTargetProfileRepository
+    extends _ProfileBundleOverrideRepository {
+  const _CanonicalBlockTargetProfileRepository();
+
+  @override
+  Future<PersonaProfileViewData> profileFor(String userId) async {
+    return _profileView(
+      personaId: 'persona_block_target',
+      displayName: '屏蔽目标',
+      nicknameCustomized: true,
+    );
+  }
+}
+
 PersonaProfileViewData _profileView({
   required String personaId,
   required String displayName,
@@ -365,7 +385,7 @@ ContentPostViewData _profileBackgroundPost(String authorId) {
       postId: '${authorId}_cover_source',
       contentType: 'image',
       contentIdentity: 'work',
-      assistantUsePolicy: 'inherit',
+      assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '封面来源用户',
       authorAvatarUrl:
@@ -455,6 +475,8 @@ Widget _scopedApp({
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
       home: ProfileShell(
+        recommendationSlots: profileRecommendationSlots,
+        participantSlots: profileParticipantSlots,
         mode: mode,
         userId: userId,
         initialAvatarUrl: initialAvatarUrl,
@@ -1324,7 +1346,8 @@ void main() {
       await tester.pumpWidget(
         _scopedApp(
           mode: ProfileMode.other,
-          userId: 'u_block_target',
+          userId: 'target_handle',
+          profileQuery: const _CanonicalBlockTargetProfileRepository(),
           onBack: () => leaveCount += 1,
           overrides: [
             authSessionControllerProvider.overrideWith(
@@ -1345,7 +1368,7 @@ void main() {
       await tester.tap(find.text(ContentText.profileBlockUser));
       await _pumpFrames(tester);
 
-      expect(writer.blockedTarget, 'u_block_target');
+      expect(writer.blockedTarget, 'persona_block_target');
       expect(leaveCount, 1);
       expect(find.text(ContentText.profileBlockSuccess), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));

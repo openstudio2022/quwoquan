@@ -110,13 +110,6 @@ func writeCanonicalIntersectionMetadata(
 		),
 		renderIntersectionDisplayMetadataDart(sourcePath, registry),
 	)
-	writeFile(
-		recommendationFeatureProfilePresentationOutputPath(
-			appDir,
-			"intersection_kind_metadata.g.dart",
-		),
-		renderIntersectionActionKeyMetadataDart(sourcePath, registry),
-	)
 }
 
 func renderIntersectionFeedbackContractsDart(

@@ -121,7 +121,12 @@ def classify(paths: list[str]) -> dict[str, bool]:
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = ["branch_policy", "feature_tree", "python_script_governance"]
+    checks = [
+        "branch_policy",
+        "feature_tree",
+        "python_script_governance",
+        "entrypoint_script_paths",
+    ]
     if flags["has_service"] or flags["has_ops"]:
         checks.append("service_architecture")
     if flags["has_app"] or flags["has_app_contracts"]:

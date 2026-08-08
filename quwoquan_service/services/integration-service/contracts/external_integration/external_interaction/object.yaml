@@ -1,4 +1,4 @@
-kind: aggregate_root
+kind: process_manager
 description: '外部可靠交互请求聚合。统一承载短信与推送的异步受理和请求生命周期；
 
   provider attempt ledger 与死信分别由 ExternalInteractionAttemptFact 和
@@ -9,14 +9,29 @@ description: '外部可靠交互请求聚合。统一承载短信与推送的异
 identity:
   fields:
   - requestId
-  version_source: store_commit
+  version_source: checkpoint
 access:
-  commands: aggregate_facade
+  commands: process_facade
   cross_context: public_contract_only
   queries: named_reader
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "流程编排对象只表达内部推进状态与补偿进度，没有用户可检索语义。"
+assistant_access:
+  read:
+    mode: owner_scoped
+    scopes:
+    - assistant.integration.external_interaction.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: consented_command
+    scopes:
+    - assistant.integration.external_interaction.write
+    requires_user_consent: true
+    consent_scope_ref: assistant.integration.external_interaction.write
 business_rules:
 - interaction type、destination digest 与 payload digest 创建后不可变
 - provider attempt 只能由 ExternalInteractionAttemptFact typed append sink 追加；除 UserAccountClosed 隐私删除外不得更新或删除

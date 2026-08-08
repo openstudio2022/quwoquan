@@ -60,7 +60,6 @@ api_routes:
       max_attempts: 2
       idempotency: none
     error_codes:
-      - INTEGRATION.USER.location_unavailable
       - INTEGRATION.USER.location_permission_required
       - INTEGRATION.MIDDLEWARE.upstream_timeout
       - INTEGRATION.MIDDLEWARE.location_provider_unavailable
@@ -123,7 +122,6 @@ api_routes:
       max_attempts: 2
       idempotency: none
     error_codes:
-      - INTEGRATION.USER.location_unavailable
       - INTEGRATION.USER.invalid_argument
       - INTEGRATION.MIDDLEWARE.upstream_timeout
       - INTEGRATION.MIDDLEWARE.location_provider_rate_limited
@@ -253,14 +251,6 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_handler__local_contract_test.go
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
-- case_id: get-nearby-locations-api
-  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
-  producer: service
-  layer: api_integration
-  target: {kind: operation, id: GetNearbyLocations}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/location/location_provider_binding__reliability__api_integration_test.go
-  executions:
-  - {env: beta, platform: service, device: runner, provider: https-location-provider, digest_binding: candidate}
 - case_id: search-locations-local
   spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
   producer: service
@@ -277,3 +267,35 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/location/location_handler__local_contract_test.go
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: location_get_nearby_locations_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: GetNearbyLocations}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/location/location_remote_api_path__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: location_search_locations_app_local
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: SearchLocations}
+  runner_source_path: quwoquan_app/test/local_contract/service/integration_service/external_integration/location/location_remote_api_path__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: location_get_nearby_locations_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetNearbyLocations}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/location/location_query__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: location_search_locations_app_api
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: SearchLocations}
+  runner_source_path: quwoquan_app/test/api_integration/service/integration_service/external_integration/location/location_query__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

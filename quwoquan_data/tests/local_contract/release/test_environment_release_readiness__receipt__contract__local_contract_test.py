@@ -318,6 +318,7 @@ def _fixture(root: Path) -> dict[str, Path]:
             "authorId": "author-a",
             "personaId": "author-a",
             "displayName": "测试创作者",
+            "userHandle": "test_creator",
             "avatarAsset": {
                 "assetId": "creator-avatar-a",
                 "kind": "avatar",
@@ -780,6 +781,9 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
         "videoWorkId": "post-video-a",
         "videoTitle": "测试视频",
         "creatorName": "测试创作者",
+        "creatorUserHandle": "test_creator",
+        "creatorPersonaId": "author-a",
+        "creatorAvatarAssetId": "creator-avatar-a",
         "tagLabel": "旅行",
         "videoAttribution": "测试视频来源",
     }

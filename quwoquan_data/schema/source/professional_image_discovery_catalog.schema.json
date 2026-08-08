@@ -36,7 +36,7 @@
         "provider": {"type": "string", "minLength": 1},
         "displayName": {"type": "string", "minLength": 1},
         "priority": {"type": "integer", "minimum": 0},
-        "discoveryMode": {"enum": ["public_search_url", "public_explore_manual_query"]},
+        "discoveryMode": {"enum": ["manual_or_supported_api", "public_search_url", "public_explore_manual_query"]},
         "publicDiscoveryUrls": {
           "type": "array",
           "minItems": 1,

@@ -21,7 +21,7 @@ ContentPostViewData _post({
     postId: id,
     contentType: contentType,
     contentIdentity: identity,
-    assistantUsePolicy: 'inherit',
+    assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: authorId,
     authorDisplayName: displayName,
     authorAvatarUrl: '',

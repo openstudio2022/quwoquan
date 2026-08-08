@@ -6,7 +6,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_cont
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/runtime/di/presentation/assistant_skill_lifecycle_sheet.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_control_request/presentation/assistant_skill_lifecycle_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _skillId = 'travel_companion';
@@ -14,7 +14,7 @@ const _skillName = '贴身旅行管家';
 
 Widget _host({
   required AssistantSkillActivityQuery activityQuery,
-  required AssistantSkillDataControlFacet dataControlFacet,
+  required _DataControlFacetFake dataControlFacet,
 }) {
   return CupertinoApp(
     locale: const Locale('zh'),
@@ -28,7 +28,8 @@ Widget _host({
           skillId: _skillId,
           skillName: _skillName,
           activityQuery: activityQuery,
-          dataControlFacet: dataControlFacet,
+          dataControlCommandWriter: dataControlFacet,
+          dataControlQuery: dataControlFacet,
           onProductAction: (_) {},
         ),
         child: const Text('open'),
@@ -40,7 +41,7 @@ Widget _host({
 Future<void> _openSheet(
   WidgetTester tester, {
   required AssistantSkillActivityQuery activityQuery,
-  required AssistantSkillDataControlFacet dataControlFacet,
+  required _DataControlFacetFake dataControlFacet,
 }) async {
   await tester.pumpWidget(
     _host(activityQuery: activityQuery, dataControlFacet: dataControlFacet),
@@ -408,7 +409,10 @@ final class _ActivityQueryFake implements AssistantSkillActivityQuery {
   }
 }
 
-final class _DataControlFacetFake implements AssistantSkillDataControlFacet {
+final class _DataControlFacetFake
+    implements
+        SkillDataControlProcessCommandWriter,
+        SkillDataControlProcessQuery {
   final List<Object> createFailures = <Object>[];
   final List<SkillDataControlMutationReceipt> createResults =
       <SkillDataControlMutationReceipt>[];

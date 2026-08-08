@@ -1,5 +1,13 @@
+import subprocess
 from pathlib import Path
 
+import pytest
+
+from quwoquan_ops.cli.lib.storage_contract_view import (
+    STORAGE_DOCUMENT_KEYS,
+    StorageContractViewError,
+    load_storage_contract_view,
+)
 from quwoquan_ops.gate.verify_domain_model_storage_governance import (
     collect_storage_governance_issues,
 )
@@ -8,6 +16,109 @@ from quwoquan_ops.gate.verify_domain_model_storage_governance import (
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def _view_result(
+    stdout: str,
+    *,
+    returncode: int = 0,
+    stderr: str = "",
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(
+        args=("storage_contract_view",),
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def test_storage_contract_view_accepts_only_the_canonical_consumer_keyset(
+    tmp_path: Path,
+) -> None:
+    storage = tmp_path / "storage.yaml"
+    storage.write_text("backend: mongodb\nrole: primary\n", encoding="utf-8")
+
+    payload = load_storage_contract_view(
+        storage,
+        runner=lambda *args, **kwargs: _view_result(
+            '{"backend":"mongodb","role":"primary","collections":{}}\n'
+        ),
+    )
+
+    assert payload == {
+        "backend": "mongodb",
+        "role": "primary",
+        "collections": {},
+    }
+    assert set(payload) <= STORAGE_DOCUMENT_KEYS
+
+
+@pytest.mark.parametrize(
+    ("result", "message"),
+    (
+        (_view_result("", returncode=2, stderr="decode failed"), "exited 2"),
+        (_view_result(""), "empty stdout"),
+        (_view_result("not-json\n"), "invalid JSON"),
+        (_view_result("[]\n"), "must return a JSON object"),
+        (
+            _view_result('{"backend":"mongodb","role":"primary","future":1}\n'),
+            "unknown keys",
+        ),
+        (_view_result('{"backend":"mongodb"}\n'), "omitted required keys"),
+    ),
+)
+def test_storage_contract_view_fail_closes_invalid_cli_results(
+    tmp_path: Path,
+    result: subprocess.CompletedProcess[str],
+    message: str,
+) -> None:
+    storage = tmp_path / "storage.yaml"
+    storage.write_text("backend: mongodb\nrole: primary\n", encoding="utf-8")
+
+    with pytest.raises(StorageContractViewError, match=message):
+        load_storage_contract_view(
+            storage,
+            runner=lambda *args, **kwargs: result,
+        )
+
+
+def test_storage_contract_view_fail_closes_timeout(tmp_path: Path) -> None:
+    storage = tmp_path / "storage.yaml"
+    storage.write_text("backend: mongodb\nrole: primary\n", encoding="utf-8")
+
+    def timeout(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd="storage_contract_view", timeout=1)
+
+    with pytest.raises(StorageContractViewError, match="timed out"):
+        load_storage_contract_view(storage, timeout_seconds=1, runner=timeout)
+
+
+def test_storage_contract_view_fail_closes_source_toctou(tmp_path: Path) -> None:
+    storage = tmp_path / "storage.yaml"
+    storage.write_text("backend: mongodb\nrole: primary\n", encoding="utf-8")
+
+    def mutate(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        storage.write_text("backend: redis\nrole: primary\n", encoding="utf-8")
+        return _view_result('{"backend":"mongodb","role":"primary"}\n')
+
+    with pytest.raises(StorageContractViewError, match="changed while"):
+        load_storage_contract_view(storage, runner=mutate)
+
+
+def test_storage_contract_view_fail_closes_consumer_keyset_drift(
+    tmp_path: Path,
+) -> None:
+    storage = tmp_path / "storage.yaml"
+    storage.write_text("backend: mongodb\nrole: primary\n", encoding="utf-8")
+
+    with pytest.raises(StorageContractViewError, match="keyset drifted"):
+        load_storage_contract_view(
+            storage,
+            expected_keys={"backend", "role", "collections"},
+            runner=lambda *args, **kwargs: _view_result(
+                '{"backend":"mongodb","role":"primary"}\n'
+            ),
+        )
 
 
 def test_storage_governance_rejects_undeclared_duplicate_and_cross_service(

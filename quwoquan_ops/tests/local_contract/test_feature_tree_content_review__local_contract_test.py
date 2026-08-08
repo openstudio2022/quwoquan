@@ -219,6 +219,65 @@ def test_acceptance_rejects_unmarked_list_step(tmp_path: Path, monkeypatch) -> N
     ]
 
 
+def test_acceptance_folds_valid_clause_ref_into_top_level_evidence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    spec = tmp_path / "spec.md"
+    spec.write_text(
+        "## 5. 验收场景\n\n"
+        "### GWT-001 复合结果\n\n"
+        "- GIVEN 输入有效。\n"
+        "- WHEN 用户提交。\n"
+        "- THEN 返回结果。\n"
+        "- AND 写入审计事实。\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(reviewer.feature_tree, "REPO_ROOT", tmp_path)
+    node = SimpleNamespace(level=3, spec=spec)
+    review = reviewer.Review(path="spec.md", kind="L3 Story")
+    canonical = reviewer.feature_tree.canonical_spec_ref(spec, "GWT-001")
+
+    reviewer.validate_acceptance(
+        review,
+        spec.read_text(encoding="utf-8"),
+        node,
+        {"runner": {f"{canonical}.t2"}},
+    )
+
+    assert review.issues == []
+    assert review.evidence == [canonical]
+
+
+def test_acceptance_rejects_dangling_clause_ref_as_top_level_evidence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    spec = tmp_path / "spec.md"
+    spec.write_text(
+        "## 5. 验收场景\n\n"
+        "### GWT-001 单一结果\n\n"
+        "- GIVEN 输入有效。\n"
+        "- WHEN 用户提交。\n"
+        "- THEN 返回结果。\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(reviewer.feature_tree, "REPO_ROOT", tmp_path)
+    node = SimpleNamespace(level=3, spec=spec)
+    review = reviewer.Review(path="spec.md", kind="L3 Story")
+    canonical = reviewer.feature_tree.canonical_spec_ref(spec, "GWT-001")
+
+    reviewer.validate_acceptance(
+        review,
+        spec.read_text(encoding="utf-8"),
+        node,
+        {"runner": {f"{canonical}.t2"}},
+    )
+
+    assert review.evidence == []
+    assert review.issues == [
+        "GWT-001 既无真实 spec_ref，也未由同节点 OPEN 声明未完成"
+    ]
+
+
 def test_semantic_migration_placeholders_are_blocked() -> None:
     issues = issues_for(
         "### REQ-002 现行边界约束\n"

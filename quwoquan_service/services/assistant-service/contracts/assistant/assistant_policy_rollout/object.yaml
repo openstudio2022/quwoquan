@@ -26,6 +26,20 @@ relationships:
   on_delete: cascade
   reference_fields: []
   target_object: assistant.AssistantPolicyCohortAssignment
+search_policy:
+  exposed: none
+  not_exposed_reason: "运营与控制面对象，只由运营台按 operator scope 访问，不进入用户检索面。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "运营控制面不是用户助手面，小趣既不读取也不写入运营对象。"
 business_rules:
 - cohort 名称唯一且权重总和必须为 10000 basis points
 - 每个 cohort 必须且只能映射到同 policyId 下已 staged 的 releaseDigest
@@ -42,11 +56,17 @@ lifecycle:
 members:
   AssistantPolicyBucketDefinition:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [cohort]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: runtime/experiments 使用的稳定 cohort 权重。
   AssistantPolicyCohortAssignment:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [cohort]
+    cardinality: many
     max_cardinality: 32
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: cohort 到 immutable releaseDigest 的映射；revision 只表示 rollout 状态序列。

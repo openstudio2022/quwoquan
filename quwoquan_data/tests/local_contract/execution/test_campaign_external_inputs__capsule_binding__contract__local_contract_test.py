@@ -1,17 +1,18 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
 from __future__ import annotations
 
+import hashlib
 import io
 from pathlib import Path
 
 import pytest
-from content.execution import campaign_request_envelope, campaign_submission
-from content.execution.campaign_external_input_runtime import (
+from content.execution.campaign import request_envelope as campaign_request_envelope, submission as campaign_submission
+from content.execution.campaign.external_input_runtime import (
     ExternalInputRuntimeContext,
     freeze_execution_external_input_envelope,
     resolve_runtime_external_input_context,
 )
-from content.execution.campaign_external_inputs import (
+from content.execution.campaign.external_inputs import (
     CampaignExternalInputError,
     bind_external_input_refs,
     content_source_revision,
@@ -20,8 +21,8 @@ from content.execution.campaign_external_inputs import (
     payload_digest,
     verify_external_input_refs,
 )
-from content.execution.campaign_submission import write_submission
-from content.execution.campaign_workspace import (
+from content.execution.campaign.submission import write_submission
+from content.execution.campaign.workspace import (
     CampaignLaneWorkspace,
     CampaignRuntimePaths,
     SourceCapsule,
@@ -72,7 +73,7 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *_args, **_kwargs: {},
     )
     monkeypatch.setattr(
-        "content.execution.pre_acquisition_handoff.bind_pre_acquisition_handoff",
+        "content.execution.controller.execute.pre_acquisition_handoff.bind_pre_acquisition_handoff",
         lambda *_args, **_kwargs: (
             {
                 "carrierRequirements": {
@@ -291,9 +292,13 @@ def _submission(
     refs: list[dict[str, object]],
     *,
     semantic_preflight_binding: dict[str, str],
+    scale_source_pool: dict[str, object],
+    source_pool_evidence_root_ref: str,
+    source_pool_selection: dict[str, object],
 ) -> dict[str, object]:
     stable: dict[str, object] = {
         "schema": "quwoquan_data.content_execution_submission",
+        "scale": "M100",
         "rootExecutionId": ROOT_ID,
         "executionId": EXECUTION_IDS[carrier],
         "operation": f"{carrier}.generate",
@@ -305,11 +310,17 @@ def _submission(
         else "priority",
         "quota": 100,
         "count": 150,
+        "requiredWorkers": 1,
+        "partitionCount": 16,
+        "capacityPlanDigest": "sha256:" + "6" * 64,
         "topic": None,
         "targetNames": [],
         "sourceProviders": [],
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "scaleSourcePool": scale_source_pool,
+        "sourcePoolEvidenceRootRef": source_pool_evidence_root_ref,
+        "sourcePoolSelection": source_pool_selection,
         "retryOf": None,
         "gitBranch": "dev1.0",
         "gitCommitSha": "c" * 40,
@@ -330,6 +341,51 @@ def _submission(
     }
 
 
+def _scale_source_pool(
+    runtime: CampaignRuntimePaths,
+) -> tuple[dict[str, object], str, dict[str, dict[str, object]]]:
+    pool_stable: dict[str, object] = {
+        "schema": "quwoquan_data.scale_source_pool",
+        "poolId": "external-input-m100-pool",
+        "targetScale": "M100",
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "candidates": [
+            {
+                "candidateId": f"{carrier}-candidate-001",
+                "carrier": carrier,
+                "objectRef": f"{carrier}/candidate-001",
+            }
+            for carrier in EXECUTION_IDS
+        ],
+    }
+    pool = {**pool_stable, "planDigest": payload_digest(pool_stable)}
+    pool_path = runtime.output_root / "data/local/workspace/scale-source-pool/plan.json"
+    write_json(pool_path, pool)
+    evidence_root = runtime.output_root / "data/local/workspace/scale-source-pool/evidence"
+    evidence_root.mkdir(parents=True)
+    binding = {
+        "poolId": pool["poolId"],
+        "targetScale": pool["targetScale"],
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+        "planRef": pool_path.relative_to(runtime.output_root).as_posix(),
+        "planDigest": pool["planDigest"],
+        "planFileSha256": "sha256:" + hashlib.sha256(pool_path.read_bytes()).hexdigest(),
+    }
+    selections: dict[str, dict[str, object]] = {}
+    for carrier in EXECUTION_IDS:
+        stable = {
+            "carrier": carrier,
+            "candidateIds": [f"{carrier}-candidate-001"],
+            "candidateCount": 1,
+        }
+        selections[carrier] = {**stable, "selectionDigest": payload_digest(stable)}
+    return binding, evidence_root.relative_to(runtime.output_root).as_posix(), selections
+
+
 def _frozen_documents(
     runtime: CampaignRuntimePaths,
     image_refs: list[dict[str, object]],
@@ -338,11 +394,15 @@ def _frozen_documents(
         "default",
         output_root=runtime.output_root,
     )
+    pool_binding, pool_evidence_ref, pool_selections = _scale_source_pool(runtime)
     submissions = {
         carrier: _submission(
             carrier,
             image_refs if carrier == "image" else [],
             semantic_preflight_binding=semantic_preflight_binding,
+            scale_source_pool=pool_binding,
+            source_pool_evidence_root_ref=pool_evidence_ref,
+            source_pool_selection=pool_selections[carrier],
         )
         for carrier in EXECUTION_IDS
     }
@@ -361,6 +421,7 @@ def _frozen_documents(
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
+        "scale": "M100",
         "gitBranch": "dev1.0",
         "gitCommitSha": "c" * 40,
         "sourceRevision": SOURCE_REVISION,
@@ -368,6 +429,9 @@ def _frozen_documents(
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "scaleSourcePool": pool_binding,
+        "sourcePoolEvidenceRootRef": pool_evidence_ref,
+        "laneSourcePoolSelections": pool_selections,
         "laneExternalInputs": lane_external,
         "externalInputsDigest": payload_digest(
             {
@@ -411,6 +475,29 @@ def _capsule(
             "externalInputRefs": refs,
             "externalInputsDigest": external_inputs_digest(refs),
         }
+    pool_plan = read_json(
+        runtime.output_root / str(plan["scaleSourcePool"]["planRef"])
+    )
+    selected_ids = {
+        str(candidate_id)
+        for selection in plan["laneSourcePoolSelections"].values()
+        for candidate_id in selection["candidateIds"]
+    }
+    selected_candidates = sorted(
+        (
+            dict(row)
+            for row in pool_plan["candidates"]
+            if row["candidateId"] in selected_ids
+        ),
+        key=lambda row: (str(row["carrier"]), str(row["candidateId"])),
+    )
+    snapshot_stable = {
+        "schema": "quwoquan_data.scale_source_pool_snapshot",
+        "planDigest": pool_plan["planDigest"],
+        "laneSourcePoolSelections": plan["laneSourcePoolSelections"],
+        "selectedCandidates": selected_candidates,
+    }
+    snapshot_digest = payload_digest(snapshot_stable)
     stable = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
         "format": "source-snapshot-v1",
@@ -421,7 +508,19 @@ def _capsule(
         "roots": ["quwoquan_data"],
         "laneExternalInputs": lane_payload,
         "externalInputsDigest": plan["externalInputsDigest"],
+        "scaleSourcePool": plan["scaleSourcePool"],
+        "sourcePoolSnapshotRootRef": "scale-source-pool",
+        "sourcePoolSnapshotDigest": snapshot_digest,
+        "laneSourcePoolSelections": plan["laneSourcePoolSelections"],
     }
+    write_json(
+        capsule_path / "scale-source-pool/plan.json",
+        pool_plan,
+    )
+    write_json(
+        capsule_path / "scale-source-pool/selected.json",
+        {**snapshot_stable, "snapshotDigest": snapshot_digest},
+    )
     capsule_digest = payload_digest(stable)
     write_json(
         capsule_path / ".qwq_campaign_capsule.json",
@@ -443,6 +542,12 @@ def _capsule(
         lane_external_inputs=lane_payload,
         roots=("quwoquan_data",),
         read_only=True,
+        scale_source_pool=dict(plan["scaleSourcePool"]),
+        lane_source_pool_selections={
+            carrier: dict(selection)
+            for carrier, selection in plan["laneSourcePoolSelections"].items()
+        },
+        source_pool_snapshot_root_ref="scale-source-pool",
     )
 
 
@@ -953,6 +1058,9 @@ def test_same_execution_cannot_replace_external_inputs_without_new_retry(
         selector=TargetSelector.PRIORITY,
         count=100,
         quota=100,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "6" * 64,
         topic=None,
         source_providers=(),
         target_names=(),

@@ -72,6 +72,11 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     this.operation = operation;
     this.context = context;
     body = requestEncoder().body;
-    return responseDecoder(null);
+    // ReportBehaviors 现在返回 typed 回执，decoder fail-closed：这里必须回放
+    // canonical 回执 wire，不能用 null 冒充「无响应体」。
+    return responseDecoder(const <String, Object?>{
+      'acceptedCount': 1,
+      'replayedCount': 0,
+    });
   }
 }

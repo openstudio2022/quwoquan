@@ -434,3 +434,35 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/device_registration/postgres_registration__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: device_registration_upsert_device_push_endpoint_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpsertDevicePushEndpoint}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/device_registration/device_push_endpoint__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: device_registration_remove_device_push_endpoint_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: RemoveDevicePushEndpoint}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/device_registration/device_push_endpoint__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: device_registration_upsert_device_push_endpoint_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpsertDevicePushEndpoint}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/device_registration/device_push_endpoint_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: device_registration_remove_device_push_endpoint_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/device-token-register/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: RemoveDevicePushEndpoint}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/device_registration/device_push_endpoint_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

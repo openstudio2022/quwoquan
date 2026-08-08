@@ -47,7 +47,7 @@ import (
 	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
 	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocesshttp "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/adapters/inbound/http"
-	originalaccesshttp "quwoquan_service/services/content-service/internal/media/media_original_access_fact/adapters/inbound/http"
+	originalaccessquotahttp "quwoquan_service/services/content-service/internal/media/original_access_quota/adapters/inbound/http"
 	uploadsessionhttp "quwoquan_service/services/content-service/internal/media/media_upload_session/adapters/inbound/http"
 	moderationhttp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/adapters/inbound/http"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
@@ -118,7 +118,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	mediaObjectGateway := input.mediaRuntime.mediaObjectGateway
 	mediaService := input.mediaRuntime.mediaService
 	mediaImageReprocessService := input.mediaRuntime.mediaImageReprocessService
-	mediaOriginalAccessService := input.mediaRuntime.mediaOriginalAccessService
+	originalAccessQuotaService := input.mediaRuntime.originalAccessQuotaService
 	postServiceOpts := input.postServiceOptions
 	moderationStore := input.moderationStore
 	moderationFacades := input.moderationFacades
@@ -320,13 +320,13 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		handlerOpts,
 		httpadapter.WithMediaAssetHandler(mediaassethttp.NewHandler(mediaService)),
 	)
-	if mediaOriginalAccessService == nil {
-		log.Fatal("content-service MediaOriginalAccessFact object composition is not configured")
+	if originalAccessQuotaService == nil {
+		log.Fatal("content-service OriginalAccessQuota object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
-		httpadapter.WithMediaOriginalAccessHandler(
-			originalaccesshttp.NewHandler(mediaOriginalAccessService),
+		httpadapter.WithOriginalAccessQuotaHandler(
+			originalaccessquotahttp.NewHandler(originalAccessQuotaService),
 		),
 	)
 	if input.mediaRuntime.mediaUploadSessionService == nil {

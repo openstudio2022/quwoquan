@@ -46,12 +46,13 @@ final class SkillDataControlFlowState {
 
 /// Skill 数据控制的端侧编排器。
 ///
-/// 它只编排 canonical typed Facet，不拥有任何数据控制业务事实。创建结果未知时
+/// 它只编排 canonical typed process port，不拥有任何数据控制业务事实。创建结果未知时
 /// 保留同一个 idempotency intent；确认冲突时读取同一个 request，再以最新 revision
 /// 恢复。Executing 是真实后台状态，轮询到达边界后不会伪装为失败或完成。
 final class SkillDataControlCoordinator {
   SkillDataControlCoordinator({
-    required this._facet,
+    required this._commandWriter,
+    required this._query,
     SkillDataControlIntentFactory? intentFactory,
     SkillDataControlDelay? delay,
     this.maximumPollAttempts = 6,
@@ -59,7 +60,8 @@ final class SkillDataControlCoordinator {
   }) : _intentFactory = intentFactory ?? const Uuid().v4,
        _delay = delay ?? ((duration) => Future<void>.delayed(duration));
 
-  final AssistantSkillDataControlFacet _facet;
+  final SkillDataControlProcessCommandWriter _commandWriter;
+  final SkillDataControlProcessQuery _query;
   final SkillDataControlIntentFactory _intentFactory;
   final SkillDataControlDelay _delay;
   final int maximumPollAttempts;
@@ -108,7 +110,7 @@ final class SkillDataControlCoordinator {
       ),
     );
     try {
-      final receipt = await _facet.createSkillDataControlRequest(
+      final receipt = await _commandWriter.createSkillDataControlRequest(
         skillId: _createSkillId!,
         requestedActions: _createActions,
         clientRequestId: _createIntentId!,
@@ -148,7 +150,7 @@ final class SkillDataControlCoordinator {
       ),
     );
     try {
-      final receipt = await _facet.confirmSkillDataControlRequest(
+      final receipt = await _commandWriter.confirmSkillDataControlRequest(
         requestId: request.requestId,
         expectedRevision: request.revision,
         confirmed: confirmed,
@@ -199,7 +201,7 @@ final class SkillDataControlCoordinator {
     if (normalized.isEmpty) {
       throw ArgumentError.value(requestId, 'requestId', 'must not be blank');
     }
-    final request = await _facet.getSkillDataControlRequest(
+    final request = await _query.getSkillDataControlRequest(
       requestId: normalized,
     );
     _accept(request);
@@ -214,7 +216,7 @@ final class SkillDataControlCoordinator {
     if (request == null) {
       throw StateError('there is no data control request to refresh');
     }
-    final latest = await _facet.getSkillDataControlRequest(
+    final latest = await _query.getSkillDataControlRequest(
       requestId: request.requestId,
     );
     return _accept(latest);
@@ -229,7 +231,7 @@ final class SkillDataControlCoordinator {
       final exponent = attempt < 3 ? attempt : 3;
       final milliseconds = 250 * (1 << exponent);
       await _delay(Duration(milliseconds: milliseconds));
-      final latest = await _facet.getSkillDataControlRequest(
+      final latest = await _query.getSkillDataControlRequest(
         requestId: requestId,
       );
       _accept(latest);
@@ -243,7 +245,7 @@ final class SkillDataControlCoordinator {
 
   Future<SkillDataControlRequest?> _tryGet(String requestId) async {
     try {
-      return await _facet.getSkillDataControlRequest(requestId: requestId);
+      return await _query.getSkillDataControlRequest(requestId: requestId);
     } on Object {
       return null;
     }

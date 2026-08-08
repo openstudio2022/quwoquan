@@ -1,3 +1,22 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+// readiness_case: call_session_initiate_call_app_api
+// readiness_case: call_session_list_calls_app_api
+// readiness_case: call_session_get_call_app_api
+// readiness_case: call_session_answer_call_app_api
+// readiness_case: call_session_join_call_app_api
+// readiness_case: call_session_report_media_connected_app_api
+// readiness_case: call_session_toggle_mute_app_api
+// readiness_case: call_session_start_screen_share_app_api
+// readiness_case: call_session_stop_screen_share_app_api
+// readiness_case: call_session_hangup_call_app_api
+// readiness_case: call_session_reject_call_app_api
+// readiness_case: call_session_cancel_call_app_api
+// readiness_case: call_session_leave_call_app_api
+// readiness_case: call_session_invite_to_call_app_api
+// readiness_case: call_session_toggle_camera_app_api
+
 /// RTC CallSession Gamma Remote API contract runner.
 ///
 /// 此 runner 只经 generated Cloud client 与 production Remote Facet 操作真实网关：
@@ -46,6 +65,7 @@ const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 late _GammaRtcActor _caller;
 late _GammaRtcActor _callee;
 late _GammaRtcActor _intruder;
+late _GammaRtcActor _bystander;
 final _createdActors = <_GammaRtcActor>[];
 
 void main() {
@@ -56,27 +76,41 @@ void main() {
       );
     }
     if (_apiBase.trim().isEmpty) {
-      throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
+      throw StateError('L3: API_CONTRACT_BASE_URL not set');
+    }
+    final gatewayBaseUri = Uri.tryParse(_apiBase);
+    if (gatewayBaseUri == null ||
+        gatewayBaseUri.scheme != 'https' ||
+        gatewayBaseUri.host != 'api.gamma.quwoquan.com') {
+      throw StateError(
+        'RTC API contract runner requires the canonical Gamma HTTPS endpoint',
+      );
     }
     final runId = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
     _caller = await _GammaRtcActor.signIn(
       label: 'caller',
       runId: runId,
-      gatewayBaseUri: Uri.parse(_apiBase),
+      gatewayBaseUri: gatewayBaseUri,
     );
     _createdActors.add(_caller);
     _callee = await _GammaRtcActor.signIn(
       label: 'callee',
       runId: runId,
-      gatewayBaseUri: Uri.parse(_apiBase),
+      gatewayBaseUri: gatewayBaseUri,
     );
     _createdActors.add(_callee);
     _intruder = await _GammaRtcActor.signIn(
       label: 'intruder',
       runId: runId,
-      gatewayBaseUri: Uri.parse(_apiBase),
+      gatewayBaseUri: gatewayBaseUri,
     );
     _createdActors.add(_intruder);
+    _bystander = await _GammaRtcActor.signIn(
+      label: 'bystander',
+      runId: runId,
+      gatewayBaseUri: gatewayBaseUri,
+    );
+    _createdActors.add(_bystander);
 
     await _caller.follow(_callee.personaId);
     await _callee.follow(_caller.personaId);
@@ -205,6 +239,520 @@ void main() {
       expect(intruderTelemetry.last.succeeded, isFalse);
     },
   );
+
+  test(
+    'remaining RTC commands replay and preserve authoritative Gamma state',
+    () async {
+      final telemetry = _RtcTelemetryLedger();
+
+      final rejectSession = await _initiateCall('reject', maxParticipants: 2);
+      final rejectBefore = await _caller.query.getCall(
+        RtcGetCallQuery(callId: rejectSession.id),
+      );
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionRejectCall,
+          () => _bystander.withRtcIdempotencyKey(
+            'reject-bola-${rejectSession.id}',
+            () => _bystander.lifecycle.rejectCall(
+              RtcCallIdCommand(callId: rejectSession.id),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionRejectCall,
+        code: 'RTC.USER.not_participant',
+        statusCode: 403,
+      );
+      expect(
+        (await _caller.query.getCall(
+          RtcGetCallQuery(callId: rejectSession.id),
+        )).toWire(),
+        rejectBefore.toWire(),
+      );
+      final rejected = await _replaySessionCommand(
+        telemetry,
+        operationId: AppCloudOperationIds.rtcCallSessionRejectCall,
+        actor: _callee,
+        idempotencyKey: 'reject-${rejectSession.id}',
+        command: () => _callee.lifecycle.rejectCall(
+          RtcCallIdCommand(callId: rejectSession.id),
+        ),
+      );
+      expect(rejected.first.status, CallStatus.ended);
+      expect(rejected.first.endReason, EndReason.rejected);
+      final rejectedReadback = await _caller.query.getCall(
+        RtcGetCallQuery(callId: rejectSession.id),
+      );
+      expect(rejectedReadback.toWire(), rejected.first.toWire());
+
+      final cancelSession = await _initiateCall('cancel', maxParticipants: 2);
+      final cancelBefore = await _caller.query.getCall(
+        RtcGetCallQuery(callId: cancelSession.id),
+      );
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionCancelCall,
+          () => _bystander.withRtcIdempotencyKey(
+            'cancel-bola-${cancelSession.id}',
+            () => _bystander.lifecycle.cancelCall(
+              RtcCallIdCommand(callId: cancelSession.id),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionCancelCall,
+        code: 'RTC.USER.not_participant',
+        statusCode: 403,
+      );
+      expect(
+        (await _caller.query.getCall(
+          RtcGetCallQuery(callId: cancelSession.id),
+        )).toWire(),
+        cancelBefore.toWire(),
+      );
+      final cancelled = await _replaySessionCommand(
+        telemetry,
+        operationId: AppCloudOperationIds.rtcCallSessionCancelCall,
+        actor: _caller,
+        idempotencyKey: 'cancel-${cancelSession.id}',
+        command: () => _caller.lifecycle.cancelCall(
+          RtcCallIdCommand(callId: cancelSession.id),
+        ),
+      );
+      expect(cancelled.first.status, CallStatus.ended);
+      expect(cancelled.first.endReason, EndReason.cancelled);
+      final cancelledReadback = await _callee.query.getCall(
+        RtcGetCallQuery(callId: cancelSession.id),
+      );
+      expect(cancelledReadback.toWire(), cancelled.first.toWire());
+
+      final leaveSession = await _connectCall('leave', maxParticipants: 2);
+      final leaveBefore = await _caller.query.getCall(
+        RtcGetCallQuery(callId: leaveSession.id),
+      );
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionLeaveCall,
+          () => _bystander.withRtcIdempotencyKey(
+            'leave-bola-${leaveSession.id}',
+            () => _bystander.participants.leaveCall(
+              RtcCallIdCommand(callId: leaveSession.id),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionLeaveCall,
+        code: 'RTC.USER.not_participant',
+        statusCode: 403,
+      );
+      expect(
+        (await _caller.query.getCall(
+          RtcGetCallQuery(callId: leaveSession.id),
+        )).toWire(),
+        leaveBefore.toWire(),
+      );
+      final left = await _replaySessionCommand(
+        telemetry,
+        operationId: AppCloudOperationIds.rtcCallSessionLeaveCall,
+        actor: _callee,
+        idempotencyKey: 'leave-${leaveSession.id}',
+        command: () => _callee.participants.leaveCall(
+          RtcCallIdCommand(callId: leaveSession.id),
+        ),
+      );
+      expect(left.first.status, CallStatus.ended);
+      expect(left.first.endReason, EndReason.lastLeave);
+      expect(
+        _participant(left.first, _callee.personaId).status,
+        ParticipantStatus.left,
+      );
+      final leftReadback = await _caller.query.getCall(
+        RtcGetCallQuery(callId: leaveSession.id),
+      );
+      expect(leftReadback.toWire(), left.first.toWire());
+
+      final activeSession = await _connectCall('invite', maxParticipants: 3);
+      final inviteBefore = await _caller.query.getCall(
+        RtcGetCallQuery(callId: activeSession.id),
+      );
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionInviteToCall,
+          () => _bystander.withRtcIdempotencyKey(
+            'invite-bola-${activeSession.id}',
+            () => _bystander.participants.inviteToCall(
+              RtcInviteToCallCommand(
+                callId: activeSession.id,
+                inviteeIds: <String>[_intruder.personaId],
+              ),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionInviteToCall,
+        code: 'RTC.USER.not_participant',
+        statusCode: 403,
+      );
+      expect(
+        (await _caller.query.getCall(
+          RtcGetCallQuery(callId: activeSession.id),
+        )).toWire(),
+        inviteBefore.toWire(),
+      );
+      final inviteKey = 'invite-${activeSession.id}';
+      final invited = await _replaySessionCommand(
+        telemetry,
+        operationId: AppCloudOperationIds.rtcCallSessionInviteToCall,
+        actor: _caller,
+        idempotencyKey: inviteKey,
+        command: () => _caller.participants.inviteToCall(
+          RtcInviteToCallCommand(
+            callId: activeSession.id,
+            inviteeIds: <String>[_intruder.personaId],
+          ),
+        ),
+      );
+      expect(invited.first.status, CallStatus.inCall);
+      expect(invited.first.participantCount, 3);
+      final invitedParticipant = _participant(
+        invited.first,
+        _intruder.personaId,
+      );
+      expect(invitedParticipant.status, ParticipantStatus.invited);
+      expect(invitedParticipant.inviteStatus, CallInviteStatus.pending);
+
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionInviteToCall,
+          () => _caller.withRtcIdempotencyKey(
+            inviteKey,
+            () => _caller.participants.inviteToCall(
+              RtcInviteToCallCommand(
+                callId: activeSession.id,
+                inviteeIds: <String>[_bystander.personaId],
+              ),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionInviteToCall,
+        code: 'RTC.USER.idempotency_conflict',
+        statusCode: 409,
+      );
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionInviteToCall,
+          () => _caller.withRtcIdempotencyKey(
+            'invite-full-${activeSession.id}',
+            () => _caller.participants.inviteToCall(
+              RtcInviteToCallCommand(
+                callId: activeSession.id,
+                inviteeIds: <String>[_bystander.personaId],
+              ),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionInviteToCall,
+        code: 'RTC.USER.call_full',
+        statusCode: 409,
+      );
+      final invitedReadback = await _caller.query.getCall(
+        RtcGetCallQuery(callId: activeSession.id),
+      );
+      expect(invitedReadback.toWire(), invited.first.toWire());
+      expect(
+        (invitedReadback.participants ?? const <CallParticipant>[]).any(
+          (participant) => participant.userId == _bystander.personaId,
+        ),
+        isFalse,
+      );
+
+      final cameraBefore = _participant(invitedReadback, _caller.personaId);
+      expect(cameraBefore.isCameraOn, isFalse);
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionToggleCamera,
+          () => _bystander.withRtcIdempotencyKey(
+            'camera-bola-${activeSession.id}',
+            () => _bystander.media.toggleCamera(
+              RtcToggleCameraCommand(callId: activeSession.id, cameraOn: true),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionToggleCamera,
+        code: 'RTC.USER.not_participant',
+        statusCode: 403,
+      );
+      final cameraKey = 'camera-${activeSession.id}';
+      final camera = await _replaySessionCommand(
+        telemetry,
+        operationId: AppCloudOperationIds.rtcCallSessionToggleCamera,
+        actor: _caller,
+        idempotencyKey: cameraKey,
+        command: () => _caller.media.toggleCamera(
+          RtcToggleCameraCommand(callId: activeSession.id, cameraOn: true),
+        ),
+      );
+      expect(_participant(camera.first, _caller.personaId).isCameraOn, isTrue);
+      await _expectRtcFailure(
+        telemetry.observe(
+          AppCloudOperationIds.rtcCallSessionToggleCamera,
+          () => _caller.withRtcIdempotencyKey(
+            cameraKey,
+            () => _caller.media.toggleCamera(
+              RtcToggleCameraCommand(callId: activeSession.id, cameraOn: false),
+            ),
+          ),
+        ),
+        operationId: AppCloudOperationIds.rtcCallSessionToggleCamera,
+        code: 'RTC.USER.idempotency_conflict',
+        statusCode: 409,
+      );
+      final cameraReadback = await _callee.query.getCall(
+        RtcGetCallQuery(callId: activeSession.id),
+      );
+      expect(
+        _participant(cameraReadback, _caller.personaId).isCameraOn,
+        isTrue,
+      );
+      expect(cameraReadback.toWire(), camera.first.toWire());
+
+      await _caller.withRtcIdempotencyKey(
+        'cleanup-caller-${activeSession.id}',
+        () => _caller.lifecycle.hangupCall(
+          RtcCallIdCommand(callId: activeSession.id),
+        ),
+      );
+      final cleaned = await _callee.withRtcIdempotencyKey(
+        'cleanup-callee-${activeSession.id}',
+        () => _callee.lifecycle.hangupCall(
+          RtcCallIdCommand(callId: activeSession.id),
+        ),
+      );
+      expect(cleaned.status, CallStatus.ended);
+
+      await telemetry.expectExactEvidence(<_GammaRtcActor>[
+        _caller,
+        _callee,
+        _bystander,
+      ]);
+    },
+  );
+}
+
+const _remainingRtcOperationIds = <String>{
+  AppCloudOperationIds.rtcCallSessionRejectCall,
+  AppCloudOperationIds.rtcCallSessionCancelCall,
+  AppCloudOperationIds.rtcCallSessionLeaveCall,
+  AppCloudOperationIds.rtcCallSessionInviteToCall,
+  AppCloudOperationIds.rtcCallSessionToggleCamera,
+};
+
+Future<CallSession> _initiateCall(
+  String label, {
+  required int maxParticipants,
+}) async {
+  final initiated = await _caller.withRtcIdempotencyKey(
+    'initiate-$label',
+    () => _caller.lifecycle.initiateCall(
+      RtcInitiateCallCommand(
+        callType: CallType.video,
+        inviteeIds: <String>[_callee.personaId],
+        maxParticipants: maxParticipants,
+      ),
+    ),
+  );
+  expect(initiated.session.id, isNotEmpty);
+  expect(initiated.session.status, CallStatus.ringing);
+  expect(initiated.session.initiatorId, _caller.personaId);
+  expect(initiated.mediaAccess.accessToken, isNotEmpty);
+  addTearDown(() => _cleanupCall(label, initiated.session.id));
+  return initiated.session;
+}
+
+Future<CallSession> _connectCall(
+  String label, {
+  required int maxParticipants,
+}) async {
+  final initiated = await _initiateCall(
+    label,
+    maxParticipants: maxParticipants,
+  );
+  final callId = initiated.id;
+  final answered = await _callee.withRtcIdempotencyKey(
+    'answer-$label',
+    () => _callee.lifecycle.answerCall(RtcCallIdCommand(callId: callId)),
+  );
+  expect(answered.session.status, CallStatus.connecting);
+  expect(answered.mediaAccess.accessToken, isNotEmpty);
+  final callerJoined = await _caller.withRtcIdempotencyKey(
+    'join-caller-$label',
+    () => _caller.participants.joinCall(RtcCallIdCommand(callId: callId)),
+  );
+  final calleeJoined = await _callee.withRtcIdempotencyKey(
+    'join-callee-$label',
+    () => _callee.participants.joinCall(RtcCallIdCommand(callId: callId)),
+  );
+  expect(callerJoined.mediaAccess.accessToken, isNotEmpty);
+  expect(calleeJoined.mediaAccess.accessToken, isNotEmpty);
+  await _caller.participants.reportMediaConnected(
+    RtcCallIdCommand(callId: callId),
+  );
+  final connected = await _callee.participants.reportMediaConnected(
+    RtcCallIdCommand(callId: callId),
+  );
+  expect(connected.status, CallStatus.inCall);
+  expect(connected.startedAt, isNotNull);
+  return _caller.query.getCall(RtcGetCallQuery(callId: callId));
+}
+
+Future<({CallSession first, CallSession replay})> _replaySessionCommand(
+  _RtcTelemetryLedger telemetry, {
+  required String operationId,
+  required _GammaRtcActor actor,
+  required String idempotencyKey,
+  required Future<CallSession> Function() command,
+}) async {
+  final first = await telemetry.observe(
+    operationId,
+    () => actor.withRtcIdempotencyKey(idempotencyKey, command),
+  );
+  final replay = await telemetry.observe(
+    operationId,
+    () => actor.withRtcIdempotencyKey(idempotencyKey, command),
+  );
+  expect(replay.toWire(), first.toWire());
+  return (first: first, replay: replay);
+}
+
+Future<void> _expectRtcFailure(
+  Future<Object?> call, {
+  required String operationId,
+  required String code,
+  required int statusCode,
+}) async {
+  await expectLater(
+    call,
+    throwsA(
+      isA<CloudException>()
+          .having(
+            (error) => error.runtimeFailure.code,
+            'runtimeFailure.code',
+            code,
+          )
+          .having((error) => error.statusCode, 'statusCode', statusCode)
+          .having(
+            (error) => error.sourceOperationId,
+            'sourceOperationId',
+            operationId,
+          )
+          .having((error) => error.requestId, 'requestId', isNotEmpty)
+          .having((error) => error.traceId, 'traceId', isNotEmpty),
+    ),
+  );
+}
+
+CallParticipant _participant(CallSession session, String personaId) =>
+    (session.participants ?? const <CallParticipant>[]).singleWhere(
+      (participant) => participant.userId == personaId,
+    );
+
+Future<void> _cleanupCall(String label, String callId) async {
+  try {
+    var current = await _caller.query.getCall(RtcGetCallQuery(callId: callId));
+    if (current.status == CallStatus.ended) {
+      return;
+    }
+    if (current.status == CallStatus.initiated ||
+        current.status == CallStatus.ringing) {
+      await _caller.withRtcIdempotencyKey(
+        'teardown-cancel-$label-$callId',
+        () => _caller.lifecycle.cancelCall(RtcCallIdCommand(callId: callId)),
+      );
+      return;
+    }
+    await _caller.withRtcIdempotencyKey(
+      'teardown-hangup-caller-$label-$callId',
+      () => _caller.lifecycle.hangupCall(RtcCallIdCommand(callId: callId)),
+    );
+    current = await _callee.query.getCall(RtcGetCallQuery(callId: callId));
+    if (current.status != CallStatus.ended) {
+      await _callee.withRtcIdempotencyKey(
+        'teardown-hangup-callee-$label-$callId',
+        () => _callee.lifecycle.hangupCall(RtcCallIdCommand(callId: callId)),
+      );
+    }
+  } on CloudException catch (error) {
+    if (error.runtimeFailure.code != 'RTC.USER.call_not_found') {
+      rethrow;
+    }
+  }
+}
+
+final class _RtcTelemetryLedger {
+  final Map<String, int> _success = <String, int>{};
+  final Map<String, int> _failure = <String, int>{};
+
+  Future<T> observe<T>(
+    String operationId,
+    Future<T> Function() operation,
+  ) async {
+    try {
+      final value = await operation();
+      _success.update(operationId, (count) => count + 1, ifAbsent: () => 1);
+      return value;
+    } catch (_) {
+      _failure.update(operationId, (count) => count + 1, ifAbsent: () => 1);
+      rethrow;
+    }
+  }
+
+  Future<void> expectExactEvidence(List<_GammaRtcActor> actors) async {
+    final events = <ProductionCloudOperationTelemetryEvent>[];
+    for (final actor in actors) {
+      events.addAll(await actor.telemetry.waitForEvents(minimumCount: 1));
+    }
+    final operationEvents = events
+        .where(
+          (event) =>
+              _remainingRtcOperationIds.contains(event.canonicalOperationId),
+        )
+        .toList(growable: false);
+    expect(
+      operationEvents.map((event) => event.canonicalOperationId).toSet(),
+      _remainingRtcOperationIds,
+    );
+    for (final operationId in _remainingRtcOperationIds) {
+      final current = operationEvents
+          .where((event) => event.canonicalOperationId == operationId)
+          .toList(growable: false);
+      final succeeded = current
+          .where((event) => event.succeeded)
+          .toList(growable: false);
+      final failed = current
+          .where((event) => !event.succeeded)
+          .toList(growable: false);
+      expect(succeeded, hasLength(_success[operationId] ?? 0));
+      expect(failed, hasLength(_failure[operationId] ?? 0));
+      expect(
+        current.every(
+          (event) => event.requestId.isNotEmpty && event.traceId.isNotEmpty,
+        ),
+        isTrue,
+      );
+      expect(
+        succeeded.every(
+          (event) =>
+              event.statusCode != null &&
+              event.statusCode! >= 200 &&
+              event.statusCode! < 300,
+        ),
+        isTrue,
+      );
+      expect(
+        failed.every(
+          (event) => event.statusCode != null && event.statusCode! >= 400,
+        ),
+        isTrue,
+      );
+    }
+  }
 }
 
 final class _MutableAccessTokenProvider implements CloudAuthTokenProvider {
@@ -303,6 +851,7 @@ final class _GammaRtcActor {
   late final relationship_capability.RemotePersonaRelationshipFacet
   relationshipCapability;
   AuthSessionGrant? _session;
+  String? _activeRtcIdempotencyKey;
 
   String get accountId => _requireSession().ownerId;
 
@@ -352,6 +901,27 @@ final class _GammaRtcActor {
   ) => relationshipCapability.getRelationshipCapability(
     GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
   );
+
+  Future<T> withRtcIdempotencyKey<T>(
+    String idempotencyKey,
+    Future<T> Function() operation,
+  ) async {
+    final normalized = idempotencyKey.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(idempotencyKey, 'idempotencyKey');
+    }
+    if (_activeRtcIdempotencyKey != null) {
+      throw StateError(
+        'RTC API contract commands must be sequential per actor',
+      );
+    }
+    _activeRtcIdempotencyKey = normalized;
+    try {
+      return await operation();
+    } finally {
+      _activeRtcIdempotencyKey = null;
+    }
+  }
 
   Future<void> close() async {
     final session = _session;
@@ -405,6 +975,7 @@ final class _GammaRtcActor {
     surface: _rtcSurfaceFor(clientPageId),
     clientPageId: clientPageId,
     command: command,
+    idempotencySuffix: command ? _activeRtcIdempotencyKey : null,
   );
 
   CloudOperationInvocationContext _invocationContext({

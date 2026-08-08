@@ -5,6 +5,7 @@
   "required": [
     "schema",
     "executionId",
+    "campaignScale",
     "scaleClass",
     "approvedQuota",
     "queueBackend",
@@ -18,7 +19,8 @@
   "properties": {
     "schema": {"const": "quwoquan_data.execution_queue_backend_envelope"},
     "executionId": {"type": "string", "minLength": 1},
-    "scaleClass": {"enum": ["BELOW_M100", "M100_PLUS"]},
+    "campaignScale": {"type": "string", "pattern": "^M[1-9][0-9]{0,5}$"},
+    "scaleClass": {"enum": ["BELOW_M100", "M100_PLUS", "M10000_PLUS"]},
     "approvedQuota": {"type": "integer", "minimum": 1},
     "queueBackend": {"enum": ["local_file", "reliabletask"]},
     "queuePolicyDigest": {
@@ -53,6 +55,25 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "campaignRunId": {"type": "string", "minLength": 1},
+    "campaignGeneration": {"type": "integer", "minimum": 1},
+    "campaignFencingToken": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignSourceRevision": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignEntityCatalogDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "envelopeDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
@@ -78,10 +99,23 @@
     },
     {
       "if": {
-        "properties": {"scaleClass": {"const": "M100_PLUS"}},
+        "properties": {
+          "scaleClass": {"enum": ["M100_PLUS", "M10000_PLUS"]}
+        },
         "required": ["scaleClass"]
       },
-      "then": {"properties": {"queueBackend": {"const": "reliabletask"}}}
+      "then": {
+        "properties": {"queueBackend": {"const": "reliabletask"}},
+        "required": [
+          "rootExecutionId",
+          "campaignRunId",
+          "campaignGeneration",
+          "campaignFencingToken",
+          "campaignPlanDigest",
+          "campaignSourceRevision",
+          "campaignEntityCatalogDigest"
+        ]
+      }
     }
   ]
 }

@@ -15,22 +15,26 @@ events:
 - name: GatheringPublished
   description: room-ready Gathering 已从 draft 原子进入 published。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringPublished
   payload_entity: GatheringEventPayload
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, roomBindingStatus, conversationId, occurredAt]
 - name: GatheringRevisionAppended
   description: append-only GatheringRevision 已追加并推进 root current revision pointer。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringRevisionAppended
   payload_entity: GatheringEventPayload
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, occurredAt]
 - name: GatheringParticipationChanged
   description: 同一 root-owned Participation 的 attempt、state、seat hold、attendance 或 acknowledgement 已变化；Recommendation 据此重读 canonical PublicCard 收敛满员与恢复。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringParticipationChanged
   topic: events.circle.gatherings
   payload_entity: GatheringEventPayload
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, participantPersonaId, participationState, revisionId, revisionNumber, revisionDigest, occurredAt]
 - name: GatheringInvitationChanged
   description: 邀请创建、接受、拒绝或撤回后，向 Notification 发布 disclosure-safe typed 邀请投影；Gathering 取消由同 stream 的 GatheringCancelled 批量失效卡片，Circle 仍是 Participation 唯一事实 owner。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringInvitationChanged
   topic: events.circle.gatherings
   payload_entity: GatheringInvitationEventPayload
   payload_shape: exact
@@ -38,12 +42,14 @@ events:
 - name: GatheringAdmissionControlChanged
   description: 人工 admission control 的 open 或 paused 事实已版本化变化；Recommendation 据此重读 canonical PublicCard。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringAdmissionControlChanged
   topic: events.circle.gatherings
   payload_entity: GatheringEventPayload
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, admissionControlStatus, occurredAt]
 - name: GatheringCancelled
   description: upcoming Gathering 已按普通取消路径进入 cancelled；Notification 据 gatheringId 幂等批量失效仍 pending 的邀请 action。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringCancelled
   topic: events.circle.gatherings
   payload_entity: GatheringEventPayload
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, roomBindingStatus, conversationId, occurredAt]
@@ -62,6 +68,7 @@ events:
 - name: GatheringCompleted
   description: temporalPhase=ended 的 Gathering 已完成并提交 owner-calculated Outcome。
   delivery_semantics: transactional_outbox
+  wire_event_type: GatheringCompleted
   payload_entity: GatheringEventPayload
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, occurredAt]
 - name: GatheringOutcomeCalculated

@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+// readiness_case: event_record_report_event_batch_app_api
 // readiness_case: event_record_report_startup_event_batch_app_api
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -17,7 +18,7 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart' as ops;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/runtime/api_contract/local_gamma_anonymous_session.dart';
+import '../../../../../support/runtime/api_contract/api_contract_anonymous_session.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -29,7 +30,7 @@ const _productOpsBase = String.fromEnvironment(
 const _authBase = String.fromEnvironment('API_CONTRACT_AUTH_BASE_URL');
 
 late http.Client _client;
-late LocalGammaAnonymousSession _session;
+late ApiContractAnonymousSession _session;
 bool _clientInitialized = false;
 
 void main() {
@@ -53,7 +54,7 @@ void main() {
     }
     _client = http.Client();
     _clientInitialized = true;
-    _session = await LocalGammaAnonymousSession.login(
+    _session = await ApiContractAnonymousSession.login(
       client: _client,
       baseUrl: _authBase,
       subject: 'product-ops-api-contract',

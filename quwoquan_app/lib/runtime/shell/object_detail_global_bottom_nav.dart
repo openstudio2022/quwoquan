@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/runtime/shell/bottom_navigation.dart';
-import 'package:quwoquan_app/runtime/di/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 
 /// 对象页（实体 / 圈子主页）底部全局导航栏。
 ///

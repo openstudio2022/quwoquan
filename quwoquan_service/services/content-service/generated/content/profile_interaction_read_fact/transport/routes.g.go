@@ -11,7 +11,7 @@ import (
 )
 
 var generatedRouteTable = []generatedRouteDef{
-	{method: "POST", pathTemplate: "/content/personas/{personaId}/interactions/{interactionId}/read-facts", operation: "UpdateProfileInteractionState"},
+	{method: "POST", pathTemplate: "/content/personas/{personaId}/interactions/{interactionId}/read-facts", operation: "AppendProfileInteractionReadFact"},
 }
 
 type generatedRouteDef struct {
@@ -121,7 +121,7 @@ func generatedSplitPath(raw string) []string {
 }
 
 var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
-	"UpdateProfileInteractionState": {
+	"AppendProfileInteractionReadFact": {
 		"state": {},
 	},
 }

@@ -10,7 +10,7 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import runner
+from content.execution.controller.execute import runner
 
 
 EXECUTION_ID = "20260714--travel-homepage-coverage--test-region-a--pilot-001"

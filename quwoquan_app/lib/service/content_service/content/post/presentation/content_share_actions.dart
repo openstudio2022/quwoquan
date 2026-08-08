@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/temporary_file_writer.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:share_plus/share_plus.dart';
@@ -13,6 +12,8 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
 class ContentShareActionResult {
   const ContentShareActionResult({
@@ -60,6 +61,11 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     ContentShareTemplate template,
     ContentShareAction action,
   ) async {
+    // handler 保持 const 可复用；异常端口在任何 await 之前从调用点所在
+    // ProviderScope 解析，因此 local_contract 能 override 成测试树内 double。
+    final telemetry = ProviderScope.containerOf(
+      context,
+    ).read(exceptionTelemetryPortProvider);
     try {
       switch (action.id) {
         case 'copy_link':
@@ -125,7 +131,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
       }
     } catch (error, stackTrace) {
       unawaited(
-        AppExceptionTelemetryService.instance.recordHandledException(
+        telemetry.recordHandledException(
           source: 'content.share.${action.id}',
           error: error,
           stackTrace: stackTrace,

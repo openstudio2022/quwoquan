@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_works_tab.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
@@ -39,6 +41,7 @@ Widget _buildApp() {
         body: SizedBox(
           height: 800,
           child: ProfileWorksTab(
+            recommendationSlots: profileRecommendationSlots,
             mode: ProfileMode.mine,
             userId: 'nature_photographer',
             isDark: false,

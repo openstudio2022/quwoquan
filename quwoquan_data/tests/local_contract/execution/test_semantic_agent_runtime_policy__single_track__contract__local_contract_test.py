@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from content.execution.model_contract import execution_model_pair
 from content.execution.preflight import handler as preflight_handler
-from content.execution.recipe import load_recipe
-from content.execution.scale_semantic_promotion import scale_calibration_sample_count
+from content.execution.planning.recipe.model import load_recipe
+from content.execution.scale.semantic_promotion import scale_calibration_sample_count
 from core.control_types import AgentProvider
 from core.paths import CONTROL_PLANE_SHARED_ROOT
 from core.runtime_policy import active_runtime_policy

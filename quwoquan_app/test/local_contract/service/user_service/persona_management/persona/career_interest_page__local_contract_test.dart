@@ -21,7 +21,7 @@ void main() {
             (ref, surface) => const _CareerProfileEditQuery(),
           ),
           tagCatalogQueryProvider.overrideWithValue(TagCatalogTypedDouble()),
-          tagFeedbackCommandWriterProvider.overrideWithValue(
+          tagFeedbackFactAppenderProvider.overrideWithValue(
             TagFeedbackTypedDouble(),
           ),
         ],
@@ -87,7 +87,7 @@ void main() {
             (ref, surface) => const _CareerProfileEditQuery(),
           ),
           tagCatalogQueryProvider.overrideWithValue(TagCatalogTypedDouble()),
-          tagFeedbackCommandWriterProvider.overrideWithValue(
+          tagFeedbackFactAppenderProvider.overrideWithValue(
             TagFeedbackTypedDouble(),
           ),
         ],
@@ -126,7 +126,7 @@ void main() {
           tagCatalogQueryProvider.overrideWithValue(
             _ReleaseOverrideTagCatalogQuery(remoteReleaseId),
           ),
-          tagFeedbackCommandWriterProvider.overrideWithValue(
+          tagFeedbackFactAppenderProvider.overrideWithValue(
             TagFeedbackTypedDouble(),
           ),
           profileCommandWriterProvider.overrideWithValue(writer),

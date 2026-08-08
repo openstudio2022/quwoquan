@@ -40,12 +40,18 @@ class BlockedUsersPage extends ConsumerStatefulWidget {
 }
 
 class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
+  static const Duration _unblockReadbackTimeout = Duration(seconds: 10);
+  static const int _unblockReadbackPageSize = 100;
+
   final List<BlockedListItemView> _items = <BlockedListItemView>[];
   final Set<String> _unblocking = <String>{};
+  final Map<String, int> _unblockAttemptByTarget = <String, int>{};
   String? _nextCursor;
   Object? _rawError;
   bool _loading = false;
   bool _loadingMore = false;
+  int _listRequestGeneration = 0;
+  int _unblockAttemptSequence = 0;
 
   @override
   void initState() {
@@ -59,6 +65,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
     if (_loading || _loadingMore) {
       return;
     }
+    final requestGeneration = ++_listRequestGeneration;
     setState(() {
       if (reset) {
         _loading = true;
@@ -76,7 +83,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
               limit: 20,
             ),
           );
-      if (!mounted) {
+      if (!mounted || requestGeneration != _listRequestGeneration) {
         return;
       }
       setState(() {
@@ -91,18 +98,24 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
         _rawError = null;
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || requestGeneration != _listRequestGeneration) {
         return;
       }
       setState(() => _rawError = error);
     } finally {
-      if (mounted) {
+      if (mounted && requestGeneration == _listRequestGeneration) {
         setState(() {
           _loading = false;
           _loadingMore = false;
         });
       }
     }
+  }
+
+  void _invalidateListRequests() {
+    _listRequestGeneration += 1;
+    _loading = false;
+    _loadingMore = false;
   }
 
   Future<void> _confirmUnblock(BlockedListItemView item) async {
@@ -134,25 +147,47 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
   }
 
   Future<void> _unblock(BlockedListItemView item) async {
-    setState(() => _unblocking.add(item.targetPersonaId));
+    if (_unblocking.contains(item.targetPersonaId)) {
+      return;
+    }
+    final targetPersonaId = item.targetPersonaId;
+    final attempt = ++_unblockAttemptSequence;
+    Object? failure;
+    setState(() {
+      _unblocking.add(targetPersonaId);
+      _unblockAttemptByTarget[targetPersonaId] = attempt;
+      // Any earlier list request is now stale. Its late response must not
+      // overwrite the authoritative verification started by this mutation.
+      _invalidateListRequests();
+    });
     try {
       final result = await ref
           .read(
             personaRelationshipBlockWriterProvider(AppUiSurfaces.blockedUsers),
           )
-          .unblockUser(
-            UnblockUserCommand(targetPersonaId: item.targetPersonaId),
-          );
-      if (!mounted) {
+          .unblockUser(UnblockUserCommand(targetPersonaId: targetPersonaId));
+      if (!mounted || _unblockAttemptByTarget[targetPersonaId] != attempt) {
         return;
       }
-      if (!result.blocked) {
-        setState(() {
-          _items.removeWhere(
-            (candidate) => candidate.targetPersonaId == item.targetPersonaId,
-          );
-        });
+      if (result.targetPersonaId != targetPersonaId || result.blocked) {
+        throw StateError('UnblockUser returned a mismatched typed result');
       }
+      final targetStillBlocked = await _authoritativeReadbackContains(
+        targetPersonaId,
+      ).timeout(_unblockReadbackTimeout);
+      if (targetStillBlocked) {
+        throw StateError(
+          'UnblockUser did not converge in the authoritative blocked list',
+        );
+      }
+      if (!mounted || _unblockAttemptByTarget[targetPersonaId] != attempt) {
+        return;
+      }
+      setState(() {
+        _items.removeWhere(
+          (candidate) => candidate.targetPersonaId == targetPersonaId,
+        );
+      });
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -161,22 +196,33 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
               action: 'unblock_user',
               pageName: 'BlockedUsersPage',
               targetType: 'user',
-              targetKey: item.targetPersonaId,
+              targetKey: targetPersonaId,
             ),
       );
       AppToast.show(context, ContentText.blockedUsersUnblockSuccess);
     } catch (error) {
-      if (!mounted) {
-        return;
+      if (_isCurrentUnblockAttempt(targetPersonaId, attempt)) {
+        failure = error;
       }
-      await AppActionErrorFeedback.show(
-        context,
-        semantic: runtimeErrorSemantic(
+    } finally {
+      if (_isCurrentUnblockAttempt(targetPersonaId, attempt)) {
+        setState(() => _unblocking.remove(targetPersonaId));
+      }
+    }
+    if (failure != null &&
+        mounted &&
+        _unblockAttemptByTarget[targetPersonaId] == attempt) {
+      final semantic = ensureRetryUiErrorSemantic(
+        runtimeErrorSemantic(
           context,
-          error: error,
+          error: failure,
           category: UiErrorCategory.submit,
           scope: UiErrorScope.dialog,
         ),
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
         onAction: (action) async {
           if (action.type == UiErrorActionType.retry ||
               action.type == UiErrorActionType.resubmit) {
@@ -184,10 +230,33 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
           }
         },
       );
-    } finally {
-      if (mounted) {
-        setState(() => _unblocking.remove(item.targetPersonaId));
+    }
+  }
+
+  bool _isCurrentUnblockAttempt(String targetPersonaId, int attempt) =>
+      mounted && _unblockAttemptByTarget[targetPersonaId] == attempt;
+
+  Future<bool> _authoritativeReadbackContains(String targetPersonaId) async {
+    final reader = ref.read(blockedListQueryProvider);
+    final seenCursors = <String>{};
+    String? cursor;
+    while (true) {
+      final page = await reader.listBlockedUsers(
+        ListBlockedUsersQuery(cursor: cursor, limit: _unblockReadbackPageSize),
+      );
+      if (page.items.any(
+        (candidate) => candidate.targetPersonaId == targetPersonaId,
+      )) {
+        return true;
       }
+      final nextCursor = page.nextCursor?.trim() ?? '';
+      if (nextCursor.isEmpty) {
+        return false;
+      }
+      if (!seenCursors.add(nextCursor)) {
+        throw StateError('Blocked list readback returned a cursor cycle');
+      }
+      cursor = nextCursor;
     }
   }
 

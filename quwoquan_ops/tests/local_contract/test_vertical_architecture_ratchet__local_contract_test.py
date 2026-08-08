@@ -66,7 +66,7 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
                 - id: travel
                   mode: content
                   label: {en: Travel}
-                  assistant_domain_ids: [travel_planning]
+                  assistant_domain_ids: [travel_companion]
                   sub_categories: [trip_guide]
                 - id: campus
                   mode: content
@@ -81,7 +81,7 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
                 """
             ).lstrip(),
         )
-        self._domains = {"travel", "content", "tag", "assistant", "gateway", "campus"}
+        self._domains = {"content", "tag", "assistant", "gateway", "campus"}
         self._write_contract_graph()
         self._write_baseline()
 
@@ -127,6 +127,8 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
                 "app": empty,
                 "assistant": empty,
                 "api_edge": empty,
+                "runtime": empty,
+                "ops": empty,
             },
         )
 
@@ -344,6 +346,14 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
                 "quwoquan_service/services/api-edge/config/routes.yaml",
                 "upstream: travel-service\n",
             ),
+            "runtime": (
+                "quwoquan_service/runtime/auth/service_credentials.go",
+                'var legacyScope = "travel.trip.read"\n',
+            ),
+            "ops": (
+                "quwoquan_ops/cli/lib/nonprod_data_assistant.py",
+                'SKILL_ID = "travel_journey_manager"\n',
+            ),
         }
         for area, (relative, content) in probes.items():
             with self.subTest(area=area):
@@ -390,6 +400,142 @@ class VerticalArchitectureRatchetTest(unittest.TestCase):
             any("vertical_service" in failure for failure in failures),
             failures,
         )
+
+    def test_retired_travel_service_symlink_is_blocked(self) -> None:
+        target = self.root / "parked-travel-owner"
+        target.mkdir()
+        retired = self.root / self.module.RETIRED_TRAVEL_SERVICE
+        retired.parent.mkdir(parents=True, exist_ok=True)
+        retired.symlink_to(target, target_is_directory=True)
+
+        failures, report = self._evaluate()
+
+        self.assertTrue(
+            any("retired_travel_service" in failure for failure in failures),
+            failures,
+        )
+        self.assertTrue(report["retired_travel_service_present"], report)
+
+    def test_materialized_travel_domain_owner_is_blocked(self) -> None:
+        self._write(
+            ".qwq_output/env/repo/local/service-contract-view/cache/run/"
+            "travel/contracts/domain.yaml",
+            "domain: travel\n",
+        )
+
+        failures, report = self._evaluate()
+
+        self.assertTrue(
+            any("materialized_travel_owner" in failure for failure in failures),
+            failures,
+        )
+        self.assertEqual(1, report["materialized_travel_owners"])
+
+    def test_parked_materialized_travel_tree_is_blocked_even_when_empty(self) -> None:
+        (
+            self.root / ".qwq_output/travel-service-materialized.parked-20260807"
+        ).mkdir(parents=True)
+
+        failures, _ = self._evaluate()
+
+        self.assertTrue(
+            any("materialized_travel_owner" in failure for failure in failures),
+            failures,
+        )
+
+    def test_contract_graph_travel_object_operation_source_and_document_are_blocked(
+        self,
+    ) -> None:
+        self._write(
+            "quwoquan_service/generated/contract_graph.json",
+            json.dumps(
+                {
+                    "objects": [
+                        {
+                            "id": "travel.trip_plan",
+                            "domain": "travel",
+                            "sourcePath": "travel/travel/trip_plan/object.yaml",
+                        }
+                    ],
+                    "operations": [
+                        {
+                            "id": "travel.trip_plan.GetTripPlan",
+                            "domain": "travel",
+                            "objectId": "travel.trip_plan",
+                            "sourcePath": "travel/travel/trip_plan/operations.yaml",
+                        }
+                    ],
+                    "sources": [
+                        {
+                            "path": "travel/travel/trip_plan/object.yaml",
+                            "sha256": "a" * 64,
+                        }
+                    ],
+                    "documents": [
+                        {
+                            "path": "travel/travel/trip_plan/object.yaml",
+                            "sha256": "a" * 64,
+                            "content": {"object": "TripPlan"},
+                        }
+                    ],
+                }
+            ),
+        )
+
+        failures, report = self._evaluate()
+
+        self.assertTrue(
+            any("contract_graph_travel_ghost" in failure for failure in failures),
+            failures,
+        )
+        self.assertEqual(4, report["contract_graph_travel_ghosts"])
+
+    def test_app_lock_manifest_and_physical_travel_client_are_blocked(self) -> None:
+        self._write(
+            "quwoquan_app/tool/cloud_codegen/contract_graph.lock.json",
+            json.dumps(
+                {
+                    "appExposedOperations": [
+                        {
+                            "canonicalOperationId": (
+                                "travel.trip_plan.GetTripPlan"
+                            ),
+                            "domain": "travel",
+                            "objectId": "travel.trip_plan",
+                            "sourcePath": "travel/travel/trip_plan/operations.yaml",
+                        }
+                    ]
+                }
+            ),
+        )
+        self._write(
+            "quwoquan_app/tool/cloud_codegen/generated_manifest.json",
+            json.dumps(
+                {
+                    "outputs": [
+                        {
+                            "path": (
+                                "packages/quwoquan_cloud_contracts/lib/src/"
+                                "travel/travel_operation_contracts.g.dart"
+                            )
+                        }
+                    ]
+                }
+            ),
+        )
+        self._write(
+            "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/travel/"
+            "travel_operation_contracts.g.dart",
+            "// retired\n",
+        )
+
+        failures, report = self._evaluate()
+
+        self.assertTrue(
+            any("app_travel_contract_ghost" in failure for failure in failures),
+            failures,
+        )
+        self.assertEqual(3, report["app_travel_contract_ghosts"])
 
     def test_baseline_rejects_retired_service_allowance_section(self) -> None:
         document = yaml.safe_load(self.baseline_path.read_text(encoding="utf-8"))

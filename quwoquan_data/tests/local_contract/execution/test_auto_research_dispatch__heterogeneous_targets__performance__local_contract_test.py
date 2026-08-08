@@ -18,7 +18,15 @@ def test_cursor_auto_runtime_reserves_bounded_m1000_lane_window():
 
     assert policy.author_workers == 1
     assert policy.research_workers == 1
-    assert policy.campaign_lane_timeout_seconds >= 72 * 60 * 60
+    assert policy.research_wave_size == 12
+    assert policy.research_max_waves_per_run == 4
+    assert (
+        policy.campaign_lane_workers * policy.research_workers
+        <= policy.semantic_capacity.burst_limit
+        == 4
+    )
+    assert policy.campaign_lane_timeout_seconds_for_scale("M1000") == 72 * 60 * 60
+    assert policy.campaign_lane_timeout_seconds_for_scale("M10000") == 7 * 24 * 60 * 60
     # 单对象失控保护不随批次总时限放宽。
     assert policy.queue_max_wall_clock_seconds == 40 * 60
 
@@ -190,6 +198,136 @@ def test_auto_research_report_preserves_all_lane_evidence_across_waves(
         "entitiesPerMinute": 30.0,
         "waveCount": 2,
     }
+
+
+def test_m100_auto_research_soak_is_bounded_resumable_and_create_once(
+    monkeypatch,
+    tmp_path,
+):
+    carrier_sizes = {
+        "homepage": 180,
+        "article": 180,
+        "image": 180,
+        "video": 15,
+    }
+    calls: dict[str, list[str]] = {carrier: [] for carrier in carrier_sizes}
+    active_carrier = {"value": ""}
+
+    monkeypatch.setattr(
+        auto_research,
+        "active_runtime_policy",
+        lambda: SimpleNamespace(research_workers=1, research_max_waves_per_run=4),
+    )
+    monkeypatch.setattr(
+        auto_research,
+        "_auto_research_wave_size",
+        lambda *_args, **_kwargs: 12,
+    )
+    monkeypatch.setattr(
+        auto_research,
+        "_download_auto_research_lanes",
+        lambda _ctx: {active_carrier["value"]},
+    )
+    monkeypatch.setattr(
+        download_unresolved,
+        "_auto_research_plan_path",
+        lambda ctx: tmp_path / f"{ctx.execution_id}.json",
+    )
+
+    def fake_write(execution_id, target_ids, *, max_workers, **_kwargs):
+        carrier = active_carrier["value"]
+        assert f"--travel-{carrier}-" in execution_id
+        assert max_workers == 1
+        assert 1 <= len(target_ids) <= 12
+        calls[carrier].extend(target_ids)
+        all_ids = [
+            f"{carrier}-候选-{index:03d}"
+            for index in range(carrier_sizes[carrier])
+        ]
+        ready_set = set(all_ids[:3])
+        ready = [entity_id for entity_id in target_ids if entity_id in ready_set]
+        unavailable = [
+            {
+                "entityId": entity_id,
+                "issues": ["deterministic shortfall"],
+                "blockers": [],
+            }
+            for entity_id in target_ids
+            if entity_id not in ready_set
+        ]
+        return {
+            "updated": list(target_ids),
+            "issues": [],
+            "candidates": [],
+            "imageCollections": [],
+            "homepageMediaAdvisories": [],
+            "sourceUnavailable": unavailable,
+            "sourceAvailability": {
+                "readyTargets": ready,
+                "readyTargetCount": len(ready),
+                "ineligibleTargets": unavailable,
+                "ineligibleTargetCount": len(unavailable),
+            },
+            "throughput": {
+                "maxWorkers": max_workers,
+                "entityCount": len(target_ids),
+                "elapsedSeconds": float(len(target_ids)),
+                "entitiesPerMinute": 60.0,
+            },
+        }
+
+    monkeypatch.setattr(auto_plan_public, "write_auto_research_plans", fake_write)
+
+    for carrier, candidate_count in carrier_sizes.items():
+        active_carrier["value"] = carrier
+        execution_id = (
+            f"20260807--travel-{carrier}-m100-root-cause--test-region-a--scale-001"
+        )
+        entity_ids = [
+            f"{carrier}-候选-{index:03d}" for index in range(candidate_count)
+        ]
+        ctx = ExecutionContext(
+            execution_id=execution_id,
+            entity_ids=entity_ids,
+            spec=ExecutionFixtureBuilder(
+                execution_id,
+                targets=tuple(
+                    {"name": entity_id, "entityType": "地点/景区"}
+                    for entity_id in entity_ids
+                ),
+            ).spec(),
+            managed=True,
+        )
+        report: dict[str, object] = {"partialRun": True}
+        resume_count = 0
+        while report.get("partialRun"):
+            report = auto_research._run_download_auto_research(
+                ctx,
+                entity_ids,
+                entity_type="地点/景区",
+            )
+            resume_count += 1
+            assert resume_count <= 4
+
+        assert calls[carrier] == entity_ids
+        assert len(set(calls[carrier])) == candidate_count
+        assert report["sourceAvailability"]["readyTargetCount"] == 3
+        assert report["sourceAvailability"]["ineligibleTargetCount"] == (
+            candidate_count - 3
+        )
+        assert report["completedEntityCount"] == candidate_count
+        assert report["remainingEntityCount"] == 0
+
+        # A completed create-once execution is a no-op on recovery; no semantic
+        # source job may be duplicated after the final checkpoint.
+        call_count = len(calls[carrier])
+        resumed = auto_research._run_download_auto_research(
+            ctx,
+            entity_ids,
+            entity_type="地点/景区",
+        )
+        assert len(calls[carrier]) == call_count
+        assert resumed["completedEntityCount"] == candidate_count
 
 
 def test_download_plan_prompts_use_each_frozen_target_entity_type(

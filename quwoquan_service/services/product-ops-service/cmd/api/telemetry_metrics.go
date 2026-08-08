@@ -387,7 +387,8 @@ func boundedLoginResult(value string) string {
 	switch value {
 	case "exposed", "success", "failure", "started", "shown", "cancelled",
 		"accepted", "required", "available", "resumed", "dismissed",
-		"binding_required", "stalled", "duplicate_suppressed":
+		"binding_required", "stalled", "duplicate_suppressed",
+		"opened", "unavailable":
 		return value
 	default:
 		return "other"
@@ -418,7 +419,8 @@ func boundedLoginOperation(value string) string {
 	switch value {
 	case "resolve_login_entry", "refresh_remembered_session", "login_one_tap",
 		"send_otp", "verify_login_otp", "complete_federated_phone_binding",
-		"login_social_wechat", "login_social_qq", "login_social_alipay":
+		"login_social_wechat", "login_social_qq", "login_social_alipay",
+		"open_account_restriction_support":
 		return value
 	default:
 		return "other"

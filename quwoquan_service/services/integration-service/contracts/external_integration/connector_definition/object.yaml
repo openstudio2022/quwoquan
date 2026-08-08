@@ -10,8 +10,20 @@ access:
   cross_context: public_contract_only
   queries: named_reader
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.integration.connector_definition.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - 只有 quwoquan.official 签名 release 可以发布 ConnectorDefinition，运行时不得扫描本地目录
 - capabilities 使用 canonical capability key；Skill 和 App 不得引用厂商、endpoint 或 credential

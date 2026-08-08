@@ -4,6 +4,11 @@
   "type": "object",
   "required": [
     "schema",
+    "executionId",
+    "stage",
+    "jobSetEnvelopeDigest",
+    "jobSetDigest",
+    "actualTaskDigest",
     "passed",
     "backend",
     "total",
@@ -38,6 +43,20 @@
   ],
   "additionalProperties": false,
   "properties": {
+    "executionId": {"type": "string", "minLength": 1},
+    "stage": {"enum": ["author", "publish"]},
+    "jobSetEnvelopeDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "jobSetDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actualTaskDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "passed": {
       "type": "boolean"
     },
@@ -61,6 +80,10 @@
       "minimum": 0
     },
     "objectTransactionResultCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "researchAcceptedCount": {
       "type": "integer",
       "minimum": 0
     },

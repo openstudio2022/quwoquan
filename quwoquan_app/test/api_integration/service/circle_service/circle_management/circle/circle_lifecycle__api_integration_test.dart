@@ -1,4 +1,8 @@
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-002
+// readiness_case: circle_create_circle_app_api
+// readiness_case: circle_update_circle_app_api
+// readiness_case: circle_get_circle_app_api
+// readiness_case: circle_archive_circle_app_api
 
 /// Circle aggregate API integration contract.
 ///

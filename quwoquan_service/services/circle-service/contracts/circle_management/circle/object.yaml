@@ -55,8 +55,25 @@ relationships:
 local_identity_reasons:
   domainId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
-taggable: true
-vector_enabled: false
+search_policy:
+  exposed: remote_index
+  object_type_refs:
+  - circle.circle
+  eligibility_ref: quwoquan_service/services/circle-service/internal/circle_management/circle/application/circle_search_projection.go#CircleSearchEligible
+  index_projector_ref: quwoquan_service/services/circle-service/internal/circle_management/circle/application/circle_search_projection.go#ProjectCircleToSearchDocument
+  privacy_filter_ref: quwoquan_service/runtime/search/core.go#isPrivateVisibility
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.circle.circle.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.circle.circle.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - ownerId 与 kind 创建后不可变，owner 变更必须通过独立治理流程
 - sectionConfig 最多 16 个且 sectionType 唯一、order 连续
@@ -105,6 +122,9 @@ lifecycle:
 members:
   CircleSectionConfig:
     kind: owned_entity
-    cardinality: 1:N
+    identity: [sectionType]
+    cardinality: many
     max_cardinality: 16
+    ownership: aggregate
+    write_access: aggregate_facade_only
     description: Circle 详情分区的有界顺序配置，只能经 Circle 行为修改。

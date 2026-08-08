@@ -416,3 +416,43 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/credential_binding/postgres_binding__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
+  - case_id: credential_binding_bind_carrier_phone_credential_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: BindCarrierPhoneCredential}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/credential_binding/credential_binding_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: credential_binding_bind_phone_credential_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: BindPhoneCredential}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/credential_binding/credential_binding_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: credential_binding_complete_federated_phone_binding_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CompleteFederatedPhoneBinding}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/credential_binding/credential_binding_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: credential_binding_list_credentials_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListCredentials}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/credential_binding/credential_binding_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: credential_binding_unbind_credential_app_local
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UnbindCredential}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/credential_binding/credential_binding_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}

@@ -2,6 +2,7 @@ package reliabletask
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,6 +46,43 @@ func TestDataContentFleetReportCarriesOneOutcomePerFrozenJob(t *testing.T) {
 		got.Status != TaskStatusDead || got.Attempts != 2 ||
 		got.FailureCode != "reliabletask.executor_failed" {
 		t.Fatalf("dead outcome=%#v", got)
+	}
+}
+
+func TestDataContentFleetReportBindsExactAttemptDigests(t *testing.T) {
+	report := BuildDataContentFleetReport(
+		dataQuotaPublishTasks(1, 1, time.Now().UTC()),
+		time.Now().Add(-time.Second),
+		time.Now().Add(-time.Second),
+		time.Now(),
+		0,
+		0,
+		1,
+		1,
+	)
+	envelopeDigest := "sha256:" + strings.Repeat("a", 64)
+	taskDigest := "sha256:" + strings.Repeat("b", 64)
+	bound, err := BindDataContentFleetReport(
+		report,
+		"20260808--travel-image-m1--china--scale-001",
+		"publish",
+		envelopeDigest,
+		taskDigest,
+		taskDigest,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound.JobSetEnvelopeDigest != envelopeDigest ||
+		bound.JobSetDigest != taskDigest ||
+		bound.ActualTaskDigest != taskDigest {
+		t.Fatalf("report attempt binding drift: %#v", bound)
+	}
+	if _, err := BindDataContentFleetReport(
+		report, "execution", "publish", envelopeDigest, taskDigest,
+		"sha256:invalid",
+	); err == nil {
+		t.Fatal("invalid actualTaskDigest was accepted")
 	}
 }
 

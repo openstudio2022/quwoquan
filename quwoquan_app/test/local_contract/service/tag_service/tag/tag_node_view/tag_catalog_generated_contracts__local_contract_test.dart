@@ -1,12 +1,150 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-002
+// readiness_case: tag_node_view_list_tag_children_app_local
+// readiness_case: tag_node_view_resolve_tag_app_local
+// readiness_case: tag_node_view_validate_tag_refs_app_local
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/runtime/transport/generated/tag/tag_request_page_ids.g.dart';
+import 'package:quwoquan_app/service/tag_service/tag/tag_node_view/adapters/tag_catalog_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../../support/runtime/remote_api_path_test_harness.dart';
 
 /// wire 编解码用例只需要一个稳定的发布号；发布身份的真相源是 tag-service，
 /// 不是端侧编译常量。
 const String _taxonomyReleaseId = 'tag-taxonomy-contract-fixture';
 
+http.Response _tagCatalogResponseFor(http.Request request) {
+  if (request.method == 'GET' && request.url.path == '/tag/children') {
+    return remoteApiPathJsonResponse(<String, Object?>{
+      'items': <Object?>[
+        <String, Object?>{
+          'tagRef': 'Audience/用户/职业/产品运营',
+          'label': '产品运营',
+          'displayLabel': '产品运营',
+          'parentTagRef': 'Audience/用户/职业',
+          'depth': 3,
+          'hasChildren': true,
+          'releaseId': _taxonomyReleaseId,
+          'lifecycleStatus': 'active',
+        },
+      ],
+    });
+  }
+  if (request.method == 'GET' && request.url.path == '/tag/resolve') {
+    return remoteApiPathJsonResponse(<String, Object?>{
+      'tagRef': 'Audience/用户/职业/产品运营/产品经理',
+      'group': 'Audience',
+      'label': '产品经理',
+      'ancestors': <Object?>['Audience/用户/职业', 'Audience/用户/职业/产品运营'],
+    });
+  }
+  if (request.method == 'POST' && request.url.path == '/tag/validate') {
+    return remoteApiPathJsonResponse(<String, Object?>{
+      'taxonomyReleaseId': _taxonomyReleaseId,
+      'valid': <Object?>['Audience/用户/职业/产品运营/产品经理'],
+      'invalid': <Object?>['Topic/兴趣/旅行'],
+    });
+  }
+  throw StateError(
+    'unexpected TagCatalog request: ${request.method} ${request.url.path}',
+  );
+}
+
+CloudOperationInvocationContext _tagCatalogContext(String clientPageId) =>
+    CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.profileCareerInterests.id,
+      routeId: AppUiSurfaces.profileCareerInterests.routeId,
+      clientPageId: clientPageId,
+      actor: const CloudOperationActorContext(
+        accountId: 'account-tag-catalog',
+        personaId: 'persona-tag-catalog',
+        deviceActorId: 'device-tag-catalog',
+      ),
+    );
+
 void main() {
   group('TagCatalog generated client contracts', () {
+    test(
+      'production Remote executes children, resolve, and validate operations',
+      () async {
+        final requests = <CapturedRemoteApiPathRequest>[];
+        final catalog = RemoteGeneratedTagCatalogQuery(
+          client: buildRemoteApiPathOperationClient(
+            requests,
+            responseFor: _tagCatalogResponseFor,
+          ),
+          invocationContext: _tagCatalogContext,
+        );
+
+        final children = await catalog.listChildren(
+          ' Audience/用户/职业 ',
+          limit: 30,
+        );
+        final resolved = await catalog.resolveTag(' Audience/用户/职业/产品运营/产品经理 ');
+        final validation = await catalog.validateRefs(
+          expectedTaxonomyReleaseId: _taxonomyReleaseId,
+          tagRefs: const <String>['Audience/用户/职业/产品运营/产品经理', 'Topic/兴趣/旅行'],
+        );
+
+        expect(children, hasLength(1));
+        expect(children.single.tagRef, 'Audience/用户/职业/产品运营');
+        expect(children.single.releaseId, _taxonomyReleaseId);
+        expect(resolved.tagRef, 'Audience/用户/职业/产品运营/产品经理');
+        expect(resolved.label, '产品经理');
+        expect(validation.valid, const <String>['Audience/用户/职业/产品运营/产品经理']);
+        expect(validation.invalid, const <String>['Topic/兴趣/旅行']);
+
+        expect(requests, hasLength(3));
+        expect(requests[0].method, 'GET');
+        expect(requests[0].path, '/tag/children');
+        expect(requests[0].query, <String, String>{
+          'parentTagRef': 'Audience/用户/职业',
+          'limit': '30',
+        });
+        expect(requests[0].body, isEmpty);
+        expectRemoteApiPathHeaders(
+          requests[0].headers,
+          clientPageId: TagRequestPageIds.listTagChildren,
+          surfaceId: AppUiSurfaces.profileCareerInterests.id,
+          operationId: AppCloudOperationIds.tagTagNodeViewListTagChildren,
+        );
+
+        expect(requests[1].method, 'GET');
+        expect(requests[1].path, '/tag/resolve');
+        expect(requests[1].query, <String, String>{
+          'tagRef': 'Audience/用户/职业/产品运营/产品经理',
+        });
+        expect(requests[1].body, isEmpty);
+        expectRemoteApiPathHeaders(
+          requests[1].headers,
+          clientPageId: TagRequestPageIds.resolveTag,
+          surfaceId: AppUiSurfaces.profileCareerInterests.id,
+          operationId: AppCloudOperationIds.tagTagNodeViewResolveTag,
+        );
+
+        expect(requests[2].method, 'POST');
+        expect(requests[2].path, '/tag/validate');
+        expect(requests[2].query, isEmpty);
+        expect(requests[2].body, <String, Object?>{
+          'expectedTaxonomyReleaseId': _taxonomyReleaseId,
+          'tagRefs': <Object?>['Audience/用户/职业/产品运营/产品经理', 'Topic/兴趣/旅行'],
+        });
+        expectRemoteApiPathHeaders(
+          requests[2].headers,
+          clientPageId: TagRequestPageIds.validateTagRefs,
+          surfaceId: AppUiSurfaces.profileCareerInterests.id,
+          operationId: AppCloudOperationIds.tagTagNodeViewValidateTagRefs,
+        );
+
+        for (final request in requests) {
+          expect(request.headers, isNot(contains('authorization')));
+        }
+      },
+    );
+
     test('encodes commercial App queries without exposing wire maps', () {
       final resolve = encodeTagTagNodeViewResolveTagGeneratedRequest(
         ResolveTagQuery(tagRef: ' Topic/旅行 '),

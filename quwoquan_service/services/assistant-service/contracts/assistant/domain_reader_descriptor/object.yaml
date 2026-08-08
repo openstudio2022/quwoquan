@@ -11,8 +11,20 @@ access:
   cross_context: public_contract_only
   queries: external_port
 relationships: []
-taggable: false
-vector_enabled: false
+search_policy:
+  exposed: none
+  not_exposed_reason: "目录与发布对象由所属域按版本直接读取，不进入统一检索索引。"
+assistant_access:
+  read:
+    mode: metadata_only
+    scopes:
+    - assistant.assistant.domain_reader_descriptor.read
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - descriptorId、resolverRef 与 descriptorDigest 全局唯一且非空；同一 resolverRef 不得绑定多个 adapter
 - ownerOperationRefs 必须是 ownerService 的 canonical typed query 集合，Reader 禁止直读其它服务数据库或派生投影存储

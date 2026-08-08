@@ -9,7 +9,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.CommitGatheringPlanProposal"
-          contract_metric: "gathering_plan_commit"
+          contract_metric: "circle_gathering_plan_commit"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -19,7 +19,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.CommitGatheringPlanProposal"
-          contract_metric: "gathering_plan_commit"
+          contract_metric: "circle_gathering_plan_commit"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -29,7 +29,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.CreateGatheringPlan"
-          contract_metric: "gathering_plan_create"
+          contract_metric: "circle_gathering_plan_create"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -39,7 +39,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.CreateGatheringPlan"
-          contract_metric: "gathering_plan_create"
+          contract_metric: "circle_gathering_plan_create"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -49,7 +49,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.GetGatheringPlan"
-          contract_metric: "gathering_plan_get"
+          contract_metric: "circle_gathering_plan_get"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -59,7 +59,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.GetGatheringPlan"
-          contract_metric: "gathering_plan_get"
+          contract_metric: "circle_gathering_plan_get"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -69,7 +69,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.ListGatheringPlanRevisions"
-          contract_metric: "gathering_plan_revision_list"
+          contract_metric: "circle_gathering_plan_revision_list"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -79,7 +79,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.ListGatheringPlanRevisions"
-          contract_metric: "gathering_plan_revision_list"
+          contract_metric: "circle_gathering_plan_revision_list"
           commercial_status: "blocked"
           slo_latency_p95_ms: "400"
           slo_availability_percent: "99.9"
@@ -89,7 +89,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.ProposeGatheringPlan"
-          contract_metric: "gathering_plan_propose"
+          contract_metric: "circle_gathering_plan_propose"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"
@@ -99,7 +99,7 @@ groups:
         labels:
           service: "circle-service"
           operation: "circle.gathering_plan.ProposeGatheringPlan"
-          contract_metric: "gathering_plan_propose"
+          contract_metric: "circle_gathering_plan_propose"
           commercial_status: "blocked"
           slo_latency_p95_ms: "1500"
           slo_availability_percent: "99.9"

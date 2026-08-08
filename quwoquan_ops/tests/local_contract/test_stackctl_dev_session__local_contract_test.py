@@ -6,6 +6,8 @@ spec_ref: specs/feature-tree/runtime/runtime-config/environment-ops-cli-and-skil
 from __future__ import annotations
 
 import argparse
+import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,22 +20,66 @@ def _ok(summary: str) -> dict[str, object]:
     return {"exitCode": 0, "summary": summary, "details": [], "reportDir": summary}
 
 
+def _handoff_completed() -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(
+        args=["build_launcher_handoff.py"],
+        returncode=0,
+        stdout=json.dumps(
+            {
+                "launchPolicy": "test_live",
+                "contentBindingState": "unbound",
+            }
+        ),
+        stderr="",
+    )
+
+
 class StackctlDevSessionTest(unittest.TestCase):
-    def test_cold_session_runs_package_up_health_in_order(self) -> None:
+    def test_mutable_session_renders_preflight_and_health_without_package(self) -> None:
         events: list[str] = []
-
-        def invoke(name: str):
-            def command(_args: argparse.Namespace) -> dict[str, object]:
-                events.append(name)
-                return _ok(name)
-
-            return command
 
         with (
             tempfile.TemporaryDirectory() as temporary,
-            mock.patch.object(stackctl, "command_package", side_effect=invoke("package")),
-            mock.patch.object(stackctl, "command_up", side_effect=invoke("up")),
-            mock.patch.object(stackctl, "command_health", side_effect=invoke("health")),
+            mock.patch.object(
+                stackctl,
+                "command_package",
+                side_effect=AssertionError("test_live must not package"),
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_up",
+                side_effect=AssertionError("test_live must not use immutable up"),
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_app_debug_preflight",
+                side_effect=lambda _args: events.append("preflight")
+                or {
+                    **_ok("preflight"),
+                    "status": "warning",
+                    "warnings": ["api-edge unavailable"],
+                    "mutableWorkspaceWarnings": ["active candidate stale"],
+                },
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_health",
+                side_effect=lambda _args: events.append("health")
+                or {
+                    "exitCode": 2,
+                    "summary": "runtime unavailable",
+                    "details": ["api-edge is not ready"],
+                },
+            ),
+            mock.patch.object(stackctl.subprocess, "run", return_value=_handoff_completed()),
+            mock.patch.object(
+                stackctl,
+                "_mutable_workspace_snapshot",
+                side_effect=[
+                    {"sourceRevision": "a", "workspaceStatusDigest": "one"},
+                    {"sourceRevision": "a", "workspaceStatusDigest": "two"},
+                ],
+            ),
             mock.patch.object(stackctl, "load_startup_attempt", return_value=None),
             mock.patch.object(
                 stackctl,
@@ -44,19 +90,21 @@ class StackctlDevSessionTest(unittest.TestCase):
             result = stackctl._run_dev_session_target(
                 environment="alpha",
                 target="alpha-local",
-                release_attestation="candidate.json",
-                rollback_release_attestation="rollback.json",
                 device_id="emulator-5554",
                 launch_app_requested=False,
                 report_dir=Path(temporary),
             )
 
-        self.assertEqual(events, ["package", "up", "health"])
+        self.assertEqual(events, ["preflight", "health"])
         self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(result["sessionKind"], "cold")
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["sessionKind"], "mutable")
+        self.assertEqual(result["launchPolicy"], "test_live")
+        self.assertEqual(result["contentBindingState"], "unbound")
+        self.assertTrue(result["warnings"])
         self.assertIn("./run.sh --env alpha -d emulator-5554", result["details"][0])
 
-    def test_hot_session_never_repeats_compose_up(self) -> None:
+    def test_running_full_runtime_is_observed_but_never_repackaged(self) -> None:
         events: list[str] = []
         full_attempt = {
             "attemptId": "full-1",
@@ -69,7 +117,7 @@ class StackctlDevSessionTest(unittest.TestCase):
             mock.patch.object(
                 stackctl,
                 "command_package",
-                side_effect=lambda _args: events.append("package") or _ok("package"),
+                side_effect=AssertionError("test_live must not package"),
             ),
             mock.patch.object(
                 stackctl,
@@ -78,8 +126,20 @@ class StackctlDevSessionTest(unittest.TestCase):
             ),
             mock.patch.object(
                 stackctl,
+                "command_app_debug_preflight",
+                side_effect=lambda _args: events.append("preflight")
+                or {**_ok("preflight"), "status": "passed", "warnings": []},
+            ),
+            mock.patch.object(
+                stackctl,
                 "command_health",
                 side_effect=lambda _args: events.append("health") or _ok("health"),
+            ),
+            mock.patch.object(stackctl.subprocess, "run", return_value=_handoff_completed()),
+            mock.patch.object(
+                stackctl,
+                "_mutable_workspace_snapshot",
+                return_value={"sourceRevision": "a", "workspaceStatusDigest": "same"},
             ),
             mock.patch.object(
                 stackctl,
@@ -101,17 +161,19 @@ class StackctlDevSessionTest(unittest.TestCase):
             result = stackctl._run_dev_session_target(
                 environment="beta",
                 target="beta-local",
-                release_attestation="candidate.json",
-                rollback_release_attestation="rollback.json",
                 device_id="",
                 launch_app_requested=False,
                 report_dir=Path(temporary),
             )
 
         self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(result["sessionKind"], "hot")
-        self.assertEqual(events, ["package", "health"])
-        self.assertEqual([phase["name"] for phase in result["phases"]], ["package", "up", "health"])
+        self.assertEqual(result["sessionKind"], "mutable")
+        self.assertTrue(result["fullRuntimeSelected"])
+        self.assertEqual(events, ["preflight", "health"])
+        self.assertEqual(
+            [phase["name"] for phase in result["phases"]],
+            ["mutable-render", "preflight", "health"],
+        )
 
     def test_running_bounded_workload_blocks_before_package(self) -> None:
         for workload in ("content-release", "content-commercial"):
@@ -159,8 +221,6 @@ class StackctlDevSessionTest(unittest.TestCase):
                     result = stackctl._run_dev_session_target(
                         environment="alpha",
                         target="alpha-local",
-                        release_attestation="candidate.json",
-                        rollback_release_attestation="rollback.json",
                         device_id="",
                         launch_app_requested=False,
                         report_dir=Path(temporary),
@@ -182,7 +242,40 @@ class StackctlDevSessionTest(unittest.TestCase):
                 )
                 self.assertEqual(result["phases"], [])
 
-    def test_stopped_bounded_receipt_allows_cold_session(self) -> None:
+    def test_stale_startup_receipt_is_warning_for_test_live(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            mock.patch.object(
+                stackctl,
+                "_dev_session_runtime_preflight",
+                side_effect=ValueError("startup attempt target identity mismatch"),
+            ),
+            mock.patch.object(stackctl.subprocess, "run", return_value=_handoff_completed()),
+            mock.patch.object(
+                stackctl,
+                "command_app_debug_preflight",
+                return_value={**_ok("preflight"), "status": "passed", "warnings": []},
+            ),
+            mock.patch.object(stackctl, "command_health", return_value=_ok("health")),
+            mock.patch.object(
+                stackctl,
+                "_mutable_workspace_snapshot",
+                return_value={"sourceRevision": "a", "workspaceStatusDigest": "same"},
+            ),
+        ):
+            result = stackctl._run_dev_session_target(
+                environment="alpha",
+                target="alpha-local",
+                device_id="",
+                launch_app_requested=False,
+                report_dir=Path(temporary),
+            )
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["status"], "warning")
+        self.assertIn("stale runtime receipt ignored", result["warnings"][0])
+
+    def test_stopped_bounded_receipt_allows_mutable_session(self) -> None:
         events: list[str] = []
         stopped = {
             "attemptId": "content-release-old",
@@ -190,18 +283,35 @@ class StackctlDevSessionTest(unittest.TestCase):
             "workload": "content-release",
         }
 
-        def invoke(name: str):
-            def command(_args: argparse.Namespace) -> dict[str, object]:
-                events.append(name)
-                return _ok(name)
-
-            return command
-
         with (
             tempfile.TemporaryDirectory() as temporary,
-            mock.patch.object(stackctl, "command_package", side_effect=invoke("package")),
-            mock.patch.object(stackctl, "command_up", side_effect=invoke("up")),
-            mock.patch.object(stackctl, "command_health", side_effect=invoke("health")),
+            mock.patch.object(
+                stackctl,
+                "command_package",
+                side_effect=AssertionError("test_live must not package"),
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_up",
+                side_effect=AssertionError("test_live must not use immutable up"),
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_app_debug_preflight",
+                side_effect=lambda _args: events.append("preflight")
+                or {**_ok("preflight"), "status": "passed", "warnings": []},
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_health",
+                side_effect=lambda _args: events.append("health") or _ok("health"),
+            ),
+            mock.patch.object(stackctl.subprocess, "run", return_value=_handoff_completed()),
+            mock.patch.object(
+                stackctl,
+                "_mutable_workspace_snapshot",
+                return_value={"sourceRevision": "a", "workspaceStatusDigest": "same"},
+            ),
             mock.patch.object(stackctl, "load_startup_attempt", return_value=None),
             mock.patch.object(
                 stackctl,
@@ -216,16 +326,14 @@ class StackctlDevSessionTest(unittest.TestCase):
             result = stackctl._run_dev_session_target(
                 environment="gamma",
                 target="gamma-local",
-                release_attestation="candidate.json",
-                rollback_release_attestation="rollback.json",
                 device_id="",
                 launch_app_requested=False,
                 report_dir=Path(temporary),
             )
 
         self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(result["sessionKind"], "cold")
-        self.assertEqual(events, ["package", "up", "health"])
+        self.assertEqual(result["sessionKind"], "mutable")
+        self.assertEqual(events, ["preflight", "health"])
 
     def test_active_workload_receipt_blocks_when_target_receipt_is_stale(self) -> None:
         scoped_attempt = {
@@ -254,8 +362,6 @@ class StackctlDevSessionTest(unittest.TestCase):
             result = stackctl._run_dev_session_target(
                 environment="alpha",
                 target="alpha-local",
-                release_attestation="candidate.json",
-                rollback_release_attestation="rollback.json",
                 device_id="",
                 launch_app_requested=False,
                 report_dir=Path(temporary),
@@ -268,15 +374,20 @@ class StackctlDevSessionTest(unittest.TestCase):
             "workload:content-release",
         )
 
-    def test_package_failure_stops_before_runtime(self) -> None:
-        package_failure = {
-            "exitCode": 2,
-            "summary": "package blocked",
-            "details": ["release attestation invalid"],
-        }
+    def test_invalid_mutable_handoff_stops_before_runtime_health(self) -> None:
         with (
             tempfile.TemporaryDirectory() as temporary,
-            mock.patch.object(stackctl, "command_package", return_value=package_failure),
+            mock.patch.object(
+                stackctl.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    args=["build_launcher_handoff.py"],
+                    returncode=2,
+                    stdout="",
+                    stderr="unsafe production endpoint",
+                ),
+            ),
+            mock.patch.object(stackctl, "_mutable_workspace_snapshot", return_value={}),
             mock.patch.object(
                 stackctl,
                 "command_up",
@@ -297,20 +408,17 @@ class StackctlDevSessionTest(unittest.TestCase):
             result = stackctl._run_dev_session_target(
                 environment="gamma",
                 target="gamma-local",
-                release_attestation="candidate.json",
-                rollback_release_attestation="rollback.json",
                 device_id="",
                 launch_app_requested=False,
                 report_dir=Path(temporary),
             )
 
         self.assertEqual(result["exitCode"], 2)
-        self.assertEqual(result["blockerKind"], "package_failed")
+        self.assertEqual(result["blockerKind"], "launcher_handoff_invalid")
+        self.assertIn("unsafe production endpoint", result["details"][0])
 
     def test_all_nonprod_is_serial_and_failure_stops_later_targets(self) -> None:
         visited: list[str] = []
-        down_targets: list[str] = []
-
         def run_target(**kwargs: object) -> dict[str, object]:
             target = str(kwargs["target"])
             visited.append(target)
@@ -332,17 +440,11 @@ class StackctlDevSessionTest(unittest.TestCase):
                 "phases": [],
             }
 
-        def down_target(args: argparse.Namespace) -> dict[str, object]:
-            down_targets.append(str(args.target))
-            return _ok("down")
-
         args = argparse.Namespace(
             command="dev-session",
             all_nonprod=True,
             env="",
             target="",
-            release_attestation="candidate.json",
-            rollback_release_attestation="rollback.json",
             device_id="",
             launch_app=False,
             report_dir="",
@@ -355,12 +457,15 @@ class StackctlDevSessionTest(unittest.TestCase):
                 return_value=Path(temporary),
             ),
             mock.patch.object(stackctl, "_run_dev_session_target", side_effect=run_target),
-            mock.patch.object(stackctl, "command_down", side_effect=down_target),
+            mock.patch.object(
+                stackctl,
+                "command_down",
+                side_effect=AssertionError("mutable dev-session must not auto-down"),
+            ),
         ):
             result = stackctl.command_dev_session(args)
 
         self.assertEqual(visited, ["alpha-local", "beta-local"])
-        self.assertEqual(down_targets, ["alpha-local"])
         self.assertEqual(result["exitCode"], 2)
         self.assertEqual(result["blockerKind"], "runtime_health_failed")
 
@@ -375,8 +480,6 @@ class StackctlDevSessionTest(unittest.TestCase):
             all_nonprod=True,
             env="",
             target="",
-            release_attestation="candidate.json",
-            rollback_release_attestation="rollback.json",
             device_id="",
             launch_app=False,
             report_dir="",

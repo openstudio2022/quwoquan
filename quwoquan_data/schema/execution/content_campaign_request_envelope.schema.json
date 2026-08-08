@@ -13,6 +13,9 @@
     "selector",
     "quota",
     "count",
+    "requiredWorkers",
+    "partitionCount",
+    "capacityPlanDigest",
     "targetNames",
     "sourceProviders",
     "semanticSelectionId",
@@ -57,6 +60,15 @@
     "selector": { "type": "string", "minLength": 1 },
     "quota": { "type": "integer", "minimum": 1, "maximum": 100000 },
     "count": { "type": "integer", "minimum": 1 },
+    "requiredWorkers": { "type": "integer", "minimum": 1 },
+    "partitionCount": { "enum": [16, 32, 64, 128, 256] },
+    "capacityPlanDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
+    "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
     "topic": { "type": ["string", "null"] },
     "targetNames": {
       "type": "array",
@@ -141,6 +153,8 @@
         "sourceRevision",
         "sourceDigest",
         "entityCatalogDigest",
+        "targetScale",
+        "carrierCounts",
         "receiptRef",
         "receiptDigest"
       ],
@@ -151,6 +165,21 @@
         "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
         "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "targetScale": {"enum": ["M100", "M1000"]},
+        "carrierCounts": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["carrier", "totalUniqueFinalizedCount"],
+            "properties": {
+              "carrier": {"enum": ["homepage", "article", "image", "video"]},
+              "totalUniqueFinalizedCount": {"type": "integer", "minimum": 1}
+            }
+          }
+        },
         "receiptRef": { "type": "string", "minLength": 1 },
         "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
       }
@@ -173,13 +202,33 @@
     {
       "if": {
         "properties": {
-          "scale": { "const": "M1000" },
+          "scale": { "enum": ["M1000", "M10000"] },
           "vertical": { "const": "travel" }
         },
         "required": ["scale", "vertical"]
       },
       "then": {
         "required": ["researchScalePromotion"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"enum": ["M100", "M1000", "M10000"]}},
+        "required": ["scale"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["scaleSourcePool"]},
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
       }
     }
   ]

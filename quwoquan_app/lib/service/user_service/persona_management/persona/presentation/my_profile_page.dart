@@ -20,6 +20,10 @@ import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/user_data_notifier.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
+    show profileRecommendationSlots;
+import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
+    show profileParticipantSlots;
 
 /// 我的主页入口；`ProfileShell` 经对象级 ProfileQuery 加载公开分身资料。
 ///
@@ -84,6 +88,8 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     }
 
     return ProfileShell(
+      recommendationSlots: profileRecommendationSlots,
+      participantSlots: profileParticipantSlots,
       mode: ProfileMode.mine,
       userId: userId,
       initialAvatarUrl: userData?.avatarUrl,

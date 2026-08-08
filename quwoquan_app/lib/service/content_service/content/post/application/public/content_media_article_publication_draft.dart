@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show AssistantUsePolicy;
 
 /// Media Upload 消费文章发布草稿时所需的最小稳定投影。
 final class ContentMediaArticlePublicationDraft {
@@ -20,7 +22,7 @@ final class ContentMediaArticlePublicationDraft {
   final String fontPreset;
   final String markdownDialect;
   final bool isPublic;
-  final String assistantUsePolicy;
+  final AssistantUsePolicy assistantUsePolicy;
 }
 
 typedef ContentMediaArticleMarkdownEncoder =
@@ -30,7 +32,7 @@ typedef ContentMediaArticleMarkdownEncoder =
       required List<String> tagRefs,
       required List<String> entityRefs,
       required String visibility,
-      required String assistantUsePolicy,
+      required AssistantUsePolicy assistantUsePolicy,
       required String coverAssetId,
       required String coverImageUrl,
     });

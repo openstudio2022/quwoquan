@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -59,6 +60,19 @@ class CloudContractHandoffTest(unittest.TestCase):
         handoff.ROOT = self.original_handoff_root
         self.temp.cleanup()
 
+    # ContractGraph 的实现/测试输入由编译期按 `--repo-root` 扫描派生，并以 path+sha256 绑进
+    # readinessEvidence。fixture 必须带上这类绑定，否则测的是一个现实中不存在的 graph 形状。
+    EVIDENCE_SOURCE = (
+        "quwoquan_service/services/sample-service/internal/sample/thing"
+        "/domain/model/thing.go"
+    )
+
+    def _write_evidence_source(self, body: str = "package model\n") -> str:
+        resolved = self.root / self.EVIDENCE_SOURCE
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        resolved.write_text(body, encoding="utf-8")
+        return handoff.sha256_bytes(resolved.read_bytes())
+
     def _write_graph(
         self,
         *,
@@ -103,6 +117,20 @@ class CloudContractHandoffTest(unittest.TestCase):
             "operations": operations,
             "projections": [],
             "businessObjectMaps": [],
+            "readinessEvidence": [
+                {
+                    "objectId": "sample.thing",
+                    "operationIds": ["sample.thing.ListThings"],
+                    "service": {
+                        "domain": [
+                            {
+                                "path": self.EVIDENCE_SOURCE,
+                                "sha256": self._write_evidence_source(),
+                            }
+                        ]
+                    },
+                }
+            ],
             "sources": [
                 {
                     "path": "sample/thing/operations.yaml",
@@ -260,6 +288,67 @@ class CloudContractHandoffTest(unittest.TestCase):
             202,
         )
         self.assertFalse((self.root / "leases/app-cloud-handoff.lock").exists())
+
+    def test_make_accept_requires_all_compare_and_swap_inputs(self) -> None:
+        cases = (
+            ({}, "APP_CONTRACT_PREVIOUS_LOCK is required"),
+            (
+                {"APP_CONTRACT_PREVIOUS_LOCK": "/tmp/reviewed.previous.lock"},
+                "APP_CONTRACT_PREVIOUS_LOCK_SHA256 is required",
+            ),
+            (
+                {
+                    "APP_CONTRACT_PREVIOUS_LOCK": "/tmp/reviewed.previous.lock",
+                    "APP_CONTRACT_PREVIOUS_LOCK_SHA256": "1" * 64,
+                },
+                "APP_CONTRACT_EXPECTED_CURRENT_LOCK_SHA256 is required",
+            ),
+        )
+        for variables, expected in cases:
+            with self.subTest(expected=expected):
+                command = [
+                    "make",
+                    "--no-print-directory",
+                    "accept-app-contract-handoff",
+                    *(f"{key}={value}" for key, value in variables.items()),
+                ]
+                completed = subprocess.run(
+                    command,
+                    cwd=ROOT,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn(expected, completed.stderr)
+
+    def test_make_accept_dry_run_passes_all_compare_and_swap_inputs(self) -> None:
+        previous_lock = "/tmp/reviewed.previous.lock"
+        previous_sha = "1" * 64
+        current_sha = "2" * 64
+        completed = subprocess.run(
+            [
+                "make",
+                "--no-print-directory",
+                "--dry-run",
+                "accept-app-contract-handoff",
+                f"APP_CONTRACT_PREVIOUS_LOCK={previous_lock}",
+                f"APP_CONTRACT_PREVIOUS_LOCK_SHA256={previous_sha}",
+                f"APP_CONTRACT_EXPECTED_CURRENT_LOCK_SHA256={current_sha}",
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(f'--previous-lock "{previous_lock}"', completed.stdout)
+        self.assertIn(
+            f'--previous-lock-sha256 "{previous_sha}"', completed.stdout
+        )
+        self.assertIn(
+            f'--expected-current-lock-sha256 "{current_sha}"',
+            completed.stdout,
+        )
 
     def test_preserves_sse_transport_as_generated_abi(self) -> None:
         self._write_graph()
@@ -517,6 +606,108 @@ class CloudContractHandoffTest(unittest.TestCase):
             handoff.accept(self._args(approve_breaking=True))
 
         self.assertFalse(self.report.exists())
+
+    # ── ContractGraph 输入 provenance 完整性 ─────────────────────────────
+    #
+    # ContractGraph 有两类互不相交的输入：契约视图里的声明（`graph["sources"]`，被
+    # `sourceDigestSetSha256` 覆盖）与编译期按 `--repo-root` 扫描派生的实现/测试文件（绑进
+    # readinessEvidence）。声明侧摘要与 compilerHash 都看不到实现侧漂移，所以「同一份
+    # sourceDigestSetSha256 + compilerHash 下 graph sha256 变化」是可以合法发生的，而一份
+    # 相对自身输入已经过期的 graph 曾能被锁定并通过全部下游门禁。
+
+    def test_declaration_digests_cannot_observe_implementation_input_drift(
+        self,
+    ) -> None:
+        """钉死诊断本身：实现侧漂移对两个声明侧摘要完全不可见。
+
+        这条断言说明为什么必须新增磁盘校验——不是因为摘要没被一起重算（accept 一直在同一次
+        build_lock 里重算三者），而是因为它们的覆盖面里根本没有实现/测试输入。
+        """
+        self._write_graph()
+        graph = handoff.read_json(self.graph)
+        before_sources = handoff.source_digest_set_sha(graph)
+        before_compiler = handoff.compiler_digest()
+
+        self._write_evidence_source("package model\n\n// 并行会话的改动\n")
+
+        self.assertEqual(handoff.source_digest_set_sha(graph), before_sources)
+        self.assertEqual(handoff.compiler_digest(), before_compiler)
+        # 但 graph 记录的绑定已经不再描述磁盘现状。
+        with self.assertRaisesRegex(ValueError, "与磁盘不一致"):
+            handoff.verify_graph_input_bindings(graph)
+
+    def test_accept_blocks_when_recorded_implementation_input_drifted(
+        self,
+    ) -> None:
+        self._write_graph()
+        self._snapshot_trusted_baseline()
+        # generate 之后、accept 之前，并行会话改了一个被扫描的实现文件。
+        self._write_evidence_source("package model\n\n// 并行会话的改动\n")
+
+        with self.assertRaisesRegex(ValueError, "1 个已改动"):
+            handoff.accept(self._args())
+
+        self.assertFalse(self.report.exists())
+
+    def test_accept_blocks_when_recorded_implementation_input_disappeared(
+        self,
+    ) -> None:
+        self._write_graph()
+        self._snapshot_trusted_baseline()
+        (self.root / self.EVIDENCE_SOURCE).unlink()
+
+        with self.assertRaisesRegex(ValueError, "1 个已消失"):
+            handoff.accept(self._args())
+
+        self.assertFalse(self.report.exists())
+
+    def test_input_verification_fails_closed_without_evidence_bindings(
+        self,
+    ) -> None:
+        """缺 readinessEvidence 时必须阻断，不能退化成空扫描恒绿。"""
+        self._write_graph()
+        self._snapshot_trusted_baseline()
+        graph = handoff.read_json(self.graph)
+        graph.pop("readinessEvidence")
+        self.graph.write_text(
+            json.dumps(graph, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "空扫描恒绿"):
+            handoff.accept(self._args())
+
+        self.assertFalse(self.report.exists())
+
+    def test_evidence_bindings_reject_malformed_and_conflicting_digests(
+        self,
+    ) -> None:
+        self._write_graph()
+        graph = handoff.read_json(self.graph)
+        packet = graph["readinessEvidence"][0]
+
+        malformed = json.loads(json.dumps(graph))
+        malformed["readinessEvidence"][0]["service"]["domain"][0]["sha256"] = "abc"
+        with self.assertRaisesRegex(ValueError, "digest 非 SHA256"):
+            handoff.evidence_digest_bindings(malformed)
+
+        conflicting = json.loads(json.dumps(graph))
+        conflicting["readinessEvidence"][0]["service"]["application"] = [
+            {"path": self.EVIDENCE_SOURCE, "sha256": "c" * 64}
+        ]
+        with self.assertRaisesRegex(ValueError, "冲突 digest"):
+            handoff.evidence_digest_bindings(conflicting)
+
+        # 未被污染的 packet 仍然只产出一条绑定。
+        self.assertEqual(
+            handoff.evidence_digest_bindings({"readinessEvidence": [packet]}),
+            [(self.EVIDENCE_SOURCE, self._write_evidence_source())],
+        )
+
+    def test_verify_inputs_passes_when_recorded_inputs_match_disk(self) -> None:
+        self._write_graph()
+
+        self.assertEqual(handoff.verify_inputs(self._args()), 0)
 
 
 if __name__ == "__main__":

@@ -159,8 +159,8 @@
 ### GWT-005 视频选封面与一次性 PublishIntent 使用同源远端封面契约
 
 - GIVEN 用户为视频选择封面并发起发布。
-- WHEN Mock 或 Remote 创建并回读内容。
-- THEN 两条路径使用同形 payload，且回读保留同一视频与封面身份。
+- WHEN 生产 Remote 单轨创建并回读内容。
+- THEN 创建与回读使用同形 payload，且回读保留同一视频与封面身份。
 
 <a id="gwt-006"></a>
 ### GWT-006 数据工程视频导入与用户上传视频使用同一封面展示契约
@@ -234,16 +234,6 @@
 - 目标：相册视频与拍摄视频均能进入统一视频编辑状态，包含 `videoPath`、`durationMs` 和默认封面候选。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-004"></a>
-### OPEN-004 视频选封面与一次性 PublishIntent 使用同源远端封面契约
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：Mock/Remote 的视频 payload 形态在 local contract 对齐，Remote/API 在 api_integration 证明创建与回读闭环。
-- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。
-
 <a id="open-005"></a>
 ### OPEN-005 数据工程视频导入与用户上传视频使用同一封面展示契约
 
@@ -263,12 +253,3 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：local_contract、api_integration 与 alpha package contract 均通过。
 - 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-007"></a>
-### OPEN-007 内容创建更新 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“内容创建更新”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

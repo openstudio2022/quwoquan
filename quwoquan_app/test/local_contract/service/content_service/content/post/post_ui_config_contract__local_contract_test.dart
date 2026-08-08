@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/content_media_viewer_policy_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 
@@ -335,6 +337,26 @@ void main() {
       );
       expect(article.contentType, 'article');
       expect(article.labelKey, 'work_format_article');
+    });
+
+    test('media playback public port mirrors viewer policy values', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final policy = container.read(contentMediaViewerPolicyProvider);
+      expect(policy.workFormatFilters.map((filter) => filter.id), <String>[
+        'all',
+        'image',
+        'video',
+        'article',
+      ]);
+      expect(
+        policy.articleDarkPaperDefaultTheme,
+        ContentUIConfig.articleDarkPaperDefaultTheme,
+      );
+      expect(
+        policy.articlePaperThemeOptions.map((option) => option.id),
+        ContentUIConfig.articlePaperThemeOptions.map((option) => option.id),
+      );
     });
 
     test('article template configs freeze five book presets', () {

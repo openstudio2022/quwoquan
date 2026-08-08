@@ -151,9 +151,7 @@ def test_entrypoint_script_paths_and_operational_dependencies_are_live() -> None
         "quwoquan_ops/tools/backup/pg_backup.sh",
         "quwoquan_ops/tools/backup/mongo_backup.sh",
         "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/requirements.txt",
-        "quwoquan_service/scripts/search-service/search_load_benchmark.py",
-        "quwoquan_service/scripts/tools/search/search_rollback_rehearsal.py",
-        "quwoquan_service/scripts/tools/search/local_gamma_capacity_probe.py",
+        "quwoquan_service/scripts/search-service/tools/search_load_benchmark.py",
     ):
         assert (ROOT / path).is_file()
 

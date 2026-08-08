@@ -6,14 +6,15 @@ import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.da
     as interaction_state_bridge;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/di/discovery_state_provider.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/discovery_state_provider.dart';
 
 MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
+  required WidgetRef ref,
   required Iterable<ContentPostViewData> posts,
-  required DiscoveryUiState discoveryState,
-  required UserRelationshipState relationshipState,
-  required PostInteractionState postInteractionState,
 }) {
+  final discoveryState = ref.read(discoveryStateProvider);
+  final relationshipState = ref.read(userRelationshipStateProvider);
+  final postInteractionState = ref.read(postInteractionStateProvider);
   final scopedPosts = posts.toList(growable: false);
   final scopePostIds = scopedPosts
       .map((post) => post.id)

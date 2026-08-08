@@ -12,6 +12,20 @@ relationships:
 local_identity_reasons:
   subjectIds: 账号关闭事件固化的本域运行主体集合，包含 accountId 与 personaIds，用于隐私阻断，不是新的业务对象引用。
   sourceEventId: UserAccountClosed 消息的不可变幂等与审计身份，不是业务对象引用。
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 仅接受 user-service durable outbox 发布的 UserAccountClosed typed event；sourceEventId 必须等于 UserAccountClosed 与 accountId 的确定性摘要，payload userId、accountState 与时间必须一致。
 - subjectIds 固化 accountId 与事件携带的全部 personaIds；一旦记录永不撤销或删除，重复事件按 sourceEventId 幂等，任何恢复事件不得重开任一主体。

@@ -19,7 +19,13 @@ _PROHIBITED_SOURCE_FRAGMENTS = (
     ("sys.stdin." + "readline().strip()", "credential stdin transport"),
     ('input=f"{' + 'key}\\n"', "credential stdin transport"),
     ("Client.launch_" + "bridge(", "SDK callback-token argv transport"),
+    ("child_env = os.environ." + "copy()", "runtime child environment passthrough"),
 )
+
+_RUNTIME_CHILD_HANDLER = Path(
+    "quwoquan_data/scripts/content/execution/preflight/handler.py"
+)
+_RUNTIME_CHILD_SANITIZER = "child_env = cursor_safe_subprocess_env(os.environ)"
 
 
 def cursor_credential_contract_issues(
@@ -42,6 +48,17 @@ def cursor_credential_contract_issues(
             f"retired credential alias: {line}"
             for line in tracked.stdout.splitlines()[:20]
         )
+    runtime_child = repo_root / _RUNTIME_CHILD_HANDLER
+    if runtime_child.is_file():
+        source = runtime_child.read_text(encoding="utf-8")
+        if (
+            "def _preflight_in_python" in source
+            and _RUNTIME_CHILD_SANITIZER not in source
+        ):
+            issues.append(
+                "forbidden Cursor runtime child sanitizer missing: "
+                f"{_RUNTIME_CHILD_HANDLER.as_posix()}"
+            )
     for fragment, reason in _PROHIBITED_SOURCE_FRAGMENTS:
         matches = subprocess.run(
             [

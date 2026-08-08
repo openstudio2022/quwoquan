@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/runtime/platform/assistant_device_action_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/contacts/device_contacts_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/contacts/flutter_contacts_device_contacts_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/device_calendar_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
@@ -26,6 +28,15 @@ final platformTargetProvider = Provider<AppPlatform>(
 final platformCapabilitiesProvider = Provider<PlatformCapabilities>(
   (ref) => platformCapabilitiesFor(ref.watch(platformTargetProvider)),
 );
+
+/// System contacts are exposed only through the platform anti-corruption
+/// boundary. Unsupported platforms receive a structured fail-closed gateway.
+final deviceContactsGatewayProvider = Provider<DeviceContactsGateway>((ref) {
+  if (!ref.watch(platformCapabilitiesProvider).contacts) {
+    return const UnsupportedDeviceContactsGateway();
+  }
+  return const FlutterContactsDeviceContactsGateway();
+});
 
 /// Assistant auth has not yet exposed a generated opaque-permit verifier.
 ///

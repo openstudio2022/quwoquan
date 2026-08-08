@@ -1,11 +1,25 @@
 """Strongly typed authoring and review service for formal video posts."""
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 
+from core.article_package import sha256_file
+from core.data_issue import (
+    DataIssue,
+    DataIssueCode,
+    DataIssueLane,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
+from core.io import write_json
+from core.prompt_render import render as render_prompt
+from governance.content_supply_policy import load_content_supply_policy
+
+from content.execution.identity import parse_execution_id
 from content.execution.stage_reports import (
     clear_repair_report,
     write_gate_report,
@@ -27,20 +41,6 @@ from content.post.video.codec import (
     load_video_draft_meta,
     load_video_writing_pack,
 )
-from core.article_package import sha256_file
-from core.data_issue import (
-    DataIssue,
-    DataIssueCode,
-    DataIssueLane,
-    DataIssueStage,
-    DataRecoveryAction,
-    data_issue,
-)
-from core.io import write_json
-from core.prompt_render import render as render_prompt
-from governance.content_supply_policy import load_content_supply_policy
-from content.execution.identity import parse_execution_id
-
 
 VIDEO_SCRIPT_FILE = "video_script.json"
 
@@ -322,7 +322,12 @@ def finalize_video_author_meta(
         ref=ref,
         generator="agent",
         status="completed",
-        model=meta.model or model,
+        # The SDK may report its internal engine label (for example
+        # ``composer``) in the draft it writes.  Release readiness is bound to
+        # the governed execution selector (for Cursor this is ``auto``), so
+        # the finalizer must project that frozen identity instead of trusting
+        # agent-authored metadata.
+        model=model,
         agent_run_id=run_id,
         agent_id=agent_id or "",
         cited_source_paths=meta.cited_source_paths or pack.source_paths,

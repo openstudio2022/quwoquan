@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""派生 Python/Shell 脚本的物理 owner、角色与结构违规。
+"""派生全 Python 治理边界及 Python/Shell 脚本 owner、角色与结构违规。
 
 本门只读取物理树、既有入口和 canonical owner 目录，不维护脚本 registry、
-债务 baseline 或 orphan allowlist。``report`` 总是输出实时派生结果；``check``
-只阻断可确定的目录、命名和角色违规。外部入口路径闭包由
+债务 baseline 或 orphan allowlist。每个 Python 文件必须唯一落入派生治理边界；
+``report`` 总是输出实时派生结果，``check`` 只阻断可确定的目录、命名、角色、
+临时文件和无 owner tool 违规。外部入口路径闭包由
 ``verify_entrypoint_script_paths.py`` 单独负责。
 """
 
@@ -14,13 +15,23 @@ import ast
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
 
 
-DEFAULT_ROOT = Path(__file__).resolve().parents[2]
+_BOOTSTRAP = next(
+    path
+    for path in Path(__file__).resolve().parents
+    if (path / "repository_root.py").is_file()
+)
+sys.path.insert(0, str(_BOOTSTRAP))
+
+from repository_root import repository_root  # noqa: E402
+
+DEFAULT_ROOT = repository_root()
 if str(DEFAULT_ROOT) not in sys.path:
     sys.path.insert(0, str(DEFAULT_ROOT))
 
@@ -29,6 +40,52 @@ from quwoquan_ops.gate import object_path_map
 
 SCOPES = ("app", "service", "ops", "data")
 SCRIPT_SUFFIXES = {".py", ".sh"}
+PYTHON_SCOPE_ROOTS = {
+    "app": Path("quwoquan_app"),
+    "service": Path("quwoquan_service"),
+    "ops": Path("quwoquan_ops"),
+    "data": Path("quwoquan_data"),
+}
+FORBIDDEN_CACHE_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".tox",
+        ".nox",
+        ".ipynb_checkpoints",
+    }
+)
+FORBIDDEN_TEMP_FILE_SUFFIXES = (
+    ".bak",
+    ".orig",
+    ".rej",
+    ".swp",
+    ".swo",
+    "~",
+)
+TRAVERSAL_IGNORED_DIR_NAMES = frozenset(
+    {
+        ".dart_tool",
+        ".git",
+        ".gradle",
+        ".idea",
+        ".qwq_output",
+        ".venv",
+        "Pods",
+        "build",
+        "dist",
+        "node_modules",
+    }
+)
+RIPGREP_EXCLUDED_GLOBS = tuple(
+    f"!**/{name}/**" for name in sorted(TRAVERSAL_IGNORED_DIR_NAMES)
+)
+TEMP_SCRIPT_NAME_RE = re.compile(
+    r"^(?:tmp|temp|scratch|copy_of)[_-].*\.(?:py|sh)$",
+    re.IGNORECASE,
+)
 _MILESTONE_TOKENS = (
     "t" + "[1-4]",
     "m" + "6",
@@ -68,6 +125,11 @@ APP_CONCERN_ROOTS = {
     "tools",
     "web",
 }
+APP_CLOUD_LAYOUT_SEGMENTS = {
+    "config",
+    "deploy",
+    "environments",
+}
 APP_RUNTIME_CONCERNS = {
     "architecture",
     "auth",
@@ -85,6 +147,11 @@ SERVICE_CONCERN_ROOTS = {
     "runtime",
     "tools",
     "verify",
+}
+SERVICE_RUNTIME_CONCERNS = {
+    "experiments",
+    "packaging",
+    "reliabletask",
 }
 OPS_MANAGED_ROOTS = (
     "ci",
@@ -118,6 +185,13 @@ class Issue:
 
 
 @dataclass(frozen=True)
+class Warning:
+    code: str
+    path: str
+    message: str
+
+
+@dataclass(frozen=True)
 class ScriptRecord:
     path: str
     scope: str
@@ -126,6 +200,13 @@ class ScriptRecord:
     referencedBy: tuple[str, ...]
     importedBy: tuple[str, ...]
     orphanCandidate: bool
+
+
+@dataclass(frozen=True)
+class PythonFileRecord:
+    path: str
+    scope: str
+    boundary: str
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -160,6 +241,114 @@ def enumerate_scripts(root: Path, scope: str) -> list[Path]:
     raise ValueError(f"unsupported scope: {scope}")
 
 
+def _ripgrep_files(
+    root: Path,
+    *,
+    include_globs: Sequence[str],
+    no_ignore: bool = False,
+) -> list[Path]:
+    if not root.is_dir():
+        return []
+    command = ["rg", "--files", "--hidden"]
+    if no_ignore:
+        command.append("--no-ignore")
+    for pattern in (*include_globs, *RIPGREP_EXCLUDED_GLOBS):
+        command.extend(("--glob", pattern))
+    command.append(str(root))
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode not in {0, 1}:
+        raise RuntimeError(
+            f"unable to enumerate Python governance files under {root}: "
+            f"{completed.stderr.strip()}"
+        )
+    return sorted(
+        Path(line)
+        for line in completed.stdout.splitlines()
+        if line.strip()
+    )
+
+
+def enumerate_python_files(root: Path, scope: str) -> list[Path]:
+    return [
+        path
+        for path in _ripgrep_files(
+            root / PYTHON_SCOPE_ROOTS[scope],
+            include_globs=("*.py",),
+            no_ignore=True,
+        )
+        if not any(
+            part in FORBIDDEN_CACHE_DIR_NAMES for part in path.parts
+        )
+    ]
+
+
+def _python_boundary(
+    root: Path,
+    scope: str,
+    path: Path,
+    managed_scripts: set[Path],
+) -> str:
+    if path in managed_scripts:
+        return "managed_script"
+    local = path.relative_to(root / PYTHON_SCOPE_ROOTS[scope])
+    parts = local.parts
+    if "vendor" in parts:
+        return "vendor"
+    if (
+        "generated" in parts
+        or "ephemeral" in parts
+        or path.name.endswith((".g.py", "_generated.py"))
+    ):
+        return "generated"
+    test_segment = "test" if scope == "app" else "tests"
+    if test_segment in parts:
+        if "support" in parts or path.name in {"conftest.py", "__init__.py"}:
+            return "test_support"
+        return "test_evidence"
+    if scope == "service" and parts and parts[0] in {
+        "contracts",
+        "services",
+        "runtime",
+        "internal",
+        "control-plane",
+        "tools",
+    }:
+        return "production_module"
+    if scope == "app" and parts and parts[0] in {"tool"}:
+        return "production_module"
+    if scope == "ops" and path.name == "__init__.py":
+        return "production_module"
+    return "unknown"
+
+
+def _python_file_records(
+    root: Path,
+    scopes: Sequence[str],
+    scripts_by_scope: dict[str, list[Path]],
+) -> list[PythonFileRecord]:
+    records: list[PythonFileRecord] = []
+    for scope in scopes:
+        managed = {
+            path.resolve()
+            for path in scripts_by_scope.get(scope, ())
+            if path.suffix == ".py"
+        }
+        for path in enumerate_python_files(root, scope):
+            records.append(
+                PythonFileRecord(
+                    path=_relative(root, path),
+                    scope=scope,
+                    boundary=_python_boundary(root, scope, path.resolve(), managed),
+                )
+            )
+    return records
+
+
 def _central_reference_sources(root: Path) -> list[Path]:
     candidates = [
         root / "Makefile",
@@ -191,6 +380,19 @@ def _central_reference_sources(root: Path) -> list[Path]:
             ).rglob("*.py")
         )
     )
+    candidates.extend(sorted((root / "specs").rglob("*.md")))
+    for package in ("quwoquan_app", "quwoquan_service", "quwoquan_ops", "quwoquan_data"):
+        package_root = root / package
+        candidates.append(package_root / "AGENTS.md")
+        candidates.append(package_root / "scripts/README.md")
+    candidates.extend(sorted((root / "quwoquan_ops/runbooks").rglob("*.md")))
+    candidates.extend(sorted((root / "quwoquan_app/test").rglob("*.py")))
+    candidates.extend(sorted((root / "quwoquan_app/test").rglob("*.dart")))
+    candidates.extend(
+        sorted((root / "quwoquan_service/services").glob("*/tests/**/*.py"))
+    )
+    candidates.extend(sorted((root / "quwoquan_ops/tests").rglob("*.py")))
+    candidates.extend(sorted((root / "quwoquan_data/tests").rglob("*.py")))
     return sorted(path for path in candidates if path.is_file())
 
 
@@ -260,9 +462,20 @@ def _path_references(
         for target in _referenced_script_targets(root, source):
             if target in references and target != source_relative:
                 references[target].add(source_relative)
+        if source.name == "README.md" and source.parent.name == "scripts":
+            package_prefix = source.parent.parent.name
+            marker = f"{package_prefix}/scripts/"
+            for target in script_paths:
+                if not target.startswith(marker):
+                    continue
+                local_target = target.removeprefix(marker)
+                if local_target in source_text and target != source_relative:
+                    references[target].add(source_relative)
         # stackctl and shell launchers often construct a path from semantic
         # segments. A unique live-tree basename is still a deterministic edge;
         # ambiguous basenames are deliberately ignored.
+        if source not in scripts and source.name != "stackctl.py" and source.suffix != ".sh":
+            continue
         for basename, targets in basename_targets.items():
             if len(targets) != 1 or basename not in source_text:
                 continue
@@ -273,6 +486,17 @@ def _path_references(
 
 
 def _import_names(path: Path) -> set[str]:
+    if path.suffix == ".sh":
+        names: set[str] = set()
+        text = _text(path)
+        names.update(
+            match.group(1)
+            for match in re.finditer(
+                r"(?m)^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_.]*)",
+                text,
+            )
+        )
+        return names
     if path.suffix != ".py":
         return set()
     try:
@@ -317,9 +541,12 @@ def _import_references(
     for source in scripts:
         source_relative = _relative(root, source)
         for imported in _import_names(source):
-            for alias, targets in aliases.items():
-                if imported != alias and not imported.endswith(f".{alias}"):
-                    continue
+            parts = imported.split(".")
+            matching_aliases = {
+                ".".join(parts[index:]) for index in range(len(parts))
+            }
+            for alias in matching_aliases:
+                targets = aliases.get(alias, ())
                 for target in targets:
                     if target != source_relative:
                         references[target].add(source_relative)
@@ -402,11 +629,15 @@ def _derive_role(
     if stem.startswith("run_"):
         reasons.append("runner naming")
         return "runner", tuple(reasons)
+    if "lib" in path.parts:
+        return "lib", ("explicit library path",)
     if ("tools" in path.parts or stem.startswith("scan_")) and not imported_by:
         reasons.append("manual tool path or naming")
         return "tool", tuple(reasons)
     if name in {"__init__.py", "handler.py"}:
         return "lib", ("package or CLI handler module",)
+    if name == "repository_root.py":
+        return "lib", ("root discovery bootstrap module",)
     if owned_data_package_module:
         return "lib", ("owned Data package module without __main__ entry",)
     if imported_by:
@@ -471,6 +702,100 @@ def _naming_issues(root: Path, scripts: Sequence[Path]) -> list[Issue]:
     return issues
 
 
+def _source_hygiene_issues(root: Path, scopes: Sequence[str]) -> list[Issue]:
+    issues: list[Issue] = []
+    for scope in scopes:
+        scope_root = root / PYTHON_SCOPE_ROOTS[scope]
+        if not scope_root.is_dir():
+            continue
+        cache_globs = tuple(
+            f"**/{name}/**" for name in sorted(FORBIDDEN_CACHE_DIR_NAMES)
+        )
+        cache_directories: set[Path] = set()
+        for path in _ripgrep_files(
+            scope_root,
+            include_globs=cache_globs,
+            no_ignore=True,
+        ):
+            for parent in path.parents:
+                if parent.name in FORBIDDEN_CACHE_DIR_NAMES:
+                    cache_directories.add(parent)
+                    break
+        issues.extend(
+            Issue(
+                code="PYTHON.SOURCE_CACHE_FORBIDDEN",
+                path=_relative(root, path),
+                message=(
+                    "Python/lint/test cache belongs under .qwq_output "
+                    "or a managed external cache"
+                ),
+            )
+            for path in sorted(cache_directories)
+        )
+
+        hygiene_files = _ripgrep_files(
+            scope_root,
+            include_globs=(
+                "*.py",
+                "*.sh",
+                "*.pyc",
+                "*.pyo",
+                "*.bak",
+                "*.orig",
+                "*.rej",
+                "*.swp",
+                "*.swo",
+                "*~",
+            ),
+            no_ignore=True,
+        )
+        for path in hygiene_files:
+            if any(part in FORBIDDEN_CACHE_DIR_NAMES for part in path.parts):
+                continue
+            if path.suffix in {".pyc", ".pyo"} or path.name.endswith(
+                FORBIDDEN_TEMP_FILE_SUFFIXES
+            ):
+                issues.append(
+                    Issue(
+                        code="PYTHON.TEMP_FILE_FORBIDDEN",
+                        path=_relative(root, path),
+                        message=(
+                            "bytecode, editor backup, and patch residue "
+                            "are forbidden in source trees"
+                        ),
+                    )
+                )
+            elif TEMP_SCRIPT_NAME_RE.fullmatch(path.name):
+                issues.append(
+                    Issue(
+                        code="PYTHON.TEMP_SCRIPT_NAME",
+                        path=_relative(root, path),
+                        message=(
+                            "temporary scripts require a stable owner "
+                            "and semantic name"
+                        ),
+                    )
+                )
+    return issues
+
+
+def _tool_owner_issues(records: Sequence[ScriptRecord]) -> list[Issue]:
+    return [
+        Issue(
+            code="SCRIPT.TOOL_OWNER_MISSING",
+            path=record.path,
+            message=(
+                "manual tool requires a live CLI/Make/runbook/spec/test/README "
+                "reference proving owner and purpose"
+            ),
+        )
+        for record in records
+        if record.role == "tool"
+        and not record.referencedBy
+        and not record.importedBy
+    ]
+
+
 def _app_structure_issues(root: Path, scripts: Sequence[Path]) -> list[Issue]:
     issues: list[Issue] = []
     scripts_root = root / "quwoquan_app/scripts"
@@ -497,6 +822,32 @@ def _app_structure_issues(root: Path, scripts: Sequence[Path]) -> list[Issue]:
             continue
 
         top = local.parts[0]
+        if top == "service":
+            issues.append(
+                Issue(
+                    code="APP.SERVICE_WRAPPER_FORBIDDEN",
+                    path=_relative(root, path),
+                    message=(
+                        "scripts/service/ wrapper is forbidden; "
+                        "use scripts/<snake>_service/ as L1"
+                    ),
+                )
+            )
+            continue
+
+        if any(segment in APP_CLOUD_LAYOUT_SEGMENTS for segment in local.parts):
+            issues.append(
+                Issue(
+                    code="APP.CLOUD_LAYOUT_COPY_FORBIDDEN",
+                    path=_relative(root, path),
+                    message=(
+                        "App scripts must not copy cloud config/deploy/"
+                        "environments layout; use env/ or gamma/ concerns"
+                    ),
+                )
+            )
+            continue
+
         if top not in APP_CONCERN_ROOTS and top not in service_names:
             issues.append(
                 Issue(
@@ -601,7 +952,32 @@ def _service_structure_issues(
                     message="contracts contains build/sync/generate only; verifier belongs in verify",
                 )
             )
+        if top == "runtime":
+            if len(local.parts) == 2 and local.name not in {"__init__.py"}:
+                issues.append(
+                    Issue(
+                        code="SERVICE.RUNTIME_FLAT_SCRIPT",
+                        path=_relative(root, path),
+                        message="runtime scripts must declare a concern directory",
+                    )
+                )
+            elif (
+                len(local.parts) >= 3
+                and local.parts[1] not in SERVICE_RUNTIME_CONCERNS
+            ):
+                issues.append(
+                    Issue(
+                        code="SERVICE.RUNTIME_CONCERN_UNKNOWN",
+                        path=_relative(root, path),
+                        message=f"unknown runtime concern {local.parts[1]}",
+                    )
+                )
+            continue
         if top not in service_names:
+            continue
+        # Service-local tools/ is a canonical manual-tool pocket; it does not
+        # require a matching internal/<context> owner.
+        if len(local.parts) >= 2 and local.parts[1] == "tools":
             continue
         internal_root = services_root / top / "internal"
         if len(local.parts) >= 3:
@@ -626,6 +1002,74 @@ def _service_structure_issues(
                     )
                 )
     return issues
+
+
+def _service_verify_single_owner_warnings(
+    root: Path,
+    scripts: Sequence[Path],
+) -> list[Warning]:
+    """Warn when ``scripts/verify/`` hosts a single-service scan root."""
+
+    warnings: list[Warning] = []
+    scripts_root = root / "quwoquan_service/scripts"
+    services_root = root / "quwoquan_service/services"
+    if not scripts_root.is_dir() or not services_root.is_dir():
+        return warnings
+    service_names = sorted(
+        path.name for path in services_root.iterdir() if path.is_dir()
+    )
+    if not service_names:
+        return warnings
+    alt = "|".join(re.escape(name) for name in service_names)
+    joined_pat = re.compile(
+        rf"(?:quwoquan_service/)?services/({alt})(?:/|\b)"
+    )
+    split_pat = re.compile(
+        rf"""["']services["']\s*/\s*["']({alt})["']"""
+    )
+    multi_walk_pat = re.compile(
+        r"(services.*iterdir|for\s+\w+\s+in\s+.*services|"
+        r"SERVICES_ROOT|service_names\s*=|services_root)",
+        re.IGNORECASE,
+    )
+    other_package_pat = re.compile(
+        r"quwoquan_app|quwoquan_ops|quwoquan_data"
+    )
+    runtime_tools_pat = re.compile(
+        r"""["']/runtime/|/tools/|["']runtime["']\s*/"""
+    )
+
+    for path in scripts:
+        try:
+            local = path.relative_to(scripts_root)
+        except ValueError:
+            continue
+        if len(local.parts) < 2 or local.parts[0] != "verify":
+            continue
+        if path.suffix != ".py":
+            continue
+        text = _text(path)
+        hits = set(joined_pat.findall(text)) | set(split_pat.findall(text))
+        if len(hits) != 1:
+            continue
+        if multi_walk_pat.search(text):
+            continue
+        if other_package_pat.search(text):
+            continue
+        if runtime_tools_pat.search(text):
+            continue
+        owner = next(iter(hits))
+        warnings.append(
+            Warning(
+                code="SERVICE.VERIFY_SINGLE_SERVICE_OWNER",
+                path=_relative(root, path),
+                message=(
+                    f"scan root only targets {owner}; move to "
+                    f"scripts/{owner}/ (verify/ is for multi-service gates)"
+                ),
+            )
+        )
+    return warnings
 
 
 def _ops_structure_issues(root: Path) -> list[Issue]:
@@ -697,14 +1141,23 @@ def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
         path_references,
         import_references,
     )
+    python_file_records = _python_file_records(
+        normalized_root,
+        scopes,
+        scripts_by_scope,
+    )
 
-    issues: list[Issue] = []
+    issues: list[Issue] = _source_hygiene_issues(normalized_root, scopes)
+    warnings: list[Warning] = []
     for scope, scripts in scripts_by_scope.items():
         issues.extend(_naming_issues(normalized_root, scripts))
         if scope == "app":
             issues.extend(_app_structure_issues(normalized_root, scripts))
         elif scope == "service":
             issues.extend(_service_structure_issues(normalized_root, scripts))
+            warnings.extend(
+                _service_verify_single_owner_warnings(normalized_root, scripts)
+            )
         elif scope == "ops":
             issues.extend(_ops_structure_issues(normalized_root))
         elif scope == "data":
@@ -719,24 +1172,54 @@ def derive_report(root: Path, scopes: Sequence[str]) -> dict[str, object]:
                     message="script has no canonical role signal",
                 )
             )
+    issues.extend(_tool_owner_issues(records))
+    issues.extend(
+        Issue(
+            code="PYTHON.BOUNDARY_UNKNOWN",
+            path=record.path,
+            message="Python file is outside every derived governance boundary",
+        )
+        for record in python_file_records
+        if record.boundary == "unknown"
+    )
 
     unique_issues = sorted(
         {issue for issue in issues},
         key=lambda issue: (issue.code, issue.path, issue.message),
     )
+    unique_warnings = sorted(
+        {warning for warning in warnings},
+        key=lambda warning: (warning.code, warning.path, warning.message),
+    )
     sorted_records = sorted(records, key=lambda record: record.path)
+    sorted_python_files = sorted(
+        python_file_records,
+        key=lambda record: record.path,
+    )
+    boundary_counts: dict[str, int] = {}
+    for record in sorted_python_files:
+        boundary_counts[record.boundary] = (
+            boundary_counts.get(record.boundary, 0) + 1
+        )
     return {
-        "schema": "quwoquan.python-script-governance-report.v1",
+        "schema": "quwoquan.python-script-governance-report.v2",
         "scopes": list(scopes),
         "summary": {
             "scriptCount": len(sorted_records),
+            "pythonFileCount": len(sorted_python_files),
+            "pythonBoundaryCounts": {
+                key: boundary_counts[key] for key in sorted(boundary_counts)
+            },
             "issueCount": len(unique_issues),
+            "warningCount": len(unique_warnings),
             "orphanCandidateCount": sum(
                 1 for record in sorted_records if record.orphanCandidate
             ),
         },
         "issues": [asdict(issue) for issue in unique_issues],
+        "warnings": [asdict(warning) for warning in unique_warnings],
         "scripts": [asdict(record) for record in sorted_records],
+        "pythonFiles": [asdict(record) for record in sorted_python_files],
     }
 
 
@@ -786,13 +1269,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "[verify_python_script_governance] REPORT "
             f"scripts={report['summary']['scriptCount']} "
+            f"pythonFiles={report['summary']['pythonFileCount']} "
             f"issues={report['summary']['issueCount']} "
+            f"warnings={report['summary'].get('warningCount', 0)} "
             f"orphanCandidates={report['summary']['orphanCandidateCount']} "
             f"output={output}"
         )
         return 0
 
     issues = report["issues"]
+    warnings = report.get("warnings") or []
+    if warnings:
+        print("[verify_python_script_governance] WARN")
+        for warning in warnings:
+            print(
+                f"  - {warning['code']} {warning['path']}: {warning['message']}"
+            )
     if issues:
         print("[verify_python_script_governance] FAIL")
         for issue in issues:
@@ -800,7 +1292,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     print(
         "[verify_python_script_governance] OK "
-        f"scripts={report['summary']['scriptCount']}"
+        f"scripts={report['summary']['scriptCount']} "
+        f"pythonFiles={report['summary']['pythonFileCount']} "
+        f"warnings={report['summary'].get('warningCount', 0)}"
     )
     return 0
 

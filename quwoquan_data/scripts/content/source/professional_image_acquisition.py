@@ -42,7 +42,7 @@ from content.source.professional_image_receipt_validation import (
 from content.source.professional_image_transport import fetch_public_image
 from content.source.research.image_provider_compliance import classify_image_provider
 from content.source.research.text_match import _normalized_title
-from content.execution.pre_acquisition_handoff import (
+from content.execution.controller.execute.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
 

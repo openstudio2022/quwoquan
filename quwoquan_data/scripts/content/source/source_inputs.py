@@ -28,7 +28,7 @@ from content.source.external_acquisition_inputs import (
 from content.source.source_unit import resolve_entity_object_dir
 
 if TYPE_CHECKING:
-    from content.execution.campaign_external_input_runtime import (
+    from content.execution.campaign.external_input_runtime import (
         ExternalInputRuntimeContext,
     )
 

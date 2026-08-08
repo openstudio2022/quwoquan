@@ -1775,6 +1775,41 @@ class AppLocalizationsZh extends AppLocalizations {
   String get replyToPrefix => ' 回复 ';
 
   @override
+  String get content_createEntryPublishContent => '发内容';
+
+  @override
+  String get content_createEntryChooseActionSubtitle => '选择要发起的动作。';
+
+  @override
+  String get content_createEntryChooseContentSubtitle => '选择照片、视频或文字开始创作。';
+
+  @override
+  String get circle_createEntryStartGathering => '发起活动';
+
+  @override
+  String get chat_createEntryStartGroupChat => '发起群聊';
+
+  @override
+  String get circle_authGateTitleStartGathering => '登录后发起活动';
+
+  @override
+  String get circle_authGateSubtitleStartGathering =>
+      '活动将以你的账号身份创建，并保留后续参与和群聊协作。';
+
+  @override
+  String get circle_authGatePromptStartGathering => '登录后即可发起活动';
+
+  @override
+  String get circle_authContinuationStartGathering => '登录后将继续发起活动';
+
+  @override
+  String get circle_gatheringCreateUnavailableTitle => '活动创建暂不可用';
+
+  @override
+  String get circle_gatheringCreateUnavailableMessage =>
+      '当前版本暂时无法打开活动创建，请稍后再试。';
+
+  @override
   String createMaxImagesToastTemplate(int count) {
     return '最多添加 $count 张图片';
   }

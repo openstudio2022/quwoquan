@@ -112,6 +112,33 @@ func (source *CatalogSource) ResolveActiveSkillPackage(
 	return snapshot.PackageID, snapshot.ReleaseDigest, nil
 }
 
+// ContainsSkillInFrozenPackage resolves membership only from the immutable
+// package identity carried by ctx. It deliberately rejects an active-pointer
+// lookup so a Run start cannot mix authorization from one release with the
+// identity persisted from another release.
+func (source *CatalogSource) ContainsSkillInFrozenPackage(
+	ctx context.Context,
+	skillID string,
+) (bool, error) {
+	if _, frozen := skillpkg.PackageReleaseFromContext(ctx); !frozen {
+		return false, fmt.Errorf("frozen Skill package context is required")
+	}
+	snapshot, err := source.resolveContextSnapshot(ctx)
+	if err != nil {
+		return false, err
+	}
+	skillID = strings.TrimSpace(skillID)
+	if skillID == "" {
+		return false, nil
+	}
+	for _, manifest := range snapshot.Manifests {
+		if strings.TrimSpace(manifest.SkillID) == skillID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (source *CatalogSource) ListCatalogItems(
 	ctx context.Context,
 ) ([]model.Item, error) {

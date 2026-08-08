@@ -697,7 +697,7 @@ class _WorksArticleCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WorksViewerArticleComposition(
+    return buildWorksViewerArticle(
       post: post,
       article: article,
       timeLine: timeLine,

@@ -12,6 +12,7 @@
 ///   turn 上下文（turnId/sessionId/events）推进。
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ import 'package:quwoquan_app/runtime/errors/generated/assistant/assistant_errors
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_learning_fact/application/assistant_learning_fact_append_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_session_run_facade.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_ports.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_session/application/public/assistant_session_ports.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_turn_query.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification/application/notification_facets.dart';
@@ -184,6 +186,63 @@ void main() {
     await _disposeTree(tester);
   });
 
+  testWidgets('running run：补充约束走 Steer 且失败时恢复输入', (tester) async {
+    final events = StreamController<AssistantStreamEventWire>();
+    final runFacet = _RecordingAssistantRunFacet(eventStream: events.stream);
+    final container = await _pumpDialogPage(tester, runFacet: runFacet);
+
+    await tester.enterText(
+      find.byKey(TestKeys.assistantChatInputField),
+      '规划周末杭州行程',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(TestKeys.assistantSendButton));
+    await tester.pump();
+    events.add(_event(seq: 1, eventType: 'run_started'));
+    await tester.pump();
+    expect(
+      container.read(personalAssistantStreamControllerProvider).running,
+      isTrue,
+    );
+    expect(find.text(AssistantText.assistantSteerPlaceholder), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(TestKeys.assistantChatInputField),
+      '不要安排得太赶',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(TestKeys.assistantSendButton));
+    await tester.pump();
+    expect(runFacet.steerInstructions, <String>['不要安排得太赶']);
+    expect(find.text('不要安排得太赶'), findsNothing);
+
+    runFacet.steerError = StateError('steer unavailable (test)');
+    await tester.enterText(
+      find.byKey(TestKeys.assistantChatInputField),
+      '预算控制在一千元',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(TestKeys.assistantSendButton));
+    await tester.pump();
+    expect(runFacet.steerInstructions, <String>['不要安排得太赶', '预算控制在一千元']);
+    expect(find.text('预算控制在一千元'), findsOneWidget);
+    expect(
+      container.read(personalAssistantStreamControllerProvider).errorMessage,
+      isNotEmpty,
+    );
+
+    events.add(
+      _event(
+        seq: 2,
+        eventType: 'completed',
+        payload: const <String, dynamic>{'text': '杭州行程已完成'},
+      ),
+    );
+    await events.close();
+    await tester.pump(const Duration(milliseconds: 100));
+    await _disposeTree(tester);
+  });
+
   testWidgets('trace_context：页面曝光进入 VisitRecorder 且发送后 turn 上下文推进', (
     tester,
   ) async {
@@ -215,7 +274,10 @@ void main() {
 
     final state = container.read(personalAssistantStreamControllerProvider);
     expect(state.sessionId, 'asn_uat_personal');
-    expect(state.runId, 'atn_uat_personal');
+    // AssistantRun 是 process_manager（saga）实例，控制器状态承载的是 run id
+    // （`arn_` 前缀，见 quwoquan_service/runtime/id/prefix_registry.go 与
+    // StartAssistantRun 的 id 生成），不是单轮 turn id（`atn_`）。
+    expect(state.runId, 'arn_uat_personal');
     expect(
       state.events.map((event) => event.eventType.wireName),
       containsAll(<String>['run_started', 'completed']),
@@ -235,6 +297,7 @@ Future<ProviderContainer> _pumpDialogPage(
     ProviderScope(
       overrides: [
         assistantSessionRunFacetProvider.overrideWithValue(runFacet),
+        assistantRunControlFacetProvider.overrideWithValue(runFacet),
         assistantLearningFactAppendFacetProvider.overrideWithValue(
           _RecordingLearningFactAppendFacet(),
         ),
@@ -364,7 +427,8 @@ class _AuthenticatedSessionController extends AuthSessionController {
 }
 
 /// Recording run Facet：记录会话创建与 run 启动，按配置回放流式事件或抛错。
-class _RecordingAssistantRunFacet implements AssistantSessionRunFacade {
+class _RecordingAssistantRunFacet
+    implements AssistantSessionRunFacade, AssistantRunControlFacet {
   @override
   Future<AssistantSessionListView> listAssistantSessions({
     int limit = kAssistantSessionListDefaultLimit,
@@ -393,11 +457,15 @@ class _RecordingAssistantRunFacet implements AssistantSessionRunFacade {
   _RecordingAssistantRunFacet({
     this.events = const <AssistantStreamEventWire>[],
     this.createSessionError,
+    this.eventStream,
   });
 
   final List<AssistantStreamEventWire> events;
+  final Stream<AssistantStreamEventWire>? eventStream;
   Object? createSessionError;
+  Object? steerError;
   final List<String> startedRunTexts = <String>[];
+  final List<String> steerInstructions = <String>[];
   int createSessionCalls = 0;
 
   @override
@@ -465,11 +533,63 @@ class _RecordingAssistantRunFacet implements AssistantSessionRunFacade {
   }
 
   @override
+  Future<AssistantRunEnvelopeWire> pauseAssistantRun({
+    required String runId,
+    required String commandRequestId,
+    String reason = '',
+  }) => getAssistantRun(runId: runId);
+
+  @override
+  Future<AssistantRunEnvelopeWire> resumeAssistantRun({
+    required String runId,
+    required String commandRequestId,
+  }) => getAssistantRun(runId: runId);
+
+  @override
+  Future<AssistantRunEnvelopeWire> steerAssistantRun({
+    required String runId,
+    required String commandRequestId,
+    required String instruction,
+  }) async {
+    steerInstructions.add(instruction);
+    final error = steerError;
+    if (error != null) {
+      throw error;
+    }
+    return AssistantRunEnvelopeWire(
+      runId: runId,
+      sessionId: 'asn_uat_personal',
+      status: 'executing',
+      traceId: 'trace_uat_personal',
+      createdAt: '2026-07-19T00:00:00Z',
+    );
+  }
+
+  @override
+  Future<AssistantToolApprovalResult> approveAssistantToolUse({
+    required String runId,
+    required String toolInvocationId,
+    required String commandRequestId,
+    required String decision,
+    required String approvalPermit,
+    String? installationId,
+    String? deviceId,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<AssistantRunEnvelopeWire> submitDeviceActionReceipt({
+    required String runId,
+    required String toolInvocationId,
+    required String commandRequestId,
+    required AssistantDeviceActionExecutionReceipt receipt,
+  }) => throw UnimplementedError();
+
+  @override
   Stream<AssistantStreamEventWire> watchAssistantRunEvents({
     required String runId,
     String lastEventId = '',
   }) {
-    return Stream<AssistantStreamEventWire>.fromIterable(events);
+    return eventStream ?? Stream<AssistantStreamEventWire>.fromIterable(events);
   }
 }
 

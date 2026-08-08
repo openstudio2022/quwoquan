@@ -11,11 +11,14 @@
     ├─ design_system/  # 唯一设计系统横切面
     └─ l10n/           # flutter gen-l10n 的 arb 根，取自 quwoquan_app/l10n.yaml
 
-v1 校验四条规则：
+三个非 service 根都是 `object_path_map.APP_CROSS_CUTTING_ROOTS` 的成员：顶层白名单
+与派生器的横切根是同一份集合，不存在「合法顶层但派生器认为待搬迁」的第三类目录。
+
+v1 校验五条规则：
 
 R1 `app_lib_top_level`
-    `lib/` 顶层只允许：`service/`、`runtime/`、
-    `design_system/`、l10n 根，以及入口文件 `main*.dart`。
+    `lib/` 顶层只允许 `service/` 容器、`APP_CROSS_CUTTING_ROOTS` 的三个横切根
+    （`runtime/`、`design_system/`、l10n 根），以及入口文件 `main*.dart`。
 
 R2 `cross_cutting_target_reverse_import`
     横切面禁止依赖业务对象。目标形态目前几乎不存在（`lib/runtime/`、
@@ -25,8 +28,8 @@ R2 `cross_cutting_target_reverse_import`
     并随搬迁与解耦单调收敛。
 
 R3 `cross_cutting_physical_reverse_import`
-    同一方向性约束在**物理空间**的完整表达：物理位于 `lib/runtime/**` 或
-    `lib/design_system/**` 的文件，禁止 import 物理位于
+    同一方向性约束在**物理空间**的完整表达：物理位于任一 canonical 横切根
+    （`lib/runtime/**`、`lib/design_system/**`、l10n 根）的文件，禁止 import 物理位于
     `lib/service/<service>/<context>/<object>/**` 的文件。
     这是搬迁完成后的终态断言；横切面目录建立前它恒为空集。
 
@@ -35,7 +38,12 @@ R4 `cross_object_private_import`
     `application/public/**` seam。目标对象的 private application、domain、adapters、
     presentation 都不能被跨对象消费；纯 generated value type 位于共享 contracts
     package，不构成本 App `lib/**` 私有边。该规则是 DEC-019 的绝对零容忍规则，
-    不接受 baseline/allowance，也不能被 `--write-baseline` 吸收。
+    不接受 baseline/allowance，也不存在违规吸收入口。
+
+R5 `runtime_di_presentation_purity`
+    `runtime/di/**` 只承担 provider、factory、typed `WidgetBuilder` 与 composition
+    装配；禁止在组合根定义 Widget 类、业务文案与业务状态。该规则是共享绝对规则，
+    不接受 baseline/allowance，也不存在违规吸收入口。
 
 组合根例外（与云侧 `cmd/` 同义，不是逃逸）：`runtime/di/**` 与顶层入口
 `main*.dart` 是装配点，其职责就是把各 domain 的实现接线到一起，因此不纳入 R2/R3
@@ -46,22 +54,18 @@ R4 `cross_object_private_import`
 `load_page_claims`、`scan_app`、`APP_ROOT`、`APP_LIB_ROOT`、`APP_SOURCE_SUFFIX`、
 `APP_CROSS_CUTTING_ROOTS`。
 
-ratchet 语义（沿用 `quwoquan_app/scripts/runtime/platform/verify_lib_dart_io_budget.py`）：
-R1/R2/R3 违规写入基线 `quwoquan_ops/policies/gates/app_architecture_baseline.json`，
-门禁断言「违规只减不增」。基线外的新违规与基线中已消失的陈旧条目都会 BLOCK；
-陈旧条目必须通过 `--write-baseline` 显式收敛，禁止长期挂账。R4 不参与 ratchet，
-任何实测边都直接 BLOCK。
+strict-zero 语义：R1-R5 任一实测条目都直接 BLOCK。迁移期 baseline 已退休；
+`quwoquan_ops/policies/gates/app_architecture_baseline.json` 必须不存在，门禁不再提供
+写入、吸收或重建 baseline 的入口。
 
 用法
 ----
     python3 quwoquan_ops/gate/verify_app_architecture.py
     python3 quwoquan_ops/gate/verify_app_architecture.py --domain content
-    python3 quwoquan_ops/gate/verify_app_architecture.py --write-baseline
-    python3 quwoquan_ops/gate/verify_app_architecture.py --domain content --write-baseline
+    python3 quwoquan_ops/gate/verify_app_architecture.py --domain content
 
-`--domain <domain>` 供 domain 并行流使用：只比对该 domain 名下的 R2/R3/R4 违规，
-R1 是共享的顶层规则，任何 scope 都全量求值。`--write-baseline` 搭配 `--domain` 时
-只重写该 domain 的 R2/R3 基线分区，避免并行流互相覆盖；R4 始终不可写入。
+`--domain <domain>` 供 domain 并行流使用：只检查该 domain 名下的 R2/R3/R4 违规，
+R1 与 R5 是共享规则，任何 scope 都全量求值。
 """
 from __future__ import annotations
 
@@ -74,8 +78,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote_to_bytes
-
-import yaml
 
 sys.dont_write_bytecode = True
 
@@ -90,31 +92,42 @@ RULE_ID = "app-architecture/v1"
 BASELINE_PATH = (
     ROOT / "quwoquan_ops" / "policies" / "gates" / "app_architecture_baseline.json"
 )
-L10N_CONFIG_PATH = ROOT / opm.APP_ROOT / "l10n.yaml"
-
 RULE_TOP_LEVEL = "app_lib_top_level"
 RULE_TARGET_REVERSE_IMPORT = "cross_cutting_target_reverse_import"
 RULE_PHYSICAL_REVERSE_IMPORT = "cross_cutting_physical_reverse_import"
 RULE_CROSS_OBJECT_PRIVATE_IMPORT = "cross_object_private_import"
+RULE_RUNTIME_DI_PRESENTATION_PURITY = "runtime_di_presentation_purity"
 
-#: R1 是共享规则（顶层只有一份）；R2/R3 按被依赖的 domain，R4 按
-#: consumer/source domain 归属到并行流。
-#: R4 是 DEC-019 的绝对规则，刻意不进入 ratchet baseline。
-SHARED_RULES = (RULE_TOP_LEVEL,)
-RATCHET_DOMAIN_RULES = (
+#: R1/R5 是共享规则；R2/R3 按被依赖的 domain，R4 按 consumer/source domain
+#: 归属到并行流。五条规则全部 strict-zero。
+SHARED_RULES = (RULE_TOP_LEVEL, RULE_RUNTIME_DI_PRESENTATION_PURITY)
+DOMAIN_RULES = (
     RULE_TARGET_REVERSE_IMPORT,
     RULE_PHYSICAL_REVERSE_IMPORT,
+    RULE_CROSS_OBJECT_PRIVATE_IMPORT,
 )
-ABSOLUTE_DOMAIN_RULES = (RULE_CROSS_OBJECT_PRIVATE_IMPORT,)
-DOMAIN_RULES = RATCHET_DOMAIN_RULES + ABSOLUTE_DOMAIN_RULES
 
 #: 顶层唯一允许的文件形态：Flutter 入口。`app_bootstrap.dart` 与 shell 文件属于
-#: `runtime/shell/`，不是入口，因此不在此列。
-TOP_LEVEL_ENTRY_RE = re.compile(r"^main[a-z0-9_]*\.dart$")
+#: `runtime/shell/`，不是入口，因此不在此列。定义取自 `object_path_map`，与那里
+#: 「入口是终态位置、横切目标路径即自身」的派生同源，不另写一份。
+TOP_LEVEL_ENTRY_RE = opm.APP_ENTRY_FILE_RE
 
 #: 组合根：只有它可以同时依赖多个 domain（云侧 `cmd/` 的端侧对等物）。定义取自
 #: `object_path_map`，与那里的「组合根不参与对象反推」同源，不另写一份。
 COMPOSITION_ROOT_TARGET_PREFIXES = (opm.APP_COMPOSITION_ROOT_TARGET_PREFIX,)
+RUNTIME_DI_ROOT = ROOT / opm.APP_LIB_ROOT / "runtime" / "di"
+RUNTIME_DI_WIDGET_BASES = frozenset(
+    {
+        "StatelessWidget",
+        "StatefulWidget",
+        "ConsumerWidget",
+        "ConsumerStatefulWidget",
+    }
+)
+RUNTIME_DI_TEXT_WIDGETS = frozenset({"Text", "RichText", "SelectableText"})
+RUNTIME_DI_COPY_ARGUMENTS = frozenset(
+    {"label", "message", "placeholder", "subtitle", "title", "tooltip"}
+)
 
 PACKAGE_URI_PREFIX = "package:quwoquan_app/"
 CLOUD_CONTRACTS_URI_PREFIX = "package:quwoquan_cloud_contracts/"
@@ -357,21 +370,19 @@ def load_roster() -> opm.ObjectRoster:
 
 
 def l10n_top_level_segment() -> str:
-    """从 `quwoquan_app/l10n.yaml` 的 `arb-dir` 派生 l10n 顶层段，不另写死常量。"""
-    document = yaml.safe_load(L10N_CONFIG_PATH.read_text(encoding="utf-8")) or {}
-    arb_dir = str(document.get("arb-dir") or "").strip().strip("/")
-    if not arb_dir.startswith("lib/"):
-        raise ValueError(
-            f"{L10N_CONFIG_PATH}: arb-dir 必须位于 lib/ 之下，实测 {arb_dir!r}"
-        )
-    return arb_dir[len("lib/") :].split("/")[0]
+    """l10n 顶层段；派生规则唯一实现在 `object_path_map`，本门禁只转发。"""
+    return opm.derive_app_l10n_cross_cutting_root()
 
 
 def allowed_top_level_directories(roster: opm.ObjectRoster) -> set[str]:
-    """`lib/` 顶层允许的目录：service 容器 + 两个横切根 + l10n 根。"""
-    return {opm.APP_SERVICE_ROOT_SEGMENT} | set(opm.APP_CROSS_CUTTING_ROOTS) | {
-        l10n_top_level_segment()
-    }
+    """`lib/` 顶层允许的目录：service 容器 + 全部 canonical 横切根（含 l10n 根）。
+
+    这里刻意不再把 l10n 根作为白名单的第三类来源单独并入。曾经的两套列表让
+    `lib/l10n/**` 同时是「R1 合法顶层」与「派生器眼中待搬去 lib/runtime/l10n 的
+    横切件」，其 `status` 停在 `cross_cutting` 而非 `canonical_cross_cutting`，
+    于是覆盖率归属把整批 l10n 源码判成无主文件并阻断 App 棘轮。
+    """
+    return {opm.APP_SERVICE_ROOT_SEGMENT} | set(opm.APP_CROSS_CUTTING_ROOTS)
 
 
 # ---------------------------------------------------------------------------
@@ -745,12 +756,118 @@ def scan_cross_object_private_import_violations(
 
 
 # ---------------------------------------------------------------------------
+# R5：runtime/di 只做装配，不定义 presentation
+# ---------------------------------------------------------------------------
+
+
+def _dart_type_declarations(
+    tokens: list[tuple[str, str]],
+) -> list[tuple[str, str, str | None]]:
+    """返回 ``(kind, name, extends)``，忽略注释与字符串里的伪声明。"""
+    declarations: list[tuple[str, str, str | None]] = []
+    for index, token in enumerate(tokens):
+        if token[0] != "identifier" or token[1] not in {"class", "enum", "typedef"}:
+            continue
+        if index + 1 >= len(tokens) or tokens[index + 1][0] != "identifier":
+            continue
+        kind = token[1]
+        name = tokens[index + 1][1]
+        base: str | None = None
+        cursor = index + 2
+        while cursor < len(tokens):
+            current = tokens[cursor]
+            if current in {("punctuation", "{"), ("punctuation", ";")}:
+                break
+            if current == ("identifier", "extends"):
+                if cursor + 1 < len(tokens) and tokens[cursor + 1][0] == "identifier":
+                    base = tokens[cursor + 1][1]
+                break
+            cursor += 1
+        declarations.append((kind, name, base))
+    return declarations
+
+
+def scan_runtime_di_presentation_purity_violations(
+    runtime_di_root: Path = RUNTIME_DI_ROOT,
+) -> list[str]:
+    """找出组合根内自定义 Widget、业务文案与业务状态。
+
+    Provider/Notifier 使用既有状态类型、factory、composition 和 typed
+    ``WidgetBuilder`` 都不触发。只有在 ``runtime/di`` **定义** presentation
+    类型/状态，或直接作者化用户可见文案时才阻断。
+    """
+    if not runtime_di_root.is_dir():
+        return []
+    findings: set[str] = set()
+    for path in sorted(runtime_di_root.rglob("*.dart")):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        tokens = _dart_source_tokens(source)
+        relative = (Path("runtime/di") / path.relative_to(runtime_di_root)).as_posix()
+        widget_classes: set[str] = set()
+        business_states: set[str] = set()
+        copy_kinds: set[str] = set()
+
+        for kind, name, base in _dart_type_declarations(tokens):
+            if base in RUNTIME_DI_WIDGET_BASES:
+                widget_classes.add(f"{name} extends {base}")
+            if name.endswith("State"):
+                business_states.add(f"{kind} {name}")
+
+        for index, token in enumerate(tokens):
+            if token[0] != "identifier":
+                continue
+            name = token[1]
+            if (
+                name in RUNTIME_DI_TEXT_WIDGETS
+                and index + 1 < len(tokens)
+                and tokens[index + 1] == ("punctuation", "(")
+            ):
+                copy_kinds.add("text_widget")
+            if (
+                name.endswith(("Copy", "Strings", "Text"))
+                and index + 2 < len(tokens)
+                and tokens[index + 1] == ("punctuation", ".")
+                and tokens[index + 2][0] == "identifier"
+            ):
+                copy_kinds.add("text_catalog")
+            if (
+                name in RUNTIME_DI_COPY_ARGUMENTS
+                and index + 2 < len(tokens)
+                and tokens[index + 1] == ("punctuation", ":")
+            ):
+                value_index = index + 2
+                if (
+                    tokens[value_index] in {
+                        ("identifier", "r"),
+                        ("identifier", "R"),
+                    }
+                    and value_index + 1 < len(tokens)
+                ):
+                    value_index += 1
+                if tokens[value_index][0] == "string":
+                    copy_kinds.add("literal")
+        if widget_classes:
+            findings.add(
+                f"{relative}: widget_class [{', '.join(sorted(widget_classes))}]"
+            )
+        if business_states:
+            findings.add(
+                f"{relative}: business_state [{', '.join(sorted(business_states))}]"
+            )
+        if copy_kinds:
+            findings.add(
+                f"{relative}: business_copy [{', '.join(sorted(copy_kinds))}]"
+            )
+    return sorted(findings)
+
+
+# ---------------------------------------------------------------------------
 # 违规汇总与基线比对
 # ---------------------------------------------------------------------------
 
 
 def evaluate(roster: opm.ObjectRoster) -> dict:
-    """求值四条规则，返回 ``{"shared": {...}, "domains": {...}}``。"""
+    """求值五条规则，返回 ``{"shared": {...}, "domains": {...}}``。"""
     index = AppSourceIndex(roster)
     target_reverse = scan_reverse_import_violations(index, physical=False)
     physical_reverse = scan_reverse_import_violations(index, physical=True)
@@ -766,106 +883,23 @@ def evaluate(roster: opm.ObjectRoster) -> dict:
             RULE_CROSS_OBJECT_PRIVATE_IMPORT: cross_object_private.get(domain, []),
         }
     return {
-        "shared": {RULE_TOP_LEVEL: scan_top_level_violations(roster)},
+        "shared": {
+            RULE_TOP_LEVEL: scan_top_level_violations(roster),
+            RULE_RUNTIME_DI_PRESENTATION_PURITY: (
+                scan_runtime_di_presentation_purity_violations()
+            ),
+        },
         "domains": domains,
     }
 
 
-def load_baseline() -> dict:
-    if not BASELINE_PATH.is_file():
-        raise FileNotFoundError(BASELINE_PATH)
-    document = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
-    if not isinstance(document, dict):
-        raise ValueError(f"{BASELINE_PATH}: baseline 顶层必须是 object")
-    if document.get("ruleId") != RULE_ID:
+def verify_retired_baseline_absent() -> None:
+    """迁移期 baseline 已退休；重新出现即是第二条准入真相源。"""
+    if BASELINE_PATH.exists():
         raise ValueError(
-            f"{BASELINE_PATH}: ruleId 必须是 {RULE_ID}，实测 {document.get('ruleId')!r}"
+            f"{BASELINE_PATH}: retired baseline must remain absent; "
+            "R1-R5 are strict-zero"
         )
-    allowed_top_level = {"ruleId", "shared", "domains", "_governance"}
-    unknown_top_level = sorted(set(document) - allowed_top_level)
-    if unknown_top_level:
-        raise ValueError(
-            f"{BASELINE_PATH}: 未知顶层字段 {unknown_top_level}"
-        )
-    shared = document.get("shared", {})
-    domains = document.get("domains", {})
-    governance = document.get("_governance")
-    if not isinstance(shared, dict) or not isinstance(domains, dict):
-        raise ValueError(f"{BASELINE_PATH}: shared/domains 必须是 object")
-    if governance is not None and not isinstance(governance, dict):
-        raise ValueError(f"{BASELINE_PATH}: _governance 必须是 object")
-    unknown_shared = sorted(set(shared) - set(SHARED_RULES))
-    if unknown_shared:
-        raise ValueError(f"{BASELINE_PATH}: 未知 shared rule {unknown_shared}")
-    forbidden = [
-        f"{rule}[{domain}]"
-        for domain, section in sorted(domains.items())
-        if isinstance(section, dict)
-        for rule in ABSOLUTE_DOMAIN_RULES
-        if rule in section
-    ]
-    if forbidden:
-        raise ValueError(
-            f"{BASELINE_PATH}: 绝对规则不得进入 baseline/allowance: {forbidden}"
-        )
-    allowed_domain_rules = set(RATCHET_DOMAIN_RULES)
-    for domain, section in sorted(domains.items()):
-        if not isinstance(domain, str) or not isinstance(section, dict):
-            raise ValueError(
-                f"{BASELINE_PATH}: domain 分区名与 section 必须是 string/object"
-            )
-        unknown_rules = sorted(set(section) - allowed_domain_rules)
-        if unknown_rules:
-            raise ValueError(
-                f"{BASELINE_PATH}: {domain} 含未知 domain rule {unknown_rules}"
-            )
-    for location, section in [("shared", shared), *sorted(domains.items())]:
-        for rule, entries in section.items():
-            if not isinstance(entries, list) or not all(
-                isinstance(entry, str) for entry in entries
-            ):
-                raise ValueError(
-                    f"{BASELINE_PATH}: {location}.{rule} 必须是 string list"
-                )
-    return document
-
-
-def write_baseline(current: dict, *, domain: str | None) -> None:
-    """只写 R1/R2/R3 ratchet；R4 绝对规则永远不持久化。"""
-    if domain is None:
-        governance = current.get("_governance")
-        if governance is None:
-            try:
-                governance = load_baseline().get("_governance")
-            except FileNotFoundError:
-                governance = None
-        payload = {"ruleId": RULE_ID, **_baseline_normalized(current)}
-    else:
-        try:
-            payload = load_baseline()
-        except FileNotFoundError:
-            payload = {"ruleId": RULE_ID, "shared": {}, "domains": {}}
-        governance = payload.get("_governance")
-        payload.setdefault("shared", {})
-        payload.setdefault("domains", {})
-        section = (current.get("domains") or {}).get(domain) or {}
-        ratchet_section = {
-            rule: section.get(rule, []) or [] for rule in RATCHET_DOMAIN_RULES
-        }
-        if any(ratchet_section.values()):
-            payload["domains"][domain] = {
-                rule: sorted(set(entries))
-                for rule, entries in ratchet_section.items()
-            }
-        else:
-            payload["domains"].pop(domain, None)
-    if domain is None and governance is not None:
-        payload["_governance"] = governance
-    BASELINE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    BASELINE_PATH.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
 
 
 def _normalized(document: dict) -> dict:
@@ -888,17 +922,6 @@ def _normalized(document: dict) -> dict:
     return {"shared": shared, "domains": domains}
 
 
-def _baseline_normalized(document: dict) -> dict:
-    """规范化可持久化 ratchet 视图；刻意完全移除 R4 键与纯 R4 domain。"""
-    normalized = _normalized(document)
-    domains: dict[str, dict[str, list[str]]] = {}
-    for domain, section in sorted(normalized["domains"].items()):
-        entries = {rule: section[rule] for rule in RATCHET_DOMAIN_RULES}
-        if any(entries.values()):
-            domains[domain] = entries
-    return {"shared": normalized["shared"], "domains": domains}
-
-
 def _rule_entries(document: dict, domain: str | None, rule: str) -> set[str]:
     if rule in SHARED_RULES:
         return set(document.get("shared", {}).get(rule, []) or [])
@@ -906,48 +929,31 @@ def _rule_entries(document: dict, domain: str | None, rule: str) -> set[str]:
     return set(section.get(rule, []) or [])
 
 
-def scoped_domains(current: dict, baseline: dict, domain: str | None) -> list[str]:
+def scoped_domains(current: dict, domain: str | None) -> list[str]:
     if domain is not None:
         return [domain]
-    return sorted(set(current.get("domains") or {}) | set(baseline.get("domains") or {}))
+    return sorted(current.get("domains") or {})
 
 
-def diff(current: dict, baseline: dict, domain: str | None) -> tuple[list[str], list[str]]:
-    """返回 ``(new_violations, stale_entries)``，条目已带规则与 domain 前缀。"""
-    new_violations: list[str] = []
-    stale_entries: list[str] = []
-
-    # R1 是共享的顶层规则，任何 scope 都全量求值，避免并行流各自放行新顶层目录。
-    for rule in SHARED_RULES:
-        observed = _rule_entries(current, None, rule)
-        recorded = _rule_entries(baseline, None, rule)
-        new_violations += [f"{rule}: {entry}" for entry in sorted(observed - recorded)]
-        stale_entries += [f"{rule}: {entry}" for entry in sorted(recorded - observed)]
-
-    for scoped_domain in scoped_domains(current, baseline, domain):
-        for rule in RATCHET_DOMAIN_RULES:
-            observed = _rule_entries(current, scoped_domain, rule)
-            recorded = _rule_entries(baseline, scoped_domain, rule)
-            new_violations += [
-                f"{rule}[{scoped_domain}]: {entry}"
-                for entry in sorted(observed - recorded)
-            ]
-            stale_entries += [
-                f"{rule}[{scoped_domain}]: {entry}"
-                for entry in sorted(recorded - observed)
-            ]
-        for rule in ABSOLUTE_DOMAIN_RULES:
-            # DEC-019 是绝对边界：baseline 即便被手写也不能消掉 observed 违规。
-            new_violations += [
+def violation_entries(current: dict, domain: str | None) -> list[str]:
+    """返回 scope 内全部 strict-zero 违规；不存在 baseline 差分。"""
+    entries = [
+        f"{rule}: {entry}"
+        for rule in SHARED_RULES
+        for entry in sorted(_rule_entries(current, None, rule))
+    ]
+    for scoped_domain in scoped_domains(current, domain):
+        for rule in DOMAIN_RULES:
+            entries += [
                 f"{rule}[{scoped_domain}]: {entry}"
                 for entry in sorted(_rule_entries(current, scoped_domain, rule))
             ]
-    return new_violations, stale_entries
+    return entries
 
 
 def summarize(current: dict, domain: str | None) -> dict:
     """派生本次求值的违规计数摘要。"""
-    domains = scoped_domains(current, {"domains": {}}, domain)
+    domains = scoped_domains(current, domain)
     counts = {rule: len(_rule_entries(current, None, rule)) for rule in SHARED_RULES}
     for rule in DOMAIN_RULES:
         counts[rule] = sum(
@@ -970,18 +976,6 @@ def summarize(current: dict, domain: str | None) -> dict:
     }
 
 
-def absolute_violation_entries(current: dict, domain: str | None) -> list[str]:
-    """返回 scope 内不可基线化的 R4 条目。"""
-    entries: list[str] = []
-    for scoped_domain in scoped_domains(current, {"domains": {}}, domain):
-        for rule in ABSOLUTE_DOMAIN_RULES:
-            entries += [
-                f"{rule}[{scoped_domain}]: {entry}"
-                for entry in sorted(_rule_entries(current, scoped_domain, rule))
-            ]
-    return entries
-
-
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
@@ -991,18 +985,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "端侧对象化架构门禁 v1（顶层白名单 + 横切面反向 import + "
-            "跨对象 public seam）"
+            "跨对象 public seam + runtime/di presentation purity）"
         )
     )
     parser.add_argument(
         "--domain",
         default=None,
-        help="只比对该 domain 名下的 R2/R3/R4 违规；R1 顶层规则始终全量求值",
-    )
-    parser.add_argument(
-        "--write-baseline",
-        action="store_true",
-        help="用当前违规重写基线；搭配 --domain 时只重写该 domain 分区",
+        help=(
+            "只比对该 domain 名下的 R2/R3/R4 违规；"
+            "R1/R5 共享规则始终全量求值"
+        ),
     )
     arguments = parser.parse_args(argv)
 
@@ -1024,59 +1016,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    if arguments.write_baseline:
-        absolute_entries = absolute_violation_entries(current, arguments.domain)
-        if absolute_entries:
-            print(
-                "verify_app_architecture: BLOCK: R4 是绝对规则，拒绝写 baseline",
-                file=sys.stderr,
-            )
-            for entry in absolute_entries:
-                print(f"  violation: {entry}", file=sys.stderr)
-            return 1
-        try:
-            write_baseline(current, domain=arguments.domain)
-        except ValueError as error:
-            print(
-                f"verify_app_architecture: FAIL load baseline for scoped write: {error}",
-                file=sys.stderr,
-            )
-            return 1
-        summary = summarize(current, arguments.domain)
-        print(
-            "verify_app_architecture: wrote baseline "
-            f"scope={summary['scope']} -> {BASELINE_PATH}"
-        )
-        print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
-        return 0
-
     try:
-        baseline = load_baseline()
-    except FileNotFoundError:
-        print(
-            "verify_app_architecture: BLOCK: missing "
-            f"{BASELINE_PATH} (run once with --write-baseline)",
-            file=sys.stderr,
-        )
-        return 2
-    except (ValueError, json.JSONDecodeError) as error:
-        print(f"verify_app_architecture: FAIL load baseline: {error}", file=sys.stderr)
+        verify_retired_baseline_absent()
+    except ValueError as error:
+        print(f"verify_app_architecture: BLOCK: {error}", file=sys.stderr)
         return 1
 
-    new_violations, stale_entries = diff(current, baseline, arguments.domain)
-    if new_violations or stale_entries:
-        print("verify_app_architecture: BLOCK: baseline drift", file=sys.stderr)
-        for entry in new_violations:
-            print(f"  new violation: {entry}", file=sys.stderr)
-        for entry in stale_entries:
-            print(f"  stale baseline entry: {entry}", file=sys.stderr)
+    violations = violation_entries(current, arguments.domain)
+    if violations:
+        print("verify_app_architecture: BLOCK: strict-zero violation", file=sys.stderr)
+        for entry in violations:
+            print(f"  violation: {entry}", file=sys.stderr)
         print(
-            "  lib/ 顶层只允许 <domain>/、runtime/、design_system/、l10n/ 与 "
+            "  lib/ 顶层只允许 service/、runtime/、design_system/、l10n/ 与 "
             "main*.dart；runtime/** 与 design_system/** 不得依赖任何 "
-            "lib/<domain>/**（组合根 runtime/di/** 与入口除外）。"
+            "lib/service/<service>/<context>/<object>/**"
+            "（组合根 runtime/di/** 与入口除外）。"
             "不同业务对象之间只能 import 目标对象 application/public/**；"
-            "该跨对象规则不能写 baseline/allowance。R1/R2/R3 违规消失后用 "
-            "--write-baseline 收敛 ratchet。",
+            "runtime/di/** 只能定义 provider/factory/typed WidgetBuilder/composition，"
+            "不得定义 Widget、业务文案或业务状态。R1-R5 全部 strict-zero，"
+            "不接受 baseline/allowance。",
             file=sys.stderr,
         )
         return 1

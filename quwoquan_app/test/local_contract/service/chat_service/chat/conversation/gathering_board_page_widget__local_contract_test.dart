@@ -141,6 +141,21 @@ Future<void> _pumpBoard(
   await tester.pumpAndSettle();
 }
 
+/// Board 是纵向滚动的分区列表：名额、附件索引等分区默认在首屏之下，
+/// 断言前必须先滚动到它们，否则测的是首屏高度而不是 Board 契约。
+Future<Finder> _revealBoardSection(WidgetTester tester, Finder target) async {
+  await tester.scrollUntilVisible(
+    target,
+    240,
+    scrollable: find.descendant(
+      of: find.byKey(const ValueKey<String>('gathering-board-sections')),
+      matching: find.byType(Scrollable),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return target;
+}
+
 void main() {
   testWidgets('active Board 读取 typed slice 并展示公告、计划、附件索引与名额', (tester) async {
     final query = _RecordingGatheringBoardQuery(_snapshot());
@@ -168,10 +183,6 @@ void main() {
     );
     expect(find.text('请带三脚架，集合后统一确认返程。'), findsOneWidget);
     expect(find.text('北山街集合'), findsOneWidget);
-    expect(find.text('6 位成员 · 剩余 2 个名额'), findsOneWidget);
-    expect(find.text('集合点示意图'), findsOneWidget);
-    expect(find.text('机位演示视频'), findsOneWidget);
-    expect(find.text('活动须知.pdf'), findsOneWidget);
 
     final announcementSection = find.byKey(
       const ValueKey<String>('gathering-board-announcement'),
@@ -187,11 +198,26 @@ void main() {
     expect(announcementTarget?.gatheringId, 'gathering-1');
     expect(announcementTarget?.conversationId, 'conversation-1');
 
+    expect(
+      await _revealBoardSection(tester, find.text('集合点示意图')),
+      findsOneWidget,
+    );
+    expect(find.text('机位演示视频'), findsOneWidget);
+    expect(find.text('活动须知.pdf'), findsOneWidget);
+
     await tester.tap(
-      find.byKey(const ValueKey<String>('gathering-board-asset-asset-video')),
+      await _revealBoardSection(
+        tester,
+        find.byKey(const ValueKey<String>('gathering-board-asset-asset-video')),
+      ),
     );
     await tester.pump();
     expect(openedAssets, <String>['asset-video']);
+
+    expect(
+      await _revealBoardSection(tester, find.text('6 位成员 · 剩余 2 个名额')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('read_only 明示只读但保留核心公告与附件', (tester) async {
@@ -208,7 +234,10 @@ void main() {
     );
     expect(find.text('活动已结束 · 只读'), findsOneWidget);
     expect(find.text('请带三脚架，集合后统一确认返程。'), findsOneWidget);
-    expect(find.text('集合点示意图'), findsOneWidget);
+    expect(
+      await _revealBoardSection(tester, find.text('集合点示意图')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Plan、Map、Calendar 缺失时结构化降级且不隐藏公告', (tester) async {

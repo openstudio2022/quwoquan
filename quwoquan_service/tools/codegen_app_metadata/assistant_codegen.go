@@ -505,7 +505,7 @@ func renderAssistantRuntimeEnumsGo(catalog *assistantEnumCatalog) string {
 		)
 		fmt.Fprintf(&b, "func (value %s) WireName() string { return string(value) }\n\n", enumDef.Name)
 	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
 func validateAssistantEnumDefaults(catalog *assistantEnumCatalog) error {

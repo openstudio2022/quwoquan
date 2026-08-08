@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from content.execution.reviewed_closure_adoption_identity import (
+from content.execution.closure.adoption_identity import (
     _is_sha256,
     _read_object,
     _resolve_path,

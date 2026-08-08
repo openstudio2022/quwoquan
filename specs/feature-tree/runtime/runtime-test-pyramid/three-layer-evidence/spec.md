@@ -29,7 +29,7 @@
 ### REQ-001 验收与真实证据双向一致
 
 - 已支持验收至少有一个职责匹配且可执行的直接 `spec_ref`；被 OPEN 声明的未完成验收不得计为通过。
-- App 测试必须位于 `test/<layer>/<domain>/<context>/<object>`，服务 local_contract/api_integration 必须位于 `tests/<layer>/<context>/<object>`；路径的每一级均能反查 canonical owner，不能只校验 domain 顶层或文件后缀。
+- App 测试必须位于 `test/<layer>/service/<service>/<context>/<object>`，服务 local_contract/api_integration 必须位于 `tests/<layer>/<context>/<object>`；路径的每一级均能反查 canonical owner，不能只校验 service 顶层或文件后缀。
 
 <a id="req-002"></a>
 ### REQ-002 测试所属层由依赖真实度决定

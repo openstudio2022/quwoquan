@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/navigation/app_router_gathering_routes.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/route_unavailable_state.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/gathering_board_route_host.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_route_hosts.dart';
 
 void main() {
   group('Gathering app shell routes', () {
@@ -13,7 +16,7 @@ void main() {
     ) async {
       await _pumpRoute(tester, AppRoutePaths.gatheringCreate);
 
-      expect(find.byType(GatheringCreateRouteHost), findsOneWidget);
+      expect(find.byType(GatheringCreatePageRouteHost), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('gatheringCreate-route-unavailable')),
         findsOneWidget,
@@ -28,7 +31,7 @@ void main() {
         AppRoutePaths.gatheringDetail(id: 'gathering-1'),
       );
 
-      expect(find.byType(GatheringDetailRouteHost), findsOneWidget);
+      expect(find.byType(GatheringDetailPageRouteHost), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('gatheringDetail-route-unavailable')),
         findsOneWidget,
@@ -43,7 +46,7 @@ void main() {
         AppRoutePaths.gatheringBoard(id: 'conversation-1'),
       );
 
-      expect(find.byType(GatheringBoardRouteHost), findsOneWidget);
+      expect(find.byType(GatheringBoardPageRouteHost), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('gatheringBoard-route-unavailable')),
         findsOneWidget,
@@ -86,7 +89,7 @@ Future<void> _pumpRoute(WidgetTester tester, String location) async {
     router.routeInformationProvider.value.uri.path,
     Uri.parse(location).path,
   );
-  expect(find.byType(GatheringRouteUnavailableState), findsOneWidget);
+  expect(find.byType(RouteUnavailableState), findsOneWidget);
   expect(find.text('Page Not Found'), findsNothing);
 }
 

@@ -173,6 +173,23 @@ def test_creative_commons_jurisdiction_suffix_normalizes_to_allowed_kind():
     assert issues == []
 
 
+def test_creative_commons_long_name_normalizes_to_allowed_kind():
+    issues = validate_image_rights(
+        {
+            "platform": "Wikimedia Commons",
+            "license": "Creative Commons Attribution-Share Alike 3.0",
+            "credit": "Creator",
+            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
+        },
+        vertical="travel",
+    )
+    assert issues == []
+
+
 def test_creative_commons_1_0_remains_blocked():
     issues = validate_image_rights(
         {

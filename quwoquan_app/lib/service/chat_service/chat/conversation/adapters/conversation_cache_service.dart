@@ -139,33 +139,53 @@ class ConversationCacheService extends ChangeNotifier
   @override
   List<ChatInboxCacheEntry> readInbox() =>
       List<ChatInboxCacheEntry>.unmodifiable(
-        getAll().map((record) => record.toInboxEntry()),
+        getAll().map(
+          (record) => _withOptimisticHint(record.id, record.toInboxEntry()),
+        ),
       );
 
   @override
-  ChatInboxCacheEntry? readInboxEntry(String conversationId) =>
-      get(conversationId)?.toInboxEntry();
+  ChatInboxCacheEntry? readInboxEntry(String conversationId) {
+    final entry = get(conversationId)?.toInboxEntry();
+    return entry == null
+        ? null
+        : _withOptimisticHint(conversationId, entry);
+  }
 
   @override
   void replaceInbox(Iterable<ChatInboxCacheEntry> items) {
+    // projection 读结果落地即为新真相；此前的乐观提示全部作废。
+    _activeBucket.optimisticInboxHints.clear();
     replaceAll(items.map(ConversationCacheRecord.fromInboxEntry));
   }
 
   @override
-  void patchInbox(String conversationId, ChatInboxCachePatch patch) {
-    applyListPatch(
-      conversationId,
-      ConversationListPatch(
-        lastMessagePreview: patch.lastMessagePreview,
-        lastMessageAt: patch.lastMessageAt?.toIso8601String(),
-        unreadCount: patch.unreadCount,
-        mentionUnreadCount: patch.mentionUnreadCount,
-      ),
-    );
+  void applyOptimisticInboxHint(
+    String conversationId,
+    ChatInboxOptimisticHint hint,
+  ) {
+    final id = conversationId.trim();
+    if (id.isEmpty) {
+      return;
+    }
+    // 只改内存叠加层：不写 disk、不改 record，进程重启后提示自然消失。
+    _activeBucket.optimisticInboxHints[id] = hint;
+    notifyListeners();
   }
 
   @override
-  void removeInbox(String conversationId) => remove(conversationId);
+  void removeInbox(String conversationId) {
+    _activeBucket.optimisticInboxHints.remove(conversationId);
+    remove(conversationId);
+  }
+
+  ChatInboxCacheEntry _withOptimisticHint(
+    String conversationId,
+    ChatInboxCacheEntry entry,
+  ) {
+    final hint = _activeBucket.optimisticInboxHints[conversationId];
+    return hint == null ? entry : hint.applyTo(entry);
+  }
 
   @override
   void addInboxListener(void Function() listener) => addListener(listener);
@@ -236,10 +256,12 @@ class ConversationCacheService extends ChangeNotifier
   void clear() {
     final bucket = _activeBucket;
     if (bucket.memory.isEmpty && bucket.disk.isEmpty) {
+      bucket.optimisticInboxHints.clear();
       return;
     }
     bucket.memory.clear();
     bucket.disk.clear();
+    bucket.optimisticInboxHints.clear();
     notifyListeners();
   }
 
@@ -306,4 +328,8 @@ class _CacheEntry {
 class _NamespaceBucket {
   final LinkedHashMap<String, _CacheEntry> memory = LinkedHashMap();
   final Map<String, _CacheEntry> disk = <String, _CacheEntry>{};
+
+  /// 易失的 inbox 展示提示，只在读取时叠加，永不进入 [disk]。
+  final Map<String, ChatInboxOptimisticHint> optimisticInboxHints =
+      <String, ChatInboxOptimisticHint>{};
 }

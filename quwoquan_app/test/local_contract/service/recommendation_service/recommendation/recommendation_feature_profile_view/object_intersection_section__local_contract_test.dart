@@ -9,8 +9,11 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
-import 'package:quwoquan_app/runtime/di/presentation/object_intersection_section.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_section.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
@@ -153,7 +156,9 @@ Widget _host({
     overrides: [
       ..._intersectionBoundaryOverrides(),
       ...overrides,
-      behaviorReporterProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorReporterProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       objectSharedReasonsProvider(_query).overrideWith((_) => reasons()),
     ],
     child: const CupertinoApp(
@@ -199,7 +204,9 @@ Widget _routerHost({
   return ProviderScope(
     overrides: [
       ..._intersectionBoundaryOverrides(),
-      behaviorReporterProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorReporterProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       objectSharedReasonsProvider(_query).overrideWith((_) async => reasons),
     ],
     child: CupertinoApp.router(routerConfig: router),
@@ -207,7 +214,8 @@ Widget _routerHost({
 }
 
 /// C0：交集卡渲染 gathering「发起结伴」pill，点击经统一 navigator._openGathering 进
-/// 发起群聊承接页（最薄真实约伴闭环）。router 含 /chat/start-group 与 /user/:userHandle。
+/// 现行「发起活动」承接页（最薄真实约伴闭环）。router 含 canonical
+/// `AppRoutePaths.gatheringCreate` 与 /user/:userHandle。
 Widget _companionHost({required List<IntersectionReason> reasons}) {
   final router = GoRouter(
     initialLocation: '/',
@@ -223,8 +231,11 @@ Widget _companionHost({required List<IntersectionReason> reasons}) {
         ),
       ),
       GoRoute(
-        path: '/chat/start-group',
-        builder: (_, _) => const Text('START_GROUP_CHAT'),
+        path: AppRoutePaths.gatheringCreate,
+        builder: (_, state) => Text(
+          'GATHERING_CREATE:'
+          '${(state.extra as GatheringCreateNavigationRequest?)?.targetObject.objectId ?? ''}',
+        ),
       ),
       GoRoute(
         path: '/user/:userHandle',
@@ -236,7 +247,9 @@ Widget _companionHost({required List<IntersectionReason> reasons}) {
   return ProviderScope(
     overrides: [
       ..._intersectionBoundaryOverrides(),
-      behaviorReporterProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+      behaviorReporterProvider.overrideWithValue(
+        RecordingContentBehaviorRepository(),
+      ),
       objectSharedReasonsProvider(_query).overrideWith((_) async => reasons),
     ],
     child: CupertinoApp.router(routerConfig: router),
@@ -476,8 +489,9 @@ void main() {
     await tester.tap(find.text('发起结伴'));
     await tester.pumpAndSettle();
 
-    // 点击 → navigator._openGathering → 真实发起群聊承接页（不 fallback 对象下钻）。
-    expect(find.text('START_GROUP_CHAT'), findsOneWidget);
+    // 点击 → navigator._openGathering → 现行发起活动承接页，并携带 typed
+    // 目标对象上下文（不 fallback 成对象下钻）。
+    expect(find.text('GATHERING_CREATE:p_west_lake'), findsOneWidget);
   });
 
   testWidgets('message dispatch actionHint 渲染可点 pill，落到对方主页的破冰承接', (

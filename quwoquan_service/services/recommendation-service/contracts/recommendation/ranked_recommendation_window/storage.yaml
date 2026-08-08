@@ -5,9 +5,6 @@ collections:
     entity: RecommendationExperimentPolicyView
     role: projection
     description: Product Ops ExperimentPolicyActivated 的单调本地投影；Recommendation 不维护私有实验配置真相源。
-    indexes:
-    - name: idx_recommendation_experiment_policy_revision
-      keys: {revision: -1, updatedAt: -1}
 streams:
   events.ops.experiment_policy_activated.recommendation.dlq:
     entity: RecommendationExperimentPolicyView

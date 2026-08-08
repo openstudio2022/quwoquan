@@ -18,6 +18,8 @@ Map<String, String> _nativeRuntimePackageFor(String environment) {
     'MEDIA_UPLOAD_BASE_URL': 'https://upload.$environment.example.test',
     'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.$environment.example.test',
     'QWQ_APP_LAUNCH_MODE': 'stackctl_$environment',
+    'APP_LAUNCH_POLICY': 'test_live',
+    'CONTENT_BINDING_STATE': 'unbound',
   };
 }
 
@@ -45,14 +47,11 @@ void main() {
         'MEDIA_UPLOAD_BASE_URL': 'https://upload.example.test',
         'RTC_MEDIA_CONNECTION_URL': 'wss://rtc.example.test',
         'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+        'APP_LAUNCH_POLICY': 'test_live',
+        'CONTENT_BINDING_STATE': 'unbound',
         'launchTarget': 'alpha-local',
         'effectiveLaunchManifestDigest':
             'sha256:3333333333333333333333333333333333333333333333333333333333333333',
-        'contentReleaseId': 'release-alpha',
-        'contentManifestDigest':
-            'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-        'contentReadinessReceiptDigest':
-            'sha256:2222222222222222222222222222222222222222222222222222222222222222',
       });
 
       expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
@@ -62,17 +61,19 @@ void main() {
         'complete',
       );
       expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
-      expect(CloudRuntimeConfig.hasCompleteContentBinding, isTrue);
+      expect(CloudRuntimeConfig.hasCompleteContentBinding, isFalse);
       expect(
         CloudRuntimeConfig.runtimeDefineSummary['contentBindingState'],
-        'complete',
+        'unbound',
       );
       expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
     });
 
     test('内容发布绑定缺失或 digest 非 canonical 时保持 invalid', () {
       CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
+        ..._nativeRuntimePackageFor('prod'),
+        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
+        'CONTENT_BINDING_STATE': 'bound',
         'contentReleaseId': 'release-alpha',
         'contentManifestDigest': 'invalid',
         'contentReadinessReceiptDigest':
@@ -86,10 +87,21 @@ void main() {
       );
     });
 
-    test('direct Flutter Debug 缺少 release-bound 内容时阻断启动', () {
+    test('test_live direct Flutter Debug 不绑定内容仍可启动', () {
       CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
         ..._nativeRuntimePackageFor('alpha'),
         'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+      });
+
+      expect(CloudRuntimeConfig.requiresReleaseBoundContent, isFalse);
+      expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
+    });
+
+    test('Prod launch policy 缺少 release-bound 内容时仍 fail-closed', () {
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
+        ..._nativeRuntimePackageFor('prod'),
+        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
+        'CONTENT_BINDING_STATE': 'bound',
       });
 
       expect(

@@ -75,10 +75,10 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 content-action-intent-contract（8 类反馈闭环契约） 验收证据
+### OPEN-001 更多操作面板失败语义尚无直接证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺少能够证明“content-action-intent-contract（8 类反馈闭环契约）”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：缺 `GWT-001.t2` 的直接证据。t1 已由 `more_action_popup__functional__local_contract_test.dart` 精确断言（只展示有真实动作的入口、无「功能开发中」假入口）并实跑通过，但该测试不覆盖失败返回 canonical failure。
+- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。

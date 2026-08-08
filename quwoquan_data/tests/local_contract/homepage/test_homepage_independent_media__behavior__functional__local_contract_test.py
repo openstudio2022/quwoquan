@@ -10,31 +10,40 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from core.paths import ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
-from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
-from core.asset_identity import compute_post_asset_id  # noqa: E402
-from core.article_package import sha256_text  # noqa: E402
-from content.post.article.draft_io import is_placeholder  # noqa: E402
-from content.homepage.homepage_assets import (  # noqa: E402
+from content.homepage.homepage_assets import (
     _prefer_homepage_placement,
     select_homepage_assets,
     write_homepage_media_dispositions,
 )
-from content.homepage.homepage_release import _manifest_caption_bindings  # noqa: E402
-from core.io import read_json  # noqa: E402
-from content.homepage.homepage_materialization import _homepage_source_figure_issues  # noqa: E402
-from content.homepage.homepage_prompt import (  # noqa: E402
+from content.homepage.homepage_materialization import (
+    _homepage_source_figure_issues,
+)
+from content.homepage.homepage_prompt import (
     _homepage_base_text_with_image_placeholders,
     _write_entity_page_prompt_and_placeholder,
 )
-from content.homepage.homepage_validation import _asset_closure_issues  # noqa: E402
-from content.homepage.quality_policy import (  # noqa: E402
+from content.homepage.homepage_release import _manifest_caption_bindings
+from content.homepage.homepage_validation import _asset_closure_issues
+from content.homepage.quality_policy import (
     homepage_body_char_minimum,
     homepage_section_char_minimum,
 )
-from verify.verify_homepage_media_completeness import _manifest_issues  # noqa: E402
-from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
-from support.image_fixture import jpeg_bytes  # noqa: E402
+from content.post.article.draft_io import is_placeholder
+from content.source.source_unit import (
+    resolve_entity_object_dir,
+    write_source_unit,
+)
+from core.article_package import sha256_text
+from core.asset_identity import compute_post_asset_id
+from core.io import read_json, write_json
+from core.paths import (
+    ensure_execution_command_layout,
+    ensure_execution_layout,
+    execution_root,
+)
+from support.execution_manifest_fixture import build_execution_fixture
+from support.image_fixture import jpeg_bytes
+from verify.verify_homepage_media_completeness import _manifest_issues
 
 
 def test_repeated_visual_uses_section_aligned_caption_as_single_authority():
@@ -119,7 +128,7 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
         source_use_mode="licensed_adaptation",
         research_lane="homepage_image",
         license_value="CC BY-SA 4.0",
-        url="https://commons.wikimedia.org/wiki/File:Independent_panoramio.jpg",
+        url="https://commons.wikimedia.org/wiki/File:Independent_clean.jpg",
         title=f"{entity}开放许可图片",
         target_ref=f"/entity/地点/景区/{entity}",
         relevance=entity,
@@ -127,14 +136,14 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
             {
                 "bytes": jpeg_bytes(seed=1),
                 "ext": ".jpg",
-                "url": "https://upload.wikimedia.org/Independent_panoramio.jpg",
-                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Independent_panoramio.jpg",
+                "url": "https://upload.wikimedia.org/Independent_clean.jpg",
+                "sourceUrl": "https://commons.wikimedia.org/wiki/File:Independent_clean.jpg",
                 "sourceCollectionId": "homepage_media:independent",
                 "license": "CC BY-SA 4.0",
                 "credit": "Commons contributor",
                 "creator": "Commons contributor",
                 "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent_panoramio.jpg",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent_clean.jpg",
                 "usageScope": "app_publish",
                 "caption": entity,
                 "relevance": entity,
@@ -155,6 +164,154 @@ def test_homepage_assets_fall_back_to_independent_rights_cleared_media_unit():
     assert assets[0]["researchLane"] == "homepage_image"
     assert assets[0]["sourceCollectionId"] == "homepage_media:independent"
     assert assets[0]["authorizationProof"].startswith("https://commons.wikimedia.org/")
+
+
+def test_homepage_assets_exclude_watermark_prone_original_provenance():
+    execution_id = "20260809--travel-homepage-media-provenance--test-region-a--pilot-001"
+    entity = "来源水印景区"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
+    ensure_execution_layout(execution_id)
+    ensure_execution_command_layout(execution_id, "source")
+    obj = resolve_entity_object_dir(execution_id, entity, etype_hint="地点/景区")
+    shutil.rmtree(obj, ignore_errors=True)
+    source = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="home_wikipedia",
+        source_md=f"{entity}拥有开放湖面景观。",
+        platform="维基百科",
+        source_category="encyclopedia",
+        source_kind="wikipedia",
+        extractor="wikipedia_api",
+        policy_revision="encyclopedia-primary",
+        source_use_mode="factual_reference_only",
+        research_lane="homepage",
+        url="https://zh.wikipedia.org/wiki/Test",
+        title=entity,
+        target_ref=f"/entity/地点/景区/{entity}",
+        images=[
+            {
+                "bytes": jpeg_bytes(seed=33),
+                "ext": ".jpg",
+                "caption": f"{entity}湖景",
+                "relevance": f"{entity}湖景",
+                "license": "CC BY 3.0",
+                "termsUrl": "https://creativecommons.org/licenses/by/3.0/",
+                "authorizationProof": (
+                    "https://commons.wikimedia.org/wiki/File:Example_-_panoramio.jpg"
+                ),
+                "usageScope": "app_publish",
+                "acquisitionStatus": "acquired",
+                "distributionDecision": "research_allowed",
+            }
+        ],
+        execution_id=execution_id,
+        build_variants=False,
+    )
+
+    selection = select_homepage_assets(
+        execution_id,
+        "地点",
+        "景区",
+        entity,
+        primary_ref=str(source["sourceRef"]),
+    )
+
+    assert selection.publishable == ()
+    assert len(selection.excluded) == 1
+    assert selection.excluded[0].reason == (
+        "watermark_prone_source_provenance:panoramio"
+    )
+
+
+def test_homepage_assets_keep_indexed_review_rejections_in_disposition_closure():
+    execution_id = "20260809--travel-homepage-media-review--test-region-a--pilot-001"
+    entity = "审阅剔图景区"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
+    ensure_execution_layout(execution_id)
+    ensure_execution_command_layout(execution_id, "source")
+    obj = resolve_entity_object_dir(execution_id, entity, etype_hint="地点/景区")
+    shutil.rmtree(obj, ignore_errors=True)
+    source = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="home_wikipedia",
+        source_md=f"{entity}拥有湖面景观与步道。",
+        platform="维基百科",
+        source_category="encyclopedia",
+        source_kind="wikipedia",
+        extractor="wikipedia_api",
+        policy_revision="encyclopedia-primary",
+        source_use_mode="factual_reference_only",
+        research_lane="homepage",
+        url="https://zh.wikipedia.org/wiki/Test",
+        title=entity,
+        target_ref=f"/entity/地点/景区/{entity}",
+        images=[
+            {
+                "bytes": jpeg_bytes(seed=31),
+                "ext": ".jpg",
+                "caption": f"{entity}湖面全景",
+                "relevance": f"{entity}湖面全景",
+                "license": "CC BY 4.0",
+                "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Safe.jpg",
+                "usageScope": "app_publish",
+                "acquisitionStatus": "acquired",
+                "distributionDecision": "commercial_allowed",
+            },
+            {
+                "bytes": jpeg_bytes(seed=32),
+                "ext": ".jpg",
+                "caption": f"{entity}带日期戳图片",
+                "relevance": f"{entity}带日期戳图片",
+                "license": "CC BY 4.0",
+                "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Stamped.jpg",
+                "usageScope": "app_publish",
+                "acquisitionStatus": "acquired",
+                "distributionDecision": "commercial_allowed",
+            },
+        ],
+        execution_id=execution_id,
+        build_variants=False,
+    )
+    unit = execution_root(execution_id) / Path(str(source["sourceRef"])).parent
+    index_path = unit / "assets" / "index.json"
+    index = read_json(index_path)
+    rejected = index["assets"][1]
+    rejected["acquisitionStatus"] = "excluded_watermark"
+    rejected["distributionDecision"] = "blocked_watermark"
+    rejected["isRepresentativeVisual"] = False
+    write_json(index_path, index)
+    excluded_dir = unit / "assets" / "_excluded_watermark"
+    excluded_dir.mkdir()
+    (unit / "assets" / rejected["fileName"]).replace(
+        excluded_dir / rejected["fileName"]
+    )
+
+    selection = select_homepage_assets(
+        execution_id,
+        "地点",
+        "景区",
+        entity,
+        primary_ref=str(source["sourceRef"]),
+    )
+
+    assert len(selection.publishable) == 1
+    assert len(selection.excluded) == 1
+    assert selection.excluded[0].source_asset_id == rejected["sourceAssetId"]
+    assert selection.excluded[0].disposition.value == "policyExcluded"
+    assert selection.excluded[0].reason == (
+        "source_distribution_not_admitted:"
+        "excluded_watermark/blocked_watermark"
+    )
 
 
 def test_homepage_assets_reject_non_place_specimen_subject():

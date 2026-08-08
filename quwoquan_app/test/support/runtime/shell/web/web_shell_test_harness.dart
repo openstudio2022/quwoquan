@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/runtime/di/shell/main_app_shell.dart';
+import 'package:quwoquan_app/runtime/shell/main_app_shell.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
@@ -15,7 +15,11 @@ import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
+import 'package:quwoquan_app/runtime/models/visit_models.dart';
+import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../cloud_boundary_test_scope.dart';
 
 /// Web 宽屏壳测试通用脚手架：固定宽屏视口 + Web 能力 + 可控登录态，
 /// 复用同一 [MainAppShell] 入口，避免每个用例各自拼装第二套壳。
@@ -37,7 +41,13 @@ class WebShellTestHarness {
     final effectiveRouter = router ?? _defaultRouter();
     return ProviderScope(
       overrides: [
+        // 先封死 App↔Cloud 边界，再叠加壳自身依赖的对象级 typed port，
+        // 保证 Web 壳测试永远不构造真实 generated operation client。
+        ...sealedCloudBoundaryOverrides(),
         ...businessOverrides,
+        visitRecorderServiceProvider.overrideWithValue(
+          _NoopVisitRecorderService(),
+        ),
         platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
         oneTapLoginClientProvider.overrideWithValue(
           const _UnavailableOneTapLoginClient(),
@@ -138,6 +148,11 @@ class MaterialAppRouterHost extends StatelessWidget {
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
     );
   }
+}
+
+final class _NoopVisitRecorderService extends VisitRecorderService {
+  @override
+  Future<void> recordVisit(VisitTarget target) async {}
 }
 
 class _UnavailableOneTapLoginClient implements OneTapLoginClient {

@@ -29,6 +29,21 @@ local_identity_reasons:
     never used as an aggregate Store identity
   releaseId: stable catalog or release key; resolved through its typed catalog reader and never used as
     an aggregate Store identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
+assistant_access:
+  read:
+    mode: public
+    scopes:
+    - assistant.user.creator_runtime_profile.read
+  cite:
+    mode: public_citation
+    scopes:
+    - assistant.user.creator_runtime_profile.cite
+  write:
+    mode: none
+    scopes: []
 business_rules:
 - Creator package 只由已激活 immutable release 投影，禁止创建可登录账号或复制 Post 正文。
 - creatorId 唯一映射 canonical personaId，release 切换必须整包原子替换并校验媒体引用。
@@ -39,6 +54,7 @@ lifecycle:
   checkpoint: user_account_event_id
   rebuild: import_active_creator_release_then_replay_user_account_closed_events
   tombstone: remove_public_profile_keep_release_audit
+  idempotency: event_id
   event_consumers:
   - name: ProjectCreatorRuntimeProfileAccountClosure
     kind: projector

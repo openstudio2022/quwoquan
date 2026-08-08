@@ -178,6 +178,15 @@ description: transient connection
 identity: {fields: [id], version_source: session}
 access: {commands: session_owner, queries: named_reader, cross_context: public_contract_only}
 relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: runtime connection fixtures are not stable searchable objects
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+business_rules: [connection_identity_is_session_scoped]
+lifecycle: {ttl_seconds: 300, expiry_semantics: discard_transient_session}
 `,
 		webSocketUpgradeFixture(reliability),
 	)
@@ -400,6 +409,13 @@ access:
   queries: named_reader
   cross_context: public_contract_only
 relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: contract fixtures do not participate in production search
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
 business_rules: [identity_is_stable]
 lifecycle:
   state_field: status
@@ -414,8 +430,18 @@ description: read model
 identity: {fields: [id], version_source: checkpoint}
 access: {commands: none, queries: named_reader, cross_context: public_contract_only}
 relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: contract projection fixtures do not enter production search
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+business_rules: [projection_is_rebuilt_from_canonical_sources]
 lifecycle:
-  immutable: true
+  checkpoint: source_sequence
+  rebuild: replay_authoritative_source
+  tombstone: delete_view_keep_checkpoint
 `
 }
 
@@ -426,6 +452,15 @@ description: immutable fact
 identity: {fields: [id], version_source: immutable}
 access: {commands: append_only_sink, queries: named_reader, cross_context: public_contract_only}
 relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: contract fact fixtures do not expose a searchable identity
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+business_rules: [fact_is_immutable_after_append]
+lifecycle: {immutable: true}
 `
 }
 
@@ -589,7 +624,7 @@ func writeSchemas(t *testing.T, metadataDir string) {
 		"context.schema.json", "object.schema.json", "fields.schema.json",
 		"operations.schema.json", "storage.schema.json", "events.schema.json",
 		"errors.schema.json", "privacy.schema.json",
-		"contract_graph.schema.json",
+		"projection.schema.json", "contract_graph.schema.json",
 	} {
 		data, err := os.ReadFile(filepath.Join(repositorySchemaRoot, name))
 		if err != nil {

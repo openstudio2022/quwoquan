@@ -11,9 +11,11 @@ package local_contract
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	runtimeerrors "quwoquan_service/runtime/errors"
 	application "quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	useridentity "quwoquan_service/services/user-service/internal/account/user_account/domain/user/identity"
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
@@ -145,6 +147,15 @@ func (commands readinessPersonaCommands) CommitCreate(
 	if meta.IdempotencyKey == "" || meta.CommandDigest == "" {
 		return personaports.PersonaCommandResult{}, personaports.ErrPersonaCommandMetaRequired
 	}
+	ownerPersonaCount := 0
+	for _, existing := range commands.runtime.personas {
+		if existing.UserID == persona.UserID {
+			ownerPersonaCount++
+		}
+	}
+	if ownerPersonaCount >= 5 {
+		return personaports.PersonaCommandResult{}, personaports.ErrPersonaQuotaReached
+	}
 	copy := *persona
 	copy.Version = 1
 	commands.runtime.personas[persona.PersonaID] = &copy
@@ -274,5 +285,24 @@ func TestPersonaOperationsUseTheCanonicalCommandAndProjectionPipeline(t *testing
 	}, readinessPersonaMeta("update-user-profile"))
 	if err != nil || profile.Nickname != profileName || runtime.personas[created.PersonaID].DisplayName != profileName {
 		t.Fatalf("UpdateUserProfile profile=%+v persona=%+v err=%v", profile, runtime.personas[created.PersonaID], err)
+	}
+	for index := 0; index < 2; index++ {
+		if _, err := service.CreatePersona(t.Context(), ownerID, application.CreatePersonaCommand{
+			DisplayName: "Quota Persona",
+		}, readinessPersonaMeta("quota-fill-"+string(rune('0'+index)))); err != nil {
+			t.Fatalf("fill Persona quota index=%d err=%v", index, err)
+		}
+	}
+	_, err = service.CreatePersona(t.Context(), ownerID, application.CreatePersonaCommand{
+		DisplayName: "Over Quota Persona",
+	}, readinessPersonaMeta("quota-rejected"))
+	assertPersonaQuotaReached(t, err)
+}
+
+func assertPersonaQuotaReached(t *testing.T, err error) {
+	t.Helper()
+	var appErr *runtimeerrors.AppError
+	if !errors.As(err, &appErr) || appErr.Code.String() != "USER.PERSONA.quota_reached" {
+		t.Fatalf("expected USER.PERSONA.quota_reached, got %T: %v", err, err)
 	}
 }

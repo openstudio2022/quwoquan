@@ -190,7 +190,7 @@ def _load_nonprod_runtime_identity(
         or startup.get("env") != environment
         or startup.get("target") != target_name
         or startup.get("candidateDigest") != baseline_id
-        or startup.get("configurationDigest") != manifest.get("runtimeConfigDigest")
+        or startup.get("configurationDigest") != manifest.get("configurationDigest")
         or startup.get("providerRuntimeDigest") != provider_runtime_digest
         or startup.get("observabilityLogSinkDigest")
         != elasticsearch_compose_digest

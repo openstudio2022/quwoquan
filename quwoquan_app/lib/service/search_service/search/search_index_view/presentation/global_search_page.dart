@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/runtime/di/presentation/conversation_avatar.dart';
+import 'package:quwoquan_app/runtime/di/chat_presentation_slots.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_search_hit_views.dart';
 import 'package:quwoquan_app/service/integration_service/external_integration/location/application/public/search_location_suggestion_view.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';

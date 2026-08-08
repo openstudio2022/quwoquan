@@ -6,7 +6,9 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from content.release.canonical.asset_review_adoption import _binding
+from content.release.canonical.asset_review_adoption import (
+    build_independent_asset_review_binding,
+)
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.release_admission import (
     _article_media_coverage,
@@ -35,6 +37,18 @@ _ENTITY_CATALOG_DIGEST = _digest("release-admission-entities")
 def _write(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _review_output_root(objects_root: Path) -> Path:
+    return objects_root / "_external-output"
+
+
+def _build_test_release_asset_admission(**kwargs):
+    objects_root = kwargs["objects_root"]
+    return build_release_asset_admission(
+        **kwargs,
+        output_root=_review_output_root(objects_root),
+    )
 
 
 def _rights_asset(asset_id: str) -> dict[str, object]:
@@ -158,7 +172,7 @@ def _publishable_video_receipt() -> dict[str, object]:
             "popularityScore": 9.2,
             "popularityPercentile": 1.0,
             "rankingEligible": True,
-            "rankingIneligibleReason": "",
+            "ineligibleReason": "",
             "comparisonCandidateCount": 2,
         },
     }
@@ -232,13 +246,18 @@ def _publishable_video_receipt() -> dict[str, object]:
 
 def _bind_video_review(root: Path, receipt: dict[str, object] | None = None) -> Path:
     selected = receipt or _publishable_video_receipt()
-    receipt_ref = Path("asset_reviews/receipts") / f"{selected['reviewId']}.json"
-    receipt_path = root / "posts/video" / receipt_ref
+    receipt_ref = (
+        Path("data/tasks/video/evidence/asset_reviews/receipts")
+        / f"{selected['reviewId']}.json"
+    )
+    receipt_path = _review_output_root(root) / receipt_ref
     _write(receipt_path, selected)
     rights_path = root / "posts/video/rights.json"
     rights = json.loads(rights_path.read_text(encoding="utf-8"))
     rights["assets"][0]["acquisitionReceiptRef"] = selected["acquisitionReceiptRef"]
-    rights["assets"][0]["independentAssetReview"] = _binding(
+    rights["assets"][0][
+        "independentAssetReview"
+    ] = build_independent_asset_review_binding(
         selected,
         receipt_ref=receipt_ref.as_posix(),
         receipt_file_sha256=file_digest(receipt_path),
@@ -362,7 +381,7 @@ def test_research_release_accepts_unverified_assets_for_all_four_carriers(
     tmp_path: Path,
 ) -> None:
     desired = _release_objects(tmp_path)
-    admission = build_release_asset_admission(
+    admission = _build_test_release_asset_admission(
         release_id="research-release",
         objects_root=tmp_path,
         desired=desired,
@@ -392,7 +411,7 @@ def test_commercial_release_rejects_same_unverified_assets(tmp_path: Path) -> No
     )
 
     with pytest.raises(ObjectTransactionError, match="non-commercial assets"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="commercial-release",
             objects_root=tmp_path,
             desired=desired,
@@ -407,14 +426,14 @@ def test_professional_acquisition_without_frozen_review_is_gate_blocked(
     rights_path = tmp_path / "posts/image/rights.json"
     rights = json.loads(rights_path.read_text(encoding="utf-8"))
     rights["assets"][0]["acquisitionReceiptRef"] = (
-        "data/local/workspace/source-acquisition/image/receipts/"
+        "data/local/workspace/source-acquisition/receipts/"
         + "a" * 64
         + ".json"
     )
     _write(rights_path, rights)
 
     with pytest.raises(ObjectTransactionError, match="review binding is incomplete"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="acquisition-only-release",
             objects_root=tmp_path,
             desired=desired,
@@ -489,7 +508,7 @@ def test_article_release_rejects_two_cover_assets_despite_two_bindings(
     _write(manifest_path, manifest)
 
     with pytest.raises(ObjectTransactionError, match="non-cover body asset"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="two-cover-release",
             objects_root=tmp_path,
             desired=desired,
@@ -508,7 +527,7 @@ def test_video_release_requires_independent_publishable_review(
     _write(rights_path, rights)
 
     with pytest.raises(ObjectTransactionError, match="video required media closure"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="unreviewed-video-release",
             objects_root=tmp_path,
             desired=desired,
@@ -536,7 +555,10 @@ def test_video_release_revalidates_motion_evidence(
 ) -> None:
     desired = _release_objects(tmp_path)
     receipt_path = next(
-        (tmp_path / "posts/video/asset_reviews/receipts").glob("*.json")
+        (
+            _review_output_root(tmp_path)
+            / "data/tasks/video/evidence/asset_reviews/receipts"
+        ).glob("*.json")
     )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     receipt["assetSnapshot"][section][field] = value
@@ -544,7 +566,7 @@ def test_video_release_revalidates_motion_evidence(
     _bind_video_review(tmp_path, receipt)
 
     with pytest.raises(ObjectTransactionError, match=expected):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="invalid-video-evidence-release",
             objects_root=tmp_path,
             desired=desired,
@@ -559,7 +581,10 @@ def test_daily_research_release_accepts_truthfully_unranked_video(
 ) -> None:
     desired = _release_objects(tmp_path)
     receipt_path = next(
-        (tmp_path / "posts/video/asset_reviews/receipts").glob("*.json")
+        (
+            _review_output_root(tmp_path)
+            / "data/tasks/video/evidence/asset_reviews/receipts"
+        ).glob("*.json")
     )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     signals = receipt["assetSnapshot"]["popularitySignals"]
@@ -568,14 +593,14 @@ def test_daily_research_release_accepts_truthfully_unranked_video(
     if reason == "incomplete":
         signals["favoriteCount"] = None
         signals["popularityScore"] = None
-        signals["rankingIneligibleReason"] = "incomplete_popularity_signals"
+        signals["ineligibleReason"] = "incomplete_popularity_signals"
     else:
         signals["comparisonCandidateCount"] = 1
-        signals["rankingIneligibleReason"] = "insufficient_comparable_candidates"
+        signals["ineligibleReason"] = "insufficient_comparable_candidates"
     receipt["receiptDigest"] = canonical_digest(receipt, excluded="receiptDigest")
     _bind_video_review(tmp_path, receipt)
 
-    admission = build_release_asset_admission(
+    admission = _build_test_release_asset_admission(
         release_id="daily-research-release",
         objects_root=tmp_path,
         desired=desired,
@@ -594,7 +619,7 @@ def test_required_carrier_media_cannot_be_inferred_from_rights_only(
     _write(tmp_path / "posts/image/manifest.json", {"contentType": "image", "assets": []})
 
     with pytest.raises(ObjectTransactionError, match="manifest/rights asset closure drift"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="research-release",
             objects_root=tmp_path,
             desired=desired,
@@ -610,7 +635,7 @@ def test_required_carrier_media_rejects_empty_manifest_and_rights(
     _write(tmp_path / "posts/image/rights.json", {"assets": []})
 
     with pytest.raises(ObjectTransactionError, match="image required media closure"):
-        build_release_asset_admission(
+        _build_test_release_asset_admission(
             release_id="research-release",
             objects_root=tmp_path,
             desired=desired,

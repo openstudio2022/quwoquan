@@ -15,8 +15,8 @@ for path in (DATA_ROOT.parent, DATA_ROOT / "scripts"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from content.execution import reliabletask_transport
-from content.execution.reliabletask_fleet import (
+from content.execution.queue.reliabletask import transport as reliabletask_transport
+from content.execution.queue.reliabletask.fleet import (
     resolve_reliabletask_fleet_transport,
 )
 

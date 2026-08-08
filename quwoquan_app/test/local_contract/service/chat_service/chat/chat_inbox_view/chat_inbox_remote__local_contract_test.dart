@@ -22,7 +22,11 @@ void main() {
       );
 
       final page = await query.listInbox(
-        ChatListInboxQuery(cursor: 'current-keyset-token', limit: 60),
+        ChatListInboxQuery(
+          cursor: 'current-keyset-token',
+          // canonical ChatListInboxQuery.maximumLimit == 50，取上界断言分页边界。
+          limit: ChatListInboxQuery.maximumLimit,
+        ),
       );
 
       expect(executor.callCount, 1);
@@ -36,7 +40,7 @@ void main() {
       expect(executor.context?.clientPageId, ChatRequestPageIds.listInbox);
       expect(executor.queryParameters, <String, String>{
         'cursor': 'current-keyset-token',
-        'limit': '60',
+        'limit': '50',
       });
       expect(executor.pathParameters, isEmpty);
       expect(executor.body, isNull);

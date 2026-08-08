@@ -354,15 +354,35 @@ func TestDerivedEvidenceBindsPhysicalLayersAndTests(t *testing.T) {
 			"demo__replay_test.py")
 }
 
-func TestDerivedEvidenceUsesApplicationBehaviorForProjection(t *testing.T) {
+func TestDerivedEvidenceKeepsApplicationSeparateFromDomain(t *testing.T) {
 	t.Parallel()
 
-	repo := newSyntheticRepo(t, ast.ObjectKindProjection)
-	evidence := onlyEvidence(t, repo.load(t, load.WithRepoRoot(repo.root)))
+	for _, kind := range []ast.ObjectKind{
+		ast.ObjectKindProjection,
+		ast.ObjectKindExternalReference,
+	} {
+		kind := kind
+		t.Run(string(kind), func(t *testing.T) {
+			t.Parallel()
+			repo := newSyntheticRepo(t, kind)
+			if err := os.Remove(filepath.Join(
+				repo.root, "quwoquan_service", "services", "demo-service", "internal",
+				"demo_context", "demo_object", "domain", "demo_object.go",
+			)); err != nil {
+				t.Fatalf("remove non-owning domain fixture: %v", err)
+			}
+			evidence := onlyEvidence(t, repo.load(t, load.WithRepoRoot(repo.root)))
 
-	objectRoot := "quwoquan_service/services/demo-service/internal/demo_context/demo_object"
-	requireArtifacts(t, "service.domain", evidence.Service.Domain,
-		objectRoot+"/application/demo_facet.go")
+			objectRoot := "quwoquan_service/services/demo-service/internal/" +
+				"demo_context/demo_object"
+			if len(evidence.Service.Domain) != 0 {
+				t.Fatalf("%s application artifacts leaked into service.domain: %v",
+					kind, artifactPaths(evidence.Service.Domain))
+			}
+			requireArtifacts(t, "service.reader", evidence.Service.Reader,
+				objectRoot+"/application/demo_facet.go")
+		})
+	}
 }
 
 func TestDerivedEvidenceKeepsPageClaimWhenPageFileIsAbsent(t *testing.T) {

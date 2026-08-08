@@ -4,6 +4,7 @@ package assistant_run_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +15,13 @@ import (
 
 type connectorGatewayAuthorization struct{}
 
-func (connectorGatewayAuthorization) AuthorizationHeader(context.Context) (string, error) {
+func (connectorGatewayAuthorization) AuthorizationHeaderForAccount(
+	_ context.Context,
+	accountID string,
+) (string, error) {
+	if accountID != "account-1" {
+		return "", fmt.Errorf("unexpected account %q", accountID)
+	}
 	return "Bearer service-token", nil
 }
 
@@ -51,7 +58,8 @@ func TestConnectorCapabilityGatewayUsesServiceScopeAndRedactedDecision(t *testin
 	if !decision.Allowed || decision.ConnectionID != "connection-1" || decision.ConnectorID != "system_calendar" {
 		t.Fatalf("decision=%+v", decision)
 	}
-	if received["accountId"] != "account-1" || received["capabilityKey"] != "calendar.event.create" {
+	if _, exists := received["accountId"]; exists ||
+		received["capabilityKey"] != "calendar.event.create" {
 		t.Fatalf("request=%#v", received)
 	}
 	if _, exists := received["credentialRef"]; exists {

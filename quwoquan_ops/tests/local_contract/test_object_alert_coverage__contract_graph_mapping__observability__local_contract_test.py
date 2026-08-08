@@ -18,7 +18,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = ROOT / "quwoquan_service/scripts/verify/verify_object_alert_coverage.py"
+SCRIPT = ROOT / "quwoquan_service/scripts/verify/observability/verify_object_alert_coverage.py"
 SPEC = importlib.util.spec_from_file_location("verify_object_alert_coverage", SCRIPT)
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError(f"无法加载 {SCRIPT}")
@@ -236,15 +236,15 @@ class ObjectAlertCoverageContractTest(unittest.TestCase):
         self.assertEqual(report.issues, ())
 
     def test_blocked_operation_is_classified_without_alert_requirement(self) -> None:
-        self.write_service("travel-service", "travel")
+        self.write_service("circle-service", "circle")
         graph = self.write_graph(
             [
                 operation(
-                    domain="travel",
-                    object_name="trip_plan",
-                    local_id="GetTripPlan",
+                    domain="circle",
+                    object_name="gathering_plan",
+                    local_id="GetGatheringPlan",
                     status="blocked",
-                    metric="travel_trip_plan_get",
+                    metric="circle_gathering_plan_get",
                 )
             ]
         )

@@ -21,6 +21,20 @@ relationships:
 local_identity_reasons:
   deviceId: device-platform fingerprint key scoped to account session or registration lookup, not the
     DeviceRegistration aggregate identity
+search_policy:
+  exposed: none
+  not_exposed_reason: "认证、凭据与会话安全对象，任何检索暴露都会直接削弱账号安全。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "认证凭据、会话密钥与风控状态对小趣完全关闭，不存在可开放的子集。"
 business_rules:
 - access/refresh token 明文不得持久化，只保存 refreshTokenHash 与 rotation lineage
 - refresh 必须单次轮换，重放旧 token 立即吊销整条 lineage

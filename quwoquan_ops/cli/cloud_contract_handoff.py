@@ -150,6 +150,89 @@ def source_digest_set_sha(graph: dict[str, Any]) -> str:
     return sha256_bytes(canonical_bytes(sources))
 
 
+# `graph["sources"]` 只枚举契约视图里的 YAML/JSON 声明，`sourceDigestSetSha256` 因此只覆盖
+# 声明输入。ContractGraph 还有第二类真实输入：readinessEvidence 是编译期按 `--repo-root`
+# 扫描 `internal/**`、`tests/**` 与端侧 `lib/service/**` 派生的，并把每个文件的确切字节绑成
+# path+sha256。这两类输入路径空间不相交，声明侧摘要永远看不到实现侧漂移——同一份
+# `sourceDigestSetSha256` 与 `compilerHash` 下 graph sha256 仍可变化，正是这个原因。
+#
+# graph sha256 已经内容寻址地覆盖了这些 evidence 绑定（它们就在 graph 字节里），缺的只是
+# 「把记录下来的绑定与磁盘现状对一次」。没有这一步，一份相对自身输入已经过期的 graph 能被
+# 锁定并通过全部下游门禁。
+def evidence_digest_bindings(graph: dict[str, Any]) -> list[tuple[str, str]]:
+    """递归收集 readinessEvidence 的 (repo 相对路径, sha256) 绑定。
+
+    packet 形状按对象与 seam 变化（service/app 各自再分层，outbox 还多包一层 artifact），
+    所以这里按结构递归，不另抄一份层名清单当第二真相源。
+    """
+    bindings: dict[str, str] = {}
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            path = node.get("path")
+            digest = node.get("sha256")
+            if isinstance(path, str) and path and isinstance(digest, str):
+                if len(digest) != SHA256_HEX_LENGTH:
+                    raise ValueError(
+                        f"readinessEvidence 绑定 digest 非 SHA256: {path}"
+                    )
+                existing = bindings.get(path)
+                if existing is not None and existing != digest:
+                    raise ValueError(
+                        f"readinessEvidence 对同一路径记录了冲突 digest: {path}"
+                    )
+                bindings[path] = digest
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(graph.get("readinessEvidence"))
+    return sorted(bindings.items())
+
+
+def verify_graph_input_bindings(graph: dict[str, Any]) -> int:
+    """校验 ContractGraph 记录的实现/测试输入仍与磁盘字节一致。
+
+    fail-closed：绑定为空说明 graph 不是按 `--repo-root` 派生 evidence 生成的，此时这项
+    校验会退化成空扫描恒绿，必须直接阻断而不是放过。
+    """
+    bindings = evidence_digest_bindings(graph)
+    if not bindings:
+        raise ValueError(
+            "ContractGraph readinessEvidence 没有任何 path+sha256 绑定；"
+            "输入校验会退化成空扫描恒绿，必须带 --repo-root 重新 generate"
+        )
+    missing: list[str] = []
+    drifted: list[str] = []
+    for path, digest in bindings:
+        resolved = ROOT / path
+        if not resolved.is_file():
+            missing.append(path)
+            continue
+        if sha256_bytes(resolved.read_bytes()) != digest:
+            drifted.append(path)
+    if missing or drifted:
+        detail: list[str] = []
+        if drifted:
+            detail.append(
+                f"{len(drifted)} 个已改动: " + ", ".join(drifted[:10])
+                + (" ..." if len(drifted) > 10 else "")
+            )
+        if missing:
+            detail.append(
+                f"{len(missing)} 个已消失: " + ", ".join(missing[:10])
+                + (" ..." if len(missing) > 10 else "")
+            )
+        raise ValueError(
+            "ContractGraph 记录的实现/测试输入与磁盘不一致，graph 相对自身输入已过期；"
+            f"共 {len(bindings)} 个绑定，" + "；".join(detail) + "。"
+            "必须在输入静止后重新 codegen-contract-graph 再 accept"
+        )
+    return len(bindings)
+
+
 def document_index(graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for item in graph["documents"]:
@@ -660,6 +743,10 @@ def accept(args: argparse.Namespace) -> int:
     report_path = args.report.resolve()
     graph = read_json(graph_path)
     validate_graph(graph)
+    # 锁只能钉住一份「相对自身全部输入都还成立」的 graph。声明侧摘要与 compilerHash 都看不
+    # 到实现/测试输入漂移，所以在写锁前必须把 graph 记录的 evidence 绑定与磁盘对一次；否则
+    # 并行会话在 generate 与 accept 之间改动被扫描的实现文件，锁会自洽地钉住一份过期 graph。
+    verify_graph_input_bindings(graph)
     exposures, unresolved = resolve_exposures(graph)
     if unresolved:
         detail = "; ".join(
@@ -771,10 +858,22 @@ def verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def verify_inputs(args: argparse.Namespace) -> int:
+    graph_path = args.graph.resolve()
+    graph = read_json(graph_path)
+    validate_graph(graph)
+    bindings = verify_graph_input_bindings(graph)
+    print(
+        "PASS: ContractGraph 记录的实现/测试输入与磁盘一致 "
+        f"({bindings} 个绑定)"
+    )
+    return 0
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     subparsers = result.add_subparsers(dest="command", required=True)
-    for command in ("accept", "verify"):
+    for command in ("accept", "verify", "verify-inputs"):
         sub = subparsers.add_parser(command)
         sub.add_argument("--graph", type=Path, default=DEFAULT_GRAPH)
         sub.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
@@ -825,6 +924,8 @@ def main() -> int:
     args = parser().parse_args()
     if args.command == "accept":
         return accept(args)
+    if args.command == "verify-inputs":
+        return verify_inputs(args)
     if args.command == "lease-acquire":
         policy = read_json(args.policy.resolve())
         lease = Lease.acquire(

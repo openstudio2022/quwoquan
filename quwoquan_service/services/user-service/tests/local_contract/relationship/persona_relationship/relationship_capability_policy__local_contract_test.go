@@ -2,7 +2,11 @@ package local_contract
 
 import (
 	"encoding/json"
+	"io/fs"
+	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -169,58 +173,23 @@ func TestInboundHandlersOnlyAssembleCapabilityFacts(t *testing.T) {
 	}
 }
 
+// 关系能力位由服务端 NewRelationshipCapabilityView 独家裁定。端侧只能把 wire
+// 结果搬进 RelationshipCapabilityViewData，不得自己算、不得改写、不得凭本地关注
+// 标志位造一个能力对象——否则同一 viewer/target 会出现端云两套动作矩阵。
 func TestAppConsumersDoNotRecalculateRelationshipCapability(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := filepath.Clean(filepath.Join(userServiceRoot(t), "..", "..", ".."))
-	files := map[string][]string{
-		filepath.Join(
-			repoRoot, "quwoquan_app", "lib", "cloud", "services", "user",
-			"relationship_capability_repository.dart",
-		): {
-			"fromFollowFlags",
-			"_defaultCanFollow",
-			"RelationshipCapabilityDto copyWith",
-		},
-		filepath.Join(
-			repoRoot, "quwoquan_app", "lib", "ui", "user", "providers",
-			"profile_state_provider.dart",
-		): {
-			"capability.copyWith",
-			"fromFollowFlags",
-			"_copyCapabilityWithFollowState",
-		},
-		filepath.Join(
-			repoRoot, "quwoquan_app", "lib", "ui", "user", "pages",
-			"profile_stats_page.dart",
-		): {"fromFollowFlags"},
-		filepath.Join(
-			repoRoot, "quwoquan_app", "lib", "cloud", "services", "user",
-			"contact_discovery_repository.dart",
-		): {"RelationshipCapabilityDto("},
-		filepath.Join(
-			repoRoot, "quwoquan_app", "packages", "quwoquan_cloud_contracts", "lib", "src", "user",
-			"public_profile_query_contracts.dart",
-		): {"SocialRelationshipCapabilityProjection"},
-		filepath.Join(
-			repoRoot, "quwoquan_app", "packages", "quwoquan_cloud_contracts", "lib", "src", "user",
-			"user_homepage_query_contracts.dart",
-		): {"HomepageRelationshipCapabilityProjection"},
-	}
-	for path, banned := range files {
-		source := readContract(t, path)
-		for _, token := range banned {
-			if strings.Contains(source, token) {
-				t.Fatalf("App consumer retains relationship capability policy %q: %s", token, path)
-			}
-		}
-	}
+	appLib := filepath.Join(repoRoot, "quwoquan_app", "lib")
+	canonicalPath := filepath.Join(
+		appLib, "service", "user_service", "relationship", "persona_relationship",
+		"application", "public", "relationship_capability_repository.dart",
+	)
 
-	canonicalAppValue := readContract(t, filepath.Join(
-		repoRoot, "quwoquan_app", "lib", "cloud", "services", "user",
-		"relationship_capability_repository.dart",
-	))
+	canonicalAppValue := readContract(t, canonicalPath)
 	for _, field := range []string{
+		"required this.viewerPersonaId",
+		"required this.targetPersonaId",
 		"required this.relationState",
 		"required this.canFollow",
 		"required this.canUnfollow",
@@ -240,6 +209,48 @@ func TestAppConsumersDoNotRecalculateRelationshipCapability(t *testing.T) {
 			t.Fatalf("App canonical capability value is not strict for %q", field)
 		}
 	}
+	if strings.Contains(canonicalAppValue, "copyWith") {
+		t.Fatalf(
+			"App canonical capability value exposes copyWith and can drift from the wire: %s",
+			canonicalPath,
+		)
+	}
+
+	builders := appFilesConstructing(t, appLib, "RelationshipCapabilityViewData(")
+	if !reflect.DeepEqual(builders, []string{canonicalPath}) {
+		t.Fatalf(
+			"relationship capability may only be built from the wire in %s, built in %v",
+			canonicalPath,
+			builders,
+		)
+	}
+}
+
+// appFilesConstructing 返回 App production 树中构造该类型的全部文件。
+func appFilesConstructing(t *testing.T, appLib string, constructor string) []string {
+	t.Helper()
+	var matches []string
+	err := filepath.WalkDir(appLib, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".dart" {
+			return nil
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if strings.Contains(string(raw), constructor) {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan App production tree: %v", err)
+	}
+	sort.Strings(matches)
+	return matches
 }
 
 func assertRelationshipActionsDenied(

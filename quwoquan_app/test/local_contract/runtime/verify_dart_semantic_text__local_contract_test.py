@@ -59,7 +59,8 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
 
     def test_detects_intersection_cloud_fallback_copy(self) -> None:
         violations = self.scan(
-            "quwoquan_app/lib/cloud/services/content/intersection_statement.dart",
+            "quwoquan_app/lib/service/recommendation_service/recommendation/"
+            "recommendation_feature_profile_view/presentation/intersection_statement_row.dart",
             "const fallback = Card(description: '你们都去过这里');\n",
         )
         self.assertEqual(len(violations), 1)
@@ -89,7 +90,8 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
         )
         self.assertTrue(
             self.verifier.is_migrated_text_scope(
-                "quwoquan_app/lib/cloud/services/content/intersection_statement.dart"
+                "quwoquan_app/lib/service/recommendation_service/recommendation/"
+                "recommendation_feature_profile_view/presentation/intersection_statement_row.dart"
             )
         )
 
@@ -135,7 +137,7 @@ class VerifyDartSemanticTextTest(unittest.TestCase):
 
     def test_scans_runtime_composition_shell_copy(self) -> None:
         violations = self.scan(
-            "quwoquan_app/lib/runtime/di/shell/example.dart",
+            "quwoquan_app/lib/runtime/shell/example.dart",
             "Widget build() => App(title: '应用标题');\n",
         )
         self.assertEqual(len(violations), 1)

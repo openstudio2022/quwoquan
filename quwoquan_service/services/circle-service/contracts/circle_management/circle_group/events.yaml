@@ -1,6 +1,7 @@
 events:
 - name: CircleGroupCreated
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupCreated
   payload_entity: CircleGroup
   payload_fields:
   - groupId
@@ -13,6 +14,7 @@ events:
   - createdAt
 - name: CircleGroupUpdated
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupUpdated
   payload_entity: CircleGroup
   payload_fields:
   - _id
@@ -21,6 +23,7 @@ events:
   - status
 - name: CircleGroupArchived
   delivery_semantics: transactional_outbox
+  wire_event_type: CircleGroupArchived
   payload_entity: CircleGroup
   payload_fields:
   - groupId

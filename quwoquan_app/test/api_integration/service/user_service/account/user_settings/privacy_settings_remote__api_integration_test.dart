@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/spec.md#gwt-001
+// readiness_case: user_settings_get_privacy_settings_app_api
+// readiness_case: user_settings_update_privacy_settings_app_api
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

@@ -1471,7 +1471,39 @@ readiness_cases:
     producer: app
     layer: local_contract
     target: {kind: operation, id: BatchGetConversations}
-    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_conversation_timestamps_app_local
+    spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListConversationTimestamps}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_update_group_governance_settings_app_local
+    spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: UpdateGroupGovernanceSettings}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_dissolve_conversation_app_local
+    spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: DissolveConversation}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_get_gathering_chat_board_app_local
+    spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetGatheringChatBoard}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
   - case_id: conversation_list_contact_home_app_local
@@ -1530,6 +1562,94 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_list_conversations_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListConversations}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_create_conversation_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: CreateConversation}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_list_conversations_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListConversations}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_get_conversation_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetConversation}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_update_conversation_title_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpdateConversationTitle}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_get_group_home_app_local
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/group-home-chat-info-contract/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetGroupHome}
+    runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation/group_home_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_get_group_home_app_api
+    spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/group-home-chat-info-contract/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetGroupHome}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_list_conversation_timestamps_app_api
+    spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListConversationTimestamps}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_batch_get_conversations_app_api
+    spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: BatchGetConversations}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_update_group_governance_settings_app_api
+    spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UpdateGroupGovernanceSettings}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_dissolve_conversation_app_api
+    spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: DissolveConversation}
+    runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
 contract_test:
   test_strategy:
     service_side:

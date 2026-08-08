@@ -1,6 +1,13 @@
 kind: append_only_fact
 lifecycle:
   immutable: true
+  append_command_admission:
+    status: evaluated
+    instance_invariant: none
+    commands:
+      - ReportTagFeedback
+    rationale: 标签反馈事实追加；热门标签为高并发写入热点，约束仅为语义键去重，聚合权重由下游异步派生。
+    evaluated_at: '2026-08-07'
 description: 'Persona 或设备对标签推荐的反馈事实。反馈只追加且不修改 TagTaxonomyRelease 或 TagNode。
 
   '
@@ -25,6 +32,20 @@ relationships:
   target_objects:
   - user.Persona
   - user.DeviceRegistration
+search_policy:
+  exposed: none
+  not_exposed_reason: "追加事实只服务于后台聚合、审计与回放，不构成用户可检索的对象身份。"
+assistant_access:
+  read:
+    mode: none
+    scopes: []
+  cite:
+    mode: none
+    scopes: []
+  write:
+    mode: none
+    scopes: []
+  denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 每条反馈必须绑定 active taxonomy 中存在的 tagRef 与可信 Persona 或 Device actor。
 - 同一来源行为 eventId 只追加一次，正向和负向反馈使用同一事实结构。

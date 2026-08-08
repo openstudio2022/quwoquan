@@ -17,7 +17,7 @@ if str(SCRIPTS) not in sys.path:
 from core.article_package import compute_document_sha256  # noqa: E402
 from core.control_types import ContentGenerator, ContentType  # noqa: E402
 from core.io import read_json  # noqa: E402
-from content.execution import post_review_closure  # noqa: E402
+from content.execution.closure import post_review as post_review_closure
 from content.execution.runtime_contract import canonical_sha256  # noqa: E402
 from verify import verify_execution_readiness as gate  # noqa: E402
 

@@ -177,6 +177,8 @@ func mapMediaImageReprocessError(err error) error {
 		return contentgenerated.AppErrorFromMediaImageReprocessInvalidTransition(err.Error())
 	case errors.Is(err, reprocessmodel.ErrRunNotFound):
 		return contentgenerated.AppErrorFromMediaImageReprocessRunNotFound(err.Error())
+	case errors.Is(err, reprocessmodel.ErrRunVersionConflict):
+		return contentgenerated.AppErrorFromMediaImageReprocessVersionConflict(err.Error())
 	default:
 		return mediaImageReprocessUnavailable(err.Error())
 	}

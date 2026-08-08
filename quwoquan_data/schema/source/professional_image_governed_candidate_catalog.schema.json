@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_governed_candidate_catalog.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "catalogId", "catalogDigest", "catalogRevision",
+    "discoveryPlanId", "discoveryPlanDigest", "createdAt", "providerCounts",
+    "candidateCount", "candidates"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_governed_candidate_catalog"},
+    "catalogId": {"type": "string", "pattern": "^professional-image-governed-[0-9a-f]{16}$"},
+    "catalogDigest": {"$ref": "#/$defs/sha256"},
+    "catalogRevision": {"const": "governed-professional-image-candidates-v1"},
+    "discoveryPlanId": {"type": "string", "minLength": 1},
+    "discoveryPlanDigest": {"$ref": "#/$defs/sha256"},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "providerCounts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/providerCount"}
+    },
+    "candidateCount": {"type": "integer", "minimum": 1},
+    "candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/candidate"}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "httpsUrl": {"type": "string", "pattern": "^https://"},
+    "providerCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "displayName", "acquisitionPath", "candidateCount"],
+      "properties": {
+        "provider": {"enum": ["pinterest", "tuchong", "wikimedia_commons", "openverse"]},
+        "displayName": {"type": "string", "minLength": 1},
+        "acquisitionPath": {"enum": ["manual_file", "supported_api"]},
+        "candidateCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "originalAssetIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contentSha256", "sourceUrl", "assetUrl", "manualFile", "apiEvidence"],
+      "properties": {
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "sourceUrl": {"$ref": "#/$defs/httpsUrl"},
+        "assetUrl": {"type": "string"},
+        "manualFile": {"type": "string"},
+        "apiEvidence": {"type": "string"}
+      }
+    },
+    "pathEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "digest", "fileSha256"],
+      "properties": {
+        "kind": {"enum": ["manual_file", "supported_api"]},
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "fileSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidateId", "provider", "acquisitionPath", "sourcePageUrl",
+        "creator", "title", "observedAt", "originalAssetCandidate",
+        "generated", "originalAssetIdentity", "pathEvidence"
+      ],
+      "properties": {
+        "candidateId": {
+          "type": "string",
+          "pattern": "^(pinterest|tuchong|wikimedia_commons|openverse):(?:[a-z0-9_-]+:)?[0-9a-f]{16}$"
+        },
+        "provider": {"enum": ["pinterest", "tuchong", "wikimedia_commons", "openverse"]},
+        "acquisitionPath": {"enum": ["manual_file", "supported_api"]},
+        "sourcePageUrl": {"$ref": "#/$defs/httpsUrl"},
+        "creator": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "observedAt": {"type": "string", "format": "date-time"},
+        "originalAssetCandidate": {"const": true},
+        "generated": {"const": false},
+        "originalAssetIdentity": {"$ref": "#/$defs/originalAssetIdentity"},
+        "pathEvidence": {"$ref": "#/$defs/pathEvidence"}
+      }
+    }
+  }
+}

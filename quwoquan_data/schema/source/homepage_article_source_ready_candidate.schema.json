@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/homepage_article_source_ready_candidate.schema.json",
+  "title": "Physical source-ready candidate capsule for homepage or article",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "carrier", "sourceRevision", "sourceDigest",
+    "entityCatalogDigest", "candidate", "materialization", "provenance",
+    "capsuleDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.homepage_article_source_ready_candidate"},
+    "carrier": {"enum": ["homepage", "article"]},
+    "sourceRevision": {"$ref": "#/$defs/sha256"},
+    "sourceDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "candidate": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Validated against the existing carrier catalog schema by the batch loader; fields are not duplicated here."
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["body", "media"],
+      "properties": {
+        "body": {"$ref": "#/$defs/fileBinding"},
+        "media": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/mediaBinding"}
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverageProjectionRef", "coverageProjectionDigest",
+        "coverageProjectionFileSha256", "discoveryEvidenceRef",
+        "discoveryEvidenceFileSha256", "acquisitionEvidenceRefs",
+        "rightsEvidenceRefs", "qualityEvidenceRefs"
+      ],
+      "properties": {
+        "coverageProjectionRef": {"$ref": "#/$defs/ref"},
+        "coverageProjectionDigest": {"$ref": "#/$defs/sha256"},
+        "coverageProjectionFileSha256": {"$ref": "#/$defs/sha256"},
+        "discoveryEvidenceRef": {"$ref": "#/$defs/ref"},
+        "discoveryEvidenceFileSha256": {"$ref": "#/$defs/sha256"},
+        "acquisitionEvidenceRefs": {"$ref": "#/$defs/evidenceRefs"},
+        "rightsEvidenceRefs": {"$ref": "#/$defs/evidenceRefs"},
+        "qualityEvidenceRefs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "capsuleDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "ref": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "contentSha256", "fileSha256"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "fileSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "mediaBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "role", "ref", "contentSha256", "fileSha256"],
+      "properties": {
+        "assetId": {"type": "string", "minLength": 1},
+        "role": {"enum": ["hero", "cover", "body"]},
+        "ref": {"$ref": "#/$defs/ref"},
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "fileSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "fileSha256"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "fileSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/evidenceRef"}
+    }
+  }
+}

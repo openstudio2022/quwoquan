@@ -279,10 +279,11 @@ def test_terminal_completion_and_readiness_boundaries_reject_early_event_tamper(
     )
     root = state_path.parent.parent
 
-    from content.execution import execution_supersession, reconcile, workspace
+    from content.execution import execution_supersession, workspace
+    from content.execution.controller.execute import reconcile
     from content.execution.controller.completion import execution_completion_issues
     from content.execution.execution_terminal import load_terminal_execution_evidence
-    from content.execution.readiness_audit import audit_execution_readiness
+    from content.execution.planning.readiness_audit import audit_execution_readiness
 
     monkeypatch.setattr(workspace, "execution_state_path", lambda _execution_id: state_path)
     monkeypatch.setattr(reconcile, "execution_root", lambda _execution_id: root)

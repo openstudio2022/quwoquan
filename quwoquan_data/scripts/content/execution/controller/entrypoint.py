@@ -53,6 +53,9 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         print("[execution run] ERROR: executionId is required", file=sys.stderr)
         raise SystemExit(2)
     spec = store.load_spec(execution_id)
+    from content.execution.spec_contract import ExecutionSpec
+
+    frozen_spec = ExecutionSpec.from_mapping(spec)
     entity_ids = tuple(coverage_entity_ids(spec))
     if not entity_ids:
         print(f"[task execute] ERROR: {execution_id} 无 coverageTargets，无实体可编排", file=sys.stderr)
@@ -118,7 +121,7 @@ def run_controlled_execution(request: ControllerRequest) -> None:
         until=request.until,
         managed=managed,
         runtime=semantic_binding.runtime,
-        max_workers=policy.author_workers,
+        max_workers=frozen_spec.execution_policy.required_workers,
         model=managed_model,
         model_parameters=author_model.parameters,
         agent_provider=AgentProvider(agent_provider),

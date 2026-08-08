@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show AssistantUsePolicy;
 
 const String qwqRichMarkdownVersion = 'qwq-rich-md';
 
@@ -117,7 +119,7 @@ class QwqMarkdownFrontMatter {
     this.tagRefs = const <String>[],
     this.sourceUrls = const <String>[],
     this.visibility = '',
-    this.assistantUsePolicy = '',
+    this.assistantUsePolicy,
     this.extra = const <String, Object?>{},
   });
 
@@ -139,7 +141,7 @@ class QwqMarkdownFrontMatter {
       tagRefs: _stringListValue(map['tag_refs']),
       sourceUrls: _stringListValue(map['source_urls']),
       visibility: _stringValue(map['visibility']),
-      assistantUsePolicy: _stringValue(map['assistantUsePolicy']),
+      assistantUsePolicy: _assistantUsePolicyValue(map['assistantUsePolicy']),
       extra: Map<String, Object?>.fromEntries(
         map.entries.where(
           (entry) => !_knownFrontMatterKeys.contains(entry.key),
@@ -160,7 +162,7 @@ class QwqMarkdownFrontMatter {
   final List<String> tagRefs;
   final List<String> sourceUrls;
   final String visibility;
-  final String assistantUsePolicy;
+  final AssistantUsePolicy? assistantUsePolicy;
   final Map<String, Object?> extra;
 
   Map<String, Object?> toMap() {
@@ -178,8 +180,8 @@ class QwqMarkdownFrontMatter {
       if (tagRefs.isNotEmpty) 'tag_refs': tagRefs,
       if (sourceUrls.isNotEmpty) 'source_urls': sourceUrls,
       if (visibility.isNotEmpty) 'visibility': visibility,
-      if (assistantUsePolicy.isNotEmpty)
-        'assistantUsePolicy': assistantUsePolicy,
+      if (assistantUsePolicy != null)
+        'assistantUsePolicy': assistantUsePolicy!.wireName,
       ...extra,
     };
   }
@@ -366,6 +368,14 @@ const Set<String> _knownFrontMatterKeys = <String>{
 };
 
 String _stringValue(Object? value) => value?.toString().trim() ?? '';
+
+/// front matter 里的 `assistantUsePolicy` 只认 canonical 取值；键缺失表示未声明，
+/// 非法取值必须在解析阶段就被拒绝，不得退化成裸文本继续流转。
+AssistantUsePolicy? _assistantUsePolicyValue(Object? value) {
+  final text = _stringValue(value);
+  if (text.isEmpty) return null;
+  return AssistantUsePolicy.fromWire(text, 'QwqMarkdownFrontMatter.assistantUsePolicy');
+}
 
 List<String> _stringListValue(Object? value) {
   if (value is Iterable) {

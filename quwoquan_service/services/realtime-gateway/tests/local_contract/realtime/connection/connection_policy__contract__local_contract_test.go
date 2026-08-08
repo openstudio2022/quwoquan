@@ -86,6 +86,11 @@ func TestConnectionOperationPoliciesAreSingleTrack(t *testing.T) {
 
 	issueTicket := requireConnectionOperation(t, operations, "IssueConnectionTicket")
 	assertNoAutomaticRetry(t, issueTicket)
+	for _, code := range issueTicket.ErrorCodes {
+		if code == "REALTIME.USER.rate_limited" {
+			t.Fatalf("IssueConnectionTicket must use the api-edge GATEWAY.USER.rate_limited admission error")
+		}
+	}
 
 	webSocket := requireConnectionOperation(t, operations, "WebSocketUpgrade")
 	assertNoAutomaticRetry(t, webSocket)

@@ -237,7 +237,7 @@ func TestAssistantTurnImportsCanonicalPreferenceSnapshot(t *testing.T) {
 		"assistant/assistant_turn/schema.yaml",
 	)
 	for _, expected := range []string{
-		"import 'package:quwoquan_app/service/assistant_service/assistant/assistant_preference/domain/assistant_preference_snapshot.dart';",
+		"import 'package:quwoquan_app/service/assistant_service/assistant/assistant_preference/application/public/assistant_preference_snapshot_view.dart';",
 		"this.sessionPreferences = const <AssistantPreferenceSnapshot>[]",
 		"this.longTermPreferences = const <AssistantPreferenceSnapshot>[]",
 		"final List<AssistantPreferenceSnapshot> sessionPreferences",

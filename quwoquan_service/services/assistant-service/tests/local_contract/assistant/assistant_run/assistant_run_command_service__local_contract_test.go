@@ -26,6 +26,7 @@ import (
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
 	assistantmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/model"
+	skillpkg "quwoquan_service/services/assistant-service/internal/assistant/skill_package_release/application/packageasset"
 )
 
 type feedbackContextResolverRecorder struct {
@@ -157,19 +158,20 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 		first.SkillPackageReleaseDigest !=
 			"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
 		replayed.SkillPackageReleaseDigest != first.SkillPackageReleaseDigest ||
-		skillPackages.calls != 1 {
+		skillPackages.calls != 1 || skillPackages.membershipCalls != 1 {
 		t.Fatalf(
-			"Skill package was not frozen: first=%+v replay=%+v activeReads=%d",
+			"Skill package was not frozen: first=%+v replay=%+v activeReads=%d membershipReads=%d",
 			first,
 			replayed,
 			skillPackages.calls,
+			skillPackages.membershipCalls,
 		)
 	}
 	conflicting := command
 	conflicting.InputText = "不同用户意图"
 	if _, err := service.Start(context.Background(), conflicting); !errors.Is(
 		err,
-		runruntime.ErrRevisionConflict,
+		runruntime.ErrRunIdempotencyConflict,
 	) {
 		t.Fatalf("same key with different input must conflict, got %v", err)
 	}
@@ -193,6 +195,209 @@ func TestAssistantRunCommandServiceOwnsIdempotencyAndJournal(t *testing.T) {
 		events[0].Sequence != 1 ||
 		events[0].Kind != "run_accepted" {
 		t.Fatalf("unexpected initial journal: %#v", events)
+	}
+}
+
+func TestAssistantRunFreezesPackageBeforeSkillDependentReads(t *testing.T) {
+	t.Parallel()
+	const packageID = "assistant.session.skills"
+	const frozenDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const nextDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+	repository := newMemoryRunRepository()
+	packages := &rotatingSkillPackageResolver{
+		packageID:     packageID,
+		releaseDigest: frozenDigest,
+		skillsByRelease: map[string]map[string]bool{
+			frozenDigest: {
+				"travel_companion":        true,
+				"fallback_general_search": true,
+			},
+			nextDigest: {"next_release_only": true},
+		},
+	}
+	assertFrozen := func(ctx context.Context, boundary string) {
+		t.Helper()
+		identity, frozen := skillpkg.PackageReleaseFromContext(ctx)
+		if !frozen || identity.PackageID != packageID ||
+			identity.ReleaseDigest != frozenDigest {
+			t.Fatalf("%s context=%+v frozen=%v", boundary, identity, frozen)
+		}
+	}
+	service := runruntime.NewCommandService(
+		repository,
+		runruntime.SessionResolverFunc(func(
+			context.Context,
+			string,
+			string,
+		) (runruntime.SessionContinuity, error) {
+			return runruntime.SessionContinuity{}, nil
+		}),
+		packages,
+		runruntime.StartAccessPolicyFunc(func(
+			ctx context.Context,
+			_ runruntime.StartAccessRequest,
+		) error {
+			assertFrozen(ctx, "StartAccess")
+			// Simulate activation immediately after authorization starts. Every
+			// later package-dependent read must remain on frozenDigest.
+			packages.releaseDigest = nextDigest
+			return nil
+		}),
+		func() time.Time { return time.Date(2026, 8, 8, 9, 0, 0, 0, time.UTC) },
+		nil,
+		runruntime.WithPolicyResolver(runruntime.PolicyResolverFunc(func(
+			ctx context.Context,
+			policyID string,
+			_ string,
+			_ string,
+			_ string,
+		) (runruntime.FrozenPolicySelection, error) {
+			assertFrozen(ctx, "policy")
+			return runruntime.FrozenPolicySelection{
+				PolicyID:        policyID,
+				ReleaseDigest:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				Cohort:          "control",
+				RolloutRevision: 1,
+				RuleID:          "activation-race",
+				Template: runruntime.FrozenPolicyTemplate{
+					TemplateID:      "activation-race",
+					SkillID:         "fallback_general_search",
+					DomainID:        "assistant",
+					PromptPolicy:    "answer from frozen package assets",
+					SearchIntensity: "medium",
+				},
+				LearningContextPolicy: runruntime.FrozenLearningContextPolicy{
+					Enabled:    true,
+					WindowDays: 30,
+				},
+			}, nil
+		})),
+		runruntime.WithFeedbackContextResolver(feedbackContextResolverFunc(func(
+			ctx context.Context,
+			_ string,
+			_ string,
+			_ string,
+			_ string,
+			resolvedPackageID string,
+			resolvedDigest string,
+			_ assistantmodel.AssistantFrozenLearningContextPolicy,
+			_ time.Time,
+		) assistantmodel.AssistantFeedbackContextSnapshot {
+			assertFrozen(ctx, "feedback")
+			if resolvedPackageID != packageID || resolvedDigest != frozenDigest {
+				t.Fatalf("feedback identity=%s@%s", resolvedPackageID, resolvedDigest)
+			}
+			return assistantmodel.AssistantFeedbackContextSnapshot{
+				Decision:   "consent_missing_or_opted_out",
+				WindowDays: 30,
+			}
+		})),
+	)
+	run, err := service.Start(t.Context(), runruntime.StartCommand{
+		UserID:           "activation-race-owner",
+		PersonaID:        "activation-race-owner:persona",
+		SessionID:        "activation-race-session",
+		ClientRequestID:  "activation-race-request",
+		InputText:        "继续旅行计划",
+		RequestedSkillID: "travel_companion",
+		RequestContext:   runruntime.RequestContext{SurfaceKind: "personal"},
+	})
+	if err != nil {
+		t.Fatalf("start frozen package run: %v", err)
+	}
+	if run.SkillPackageID != packageID ||
+		run.SkillPackageReleaseDigest != frozenDigest ||
+		packages.calls != 1 || packages.membershipCalls != 2 {
+		t.Fatalf("run/package reads=%+v active=%d membership=%d", run, packages.calls, packages.membershipCalls)
+	}
+	for _, identity := range packages.membershipRelease {
+		if identity.PackageID != packageID || identity.ReleaseDigest != frozenDigest {
+			t.Fatalf("membership followed new activation: %+v", identity)
+		}
+	}
+}
+
+func TestAssistantRunRejectsSkillsAbsentFromFrozenPackageBeforeJournal(t *testing.T) {
+	t.Parallel()
+	const packageID = "assistant.session.skills"
+	const releaseDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	cases := map[string]struct {
+		requestedSkillID string
+		policySkillID    string
+		wantErr          error
+	}{
+		"requested Skill": {
+			requestedSkillID: "not_in_release",
+			policySkillID:    "fallback_general_search",
+			wantErr:          runruntime.ErrSkillPackageUnavailable,
+		},
+		"policy template Skill": {
+			policySkillID: "not_in_release",
+			wantErr:       runruntime.ErrPolicyUnavailable,
+		},
+	}
+	for name, testCase := range cases {
+		name, testCase := name, testCase
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			repository := newMemoryRunRepository()
+			packages := &rotatingSkillPackageResolver{
+				packageID:     packageID,
+				releaseDigest: releaseDigest,
+				skillsByRelease: map[string]map[string]bool{
+					releaseDigest: {"fallback_general_search": true},
+				},
+			}
+			service := runruntime.NewCommandService(
+				repository,
+				runruntime.SessionResolverFunc(func(
+					context.Context,
+					string,
+					string,
+				) (runruntime.SessionContinuity, error) {
+					return runruntime.SessionContinuity{}, nil
+				}),
+				packages,
+				runruntime.AllowAllStartAccessPolicy{},
+				func() time.Time { return time.Date(2026, 8, 8, 10, 0, 0, 0, time.UTC) },
+				nil,
+				runruntime.WithPolicyResolver(runruntime.PolicyResolverFunc(func(
+					_ context.Context,
+					policyID string,
+					_ string,
+					_ string,
+					_ string,
+				) (runruntime.FrozenPolicySelection, error) {
+					return runruntime.FrozenPolicySelection{
+						PolicyID:        policyID,
+						ReleaseDigest:   "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+						Cohort:          "control",
+						RolloutRevision: 1,
+						Template: runruntime.FrozenPolicyTemplate{
+							TemplateID:   "membership-gate",
+							SkillID:      testCase.policySkillID,
+							DomainID:     "assistant",
+							PromptPolicy: "fail closed",
+						},
+					}, nil
+				})),
+			)
+			_, err := service.Start(t.Context(), runruntime.StartCommand{
+				UserID:           "membership-owner",
+				SessionID:        "membership-session-" + name,
+				ClientRequestID:  "membership-request-" + name,
+				InputText:        "执行冻结 Skill",
+				RequestedSkillID: testCase.requestedSkillID,
+			})
+			if !errors.Is(err, testCase.wantErr) {
+				t.Fatalf("missing Skill error=%v want=%v", err, testCase.wantErr)
+			}
+			if len(repository.runs) != 0 || len(repository.events) != 0 || len(repository.requests) != 0 {
+				t.Fatalf("rejected Skill wrote journal: runs=%d events=%d requests=%d", len(repository.runs), len(repository.events), len(repository.requests))
+			}
+		})
 	}
 }
 
@@ -806,6 +1011,21 @@ func (r *memoryRunRepository) Commit(
 		r.receipts[key] = *receipt
 	}
 	return nil
+}
+
+func (r *memoryRunRepository) CommitClaim(
+	ctx context.Context,
+	claim runruntime.WorkClaim,
+	expectedRevision int64,
+	run runruntime.Run,
+	events []runruntime.JournalEvent,
+	receipt *runruntime.CommandReceipt,
+) error {
+	if strings.TrimSpace(claim.RunID) != strings.TrimSpace(run.RunID) ||
+		strings.TrimSpace(claim.WorkerID) == "" || claim.FencingToken <= 0 {
+		return runruntime.ErrExecutionFenced
+	}
+	return r.Commit(ctx, expectedRevision, run, events, receipt)
 }
 
 func (r *memoryRunRepository) LoadCommandReceipt(

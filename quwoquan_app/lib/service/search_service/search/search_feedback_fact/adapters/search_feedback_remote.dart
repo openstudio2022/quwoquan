@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_command_writer.dart';
+import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/runtime/transport/generated/search/search_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 检索反馈事实对象的 invocation context 工厂。
@@ -10,7 +10,7 @@ typedef SearchFeedbackInvocationContextFactory =
 
 /// SearchFeedbackFact 的 production Remote append writer。
 /// 事实按 (searchRequestId, eventType, objectId) 语义键服务端去重，重放安全。
-final class RemoteSearchFeedbackAdapter implements SearchFeedbackCommandWriter {
+final class RemoteSearchFeedbackAdapter implements SearchFeedbackFactAppender {
   const RemoteSearchFeedbackAdapter({
     required this.client,
     required this.invocationContext,

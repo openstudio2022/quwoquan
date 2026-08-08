@@ -19,12 +19,17 @@ package local_contract
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/controlplane"
 	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
+	"quwoquan_service/runtime/operation"
+	eventhttp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http"
 	eventapp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 	eventpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence"
 	visitapp "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
@@ -122,6 +127,58 @@ func TestEventRecordOperationFacadesExecuteAllCanonicalQueriesAndCommands(t *tes
 	triage, err := controlQueries.GetProductTriageSummary(ctx, eventapp.ProductTriageQuery{})
 	if err != nil || triage.Source != "control-plane" {
 		t.Fatalf("GetProductTriageSummary summary=%+v err=%v", triage, err)
+	}
+}
+
+func TestEventRecordRuntimeBoundaryUsesCanonicalErrorOwners(t *testing.T) {
+	store := eventpersistence.NewMemoryTelemetryStore()
+	handler := eventhttp.NewOperationsHandler(eventhttp.OperationsDependencies{
+		Telemetry:       new(eventapp.TelemetryService),
+		RuntimeLogs:     new(eventapp.RuntimeLogService),
+		RuntimeLogStore: store,
+		Growth:          new(eventapp.GrowthService),
+		Metrics:         new(eventapp.MetricQueryService),
+		ControlPlane:    new(eventapp.ControlPlaneQueryService),
+	})
+	mux := http.NewServeMux()
+	handler.Register(mux)
+
+	wrongMethod := httptest.NewRequest(http.MethodDelete, "/ops/runtime-logs", nil)
+	wrongMethodResponse := httptest.NewRecorder()
+	mux.ServeHTTP(wrongMethodResponse, wrongMethod)
+	if wrongMethodResponse.Code != http.StatusNotFound ||
+		!strings.Contains(
+			wrongMethodResponse.Body.String(),
+			`"code":"GATEWAY.USER.route_not_found"`,
+		) {
+		t.Fatalf(
+			"wrong method status=%d body=%s",
+			wrongMethodResponse.Code,
+			wrongMethodResponse.Body.String(),
+		)
+	}
+
+	invalidBody := httptest.NewRequest(
+		http.MethodPost,
+		"/ops/runtime-logs",
+		strings.NewReader("{"),
+	)
+	invalidBody = invalidBody.WithContext(rtauth.WithPrincipal(
+		invalidBody.Context(),
+		rtauth.Principal{Actor: operation.ActorContext{PersonaID: "persona-error-owner"}},
+	))
+	invalidBodyResponse := httptest.NewRecorder()
+	mux.ServeHTTP(invalidBodyResponse, invalidBody)
+	if invalidBodyResponse.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(
+			invalidBodyResponse.Body.String(),
+			`"code":"OPS.USER.runtime_log_batch_invalid"`,
+		) {
+		t.Fatalf(
+			"invalid body status=%d body=%s",
+			invalidBodyResponse.Code,
+			invalidBodyResponse.Body.String(),
+		)
 	}
 }
 

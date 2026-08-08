@@ -97,3 +97,18 @@ abstract class ContactDiscoveryRepository {
   /// 关闭/忽略一次匹配记录。
   Future<void> dismiss(String id);
 }
+
+/// App-side command boundary that binds a caller intent to the generated
+/// operation invocation context. The generated wire command intentionally does
+/// not carry transport metadata such as an idempotency key.
+abstract interface class ContactDiscoveryIntentCommandWriter {
+  Future<ContactDiscoveryResult> initiateContactDiscoveryWithIntent(
+    InitiateContactDiscoveryCommand command, {
+    required String idempotencyKey,
+  });
+
+  Future<ContactDiscoveryDismissResult> dismissContactDiscoveryWithIntent(
+    DismissContactDiscoveryCommand command, {
+    required String idempotencyKey,
+  });
+}

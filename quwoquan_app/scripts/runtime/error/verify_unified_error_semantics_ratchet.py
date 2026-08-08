@@ -130,7 +130,7 @@ def is_page_like(rel: str) -> bool:
     return rel.startswith(
         (
             "quwoquan_app/lib/runtime/shell/",
-            "quwoquan_app/lib/runtime/di/shell/",
+            "quwoquan_app/lib/runtime/shell/",
         )
     )
 

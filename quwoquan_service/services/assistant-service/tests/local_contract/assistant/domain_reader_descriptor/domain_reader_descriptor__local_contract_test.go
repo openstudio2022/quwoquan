@@ -6,6 +6,9 @@ package local_contract
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -116,6 +119,37 @@ func TestDescriptorQueriesFailClosedForInvalidMissingAndUnavailableCatalog(t *te
 		application.ListDescriptorsQuery{Limit: 101},
 	)
 	assertAppError(t, err, "ASSISTANT.USER.domain_reader_invalid_argument", 400)
+}
+
+func TestDomainReaderAuthorizationIsOwnedOnlyByGeneratedGatewayGuard(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve domain reader test path")
+	}
+	serviceRoot := filepath.Clean(filepath.Join(filepath.Dir(testFile), "../../../.."))
+	for _, relativePath := range []string{
+		"contracts/assistant/domain_reader_descriptor/errors.yaml",
+		"contracts/assistant/domain_reader_descriptor/operations.yaml",
+		"internal/assistant/domain_reader_descriptor/adapters/inbound/http/handler.go",
+	} {
+		payload, err := os.ReadFile(filepath.Join(serviceRoot, relativePath))
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		for _, deadOwner := range []string{
+			"ASSISTANT.MIDDLEWARE.domain_reader_unauthorized",
+			"AppErrorFromDomainReaderUnauthorized",
+			"ErrDomainReaderUnauthorized",
+		} {
+			if strings.Contains(string(payload), deadOwner) {
+				t.Fatalf("%s retains dead object-local authorization owner %q", relativePath, deadOwner)
+			}
+		}
+		if strings.HasSuffix(relativePath, "handler.go") &&
+			!strings.Contains(string(payload), "RequireGeneratedOperationAuthorization") {
+			t.Fatalf("%s does not mount the generated Gateway operation guard", relativePath)
+		}
+	}
 }
 
 func testDescriptor(descriptorID string, resolverRef string) model.Descriptor {

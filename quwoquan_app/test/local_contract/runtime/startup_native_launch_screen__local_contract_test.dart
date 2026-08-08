@@ -458,7 +458,7 @@ void main() {
       );
       expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
       final iosGateProbe = _readAppFile(
-        'scripts/device/verify_ios_native_startup_gate.py',
+        'scripts/tools/device/inspect_ios_native_startup.py',
       );
       expect(
         iosGateProbe,
@@ -563,7 +563,7 @@ void main() {
         'lib/runtime/shell/welcome/welcome_flower_mark.dart',
       );
       final shell = _readAppFile(
-        'lib/runtime/di/shell/composition/quwoquan_app_shell.dart',
+        'lib/runtime/shell/composition/quwoquan_app_shell.dart',
       );
 
       expect(timeline, contains('StartupWelcomeTiming production'));
@@ -857,7 +857,7 @@ void main() {
         'scripts/device/verify_welcome_motion_frames.py',
       );
       final shell = _readAppFile(
-        'lib/runtime/di/shell/composition/quwoquan_app_shell.dart',
+        'lib/runtime/shell/composition/quwoquan_app_shell.dart',
       );
       expect(
         probe,
@@ -915,7 +915,19 @@ void main() {
       );
       final beforeRunApp = bootstrap.substring(0, bootstrap.indexOf('runApp('));
       expect(beforeRunApp, isNot(contains('await startupPrerequisites')));
-      expect(beforeRunApp, contains('beginNativeStartupAttempt'));
+      expect(bootstrap, contains('beginNativeStartupAttempt'));
+      expect(
+        beforeRunApp,
+        isNot(
+          contains(
+            'await AppStartupRuntime.instance.beginNativeStartupAttempt',
+          ),
+        ),
+      );
+      expect(
+        beforeRunApp,
+        contains('unawaited(_hydrateNativeStartupTimingForBootstrap())'),
+      );
       // SecureStorage / package_info 不得阻塞 runApp，否则挤爆原生首帧预算。
       expect(beforeRunApp, contains('bootstrapForColdStart'));
       expect(
@@ -957,7 +969,7 @@ void main() {
     test('iOS 裸 Debug 与 canonical launcher 共用完整 runtime handoff', () {
       final script = _readAppFile('scripts/ios/build_prepare_dart_defines.sh');
       final logHygiene = _readAppFile(
-        'scripts/ios/run_ios_shortcut_log_hygiene.py',
+        'scripts/tools/ios/ios_shortcut_log_hygiene.py',
       );
       final wrapper = _readAppFile('scripts/ios/build_xcode_backend.sh');
       final project = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');
@@ -1194,7 +1206,7 @@ void main() {
 
     test('Root deadline 只在安全终态真实绘制后取消，不能以 Router 状态提前豁免', () {
       final shell = _readAppFile(
-        'lib/runtime/di/shell/composition/quwoquan_app_shell.dart',
+        'lib/runtime/shell/composition/quwoquan_app_shell.dart',
       );
       final deadlineStart = shell.indexOf('void _armStartupDeadline()');
       final deadlineEnd = shell.indexOf(

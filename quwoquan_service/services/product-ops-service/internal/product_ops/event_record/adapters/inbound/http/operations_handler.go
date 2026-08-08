@@ -10,6 +10,7 @@ import (
 	"quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	eventgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
 	eventapp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
@@ -114,22 +115,35 @@ func writeRuntimeError(
 	userMessage string,
 	debugMessage string,
 ) {
-	reason := "internal_error"
-	kind := rterr.KindSystem
-	module := rterr.ModuleOps
+	var appError *rterr.AppError
 	switch status {
 	case http.StatusBadRequest, http.StatusMethodNotAllowed:
-		reason, kind = "invalid_argument", rterr.KindUser
+		appError = eventgenerated.AppErrorFromRuntimeLogBatchInvalid(debugMessage)
 	case http.StatusUnauthorized:
-		reason, kind, module = "unauthorized", rterr.KindUser, rterr.ModuleGateway
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "unauthorized"),
+			userMessage,
+			debugMessage,
+		)
 	case http.StatusForbidden:
-		reason, kind, module = "forbidden", rterr.KindUser, rterr.ModuleGateway
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "forbidden"),
+			userMessage,
+			debugMessage,
+		)
 	case http.StatusNotFound:
-		reason, kind = "route_not_found", rterr.KindUser
-	case http.StatusConflict:
-		reason, kind = "conflict", rterr.KindUser
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+			userMessage,
+			debugMessage,
+		)
+	default:
+		appError = rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleOps, rterr.KindSystem, "internal_error"),
+			userMessage,
+			debugMessage,
+		)
 	}
-	appError := rterr.NewAppError(rterr.NewCode(module, kind, reason), userMessage, debugMessage)
 	if status == http.StatusUnauthorized {
 		appError.WithMetadata("unauthorized", http.StatusUnauthorized)
 	}

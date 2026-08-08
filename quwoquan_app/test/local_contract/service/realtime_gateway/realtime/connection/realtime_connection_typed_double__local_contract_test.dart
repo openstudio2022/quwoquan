@@ -1,19 +1,38 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/presentation/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/service/realtime_gateway/realtime/connection/connection_typed_double.dart';
 
 void main() {
   test(
     'fixture delegate enters active and pushes catalog MessageSent',
     () async {
+      ensureSqfliteFfiInitialized();
       final container = ProviderContainer(
         overrides: [
+          // 读 timeline 会经 chatRepositoryComposition 触达 generated operation
+          // client；本用例只验证 fixture delegate 推送，边界必须封死。
+          ...sealedCloudBoundaryOverrides(),
+          chatRepositoryCompositionProvider.overrideWithValue(
+            MockChatRepository(),
+          ),
+          activePersonaContextLoaderProvider.overrideWithValue(
+            () async => ActivePersonaContextViewData.fallback(
+              personaId: 'realtime-test-persona',
+              ownerUserId: 'realtime-test-owner',
+              displayName: '实时连接测试用户',
+              avatarUrl: '',
+            ),
+          ),
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
           _fixtureOverride,
         ],
