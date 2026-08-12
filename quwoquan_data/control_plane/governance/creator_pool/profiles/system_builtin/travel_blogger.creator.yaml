@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_travel_blogger_001
 personaId: builtin_travel_blogger
 authorId: builtin_travel_blogger
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 阿宁在路上
 userHandle: ning_on_road
@@ -62,4 +68,4 @@ avatarAsset:
   objectKey: media/objects/sha256/00/fe/00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f.webp
   bytes: 290766
   mimeType: image/webp
-  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_travel_blogger_001/00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f.json
+  evidenceRef: evidence/avatar_rights/qwq_creator_travel_blogger_001/00feedc2acfb1d25a99194911e82372227aca330a81931a2ba47ec26b5b92b8f.json

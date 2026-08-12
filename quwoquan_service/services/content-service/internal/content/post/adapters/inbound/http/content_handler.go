@@ -29,6 +29,7 @@ type ContentHandler struct {
 	feedService                  *feedapp.FeedService
 	postService                  *postapp.Facades
 	postQueryService             *postapp.PostQueryFacade
+	researchReleaseReadback      *postapp.ResearchReleaseReadbackQueryFacet
 	commentHandler               commentHTTPHandler
 	reactionHandler              contentReactionHTTPHandler
 	reportHandler                ReportHTTPHandler
@@ -311,6 +312,14 @@ type filterCatalogReleaseHTTPHandler interface {
 
 func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
 	return func(h *ContentHandler) { h.healthChecker = c }
+}
+
+func WithResearchReleaseReadback(
+	facet *postapp.ResearchReleaseReadbackQueryFacet,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) {
+		handler.researchReleaseReadback = facet
+	}
 }
 
 func WithOutboundShareHandler(service outboundShareHTTPHandler) ContentHandlerOption {

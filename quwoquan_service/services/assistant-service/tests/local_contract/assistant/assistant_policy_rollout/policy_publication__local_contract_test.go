@@ -340,8 +340,7 @@ func TestTravelEvaluationReplayUsesCanonicalSkillIdentity(t *testing.T) {
 		policyPublicationServiceRoot(),
 		"tests",
 		"support",
-		"contract_fixtures",
-		"scenarios",
+		"eval_corpora",
 		"assistant_skill_eval_scenarios.json",
 	))
 	if err != nil {

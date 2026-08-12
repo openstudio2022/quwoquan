@@ -16,7 +16,7 @@ import (
 
 const (
 	contractViewProvenanceFilename = ".contract-view-provenance"
-	contractViewProvenanceVersion  = 1
+	contractViewProvenanceFormat   = "contract-view-provenance"
 )
 
 type contractViewProvenanceSource struct {
@@ -31,10 +31,10 @@ type contractViewProvenanceFile struct {
 }
 
 type contractViewProvenanceDocument struct {
-	SchemaVersion int                            `json:"schemaVersion"`
-	ViewDigest    string                         `json:"viewDigest"`
-	Sources       []contractViewProvenanceSource `json:"sources"`
-	Files         []contractViewProvenanceFile   `json:"files"`
+	Format     string                         `json:"format"`
+	ViewDigest string                         `json:"viewDigest"`
+	Sources    []contractViewProvenanceSource `json:"sources"`
+	Files      []contractViewProvenanceFile   `json:"files"`
 }
 
 // contractViewProvenance binds immutable bytes in a disposable compiler view
@@ -72,11 +72,11 @@ func loadContractViewProvenance(metadataDir string) (*contractViewProvenance, er
 	if err := ensureJSONEOF(decoder); err != nil {
 		return nil, fmt.Errorf("decode contract view provenance: %w", err)
 	}
-	if document.SchemaVersion != contractViewProvenanceVersion {
+	if document.Format != contractViewProvenanceFormat {
 		return nil, fmt.Errorf(
-			"contract view provenance schemaVersion=%d, want %d",
-			document.SchemaVersion,
-			contractViewProvenanceVersion,
+			"contract view provenance format=%q, want %q",
+			document.Format,
+			contractViewProvenanceFormat,
 		)
 	}
 	if !canonicalSHA256(document.ViewDigest) {

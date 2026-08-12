@@ -63,6 +63,8 @@
 - 错误链路：metadata errors、HTTP 响应、端侧 mapper/UI、恢复动作、埋点、日志、告警和测试必须同源。
 - 可观测与配置：新增页面、API、行为信号、推荐策略和数据发布必须声明 SLI/SLO、指标、采样、保留、告警、配置来源、灰度与回滚。
 - 无法证明时返回 `GATE_BLOCK`，补规格、metadata、测试或运维证据。
+- 测试数据按层构造：`local_contract` 使用对象级 builder/generator 与最小 contract example；`api_integration` 使用真实进程 application command/provider-state；`user_acceptance` 只读引用 immutable release，并以强类型 capability request 经公开 command/event 创建按 CaseResult 隔离的 Actor 与交易事实。Prod 在首条测试 mutation 前拒绝。
+- 环境测试不得书写 capability 字符串、裸字典参数、固定业务对象 ID 或导入 Provider 实现；Provider 只按选中请求的领域依赖闭包加载。禁止 capability registry、测试 inventory、数据库 seed、投影预填与跨 CaseResult 复用可变数据。
 
 ## 编码总约束
 
@@ -73,7 +75,7 @@
 - `.qwq_output/` 只存可删除、可重建的运行输出；删除后仍必须能凭受版本控制真相源重建。
 - 源码树不得保留 `__pycache__/`、`*.pyc`、`*.pyo`、`.pytest_cache/`；缓存重定向到 `.qwq_output/env/repo/local/**`。
 - 每个第一方服务以 `environments/<alpha|beta|gamma|prod>/` 作为环境自治入口，共享定义只存在于服务内 `config/schema.yaml`、`resources/` 与 `deploy/base/`；环境之间禁止继承。环境装配、部署、巡检、修复统一使用 `python3 quwoquan_ops/cli/stackctl.py`。
-- 本地长期分支只允许 `dev1.0`；未经用户明确同意不得创建、提交或推送其他分支。
+- `main` 是唯一长期、本地与远端发布分支；短期 PR 分支只允许使用 `branch_policy.yaml` 声明的前缀，合并后必须自动删除，禁止恢复 `dev1.0` 或其他长期分支。
 - 脏工作树是常态；禁止回滚、覆盖或清理与当前任务无关的用户改动。
 
 ## Python 脚本治理

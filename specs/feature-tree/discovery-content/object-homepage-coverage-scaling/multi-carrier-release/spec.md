@@ -30,7 +30,7 @@
 
 - 每个发布对象必须闭合 creator、tag、entity、media 与 source 引用；运行 receipt 只能写入输出目录，不得回写静态真相源。
 - homepage、article、image、video 不以彼此的 execution 或 publish 结果作为运行前置；post 只依赖可解析的 canonical entity identity。
-- 四个 execution 必须从同一 reviewed named main branch、commit、source digest 与 entity catalog digest 并行运行，单一载体失败不得覆盖其他载体工作包，也不得阻止其他载体已合格对象发布。
+- 四个 execution 必须从同一不可变 source-definition capsule、execution bundle 与 entity catalog digest 并行运行，单一载体失败不得覆盖其他载体工作包，也不得阻止其他载体已合格对象发布；capsule 封存后不得再用 live worktree 漂移否定该 execution。
 - `task execute --stage submit-only|campaign-run|campaign-freeze|campaign-lane-run|campaign-finalize|review-only` 是唯一 campaign 门面；单 controller 可用 `campaign-run`，四复制会话必须先由 `campaign-freeze` 等齐四份 immutable submission 并冻结唯一 plan、只读 capsule 与 `planDigest`，再由每个 `campaign-lane-run` 独占一路 claim，最后由 `campaign-finalize` 只聚合 create-once receipt。collision、branch/commit/source/catalog mismatch、重复 claim、主工作树漂移或超时均 fail closed。
 - submission-only attempt 只能在无 plan/report/runtime/execution 证据时由 `reconcile-submissions` 收口。
 - 已冻结 campaign 若四个 claim 在 author/review/publish 前 terminal failed，只有在四个 execution root 已经受 GC protection 合法清理且 source identity 确实漂移后，才允许 `reconcile-failed-campaign` 写 create-once supersession。
@@ -38,15 +38,20 @@
 - 四个 terminal execution 必须分别写入当前源码可复核的 create-once supersession receipt，再由 campaign reconciliation 精确绑定四份 receipt、原 plan/report/runtime/claim/submission 与已变化的 source identity。
 - 下一序列逐 lane 声明 `retryOf` 并精确引用 reconciliation receipt。任一进程仍存活、lease 未释放、execution receipt 缺失或字节漂移均 fail closed。
 - controller 为四个 lane 建立同一 content-addressed、只读 source/executor capsule，并为每条 lane 分配独立 execution root、queue namespace 与 staging prefix；四 lane 并发 review，每条 lane 按自身 review 结果独立进入 publish，不得因任一 lane 失败而整批 abort，也不得为每条 lane 复制完整 Git object store。
-- 四路 workload target 均低于 homepage/article/image/video `100/100/100/10` 的低规模 campaign 可继续使用专属 ReliableTask MongoStore/RedisReadyIndex 与 controller 冻结的 digest-bound worker binary，但不生成或消费规模验证 runtime observer 证据；worker 子进程只验证 binary ref/digest，不得冒充 lane observer。达到或超过该四路 target 的规模验证 campaign 必须同时验证 plan/generation/fence/lane/process-bound observer context，禁止由低规模路径降级或复用。
+- semantic author/reviewer 只消费 create-once 本地 journal 与只读 source capsule。它的 preflight、并发与质量结论不依赖 Mongo、Redis 或任何环境。review 通过后才生成 immutable pool-delivery intent，ReliableTask 与 generation/fence/worker binary 仅负责 intent 的幂等交付。transport 不可用时对象保持 `deliveryPending`，不得撤销 review、重复调用 semantic Provider 或阻塞其它 lane。
 - lane 终态独立记录为 `published`（`qualified >= quota`）、`partial`（`0 < qualified < quota` 且已合格对象已发布）或 `blocked`（`qualified == 0` 或 review/publish 失败）；campaign 终态为聚合视图：`succeeded`（四路均达标）、`succeeded_partial`（至少一路发布了合格对象）、`blocked`（无任何可发布合格对象）。
 - `quota` 是里程碑累计目标，不是发布许可条件；`partial` lane 必须发布全部已合格对象，并将 shortfall 写入 typed evidence，不得因未达 quota 丢弃合格对象。
 - 若存在 discard，每个 discard 必须具备非空 `objectRef` 与 typed `issues`，且 `selected == qualified + discarded`；不得要求真实批次必须存在 discard 才准出。
 - article/image/video 的 canonical Post manifest 必须显式声明 `contentIdentity=work`；schema、promotion 与 importer 任一层发现缺失或非 `work` 均阻断该对象，禁止由消费者默认补值。
+- 新增 canonical Post 必须显式携带稳定 `contentId`、递增 `version`、`sourceType=data`、`variantPurpose`、`admission.processResult/qualityResult/usageScope` 与 `status`。只有 `completed + passed + active` 可被 ReleaseManifest 选择。
+- 统一池 reader 只接受显式 create-once pool record。缺 admission、稳定 `contentId/contentVersion`、完整 `sourceAttribution` 或 source identity 的历史对象按对象排除，不得在读取时从 review、路径或当前 source identity 推导。可修复对象只能由 governed repair 基于 canonical bytes 与 fresh source evidence 追加新的 `recordSequence`，保持原 `contentVersion`。旧 record 与旧 task receipt 均不改写、不复用。
+- 环境定向 Manifest 从同一 pool 生成固定载体/作者轮转顺序并按 Alpha 2,100、Beta 10k、Gamma 100k 截取稳定 Post 前缀，Homepage 不计 Post cap；环境无关 M100/M1000 Research Manifest 精确冻结 cohort 并可由四环境消费。相同 `contentId` 在同一 manifest 只出现一个版本，有供给且容量允许时 article/image/video 必须同时出现。
 - campaign report 必须保留 named main branch、status、phase、run generation/fencing、heartbeat、review/publish return code、source capsule/execution-root ref、qualified/finalized count 与 cleanup 终态；报告是运行回执，不得成为新的内容或 release 真相源。
 - 复制会话的 carrier claim 必须绑定 campaign/run generation/fencing、carrier、execution、只读 source capsule 与独立 execution root；同一 carrier 同一 generation 只能存在一个有效 claim，过期或跨 generation owner 不得 finalize。
 - carrier finalize 必须绑定对应 claim、对象级 review/rights/provenance 证据与 publish receipt，并满足 `finalized == qualified >= 1`；同 digest 重放幂等，token、generation、source 或对象闭包漂移 fail closed。未达 quota、存在 shortfall 或存在带 typed issues 的 discard 均不阻止其余全部合格对象 finalize。
-- 复制会话低规模准出（COPY_READY）要求四路各 `finalized == qualified >= 1`、receipt/cleanup 闭合；日常 canonical publish 不以 quota 阻断，但 M100/M1000/M10000 promotion 必须满足本 milestone 的累计唯一对象数量硬门和 `shortfallCount=0`。
+- 每个生成批次只按对象记录过程完成、质量和授权范围；合格对象立即追加到统一池，批次未达 quota、存在 shortfall 或其他对象失败均不阻断已合格对象。M100/M1000/M10000 只按累计唯一对象数量判断是否达标，均为数量下限而不是停止生产或准入的上限。
+- M1000 sourcing 以四川、浙江全量 frontier 为产品范围：穷举两省全部市、区、县与可识别 POI，合格对象即使显著超过 1000 也全部准入。不得设置单一区县、单一实体类型、Provider 或 creator 数量/比例上限。
+- M10000 将同一 frontier 先推广到全国，再扩海外，国内外只共享一套 canonical geo/entity/source contract。
 
 ### REQ-002 生命周期与统一素材 admission
 
@@ -55,30 +60,37 @@
 - `research` 允许已取得且权利状态为 verified/unverified/unknown 的资产，restricted、未取得、生成素材或缺来源/权利缺口字段仍阻断；`commercial` 只允许 verified 且具有商业授权证据的 `commercial_allowed`。
 - research immutable release 必须冻结权利状态计数、精确 authorization-required asset IDs、四载体 `researchAcceptedCount`、逐来源 assets funnel 和 `containsUnverifiedAssets`；未授权资产不得计入 `commercialAcceptedCount` 或生成 commercial readiness。
 
-### REQ-003 专业图片、文章配图与热门视频
+### REQ-003 站点、实体与 creator 深挖的文章、图片和视频来源
 
-- research 图片检索目录版本化，按 category/entity/season/style/viewpoint/popularity 展开，Pinterest 为第一发现源、图虫为补充；只允许公开直链、平台支持接口或人工提供文件，不新增规避访问控制的抓取器。
+- Article 来源按 `著名旅游站点的站点级发现 -> 实体强相关主题搜索补充 -> 命中 creator 的公开作品分页` 顺序运行。站点级发现优先消费公开 sitemap、列表、专题、分页或官方 API；实体搜索只接受攻略、游记、玩法、避坑、出行或摄影等旅行强相关命中。每一篇作品独立执行实体/地理/旅行意图、内容安全、重复与质量判断，creator 主页不可访问时才使用搜索索引补全公开结果，不得据此宣称抓全作者全集。
+- Article 分类必须覆盖 `摄影`；摄影文章与攻略、游记等使用同一 Post/Article 契约与质量准入，不创建第二套载体。
+- research 图片检索目录版本化，按 category/entity/season/style/viewpoint/popularity 展开。图片来源按 `专业图库/摄影社区站点级发现 -> 实体或摄影主题搜索 -> 命中摄影师的公开作品分页` 运行；Wikipedia/MediaWiki entity media 只作实体相关补充，不作为长期专业图库主来源。搜索引擎只作 discovery，最终来源、creator、原始资产、取得方式、rights/license/terms 与时间证据必须回到作品页、官方 API 或受治理人工输入。
+- 视频按 `canonical entity 强相关搜索 -> 视频命中 -> channel/creator stable id -> 作者公开视频分页` 运行；作者其他作品仍须逐条通过旅行/地点/摄影相关性与负面主题过滤。无法取得 stable creator id、公开分页或逐作品来源证据时只保留本次命中，不构造作者全集。
+- creator 深挖 receipt 必须冻结 provider、stable creator id、query/list page、cursor/checkpoint、observedAt、可见结果范围与每作品判定；完整度只能表述为 `visible_public_results_at_observed_at`，禁止把搜索索引结果声称为平台全量。
+- 所有站点、搜索和 creator shard 只允许公开直链、平台支持接口或人工提供文件，不新增规避登录、付费墙、验证码、访问控制、DRM 或 robots/服务条款限制的抓取器。单 Provider 或 shard 的 typed failure 只阻断自身，不阻断同 carrier 其他来源。
 - CLI 与 receipt 对每个 `displayName/provider` 输出 `planned/discovered/downloaded/accepted/rejectedAssetCount` 及 verified/unverified/restricted/unknown 计数；下载成功不得把 rights 状态升级为 verified。
-- 文章声明为 illustrated 时，图片只来自同一 article sourceUnit 且至少闭合封面与正文图；日常 release 如实记录 illustrated/text-only rate，而 M100 及以上 promotion 额外要求 illustrated rate 不低于 90%、text-only rate 不高于 10%。
+- 文章声明为 illustrated 时必须闭合封面与正文图及各自来源；封面与正文图可来自不同的可追溯授权来源。illustrated/text-only rate 只作为供给统计，不参与对象准入或规模晋级。
 - 视频候选保留 play/like/comment/share/favorite 的真实观测与观测时间，并只在同平台、同主题、同时间桶内按 percentile 排序。缺失项保持缺失并标明不可参与热度排序的原因，不得补零或生成虚假排名。
-- 低规模验证允许 ranking-ineligible 视频进入日常 research release。M100 及以上 milestone 计数视频必须五项信号完整且具备可比 percentile。只有公开可取得、可解码、可播放、无 DRM、未绕过访问控制且通过安全/相关性门的真实视频文件可进入 research release。
+- ranking-ineligible 视频可以进入 research release；热度信号完整度和 percentile 只作为推荐与供给统计。只有公开可取得、可解码、可播放、无 DRM、未绕过访问控制且通过安全/相关性门的真实视频文件可进入 research release。
 
 ### REQ-004 四环境 research 隔离、商用切换与规模门
 
 - research activation 前，四环境分别证明身份白名单、匿名内容和媒体关闭、无公开 CDN/匿名 URL、分享/导出/索引关闭、内部 App 签名与研究态标识、媒体短期签名 URL 和访问审计；任一缺失立即 `GATE_BLOCK`。
 - `appUatEnvelope` 从本 release 对象闭包投影并显式带 `releaseClass=research/productLifecycleState=research`，不可被 commercial package/activation/UAT 复用。
+- Alpha/Beta/Gamma/Prod 必须分别生成 create-once `activationEnvelope`，精确绑定同一 `releaseId + manifestDigest + sourceIdentitySetDigest + releaseClass + productLifecycleState + appUatEnvelopeDigest`。每个 cohort 对象在 manifest 中保留自身 execution/source identity。环境按 Alpha→Beta→Gamma→Prod 依次激活，后续环境冻结前一环境同 release 的 passed activation/readback/App UAT receipt 字节摘要，同时仍生成本环境独立 import/readback 与 research isolation policy/proof。任一环境 receipt 不得替代另一环境，也不得把 Prod research activation提升为 commercial。
 - 商用切换冻结新的 source digest 与 immutable commercial release，对 research 对象逐项替换/撤下/删除，清理缓存和签名 URL，验证四环境未授权 readback 为 0 后重新完成 Creator/attribution/article/image/video/Premium/discovery/rollback/replay/真机 UAT。
 - `qwq-data release commercial-transition` 只从 research/commercial 两个不可变 release 与四环境 cache/media/signed-URL 清理及未授权 readback=0 证据生成逐资产 create-once migration receipt；不得修改旧 research release 或用手工布尔值替代环境证据。
 - 日常 research release 不以规模数量作为发布许可。
-- 三个累计规模 milestone 固定为 homepage/article/image/video：M100=`100/100/100/10`、M1000=`1000/1000/1000/100`、M10000=`10000/10000/10000/1000`。日常 publish 允许 partial，但 milestone promotion 必须逐路满足 `totalUniqueFinalizedCount >= targetCount` 且 `shortfallCount=0`。
-- M100 及以上的四份 request envelope 必须共同绑定一个 create-once、同 source 三元组的 scale source-pool plan；plan 对每条 lane 的 source-ready 唯一候选数必须不少于该 execution 冻结的 oversampled `count`，且 sourceUnit/acquisition/rights/quality/playability evidence refs 在首次 claim 前仍逐字节匹配。缺 plan、跨 scale/identity、候选重复、证据缺失或 digest 漂移均返回 `DATA.SOURCE.POOL_SHORTFALL`，禁止在 author 阶段临时发现大批来源。
-- 规模 promotion 必须证明四路均真实执行、所有合格对象均已发布、同一 source revision/digest/entity catalog、对象级 review/rights/provenance/安全/可播放/实体引用闭合、跨 lane 写入与重复为 0、60 分钟重叠、frozen observer、资源隔离与 receipt 引用完整。
-- 后继 milestone 只新增差额，前驱 immutable release 对象通过 CAS/object refs 原样携带，且 `predecessorCarriedCount + newFinalizedCount = totalUniqueFinalizedCount`。
-- M1000 精确消费 M100 promotion，M10000 精确消费 M1000 promotion；任一 release/manifest/source/catalog/receipt identity 漂移均阻断。
-- promotion receipt 必须记录各 carrier 的 target/qualified/finalized/selected/discarded/shortfall，以及 object pass、illustrated、video popularity availability/coverage、automatic recovery、first pass、discard 与 quota attainment 的清晰分子、分母和 rate。M100 及以上的 video popularity 与 automatic recovery 是晋级硬门，不能以统计或 non-blocking 状态绕过。
-- M100/M1000/M10000 分别至少形成 20/50/100 个 recovery-eligible 故障样本，自动恢复率不低于 95%；fault evidence 的 campaign/run/generation/fence/source identity、完整性与 typed outcome 必须逐项闭合。
-- M1000 必须在 72 小时预算内完成；M10000 从 M1000 promotion 起算必须在 7 天预算内完成。若按前驱实测速率计算的 Cursor 容量不足，返回 typed capacity blocker 并保留 checkpoint，禁止静默换 Provider 或降低目标。
-- semantic author/reviewer 通过受治理 `cursor_sdk|codex_sdk` adapter 执行，Provider、model、role、SDK/runtime digest 与 run/result digest 在 execution 冻结；默认 Codex Terra 承担 author/reviewer、Codex Sol 承担分层抽样校准，Cursor `auto` 仅在自身 capacity receipt 通过后可显式选择。Provider/model 变化必须创建 `retryOf`，禁止 execution 中静默 fallback，真实 capacity soak 未通过时不得用下载数或框架测试冒充内容稳产。
+- Content candidate 必须按 `prepared -> imported -> projected -> verified -> active` 单轨推进；逐阶段持久化脱敏 receipt，记录 duration、attempted/success count、checkpoint 与首个 typed blocker。只有 `verified` 可切换 active pointer，任一阶段失败保留 previous active 与已成功阶段事实。
+- 三个累计规模 milestone 固定为 homepage/article/image/video：M100=`100/100/100/10`、M1000=`1000/1000/1000/100`、M10000=`10000/10000/10000/1000`。这些数字均为 promotion 下限；日常 publish 允许 partial，已合格对象超过下限时继续准入，不为凑整数截断 frontier。milestone promotion 必须逐路满足 `totalUniqueFinalizedCount >= targetCount` 且 `shortfallCount=0`。
+- source-pool、oversampling、Provider、并行时长、资源和恢复事实用于计划容量与定位瓶颈；它们不得改变一个已完成、质量合格且在授权范围内对象的池准入结果。
+- 规模 promotion 只验证累计唯一对象数量、对象准入结果和所构建 ReleaseManifest 的引用闭包；精确重复不计数，缺引用对象留在池中等待修复，不阻断其他合格对象发布。
+- 后继 milestone 只生成累计目标差额。前驱 promotion receipt 只记录 lineage，不作为新合格对象入池或当前 milestone 计数的前置门。M1000 的 source discovery/acquisition、semantic 与 review 可以在 M100 环境验收期间并行；M1000 promotion 前必须补足同一 M100 Research release 的 Alpha activation/readback 与 100 例 App UAT。该产品阶段门不撤销池中任何 M100 对象，也不冻结后继来源队列。
+- promotion receipt 必须记录各 carrier 的 target、admitted、publishable、deliveryPending、selected、excluded 和 gap；illustrated、video popularity、automatic recovery、source mix、并行时长与资源使用只作为统计。
+- M1000 与 M10000 的时间、Provider 容量和故障恢复样本用于计划和 SRE 评估；目标未按期完成时报告实际 gap，不撤销已经完成的池追加或已验证 Release。
+- semantic author/reviewer 通过受治理 `cursor_sdk|codex_sdk` adapter 执行，Provider、model、role、SDK/runtime digest 与 run/result digest 在 execution 冻结。受治理生产主选为 exact `cursor_grok/grok-4.5`。
+- `cursor_auto` 只能在父 execution 已以允许的 typed provider/model failure 终止后，以新的 `retryOf` 显式选择。禁止 execution 中静默 fallback 或由 SDK Auto 首次路由替代 Grok 证据，真实 capacity soak 未通过时不得用下载数或框架测试冒充内容稳产。
+- 10 万级不是单一 promotion 事务：使用同一分片键持续生产，并以 1K/5K/10K immutable release waves 累计到不少于 100000 个合格对象；单 wave 或 named scale 仍是下限，不是总量上限。达到 100K 稳产还须证明跨分片全局去重、checkpoint 恢复、dead-letter 隔离以及连续 7 天无全局冻结的 soak。
 
 ### REQ-005 已审核闭包采纳与 release identity incident
 
@@ -113,7 +125,7 @@
 - GIVEN homepage、article、image、video 各有一个 immutable execution，并共享同一 named main branch、commit、source digest 与 entity catalog digest。
 - WHEN 四个 execution 并行生产且操作者请求聚合并 promotion release。
 - THEN post 不等待 homepage execution 或 publish，任一载体失败只保留在自身 evidence，其他载体已合格对象仍可 publish。
-- THEN 仅当全部 approved 对象的 entity identity、creator、tag、source 与媒体处置闭合时生成 immutable release；任一悬挂引用使整次 promotion 失败。
+- THEN 仅从 entity identity、creator、tag、source 与媒体处置全部闭合的 approved 对象中选择 immutable cohort；悬挂引用只排除对应对象，足量有效 cohort 仍可 promotion。
 - THEN 四个 review 子进程存在真实时间重叠；任一 lane 的 publish 不得早于该 lane 自身 review 终态，但不得等待其他 lane 的 review/publish 终态。
 - THEN 某 lane `0 < qualified < quota` 时终态为 `partial`，已合格对象已 finalize，shortfall 有 typed evidence；`qualified == 0` 时该 lane 为 `blocked`。
 - THEN 全批次零 discard 仍允许成功终态；若存在 discard，则每个 discard 必须有非空 `objectRef` 与 typed `issues`。
@@ -125,10 +137,14 @@
 <a id="gwt-002"></a>
 ### GWT-002 research release 可内部消费但不可冒充商用
 
+- GIVEN Alpha、Beta 或 Gamma 要为受控 Research release 申请内部消费身份。
+- WHEN runtime materialization 冻结 target-scoped acceptance subject 与 canonical account identity，User 通过同一 subject 的公开 OTP/login 建立账号并 readback。
+- THEN Research session authority 只接受该单一 target binding 的 account allowlist 并签发短时 attestation；空 allowlist、临时 TestData actor、数据库反查、旧 session 或 account/subject readback 漂移必须 fail closed，且 Prod 不启用该 authority。
+
 - GIVEN 四载体对象共享同一 source revision/digest/entity catalog digest，研究素材已取得且完整记录来源与权利缺口。
 - WHEN 生成并请求激活 `releaseClass=research` 的 immutable release。
 - THEN unverified/unknown 可记为 `research_allowed`，restricted/未取得/生成/缺字段素材与不可播放视频被阻断；文章批次配图率只写入统计，单篇 illustrated 声明的同源封面/正文图闭包仍是对象硬门。
-- THEN activation/readiness/App UAT receipt 绑定同一 `releaseId+manifestDigest+releaseClass+productLifecycleState`，匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。
+- THEN 四环境各自的 activation/readiness/App UAT receipt 绑定同一 `releaseId+manifestDigest+sourceIdentitySetDigest+releaseClass+productLifecycleState+appUatEnvelopeDigest`，逐环境绑定独立 import/readback 与 research isolation policy/proof，并按 Alpha→Beta→Gamma→Prod 冻结前一环境 passed receipt；匿名身份、公开媒体 URL、分享、导出或索引任一可用均 `GATE_BLOCK`。
 - THEN commercial readiness 不存在，且任何未授权 asset ID 不得进入 `commercialAcceptedCount`。
 
 <a id="gwt-003"></a>
@@ -141,15 +157,18 @@
 - THEN identity incident 中的 `protectedExecutionIds` 精确等于全部观测 identity 的 execution closure，incident 存在时 discard/GC 保持 fail closed；重放同一 adoption 只能读取同 digest receipt，不得覆盖或变造历史证据。
 
 <a id="gwt-004"></a>
-### GWT-004 ReliableTask 实测证据与规模验证到扩展规模晋级
+### GWT-004 独立 semantic journal、池交付与规模晋级
 
-- GIVEN selected semantic Provider 的 preflight 与 capacity soak 均为 `ready=true`，四条 execution envelope 已冻结相同 campaign/run/generation/fencing/source identity，Runtime owner 提供受治理的只读 MongoStore 与 RedisReadyIndex observer。
-- WHEN 四 lane 在 ReliableTask 上重叠运行至少 60 分钟、每 lane 完成至少 10 个真实 semantic job，并由 frozen observer 记录队列、资源与恢复事实。
-- THEN observer evidence 必须精确绑定四条 frozen execution envelope，跨 execution/generation/source 读取立即失败；Data 禁止用 local object-job mirror、环境变量或手工样本替代 live queue/job/resource/recovery evidence。
-- THEN 无重复发布、丢对象或跨 lane 写入，并通过 controller/worker/总 RSS、临时工作集、terminal cleanup、queue age 与 heartbeat 资源门；automatic recovery 只按 recovered/eligible 记录，零分母显式记为未执行，不参与 promotion 判定。
-- THEN 只有四路累计唯一 finalized 达到 M100 `100/100/100/10`、shortfall=0、文章配图与视频热度硬门通过后，才可创建新的 immutable research release 与 create-once M100 promotion receipt。
-- THEN M1000 只新增到累计 `1000/1000/1000/100` 的差额并精确消费 M100 identity；M10000 再新增到累计 `10000/10000/10000/1000` 的差额并精确消费 M1000 identity，任一级未达数量或时间预算不得晋级。
-- THEN M100/M1000/M10000 的四个 envelope、submission、execution policy 与 runtime observer 精确携带同一 source-pool plan digest；任一 lane 的冻结 pool candidateCount 小于该 lane oversampled count，或任一 evidence ref 在 claim 前不存在/摘要漂移，均不得派发 Cursor author job。
+- GIVEN selected semantic Provider 的 preflight 与 capacity soak 均为 `ready=true`，四条 execution 各自冻结 semantic journal/source identity；pool delivery 另有受治理的 MongoStore/RedisReadyIndex generation、fence 与 worker bundle。
+- WHEN 任意 Data 批次产生完成、质量合格且具备 Research 或 Commercial 授权范围的 Homepage、Article、Image 或 Video。
+- THEN 每个合格对象立即幂等追加到统一池；失败、授权待定、重复或缺交付引用的对象分别报告，不撤销同批其他对象。
+- THEN Mongo、Redis 或目标环境不可用时，source/compose/author/review 继续运行；reviewed 对象写入 delivery intent 并停止重复 semantic 调度，transport 恢复后按同一 digest exact-once drain。
+- THEN 日常 Research Release 从 publishable 对象构建并可在未达到 milestone 时发布；Manifest 冻结后导入、Search、Recommendation、Homepage 和 Persona 数量必须全量一致。
+- AND import 成功只到 `imported`；Search/Recommendation/Homepage/Tag/媒体与 Persona consumer 投影及 readback 全部 verified 后才可进入 `active`，失败 receipt 不得覆盖 previous active。
+- THEN 累计唯一 publishable 达到 M100 `100/100/100/10` 时标记 M100 达标；M1000 与 M10000 分别只按 `1000/1000/1000/100` 和 `10000/10000/10000/1000` 判断，不依赖前驱 promotion、Provider、热度、恢复率或并行时长，超过下限的全部合格对象继续准入。
+- THEN source-pool、Provider、资源、恢复、配图率和视频热度保留在同一报告的 statistics 中，任何变化都不得改变对象准入与 milestone 数量结果。
+- THEN 同一批或同一环境中的个别对象失败只把该对象标为 excluded/deliveryPending；冻结 Manifest 后仍全量一致、失败候选不替换 previous verified release。
+- THEN 有 20 个质量、Research 授权与交付闭包均合格的视频时，Alpha/Beta/Gamma 的稳定选择均包含全部 20 个，M100 的 10 个视频只是里程碑下限而非发布上限。
 
 ## 6. 依赖
 
@@ -165,6 +184,6 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：受治理 MongoStore+RedisReadyIndex observer、stage-scoped immutable job-set 与 Data/Service digest wire 已进入源码；当前阻断转为 production worker E2E、fresh Cursor preflight、足量专业来源池、三档累计 promotion 合同与真实四路数量未闭合。在这些证据缺失时保持 `GATE_BLOCK`。
-- 完成判定：`GWT-001/GWT-002/GWT-004` 有 local_contract 与真实 Mongo+Redis/Cursor API integration。四 lane 同身份重叠至少 60 分钟，无重复/跨 lane 并通过资源和恢复预算；依次生成达到实际数量硬门的 M100、M1000、M10000 immutable research release 与 create-once promotion，最终 M10000 在 7 天预算内完成。
-- 依赖：Data/Runtime/Service owner共同维护 governed ReliableTask wire；Testing/Ops owner负责四环境 identity/readback/rollback/replay，不由 Data 修改 stackctl 或环境。
+- 影响或价值：当前仍缺 production worker E2E、fresh Cursor preflight、足量专业来源池、真实四路累计数量与可证明物理主机的 remote executor，所以保持 `GATE_BLOCK`。
+- 完成判定：`GWT-001/GWT-002/GWT-004` 有 local_contract 与真实 Content importer、Search、Recommendation、Homepage、Persona readback；依次达到 M100、M1000、M10000 的累计唯一数量并能从统一池构建和发布对应 immutable Research Release。
+- 依赖：Data/Runtime/Service owner维护对象生成与池追加；Testing/Ops owner负责同一 Research Manifest 在 Alpha/Beta/Gamma/Prod 的独立 import/private-isolation/verify/activate/rollback/replay，Commercial 转换另立显式授权 release。Provider 与 remote executor 只影响生成吞吐和计划时间，不改变已合格对象准入。

@@ -18,9 +18,9 @@ from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 def test_data_execution_fleet__uses_one_declared_local_target__contract__local_contract() -> None:
     config = load_data_execution_fleet_config()
     endpoint = resolve_data_execution_fleet_endpoint(config)
-    ports = profile_ports(load_port_manifest(), config.local_target)
+    ports = profile_ports(load_port_manifest(), config.port_profile)
 
-    assert endpoint.target == config.local_target
+    assert endpoint.target == config.target == "data-local"
     assert endpoint.mongo_uri.endswith(f":{ports[config.mongo_port_role]}/?directConnection=true")
     assert endpoint.redis_addr.endswith(f":{ports[config.redis_port_role]}")
     assert config.mongo_port_role == "data-execution-mongodb"
@@ -33,7 +33,8 @@ def test_data_execution_fleet__rejects_implicit_or_extra_configuration__contract
     try:
         DataExecutionFleetConfig.from_document(
             {
-                "localTarget": "gamma-local",
+                "target": "data-local",
+                "portProfile": "gamma-local",
                 "mongoPortRole": "mongodb",
                 "redisPortRole": "redis",
                 "fallbackTarget": "beta-local",
@@ -72,6 +73,8 @@ def test_data_execution_fleet__dedicated_compose_owns_both_endpoints__contract__
     compose = COMPOSE_PATH.read_text(encoding="utf-8")
     assert "QWQ_DATA_FLEET_MONGO_PORT" in compose
     assert "QWQ_DATA_FLEET_REDIS_PORT" in compose
+    assert "127.0.0.1:${QWQ_DATA_FLEET_MONGO_PORT" in compose
+    assert "127.0.0.1:${QWQ_DATA_FLEET_REDIS_PORT" in compose
     assert "postgres" not in compose
     assert "object-storage" not in compose
 
@@ -101,6 +104,28 @@ def test_data_execution_fleet__tcp_without_writable_backends_is_not_ready__contr
     assert status.ready is False
     assert status.mongo is True
     assert status.redis is False
+    assert status.issue_code == "DATA.POOL.DELIVERY_UNAVAILABLE"
+
+
+def test_data_execution_fleet__owned_internal_service_without_host_mapping_is_unavailable__contract__local_contract(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._socket_ready",
+        lambda _host, _port: False,
+    )
+    monkeypatch.setattr(
+        "quwoquan_ops.cli.lib.data_execution_fleet._compose_running_services",
+        lambda _endpoint: frozenset({"mongodb", "redis"}),
+    )
+
+    status = data_execution_fleet_status()
+
+    assert status.owned is True
+    assert status.mongo is False
+    assert status.redis is False
+    assert status.ready is False
+    assert status.issue_code == "DATA.POOL.DELIVERY_UNAVAILABLE"
 
 
 def test_data_execution_fleet__redis_probe_requires_exact_write_read_delete_result__contract__local_contract(

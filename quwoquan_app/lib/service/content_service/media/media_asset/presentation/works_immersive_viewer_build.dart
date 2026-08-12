@@ -19,7 +19,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     ref.watch(contentRuntimeConfigProvider);
     ref.watch(activePersonaContextProvider);
     final enableArticlePageCurl = _enableArticlePageCurl;
-    final posts = _buildFeed();
+    final internalFeed = _usesExternalFeed
+        ? null
+        : _buildInternalFeedAggregate();
+    final posts = internalFeed?.posts ?? _buildFeed();
     final showLoadMoreSentinel =
         !_usesExternalFeed &&
         posts.isNotEmpty &&
@@ -307,6 +310,12 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                             },
                           );
                         }
+                        if (internalFeed != null) {
+                          return _buildInternalFeedTerminal(
+                            context,
+                            internalFeed,
+                          );
+                        }
                         return AppRequestFeedback.section();
                       }
                       if (showLoadMoreSentinel && index >= posts.length) {
@@ -574,6 +583,86 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     );
   }
 
+  Widget _buildInternalFeedTerminal(
+    BuildContext context,
+    _WorksInternalFeedAggregate feed,
+  ) {
+    switch (feed.terminal) {
+      case _WorksInternalFeedTerminal.loading:
+        return ColoredBox(
+          key: const ValueKey<String>('works-internal-feed-loading'),
+          color: AppColors.black,
+          child: AppRequestFeedback.page(),
+        );
+      case _WorksInternalFeedTerminal.canonicalEmpty:
+        final reason = feed.emptyReason!;
+        return ColoredBox(
+          key: ValueKey<String>('works-internal-feed-empty-${reason.wireName}'),
+          color: AppColors.black,
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.containerLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    DiscoveryText.webPcFeedEmpty,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontSize: AppTypography.iosTitle3,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.intraGroupSm),
+                  Text(
+                    DiscoveryFeedText.contentLoadingCompleted,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.white.withValues(alpha: 0.72),
+                      fontSize: AppTypography.iosSubheadline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      case _WorksInternalFeedTerminal.blockingError:
+        final semantic = runtime_error_display.ensureRetryUiErrorSemantic(
+          runtime_error_display.runtimeErrorSemantic(
+            context,
+            error: feed.blockingError!,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            presentation: UiErrorPresentation.emptyPage,
+            appearanceMode: UiErrorAppearanceMode.dark,
+            sourceRouteId: AppUiSurfaces.workBrowser.routeId,
+            sourceSurfaceId: AppUiSurfaces.workBrowser.id,
+            sourceOperationId: AppCloudOperationIds.contentPostGetFeed,
+          ),
+          retryLabel: SearchText.reload,
+        );
+        return AppPageErrorState(
+          key: const ValueKey<String>('works-internal-feed-error'),
+          semantic: semantic,
+          onRecovery: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              return _retryTrackedFeeds();
+            }
+            if (action.type == UiErrorActionType.dismiss) {
+              _dismissViewer();
+              return UiRecoveryOutcome.handedOff;
+            }
+            return UiRecoveryOutcome.cancelled;
+          },
+        );
+      case _WorksInternalFeedTerminal.content:
+        return const SizedBox.shrink();
+    }
+  }
+
   Widget _buildPostCanvas(
     ContentPostViewData post, {
     required bool enableArticlePageCurl,
@@ -723,11 +812,18 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
           onRecovery: (action) async {
             if (action.type == UiErrorActionType.retry ||
                 action.type == UiErrorActionType.resubmit) {
-              await _maybeHydrateArticleDetail(post, force: true);
-              final refreshed = _articleViewFor(post);
-              return _shouldShowArticleHydrationError(post, refreshed)
-                  ? UiRecoveryOutcome.stillBlocked
-                  : UiRecoveryOutcome.recovered;
+              final result = await _maybeHydrateArticleDetail(
+                post,
+                force: true,
+              );
+              return switch (result.terminal) {
+                WorksViewerArticleHydrationTerminal.recovered =>
+                  UiRecoveryOutcome.recovered,
+                WorksViewerArticleHydrationTerminal.stillBlocked =>
+                  UiRecoveryOutcome.stillBlocked,
+                WorksViewerArticleHydrationTerminal.superseded =>
+                  UiRecoveryOutcome.superseded,
+              };
             }
             return UiRecoveryOutcome.cancelled;
           },

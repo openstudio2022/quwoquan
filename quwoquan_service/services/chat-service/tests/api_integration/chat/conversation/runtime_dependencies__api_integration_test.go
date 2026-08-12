@@ -51,11 +51,15 @@ func startRelationshipContractRuntime(
 			capability = configured
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]bool{
+		relationState := "not_following"
+		if capability.IsMutual {
+			relationState = "mutual"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"relationState":               relationState,
 			"canCreateDirectConversation": capability.CanCreateDirectConversation,
 			"canSendMessage":              capability.CanSendMessage,
 			"hasFormalConversation":       capability.HasFormalConversation,
-			"isMutual":                    capability.IsMutual,
 			"isBlocked":                   capability.IsBlocked,
 			"isBlockedBy":                 capability.IsBlockedBy,
 		})
@@ -98,10 +102,10 @@ func TestAuthorizedRelationshipGateDelegatesViewerPersona(t *testing.T) {
 			http.Error(w, "delegated principal drift", http.StatusForbidden)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]bool{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"relationState":               "mutual",
 			"canCreateDirectConversation": true,
 			"canSendMessage":              true,
-			"isMutual":                    true,
 		})
 	}))
 	defer server.Close()

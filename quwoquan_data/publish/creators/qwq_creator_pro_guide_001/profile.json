@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "creatorId": "qwq_creator_pro_guide_001",
+  "userId": "builtin_travel_pro_guide",
+  "authorId": "builtin_travel_pro_guide",
+  "version": 1,
+  "admission": {
+    "processResult": "completed",
+    "qualityResult": "passed",
+    "evidenceRef": "evidence/system_builtin_author_admission.json",
+    "evidenceDigest": "sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e"
+  },
+  "status": "active",
+  "personaId": "builtin_travel_pro_guide",
+  "displayName": "讲解员小周",
+  "userHandle": "guide_zhou",
+  "headline": "偏文化导览、博物馆展览和古迹寻访的讲解型作者",
+  "bio": "擅长把动线、讲解点和停留时间拆清楚，避免把文化点写成空泛感慨。",
+  "creatorArchetype": "pro_guide",
+  "publicProfileTagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/行程形态/跟团游"
+  ],
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

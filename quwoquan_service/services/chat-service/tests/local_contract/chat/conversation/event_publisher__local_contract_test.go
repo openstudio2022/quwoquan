@@ -7,9 +7,62 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
+	conversationevent "quwoquan_service/services/chat-service/generated/chat/conversation/contract/event"
 	membershipevent "quwoquan_service/services/chat-service/generated/chat/conversation_membership/contract/event"
 	messageevent "quwoquan_service/services/chat-service/generated/chat/message/contract/event"
 )
+
+func TestCircleGroupConversationProvisionedGeneralRelayIsServerOnly(t *testing.T) {
+	ctx := context.Background()
+	realtime := rtredis.NewMemoryClient()
+	general := rtredis.NewMemoryClient()
+	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(
+		"chat-service-api",
+		runtimemessaging.RedisMessageTransportAdapter,
+		realtime,
+		general,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolverCalled := false
+	publisher := NewEventPublisherWithTransport(
+		transport,
+		NewMemberRecipientResolver(func(context.Context, string) ([]string, error) {
+			resolverCalled = true
+			return []string{"user-a"}, nil
+		}),
+	)
+
+	if err := publisher.PublishRecordedDomainEvent(
+		ctx,
+		"circle-group-conversation-provisioned-1",
+		conversationevent.CircleGroupConversationProvisioned,
+		"conversation-1",
+		"user-a",
+		map[string]any{
+			"circleId":      "circle-1",
+			"circleGroupId": "circle-group-1",
+		},
+	); err != nil {
+		t.Fatalf("PublishRecordedDomainEvent() error = %v", err)
+	}
+	if resolverCalled {
+		t.Fatal("server-only event must not enter client realtime recipient resolution")
+	}
+	messages, err := general.XRead(
+		ctx,
+		map[string]string{CircleGroupConversationProvisionedStream: "0-0"},
+		10,
+		0,
+	)
+	if err != nil {
+		t.Fatalf("read dedicated stream: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("general relay must not duplicate dedicated stream publication: %#v", messages)
+	}
+}
 
 func TestAssistantMentionDurableStreamUsesDedicatedGeneralTransport(t *testing.T) {
 	ctx := context.Background()

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import ssl
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib import error, request
 
 from .deployment_candidate_manifest import load_candidate_manifest
@@ -15,7 +16,8 @@ from .local_environment_auth import (
     LocalAcceptanceSession,
     mint_local_product_ops_operator_token,
 )
-from .output_paths import active_deployment_candidate, env_runs_root
+from .output_paths import active_deployment_candidate, env_runs_root, output_root
+from .test_live_content_binding import load_test_live_content_binding
 
 
 COLLECTION_PATH = "/control-plane/product/recommendation/premium-pool"
@@ -24,6 +26,19 @@ PREMIUM_FEED_PATH = "/content/feed?sort=recommend&channelId=premium_stream&limit
 
 class PremiumPoolReleaseError(RuntimeError):
     pass
+
+
+def _require_sha256_digest(value: object, *, label: str) -> str:
+    digest = str(value or "").strip()
+    if (
+        len(digest) != 71
+        or not digest.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in digest[7:])
+    ):
+        raise PremiumPoolReleaseError(
+            f"{label} must be sha256:<64 lowercase hex>"
+        )
+    return digest
 
 
 @dataclass(frozen=True)
@@ -39,6 +54,25 @@ class PremiumPoolCandidateBinding:
     verify_run_id: str
     content_id: str
     readiness_receipt_ref: str
+
+
+@dataclass(frozen=True)
+class PremiumPoolTestLiveBinding:
+    environment: str
+    target: str
+    release_id: str
+    manifest_digest: str
+    import_run_id: str
+    verify_run_id: str
+    content_id: str
+    readiness_phase: str
+    readiness_receipt_ref: str
+    readiness_receipt_digest: str
+    startup_attempt_id: str
+    runtime_identity: Mapping[str, str]
+
+
+PremiumPoolBinding = PremiumPoolCandidateBinding | PremiumPoolTestLiveBinding
 
 
 def load_premium_pool_candidate_binding(
@@ -133,6 +167,167 @@ def load_premium_pool_candidate_binding(
     )
 
 
+def load_premium_pool_test_live_binding(
+    *,
+    environment: str,
+    target: str,
+    readiness_receipt: str | Path,
+    content_id: str,
+) -> PremiumPoolTestLiveBinding:
+    """Bind PremiumPoolEntry to the exact current mutable content evidence."""
+
+    if environment not in {"alpha", "beta", "gamma"} or target != f"{environment}-local":
+        raise PremiumPoolReleaseError(
+            "test-live premium pool binding requires an exact Alpha/Beta/Gamma local target"
+        )
+    try:
+        content_binding = load_test_live_content_binding(target)
+    except (OSError, ValueError) as exc:
+        raise PremiumPoolReleaseError(
+            "current test-live content binding is invalid"
+        ) from exc
+    if not isinstance(content_binding, dict):
+        raise PremiumPoolReleaseError(
+            "current test-live content binding is required"
+        )
+    if (
+        content_binding.get("launchPolicy") != "test_live"
+        or content_binding.get("nonPromotable") is not True
+        or content_binding.get("contentBindingState") != "bound"
+        or content_binding.get("retentionClass") != "run_bound"
+        or content_binding.get("environment") != environment
+        or content_binding.get("target") != target
+    ):
+        raise PremiumPoolReleaseError(
+            "current test-live content binding identity mismatch"
+        )
+
+    attempt_id = str(content_binding.get("startupAttemptId") or "").strip()
+    runtime_identity = content_binding.get("startupIdentity")
+    if not attempt_id or not isinstance(runtime_identity, Mapping):
+        raise PremiumPoolReleaseError(
+            "current test-live content binding is partial"
+        )
+    canonical_runtime_identity = {
+        str(key): str(value or "").strip()
+        for key, value in runtime_identity.items()
+    }
+    for field in (
+        "mutableStateDigest",
+        "configurationDigest",
+        "providerRuntimeDigest",
+    ):
+        _require_sha256_digest(
+            canonical_runtime_identity.get(field),
+            label=f"test-live runtime {field}",
+        )
+
+    receipt_ref = str(content_binding.get("readinessReceiptRef") or "").strip()
+    receipt_digest = _require_sha256_digest(
+        content_binding.get("readinessReceiptDigest"),
+        label="test-live readiness receipt",
+    )
+    relative_receipt_path = Path(receipt_ref)
+    if (
+        not receipt_ref
+        or relative_receipt_path.is_absolute()
+        or ".." in relative_receipt_path.parts
+    ):
+        raise PremiumPoolReleaseError(
+            "test-live readiness receipt reference is not canonical"
+        )
+    expected_receipt_path = Path(
+        os.path.abspath(output_root() / receipt_ref)
+    )
+    supplied_receipt_path = Path(
+        os.path.abspath(Path(readiness_receipt).expanduser())
+    )
+    if supplied_receipt_path != expected_receipt_path:
+        raise PremiumPoolReleaseError(
+            "readiness receipt does not match the current test-live content binding"
+        )
+    if supplied_receipt_path.is_symlink():
+        raise PremiumPoolReleaseError(
+            "readiness receipt must be a regular non-symlink file"
+        )
+    try:
+        encoded = supplied_receipt_path.read_bytes()
+        readiness = json.loads(encoded.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PremiumPoolReleaseError("readiness receipt is unreadable") from exc
+    if not isinstance(readiness, dict):
+        raise PremiumPoolReleaseError("readiness receipt must be a JSON object")
+    observed_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    if observed_digest != receipt_digest:
+        raise PremiumPoolReleaseError(
+            "readiness receipt digest drifted from the current test-live content binding"
+        )
+
+    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
+    expected_readiness = {
+        "schema": "quwoquan_data.environment_release_readiness",
+        "environment": environment,
+        "releaseId": content_binding.get("releaseId"),
+        "verifyRunId": content_binding.get("verifyRunId"),
+        "manifestDigest": content_binding.get("manifestDigest"),
+        "passed": True,
+    }
+    if (
+        readiness_phase not in {"consumer", "commercial"}
+        or any(readiness.get(field) != value for field, value in expected_readiness.items())
+        or readiness.get("appUatEnvelope") != content_binding.get("appUatEnvelope")
+    ):
+        raise PremiumPoolReleaseError(
+            "readiness receipt does not match the current test-live content evidence"
+        )
+    import_run_id = str(readiness.get("importRunId") or "").strip()
+    if not import_run_id:
+        raise PremiumPoolReleaseError("readiness receipt lacks importRunId")
+    canonical_content_id = str(content_id or "").strip()
+    envelope = readiness.get("appUatEnvelope")
+    video_work_id = (
+        str(envelope.get("videoWorkId") or "").strip()
+        if isinstance(envelope, Mapping)
+        else ""
+    )
+    typed_video_rows = [
+        row
+        for row in readiness.get("feedQueries") or []
+        if isinstance(row, Mapping) and row.get("name") == "typed_video"
+    ]
+    typed_video_ids = {
+        str(item).strip()
+        for item in (
+            typed_video_rows[0].get("matchedPostIds")
+            if len(typed_video_rows) == 1
+            else []
+        )
+        if str(item).strip()
+    }
+    if (
+        not canonical_content_id
+        or canonical_content_id != video_work_id
+        or canonical_content_id not in typed_video_ids
+    ):
+        raise PremiumPoolReleaseError(
+            "contentId must be the typed videoWorkId in the exact readiness envelope"
+        )
+    return PremiumPoolTestLiveBinding(
+        environment=environment,
+        target=target,
+        release_id=str(readiness["releaseId"]),
+        manifest_digest=str(readiness["manifestDigest"]),
+        import_run_id=import_run_id,
+        verify_run_id=str(readiness["verifyRunId"]),
+        content_id=canonical_content_id,
+        readiness_phase=readiness_phase,
+        readiness_receipt_ref=receipt_ref,
+        readiness_receipt_digest=receipt_digest,
+        startup_attempt_id=attempt_id,
+        runtime_identity=canonical_runtime_identity,
+    )
+
+
 def open_premium_pool_operator_session(
     *,
     environment: str,
@@ -155,7 +350,7 @@ def open_premium_pool_operator_session(
 
 def execute_premium_pool_upsert(
     *,
-    binding: PremiumPoolCandidateBinding,
+    binding: PremiumPoolBinding,
     product_ops_base_url: str,
     api_base_url: str,
     session: LocalAcceptanceSession,
@@ -170,11 +365,7 @@ def execute_premium_pool_upsert(
     canonical_expiry = _future_rfc3339(expires_at)
     supply_source = "canonical_data_release:" + binding.release_id
     audit_id = "content-commercial:" + binding.verify_run_id
-    rollback_token = "rbk-premium-" + hashlib.sha256(
-        "\x1f".join(
-            (binding.target, binding.baseline_id, binding.content_id)
-        ).encode("utf-8")
-    ).hexdigest()[:32]
+    rollback_token = _premium_rollback_token(binding)
     body = {
         "contentId": binding.content_id,
         "scope": "global",
@@ -193,7 +384,7 @@ def execute_premium_pool_upsert(
         sort_keys=True,
     ).encode("utf-8")
     idempotency_key = hashlib.sha256(
-        binding.package_digest.encode("utf-8") + b"\x00" + canonical_body
+        _premium_idempotency_identity(binding) + b"\x00" + canonical_body
     ).hexdigest()
     request_id = "premium-" + idempotency_key[:24]
     response = _request_json(
@@ -254,16 +445,7 @@ def execute_premium_pool_upsert(
         "status": "passed",
         "environment": binding.environment,
         "target": binding.target,
-        "candidate": {
-            "baselineId": binding.baseline_id,
-            "packageDigest": binding.package_digest,
-            "sourceRevision": binding.source_revision,
-            "releaseId": binding.release_id,
-            "manifestDigest": binding.manifest_digest,
-            "importRunId": binding.import_run_id,
-            "verifyRunId": binding.verify_run_id,
-            "readinessReceiptRef": binding.readiness_receipt_ref,
-        },
+        **_premium_receipt_binding(binding),
         "operator": {
             "kind": operator_kind,
             "credentialPersisted": False,
@@ -293,12 +475,12 @@ def execute_premium_pool_upsert(
 
 def execute_premium_pool_readback(
     *,
-    binding: PremiumPoolCandidateBinding,
+    binding: PremiumPoolBinding,
     api_base_url: str,
     ssl_cafile: str,
     projection_deadline_seconds: float = 30.0,
 ) -> dict[str, Any]:
-    """Verify the candidate-bound premium projection from content-release only."""
+    """Verify the exact release-bound premium projection from content only."""
     matched_ids = _wait_for_premium_projection(
         api_base_url=api_base_url,
         content_id=binding.content_id,
@@ -311,16 +493,7 @@ def execute_premium_pool_readback(
         "status": "passed",
         "environment": binding.environment,
         "target": binding.target,
-        "candidate": {
-            "baselineId": binding.baseline_id,
-            "packageDigest": binding.package_digest,
-            "sourceRevision": binding.source_revision,
-            "releaseId": binding.release_id,
-            "manifestDigest": binding.manifest_digest,
-            "importRunId": binding.import_run_id,
-            "verifyRunId": binding.verify_run_id,
-            "readinessReceiptRef": binding.readiness_receipt_ref,
-        },
+        **_premium_receipt_binding(binding),
         "recommendationReadback": {
             "path": "/content/feed",
             "query": "sort=recommend&channelId=premium_stream&limit=20",
@@ -367,19 +540,91 @@ def _wait_for_premium_projection(
         time.sleep(0.5)
 
 
-def _premium_readback_session_id(binding: PremiumPoolCandidateBinding) -> str:
-    digest = hashlib.sha256(
-        "\x1f".join(
-            (binding.target, binding.baseline_id, binding.content_id)
-        ).encode("utf-8")
-    ).hexdigest()[:24]
+def _premium_readback_session_id(binding: PremiumPoolBinding) -> str:
+    if isinstance(binding, PremiumPoolTestLiveBinding):
+        identity = (
+            binding.target,
+            binding.startup_attempt_id,
+            binding.runtime_identity["mutableStateDigest"],
+            binding.content_id,
+        )
+    else:
+        identity = (binding.target, binding.baseline_id, binding.content_id)
+    digest = hashlib.sha256("\x1f".join(identity).encode("utf-8")).hexdigest()[:24]
     return "premium-readback-" + digest
+
+
+def _premium_idempotency_identity(binding: PremiumPoolBinding) -> bytes:
+    if isinstance(binding, PremiumPoolCandidateBinding):
+        return binding.package_digest.encode("utf-8")
+    return json.dumps(
+        {
+            "target": binding.target,
+            "startupAttemptId": binding.startup_attempt_id,
+            "mutableStateDigest": binding.runtime_identity["mutableStateDigest"],
+            "configurationDigest": binding.runtime_identity["configurationDigest"],
+            "providerRuntimeDigest": binding.runtime_identity["providerRuntimeDigest"],
+            "readinessReceiptDigest": binding.readiness_receipt_digest,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _premium_rollback_token(binding: PremiumPoolBinding) -> str:
+    if isinstance(binding, PremiumPoolTestLiveBinding):
+        identity = (
+            binding.target,
+            binding.startup_attempt_id,
+            binding.runtime_identity["mutableStateDigest"],
+            binding.content_id,
+        )
+    else:
+        identity = (binding.target, binding.baseline_id, binding.content_id)
+    return "rbk-premium-" + hashlib.sha256(
+        "\x1f".join(identity).encode("utf-8")
+    ).hexdigest()[:32]
+
+
+def _premium_receipt_binding(binding: PremiumPoolBinding) -> dict[str, Any]:
+    if isinstance(binding, PremiumPoolCandidateBinding):
+        return {
+            "candidate": {
+                "baselineId": binding.baseline_id,
+                "packageDigest": binding.package_digest,
+                "sourceRevision": binding.source_revision,
+                "releaseId": binding.release_id,
+                "manifestDigest": binding.manifest_digest,
+                "importRunId": binding.import_run_id,
+                "verifyRunId": binding.verify_run_id,
+                "readinessReceiptRef": binding.readiness_receipt_ref,
+            }
+        }
+    return {
+        "testLiveBinding": {
+            "launchPolicy": "test_live",
+            "nonPromotable": True,
+            "startupAttemptId": binding.startup_attempt_id,
+            "mutableStateDigest": binding.runtime_identity["mutableStateDigest"],
+            "configurationDigest": binding.runtime_identity["configurationDigest"],
+            "providerRuntimeDigest": binding.runtime_identity["providerRuntimeDigest"],
+            "runtimeIdentity": dict(binding.runtime_identity),
+            "releaseId": binding.release_id,
+            "manifestDigest": binding.manifest_digest,
+            "importRunId": binding.import_run_id,
+            "verifyRunId": binding.verify_run_id,
+            "readinessPhase": binding.readiness_phase,
+            "readinessReceiptRef": binding.readiness_receipt_ref,
+            "readinessReceiptDigest": binding.readiness_receipt_digest,
+            "videoWorkId": binding.content_id,
+        }
+    }
 
 
 def _require_matching_entry(
     entry: dict[str, Any],
     *,
-    binding: PremiumPoolCandidateBinding,
+    binding: PremiumPoolBinding,
     supply_source: str,
     expires_at: str,
 ) -> None:
@@ -395,7 +640,7 @@ def _require_matching_entry(
         or int(entry["revision"]) <= 0
     ):
         raise PremiumPoolReleaseError(
-            "PremiumPoolEntry readback does not match the candidate-bound command"
+            "PremiumPoolEntry readback does not match the content-bound command"
         )
 
 

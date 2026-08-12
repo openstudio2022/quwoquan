@@ -5,7 +5,6 @@ import math
 from dataclasses import dataclass
 from typing import Mapping
 
-
 _FLEET_TASK_STATUSES = frozenset(
     {"ready", "processing", "retry_wait", "succeeded", "dead"}
 )
@@ -56,6 +55,7 @@ class ReliableTaskFleetReport:
     passed: bool = True
     accepted_content_throughput_status: str = "MEASURED"
     finalized_object_count: int = 0
+    required_quota: int = 0
     publish_task_count: int = 0
     object_transaction_result_count: int = 0
     research_accepted_count: int = 0
@@ -95,6 +95,9 @@ class ReliableTaskFleetReport:
             total = int(value.get("total"))
             succeeded = int(value.get("succeeded"))
             finalized_object_count = int(value.get("finalizedObjectCount") or 0)
+            required_quota = int(value.get("requiredQuota"))
+            duplicate_publish_count = int(value.get("duplicatePublishCount"))
+            missing_object_count = int(value.get("missingObjectCount"))
             publish_task_count = int(value.get("publishTaskCount"))
             object_transaction_result_count = int(
                 value.get("objectTransactionResultCount")
@@ -128,6 +131,9 @@ class ReliableTaskFleetReport:
         )
         if (
             finalized_object_count < 0
+            or required_quota < 1
+            or duplicate_publish_count < 0
+            or missing_object_count < 0
             or succeeded > total
             or publish_task_count < 0
             or publish_task_count > total
@@ -139,6 +145,14 @@ class ReliableTaskFleetReport:
             or canonical_accepted_count > object_transaction_result_count
         ):
             raise ValueError("ReliableTask fleet publish acceptance counts are invalid")
+        if stage == "publish" and passed != (
+            canonical_accepted_count >= required_quota
+            and duplicate_publish_count == 0
+            and missing_object_count == 0
+        ):
+            raise ValueError(
+                "ReliableTask fleet publish pass differs from canonical acceptance"
+            )
         if (
             recovery_eligible_count < 0
             or automatic_recovered_count < 0
@@ -190,6 +204,7 @@ class ReliableTaskFleetReport:
             passed=passed,
             accepted_content_throughput_status=accepted_status,
             finalized_object_count=finalized_object_count,
+            required_quota=required_quota,
             publish_task_count=publish_task_count,
             object_transaction_result_count=object_transaction_result_count,
             research_accepted_count=research_accepted_count,

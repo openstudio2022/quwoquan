@@ -7,6 +7,7 @@ import re
 import shutil
 import tempfile
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -65,9 +66,11 @@ def deploy_official_distribution(
             manifest=package_manifest,
             distribution_root=distribution_root,
             expected_current=expected_current,
+            release_manifest_path=release_manifest_path,
+            release_manifest=release_manifest,
         )
     receipt = {
-        "schema": "qwq.official-distribution.receipt",
+        "schema": "client-app.official-distribution.receipt",
         "artifactKind": kind,
         "artifactDigest": release_digest,
         "candidateId": release_manifest["candidateId"],
@@ -116,6 +119,7 @@ def inspect_official_distribution(
     if latest_path.is_file():
         try:
             latest = _json_object(latest_path, "Android latest manifest")
+            _validate_android_latest_manifest(latest)
             apk_path = root / str(latest["apkPath"])
             if not apk_path.is_file():
                 raise OfficialDistributionReleaseError("Android latest APK is missing")
@@ -132,6 +136,16 @@ def inspect_official_distribution(
             if (
                 f"PRODUCT_OPS_ANDROID_LATEST_BUILD={latest['buildNumber']}\n"
                 not in product_ops_environment
+                or (
+                    "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_VERSION="
+                    f"{latest['minimumSupportedVersion']}\n"
+                )
+                not in product_ops_environment
+                or (
+                    "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_BUILD="
+                    f"{latest['minimumSupportedBuild']}\n"
+                )
+                not in product_ops_environment
                 or f"PRODUCT_OPS_ANDROID_APK_SHA256={latest['apkSHA256']}\n"
                 not in product_ops_environment
             ):
@@ -142,6 +156,8 @@ def inspect_official_distribution(
                 "status": "ready",
                 "versionName": latest["versionName"],
                 "buildNumber": latest["buildNumber"],
+                "minimumSupportedVersion": latest["minimumSupportedVersion"],
+                "minimumSupportedBuild": latest["minimumSupportedBuild"],
                 "apkSHA256": latest["apkSHA256"],
             }
             if verify_hosted:
@@ -168,7 +184,7 @@ def inspect_official_distribution(
                 issues.append("hosted download origin is not an official quwoquan.com host")
 
     return {
-        "schema": "qwq.official-distribution.inspection",
+        "schema": "client-app.official-distribution.inspection",
         "status": "ready" if not issues else "GATE_BLOCK",
         "web": web,
         "android": android,
@@ -201,6 +217,7 @@ def prevalidate_android_distribution_candidate(
     )
     latest_path = Path(str(result["latestManifestPath"]))
     latest = _json_object(latest_path, "prevalidated Android latest manifest")
+    _validate_android_latest_manifest(latest)
     apk_path = scratch_root / str(latest["apkPath"])
     if (
         not apk_path.is_file()
@@ -211,10 +228,12 @@ def prevalidate_android_distribution_candidate(
             "prevalidated Android latest pointer does not bind the immutable APK"
         )
     return {
-        "schema": "qwq.android.distribution-prevalidation",
+        "schema": "client-app.android.distribution-prevalidation",
         "status": "component-ready",
         "versionName": latest["versionName"],
         "buildNumber": latest["buildNumber"],
+        "minimumSupportedVersion": latest["minimumSupportedVersion"],
+        "minimumSupportedBuild": latest["minimumSupportedBuild"],
         "apkSHA256": latest["apkSHA256"],
         "apkSigningCertificateSHA256": latest[
             "apkSigningCertificateSHA256"
@@ -231,7 +250,7 @@ def _deploy_web(
     distribution_root: Path,
     expected_current: str,
 ) -> dict[str, Any]:
-    if manifest.get("schema") != "qwq.public-web.release":
+    if manifest.get("schema") != "client-app.web.official-release":
         raise OfficialDistributionReleaseError("Web release manifest schema mismatch")
     release_id = str(manifest.get("releaseId") or "")
     if not re.fullmatch(r"[0-9a-f]{20}", release_id):
@@ -271,14 +290,26 @@ def _deploy_android(
     manifest: dict[str, Any],
     distribution_root: Path,
     expected_current: str,
+    release_manifest_path: Path | None = None,
+    release_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if manifest.get("schema") != "qwq.android.official-release":
+    if manifest.get("schema") != "client-app.android.official-release":
         raise OfficialDistributionReleaseError("Android release manifest schema mismatch")
     version = str(manifest.get("versionName") or "")
     build = str(manifest.get("buildNumber") or "")
+    minimum_supported_version = str(manifest.get("minimumSupportedVersion") or "")
+    minimum_supported_build = str(manifest.get("minimumSupportedBuild") or "")
     artifact_name = str(manifest.get("packagedAPK") or "")
     if not re.fullmatch(r"[1-9][0-9]{0,17}", build):
         raise OfficialDistributionReleaseError("Android build number is invalid")
+    if (
+        not minimum_supported_version
+        or not re.fullmatch(r"[1-9][0-9]{0,17}", minimum_supported_build)
+        or int(minimum_supported_build) > int(build)
+    ):
+        raise OfficialDistributionReleaseError(
+            "Android minimum supported version/build is invalid"
+        )
     if artifact_name != f"quwoquan-{build}.apk":
         raise OfficialDistributionReleaseError("Android APK immutable filename is invalid")
     source_apk = package_manifest_path.parent / artifact_name
@@ -289,6 +320,25 @@ def _deploy_android(
     if source_apk.stat().st_size != int(manifest.get("apkSizeBytes") or 0):
         raise OfficialDistributionReleaseError("packaged Android APK size mismatch")
 
+    latest_path = distribution_root / "download" / "android" / "latest.json"
+    previous = ""
+    previous_minimum_supported_build = ""
+    if latest_path.is_file():
+        current = _json_object(latest_path, "Android latest manifest")
+        _validate_android_latest_manifest(current)
+        previous = str(current["buildNumber"])
+        previous_minimum_supported_build = str(current["minimumSupportedBuild"])
+    _require_expected_current(previous, expected_current, label="Android")
+    if previous_minimum_supported_build and (
+        int(minimum_supported_build) > int(previous_minimum_supported_build)
+    ):
+        _validate_minimum_supported_build_increase(
+            manifest=manifest,
+            from_minimum_supported_build=previous_minimum_supported_build,
+            release_manifest_path=release_manifest_path,
+            release_manifest=release_manifest,
+        )
+
     relative_apk = Path("download") / "android" / version / build / artifact_name
     destination = distribution_root / relative_apk
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -298,16 +348,12 @@ def _deploy_android(
     else:
         _atomic_copy(source_apk, destination)
 
-    latest_path = distribution_root / "download" / "android" / "latest.json"
-    previous = ""
-    if latest_path.is_file():
-        current = _json_object(latest_path, "Android latest manifest")
-        previous = str(current.get("buildNumber") or "")
-    _require_expected_current(previous, expected_current, label="Android")
     latest = {
-        "schema": "qwq.android.latest",
+        "schema": "client-app.android.latest",
         "versionName": version,
         "buildNumber": build,
+        "minimumSupportedVersion": minimum_supported_version,
+        "minimumSupportedBuild": minimum_supported_build,
         "minAndroidVersion": manifest["minAndroidVersion"],
         "packageName": manifest["packageName"],
         "apkUrl": manifest["apkUrl"],
@@ -321,9 +367,12 @@ def _deploy_android(
     _atomic_json(latest_path, latest)
     product_ops_environment = {
         "PRODUCT_OPS_APP_RELEASE_PUBLIC_ORIGIN": manifest["publicOrigin"],
-        "PRODUCT_OPS_APP_RELEASE_RECOVERY_URL": manifest["recoveryUrl"],
         "PRODUCT_OPS_ANDROID_LATEST_VERSION": version,
         "PRODUCT_OPS_ANDROID_LATEST_BUILD": build,
+        "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_VERSION": minimum_supported_version,
+        "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_BUILD": minimum_supported_build,
+        "PRODUCT_OPS_ANDROID_UPDATE_URL": manifest["updateUrl"],
+        "PRODUCT_OPS_ANDROID_RECOVERY_URL": manifest["recoveryUrl"],
         "PRODUCT_OPS_ANDROID_APK_URL": manifest["apkUrl"],
         "PRODUCT_OPS_ANDROID_APK_HOST_ALLOWLIST": ",".join(
             str(value) for value in manifest.get("apkHostAllowlist") or []
@@ -350,10 +399,247 @@ def _deploy_android(
         "versionName": version,
         "previousBuildNumber": previous,
         "currentBuildNumber": build,
+        "previousMinimumSupportedBuild": previous_minimum_supported_build,
+        "currentMinimumSupportedBuild": minimum_supported_build,
+        "minimumSupportedBuildRaised": bool(previous_minimum_supported_build)
+        and int(minimum_supported_build) > int(previous_minimum_supported_build),
         "apkSHA256": manifest["apkSHA256"],
         "latestManifestPath": str(latest_path),
         "productOpsEnvironmentPath": str(product_ops_path),
     }
+
+
+def _validate_minimum_supported_build_increase(
+    *,
+    manifest: dict[str, Any],
+    from_minimum_supported_build: str,
+    release_manifest_path: Path | None,
+    release_manifest: dict[str, Any] | None,
+) -> None:
+    evidence = manifest.get("minimumSupportedBuildIncreaseEvidence")
+    if not isinstance(evidence, dict):
+        raise OfficialDistributionReleaseError(
+            "minimum supported build increase requires canonical evidence"
+        )
+    expected_fields = {
+        "schema",
+        "platform",
+        "fromMinimumSupportedBuild",
+        "toMinimumSupportedVersion",
+        "toMinimumSupportedBuild",
+        "wouldBlock",
+        "normalSupport",
+        "channels",
+        "securityException",
+    }
+    if set(evidence) != expected_fields:
+        raise OfficialDistributionReleaseError(
+            "minimum supported build increase evidence shape is invalid"
+        )
+    if (
+        evidence.get("schema")
+        != "client-app.minimum-supported-build-increase-evidence"
+        or evidence.get("platform") != "android"
+        or str(evidence.get("fromMinimumSupportedBuild") or "")
+        != from_minimum_supported_build
+        or str(evidence.get("toMinimumSupportedVersion") or "")
+        != str(manifest["minimumSupportedVersion"])
+        or str(evidence.get("toMinimumSupportedBuild") or "")
+        != str(manifest["minimumSupportedBuild"])
+    ):
+        raise OfficialDistributionReleaseError(
+            "minimum supported build increase evidence is not bound to this change"
+        )
+
+    _validate_update_and_recovery_channels(evidence.get("channels"))
+    security_exception = evidence.get("securityException")
+    if security_exception is not None:
+        _validate_security_exception(
+            security_exception,
+            release_manifest_path=release_manifest_path,
+            release_manifest=release_manifest,
+        )
+        return
+    _validate_would_block_observation(evidence.get("wouldBlock"))
+    _validate_normal_support_window(evidence.get("normalSupport"))
+
+
+def _validate_would_block_observation(value: Any) -> None:
+    expected_fields = {
+        "observationStartedAt",
+        "observationEndedAt",
+        "oldVersionActiveInstallShareBasisPoints",
+        "receiptDigest",
+    }
+    if not isinstance(value, dict) or set(value) != expected_fields:
+        raise OfficialDistributionReleaseError("would_block evidence shape is invalid")
+    started = _timestamp(value["observationStartedAt"], "would_block start")
+    ended = _timestamp(value["observationEndedAt"], "would_block end")
+    if (ended - started).total_seconds() < 30 * 24 * 60 * 60:
+        raise OfficialDistributionReleaseError(
+            "would_block observation must cover at least 30 days"
+        )
+    share = value["oldVersionActiveInstallShareBasisPoints"]
+    if (
+        not isinstance(share, int)
+        or isinstance(share, bool)
+        or share < 0
+        or share >= 10
+    ):
+        raise OfficialDistributionReleaseError(
+            "old-version active install share must be below 0.1 percent"
+        )
+    _receipt_digest(value["receiptDigest"], "would_block")
+
+
+def _validate_normal_support_window(value: Any) -> None:
+    expected_fields = {"supportedSince", "evaluatedAt", "receiptDigest"}
+    if not isinstance(value, dict) or set(value) != expected_fields:
+        raise OfficialDistributionReleaseError("normal support evidence shape is invalid")
+    supported_since = _timestamp(value["supportedSince"], "normal support start")
+    evaluated_at = _timestamp(value["evaluatedAt"], "normal support evaluation")
+    try:
+        anniversary = supported_since.replace(year=supported_since.year + 1)
+    except ValueError:
+        anniversary = supported_since.replace(
+            year=supported_since.year + 1,
+            month=2,
+            day=28,
+        )
+    if evaluated_at < anniversary:
+        raise OfficialDistributionReleaseError(
+            "normal support window must cover at least 12 months"
+        )
+    _receipt_digest(value["receiptDigest"], "normal support")
+
+
+def _validate_update_and_recovery_channels(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != {"update", "recovery"}:
+        raise OfficialDistributionReleaseError(
+            "update and recovery channel evidence is required"
+        )
+    for channel_name in ("update", "recovery"):
+        channel = value[channel_name]
+        if (
+            not isinstance(channel, dict)
+            or set(channel) != {"verified", "verifiedAt", "receiptDigest"}
+            or channel.get("verified") is not True
+        ):
+            raise OfficialDistributionReleaseError(
+                f"{channel_name} channel is not verified"
+            )
+        _timestamp(channel["verifiedAt"], f"{channel_name} channel verification")
+        _receipt_digest(channel["receiptDigest"], f"{channel_name} channel")
+
+
+def _validate_security_exception(
+    value: Any,
+    *,
+    release_manifest_path: Path | None,
+    release_manifest: dict[str, Any] | None,
+) -> None:
+    expected_fields = {"risk", "reason", "approvalAuthority"}
+    if not isinstance(value, dict) or set(value) != expected_fields:
+        raise OfficialDistributionReleaseError(
+            "security exception evidence shape is invalid"
+        )
+    reason = str(value.get("reason") or "").strip()
+    if value.get("risk") != "high" or len(reason) < 20:
+        raise OfficialDistributionReleaseError(
+            "security exception must declare a high-risk audited reason"
+        )
+    if value.get("approvalAuthority") != "governance-receipt.json":
+        raise OfficialDistributionReleaseError(
+            "security exception approval authority is not canonical"
+        )
+    if release_manifest_path is None or release_manifest is None:
+        raise OfficialDistributionReleaseError(
+            "security exception requires governed release evidence"
+        )
+    approval_path = release_manifest_path.parent / "governance-receipt.json"
+    if not approval_path.is_file():
+        raise OfficialDistributionReleaseError(
+            "security exception approval receipt is missing"
+        )
+    approval = _json_object(approval_path, "security exception approval receipt")
+    source = release_manifest.get("source")
+    expected_approval_fields = {
+        "schema",
+        "repository",
+        "gitSha",
+        "artifactDigest",
+        "pullRequest",
+        "author",
+        "mergedBy",
+        "approvers",
+        "distinctPrincipals",
+        "verifiedAt",
+    }
+    approvers = approval.get("approvers")
+    principals = approval.get("distinctPrincipals")
+    if (
+        set(approval) != expected_approval_fields
+        or approval.get("schema") != "prod-release-governance-receipt"
+        or not isinstance(source, dict)
+        or approval.get("repository") != source.get("repository")
+        or approval.get("gitSha") != source.get("gitSha")
+        or approval.get("artifactDigest") != release_manifest.get("artifactDigest")
+        or not isinstance(approval.get("pullRequest"), int)
+        or isinstance(approval.get("pullRequest"), bool)
+        or approval["pullRequest"] < 1
+        or not isinstance(approvers, list)
+        or not approvers
+        or not all(isinstance(item, str) and item for item in approvers)
+        or not isinstance(principals, list)
+        or len(set(principals)) < 2
+        or str(approval.get("author") or "") in approvers
+    ):
+        raise OfficialDistributionReleaseError(
+            "security exception approval does not bind the reviewed release"
+        )
+    _timestamp(approval.get("verifiedAt"), "security exception approval")
+
+
+def _validate_android_latest_manifest(value: dict[str, Any]) -> None:
+    if value.get("schema") != "client-app.android.latest":
+        raise OfficialDistributionReleaseError("Android latest manifest schema mismatch")
+    if "minimumVersion" in value or "minimumBuild" in value:
+        raise OfficialDistributionReleaseError(
+            "Android latest manifest contains non-canonical minimum version fields"
+        )
+    minimum_version = str(value.get("minimumSupportedVersion") or "")
+    minimum_build = str(value.get("minimumSupportedBuild") or "")
+    build = str(value.get("buildNumber") or "")
+    if (
+        not minimum_version
+        or re.fullmatch(r"[1-9][0-9]{0,17}", minimum_build) is None
+        or re.fullmatch(r"[1-9][0-9]{0,17}", build) is None
+        or int(minimum_build) > int(build)
+    ):
+        raise OfficialDistributionReleaseError(
+            "Android latest minimum supported version/build is invalid"
+        )
+
+
+def _timestamp(value: Any, label: str) -> datetime:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise OfficialDistributionReleaseError(f"{label} timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(value.removesuffix("Z") + "+00:00")
+    except ValueError as error:
+        raise OfficialDistributionReleaseError(
+            f"{label} timestamp is invalid"
+        ) from error
+    if parsed.tzinfo != timezone.utc:
+        raise OfficialDistributionReleaseError(f"{label} timestamp is invalid")
+    return parsed
+
+
+def _receipt_digest(value: Any, label: str) -> str:
+    digest = str(value or "")
+    if _SHA256.fullmatch(digest) is None:
+        raise OfficialDistributionReleaseError(f"{label} receipt digest is invalid")
+    return digest
 
 
 def _release_manifest(path: Path) -> tuple[dict[str, Any], str]:
@@ -393,8 +679,8 @@ def _verify_component_binding(
             f"release manifest distribution digest mismatch: {component_key}"
         )
     expected_schema = {
-        "web": "qwq.public-web.release",
-        "android": "qwq.android.official-release",
+        "web": "client-app.web.official-release",
+        "android": "client-app.android.official-release",
     }[component_key]
     if expected_schema != str(package_manifest.get("schema") or ""):
         raise OfficialDistributionReleaseError(

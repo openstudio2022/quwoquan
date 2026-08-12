@@ -17,6 +17,9 @@ from governance.coverage.distribution import (
 )
 
 from content.source.image_payload import sniff_image_ext
+from content.source.professional_image_source_attribution import (
+    bound_image_source_attribution,
+)
 
 ValidateItem = Callable[
     [Mapping[str, Any]],
@@ -214,6 +217,11 @@ def _validate_accepted_asset(
         "relevance": str(row["relevance"]),
         "width": int(row["width"]),
         "height": int(row["height"]),
+        "sourceAttribution": bound_image_source_attribution(
+            row,
+            platform=str(provider["platform"]),
+            distribution_decision=decision,
+        ),
     }
     drifted = [key for key, value in expected.items() if plan_spec.get(key) != value]
     if drifted:

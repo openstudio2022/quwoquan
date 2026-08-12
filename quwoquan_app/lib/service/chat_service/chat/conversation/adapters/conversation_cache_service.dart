@@ -147,9 +147,7 @@ class ConversationCacheService extends ChangeNotifier
   @override
   ChatInboxCacheEntry? readInboxEntry(String conversationId) {
     final entry = get(conversationId)?.toInboxEntry();
-    return entry == null
-        ? null
-        : _withOptimisticHint(conversationId, entry);
+    return entry == null ? null : _withOptimisticHint(conversationId, entry);
   }
 
   @override

@@ -26,6 +26,7 @@ class _SearchNetworkResultsPageState
   List<SearchHit> _userResults = const <SearchHit>[];
   List<SearchHit> _groupResults = const <SearchHit>[];
   List<SearchHit> _locationResults = const <SearchHit>[];
+  List<SearchPageResultItem> _pageItems = const <SearchPageResultItem>[];
   // 云侧内容命中的排序/封面/理由元信息（按 postId 索引），由 [_contentItemsFromResponse]
   // 解析云侧 SearchHit 时填充；结果页据此消费 rankPosition/coverWidth/coverHeight/rankReasons
   // （R-001/R-003）。响应未携带可选云信号时保持既定端侧展示。

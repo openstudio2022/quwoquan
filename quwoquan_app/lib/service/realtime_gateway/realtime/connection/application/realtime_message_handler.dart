@@ -74,18 +74,14 @@ class RealtimeMessageHandler {
             error: error,
             stackTrace: stackTrace,
           );
-          unawaited(
-            messageTimelineResolver(conversationId).loadMessages(),
-          );
+          unawaited(messageTimelineResolver(conversationId).loadMessages());
           return;
         }
         _updateConversationCacheForNewMessage(conversationId, payload);
         if (msg.mediaAssetId?.isNotEmpty ?? false) {
           // MediaAsset delivery fields belong to the named Reader, not the
           // MessageSent event. Refresh through the typed query before render.
-          unawaited(
-            messageTimelineResolver(conversationId).loadMessages(),
-          );
+          unawaited(messageTimelineResolver(conversationId).loadMessages());
           return;
         }
         messageTimelineResolver(conversationId).addMessage(msg);
@@ -126,9 +122,7 @@ class RealtimeMessageHandler {
       case 'UserAvatarUpdated':
         _scheduleAvatarPatchSync();
         if (conversationId.isNotEmpty) {
-          unawaited(
-            conversationMembershipProjection.refresh(conversationId),
-          );
+          unawaited(conversationMembershipProjection.refresh(conversationId));
           conversationMembershipProjection.refreshHome(conversationId);
           _refreshConversationCache(conversationId);
         }
@@ -259,9 +253,7 @@ class RealtimeMessageHandler {
 
   /// 成员 / roster 变更 → 刷新成员 provider、group home 与缓存。
   void _reloadGroupRosterProviders(String conversationId) {
-    unawaited(
-      conversationMembershipProjection.refresh(conversationId),
-    );
+    unawaited(conversationMembershipProjection.refresh(conversationId));
     conversationMembershipProjection.refreshHome(conversationId);
     _refreshConversationCache(conversationId);
   }

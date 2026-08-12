@@ -131,7 +131,9 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 			"codeRef":         codeRef,
 			"phoneHash":       integrationsupport.CanonicalTestSHA256("+8618013813909"),
 			"maskedRecipient": "180****3909",
-			"templateId":      "sms_otp_login",
+			"templateId":      "sms_otp_login_acceptance",
+			"platform":        "acceptance",
+			"requestRef":      "req-real-sms-001",
 		},
 	}
 	first, err := service.Submit(context.Background(), request)
@@ -204,7 +206,9 @@ func TestExternalInteractionPersistsIdempotentlyAndRecordsProviderAttempt(t *tes
 	providerPayload, _ := requests[0]["payload"].(map[string]any)
 	if providerPayload["recipient"] != "+8618013813909" ||
 		providerPayload["code"] != "123456" ||
-		providerPayload["templateId"] != "sms_otp_login" ||
+		providerPayload["templateId"] != "sms_otp_login_acceptance" ||
+		providerPayload["platform"] != "acceptance" ||
+		providerPayload["requestRef"] != request.RequestID ||
 		strings.Contains(fmt.Sprint(requests[0]), "codeRef") {
 		t.Fatalf("provider request did not use transient decrypted payload: %+v", requests[0])
 	}

@@ -68,7 +68,7 @@
       "required": [
         "status", "entityMatch", "privacyRisk", "minorRisk",
         "maliciousMediaRisk", "watermarkStatus", "reviewedAt", "reviewer",
-        "evidenceRef"
+        "evidenceRef", "safetyEvidenceFileSha256"
       ],
       "additionalProperties": false,
       "properties": {
@@ -80,7 +80,11 @@
         "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
         "reviewedAt": {"type": "string", "minLength": 1},
         "reviewer": {"type": "string", "minLength": 1},
-        "evidenceRef": {"type": "string", "minLength": 1}
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "safetyEvidenceFileSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     },
     "providerCounts": {
@@ -115,7 +119,7 @@
         "authorizationRequired", "distributionDecision", "rightsAuditStatus",
         "rightsIssues", "license", "licenseSnapshot", "usageScope",
         "modelReleaseStatus", "termsUrl", "authorizationProof", "caption",
-        "relevance", "width", "height"
+        "relevance", "width", "height", "sourceAttribution"
       ],
       "additionalProperties": false,
       "properties": {
@@ -149,7 +153,8 @@
         "caption": {"type": "string", "minLength": 1},
         "relevance": {"type": "string", "minLength": 1},
         "width": {"type": "integer", "minimum": 1},
-        "height": {"type": "integer", "minimum": 1}
+        "height": {"type": "integer", "minimum": 1},
+        "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"}
       }
     },
     "asset": {
@@ -163,7 +168,8 @@
         "assetRef", "bytes", "width", "height", "license", "licenseSnapshot",
         "usageScope", "modelReleaseStatus", "termsUrl",
         "authorizationProof", "rightsIssues", "caption", "relevance", "safetyReview",
-        "withdrawalRequired", "failureCode", "failure", "planImageSpec"
+        "withdrawalRequired", "failureCode", "failure", "planImageSpec",
+        "sourceAttribution"
       ],
       "additionalProperties": false,
       "properties": {
@@ -216,6 +222,12 @@
         "caption": {"type": "string", "minLength": 1},
         "relevance": {"type": "string", "minLength": 1},
         "safetyReview": {"$ref": "#/$defs/safetyReview"},
+        "sourceAttribution": {
+          "anyOf": [
+            {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+            {"type": "null"}
+          ]
+        },
         "withdrawalRequired": {"type": "boolean"},
         "failureCode": {"type": "string"},
         "failure": {"type": "string"},
@@ -250,6 +262,7 @@
               "failureCode": {"const": ""},
               "failure": {"const": ""},
               "planImageSpec": {"$ref": "#/$defs/planImageSpec"},
+              "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
               "safetyReview": {
                 "type": "object",
                 "properties": {

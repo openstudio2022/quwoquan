@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../../support/runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
 
 List<ContentPostViewData> _contractDiscoveryItems() {
-  final posts = objectScenarioSeedReader.contentSeedSet()?['posts'];
+  final posts = objectContractExampleReader.contentExample()?['posts'];
   if (posts is! List) {
     throw StateError('content_discovery_core.posts fixture is missing');
   }

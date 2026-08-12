@@ -50,6 +50,10 @@ extension _SearchNetworkResultsPageStateHelpers
       ];
     }
 
+    if (_pageItems.isNotEmpty) {
+      return withDegradeBanner(_buildSearchPageFlatCards(isDark: isDark));
+    }
+
     if (_activeTabId == _SearchNetworkResultsPageState._tabAll) {
       return withDegradeBanner(
         _buildAllResultChildren(
@@ -103,6 +107,26 @@ extension _SearchNetworkResultsPageStateHelpers
         relatedSearchCard: relatedSearchCard,
       ),
     );
+  }
+
+  List<Widget> _buildSearchPageFlatCards({required bool isDark}) {
+    final sections = <Widget>[];
+    for (final item in _pageItems) {
+      sections.add(
+        _SearchPageFlatCard(
+          item: item,
+          isDark: isDark,
+          onTap: () => _openSearchPageResult(item),
+        ),
+      );
+      sections.add(SizedBox(height: AppSpacing.intraGroupSm));
+    }
+    final relatedSearchCard = _buildRelatedSearchCard(isDark: isDark);
+    if (relatedSearchCard != null) {
+      sections.add(SizedBox(height: AppSpacing.containerSm));
+      sections.add(relatedSearchCard);
+    }
+    return sections;
   }
 
   List<Widget> _buildAllResultChildren({

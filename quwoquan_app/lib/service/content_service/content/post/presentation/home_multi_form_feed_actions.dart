@@ -291,6 +291,7 @@ class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
   double _peakFraction = 0;
   bool _everVisible = false;
   bool _reported = false;
+  bool _isActive = true;
 
   @override
   void initState() {
@@ -313,6 +314,24 @@ class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
   }
 
   @override
+  void activate() {
+    super.activate();
+    _isActive = true;
+    if (!_reported) {
+      _samplingClock.addListener(_samplingListener);
+    }
+  }
+
+  @override
+  void deactivate() {
+    // mounted 在 inactive element 上仍为 true；必须在 deactivate 边界撤销采样，
+    // 否则共享 Timer 会对已离开 render tree 的 context 调 findRenderObject。
+    _isActive = false;
+    _samplingClock.removeListener(_samplingListener);
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _flushWeakVisibleIfNeeded(widget.onWeakVisible);
     _samplingClock.removeListener(_samplingListener);
@@ -327,7 +346,7 @@ class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
   }
 
   void _sample() {
-    if (_reported || !mounted) {
+    if (_reported || !_isActive || !mounted) {
       return;
     }
     final fraction = _viewportVisibleFraction();

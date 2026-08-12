@@ -4,6 +4,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 for _path in (DATA_ROOT, SCRIPTS_ROOT):
@@ -27,7 +29,8 @@ from core.content_source_registry import (
     verify_content_source_registry,
 )
 from core.video_source_admission import (
-    assert_video_source_admitted,
+    assert_video_acquisition_path_allowed,
+    assert_video_distribution_use_allowed,
 )
 
 
@@ -187,7 +190,7 @@ def test_registry_rejects_dropping_the_narrative_guard():
     assert any("allowedSourceClasses" in issue for issue in issues)
 
 
-def test_reference_only_video_sources_have_no_acquisition_or_release_admission():
+def test_reference_only_video_sources_separate_research_bytes_from_release_defaults():
     data = load_content_source_registry()
     matrix = {
         row["sourceId"]: row
@@ -201,19 +204,72 @@ def test_reference_only_video_sources_have_no_acquisition_or_release_admission()
         source = video_sources[source_id]
         assert source["defaultRole"] == "reference_only"
         assert source["fetchMode"] == "platform_reference"
-        assert source.get("researchAcquisitionPaths") in (None, [])
+        assert source["researchAcquisitionPaths"] == ["manual_file"]
         assert matrix[source_id]["publicationAdmissions"] == []
-        try:
-            assert_video_source_admitted(
+        assert_video_acquisition_path_allowed(
+            data,
+            source_id=source_id,
+            source_kind="tourism_video_site",
+            acquisition_path="manual_file",
+        )
+        with pytest.raises(ValueError, match="public_direct is not allowed"):
+            assert_video_acquisition_path_allowed(
                 data,
                 source_id=source_id,
                 source_kind="tourism_video_site",
-                publication_admission="research_release",
+                acquisition_path="public_direct",
             )
-        except ValueError as exc:
-            assert "GATE_BLOCK DATA.CONTRACT.INVALID" in str(exc)
-        else:
-            raise AssertionError(f"{source_id} reference-only admission was accepted")
+        assert_video_distribution_use_allowed(
+            data,
+            source_id=source_id,
+            source_kind="tourism_video_site",
+            publication_admission="research_release",
+        )
+        for publication in ("commercial_release", "risk_accepted_attribution_only"):
+            with pytest.raises(ValueError, match=f"{publication} is not allowed"):
+                assert_video_distribution_use_allowed(
+                    data,
+                    source_id=source_id,
+                    source_kind="tourism_video_site",
+                    publication_admission=publication,
+                )
+
+
+def test_cctv_public_video_is_research_only_and_never_commercial():
+    data = load_content_source_registry()
+    source = next(
+        row
+        for row in data["verticals"]["travel"]["video"]
+        if row["sourceId"] == "cctv_video"
+    )
+    matrix = next(
+        row
+        for row in data["lanePolicies"]["video"]["commercialAdmissionMatrix"]
+        if row["sourceId"] == "cctv_video"
+    )
+
+    assert source["platform"] == "央视网"
+    assert source["researchAcquisitionPaths"] == ["public_direct", "manual_file"]
+    assert matrix["publicationAdmissions"] == ["research_release"]
+    assert_video_acquisition_path_allowed(
+        data,
+        source_id="cctv_video",
+        source_kind="tourism_video_site",
+        acquisition_path="public_direct",
+    )
+    assert_video_distribution_use_allowed(
+        data,
+        source_id="cctv_video",
+        source_kind="tourism_video_site",
+        publication_admission="research_release",
+    )
+    with pytest.raises(ValueError, match="commercial_release is not allowed"):
+        assert_video_distribution_use_allowed(
+            data,
+            source_id="cctv_video",
+            source_kind="tourism_video_site",
+            publication_admission="commercial_release",
+        )
 
 
 def test_registry_typed_gate_blocks_reference_only_video_configuration_conflicts():
@@ -230,8 +286,8 @@ def test_registry_typed_gate_blocks_reference_only_video_configuration_conflicts
     issues = verify_content_source_registry(data)
 
     assert (
-        "GATE_BLOCK DATA.CONTRACT.INVALID: video source bilibili is "
-        "reference_only/platform_reference but declares research acquisition paths"
+        "video source bilibili: research acquisition paths must equal "
+        "['manual_file']"
     ) in issues
     assert (
         "GATE_BLOCK DATA.CONTRACT.INVALID: video matrix bilibili is "

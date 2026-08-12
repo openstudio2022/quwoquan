@@ -6,10 +6,20 @@ import 'dart:async';
 final class BlockedKeywordSnapshotCache {
   BlockedKeywordSnapshotCache({
     this.ttl = const Duration(minutes: 5),
+    this.lookupDeadline = const Duration(milliseconds: 1500),
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+  }) : _now = now ?? DateTime.now {
+    if (lookupDeadline <= Duration.zero) {
+      throw ArgumentError.value(
+        lookupDeadline,
+        'lookupDeadline',
+        'must be positive',
+      );
+    }
+  }
 
   final Duration ttl;
+  final Duration lookupDeadline;
   final DateTime Function() _now;
   List<String> _value = const <String>[];
   DateTime? _expiresAt;
@@ -22,12 +32,18 @@ final class BlockedKeywordSnapshotCache {
     }
     final inflight = _inflight;
     if (inflight != null) return inflight;
-    final request = loader()
+    late final Future<List<String>> request;
+    request = Future<List<String>>.sync(loader)
+        .timeout(lookupDeadline)
         .then((items) {
           replace(items);
           return _value;
         })
-        .whenComplete(() => _inflight = null);
+        .whenComplete(() {
+          if (identical(_inflight, request)) {
+            _inflight = null;
+          }
+        });
     _inflight = request;
     return request;
   }

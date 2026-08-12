@@ -9,16 +9,46 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.local_beta_object_storage import prepare_local_beta_object_storage
+from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
 from quwoquan_ops.cli.lib.local_environment_auth import prepare_local_environment_auth
 
 
 class LocalGammaObjectStorageTest(unittest.TestCase):
+    def test_all_local_upload_authorities_use_the_target_object_storage_edge(self) -> None:
+        topology = load_environment_topology()
+        expected = {
+            "alpha-local": "https://upload.alpha.quwoquan.com:17130",
+            "beta-local": "https://upload.beta.quwoquan.com:18130",
+            "gamma-local": "https://upload.gamma.quwoquan.com:19130",
+        }
+
+        for target_name, upload_base in expected.items():
+            with self.subTest(target=target_name):
+                target = get_target(topology, target_name)
+                self.assertEqual(target["publicBases"]["mediaUpload"], upload_base)
+
+    def test_all_local_content_runtimes_presign_https_uploads(self) -> None:
+        service_root = ROOT / "quwoquan_service/services/content-service"
+        for environment in ("alpha", "beta", "gamma"):
+            with self.subTest(environment=environment):
+                config = yaml.safe_load(
+                    (service_root / "environments" / environment / "config.yaml").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertIs(
+                    config["overrides"]["sys.content-service.oss.use_ssl"],
+                    True,
+                )
+
     def _write_public_certificate(self, deploy_root: Path, target: str) -> None:
         certificate_root = deploy_root / target / "certificates"
         certificate_root.mkdir(parents=True)

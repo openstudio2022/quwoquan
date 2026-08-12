@@ -17,6 +17,7 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/ada
 import 'package:quwoquan_app/service/user_service/profile_projection/following_subject/adapters/following_subject_remote.dart';
 import 'package:quwoquan_app/service/user_service/relationship/followed_subject_visit_state/adapters/followed_subject_visit_state_remote.dart';
 import 'package:quwoquan_app/service/user_service/relationship/greeting_request/adapters/greeting_request_remote.dart';
+import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/adapters/persona_relationship_follow_remote.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/adapters/persona_relationship_remote.dart';
 import 'package:quwoquan_app/service/user_service/relationship/subject_follow/adapters/subject_follow_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -45,6 +46,7 @@ final class UserApiContractHarness {
     required this.followingSubjects,
     required this.followedSubjectVisits,
     required this.greetingRequests,
+    required this.personaRelationshipFollows,
     required this.personaCommands,
     required this.settingsReader,
     required this.settingsCommands,
@@ -76,8 +78,13 @@ final class UserApiContractHarness {
         gatewayBaseUri: Uri.parse(_apiBase),
       ),
     );
-    CloudOperationInvocationContext invocationContext(String clientPageId) =>
-        harness._invocationContext(clientPageId);
+    CloudOperationInvocationContext invocationContext(
+      String clientPageId, {
+      String? idempotencyKey,
+    }) => harness._invocationContext(
+      clientPageId,
+      idempotencyKey: idempotencyKey,
+    );
     harness = UserApiContractHarness._(
       httpClient: httpClient,
       tokenProvider: tokenProvider,
@@ -147,6 +154,24 @@ final class UserApiContractHarness {
         client: client,
         invocationContext: invocationContext,
       ),
+      personaRelationshipFollows: RemotePersonaRelationshipFollowAdapter(
+        client: client,
+        invocationContext: (clientPageId, _) {
+          final idempotencyKey = switch (clientPageId) {
+            UserRequestPageIds.followUser || UserRequestPageIds.unfollowUser =>
+              harness._activeIdempotencyKey ??
+                  (throw StateError(
+                    '$clientPageId requires an explicit idempotency scope',
+                  )),
+            _ => null,
+          };
+          return harness._invocationContextForSurface(
+            AppUiSurfaces.userProfile,
+            clientPageId,
+            idempotencyKey: idempotencyKey,
+          );
+        },
+      ),
       personaCommands: RemotePersonaCommandWriter(
         client: client,
         invocationContext: invocationContext,
@@ -180,6 +205,7 @@ final class UserApiContractHarness {
   final RemoteFollowingSubjectReader followingSubjects;
   final RemoteFollowedSubjectVisitStateWriter followedSubjectVisits;
   final RemoteGreetingRequestFacet greetingRequests;
+  final RemotePersonaRelationshipFollowAdapter personaRelationshipFollows;
   final RemotePersonaCommandWriter personaCommands;
   final RemoteUserSettingsQueryReader settingsReader;
   final RemoteUserSettingsCommandWriter settingsCommands;

@@ -53,7 +53,9 @@ const String _homepageId = 'homepage_sight_west_lake';
 
 List<Override> _homepageShellBoundaryOverrides() => <Override>[
   ...sealedCloudBoundaryOverrides(),
-  behaviorRepositoryProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+  behaviorRepositoryProvider.overrideWithValue(
+    RecordingContentBehaviorRepository(),
+  ),
   intersectionRepositoryProvider.overrideWithValue(
     InMemoryIntersectionRepository(),
   ),

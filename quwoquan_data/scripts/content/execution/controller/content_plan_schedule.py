@@ -35,7 +35,14 @@ class ContentPlanScheduler:
             raise ValueError("creator registry must not be empty")
         return cls(execution_id, region, daily_object_target, registry)
 
-    def assign(self, *, carrier: str, target: str, intent: str = "") -> dict[str, Any]:
+    def assign(
+        self,
+        *,
+        carrier: str,
+        target: str,
+        intent: str = "",
+        topic_tag_refs: list[str] | tuple[str, ...] = (),
+    ) -> dict[str, Any]:
         tags = (
             ["Topic/旅行", f"Topic/地理/行政区/中国/{self.region}"]
             if self.region
@@ -43,6 +50,8 @@ class ContentPlanScheduler:
         )
         if carrier == "image":
             tags.append("Topic/旅行/玩法/摄影旅拍")
+        tags.extend(str(ref) for ref in topic_tag_refs if str(ref).strip())
+        tags = list(dict.fromkeys(tags))
         return resolve_registry_creator_assignment(
             {"carrier": carrier, "vertical": "travel", "creatorPersona": {}},
             carrier=carrier,

@@ -10,7 +10,6 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrLocationUnavailable             = errors.New("INTEGRATION.USER.location_unavailable")
 	ErrInvalidArgument                 = errors.New("INTEGRATION.USER.invalid_argument")
 	ErrLocationPermissionRequired      = errors.New("INTEGRATION.USER.location_permission_required")
 	ErrUpstreamTimeout                 = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
@@ -19,12 +18,6 @@ var (
 	ErrLocationProviderInvalidResponse = errors.New("INTEGRATION.MIDDLEWARE.location_provider_invalid_response")
 	ErrLocationInternalError           = errors.New("INTEGRATION.SYSTEM.location_internal_error")
 )
-
-// AppErrorFromLocationUnavailable returns *AppError for INTEGRATION.USER.location_unavailable (user_message from errors.yaml).
-func AppErrorFromLocationUnavailable(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrLocationUnavailable.Error()))
-	return rerrors.NewAppError(code, "暂时无法获取当前位置，请稍后重试", debugMessage).WithMetadata("unavailable", 400).WithRecoveryDirective("retry", "snackbar", 3)
-}
 
 // AppErrorFromInvalidArgument returns *AppError for INTEGRATION.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {

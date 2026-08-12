@@ -125,9 +125,37 @@ abstract class GreetingRepository {
     required int limit,
   });
 
-  Future<GreetingReplyResultViewData> replyGreeting(String requestId);
+  Future<GreetingReplyResultViewData> replyGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  });
 
-  Future<GreetingRequestViewData> ignoreGreeting(String requestId);
+  Future<GreetingRequestViewData> ignoreGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  });
 
-  Future<GreetingRequestViewData> cancelGreeting(String requestId);
+  Future<GreetingRequestViewData> cancelGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  });
+}
+
+/// Caller-bound command seam used by a UI attempt to replay the exact same
+/// semantic intent after a recoverable failure.
+abstract interface class GreetingRequestIntentCommandWriter {
+  Future<GreetingRequestRecord> replyGreetingWithIntent(
+    ReplyGreetingCommand command, {
+    required String idempotencyKey,
+  });
+
+  Future<GreetingRequestRecord> ignoreGreetingWithIntent(
+    IgnoreGreetingCommand command, {
+    required String idempotencyKey,
+  });
+
+  Future<GreetingRequestRecord> cancelGreetingWithIntent(
+    CancelGreetingCommand command, {
+    required String idempotencyKey,
+  });
 }

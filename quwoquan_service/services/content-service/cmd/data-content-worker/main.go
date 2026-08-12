@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -191,7 +192,33 @@ func run() error {
 		DefaultScene: "reliabletask",
 	})
 	defer router.Close()
-	executionHash := sha256.Sum256([]byte(request.ExecutionID))
+	streamIdentity := request.ExecutionID
+	allowedPartitions := map[string]struct{}(nil)
+	workerIdentity := "data-content-worker"
+	if request.WorkerHostBinding != nil {
+		binding := request.WorkerHostBinding
+		streamIdentity = strings.Join(
+			[]string{
+				request.ExecutionID,
+				binding.HostSetDigest,
+				strconv.Itoa(binding.Generation),
+				binding.FencingToken,
+				binding.HostScopeID,
+			},
+			"|",
+		)
+		allowedPartitions = make(map[string]struct{}, len(binding.PartitionKeys))
+		for _, partition := range binding.PartitionKeys {
+			allowedPartitions[strings.TrimSpace(partition)] = struct{}{}
+		}
+		workerIdentity = fmt.Sprintf(
+			"data-content-worker-%s-g%d-%s",
+			binding.HostScopeID,
+			binding.Generation,
+			strings.TrimPrefix(binding.FencingToken, "sha256:")[:12],
+		)
+	}
+	executionHash := sha256.Sum256([]byte(streamIdentity))
 	streamSuffix := hex.EncodeToString(executionHash[:])
 	ready, err := reliabletask.NewRedisReadyIndex(
 		reliabletask.RedisReadyIndexConfig{
@@ -208,24 +235,47 @@ func run() error {
 		return fmt.Errorf("ensure reliabletask Redis ready index: %w", err)
 	}
 	fleet := reliabletask.DataContentFleet{
-		Store:          store,
-		ExecutionID:    request.ExecutionID,
-		Ready:          ready,
-		WorkerID:       "data-content-worker",
-		LeaseTTL:       cfg.LeaseTTL,
-		PendingMinIdle: cfg.PendingMinIdle,
-		Retry: reliabletask.RetryPolicy{
-			MaxAttempts: cfg.MaxAttempts,
-		},
+		Store:             store,
+		ExecutionID:       request.ExecutionID,
+		Ready:             ready,
+		WorkerID:          workerIdentity,
+		LeaseTTL:          cfg.LeaseTTL,
+		PendingMinIdle:    cfg.PendingMinIdle,
+		Retry:             reliabletask.RetryPolicy{},
+		AllowedPartitions: allowedPartitions,
 		ResultVerifier: reliabletask.DataContentFilesystemEvidenceVerifier{
 			PublishRoot:  cfg.PublishRoot,
 			EvidenceRoot: cfg.EvidenceRoot,
 		},
 	}
+	if request.WorkerHostBinding != nil {
+		fleet.WorkerFence = &reliabletask.DataContentWorkerFence{
+			HostSetDigest: request.WorkerHostBinding.HostSetDigest,
+			Generation:    request.WorkerHostBinding.Generation,
+			FencingToken:  request.WorkerHostBinding.FencingToken,
+			HostScopeID:   request.WorkerHostBinding.HostScopeID,
+		}
+	}
 	startedAt := time.Now().UTC()
 	for _, job := range request.Jobs {
 		if _, err := fleet.Declare(ctx, job); err != nil {
 			return fmt.Errorf("declare data content job %s: %w", job.JobID, err)
+		}
+	}
+	if fleet.WorkerFence != nil {
+		executionTasks, err := loadExecutionTasks(ctx, fleet.Store, request.ExecutionID)
+		if err != nil {
+			return err
+		}
+		selected, err := importer.SelectFenceTargets(executionTasks, request)
+		if err != nil {
+			return err
+		}
+		if len(selected) != len(request.Jobs) {
+			return errors.New("governed fleet could not resolve every host task before fencing")
+		}
+		if err := fleet.BindWorkerFence(ctx, selected); err != nil {
+			return fmt.Errorf("bind governed worker fence: %w", err)
 		}
 	}
 	if *request.RecoverDeadTasks {
@@ -445,10 +495,7 @@ func runWorkers(
 		go func(workerIndex int) {
 			defer group.Done()
 			localFleet := fleet
-			localFleet.WorkerID = fmt.Sprintf(
-				"data-content-worker-%04d",
-				workerIndex,
-			)
+			localFleet.WorkerID = fmt.Sprintf("%s-%04d", fleet.WorkerID, workerIndex)
 			for workerCtx.Err() == nil {
 				objectCtx, cancelObject := context.WithTimeout(
 					workerCtx,

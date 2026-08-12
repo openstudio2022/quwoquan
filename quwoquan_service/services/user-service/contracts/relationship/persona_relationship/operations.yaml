@@ -888,3 +888,67 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_relationship_follow_user_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: FollowUser}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_unfollow_user_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UnfollowUser}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_list_following_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListFollowing}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_list_followers_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListFollowers}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_get_relationship_capability_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetRelationshipCapability}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_block_user_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: BlockUser}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_list_blocked_users_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListBlockedUsers}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_unblock_user_app_api
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UnblockUser}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

@@ -20,6 +20,7 @@ type operationDescriptorContextKey struct{}
 type OperationSecurityDescriptor struct {
 	CanonicalOperationID string
 	ContractGraphSHA256  string
+	Transport            string
 	Method               string
 	PathTemplate         string
 	OperationKind        string
@@ -154,6 +155,35 @@ const (
 func RequireGeneratedOperationAuthorization(
 	descriptors []OperationSecurityDescriptor,
 ) func(http.Handler) http.Handler {
+	return requireGeneratedOperationAuthorization(
+		descriptors,
+		publicOperationBoundary,
+	)
+}
+
+// RequireGeneratedOperationAuthorizationForTestLive applies the same
+// default-deny public route table while allowing one validated mutable
+// test-live runtime to exercise a generated operation whose commercial
+// rollout evidence is not ready yet. The identity validation is deliberately
+// separate from request authorization: authn/authz, ownership, idempotency,
+// preconditions and deadlines remain identical to the public boundary.
+func RequireGeneratedOperationAuthorizationForTestLive(
+	descriptors []OperationSecurityDescriptor,
+	identity MutableTestLiveOperationIdentity,
+) (func(http.Handler) http.Handler, error) {
+	if err := identity.Validate(); err != nil {
+		return nil, err
+	}
+	return requireGeneratedOperationAuthorization(
+		descriptors,
+		runtimeOperationBoundary,
+	), nil
+}
+
+func requireGeneratedOperationAuthorization(
+	descriptors []OperationSecurityDescriptor,
+	boundary operationBoundary,
+) func(http.Handler) http.Handler {
 	compiled := mustCompileOperationDescriptors(descriptors)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +201,7 @@ func RequireGeneratedOperationAuthorization(
 				w,
 				r,
 				descriptor,
-				publicOperationBoundary,
+				boundary,
 				next,
 			)
 		})
@@ -189,8 +219,9 @@ func RequireGeneratedOperationAuthorization(
 //   - unmatched paths pass through, because this middleware is not the routing
 //     authority for probes or for object routes that are still migrating.
 //
-// api-edge must keep using RequireGeneratedOperationAuthorization: it is the
-// public boundary and stays default-deny plus commercial fail-closed.
+// api-edge must keep using one of the default-deny RequireGeneratedOperation
+// Authorization guards. EnforceRuntimeOperationContract is never an edge
+// guard because unmatched paths deliberately pass through it.
 func EnforceRuntimeOperationContract(
 	descriptors []OperationSecurityDescriptor,
 ) func(http.Handler) http.Handler {
@@ -279,6 +310,7 @@ func mustCompileOperationDescriptors(
 	seen := make(map[string]struct{}, len(descriptors))
 	contractGraphSHA256 := ""
 	for _, descriptor := range descriptors {
+		descriptor.Transport = strings.TrimSpace(descriptor.Transport)
 		descriptor.OperationKind = strings.TrimSpace(descriptor.OperationKind)
 		descriptor.MutationTarget = strings.TrimSpace(descriptor.MutationTarget)
 		descriptor.InvariantTarget = strings.TrimSpace(descriptor.InvariantTarget)
@@ -345,6 +377,15 @@ func mustCompileOperationDescriptors(
 			contractGraphSHA256 = descriptor.ContractGraphSHA256
 		} else if contractGraphSHA256 != descriptor.ContractGraphSHA256 {
 			panic("generated operation descriptors use multiple ContractGraph hashes")
+		}
+		// GraphQL deliberately multiplexes many canonical read operations over
+		// one POST /graphql transport route. The signed persisted-query registry
+		// resolves the hash to one operation before its dedicated authorizer
+		// checks the generated descriptor. A method/path-only guard cannot make
+		// that choice and therefore must not compile GraphQL entries into its
+		// REST route table. All descriptor-level validation above still runs.
+		if descriptor.Transport == "graphql" {
+			continue
 		}
 		pattern, err := compilePathTemplate(descriptor.PathTemplate)
 		if err != nil {

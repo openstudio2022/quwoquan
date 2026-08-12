@@ -16,8 +16,196 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     aggregate.add_argument("--release-id", required=True)
     aggregate.add_argument("--root-execution-id", required=True)
+    aggregate.add_argument(
+        "--target-environment",
+        choices=("alpha", "beta", "gamma", "prod"),
+        help=(
+            "按同一内容池的稳定前缀构建环境 ReleaseManifest；"
+            "alpha/beta/gamma cap 分别为 2.1k/10k/100k"
+        ),
+    )
     aggregate.add_argument("--output-root")
     aggregate.set_defaults(handler=owner.handle_campaign_aggregate_release)
+
+    pool_build = commands.add_parser(
+        "pool-build",
+        help="从统一池构建环境 ReleaseManifest 或精确 Research milestone cohort",
+    )
+    pool_build.add_argument("--release-id", required=True)
+    selection = pool_build.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
+        "--target-environment",
+        choices=("alpha", "beta", "gamma", "prod"),
+    )
+    selection.add_argument(
+        "--milestone", choices=("M100", "M1000", "M10000")
+    )
+    pool_build.add_argument("--release-class", choices=("research",))
+    pool_build.add_argument("--publish-root")
+    pool_build.add_argument("--release-root")
+    pool_build.set_defaults(handler=owner.handle_pool_release_build)
+
+    pool_inspect = commands.add_parser(
+        "pool-inspect",
+        help="只读审视作者/内容准入、引用闭包、环境容量与 M100 gap",
+    )
+    pool_inspect.add_argument("--publish-root")
+    pool_inspect.add_argument(
+        "--milestone",
+        choices=("M100", "M1000", "M10000"),
+        default="M100",
+        help="按累计唯一 publishable 计算目标、gap 与下一 rolling wave",
+    )
+    pool_inspect.add_argument(
+        "--details",
+        action="store_true",
+        help="包含全部逐对象问题；默认只输出首个 typed blocker",
+    )
+    pool_inspect.add_argument(
+        "--by-task",
+        action="store_true",
+        help="按来源任务批次显示目标、成功、质量、授权与交付统计",
+    )
+    pool_inspect.add_argument(
+        "--execution-id",
+        action="append",
+        help="与 --by-task 一起重复传入要审计的精确 frozen execution",
+    )
+    pool_inspect.add_argument(
+        "--source-pool-ref",
+        help="待调度 current wave 的 exact immutable scale source-pool output ref",
+    )
+    pool_inspect.add_argument(
+        "--source-pool-evidence-root-ref",
+        help="与 source-pool 逐字节核验的 exact physical evidence root output ref",
+    )
+    pool_inspect.add_argument(
+        "--throughput-promotion-ref",
+        help="可选：含真实 per-slot samples 的 immutable promotion output ref",
+    )
+    pool_inspect.set_defaults(handler=owner.handle_pool_inspect)
+
+    pool_dispatch = commands.add_parser(
+        "pool-dispatch",
+        help="从 pool-inspect 的物理 waveInput 冻结 carrier-selective 单 execution 请求",
+    )
+    pool_dispatch.add_argument("--dispatch-id", required=True)
+    pool_dispatch.add_argument("--pool-inspection-ref", required=True)
+    pool_dispatch.add_argument("--semantic-preflight-receipt", required=True)
+    pool_dispatch.add_argument("--run-date", required=True)
+    pool_dispatch.add_argument("--scope", required=True)
+    pool_dispatch.add_argument("--region-ref", required=True)
+    pool_dispatch.add_argument("--sequence-start", type=int, default=1)
+    pool_dispatch.add_argument(
+        "--predecessor-dispatch-ref",
+        help="retry wave 的 immutable predecessor dispatch manifest output ref",
+    )
+    pool_dispatch.add_argument(
+        "--retry-predecessor",
+        action="append",
+        default=[],
+        metavar="SLOT_ID=EXECUTION_ID",
+        help="逐 slot 显式绑定失败 predecessor；retry wave 只物化这些 exact slots",
+    )
+    pool_dispatch.add_argument(
+        "--retry-unfinished-ref",
+        action="append",
+        default=[],
+        metavar="SLOT_ID=OBJECT_REF",
+        help="逐 slot 按 predecessor state 的 exact ordered unfinished ref 缩窄 retry",
+    )
+    pool_dispatch.add_argument("--required-workers", type=int, default=1)
+    pool_dispatch.add_argument(
+        "--partition-count",
+        type=int,
+        choices=(16, 32, 64, 128, 256),
+        default=16,
+    )
+    pool_dispatch.add_argument("--capacity-plan-digest", required=True)
+    pool_dispatch.add_argument("--publish-root")
+    pool_dispatch.set_defaults(handler=owner.handle_pool_dispatch)
+
+    supply_chain_drill = commands.add_parser(
+        "supply-chain-drill",
+        help="经正式发布、验证与运行时入口演练一个不可变 Release",
+    )
+    supply_chain_drill.add_argument("--release-id", required=True)
+    supply_chain_drill.add_argument(
+        "--env",
+        required=True,
+        choices=("alpha", "beta", "gamma", "prod"),
+    )
+    supply_chain_drill.add_argument(
+        "--profile",
+        required=True,
+        choices=("inspect", "delivery", "rehearsal"),
+    )
+    supply_chain_drill.add_argument(
+        "--platform",
+        choices=("android", "ios-simulator"),
+        default="",
+    )
+    supply_chain_drill.add_argument("--device-id", default="")
+    supply_chain_drill.set_defaults(handler=owner.handle_supply_chain_drill)
+
+    pool_append = commands.add_parser(
+        "pool-append",
+        help="逐对象校验或显式追加作者、实体主页和内容准入记录",
+    )
+    pool_append.add_argument("--input", required=True)
+    pool_append.add_argument("--publish-root")
+    pool_append.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式写入；省略时只验证并输出 plan 结果",
+    )
+    pool_append.set_defaults(handler=owner.handle_pool_append)
+
+    pool_backfill = commands.add_parser(
+        "pool-backfill",
+        help="从现有 canonical 证据派生只读 backfill 计划",
+    )
+    pool_backfill_actions = pool_backfill.add_subparsers(
+        dest="pool_backfill_action", required=True
+    )
+    pool_backfill_plan = pool_backfill_actions.add_parser(
+        "plan", help="仅输出证据绑定的 pool-append batch；不写 canonical"
+    )
+    pool_backfill_plan.add_argument("--publish-root")
+    pool_backfill_plan.set_defaults(handler=owner.handle_pool_backfill_plan)
+    pool_backfill_repair = pool_backfill_actions.add_parser(
+        "repair-attribution",
+        help="从 exact source-ready candidate 计划或追加显式 attribution pool record",
+    )
+    pool_backfill_repair.add_argument("--bindings", required=True)
+    pool_backfill_repair.add_argument("--source-pool-ref", required=True)
+    pool_backfill_repair.add_argument(
+        "--source-pool-evidence-root-ref", required=True
+    )
+    pool_backfill_repair.add_argument("--publish-root")
+    pool_backfill_repair.add_argument("--apply", action="store_true")
+    pool_backfill_repair.set_defaults(
+        handler=owner.handle_pool_attribution_repair
+    )
+
+    object_transaction = commands.add_parser(
+        "object-transaction",
+        help="按审计 delta 与 canonical Merkle 管理单一对象事务",
+    )
+    object_transaction_actions = object_transaction.add_subparsers(
+        dest="object_transaction_action",
+        required=True,
+    )
+    object_transaction_rollback = object_transaction_actions.add_parser(
+        "rollback",
+        help="按精确 inverse delta 回滚一笔已应用对象事务并保留回执",
+    )
+    object_transaction_rollback.add_argument("--transaction-id", required=True)
+    object_transaction_rollback.add_argument("--output-root")
+    object_transaction_rollback.add_argument("--publish-root")
+    object_transaction_rollback.set_defaults(
+        handler=owner.handle_object_transaction_rollback
+    )
 
     identity_incident = commands.add_parser(
         "identity-incident",

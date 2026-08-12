@@ -11,6 +11,8 @@ import 'package:quwoquan_app/service/tag_service/tag/tag_node_view/application/p
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_edit_models.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_media_upload_gateway.dart';
 import 'package:quwoquan_app/service/user_service/account/credential_binding/application/public/phone_number_wire.dart';
+import 'package:quwoquan_app/service/user_service/account/authentication_challenge/application/public/authentication_challenge_writer.dart'
+    show newOtpIdempotencyKey, otpClientPlatformForRuntime;
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';

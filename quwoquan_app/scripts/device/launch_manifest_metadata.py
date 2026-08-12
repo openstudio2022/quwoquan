@@ -85,6 +85,7 @@ def load_launch_manifest_contract(
     digest_fields = content_binding.get("digest_fields")
     required_launch_policies = content_binding.get("required_launch_policies")
     launch_policies = decoded.get("launch_policies")
+    supported_binding_modes = {"unbound", "run_bound", "immutable_release"}
     if (
         not isinstance(binding_fields, list)
         or not binding_fields
@@ -99,6 +100,26 @@ def load_launch_manifest_contract(
         )
         or not isinstance(launch_policies, dict)
         or set(required_launch_policies) - set(launch_policies)
+        or any(
+            not isinstance(policy, str)
+            or not policy
+            or not isinstance(policy_contract, dict)
+            or not isinstance(policy_contract.get("environments"), list)
+            or not policy_contract["environments"]
+            or any(
+                not isinstance(environment, str) or not environment
+                for environment in policy_contract["environments"]
+            )
+            or not isinstance(policy_contract.get("content_binding_modes"), list)
+            or not policy_contract["content_binding_modes"]
+            or any(
+                not isinstance(mode, str) or mode not in supported_binding_modes
+                for mode in policy_contract["content_binding_modes"]
+            )
+            or len(set(policy_contract["content_binding_modes"]))
+            != len(policy_contract["content_binding_modes"])
+            for policy, policy_contract in launch_policies.items()
+        )
     ):
         raise LaunchManifestContractError(
             "content_binding_contract definition is invalid"
@@ -475,10 +496,24 @@ def validate_handoff_against_metadata(
             issues.append(
                 f"effective launch policy {launch_policy} is invalid for {environment}"
             )
-        expected_binding_state = policy_contract.get("content_binding_state")
+        if len(populated_fields) == len(binding_fields):
+            binding_mode = (
+                "run_bound"
+                if launch_policy == "test_live"
+                else "immutable_release"
+            )
+            expected_binding_state = "bound"
+        else:
+            binding_mode = "unbound"
+            expected_binding_state = "unbound"
+        if binding_mode not in policy_contract.get("content_binding_modes", []):
+            issues.append(
+                f"effective launch content binding mode {binding_mode} "
+                f"is invalid for launch policy {launch_policy}"
+            )
         if effective_manifest.get("contentBindingState") != expected_binding_state:
             issues.append(
-                "effective launch contentBindingState disagrees with launch policy"
+                "effective launch contentBindingState disagrees with content binding mode"
             )
     if (
         launch_policy in binding_contract["required_launch_policies"]
@@ -487,9 +522,6 @@ def validate_handoff_against_metadata(
         issues.append(
             f"effective launch content binding is required for launch policy {launch_policy}"
         )
-    if launch_policy == "test_live" and populated_fields:
-        issues.append("test_live effective launch content binding must be unbound")
-
     defines = handoff.get("dartDefines")
     if isinstance(defines, dict):
         normalized_defines = {

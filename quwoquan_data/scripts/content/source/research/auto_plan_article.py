@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
+from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 from content.source.research.plan_state import (
     _accept_source,
     _hydrate_mediawiki_same_source_images,
@@ -16,7 +17,6 @@ from content.source.research.plan_state import (
 from content.source.research.reject_memory import _url_in_memory
 from content.source.research.plan_reuse import _homepage_urls_from_current_plan
 from content.source.research.source_quality import (
-    _ARTICLE_BASE_CATEGORIES,
     _article_base_candidate_limit,
     _evidence_reason,
     _select_article_plan_sources,
@@ -62,33 +62,35 @@ def write_article_lane(
 ) -> None:
     article_sources: list[dict[str, Any]] = []
     if "article" in selected_lanes:
-        if article_commercial_mode:
-            frontier_outcome = discover_article_source_frontier(
-                entity_id,
+        frontier_outcome = discover_article_source_frontier(
+            entity_id,
+            entity_aliases=entity_aliases,
+            topics=topic_terms,
+            limit=_article_base_candidate_limit(required_article_bases),
+        )
+        report.setdefault("articleSourceDiscovery", []).append(
+            frontier_outcome.as_evidence()
+        )
+        for source in frontier_outcome.source_documents():
+            source = _hydrate_mediawiki_same_source_images(
+                source,
+                entity_id=entity_id,
+                publish_media_mode="illustrated",
+            )
+            accepted = _accept_source(
+                report,
+                source,
+                entity_id=entity_id,
+                lane="article",
+                vertical=vertical,
                 entity_aliases=entity_aliases,
-                topics=topic_terms,
-                limit=_article_base_candidate_limit(required_article_bases),
             )
-            report.setdefault("articleSourceDiscovery", []).append(
-                frontier_outcome.as_evidence()
-            )
-            for source in frontier_outcome.source_documents():
-                source = _hydrate_mediawiki_same_source_images(
-                    source,
-                    entity_id=entity_id,
-                    publish_media_mode="illustrated",
-                )
-                accepted = _accept_source(
-                    report,
-                    source,
-                    entity_id=entity_id,
-                    lane="article",
-                    vertical=vertical,
-                    entity_aliases=entity_aliases,
-                )
-                if accepted:
-                    article_sources.append(accepted)
-        if not article_commercial_mode:
+            if accepted:
+                article_sources.append(accepted)
+        frontier_base_count = sum(
+            1 for source in article_sources if source.get("sourceRole") == "base"
+        )
+        if not article_commercial_mode and frontier_base_count < required_article_bases:
             for source in _qunar_travelogue_sources(
                 entity_id,
                 entity_aliases=entity_aliases,
@@ -188,7 +190,7 @@ def write_article_lane(
                 continue
             platform = _external_platform(link)
             category = _external_article_category(link, platform)
-            source_role = "base" if category in _ARTICLE_BASE_CATEGORIES else "supporting"
+            source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
             accepted = _accept_source(
                 report,
                 _source(
@@ -221,7 +223,7 @@ def write_article_lane(
                 if _url_in_memory(str(known.get("url") or ""), rejected_source_urls):
                     continue
                 category = str(known.get("category") or "travelogue").strip()
-                source_role = "base" if category in _ARTICLE_BASE_CATEGORIES else "supporting"
+                source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
                 accepted = _accept_source(
                     report,
                     _source(

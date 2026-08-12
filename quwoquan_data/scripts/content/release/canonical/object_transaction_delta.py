@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical.canonical_inventory import apply_inventory_delta
 from content.release.canonical.object_transaction_contract import (
     ALLOWED_CANONICAL_ROOTS,
     ObjectTransactionError,
@@ -25,7 +26,6 @@ from content.release.canonical.object_transaction_contract import (
     _safe_rel,
     _write_json,
 )
-from content.release.canonical.canonical_inventory import apply_inventory_delta
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
 
@@ -111,16 +111,6 @@ def build_transaction_delta(
     run_root.mkdir(parents=True, exist_ok=True)
     sources: dict[str, tuple[Path, bool]] = {}
     try:
-        for creator in package["creatorObjects"]:
-            creator_ref = _safe_rel(str(creator["creatorRef"]), label="creatorRef")
-            creator_root = Path(creator["objectRoot"])
-            for source in _files(creator_root):
-                _register_source(
-                    sources,
-                    destination=Path("creators") / creator_ref / source.relative_to(creator_root),
-                    source=source,
-                )
-
         object_root = Path(package["objectRoot"])
         object_prefix = (
             Path(str(package["objectKind"]))
@@ -131,6 +121,7 @@ def build_transaction_delta(
                 sources,
                 destination=object_prefix / source.relative_to(object_root),
                 source=source,
+                allow_replace=True,
             )
 
         for row in package["casRows"]:
@@ -144,8 +135,11 @@ def build_transaction_delta(
             os.environ.get("QWQ_TAGS_ROOT") or CONTROL_PLANE_TAXONOMY_ROOT
         )
         tag_refs = {str(item) for item in package["tagRefs"]}
-        for creator in package["creatorObjects"]:
-            for source in _files(Path(creator["objectRoot"])):
+        for creator_ref in package["creatorRefs"]:
+            creator_root = publish_root / "creators" / _safe_rel(
+                str(creator_ref), label="creatorRef"
+            )
+            for source in _files(creator_root):
                 if source.suffix == ".json":
                     tag_refs.update(_collect_tag_refs(_read_json(source)))
         for source in _files(object_root):
@@ -197,6 +191,7 @@ def build_transaction_delta(
                         "beforeBytes": before_blob["bytes"],
                     }
                 )
+
             elif destination.exists():
                 raise ObjectTransactionError(
                     f"canonical destination is not a regular file: {destination_text}"
@@ -214,6 +209,33 @@ def build_transaction_delta(
                         **desired,
                     }
                 )
+
+        desired_object_paths = {
+            destination
+            for destination in sources
+            if destination.startswith(f"{object_prefix.as_posix()}/")
+        }
+        canonical_object_root = publish_root / object_prefix
+        if canonical_object_root.exists() and not canonical_object_root.is_dir():
+            raise ObjectTransactionError(
+                f"canonical object target is not a directory: {object_prefix}"
+            )
+        if canonical_object_root.is_dir():
+            for existing in _files(canonical_object_root):
+                destination_text = existing.relative_to(publish_root).as_posix()
+                if destination_text in desired_object_paths:
+                    continue
+                before_blob = _ingest_blob(source=existing, run_root=run_root)
+                entries.append(
+                    {
+                        "destination": destination_text,
+                        "operation": "delete",
+                        "beforeBlobRef": before_blob["blobRef"],
+                        "beforeSha256": before_blob["sha256"],
+                        "beforeBytes": before_blob["bytes"],
+                    }
+                )
+        entries.sort(key=lambda row: str(row["destination"]))
 
         after_inventory = apply_inventory_delta(
             before_inventory,
@@ -235,7 +257,8 @@ def build_transaction_delta(
             "entries": entries,
             "createdFileCount": sum(row["operation"] == "create" for row in entries),
             "replacedFileCount": sum(row["operation"] == "replace" for row in entries),
-            "deltaBytes": sum(int(row["bytes"]) for row in entries),
+            "deletedFileCount": sum(row["operation"] == "delete" for row in entries),
+            "deltaBytes": sum(int(row.get("bytes") or 0) for row in entries),
         }
         manifest["deltaDigest"] = _manifest_digest(manifest)
         _write_json(delta_root / "manifest.json", manifest)
@@ -276,10 +299,10 @@ def load_transaction_delta(
             raise ObjectTransactionError(f"duplicate transaction delta destination: {destination}")
         destinations.add(destination)
         operation = raw.get("operation")
-        if operation not in {"create", "replace"}:
+        if operation not in {"create", "replace", "delete"}:
             raise ObjectTransactionError(f"invalid transaction delta operation: {operation}")
-        refs = [("blobRef", "sha256", "bytes")]
-        if operation == "replace":
+        refs = [] if operation == "delete" else [("blobRef", "sha256", "bytes")]
+        if operation in {"replace", "delete"}:
             refs.append(("beforeBlobRef", "beforeSha256", "beforeBytes"))
         for ref_key, digest_key, bytes_key in refs:
             blob = run_root / _safe_rel(str(raw.get(ref_key) or ""), label=ref_key)
@@ -332,7 +355,8 @@ def apply_forward_delta(
     try:
         for entry in _ordered_entries(manifest, reverse=False):
             destination = publish_root / _destination(str(entry["destination"]))
-            if entry["operation"] == "create":
+            operation = entry["operation"]
+            if operation == "create":
                 if destination.exists():
                     raise ObjectTransactionError(
                         f"stale create destination already exists: {entry['destination']}"
@@ -342,12 +366,16 @@ def apply_forward_delta(
                     raise ObjectTransactionError(
                         f"stale replace destination drift: {entry['destination']}"
                     )
-            blob = run_root / _safe_rel(str(entry["blobRef"]), label="blobRef")
-            _materialize_blob(blob, destination)
-            if _digest_file(destination) != entry["sha256"]:
-                raise ObjectTransactionError(
-                    f"post-materialize digest mismatch: {entry['destination']}"
-                )
+            if operation == "delete":
+                destination.unlink()
+                _prune_empty_parents(destination, root=publish_root)
+            else:
+                blob = run_root / _safe_rel(str(entry["blobRef"]), label="blobRef")
+                _materialize_blob(blob, destination)
+                if _digest_file(destination) != entry["sha256"]:
+                    raise ObjectTransactionError(
+                        f"post-materialize digest mismatch: {entry['destination']}"
+                    )
             applied.append(entry)
         return applied
     except BaseException:
@@ -377,7 +405,8 @@ def revert_applied_delta(
 ) -> None:
     for entry in reversed(entries):
         destination = publish_root / _destination(str(entry["destination"]))
-        if entry["operation"] == "create":
+        operation = entry["operation"]
+        if operation == "create":
             if destination.is_file() and _digest_file(destination) == entry["sha256"]:
                 destination.unlink()
                 _prune_empty_parents(destination, root=publish_root)
@@ -386,7 +415,12 @@ def revert_applied_delta(
                     f"cannot revert drifted create destination: {entry['destination']}"
                 )
         else:
-            if not destination.is_file() or _digest_file(destination) != entry["sha256"]:
+            if operation == "delete":
+                if destination.exists():
+                    raise ObjectTransactionError(
+                        f"cannot revert drifted delete destination: {entry['destination']}"
+                    )
+            elif not destination.is_file() or _digest_file(destination) != entry["sha256"]:
                 raise ObjectTransactionError(
                     f"cannot revert drifted replace destination: {entry['destination']}"
                 )
@@ -408,11 +442,17 @@ def apply_inverse_delta(
     try:
         for entry in entries:
             destination = publish_root / _destination(str(entry["destination"]))
-            if not destination.is_file() or _digest_file(destination) != entry["sha256"]:
+            operation = entry["operation"]
+            if operation == "delete":
+                if destination.exists():
+                    raise ObjectTransactionError(
+                        f"rollback delete destination drift: {entry['destination']}"
+                    )
+            elif not destination.is_file() or _digest_file(destination) != entry["sha256"]:
                 raise ObjectTransactionError(
                     f"rollback destination drift: {entry['destination']}"
                 )
-            if entry["operation"] == "create":
+            if operation == "create":
                 destination.unlink()
                 _prune_empty_parents(destination, root=publish_root)
             else:
@@ -426,8 +466,13 @@ def apply_inverse_delta(
         # Restore the forward state for the subset already reverted.
         for entry in reversed(reverted):
             destination = publish_root / _destination(str(entry["destination"]))
-            blob = run_root / _safe_rel(str(entry["blobRef"]), label="blobRef")
-            _materialize_blob(blob, destination)
+            if entry["operation"] == "delete":
+                if destination.is_file() and _digest_file(destination) == entry["beforeSha256"]:
+                    destination.unlink()
+                    _prune_empty_parents(destination, root=publish_root)
+            else:
+                blob = run_root / _safe_rel(str(entry["blobRef"]), label="blobRef")
+                _materialize_blob(blob, destination)
         raise
 
 

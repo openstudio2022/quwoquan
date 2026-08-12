@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为开发、测试或运维角色，我希望 gamma-local 同时承担开发与提交前左移验证，以及 main 受控 promotion 的正式阻断回执（gamma 仅本地，无远端 gamma）；真实远端复验由 prod gray-initial rollout stage 承接，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+作为开发、测试或运维角色，我希望 gamma-local 同时承担开发与提交前左移验证，以及 main 受控 promotion 的正式阻断回执（gamma 仅本地，无远端 gamma）；真实远端复验由 prod canary rollout stage 承接，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
 ## 2. 范围与非目标
 
@@ -41,18 +41,18 @@
 - full 镜像栈使用唯一的 Caddy 路由真相源与各服务声明的内部监听端口；非生产环境不会因生产 operator OIDC 前提阻塞健康检查。
 - 以已有 package provenance image 启动时必须先验证本地 image 可用，缺镜像为可诊断的 GATE_BLOCK，禁止通过手工重标记、拉取 localhost tag 或旧 Caddyfile 路径绕开。
 - 领域 readback 使用候选绑定的 nonprod acceptance account receipt；账号必须通过正式 OTP 与 `LoginWithPhone` 创建，不得签发无 canonical UserAccount 的验收 JWT，也不得复用 App user_acceptance principal 消耗推荐曝光、改写关系或污染后续自然入口证据。
-- 首页、视频书、消息与我的统一由 metadata `app-core-readback` scope 验证；Content 只读取已激活 immutable release，Chat/Circle/User/Assistant/RTC 只由 user_acceptance typed recipe 经公开命令创建并回读。固定账号、固定业务对象 ID、DB seed、派生计数预填与运行时 fake 均不得构成 Gamma 证据。
+- 首页、视频书、消息与我的统一由 metadata `app-core-readback` scope 验证。Content 只读取已激活 immutable release，Chat/Circle/User/Assistant/Notification/RTC 只由当前选中 user_acceptance 用例的强类型 capability request graph 经公开命令创建并回读。未被请求的领域 Provider 不导入、不检查、不清理。固定账号、固定业务对象 ID、DB seed、派生计数预填与运行时 fake 均不得构成 Gamma 证据。
 - 每个 T3/API 验证段必须同时记录执行前和执行后 readiness；验证后 edge 或所需控制面未恢复健康时结果为 `GATE_BLOCK`，不得用已经通过的业务断言掩盖环境失稳。
 
 <a id="req-002"></a>
-### REQ-002 远端复验只在 prod gray-initial 执行
+### REQ-002 远端复验只在 prod canary 执行
 
-- 仓库不定义 hosted gamma 环境；真实远端复验只在 prod `gray-initial` rollout stage 执行，与 gamma-local 的本地左移和正式候选阻断职责不重叠。
+- 仓库不定义 hosted gamma 环境；真实远端复验只在 prod `canary` rollout stage 执行，与 gamma-local 的本地左移和正式候选阻断职责不重叠。
 
 <a id="req-003"></a>
 ### REQ-003 本地阻断验证与远端准出边界
 
-- gamma-local 必须覆盖 `local_contract -> api_integration -> user_acceptance` 的本地可验证链路，但不得替代 prod gray-initial 的远端准出证据。
+- gamma-local 必须覆盖 `local_contract -> api_integration -> user_acceptance` 的本地可验证链路，但不得替代 prod canary 的远端准出证据。
 - main 只接受绑定当前候选摘要的 gamma-local canonical 回执，不接受提交前报告、其他候选回执或远端复验证据代替该阶段。
 - 本地 `user_acceptance` runner 统一 App 与测试进程 endpoint，至少在一台模拟器或真机完成 Patrol 核心旅程。
 - gamma-local 服务名册与 prod `runtime.yaml` 及各服务真实环境部署目录一致。
@@ -125,8 +125,8 @@
 
 - canonical：`quwoquan_ops/environments/gamma/validation_suites.json`
 - canonical：`quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py`
-- canonical：`quwoquan_ops/cli/lib/nonprod_business_data.py`（仅组合 ContractGraph operation，不拥有 wire schema）
-- canonical：候选绑定的 `qwq.nonprod_acceptance_dataset_receipt` 运行回执
+- canonical：`quwoquan_ops/cli/lib/test_data/capabilities/**` 与 `test_data/api.py`（只公开强类型 capability contract，不拥有 wire schema）
+- canonical：候选绑定的追加式 test-data instance / request / operation / cleanup receipt
 - canonical：`quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml` 与 `quwoquan_service/services/*/deploy/compose.yaml`
 - canonical：`quwoquan_ops/environments`
 - canonical：`quwoquan_ops/gate/verify_service_architecture.py`
@@ -139,7 +139,7 @@
 
 - GIVEN 开发机具备 Docker mirror 栈与至少一台模拟器/浏览器 runner。
 - GIVEN 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma 的 production Remote composition 接入本地 mirror endpoint，代码图中不存在运行时 Mock/Remote 开关。
-- GIVEN 内容与 creator 仅来自当前 immutable release，非内容业务数据由当前候选的 typed recipe 经正式认证与公开 API 创建。
+- GIVEN 内容与 Creator 仅来自当前 immutable release，非内容业务数据由当前候选下所选用例的强类型 capability request graph 经正式认证与公开 API 创建。
 - WHEN 提交前运行 make gate-local-gamma，或 main 受控 promotion 对当前 candidate digest 执行 gamma-local release-fast。
 - THEN 启动 gamma 语义镜像栈并完成配置摘要、依赖、health、local-managed TLS/resolver 与 media 前置检查。
 - THEN 依次执行 local_contract->user_acceptance，并在 `.qwq_output/env/gamma/runs/<run-id>/` 生成 canonical 报告与摘要；缺 local-managed TLS/resolver、设备或服务依赖时状态为 GATE_BLOCK，公网 DNS/ACME 缺失不阻断 gamma-local。
@@ -148,15 +148,16 @@
 - THEN content 等领域探针从候选绑定 receipt 解析独立真实 verification principal，App user_acceptance principal 的推荐曝光与关系事实保持不变。
 - THEN `app-core-readback` 在同一 production Remote composition 中断言首页推荐非空、视频书只返回可播放 video work、Chat API contract 可发送/撤回/回读消息、`/me` 的 owner/persona/displayName/postCount 与本次 ephemeral principal 一致。
 - THEN ContactDiscovery、Conversation 与 Message 验收事实经公开 operation 与幂等键建立；环境不得读取 fixture 或直接写服务存储冒充在线业务 provisioning。
+- THEN 数据准备、测试正文与 cleanup 分段计时并记录 operation count、加载 Provider 和 DAG critical path；Chat-only 用例不加载 Assistant、Notification 或 RTC Provider。
 - THEN 每段集成探针结束后重新验证 edge/readiness；PostgreSQL 连接耗尽、outbox heartbeat stale 或任一依赖降级均阻断通过。
 - THEN 复用 package 时的 image 缺失在启动前失败并给出修复动作，而非运行时拉取或人工 image tag 修补。
 
 <a id="gwt-002"></a>
-### GWT-002 远端复验只在 prod gray-initial 执行
+### GWT-002 远端复验只在 prod canary 执行
 
 - GIVEN gamma-local 已作为提交前主验证链，gamma 仅本地、无远端 gamma。
-- WHEN 需要云侧手动复验、nightly 或发布前高置信度回归时，统一在 prod gray-initial rollout stage 执行。
-- THEN prod gray-initial 执行 hosted deploy、readiness、api_integration API contract、assistant/chat-avatar probe。
+- WHEN 需要云侧手动复验、nightly 或发布前高置信度回归时，统一在 prod canary rollout stage 执行。
+- THEN prod canary 执行 hosted deploy、readiness、api_integration API contract、assistant/chat-avatar probe。
 - THEN 远端复验不承担提交前左移职责，也不与 gamma-local 重复维护第二套验证逻辑。
 
 <a id="gwt-003"></a>
@@ -226,10 +227,10 @@
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
-### OPEN-002 prod gray-initial 远端复验证据
+### OPEN-002 prod canary 远端复验证据
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：真实远端复验只允许在 prod `gray-initial` rollout stage 产生，不能用 gamma-local 证据替代。
+- 影响或价值：尚缺实现或直接 `spec_ref`；目标：真实远端复验只允许在 prod `canary` rollout stage 产生，不能用 gamma-local 证据替代。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效

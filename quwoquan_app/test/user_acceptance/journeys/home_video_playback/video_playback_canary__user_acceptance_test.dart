@@ -118,7 +118,10 @@ void main() {
       );
       if (_requireNativePlaybackSignals) {
         // 环境 runner 只从设备所属的 Patrol 日志解析此行，不能由 stackctl 环境变量伪造。
-        debugPrint(
+        // This structured marker must cross the iOS XCTest boundary through
+        // Dart stdout so the host runner can bind it to this device run.
+        // ignore: avoid_print
+        print(
           'QWQ_VIDEO_PLAYBACK_EVIDENCE '
           '{"nativeFirstFrame":true,"nativeSeekSettled":true}',
         );

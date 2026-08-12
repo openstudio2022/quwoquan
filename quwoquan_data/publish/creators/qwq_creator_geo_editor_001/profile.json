@@ -3,6 +3,14 @@
   "creatorId": "qwq_creator_geo_editor_001",
   "userId": "builtin_travel_geo_editor",
   "authorId": "builtin_travel_geo_editor",
+  "version": 1,
+  "admission": {
+    "processResult": "completed",
+    "qualityResult": "passed",
+    "evidenceRef": "evidence/system_builtin_author_admission.json",
+    "evidenceDigest": "sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e"
+  },
+  "status": "active",
   "personaId": "builtin_travel_geo_editor",
   "displayName": "地理编辑南川",
   "userHandle": "geo_editor_nanchuan",

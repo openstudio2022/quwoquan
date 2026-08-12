@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Test-only catalog backed by the canonical Chat contract scenario.
 final class FixtureRealtimeEventCatalog {
@@ -12,7 +12,7 @@ final class FixtureRealtimeEventCatalog {
   static List<Map<String, dynamic>> eventsForConversation(
     String conversationId,
   ) {
-    final contractSeed = objectScenarioSeedReader.seedSet(
+    final contractSeed = objectContractExampleReader.example(
       'chat',
       'chat_realtime_fixture_core',
     );

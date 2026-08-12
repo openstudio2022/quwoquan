@@ -518,6 +518,36 @@ func TestProductOpsAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 	}
 }
 
+func TestProductOpsComposeStartsAccountSecurityAuthorityBeforeHealthGate(t *testing.T) {
+	root := productOpsServiceRoot(t)
+	var compose struct {
+		Services map[string]struct {
+			DependsOn map[string]struct {
+				Condition string `yaml:"condition"`
+			} `yaml:"depends_on"`
+		} `yaml:"services"`
+	}
+	readProductOpsAuthorityYAML(
+		t,
+		filepath.Join(root, "deploy", "compose.yaml"),
+		&compose,
+	)
+	productOps, ok := compose.Services["product-ops-service"]
+	if !ok {
+		t.Fatal("product-ops-service Compose workload is missing")
+	}
+	dependency, ok := productOps.DependsOn["user-service"]
+	if !ok {
+		t.Fatal("Product Ops must start the public AccountSecurityAuthority owner")
+	}
+	if dependency.Condition != "service_healthy" {
+		t.Fatalf(
+			"user-service dependency condition=%q, want service_healthy",
+			dependency.Condition,
+		)
+	}
+}
+
 func productOpsAuthorityAccessTokenConfig() rtauth.TokenConfig {
 	return rtauth.TokenConfig{
 		Secret:       []byte("product-ops-account-security-authority-test-secret"),

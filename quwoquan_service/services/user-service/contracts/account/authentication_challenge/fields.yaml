@@ -58,6 +58,28 @@ fields:
     constraints:
       - NULLABLE
     role: authoritative_state
+  - name: deliveryRequestId
+    type: string
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+    reference: true
+  - name: deliveryStatus
+    type: enum
+    enum_ref: OtpDeliveryStatus
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+  - name: deliveryUpdatedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+  - name: lastDeliveryEventId
+    type: string
+    constraints:
+      - NULLABLE
+    role: authoritative_state
 enums:
   AuthenticationChallengeStatus:
     - pending
@@ -65,7 +87,22 @@ enums:
     - expired
     - locked
     - cancelled
+  OtpDeliveryStatus:
+    - queued
+    - sent_unconfirmed
+    - delivered
+    - failed
+  OtpClientPlatform:
+    - ios
+    - android
+    - web
+    - acceptance
+  OtpDeliveryAvailability:
+    - ready
+    - temporarily_unavailable
 types:
+  OtpDeliveryReadinessQuery:
+    fields: []
   SendOtpCommand:
     fields:
       - name: phone
@@ -80,10 +117,11 @@ types:
           - NULLABLE
         client_dart_type: String?
       - name: platform
-        type: string
+        type: enum
+        enum_ref: OtpClientPlatform
         constraints:
-          - NULLABLE
-        client_dart_type: String?
+          - NOT_NULL
+        client_dart_type: OtpClientPlatform
       - name: appVersion
         type: string
         constraints:
@@ -146,10 +184,14 @@ types:
     fields:
       - {name: maskedPhone, type: string, constraints: [NOT_NULL]}
       - {name: expiresInSeconds, type: int, constraints: [NOT_NULL]}
-      - {name: deliveryStatus, type: string, constraints: [NOT_NULL]}
+      - {name: deliveryStatus, type: enum, enum_ref: OtpDeliveryStatus, constraints: [NOT_NULL]}
       - {name: retryAfterSeconds, type: int, constraints: [NOT_NULL]}
-      - {name: requestId, type: string, constraints: [NULLABLE]}
-      - {name: challengeId, type: string, constraints: [NULLABLE]}
+      - {name: requestId, type: string, constraints: [NOT_BLANK]}
+      - {name: challengeId, type: string, constraints: [NOT_BLANK]}
+  OtpDeliveryReadiness:
+    fields:
+      - {name: availability, type: enum, enum_ref: OtpDeliveryAvailability, constraints: [NOT_NULL]}
+      - {name: retryAfterSeconds, type: int, constraints: [NOT_NULL]}
   AlipayAuthorizationGrant:
     fields:
       - {name: authorizationPayload, type: string, constraints: [NOT_BLANK]}

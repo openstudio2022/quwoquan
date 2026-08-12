@@ -277,11 +277,13 @@ class CircleStateNotifier extends Notifier<CircleState> {
           )
           .catchError((Object error, StackTrace stackTrace) {
             unawaited(
-              ref.read(exceptionTelemetryPortProvider).recordGlobalException(
-                source: 'circle.behavior.${eventType.wireName}',
-                exceptionText: error.toString(),
-                stackText: stackTrace.toString(),
-              ),
+              ref
+                  .read(exceptionTelemetryPortProvider)
+                  .recordGlobalException(
+                    source: 'circle.behavior.${eventType.wireName}',
+                    exceptionText: error.toString(),
+                    stackText: stackTrace.toString(),
+                  ),
             );
           }),
     );

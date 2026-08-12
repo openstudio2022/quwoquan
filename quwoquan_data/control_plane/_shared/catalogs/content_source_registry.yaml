@@ -263,6 +263,7 @@ lanePolicies:
       - { sourceId: storyblocks, sourceKind: tourism_video_site, publicationAdmissions: [research_release, commercial_release] }
       - { sourceId: travel_vlog, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
       - { sourceId: chinese_tourism_vertical, sourceKind: tourism_video_site, publicationAdmissions: [research_release, risk_accepted_attribution_only, commercial_release] }
+      - { sourceId: cctv_video, sourceKind: tourism_video_site, publicationAdmissions: [research_release] }
     rankingSignals:
       - visual_relevance
       - play_count
@@ -703,6 +704,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: api
+      researchAcquisitionPaths: [public_direct, supported_api, manual_file]
       rightsPolicy: open_license_required
       rateLimit: conservative
       promptFacts: [开放许可原始视频, 逐条冻结文件页、作者、许可、媒体探针、音频与无水印证据]
@@ -712,6 +714,7 @@ common:
       lanes: [video]
       defaultRole: reference_only
       fetchMode: platform_reference
+      researchAcquisitionPaths: [manual_file]
       rightsPolicy: asset_level_required
       rateLimit: conservative
       promptFacts: [通用视频发现和官方频道参考, 发布需明确授权]
@@ -721,6 +724,7 @@ common:
       lanes: [video]
       defaultRole: reference_only
       fetchMode: platform_reference
+      researchAcquisitionPaths: [manual_file]
       rightsPolicy: asset_level_required
       rateLimit: conservative
       promptFacts: [通用视频发现和创作者作品参考, 发布需明确授权]
@@ -730,6 +734,7 @@ common:
       lanes: [video]
       defaultRole: reference_only
       fetchMode: platform_reference
+      researchAcquisitionPaths: [manual_file]
       rightsPolicy: asset_level_required
       rateLimit: conservative
       promptFacts: [中视频和垂类评测发现, 发布需明确授权]
@@ -739,6 +744,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: attribution_manifest
+      researchAcquisitionPaths: [public_direct, manual_file]
       rightsPolicy: attribution_no_watermark
       rateLimit: conservative
       promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
@@ -748,6 +754,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: attribution_manifest
+      researchAcquisitionPaths: [public_direct, manual_file]
       rightsPolicy: attribution_no_watermark
       rateLimit: conservative
       promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
@@ -757,6 +764,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: attribution_manifest
+      researchAcquisitionPaths: [public_direct, manual_file]
       rightsPolicy: attribution_no_watermark
       rateLimit: conservative
       promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
@@ -766,6 +774,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: attribution_manifest
+      researchAcquisitionPaths: [public_direct, manual_file]
       rightsPolicy: attribution_no_watermark
       rateLimit: conservative
       promptFacts: [仅准入可直接下载且无水印的视频, 必须展示原创者归属并绑定逐资产风险审批或商业授权]
@@ -775,6 +784,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: api
+      researchAcquisitionPaths: [public_direct, supported_api, manual_file]
       rightsPolicy: asset_level_required
       rateLimit: conservative
       promptFacts: [免费视频素材, 逐条校验许可]
@@ -784,6 +794,7 @@ common:
       lanes: [video]
       defaultRole: publish_candidate
       fetchMode: api
+      researchAcquisitionPaths: [public_direct, supported_api, manual_file]
       rightsPolicy: asset_level_required
       rateLimit: conservative
       promptFacts: [免费视频素材, 逐条校验许可]
@@ -793,6 +804,7 @@ common:
       lanes: [video]
       defaultRole: licensed_candidate
       fetchMode: licensed_api
+      researchAcquisitionPaths: [supported_api, manual_file]
       rightsPolicy: commercial_license_required
       rateLimit: conservative
       promptFacts: [商业视频素材库, 必须有授权凭证]
@@ -802,6 +814,7 @@ common:
       lanes: [video]
       defaultRole: licensed_candidate
       fetchMode: licensed_api
+      researchAcquisitionPaths: [supported_api, manual_file]
       rightsPolicy: commercial_license_required
       rateLimit: conservative
       promptFacts: [商业视频素材库, 必须有授权凭证]
@@ -926,6 +939,7 @@ verticals:
         lanes: [video]
         defaultRole: publish_candidate
         fetchMode: attribution_manifest
+        researchAcquisitionPaths: [public_direct, manual_file]
         rightsPolicy: attribution_no_watermark
         rateLimit: conservative
         promptFacts: [旅行实况优先, 仅准入可直接下载无水印并冻结原创者归属、风险审批或商业授权的逐资产证据]
@@ -935,6 +949,17 @@ verticals:
         lanes: [video]
         defaultRole: publish_candidate
         fetchMode: attribution_manifest
+        researchAcquisitionPaths: [public_direct, manual_file]
         rightsPolicy: attribution_no_watermark
         rateLimit: conservative
         promptFacts: [优先中国旅游专业内容, 仅准入可直接下载无水印并冻结原创者归属、风险审批或商业授权的逐资产证据]
+      - sourceId: cctv_video
+        platform: 央视网
+        sourceClass: vertical_video
+        lanes: [video]
+        defaultRole: publish_candidate
+        fetchMode: attribution_manifest
+        researchAcquisitionPaths: [public_direct, manual_file]
+        rightsPolicy: attribution_no_watermark
+        rateLimit: conservative
+        promptFacts: [央视网匿名公开节目仅可进入 research release, 必须逐资产冻结公开页面、公开媒体流、无水印裁剪、原创者归属与未核实权利风险]

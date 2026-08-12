@@ -16,9 +16,9 @@ var (
 	ErrConnectionConnectorDefinitionNotFound  = errors.New("INTEGRATION.USER.connection_connector_definition_not_found")
 	ErrConnectorCapabilityDenied              = errors.New("INTEGRATION.USER.connector_capability_denied")
 	ErrConnectorGrantReceiptInvalid           = errors.New("INTEGRATION.USER.connector_grant_receipt_invalid")
+	ErrConnectorGrantAuthorizationDenied      = errors.New("INTEGRATION.MIDDLEWARE.connector_grant_authorization_denied")
 	ErrConnectorConnectionRevisionConflict    = errors.New("INTEGRATION.USER.connector_connection_revision_conflict")
 	ErrConnectorConnectionIdempotencyConflict = errors.New("INTEGRATION.USER.connector_connection_idempotency_conflict")
-	ErrConnectorGrantAuthorizationDenied      = errors.New("INTEGRATION.MIDDLEWARE.connector_grant_authorization_denied")
 	ErrConnectorConnectionUnavailable         = errors.New("INTEGRATION.SYSTEM.connector_connection_unavailable")
 )
 
@@ -58,6 +58,12 @@ func AppErrorFromConnectorGrantReceiptInvalid(debugMessage string) *rerrors.AppE
 	return rerrors.NewAppError(code, "授权结果已失效，请重新连接", debugMessage).WithMetadata("connector_grant_receipt_invalid", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
+// AppErrorFromConnectorGrantAuthorizationDenied returns *AppError for INTEGRATION.MIDDLEWARE.connector_grant_authorization_denied (user_message from errors.yaml).
+func AppErrorFromConnectorGrantAuthorizationDenied(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrConnectorGrantAuthorizationDenied.Error()))
+	return rerrors.NewAppError(code, "当前服务无权读取连接授权", debugMessage).WithMetadata("connector_grant_authorization_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
 // AppErrorFromConnectorConnectionRevisionConflict returns *AppError for INTEGRATION.USER.connector_connection_revision_conflict (user_message from errors.yaml).
 func AppErrorFromConnectorConnectionRevisionConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionRevisionConflict.Error()))
@@ -68,12 +74,6 @@ func AppErrorFromConnectorConnectionRevisionConflict(debugMessage string) *rerro
 func AppErrorFromConnectorConnectionIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorConnectionIdempotencyConflict.Error()))
 	return rerrors.NewAppError(code, "重复请求与原连接命令不一致", debugMessage).WithMetadata("connector_connection_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
-}
-
-// AppErrorFromConnectorGrantAuthorizationDenied returns *AppError for INTEGRATION.MIDDLEWARE.connector_grant_authorization_denied (user_message from errors.yaml).
-func AppErrorFromConnectorGrantAuthorizationDenied(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrConnectorGrantAuthorizationDenied.Error()))
-	return rerrors.NewAppError(code, "当前服务无权读取连接授权", debugMessage).WithMetadata("connector_grant_authorization_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorConnectionUnavailable returns *AppError for INTEGRATION.SYSTEM.connector_connection_unavailable (user_message from errors.yaml).

@@ -79,6 +79,20 @@ func (store *migratedCommandFacadeMemoryChallengeStore) LoadLatest(
 	return latest, found, nil
 }
 
+func (store *migratedCommandFacadeMemoryChallengeStore) LoadByDeliveryRequestID(
+	_ context.Context,
+	requestID string,
+) (challengemodel.AuthenticationChallenge, bool, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, item := range store.items {
+		if item.State().DeliveryRequestID == requestID {
+			return item, true, nil
+		}
+	}
+	return challengemodel.AuthenticationChallenge{}, false, nil
+}
+
 func (store *migratedCommandFacadeMemoryChallengeStore) Commit(
 	_ context.Context,
 	expectedVersion int64,

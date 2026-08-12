@@ -294,7 +294,9 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			ToolPolicy:      runtimeToolPolicy,
 			Budget: react.Budget{
 				MaxIterations: budget.MaxIterations - iteration + 1,
-				MaxToolCalls:  budget.MaxToolCalls - len(toolHistory),
+				MaxToolCalls: usageBudget.remainingToolCalls(
+					budget.MaxToolCalls - len(toolHistory),
+				),
 			},
 		})
 		effectiveRepairTools := explorationBudget.repairTools(
@@ -516,7 +518,8 @@ func (r ReactRuntime) RunWithFinalTextSink(
 			}
 			break
 		}
-		if toolName == "" || len(toolHistory) >= budget.MaxToolCalls {
+		if toolName == "" ||
+			usageBudget.remainingToolCalls(budget.MaxToolCalls-len(toolHistory)) <= 0 {
 			if err := persistContextBoundary(
 				iteration,
 				"",
@@ -590,7 +593,11 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		// Reserve at the final policy/consent boundary. The shared request state
 		// prevents parallel Subagents from overcommitting; the durable count is
 		// written only after ToolExecutor actually returns.
-		toolReservation, err := usageBudget.reserveToolCall()
+		executionCallCount, err := metadata.Research.ExecutionCallCount(toolInput)
+		if err != nil {
+			return ReactResult{}, err
+		}
+		toolReservation, err := usageBudget.reserveToolCalls(executionCallCount)
 		if err != nil {
 			return ReactResult{}, err
 		}
@@ -806,7 +813,9 @@ func (r ReactRuntime) RunWithFinalTextSink(
 		)
 		remainingBudget := react.Budget{
 			MaxIterations: budget.MaxIterations - iteration,
-			MaxToolCalls:  budget.MaxToolCalls - len(toolHistory),
+			MaxToolCalls: usageBudget.remainingToolCalls(
+				budget.MaxToolCalls - len(toolHistory),
+			),
 		}
 		reflectionApplied := !hasExecutionPolicy ||
 			len(toolHistory)%executionPolicy.ReflectionEverySteps == 0

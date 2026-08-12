@@ -102,24 +102,28 @@ FOR UPDATE`, idempotencyKey).Scan(&existingID, &existingFingerprint)
 
 	if _, err := tx.Exec(ctx, `
 INSERT INTO authentication_challenges (
-  challenge_id, account_id, purpose, channel, phone_hash, code_hash,
-  binding_ticket_id,
+  challenge_id, request_id, account_id, purpose, channel, phone_hash, code_hash,
+  binding_ticket_id, delivery_status, delivery_updated_at, last_delivery_event_id,
   status, failed_attempts, expires_at, created_at, consumed_at,
   completion_fingerprint, idempotency_key, creation_fingerprint,
   version, updated_at
 ) VALUES (
-  $1, NULLIF($2, ''), $3, $4, NULLIF($5, ''), $6,
-  NULLIF($7, ''),
-  $8, $9, $10, $11, NULL,
-  NULL, $12, $13, $14, $15
+  $1, NULLIF($2, ''), NULLIF($3, ''), $4, $5, NULLIF($6, ''), $7,
+  NULLIF($8, ''), NULLIF($9, ''), $10, NULLIF($11, ''),
+  $12, $13, $14, $15, NULL,
+  NULL, $16, $17, $18, $19
 )`,
 		state.ID,
+		state.DeliveryRequestID,
 		state.AccountID,
 		state.Purpose,
 		state.Channel,
 		state.DestinationHash,
 		state.SecretRef,
 		state.BindingTicketRef,
+		state.DeliveryStatus,
+		state.DeliveryUpdatedAt,
+		state.LastDeliveryEventID,
 		state.Status,
 		state.AttemptCount,
 		state.ExpiresAt,
@@ -180,6 +184,21 @@ LIMIT 1`,
 	))
 }
 
+func (store *PostgresStore) LoadByDeliveryRequestID(
+	ctx context.Context,
+	requestID string,
+) (challengemodel.AuthenticationChallenge, bool, error) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return challengemodel.AuthenticationChallenge{}, false,
+			challengemodel.ErrInvalidChallenge
+	}
+	return scanChallenge(store.pool.QueryRow(ctx, `
+SELECT `+challengeSelectColumns+`
+FROM authentication_challenges
+WHERE request_id=$1`, requestID))
+}
+
 // Commit 使用内部 version CAS；status、attemptCount、completedAt 与
 // completion fingerprint 在同一行、同一 PostgreSQL transaction 原子更新。
 func (store *PostgresStore) Commit(
@@ -206,14 +225,20 @@ SET
   failed_attempts=$3,
   consumed_at=$4,
   completion_fingerprint=NULLIF($5, ''),
-  version=$6,
-  updated_at=$7
-WHERE challenge_id=$1 AND version=$8`,
+  delivery_status=NULLIF($6, ''),
+  delivery_updated_at=$7,
+  last_delivery_event_id=NULLIF($8, ''),
+  version=$9,
+  updated_at=$10
+WHERE challenge_id=$1 AND version=$11`,
 		state.ID,
 		state.Status,
 		state.AttemptCount,
 		state.CompletedAt,
 		state.CompletionFingerprint,
+		state.DeliveryStatus,
+		state.DeliveryUpdatedAt,
+		state.LastDeliveryEventID,
 		state.Version,
 		state.UpdatedAt,
 		expectedVersion,

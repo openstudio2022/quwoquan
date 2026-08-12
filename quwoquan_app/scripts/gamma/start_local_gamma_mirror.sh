@@ -35,6 +35,9 @@ cleanup_active_child() {
      && "$STARTUP_ATTEMPT_RUNNING" != "1" \
      && "${formal_release:-0}" != "1" ]]; then
     echo "[local-gamma] startup failed after partial mutation; tearing down attempt resources" >&2
+    if declare -F capture_content_startup_health_failure >/dev/null 2>&1; then
+      capture_content_startup_health_failure || true
+    fi
     if declare -F stop_colima_tunnels >/dev/null 2>&1; then
       stop_colima_tunnels || cleanup_status=$?
     fi
@@ -872,6 +875,27 @@ raise SystemExit(0)
 PY
 }
 
+capture_content_startup_health_failure() {
+  local evidence_path="${QWQ_RUN_ROOT:?QWQ_RUN_ROOT is required}/startup-health-failure.json"
+  if [[ -e "$evidence_path" ]]; then
+    echo "[local-gamma] startup health failure evidence already exists: ${evidence_path}" >&2
+    return 1
+  fi
+  start_colima_tunnels_if_needed || true
+  if PYTHONDONTWRITEBYTECODE=1 python3 -B \
+    "$ROOT/quwoquan_ops/cli/lib/startup_health_failure_evidence.py" \
+    --target "$QWQ_LOCAL_RELEASE_TARGET" \
+    --candidate-digest "${QWQ_RELEASE_CANDIDATE_DIGEST:?candidate digest is required}" \
+    --service content-service \
+    --url "http://127.0.0.1:${LOCAL_GAMMA_CONTENT_PORT:?content port is required}/healthz" \
+    --output "$evidence_path"; then
+    echo "[local-gamma] captured managed content-service startup health failure: ${evidence_path}" >&2
+    return 0
+  fi
+  echo "[local-gamma] content-service startup health failure evidence unavailable" >&2
+  return 1
+}
+
 start_colima_tunnels_if_needed() {
   command -v colima >/dev/null 2>&1 || return 0
   command -v ssh >/dev/null 2>&1 || return 0
@@ -1093,6 +1117,53 @@ print(version)
 PY
 )" || return 1
     cp "$config_file" "$out/${service}.yaml"
+    if [[ "$service" == "api-edge" ]]; then
+      PYTHONDONTWRITEBYTECODE=1 python3 -B - \
+        "$package_dir" "$out" \
+        "${QWQ_RELEASE_CANDIDATE_DIGEST:?candidate digest is required}" \
+        "$CONFIG_SOURCE_ENV" "$QWQ_LOCAL_RELEASE_TARGET" <<'PY'
+import hashlib
+import json
+import re
+import shutil
+import sys
+from pathlib import Path
+
+package_dir, output_dir, candidate_digest, environment, target = sys.argv[1:6]
+package_root = Path(package_dir)
+output_root = Path(output_dir)
+descriptor_path = package_root / "config/graphql-read-package.json"
+descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+if (
+    descriptor.get("schema") != "stackctl-graphql-read-registry-package"
+    or descriptor.get("candidateDigest") != candidate_digest
+    or descriptor.get("environment") != environment
+    or descriptor.get("target") != target
+):
+    raise SystemExit("GraphQL registry package candidate identity mismatch")
+bindings = (
+    ("schemaRef", "schemaDigest", "graphql-read-schema.graphqls"),
+    ("envelopeRef", "envelopeDigest", "graphql-read-registry.json"),
+    (
+        "trustedPublicKeysRef",
+        "trustedPublicKeysDigest",
+        "graphql-read-trusted-public-keys.json",
+    ),
+)
+for ref_field, digest_field, filename in bindings:
+    ref = str(descriptor.get(ref_field) or "")
+    digest = str(descriptor.get(digest_field) or "")
+    if Path(ref).name != filename or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise SystemExit(f"GraphQL registry package {ref_field} mismatch")
+    source = package_root / "config" / filename
+    encoded = source.read_bytes()
+    if "sha256:" + hashlib.sha256(encoded).hexdigest() != digest:
+        raise SystemExit(f"GraphQL registry package {filename} digest mismatch")
+    shutil.copyfile(source, output_root / filename)
+    if (output_root / filename).read_bytes() != encoded:
+        raise SystemExit(f"GraphQL registry runtime copy drifted: {filename}")
+PY
+    fi
     local service_env_key
     service_env_key="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
     local version_var="LOCAL_GAMMA_${service_env_key}_CONFIG_VERSION"
@@ -1103,7 +1174,7 @@ PY
   mkdir -p "$out/quwoquan_service/runtime/reliabletask/resources"
   local service
   while IFS= read -r service; do
-    copy_service_package_config "$service"
+    copy_service_package_config "$service" || return $?
   done < <(first_party_image_owners)
 
   if [[ ! -f "$package_root/runtime-shared/module_catalog.yaml" \
@@ -1313,11 +1384,8 @@ raise SystemExit(0 if "no space left on device" in text else 1)
 PY
   then
     echo "[local-gamma] FAIL: image build exhausted Docker/Colima disk ('no space left on device')." >&2
-    echo "[local-gamma] Reclaim local container storage and rerun:" >&2
-    echo "[local-gamma]   docker system df" >&2
-    echo "[local-gamma]   docker builder prune -af" >&2
-    echo "[local-gamma]   docker image prune -af" >&2
-    echo "[local-gamma]   docker volume prune -f" >&2
+    echo "[local-gamma] Reclaim only unused local BuildKit cache through the managed global repair after other package/UAT operations stop:" >&2
+    echo "[local-gamma]   PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/stackctl.py --output-format json repair --target ${QWQ_LOCAL_RELEASE_TARGET} --fix reclaim-build-cache --confirm-global-build-cache-reclaim" >&2
   fi
   echo "[local-gamma] FAIL: image build failed; startup aborted. Build log: $build_log" >&2
   return 1

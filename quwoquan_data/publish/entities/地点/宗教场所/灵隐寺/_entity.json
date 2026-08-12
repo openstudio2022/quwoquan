@@ -1,0 +1,83 @@
+{
+  "label": "灵隐寺",
+  "domain": "地点",
+  "type": "宗教场所",
+  "executionId": "20260812--travel-homepage-m100--china--scale-010",
+  "entityRef": "/entity/地点/宗教场所/灵隐寺",
+  "summary": "灵隐寺别称云林禅寺，座落于杭州西湖西北、飞来峰与北高峰夹峙的灵隐山麓，列为江南名刹与中国十大古刹，南宋高僧济公曾在此修行。",
+  "sourceRefs": [
+    "sources/homepage-source-ef25443ca6a4da8a2bf7/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA"
+  ],
+  "primarySource": {
+    "entityName": "灵隐寺",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T07:26:24Z",
+    "snapshotHash": "sha256:8feb19845fe2a6410108d9722a459992e1790b012960fef73b02d29d7c916313",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only"
+  },
+  "sourceAttribution": {
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "audioRightsStatus": "no_audio",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "collectedAt": "2026-08-12T07:26:24Z",
+    "commercialAuthorizationStatus": "verified",
+    "isOriginal": false,
+    "modelReleaseStatus": "not_required",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "propertyReleaseStatus": "not_required",
+    "publicationAdmission": "research_release",
+    "rightsBasis": "CC BY-SA 4.0",
+    "riskAcceptanceId": null,
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "watermarkStatus": "absent"
+  },
+  "textSourceRefs": [
+    "sources/homepage-source-ef25443ca6a4da8a2bf7/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/homepage-source-ef25443ca6a4da8a2bf7/source.md"
+  ],
+  "heroAssetId": "灵隐寺_cover_灵隐寺大雄宝殿_273_ab76622e",
+  "mediaAssetIds": [
+    "灵隐寺_cover_灵隐寺大雄宝殿_273_ab76622e"
+  ],
+  "tagRefs": [
+    "Entity/地点/宗教场所",
+    "Topic/地理/行政区/中国/浙江省/杭州市/西湖区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/浙江省/杭州市/西湖区",
+  "aliases": [
+    "云林禅寺"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

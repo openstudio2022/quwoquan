@@ -9,9 +9,15 @@ import pytest
 from content.execution import context, execution_supersession, execution_terminal
 from content.execution.controller.execute import reconcile
 from content.execution.execution_terminal import load_terminal_execution_evidence
+from content.execution import workspace
 from core.control_types import ExecutionStateStatus
 from core.io import read_json, write_json
-from core.source_digest import SourceDigest, current_source_digest
+from core.source_digest import (
+    SourceDefinitionSnapshot,
+    SourceDigest,
+    current_source_definition_snapshot,
+    current_source_digest,
+)
 from verify import (
     verify_content_execution_layout,
     verify_runtime_input_ownership,
@@ -182,6 +188,32 @@ def test_stale_receipt_closes_global_historical_gates_but_not_readiness(
     _assert_global_gates_accept_only_as_historical(root, monkeypatch)
 
 
+def test_legacy_terminal_manifest_is_read_only_but_nonterminal_requires_migration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _fixture(tmp_path, monkeypatch)
+    _drift_manifest(root)
+    monkeypatch.setattr(workspace, "execution_manifest_path", lambda _value: root / "execution_manifest.json")
+    monkeypatch.setattr(workspace, "frozen_target_set_digest", lambda _value: "unused")
+
+    with pytest.raises(
+        workspace.ExecutionSourceDigestDriftError,
+        match="DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED",
+    ):
+        workspace.load_frozen_execution_manifest(EXECUTION_ID)
+
+    reconcile.reconcile_stale_execution(EXECUTION_ID)
+    frozen = workspace.load_frozen_execution_manifest(EXECUTION_ID)
+    assert frozen["schema"] == "historical-fixture"
+
+    with pytest.raises(
+        workspace.ExecutionSourceDigestDriftError,
+        match="DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED",
+    ):
+        workspace.load_execution_manifest(EXECUTION_ID)
+
+
 def test_terminal_receipt_uses_byte_integrity_not_current_runtime_schema(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -258,6 +290,34 @@ def test_source_drift_supersession_is_create_once_and_anchor_bound(
     write_json(root / "execution_manifest.json", manifest)
     with pytest.raises(ValueError, match="anchor drift"):
         load_terminal_execution_evidence(root)
+
+
+def test_source_drift_supersession_accepts_v2_source_definition_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    observed = current_source_definition_snapshot().to_document()
+    frozen = {**observed, "digest": "sha256:" + "e" * 64}
+    manifest = read_json(root / "execution_manifest.json")
+    manifest["sourceDigest"] = frozen
+    write_json(root / "execution_manifest.json", manifest)
+    stable = SourceDefinitionSnapshot.from_document(observed)
+    monkeypatch.setattr(
+        execution_supersession,
+        "current_source_definition_snapshot",
+        lambda **_kwargs: stable,
+    )
+
+    receipt, _path = execution_supersession.supersede_execution(
+        EXECUTION_ID,
+        reason="source_drift",
+        executions_root=root.parent,
+    )
+
+    assert receipt["manifestSourceDigest"] == frozen
+    assert receipt["observedSourceDigest"] == observed
 
 
 @pytest.mark.parametrize("fragment", ["head", "events"])

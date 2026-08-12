@@ -28,8 +28,12 @@
 ## 证据要求
 
 - 环境相关收口优先使用：`python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile smoke|integration|release`；`baseline` 不接受环境参数。
-- hosted prod 操作（含 gray-initial 灰度验证，承接原远端 gamma 验证职责）以 `.qwq_output/env/prod/runs/**`、`QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/**` 和 stackctl summary/report 为证据。
+- hosted prod 操作（含 `canary` 单实例验证及 `5/20/50/100` 分阶段放量，承接原远端 gamma 验证职责）以 `.qwq_output/env/prod/runs/**`、`QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/**` 和 stackctl summary/report 为证据。
 - 新增 gate 必须说明触发范围、阻断条件、修复方式和是否接入 `make gate` / `gate_repo.sh`。
+- Alpha/Beta/Gamma 测试数据统一由 `stackctl verify` 消费强类型 request/evidence：控制面只加载选中 capability 的 Provider 依赖闭包，以 DAG 有界并行执行并记录 provision/readback/test/cleanup 分段耗时、operation count 与追加式 receipt；Prod 在首条 mutation 前拒绝。
+- 七领域 release 关键 Journey 请求只由 `python3 quwoquan_ops/cli/stackctl.py test-data-request` 从强类型 composition 生成；integration 的 focused selection 由具体测试直接组合 case factory，不得手工拼 JSON、case 字符串 registry 或 capability inventory。
+- 外部 Provider 依赖使用 `ProviderCapabilityKey`，由 `stackctl test-data-evidence` 从当前 conformance readiness 仅投影选中 request 的精确闭包并绑定 candidate/request digest；测试不得直接书写 Provider capability 字符串。
+- `quwoquan_ops/cli/lib/test_data/capabilities/**` 只公开 frozen params/result 与 capability 引用，`providers/**` 只实现所属领域且不得导入兄弟 Provider；测试不得导入 Provider、书写 capability key 或传裸 `dict` params。不得建立 registry/inventory、兼容双轨或测试专用业务 API。
 
 ## 典型触发与 E2E
 

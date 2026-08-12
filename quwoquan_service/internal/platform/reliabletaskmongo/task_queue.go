@@ -309,6 +309,90 @@ func (s *Store) ClaimReadyTaskByID(
 	return &task, nil
 }
 
+func (s *Store) ClaimReadyTaskByIDWithFence(
+	ctx context.Context,
+	taskID string,
+	workerID string,
+	leaseTTL time.Duration,
+	now time.Time,
+	fence map[string]string,
+) (*reliabletask.ReliableAsyncTask, error) {
+	filter := readyTaskFilter(nil, strings.TrimSpace(taskID), now)
+	filter["workerHostSetDigest"] = fence["workerHostSetDigest"]
+	filter["workerHostGeneration"] = fence["workerHostGeneration"]
+	filter["workerFencingToken"] = fence["workerFencingToken"]
+	filter["workerHostScopeId"] = fence["workerHostScopeId"]
+	token := reliabletask.NewRecordID("lease")
+	update := bson.M{"$set": bson.M{
+		"status": reliabletask.TaskStatusProcessing, "leaseOwner": strings.TrimSpace(workerID),
+		"leaseToken": token, "leaseUntil": now.Add(leaseTTL).UTC(), "updatedAt": now.UTC(),
+	}}
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	var task reliabletask.ReliableAsyncTask
+	if err := s.tasks.FindOneAndUpdate(ctx, filter, update, opts).Decode(&task); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &task, nil
+}
+
+func (s *Store) AdvanceDataContentTaskFence(
+	ctx context.Context,
+	taskID string,
+	fence reliabletask.DataContentWorkerFence,
+	now time.Time,
+) (bool, error) {
+	if err := fence.Validate(); err != nil {
+		return false, err
+	}
+	values := fence.PayloadForStore()
+	exact := bson.M{
+		"_id":                        strings.TrimSpace(taskID),
+		"workerHostGenerationNumber": fence.Generation,
+		"workerHostSetDigest":        values["workerHostSetDigest"],
+		"workerFencingToken":         values["workerFencingToken"],
+		"workerHostScopeId":          values["workerHostScopeId"],
+	}
+	if count, err := s.tasks.CountDocuments(ctx, exact, options.Count().SetLimit(1)); err != nil {
+		return false, err
+	} else if count == 1 {
+		return true, nil
+	}
+	filter := bson.M{
+		"_id":    strings.TrimSpace(taskID),
+		"status": bson.M{"$nin": bson.A{reliabletask.TaskStatusSucceeded, reliabletask.TaskStatusDead}},
+		"$or": bson.A{
+			bson.M{"workerHostGenerationNumber": bson.M{"$lt": fence.Generation}},
+			bson.M{"workerHostGenerationNumber": bson.M{"$exists": false}},
+		},
+	}
+	set := bson.M{
+		"workerHostGenerationNumber":   fence.Generation,
+		"workerHostSetDigest":          values["workerHostSetDigest"],
+		"workerHostGeneration":         values["workerHostGeneration"],
+		"workerFencingToken":           values["workerFencingToken"],
+		"workerHostScopeId":            values["workerHostScopeId"],
+		"payload.workerHostSetDigest":  values["workerHostSetDigest"],
+		"payload.workerHostGeneration": values["workerHostGeneration"],
+		"payload.workerFencingToken":   values["workerFencingToken"],
+		"payload.workerHostScopeId":    values["workerHostScopeId"],
+		"status":                       reliabletask.TaskStatusReady,
+		"nextAttemptAt":                now.UTC(),
+		"updatedAt":                    now.UTC(),
+	}
+	update := bson.M{
+		"$set":   set,
+		"$unset": bson.M{"leaseOwner": "", "leaseToken": "", "leaseUntil": ""},
+	}
+	result, err := s.tasks.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return false, err
+	}
+	return result.MatchedCount == 1, nil
+}
+
 func (s *Store) ListReadyTasks(
 	ctx context.Context,
 	taskTypes []string,

@@ -94,6 +94,8 @@ domain_operation_page_ids:
   entity:
     CreateHomepageClaimRequest: entity.homepage.claim.create
     CreateHomepageStatusReport: entity.homepage.status_report.create
+    GetMyPendingHomepageClaimRequest: entity.homepage.claim.mine
+    GetMyPendingHomepageStatusReport: entity.homepage.status_report.mine
     GetHomepageDetail: entity.homepage.detail
     GetHomepageIntroduction: entity.homepage.introduction
     GetHomepageRelatedGroups: entity.homepage.related_groups

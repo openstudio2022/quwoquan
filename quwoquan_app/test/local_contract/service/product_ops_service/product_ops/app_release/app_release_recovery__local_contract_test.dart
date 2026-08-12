@@ -33,7 +33,11 @@ void main() {
             requested = request.url;
             requestedHeaders = request.headers;
             return http.Response(
-              '{"latestVersion":"1.8.2","latestBuild":"18201",'
+              '{"platform":"android",'
+              '"latestVersion":"1.8.2","latestBuild":"18201",'
+              '"minimumSupportedVersion":"1.8.0",'
+              '"minimumSupportedBuild":"18000",'
+              '"updateState":"available",'
               '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
               '"recoveryUrl":"https://quwoquan.com/"}',
               200,
@@ -60,10 +64,7 @@ void main() {
         'appVersion': '1.8.1',
         'buildNumber': '18100',
       });
-      expect(
-        requestedHeaders['X-Client-Surface-Id'],
-        AppUiSurfaces.welcome.id,
-      );
+      expect(requestedHeaders['X-Client-Surface-Id'], AppUiSurfaces.welcome.id);
       expect(
         requestedHeaders['X-Client-Page-Id'],
         OpsRequestPageIds.getAppRecoveryVersion,
@@ -77,12 +78,46 @@ void main() {
     },
   );
 
+  test('remote reader maps platform minimum build and update state', () async {
+    final reader = _remoteReader(
+      MockClient(
+        (_) async => http.Response(
+          '{"platform":"android",'
+          '"latestVersion":"1.8.2","latestBuild":"18201",'
+          '"minimumSupportedVersion":"1.8.0",'
+          '"minimumSupportedBuild":"18000",'
+          '"updateState":"available",'
+          '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
+          '"recoveryUrl":"https://quwoquan.com/"}',
+          200,
+        ),
+      ),
+    );
+
+    final facts = await reader.read(
+      const AppReleaseRecoveryQuery(
+        platform: 'android',
+        appVersion: '1.8.1',
+        buildNumber: 18100,
+      ),
+    );
+
+    expect(facts.platform, 'android');
+    expect(facts.minimumSupportedVersion, '1.8.0');
+    expect(facts.minimumSupportedBuild, 18000);
+    expect(facts.updateState, AppReleaseUpdateState.available);
+  });
+
   test('version client rejects non-https origin and expanded response', () async {
     final client = RecoveryVersionClient(
       gateway: _httpGateway(
         MockClient(
           (_) async => http.Response(
-            '{"latestVersion":"1.8.2","latestBuild":"18201",'
+            '{"platform":"android",'
+            '"latestVersion":"1.8.2","latestBuild":"18201",'
+            '"minimumSupportedVersion":"1.8.0",'
+            '"minimumSupportedBuild":"18000",'
+            '"updateState":"available",'
             '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
             '"recoveryUrl":"https://quwoquan.com/",'
             '"diagnosticId":"forbidden"}',
@@ -123,7 +158,21 @@ void main() {
       http.Response('{"code":"unavailable"}', 503),
       http.Response('{not-json', 200),
       http.Response(
-        '{"latestVersion":"1.8.2","latestBuild":"0",'
+        '{"platform":"android",'
+        '"latestVersion":"1.8.2","latestBuild":"0",'
+        '"minimumSupportedVersion":"1.8.0",'
+        '"minimumSupportedBuild":"18000",'
+        '"updateState":"required",'
+        '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
+        '"recoveryUrl":"https://quwoquan.com/"}',
+        200,
+      ),
+      http.Response(
+        '{"platform":"android",'
+        '"latestVersion":"1.8.2","latestBuild":"18201",'
+        '"minimumSupportedVersion":"1.8.0",'
+        '"minimumSupportedBuild":"18000",'
+        '"updateState":"none",'
         '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
         '"recoveryUrl":"https://quwoquan.com/"}',
         200,
@@ -175,6 +224,12 @@ void main() {
 }
 
 RecoveryOperationGateway _httpGateway(http.Client client) {
+  return RecoveryOperationGateway(
+    operations: _VersionOperations(_remoteReader(client)),
+  );
+}
+
+AppReleaseRecoveryReader _remoteReader(http.Client client) {
   final generatedClient = buildGeneratedCloudOperationClient(
     httpClient: CloudHttpClient(client: client),
     clientContextProvider: const _RecoveryClientContextProvider(),
@@ -184,18 +239,14 @@ RecoveryOperationGateway _httpGateway(http.Client client) {
       gatewayBaseUri: _binding().recoveryOrigin,
     ),
   );
-  return RecoveryOperationGateway(
-    operations: _VersionOperations(
-      RemoteAppReleaseRecoveryReader(
-        client: generatedClient,
-        invocationContext: () => CloudOperationInvocationContext(
-          // 恢复版本读面在 canonical 契约里只绑定 `welcome`。
-          surfaceId: AppUiSurfaces.welcome.id,
-          clientPageId: OpsRequestPageIds.getAppRecoveryVersion,
-          actor: const CloudOperationActorContext(
-            deviceActorId: 'recovery-device-actor',
-          ),
-        ),
+  return RemoteAppReleaseRecoveryReader(
+    client: generatedClient,
+    invocationContext: () => CloudOperationInvocationContext(
+      // 恢复版本读面在 canonical 契约里只绑定 `welcome`。
+      surfaceId: AppUiSurfaces.welcome.id,
+      clientPageId: OpsRequestPageIds.getAppRecoveryVersion,
+      actor: const CloudOperationActorContext(
+        deviceActorId: 'recovery-device-actor',
       ),
     ),
   );
@@ -220,6 +271,13 @@ final class _VersionOperations implements RecoveryRuntimeOperations {
     return RecoveryVersionResponse(
       latestVersion: facts.latestVersion,
       latestBuild: facts.latestBuild,
+      minimumSupportedVersion: facts.minimumSupportedVersion,
+      minimumSupportedBuild: facts.minimumSupportedBuild,
+      updateState: switch (facts.updateState) {
+        AppReleaseUpdateState.none => RecoveryUpdateState.none,
+        AppReleaseUpdateState.available => RecoveryUpdateState.available,
+        AppReleaseUpdateState.required => RecoveryUpdateState.required,
+      },
       updateUrl: facts.updateUrl ?? '',
       recoveryUrl: facts.recoveryUrl,
     );

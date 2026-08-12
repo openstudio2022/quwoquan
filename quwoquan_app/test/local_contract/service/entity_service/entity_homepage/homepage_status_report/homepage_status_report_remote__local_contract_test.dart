@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
 // readiness_case: homepage_status_report_create_homepage_status_report_app_local
+// readiness_case: homepage_status_report_get_my_pending_homepage_status_report_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/adapters/homepage_status_report_remote.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_command_writer.dart';
@@ -17,6 +19,7 @@ void main() {
 
     final result = await writer.createStatusReport(
       homepageId: 'homepage-1',
+      clientRequestId: 'status-report-intent-1',
       draft: HomepageStatusReportDraft(
         reason: 'incorrect_info',
         description: '地址已经变更',
@@ -67,12 +70,51 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('本人待审状态上报 Remote 执行 canonical GET 并 typed decode', () async {
+    final executor = _RecordingExecutor(response: _statusReportResponse());
+    final reader = RemoteHomepageStatusReportReader(
+      client: GeneratedCloudOperationClient(executor),
+      invocationContext: _queryContext,
+    );
+
+    final result = await reader.getMyPendingStatusReport(
+      homepageId: 'homepage-1',
+      reason: 'incorrect_info',
+    );
+
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds
+          .entityHomepageStatusReportGetMyPendingHomepageStatusReport,
+    );
+    expect(executor.operation?.method, 'GET');
+    expect(
+      executor.operation?.pathTemplate,
+      '/homepages/{homepageId}/status-reports/mine',
+    );
+    expect(executor.pathParameters, <String, String>{
+      'homepageId': 'homepage-1',
+    });
+    expect(executor.queryParameters, <String, String>{
+      'reason': 'incorrect_info',
+    });
+    expect(
+      executor.context?.clientPageId,
+      EntityRequestPageIds.getMyPendingHomepageStatusReport,
+    );
+    expect(executor.context?.idempotencyKey, isNull);
+    expect(result.reportId, 'report-1');
+    expect(result.reporterPersonaId, 'persona-1');
+    expect(result.status, HomepageStatusReportStatus.pendingReview);
+  });
 }
 
 CloudOperationInvocationContext _context(
   String clientPageId,
-  AppUiSurface surface,
-) => CloudOperationInvocationContext(
+  AppUiSurface surface, {
+  String? idempotencyKey,
+}) => CloudOperationInvocationContext(
   surfaceId: surface.id,
   routeId: surface.routeId,
   clientPageId: clientPageId,
@@ -80,7 +122,21 @@ CloudOperationInvocationContext _context(
     accountId: 'account-1',
     personaId: 'persona-1',
   ),
-  idempotencyKey: 'status-report-intent-1',
+  idempotencyKey: idempotencyKey ?? 'status-report-intent-fallback',
+);
+
+CloudOperationInvocationContext _queryContext(
+  String clientPageId,
+  AppUiSurface surface, {
+  String? idempotencyKey,
+}) => CloudOperationInvocationContext(
+  surfaceId: surface.id,
+  routeId: surface.routeId,
+  clientPageId: clientPageId,
+  actor: const CloudOperationActorContext(
+    accountId: 'account-1',
+    personaId: 'persona-1',
+  ),
 );
 
 Map<String, Object?> _statusReportResponse() => <String, Object?>{
@@ -101,6 +157,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
   CloudOperationContract? operation;
   CloudOperationInvocationContext? context;
   Map<String, String> pathParameters = const <String, String>{};
+  Map<String, String> queryParameters = const <String, String>{};
   Object? body;
 
   @override
@@ -114,6 +171,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     this.context = context;
     final payload = requestEncoder();
     pathParameters = payload.pathParameters;
+    queryParameters = payload.queryParameters;
     body = payload.body;
     return responseDecoder(response);
   }

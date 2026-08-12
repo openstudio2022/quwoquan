@@ -78,6 +78,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 - "$service" "$env_name" "$owner" "$stage_dir"
 import hashlib
 import base64
 import json
+import os
 import re
 import subprocess
 import sys
@@ -224,7 +225,13 @@ if requires_policy_publication:
             raise SystemExit(
                 f"FAIL: missing assistant policy publication {field}: {artifact}"
             )
-revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+revision = os.environ.get("QWQ_PACKAGE_SOURCE_REVISION", "").strip()
+if not revision:
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+if not re.fullmatch(r"[0-9a-f]{40}", revision):
+    raise SystemExit("FAIL: unable to resolve package git revision")
 image_digest = ("sha256:" + source_digest.removeprefix("sha256:"))
 (package / "image.lock").write_text(
     yaml.safe_dump(

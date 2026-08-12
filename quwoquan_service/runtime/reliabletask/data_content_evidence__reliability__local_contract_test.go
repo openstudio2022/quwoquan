@@ -31,7 +31,7 @@ func TestDataContentTreeMerkleMatchesPythonContractVector(t *testing.T) {
 	}
 }
 
-func TestDataContentFilesystemEvidenceVerifierBindsAppliedTransactionAndCanonicalObject(
+func TestDataContentFilesystemEvidenceVerifierBindsAppliedTransactionAndCanonicalObjectForBothLifecycleStates(
 	t *testing.T,
 ) {
 	root := t.TempDir()
@@ -84,6 +84,10 @@ func TestDataContentFilesystemEvidenceVerifierBindsAppliedTransactionAndCanonica
 	}
 	if err := verifier.VerifyDataContentResult(context.Background(), item, result); err != nil {
 		t.Fatalf("valid commercial evidence was rejected: %v", err)
+	}
+	result.AcceptanceClass = DataContentAcceptanceResearchCanonical
+	if err := verifier.VerifyDataContentResult(context.Background(), item, result); err != nil {
+		t.Fatalf("valid research evidence was rejected: %v", err)
 	}
 
 	if err := os.WriteFile(

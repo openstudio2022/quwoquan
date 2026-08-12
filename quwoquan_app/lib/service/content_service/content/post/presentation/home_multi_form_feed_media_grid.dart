@@ -411,6 +411,13 @@ class _HomeFeedVideoCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 这些回调可能在播放器子树 dispose 时才执行。此时 ConsumerElement 已经
+    // deactivate，不能再经 WidgetRef 查 Provider；在活跃 build 帧捕获 typed
+    // port，既保持当前 actor epoch，也保证控制器释放不会因 Ref 生命周期中断。
+    final behaviorTracker = ref.watch(contentBehaviorTrackerProvider);
+    final performanceObservability = ref.watch(
+      feedPerformanceObservabilityProvider,
+    );
     final surfaceMuted = AppColorsFunctional.getColor(
       isDark,
       ColorType.surfaceMuted,
@@ -472,39 +479,33 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 aspectRatio: _mediaAspectRatio(dto),
                 onTap: onTap,
                 onPlaybackStarted: (startupLatency, candidateIndex) {
-                  ref
-                      .read(feedPerformanceObservabilityProvider)
-                      .recordVideoPlaybackStarted(
-                        contentId: dto.id,
-                        startupMs: startupLatency.inMilliseconds,
-                        candidateIndex: candidateIndex,
-                        autoPlay: autoPlay,
-                      );
+                  performanceObservability.recordVideoPlaybackStarted(
+                    contentId: dto.id,
+                    startupMs: startupLatency.inMilliseconds,
+                    candidateIndex: candidateIndex,
+                    autoPlay: autoPlay,
+                  );
                 },
                 onEffectivePlayback: (evidence) {
-                  ref
-                      .read(contentBehaviorTrackerProvider)
-                      .trackEffectivePlayback(
-                        dto.id,
-                        playbackSessionId: evidence.playbackSessionId,
-                        effectivePlayMs: evidence.effectivePlayMs,
-                        consumedRatio: evidence.consumedRatio,
-                        totalUnits: evidence.totalUnits,
-                        contentType: 'video',
-                        referralSource: ReferralSource.organicFeed,
-                      );
+                  behaviorTracker.trackEffectivePlayback(
+                    dto.id,
+                    playbackSessionId: evidence.playbackSessionId,
+                    effectivePlayMs: evidence.effectivePlayMs,
+                    consumedRatio: evidence.consumedRatio,
+                    totalUnits: evidence.totalUnits,
+                    contentType: 'video',
+                    referralSource: ReferralSource.organicFeed,
+                  );
                 },
                 onPlaybackFailed: (failure) {
-                  ref
-                      .read(feedPerformanceObservabilityProvider)
-                      .recordVideoPlaybackFailed(
-                        contentId: dto.id,
-                        candidatesTried: failure.candidatesTried,
-                        failureKind: failure.kind.name,
-                        userScene: failure.userScene.name,
-                        retryable: failure.isRetryable,
-                        autoPlay: autoPlay,
-                      );
+                  performanceObservability.recordVideoPlaybackFailed(
+                    contentId: dto.id,
+                    candidatesTried: failure.candidatesTried,
+                    failureKind: failure.kind.name,
+                    userScene: failure.userScene.name,
+                    retryable: failure.isRetryable,
+                    autoPlay: autoPlay,
+                  );
                 },
               )
             else if (dto.primaryVisualUrl.trim().isNotEmpty)

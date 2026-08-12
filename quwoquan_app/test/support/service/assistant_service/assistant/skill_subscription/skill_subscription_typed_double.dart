@@ -3,8 +3,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class InMemoryAssistantSkillSubscriptionFacet
     implements AssistantSkillSubscriptionFacet {
-  final List<SkillSubscriptionWire> _subscriptions =
-      <SkillSubscriptionWire>[];
+  final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
 
   @override
   Future<List<SkillSubscriptionWire>> listSkillSubscriptions({

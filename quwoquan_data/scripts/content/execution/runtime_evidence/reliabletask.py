@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
+
 from content.execution.queue.backend import load_reliabletask_job_set_envelopes
 from content.execution.queue.reliabletask.transport import (
     ReliableTaskFleetTransport,
@@ -18,18 +19,36 @@ from content.execution.runtime_evidence.contract import (
     canonical_digest,
 )
 from content.execution.runtime_evidence.reliabletask_contract import (
-    ExecutionTarget as _ExecutionTarget,
-    ExpectedTask as _ExpectedTask,
-    JobSetTarget as _JobSetTarget,
     LEASE_STATES as _LEASE_STATES,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     OBSERVATION_FIELDS as _OBSERVATION_FIELDS,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     TASK_OPTIONAL_FIELDS as _TASK_OPTIONAL_FIELDS,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     TASK_REQUIRED_FIELDS as _TASK_REQUIRED_FIELDS,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     TASK_STATUSES as _TASK_STATUSES,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
+    ExecutionTarget as _ExecutionTarget,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
+    JobSetTarget as _JobSetTarget,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     campaign_binding as _campaign_binding,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     canonical_digest_any as _canonical_digest_any,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     fault_event_time as _fault_event_time,
-    job_set_targets as _job_set_targets_from_envelopes,
+)
+from content.execution.runtime_evidence.reliabletask_contract import (
     sha256_digest as _sha256,
 )
 from content.execution.runtime_evidence.reliabletask_process import (
@@ -41,10 +60,14 @@ from content.execution.runtime_evidence.reliabletask_process import (
     observer_timeout_seconds,
     run_observer_command,
 )
+from content.execution.runtime_evidence.reliabletask_targets import (
+    load_job_set_targets as _load_job_set_targets,
+)
 from content.execution.runtime_evidence.sampling import (
     FaultQueueEvent,
     QueueObservation,
 )
+
 
 def _typed(suffix: str, message: str) -> ReliableTaskObserverError:
     return observer_error(suffix, message)
@@ -65,19 +88,12 @@ def _job_set_targets(
     execution_id: str,
     backend_envelope: Mapping[str, Any],
 ) -> tuple[_JobSetTarget, ...]:
-    try:
-        envelopes = load_reliabletask_job_set_envelopes(execution_id)
-        return _job_set_targets_from_envelopes(
-            carrier,
-            execution_id,
-            backend_envelope,
-            envelopes,
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        raise _typed(
-            "FROZEN_TARGET_INVALID",
-            f"{carrier}/{execution_id} immutable job-set invalid",
-        ) from exc
+    return _load_job_set_targets(
+        carrier,
+        execution_id,
+        backend_envelope,
+        load_envelopes=load_reliabletask_job_set_envelopes,
+    )
 
 
 def _count(value: object, *, label: str) -> int:
@@ -104,7 +120,7 @@ def _task_rows(
     if not isinstance(raw_tasks, list):
         raise _typed("RESPONSE_INVALID", "tasks must be an array")
     rows: list[dict[str, Any]] = []
-    identities: list[dict[str, str]] = []
+    identities: list[dict[str, object]] = []
     for raw in raw_tasks:
         if not isinstance(raw, Mapping):
             raise _typed("RESPONSE_INVALID", "task observation must be an object")
@@ -122,6 +138,11 @@ def _task_rows(
         if row["stage"] not in {"author", "publish"} or row["status"] not in _TASK_STATUSES:
             raise _typed("RESPONSE_INVALID", "task stage or status is invalid")
         _count(row.get("attempts"), label="task attempts")
+        max_attempts = _count(
+            row.get("maxAttempts"), label="task maxAttempts"
+        )
+        if max_attempts < 1:
+            raise _typed("RESPONSE_INVALID", "task maxAttempts must be >= 1")
         _parse_time(row.get("createdAt"), label="task createdAt")
         _parse_time(row.get("updatedAt"), label="task updatedAt")
         if row.get("leaseState") not in _LEASE_STATES:
@@ -137,6 +158,7 @@ def _task_rows(
                 "entityRef": str(row["entityRef"]),
                 "stage": str(row["stage"]),
                 "sourceRevision": str(row["sourceRevision"]),
+                "maxAttempts": max_attempts,
             }
         )
         rows.append(row)

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/homepage_article_seed_selection.schema.json",
+  "title": "Homepage and article acquisition seed selection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "seedSetId", "selectionDigest", "counts", "seeds"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.homepage_article_seed_selection"},
+    "seedSetId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
+    },
+    "selectionDigest": {"$ref": "#/$defs/sha256"},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homepage", "article"],
+      "properties": {
+        "homepage": {"type": "integer", "minimum": 0},
+        "article": {"type": "integer", "minimum": 0}
+      }
+    },
+    "seeds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/seed"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seedOrigin", "seedId", "coverageKey", "candidateName", "province",
+        "city", "district", "entityType", "sourceKind", "extractor"
+      ],
+      "properties": {
+        "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+        "seedId": {"$ref": "#/$defs/sha256"},
+        "coverageKey": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "coverageEntityIdentity", "coverageRecordDigest", "entityRef",
+            "carrier", "sourceUrl"
+          ],
+          "properties": {
+            "coverageEntityIdentity": {"type": "string", "minLength": 1},
+            "coverageRecordDigest": {"$ref": "#/$defs/sha256"},
+            "entityRef": {"type": "string", "pattern": "^/entity/[^/]+/[^/]+/[^/]+$"},
+            "carrier": {"enum": ["homepage", "article"]},
+            "sourceUrl": {"type": "string", "pattern": "^https://"}
+          }
+        },
+        "candidateName": {"type": "string", "minLength": 1},
+        "province": {"type": "string"},
+        "city": {"type": "string"},
+        "district": {"type": "string"},
+        "entityType": {"type": "string", "pattern": "^[^/]+/[^/]+$"},
+        "sourceKind": {"enum": ["wikipedia", "baidu_baike", "toutiao_baike"]},
+        "extractor": {"enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html"]},
+        "articleCategory": {"const": "photography"},
+        "writingIntent": {"const": "planning_consultation"},
+        "topicTagRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": {"const": "Topic/旅行/玩法/摄影旅拍"}
+        },
+        "historicalBaseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidateId", "bodyContentSha256"],
+          "properties": {
+            "candidateId": {"type": "string", "minLength": 1},
+            "bodyContentSha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"seedOrigin": {"const": "legacy_hint"}}},
+          "then": {"required": ["historicalBaseline"]},
+          "else": {"not": {"required": ["historicalBaseline"]}}
+        },
+        {
+          "if": {"required": ["articleCategory"]},
+          "then": {
+            "required": ["writingIntent", "topicTagRefs"],
+            "properties": {
+              "coverageKey": {
+                "properties": {"carrier": {"const": "article"}}
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["writingIntent"]},
+                {"required": ["topicTagRefs"]}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

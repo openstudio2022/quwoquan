@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 _BRANCH_POLICY_RELPATH = Path("quwoquan_ops") / "policies" / "branch_policy.yaml"
+_CAPSULE_MANIFEST = ".qwq_campaign_capsule.json"
 
 
 def _repo_root() -> Path:
@@ -47,7 +48,8 @@ def is_homepage_only_spec(spec: Mapping[str, Any] | None = None) -> bool:
 
 
 def current_git_branch(*, cwd: str | Path | None = None) -> str:
-    root = str(Path(cwd).resolve()) if cwd else None
+    resolved_root = Path(cwd).resolve() if cwd else _repo_root().resolve()
+    root = str(resolved_root)
     try:
         result = subprocess.run(
             ["git", "branch", "--show-current"],
@@ -65,16 +67,28 @@ def current_git_branch(*, cwd: str | Path | None = None) -> str:
     )
     if branch:
         return branch
-    # Campaign lanes deliberately run at detached HEAD. The controller freezes
-    # the named main branch and root execution ID together, then passes both to
-    # the lane; ordinary detached executions remain fail-closed.
-    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip():
-        return str(os.environ.get("QWQ_FROZEN_MAIN_BRANCH") or "").strip()
+    # Campaign lanes execute from an immutable v2 source capsule without Git
+    # metadata.  The captured branch inside that capsule is the execution
+    # authority; environment values are only checked for exact transit drift.
+    manifest_path = resolved_root / _CAPSULE_MANIFEST
+    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip() and manifest_path.is_file():
+        from core.io import read_json
+
+        manifest = read_json(manifest_path)
+        if (
+            not isinstance(manifest, Mapping)
+            or manifest.get("format") != "source-capsule-v2"
+        ):
+            return ""
+        captured = str(manifest.get("gitBranch") or "").strip()
+        transit = str(os.environ.get("QWQ_FROZEN_MAIN_BRANCH") or "").strip()
+        return captured if captured and (not transit or transit == captured) else ""
     return ""
 
 
 def current_git_commit(*, cwd: str | Path | None = None) -> str:
-    root = str(Path(cwd).resolve()) if cwd else None
+    resolved_root = Path(cwd).resolve() if cwd else _repo_root().resolve()
+    root = str(resolved_root)
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -87,11 +101,19 @@ def current_git_commit(*, cwd: str | Path | None = None) -> str:
         return ""
     if result.returncode == 0 and str(result.stdout or "").strip():
         return str(result.stdout or "").strip()
-    # Content-addressed campaign capsules intentionally contain no mutable Git
-    # metadata.  The controller binds the exported commit to the root execution
-    # and passes it together with the existing named-branch proof.
-    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip():
-        return str(os.environ.get("QWQ_FROZEN_MAIN_COMMIT") or "").strip()
+    manifest_path = resolved_root / _CAPSULE_MANIFEST
+    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip() and manifest_path.is_file():
+        from core.io import read_json
+
+        manifest = read_json(manifest_path)
+        if (
+            not isinstance(manifest, Mapping)
+            or manifest.get("format") != "source-capsule-v2"
+        ):
+            return ""
+        captured = str(manifest.get("gitCommitSha") or "").strip()
+        transit = str(os.environ.get("QWQ_FROZEN_MAIN_COMMIT") or "").strip()
+        return captured if captured and (not transit or transit == captured) else ""
     return ""
 
 
@@ -151,7 +173,9 @@ def execution_branch_payload(
         "stampedGitCommitSha": str(workflow.get("gitCommitSha") or "").strip(),
         "currentGitBranch": current_git_branch(cwd=cwd or _repo_root()),
         "currentGitCommitSha": current_git_commit(cwd=cwd or _repo_root()),
-        "allowedBranches": branch_policy_allowed_branches(),
+        "allowedBranches": branch_policy_allowed_branches(
+            repo_root=cwd or _repo_root()
+        ),
     }
 
 
@@ -162,7 +186,7 @@ def execution_branch_issues(
 ) -> list[str]:
     """商业执行分支门：当前分支必须在 branch policy allowlist 内。"""
     del spec  # 分支不再由任务内容类型推导；历史 spec 冻结值仅是证据。
-    allowed = branch_policy_allowed_branches()
+    allowed = branch_policy_allowed_branches(repo_root=cwd or _repo_root())
     actual = current_git_branch(cwd=cwd or _repo_root())
     issues: list[str] = []
     if not allowed:

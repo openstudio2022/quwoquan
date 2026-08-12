@@ -35,6 +35,156 @@ func TestNormalizeXReadGroupBlock(t *testing.T) {
 	})
 }
 
+func TestStreamConsumerGroupInitializationIsSingleCommand(t *testing.T) {
+	server := miniredis.RunT(t)
+	raw := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	instance := &client{raw: raw}
+	t.Cleanup(func() { _ = instance.Close() })
+	if err := raw.Ping(context.Background()).Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	before := server.CommandCount()
+	var wait sync.WaitGroup
+	for index := 0; index < 32; index++ {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			if err := instance.XGroupCreateMkStream(
+				context.Background(),
+				"events:consumer-group-once",
+				"consumer-group-once",
+				"0",
+			); err != nil {
+				t.Errorf("initialize consumer group: %v", err)
+			}
+		}()
+	}
+	wait.Wait()
+
+	if commands := server.CommandCount() - before; commands != 1 {
+		t.Fatalf("XGROUP commands=%d, want exactly one", commands)
+	}
+}
+
+func TestBusyGroupClassificationRequiresRedisProtocolError(t *testing.T) {
+	server := miniredis.RunT(t)
+	raw := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = raw.Close() })
+	ctx := context.Background()
+	if err := raw.XGroupCreateMkStream(ctx, "events:busy", "busy", "0").Err(); err != nil {
+		t.Fatal(err)
+	}
+	busy := raw.XGroupCreateMkStream(ctx, "events:busy", "busy", "0").Err()
+	if !isBusyGroupError(busy) {
+		t.Fatalf("Redis BUSYGROUP error was not classified: %T %v", busy, busy)
+	}
+	if isBusyGroupError(errors.New("proxy mentioned BUSYGROUP in unrelated failure")) {
+		t.Fatal("plain-text BUSYGROUP was misclassified as Redis protocol error")
+	}
+	missing := raw.XReadGroup(ctx, &goredis.XReadGroupArgs{
+		Group: "missing", Consumer: "consumer",
+		Streams: []string{"events:missing", ">"},
+	}).Err()
+	if !isNoGroupError(missing) {
+		t.Fatalf("Redis NOGROUP error was not classified: %T %v", missing, missing)
+	}
+}
+
+func TestNoGroupInvalidatesInitializationCache(t *testing.T) {
+	server := miniredis.RunT(t)
+	raw := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	instance := &client{raw: raw}
+	t.Cleanup(func() { _ = instance.Close() })
+	ctx := context.Background()
+	const stream = "events:recreate"
+	const group = "recreate"
+	if err := instance.XGroupCreateMkStream(ctx, stream, group, "0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.XGroupDestroy(ctx, stream, group).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := instance.XReadGroup(
+		ctx, group, "consumer", map[string]string{stream: ">"}, 10, 0,
+	); !isNoGroupError(err) {
+		t.Fatalf("read after group loss error=%v, want typed NOGROUP", err)
+	}
+	if err := instance.XGroupCreateMkStream(ctx, stream, group, "0"); err != nil {
+		t.Fatalf("recreate invalidated group: %v", err)
+	}
+}
+
+func TestStreamEmptyPollBackoffIsBoundedCancelableAndResets(t *testing.T) {
+	governor := newStreamPollGovernor(5*time.Millisecond, 20*time.Millisecond)
+	const key = "events:poll\x00pollers"
+
+	for index, expected := range []time.Duration{
+		5 * time.Millisecond,
+		10 * time.Millisecond,
+		20 * time.Millisecond,
+		20 * time.Millisecond,
+	} {
+		governor.record(key, 0, nil)
+		if got := governor.delay(key); got < expected-time.Millisecond || got > expected+time.Millisecond {
+			t.Fatalf("empty poll %d delay=%v, want %v", index+1, got, expected)
+		}
+		time.Sleep(expected)
+	}
+
+	governor.record(key, 1, nil)
+	if got := governor.delay(key); got != 0 {
+		t.Fatalf("message delivery did not reset backoff: %v", got)
+	}
+
+	governor.record(key, 0, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	if err := governor.wait(ctx, key); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled wait error=%v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(started); elapsed > 25*time.Millisecond {
+		t.Fatalf("canceled wait took %v", elapsed)
+	}
+}
+
+func TestSuccessfulEmptyStreamReadsCannotFormATightCommandLoop(t *testing.T) {
+	server := miniredis.RunT(t)
+	raw := goredis.NewClient(&goredis.Options{Addr: server.Addr()})
+	instance := &client{
+		raw:         raw,
+		streamPolls: newStreamPollGovernor(5*time.Millisecond, 20*time.Millisecond),
+	}
+	t.Cleanup(func() { _ = instance.Close() })
+	ctx := context.Background()
+	if err := instance.XGroupCreateMkStream(ctx, "events:empty", "empty", "0"); err != nil {
+		t.Fatal(err)
+	}
+
+	beforeCommands := server.CommandCount()
+	started := time.Now()
+	for index := 0; index < 5; index++ {
+		messages, err := instance.XReadGroup(
+			ctx,
+			"empty",
+			"empty-consumer",
+			map[string]string{"events:empty": ">"},
+			10,
+			0,
+		)
+		if err != nil || len(messages) != 0 {
+			t.Fatalf("empty read %d messages=%v err=%v", index, messages, err)
+		}
+	}
+	if commands := server.CommandCount() - beforeCommands; commands != 5 {
+		t.Fatalf("XREADGROUP commands=%d, want 5", commands)
+	}
+	if elapsed := time.Since(started); elapsed < 50*time.Millisecond {
+		t.Fatalf("five successful empty reads completed in %v; command loop is unbounded", elapsed)
+	}
+}
+
 func TestBoundedImmutableRecordAtomicLuaCommercialAdmission(t *testing.T) {
 	raw, client := newAtomicTestClient(t)
 	ctx := context.Background()

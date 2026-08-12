@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   quwoquan_ops/cli/prod/config_release_apply_stage.sh \
-    --service <svc> --step <5|25|50|100> \
+    --service <svc> --step <0|5|20|50|100> \
     --error-rate <float> --p95-ms <int> --redis-error-rate <float>
 
 Behavior:

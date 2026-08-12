@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_supported_api_author_result.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "candidateId", "contentSha256", "entityId", "status",
+    "entityMatch", "attributionMatch", "qualityStatus", "caption", "findings"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_supported_api_author_result"},
+    "candidateId": {"type": "string", "minLength": 1},
+    "contentSha256": {"$ref": "#/$defs/sha256"},
+    "entityId": {"type": "string", "minLength": 1},
+    "status": {"enum": ["passed", "blocked"]},
+    "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+    "attributionMatch": {"enum": ["matched", "mismatch", "unknown"]},
+    "qualityStatus": {"enum": ["passed", "blocked"]},
+    "caption": {"type": "string", "minLength": 1, "maxLength": 300},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

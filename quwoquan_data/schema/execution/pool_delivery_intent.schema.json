@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/pool_delivery_intent.schema.json",
+  "description": "Create-once reviewed object intent for canonical pool delivery.",
+  "type": "object",
+  "required": [
+    "schema",
+    "intentId",
+    "executionId",
+    "carrier",
+    "objectRef",
+    "contentObjectDir",
+    "objectId",
+    "contentId",
+    "version",
+    "poolIdentityReservationId",
+    "reviewEvidenceRef",
+    "reviewEvidenceSha256",
+    "creatorBindingMode",
+    "creatorBinding",
+    "creatorBindingDigest",
+    "entityTagBindingDigest",
+    "sourceAttributionDigest",
+    "mediaClosureDigest",
+    "transactionId",
+    "transactionInputDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_delivery_intent"},
+    "intentId": {"$ref": "#/$defs/digest"},
+    "executionId": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "objectRef": {"type": "string", "minLength": 1},
+    "contentObjectDir": {"type": "string", "minLength": 1},
+    "objectId": {"type": "string", "minLength": 1},
+    "contentId": {"type": ["string", "null"], "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "poolIdentityReservationId": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/digest"}
+      ]
+    },
+    "reviewEvidenceRef": {"type": "string", "minLength": 1},
+    "reviewEvidenceSha256": {"$ref": "#/$defs/digest"},
+    "creatorBindingMode": {
+      "enum": ["manifest_exact", "semantic_fit_recovery"]
+    },
+    "creatorBinding": {"$ref": "#/$defs/creatorBinding"},
+    "creatorBindingDigest": {"$ref": "#/$defs/digest"},
+    "entityTagBindingDigest": {"$ref": "#/$defs/digest"},
+    "sourceAttributionDigest": {"$ref": "#/$defs/digest"},
+    "mediaClosureDigest": {"$ref": "#/$defs/digest"},
+    "transactionId": {"type": "string", "minLength": 1},
+    "transactionInputDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "creatorBinding": {
+      "type": "object",
+      "required": [
+        "authorId",
+        "creatorProfileId",
+        "creatorArchetype",
+        "creatorProfileDigest",
+        "creatorProfileVersion",
+        "creatorDisclosure",
+        "experienceClaimMode",
+        "authorQualitySignals"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "authorId": {"type": "string", "minLength": 1},
+        "creatorProfileId": {"type": "string", "minLength": 1},
+        "creatorArchetype": {"type": "string", "minLength": 1},
+        "creatorProfileDigest": {"$ref": "#/$defs/digest"},
+        "creatorProfileVersion": {"$ref": "#/$defs/digest"},
+        "creatorDisclosure": {
+          "type": "object",
+          "required": ["type", "visible", "displayText"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {"const": "platform_virtual_creator"},
+            "visible": {"const": true},
+            "displayText": {"type": "string", "minLength": 1}
+          }
+        },
+        "experienceClaimMode": {
+          "enum": [
+            "editorial_synthesis",
+            "authorized_first_person",
+            "public_data_analysis",
+            "visual_discovery"
+          ]
+        },
+        "authorQualitySignals": {
+          "type": "object",
+          "required": ["qualityScore", "fatigueScore", "riskTier"],
+          "additionalProperties": false,
+          "properties": {
+            "qualityScore": {"type": "number", "minimum": 0, "maximum": 1},
+            "fatigueScore": {"type": "number", "minimum": 0, "maximum": 1},
+            "riskTier": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"carrier": {"const": "homepage"}},
+        "required": ["carrier"]
+      },
+      "then": {
+        "properties": {
+          "contentId": {"type": "null"},
+          "poolIdentityReservationId": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "contentId": {"type": "string", "minLength": 1},
+          "poolIdentityReservationId": {"$ref": "#/$defs/digest"}
+        }
+      }
+    }
+  ]
+}

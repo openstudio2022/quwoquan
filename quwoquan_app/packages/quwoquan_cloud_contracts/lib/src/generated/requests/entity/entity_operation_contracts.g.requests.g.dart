@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 part of '../../../entity/entity_operation_contracts.g.dart';
 
@@ -231,6 +231,60 @@ final class DeleteHomepageReviewCommand {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "reviewId": this.reviewId,
+  };
+}
+
+final class GetMyPendingHomepageClaimRequestQuery {
+  GetMyPendingHomepageClaimRequestQuery({
+    required String homepageId,
+  }) : homepageId = homepageId.trim() {
+    if (this.homepageId.isEmpty) {
+      throw ArgumentError.value(this.homepageId, "homepageId", 'must not be blank');
+    }
+  }
+
+  final String homepageId;
+
+  factory GetMyPendingHomepageClaimRequestQuery.fromWire(Map<String, Object?> map, [String path = "GetMyPendingHomepageClaimRequestQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"homepageId"}, path);
+    return GetMyPendingHomepageClaimRequestQuery(
+      homepageId: _generatedRequestString(map["homepageId"], '$path.homepageId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "homepageId": this.homepageId,
+  };
+}
+
+final class GetMyPendingHomepageStatusReportQuery {
+  GetMyPendingHomepageStatusReportQuery({
+    required String homepageId,
+    required String reason,
+  }) : homepageId = homepageId.trim(),
+       reason = reason.trim() {
+    if (this.homepageId.isEmpty) {
+      throw ArgumentError.value(this.homepageId, "homepageId", 'must not be blank');
+    }
+    if (this.reason.isEmpty) {
+      throw ArgumentError.value(this.reason, "reason", 'must not be blank');
+    }
+  }
+
+  final String homepageId;
+  final String reason;
+
+  factory GetMyPendingHomepageStatusReportQuery.fromWire(Map<String, Object?> map, [String path = "GetMyPendingHomepageStatusReportQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"homepageId", "reason"}, path);
+    return GetMyPendingHomepageStatusReportQuery(
+      homepageId: _generatedRequestString(map["homepageId"], '$path.homepageId'),
+      reason: _generatedRequestString(map["reason"], '$path.reason'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "homepageId": this.homepageId,
+    "reason": this.reason,
   };
 }
 
@@ -737,6 +791,14 @@ CloudOperationRequestPayload encodeEntityHomepageClaimRequestCreateHomepageClaim
   );
 }
 
+CloudOperationRequestPayload encodeEntityHomepageClaimRequestGetMyPendingHomepageClaimRequestGeneratedRequest(GetMyPendingHomepageClaimRequestQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "homepageId": request.homepageId,
+    },
+  );
+}
+
 CloudOperationRequestPayload encodeEntityHomepageReviewCreateHomepageReviewGeneratedRequest(CreateHomepageReviewCommand request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
@@ -804,6 +866,17 @@ CloudOperationRequestPayload encodeEntityHomepageStatusReportCreateHomepageStatu
       "reason": request.reason,
       if (request.description != null) "description": request.description!,
       if (request.evidenceUrls.isNotEmpty) "evidenceUrls": request.evidenceUrls.map((value) => value).toList(growable: false),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeEntityHomepageStatusReportGetMyPendingHomepageStatusReportGeneratedRequest(GetMyPendingHomepageStatusReportQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "homepageId": request.homepageId,
+    },
+    queryParameters: <String, String>{
+      "reason": request.reason,
     },
   );
 }

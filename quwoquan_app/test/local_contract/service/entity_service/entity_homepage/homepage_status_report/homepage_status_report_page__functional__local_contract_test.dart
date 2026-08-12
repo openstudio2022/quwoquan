@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +11,7 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_sta
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_write_target_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_query_reader.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/presentation/homepage_status_report_page.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -15,7 +19,7 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show HomepageStatusReportView;
+    show HomepageStatusReportStatus, HomepageStatusReportView;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
@@ -29,7 +33,12 @@ void main() {
     final repository = _StatusRepository();
     final telemetry = RecordingAppTelemetryRecorder();
     await tester.pumpWidget(
-      _statusHost(reader: repository, writer: repository, telemetry: telemetry),
+      _statusHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: telemetry,
+      ),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
     await _pumpUi(tester);
@@ -52,6 +61,7 @@ void main() {
     expect(repository.createCalls, 1);
     expect(repository.lastDraft?.reason, 'incorrect_info');
     expect(repository.lastDraft?.description, '地址已经变更');
+    expect(repository.lastClientRequestId, isNotEmpty);
     expect(find.text('STATUS_RESULT:true'), findsOneWidget);
     expect(
       telemetry.recorded.any(
@@ -68,7 +78,12 @@ void main() {
     final repository = _StatusRepository(failSubmit: true);
     final telemetry = RecordingAppTelemetryRecorder();
     await tester.pumpWidget(
-      _statusHost(reader: repository, writer: repository, telemetry: telemetry),
+      _statusHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: telemetry,
+      ),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
     await _pumpUi(tester);
@@ -89,6 +104,104 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  testWidgets('状态上报重试同一表单意图复用稳定幂等键', (tester) async {
+    final repository = _StatusRepository(failuresRemaining: 1);
+    await tester.pumpWidget(
+      _statusHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: RecordingAppTelemetryRecorder(),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
+    await _pumpUi(tester);
+    await tester.tap(
+      find.text(ObjectHomepageText.homepageStatusReportReasonOffline),
+    );
+    await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
+    await _pumpUi(tester);
+
+    final errorCard = tester.widget<AppFormErrorCard>(
+      find.byType(AppFormErrorCard),
+    );
+    expect(errorCard.semantic.primaryAction, isNotNull);
+    expect(errorCard.onAction, isNotNull);
+    await errorCard.onAction!(errorCard.semantic.primaryAction!);
+    await _pumpUi(tester);
+
+    expect(repository.clientRequestIds, hasLength(2));
+    expect(repository.clientRequestIds.first, isNotEmpty);
+    expect(repository.clientRequestIds.last, repository.clientRequestIds.first);
+    expect(find.text('STATUS_RESULT:true'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('状态上报拒绝非待审 typed receipt 且不退出页面', (tester) async {
+    final repository = _StatusRepository(returnReviewedReceipt: true);
+    final telemetry = RecordingAppTelemetryRecorder();
+    await tester.pumpWidget(
+      _statusHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: telemetry,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
+    await _pumpUi(tester);
+    await tester.tap(
+      find.text(ObjectHomepageText.homepageStatusReportReasonIncorrectInfo),
+    );
+    await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
+    await _pumpUi(tester);
+
+    expect(find.byType(AppFormErrorCard), findsOneWidget);
+    expect(find.byType(HomepageStatusReportPage), findsOneWidget);
+    expect(
+      telemetry.recorded.any(
+        (event) =>
+            event.action == 'status_report_submit' &&
+            event.extensions['result'] == 'failure' &&
+            event.extensions['failReasonCode'] ==
+                RuntimeFailureCodes.appContractInvalidResponse,
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('状态上报 ACK 后权威读回失败时保留页面并以同一意图重试', (tester) async {
+    final repository = _StatusRepository(readbackFailuresRemaining: 1);
+    await tester.pumpWidget(
+      _statusHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: RecordingAppTelemetryRecorder(),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
+    await _pumpUi(tester);
+    await tester.tap(
+      find.text(ObjectHomepageText.homepageStatusReportReasonOffline),
+    );
+    await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
+    await _pumpUi(tester);
+
+    expect(find.byType(HomepageStatusReportPage), findsOneWidget);
+    final errorCard = tester.widget<AppFormErrorCard>(
+      find.byType(AppFormErrorCard),
+    );
+    await errorCard.onAction!(errorCard.semantic.primaryAction!);
+    await _pumpUi(tester);
+
+    expect(repository.clientRequestIds, hasLength(2));
+    expect(repository.clientRequestIds.toSet(), hasLength(1));
+    expect(repository.readbackCalls, 2);
+    expect(find.text('STATUS_RESULT:true'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('游客关闭状态上报登录页回详情且不会再次弹出', (tester) async {
@@ -117,6 +230,7 @@ void main() {
             homepageId: _homepageId,
             writeTargetReader: repository,
             commandWriter: repository,
+            queryReader: repository,
             actionTracker: actionTracker,
           ),
         ),
@@ -168,6 +282,7 @@ void main() {
 Widget _statusHost({
   required HomepageWriteTargetReader reader,
   required HomepageStatusReportCommandWriter writer,
+  required HomepageStatusReportQueryReader queryReader,
   required RecordingAppTelemetryRecorder telemetry,
 }) {
   final router = GoRouter(
@@ -183,6 +298,7 @@ Widget _statusHost({
           homepageId: _homepageId,
           writeTargetReader: reader,
           commandWriter: writer,
+          queryReader: queryReader,
           actionTracker: _actionTracker(telemetry),
         ),
       ),
@@ -244,23 +360,74 @@ class _StatusHostState extends State<_StatusHost> {
 }
 
 class _StatusRepository extends MockHomepageRepository {
-  _StatusRepository({this.failSubmit = false});
+  _StatusRepository({
+    this.failSubmit = false,
+    this.returnReviewedReceipt = false,
+    this.failuresRemaining = 0,
+    this.readbackFailuresRemaining = 0,
+  });
 
   final bool failSubmit;
+  final bool returnReviewedReceipt;
+  int failuresRemaining;
+  int readbackFailuresRemaining;
   int createCalls = 0;
+  int readbackCalls = 0;
   HomepageStatusReportDraft? lastDraft;
+  String? lastClientRequestId;
+  final List<String> clientRequestIds = <String>[];
 
   @override
   Future<HomepageStatusReportView> createStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
+    String? clientRequestId,
   }) async {
     createCalls += 1;
     lastDraft = draft;
-    if (failSubmit) {
+    lastClientRequestId = clientRequestId;
+    clientRequestIds.add(clientRequestId ?? '');
+    if (failSubmit || failuresRemaining > 0) {
+      if (failuresRemaining > 0) {
+        failuresRemaining -= 1;
+      }
       throw StateError('redacted status failure');
     }
-    return super.createStatusReport(homepageId: homepageId, draft: draft);
+    final receipt = await super.createStatusReport(
+      homepageId: homepageId,
+      draft: draft,
+      clientRequestId: clientRequestId,
+    );
+    if (!returnReviewedReceipt) {
+      return receipt;
+    }
+    return HomepageStatusReportView(
+      reportId: receipt.reportId,
+      homepageId: receipt.homepageId,
+      reporterPersonaId: receipt.reporterPersonaId,
+      reason: receipt.reason,
+      status: HomepageStatusReportStatus.confirmedOffline,
+      description: receipt.description,
+      evidenceUrls: receipt.evidenceUrls,
+      createdAt: receipt.createdAt,
+      reviewedAt: receipt.createdAt,
+    );
+  }
+
+  @override
+  Future<HomepageStatusReportView> getMyPendingStatusReport({
+    required String homepageId,
+    required String reason,
+  }) async {
+    readbackCalls += 1;
+    if (readbackFailuresRemaining > 0) {
+      readbackFailuresRemaining -= 1;
+      throw StateError('redacted status readback failure');
+    }
+    return super.getMyPendingStatusReport(
+      homepageId: homepageId,
+      reason: reason,
+    );
   }
 }
 

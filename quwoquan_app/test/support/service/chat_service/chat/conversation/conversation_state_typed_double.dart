@@ -5,7 +5,7 @@ import 'dart:convert' show jsonEncode, utf8;
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 part 'conversation_state_typed_double_conversations.dart';
 part 'conversation_state_typed_double_groups.dart';
@@ -60,17 +60,17 @@ ChatFixtureCursorPage _fixtureCursorPage(
 /// Patrol/UAT 不可达。
 final class InMemoryChatStateEngine {
   InMemoryChatStateEngine({
-    ObjectScenarioSeedReader? fixtures,
+    ObjectContractExampleReader? fixtures,
     List<ChatFixtureObject>? seedConversations,
     Map<String, List<ChatFixtureObject>>? seedMembers,
     Map<String, List<ChatFixtureObject>>? seedMessages,
   }) {
-    final scenarioReader = fixtures ?? objectScenarioSeedReader;
+    final scenarioReader = fixtures ?? objectContractExampleReader;
     final chatRoot = scenarioReader.document('chat');
-    final seedSets = _asObject(chatRoot['seedSets']);
-    final core = _asObject(seedSets['chat_core']);
-    final contacts = _asObject(seedSets['chat_contacts_core']);
-    final settings = _asObject(seedSets['chat_settings_core']);
+    final examples = _asObject(chatRoot['examples']);
+    final core = _asObject(examples['chat_core']);
+    final contacts = _asObject(examples['chat_contacts_core']);
+    final settings = _asObject(examples['chat_settings_core']);
 
     currentUserId = _text(core['currentUserId']);
     if (currentUserId.isEmpty) {
@@ -293,11 +293,11 @@ final class InMemoryChatStateEngine {
   }
 
   static List<ChatFixtureObject> _readCircleRows(
-    ObjectScenarioSeedReader fixtures,
+    ObjectContractExampleReader fixtures,
   ) {
     final root = fixtures.document('circle');
-    final seedSets = _asObject(root['seedSets']);
-    final core = _asObject(seedSets['circle_core']);
+    final examples = _asObject(root['examples']);
+    final core = _asObject(examples['circle_core']);
     return _objectList(core['circles']).map(_copy).toList(growable: false);
   }
 

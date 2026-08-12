@@ -13,17 +13,14 @@ if str(_SCRIPTS_ROOT) not in sys.path:
 
 from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
 
-from pathlib import Path
-import json
 import re
-import sys
 
 ROOT = REPO_ROOT
 LIB = ROOT / "quwoquan_app/lib"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
-CHAT_FIXTURE = (
+CHAT_OBJECT_BUILDER = (
     ROOT
-    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
+    / "quwoquan_app/test/support/runtime/fixtures/object_scenario_builders.dart"
 )
 
 violations = []
@@ -44,21 +41,21 @@ if production_refs:
         + ", ".join(sorted(production_refs))
     )
 
-if CHAT_FIXTURE.is_file():
-    payload = json.loads(CHAT_FIXTURE.read_text(encoding="utf-8"))
-    seed_sets = payload.get("seedSets") or {}
-    chat_core = seed_sets.get("chat_core") or {}
-    for conversation in chat_core.get("conversations") or []:
-        if conversation.get("type") != "group":
-            continue
-        object_key = str(conversation.get("avatarUrl") or "").strip()
-        conversation_id = str(conversation.get("id") or "").strip()
-        if not object_key.startswith("media/avatar/"):
-            violations.append(
-                "chat contract group avatar must use media/avatar: "
-                f"{conversation_id}={object_key}"
-            )
-            continue
+if not CHAT_OBJECT_BUILDER.is_file():
+    violations.append("chat object builder must exist")
+else:
+    builder = CHAT_OBJECT_BUILDER.read_text(encoding="utf-8")
+    avatar_template = "media/avatar/s/archived-avatar/group/$id/v1/composite.png"
+    if avatar_template not in builder:
+        violations.append(
+            f"chat object builder must use canonical group avatar template: {avatar_template}"
+        )
+    for conversation_id in ("fixture_conv_group", "fixture_conv_photo_group"):
+        object_key = (
+            f"media/avatar/s/archived-avatar/group/{conversation_id}/v1/composite.png"
+        )
+        if conversation_id not in builder:
+            violations.append(f"chat object builder must retain {conversation_id}")
         if not (MEDIA_ROOT / object_key).is_file():
             violations.append(
                 "chat contract group avatar must be materialized in shared "

@@ -49,4 +49,10 @@ func TestSearchHealthProbeSplitKeepsComposeOnShallowLiveness(t *testing.T) {
 	if !strings.Contains(composeText, "http://127.0.0.1:18095/healthz") {
 		t.Fatal("compose healthcheck must probe shallow /healthz")
 	}
+	if !strings.Contains(
+		composeText,
+		`QWQ_RELEASE_CANDIDATE_DIGEST: "${QWQ_RELEASE_CANDIDATE_DIGEST:?release candidate digest is required}"`,
+	) {
+		t.Fatal("compose must bind search cursors to the immutable release candidate")
+	}
 }

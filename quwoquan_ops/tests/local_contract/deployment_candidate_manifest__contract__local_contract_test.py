@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
@@ -42,10 +43,22 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         digest = "sha256:" + "a" * 64
         self.configuration_digest = "sha256:" + "1" * 64
         self.runtime_config_digest = "sha256:" + "2" * 64
+        self.contract_graph = self.root / "contract_graph.json"
+        self.contract_graph.write_text(
+            json.dumps({"objects": [], "operations": []}) + "\n",
+            encoding="utf-8",
+        )
+        self.contract_graph_digest = "sha256:" + hashlib.sha256(
+            self.contract_graph.read_bytes()
+        ).hexdigest()
         self.snapshot = {
             "baselineId": "sha256:" + "b" * 64,
             "sourceRevision": "c" * 40,
             "workspaceStatusDigest": "sha256:" + "d" * 64,
+        }
+        self.graphql_read_registry = {
+            "schema": "stackctl-graphql-read-registry-package",
+            "candidateDigest": self.snapshot["baselineId"],
         }
         (self.app / "environment_runtime.yaml").write_text(
             json.dumps(
@@ -67,6 +80,9 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
                 {
                     "candidateType": subject.RUNTIME_CANDIDATE_TYPE,
                     "includeServices": True,
+                    "releaseInputClassification": "commercial_inputs",
+                    "contractGraphDigest": self.contract_graph_digest,
+                    "graphqlReadRegistry": self.graphql_read_registry,
                     "deploymentInputs": {"digest": digest},
                     "packageContent": {"digest": digest},
                 }
@@ -86,15 +102,22 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         )
         self.release = self.root / "candidate-release.json"
         self.rollback = self.root / "rollback-release.json"
-        for path, release_id, release_digest in (
-            (self.release, "west-lake-canonical-20260729", "8" * 64),
-            (self.rollback, "pilot-002", "5" * 64),
+        for path, release_id, release_digest, release_class in (
+            (
+                self.release,
+                "west-lake-canonical-20260729",
+                "8" * 64,
+                "commercial",
+            ),
+            (self.rollback, "pilot-002", "5" * 64, "commercial"),
         ):
             path.write_text(
                 json.dumps(
                     {
                         "schema": "quwoquan_data.release_attestation",
                         "releaseId": release_id,
+                        "releaseClass": release_class,
+                        "productLifecycleState": release_class,
                         "payloadSha256": "sha256:" + release_digest,
                     }
                 )
@@ -103,6 +126,21 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
             )
         self.patches = ExitStack()
         self.addCleanup(self.patches.close)
+        self.patches.enter_context(
+            mock.patch.object(
+                subject,
+                "CONTRACT_GRAPH_PATH",
+                self.contract_graph,
+                create=True,
+            )
+        )
+        self.patches.enter_context(
+            mock.patch.object(
+                subject,
+                "validate_packaged_graphql_read_registry",
+                return_value=self.graphql_read_registry,
+            )
+        )
         self.patches.enter_context(
             mock.patch.object(
                 subject,
@@ -250,6 +288,22 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
         )
         self.assertEqual(payload["release"]["rollback"]["releaseId"], "pilot-002")
         self.assertEqual(
+            payload["release"]["candidate"]["releaseClass"],
+            "commercial",
+        )
+        self.assertEqual(
+            subject.release_input_classification(payload["release"]),
+            "commercial_inputs",
+        )
+        self.assertEqual(
+            payload["releaseInputClassification"],
+            "commercial_inputs",
+        )
+        self.assertEqual(
+            payload["contractGraphDigest"],
+            self.contract_graph_digest,
+        )
+        self.assertEqual(
             payload["observabilityLogSink"]["adapterId"],
             "ext.obs.elasticsearch",
         )
@@ -298,6 +352,106 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
                         require_full=True,
                         candidate_root=self.candidate,
                     )
+
+    def test_candidate_rejects_missing_or_drifted_package_identity(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        for field in ("releaseInputClassification", "contractGraphDigest"):
+            with self.subTest(field=field):
+                malformed = dict(canonical)
+                malformed.pop(field)
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "deployment candidate manifest fields mismatch",
+                ):
+                    subject.validate_candidate_manifest(
+                        malformed,
+                        expected_environment="alpha",
+                        expected_target="alpha-local",
+                        require_full=True,
+                        candidate_root=self.candidate,
+                    )
+
+        classification_drift = dict(canonical)
+        classification_drift["releaseInputClassification"] = "research_inputs"
+        with self.assertRaisesRegex(ValueError, "release input classification"):
+            subject.validate_candidate_manifest(
+                classification_drift,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
+        graph_drift = dict(canonical)
+        graph_drift["contractGraphDigest"] = "sha256:" + "9" * 64
+        with self.assertRaisesRegex(ValueError, "ContractGraph"):
+            subject.validate_candidate_manifest(
+                graph_drift,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
+    def test_candidate_self_verify_is_independent_of_current_source(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.contract_graph.write_text(
+            json.dumps({"objects": [{"id": "drift"}], "operations": []}) + "\n",
+            encoding="utf-8",
+        )
+        self.release.unlink()
+        self.rollback.unlink()
+        subject.validate_candidate_manifest(
+            payload,
+            expected_environment="alpha",
+            expected_target="alpha-local",
+            require_full=True,
+            candidate_root=self.candidate,
+            purpose="self_verify",
+        )
+
+        with self.assertRaisesRegex(ValueError, "ContractGraph bytes drifted"):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="currentness",
+            )
+
+        self.release.write_text("{}\n", encoding="utf-8")
+        self.rollback.write_text("{}\n", encoding="utf-8")
+        self.contract_graph.write_text(
+            json.dumps({"objects": [], "operations": []}) + "\n",
+            encoding="utf-8",
+        )
+        fingerprint_path = self.app / "package-fingerprint.json"
+        fingerprint = json.loads(fingerprint_path.read_text(encoding="utf-8"))
+        fingerprint["releaseInputClassification"] = "mixed_inputs"
+        fingerprint_path.write_text(json.dumps(fingerprint) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "package fingerprint release identity"):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
 
     def test_candidate_rejects_extra_configuration_identity(self) -> None:
         path = subject.write_candidate_manifest(
@@ -412,6 +566,100 @@ class DeploymentCandidateManifestContractTest(unittest.TestCase):
             subject.validate_release_attestations(
                 str(self.release),
                 str(self.release),
+            )
+
+    def test_release_input_classification_is_closed_over_both_bindings(self) -> None:
+        cases = {
+            ("research", "research"): "research_inputs",
+            ("commercial", "commercial"): "commercial_inputs",
+            ("research", "commercial"): "mixed_inputs",
+            ("commercial", "research"): "mixed_inputs",
+        }
+        for (candidate_class, rollback_class), expected in cases.items():
+            bindings: dict[str, dict[str, str]] = {}
+            for label, release_class in (
+                ("candidate", candidate_class),
+                ("rollback", rollback_class),
+            ):
+                bindings[label] = {
+                    "releaseId": label,
+                    "releaseDigest": "sha256:" + "1" * 64,
+                    "attestationRef": f"/{label}.json",
+                    "attestationDigest": "sha256:" + "2" * 64,
+                    "releaseClass": release_class,
+                    "productLifecycleState": release_class,
+                }
+            with self.subTest(
+                candidate=candidate_class,
+                rollback=rollback_class,
+            ):
+                self.assertEqual(
+                    subject.release_input_classification(bindings),
+                    expected,
+                )
+
+    def test_release_binding_rejects_simplified_unknown_or_mismatched_lifecycle(
+        self,
+    ) -> None:
+        cases = {
+            "simplified": {},
+            "unknown": {
+                "releaseClass": "preview",
+                "productLifecycleState": "preview",
+            },
+            "mismatch": {
+                "releaseClass": "commercial",
+                "productLifecycleState": "research",
+            },
+        }
+        for label, lifecycle in cases.items():
+            path = self.root / f"{label}.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema": "quwoquan_data.release_attestation",
+                        "releaseId": label,
+                        "payloadSha256": "sha256:" + "9" * 64,
+                        **lifecycle,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with self.subTest(label=label), self.assertRaisesRegex(
+                ValueError,
+                "releaseClass|productLifecycleState|lifecycle",
+            ):
+                subject.validate_release_attestations(
+                    str(path),
+                    str(self.rollback),
+                )
+
+    def test_candidate_validation_rechecks_exact_attestation_bytes(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        changed = json.loads(self.release.read_text(encoding="utf-8"))
+        self.release.write_text(
+            json.dumps(changed, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "candidate release attestation bytes drifted",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
             )
 
     def test_local_elasticsearch_image_accepts_only_pinned_package_forms(self) -> None:

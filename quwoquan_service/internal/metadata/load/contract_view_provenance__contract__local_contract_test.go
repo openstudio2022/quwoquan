@@ -257,8 +257,8 @@ func writeContractViewFixtureManifest(
 	_, _ = viewDigest.Write([]byte(hex.EncodeToString(viewSHA[:])))
 	_, _ = viewDigest.Write([]byte{'\n'})
 	document := contractViewProvenanceDocument{
-		SchemaVersion: contractViewProvenanceVersion,
-		ViewDigest:    hex.EncodeToString(viewDigest.Sum(nil)),
+		Format:     contractViewProvenanceFormat,
+		ViewDigest: hex.EncodeToString(viewDigest.Sum(nil)),
 		Sources: []contractViewProvenanceSource{{
 			Path: sourcePath, SHA256: hex.EncodeToString(sourceSHA[:]),
 		}},
@@ -392,7 +392,7 @@ func writeContractViewManifest(
 	sort.Strings(viewPaths)
 	viewDigest := sha256.New()
 	document := contractViewProvenanceDocument{
-		SchemaVersion: contractViewProvenanceVersion,
+		Format: contractViewProvenanceFormat,
 	}
 	for _, viewRelative := range viewPaths {
 		sourceRelative := fileSources[viewRelative]

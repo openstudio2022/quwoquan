@@ -39,6 +39,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart'
         appTelemetryReporterProvider,
         appResourceCacheProfileProvider,
         cacheTelemetrySinkProvider,
+        contentBehaviorTrackerProvider,
         mediaDownloadCacheProvider,
         postObjectCacheProvider,
         realtimeConnectionManagerProvider;
@@ -96,6 +97,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
   Timer? _welcomeOverlayRemovalTimer;
   Timer? _startupDeadlineTimer;
   Future<void>? _routerPreload;
+  ProviderSubscription<Object?>? _contentBehaviorTrackerSubscription;
   final Completer<void> _disposeSignal = Completer<void>();
   late final StartupInitScheduler _startupInitScheduler;
   late final StartupStateMachine _startupStateMachine;
@@ -119,9 +121,22 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       startupPrerequisiteBudget: _startupPrerequisiteBudget,
     );
     _armStartupDeadline();
+    // Deferred Router 的装载与 Welcome 首帧并发，但只有 Welcome 完成后才会挂载。
+    // 冷启动若等首帧后才开始加载，debug/低端机上会把真实 Shell 推过 6 秒原生门。
+    unawaited(_preloadRouter());
     unawaited(_hydrateNativeTimingForTelemetry());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStartupRuntime.instance.markFirstFramePainted();
+      if (!mounted) return;
+      // 登录会同时切换 account/persona actor。若行为队列等到
+      // Home feed build 才首次订阅 actor Provider，Riverpod 会在页面
+      // build 期间试图刷新根 ProviderScope。根组件首帧后建立持续
+      // 订阅：不抢首帧，也让 guest -> authenticated 切换在页面外完成。
+      _contentBehaviorTrackerSubscription = ref.listenManual<Object?>(
+        contentBehaviorTrackerProvider,
+        (_, _) {},
+        fireImmediately: true,
+      );
     });
     if (widget.skipStartupWelcome) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -157,6 +172,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       _disposeSignal.complete();
     }
     _startupInitScheduler.dispose();
+    _contentBehaviorTrackerSubscription?.close();
     _welcomeOverlayRemovalTimer?.cancel();
     _startupDeadlineTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -480,7 +496,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         stackText: stack.toString(),
       );
     }
-    unawaited(_preloadRouter());
   }
 
   void _armStartupDeadline() {

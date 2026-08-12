@@ -179,16 +179,24 @@ def validate_publish_delta(
     """
     issues: list[dict[str, str]] = []
     candidates: dict[str, Path] = {}
+    deleted: set[str] = set()
     for raw in entries:
         destination = str(raw.get("destination") or "")
         try:
             relative = _safe_rel(destination, label="delta.destination")
-            blob_ref = _safe_rel(str(raw.get("blobRef") or ""), label="delta.blobRef")
         except ObjectTransactionError as exc:
             issues.append({"code": "delta_ref_path_escape", "ref": f"{destination}: {exc}"})
             continue
         if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
             issues.append({"code": "noncanonical_root", "ref": relative.parts[0]})
+            continue
+        if raw.get("operation") == "delete":
+            deleted.add(relative.as_posix())
+            continue
+        try:
+            blob_ref = _safe_rel(str(raw.get("blobRef") or ""), label="delta.blobRef")
+        except ObjectTransactionError as exc:
+            issues.append({"code": "delta_ref_path_escape", "ref": f"{destination}: {exc}"})
             continue
         blob = run_root / blob_ref
         if not blob.is_file():
@@ -207,7 +215,7 @@ def validate_publish_delta(
     def creator_refs_of(rel: str) -> Any:
         sibling = (Path(rel).parent / "creator.refs.json").as_posix()
         blob = candidates.get(sibling)
-        if blob is None:
+        if blob is None and sibling not in deleted:
             path = publish_root / sibling
             blob = path if path.is_file() else None
         if blob is None:
@@ -419,7 +427,7 @@ def audit_object_transaction(
     package = _verify_package(
         package_root,
         canonical_root=publish_root,
-        require_target_absent=True,
+        require_target_absent=False,
     )
     if package["transactionId"] != transaction_id:
         raise ObjectTransactionError("package transactionId 不匹配")

@@ -182,6 +182,13 @@ codes:
     defaultLocation:
       businessObject: reliable_task
       functionModule: task_worker
+  - code: RELIABLETASK.WORKER.invalid_retry_policy
+    origin: developer
+    kind: validation
+    nature: bug
+    defaultLocation:
+      businessObject: reliable_task
+      functionModule: task_worker
   - code: SEARCH.BACKEND.recall_failed
     origin: remoteDependency
     kind: unavailable

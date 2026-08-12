@@ -11,6 +11,7 @@ final class StartupRecoveryController extends ChangeNotifier {
     AppRecoveryNativeBridge? nativeBridge,
     RecoverySnapshot initialSnapshot = const RecoverySnapshot.startupChecking(),
     this.onRuntimeReenter,
+    this.requiredUpdateOnly = false,
     this._visibleCheckBudget = const Duration(milliseconds: 1500),
   }) : _versionClient = versionClient ?? RecoveryVersionClient(),
        _nativeBridge = nativeBridge ?? AppRecoveryNativeBridge(),
@@ -21,6 +22,7 @@ final class StartupRecoveryController extends ChangeNotifier {
   final Duration _visibleCheckBudget;
   final RecoveryStateMachine _stateMachine;
   final Future<void> Function()? onRuntimeReenter;
+  final bool requiredUpdateOnly;
 
   Timer? _visibleCheckTimer;
   bool _started = false;
@@ -80,6 +82,9 @@ final class StartupRecoveryController extends ChangeNotifier {
       if (_stateMachine.confirmVersion(
         currentBuild: nativeContext.buildNumber,
         latestBuild: result.latestBuild,
+        minimumSupportedBuild: result.minimumSupportedBuild,
+        updateState: result.updateState,
+        requiredUpdateOnly: requiredUpdateOnly,
         updateUrl: result.updateUrl,
         recoveryUrl: result.recoveryUrl,
         trustedBaseUrls: <String>[

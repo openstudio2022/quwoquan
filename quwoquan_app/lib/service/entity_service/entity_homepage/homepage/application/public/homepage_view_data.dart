@@ -253,7 +253,8 @@ class HomepageShellData {
     return HomepageShellData(
       homepage: HomepageDetail.fromWire(source.homepage),
       reviewSummary: source.reviewSummary,
-      contentPreview: source.contentPreview ?? const <wire.HomepageContentPreview>[],
+      contentPreview:
+          source.contentPreview ?? const <wire.HomepageContentPreview>[],
       questionPreview:
           source.questionPreview ?? const <wire.HomepageQuestionPreview>[],
       relatedGroups:

@@ -35,6 +35,29 @@ func (status Status) Valid() bool {
 	}
 }
 
+type DeliveryStatus string
+
+const (
+	DeliveryStatusQueued          DeliveryStatus = "queued"
+	DeliveryStatusSentUnconfirmed DeliveryStatus = "sent_unconfirmed"
+	DeliveryStatusDelivered       DeliveryStatus = "delivered"
+	DeliveryStatusFailed          DeliveryStatus = "failed"
+)
+
+func (status DeliveryStatus) Valid() bool {
+	switch status {
+	case DeliveryStatusQueued, DeliveryStatusSentUnconfirmed,
+		DeliveryStatusDelivered, DeliveryStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func (status DeliveryStatus) Terminal() bool {
+	return status == DeliveryStatusDelivered || status == DeliveryStatusFailed
+}
+
 type VerificationOutcome string
 
 const (
@@ -48,15 +71,17 @@ const (
 )
 
 type CreateParams struct {
-	ID               string
-	AccountID        string
-	Purpose          string
-	Channel          string
-	DestinationHash  string
-	SecretRef        string
-	BindingTicketRef string
-	ExpiresAt        time.Time
-	CreatedAt        time.Time
+	ID                string
+	AccountID         string
+	Purpose           string
+	Channel           string
+	DestinationHash   string
+	SecretRef         string
+	BindingTicketRef  string
+	DeliveryRequestID string
+	DeliveryStatus    DeliveryStatus
+	ExpiresAt         time.Time
+	CreatedAt         time.Time
 }
 
 // State 是对象专属 Store 的持久化形态。SecretRef 与 CompletionFingerprint
@@ -75,25 +100,33 @@ type State struct {
 	CreatedAt             time.Time
 	CompletedAt           *time.Time
 	CompletionFingerprint string
+	DeliveryRequestID     string
+	DeliveryStatus        DeliveryStatus
+	DeliveryUpdatedAt     *time.Time
+	LastDeliveryEventID   string
 	Version               int64
 	UpdatedAt             time.Time
 }
 
 // Snapshot 是 application 可返回的脱敏聚合快照，不含 secretRef 或完成凭据指纹。
 type Snapshot struct {
-	ID               string
-	AccountID        string
-	Purpose          string
-	Channel          string
-	DestinationHash  string
-	BindingTicketRef string
-	Status           Status
-	AttemptCount     int
-	ExpiresAt        time.Time
-	CreatedAt        time.Time
-	CompletedAt      *time.Time
-	Version          int64
-	UpdatedAt        time.Time
+	ID                  string
+	AccountID           string
+	Purpose             string
+	Channel             string
+	DestinationHash     string
+	BindingTicketRef    string
+	Status              Status
+	AttemptCount        int
+	ExpiresAt           time.Time
+	CreatedAt           time.Time
+	CompletedAt         *time.Time
+	DeliveryRequestID   string
+	DeliveryStatus      DeliveryStatus
+	DeliveryUpdatedAt   *time.Time
+	LastDeliveryEventID string
+	Version             int64
+	UpdatedAt           time.Time
 }
 
 type AuthenticationChallenge struct {
@@ -102,18 +135,24 @@ type AuthenticationChallenge struct {
 
 func New(params CreateParams) (AuthenticationChallenge, error) {
 	state := State{
-		ID:               strings.TrimSpace(params.ID),
-		AccountID:        strings.TrimSpace(params.AccountID),
-		Purpose:          strings.TrimSpace(params.Purpose),
-		Channel:          strings.TrimSpace(params.Channel),
-		DestinationHash:  strings.TrimSpace(params.DestinationHash),
-		SecretRef:        strings.TrimSpace(params.SecretRef),
-		BindingTicketRef: strings.TrimSpace(params.BindingTicketRef),
-		Status:           StatusPending,
-		ExpiresAt:        params.ExpiresAt.UTC(),
-		CreatedAt:        params.CreatedAt.UTC(),
-		Version:          1,
-		UpdatedAt:        params.CreatedAt.UTC(),
+		ID:                strings.TrimSpace(params.ID),
+		AccountID:         strings.TrimSpace(params.AccountID),
+		Purpose:           strings.TrimSpace(params.Purpose),
+		Channel:           strings.TrimSpace(params.Channel),
+		DestinationHash:   strings.TrimSpace(params.DestinationHash),
+		SecretRef:         strings.TrimSpace(params.SecretRef),
+		BindingTicketRef:  strings.TrimSpace(params.BindingTicketRef),
+		DeliveryRequestID: strings.TrimSpace(params.DeliveryRequestID),
+		DeliveryStatus:    params.DeliveryStatus,
+		Status:            StatusPending,
+		ExpiresAt:         params.ExpiresAt.UTC(),
+		CreatedAt:         params.CreatedAt.UTC(),
+		Version:           1,
+		UpdatedAt:         params.CreatedAt.UTC(),
+	}
+	if state.DeliveryRequestID != "" {
+		deliveryUpdatedAt := params.CreatedAt.UTC()
+		state.DeliveryUpdatedAt = &deliveryUpdatedAt
 	}
 	return Restore(state)
 }
@@ -127,10 +166,13 @@ func Restore(state State) (AuthenticationChallenge, error) {
 	state.SecretRef = strings.TrimSpace(state.SecretRef)
 	state.BindingTicketRef = strings.TrimSpace(state.BindingTicketRef)
 	state.CompletionFingerprint = strings.TrimSpace(state.CompletionFingerprint)
+	state.DeliveryRequestID = strings.TrimSpace(state.DeliveryRequestID)
+	state.LastDeliveryEventID = strings.TrimSpace(state.LastDeliveryEventID)
 	state.ExpiresAt = state.ExpiresAt.UTC()
 	state.CreatedAt = state.CreatedAt.UTC()
 	state.UpdatedAt = state.UpdatedAt.UTC()
 	state.CompletedAt = cloneTime(state.CompletedAt)
+	state.DeliveryUpdatedAt = cloneTime(state.DeliveryUpdatedAt)
 	if err := validateState(state); err != nil {
 		return AuthenticationChallenge{}, err
 	}
@@ -140,25 +182,30 @@ func Restore(state State) (AuthenticationChallenge, error) {
 func (challenge AuthenticationChallenge) State() State {
 	state := challenge.state
 	state.CompletedAt = cloneTime(challenge.state.CompletedAt)
+	state.DeliveryUpdatedAt = cloneTime(challenge.state.DeliveryUpdatedAt)
 	return state
 }
 
 func (challenge AuthenticationChallenge) Snapshot() Snapshot {
 	state := challenge.State()
 	return Snapshot{
-		ID:               state.ID,
-		AccountID:        state.AccountID,
-		Purpose:          state.Purpose,
-		Channel:          state.Channel,
-		DestinationHash:  state.DestinationHash,
-		BindingTicketRef: state.BindingTicketRef,
-		Status:           state.Status,
-		AttemptCount:     state.AttemptCount,
-		ExpiresAt:        state.ExpiresAt,
-		CreatedAt:        state.CreatedAt,
-		CompletedAt:      cloneTime(state.CompletedAt),
-		Version:          state.Version,
-		UpdatedAt:        state.UpdatedAt,
+		ID:                  state.ID,
+		AccountID:           state.AccountID,
+		Purpose:             state.Purpose,
+		Channel:             state.Channel,
+		DestinationHash:     state.DestinationHash,
+		BindingTicketRef:    state.BindingTicketRef,
+		Status:              state.Status,
+		AttemptCount:        state.AttemptCount,
+		ExpiresAt:           state.ExpiresAt,
+		CreatedAt:           state.CreatedAt,
+		CompletedAt:         cloneTime(state.CompletedAt),
+		DeliveryRequestID:   state.DeliveryRequestID,
+		DeliveryStatus:      state.DeliveryStatus,
+		DeliveryUpdatedAt:   cloneTime(state.DeliveryUpdatedAt),
+		LastDeliveryEventID: state.LastDeliveryEventID,
+		Version:             state.Version,
+		UpdatedAt:           state.UpdatedAt,
 	}
 }
 
@@ -248,6 +295,70 @@ type Mutation struct {
 	Changed   bool
 }
 
+type DeliveryResult struct {
+	EventID    string
+	RequestID  string
+	Status     DeliveryStatus
+	OccurredAt time.Time
+}
+
+// ApplyDeliveryResult 把 Integration durable result 投影到 challenge 权威行。
+// 重复、乱序以及 delivered/failed 终态倒退均为稳定 no-op。
+func (challenge AuthenticationChallenge) ApplyDeliveryResult(
+	result DeliveryResult,
+) (Mutation, error) {
+	if err := challenge.Validate(); err != nil {
+		return Mutation{}, err
+	}
+	result.EventID = strings.TrimSpace(result.EventID)
+	result.RequestID = strings.TrimSpace(result.RequestID)
+	if result.EventID == "" || result.RequestID == "" ||
+		!result.Status.Valid() || result.OccurredAt.IsZero() {
+		return Mutation{}, fmt.Errorf("%w: delivery result is incomplete", ErrInvalidChallenge)
+	}
+	if challenge.state.DeliveryRequestID == "" ||
+		challenge.state.DeliveryRequestID != result.RequestID {
+		return Mutation{}, fmt.Errorf("%w: delivery request does not match challenge", ErrInvalidChallenge)
+	}
+	if challenge.state.LastDeliveryEventID == result.EventID ||
+		(challenge.state.DeliveryUpdatedAt != nil &&
+			result.OccurredAt.UTC().Before(challenge.state.DeliveryUpdatedAt.UTC())) ||
+		challenge.state.DeliveryStatus.Terminal() {
+		return Mutation{Aggregate: challenge}, nil
+	}
+	if deliveryRank(result.Status) < deliveryRank(challenge.state.DeliveryStatus) {
+		return Mutation{Aggregate: challenge}, nil
+	}
+	state := challenge.State()
+	occurredAt := result.OccurredAt.UTC()
+	state.DeliveryStatus = result.Status
+	state.DeliveryUpdatedAt = &occurredAt
+	state.LastDeliveryEventID = result.EventID
+	if result.Status == DeliveryStatusFailed && state.Status == StatusPending {
+		state.Status = StatusCancelled
+	}
+	state.Version++
+	state.UpdatedAt = occurredAt
+	updated, err := Restore(state)
+	if err != nil {
+		return Mutation{}, err
+	}
+	return Mutation{Aggregate: updated, Changed: true}, nil
+}
+
+func deliveryRank(status DeliveryStatus) int {
+	switch status {
+	case DeliveryStatusQueued:
+		return 0
+	case DeliveryStatusSentUnconfirmed:
+		return 1
+	case DeliveryStatusDelivered, DeliveryStatusFailed:
+		return 2
+	default:
+		return -1
+	}
+}
+
 // Cancel 只允许 pending -> cancelled；所有终态重复取消均为稳定 no-op。
 func (challenge AuthenticationChallenge) Cancel(now time.Time) (Mutation, error) {
 	if err := challenge.Validate(); err != nil {
@@ -305,6 +416,8 @@ func validateState(state State) error {
 		invalidText(state.Channel, 32) ||
 		invalidOptionalText(state.DestinationHash, 256) ||
 		invalidOptionalText(state.BindingTicketRef, 64) ||
+		invalidOptionalText(state.DeliveryRequestID, 128) ||
+		invalidOptionalText(state.LastDeliveryEventID, 128) ||
 		invalidText(state.SecretRef, 1024) {
 		return fmt.Errorf("%w: identity or immutable attributes are invalid", ErrInvalidChallenge)
 	}
@@ -323,6 +436,16 @@ func validateState(state State) error {
 		!state.ExpiresAt.After(state.CreatedAt) ||
 		state.UpdatedAt.Before(state.CreatedAt) {
 		return fmt.Errorf("%w: lifecycle attributes are invalid", ErrInvalidChallenge)
+	}
+	if state.DeliveryRequestID == "" {
+		if state.DeliveryStatus != "" || state.DeliveryUpdatedAt != nil ||
+			state.LastDeliveryEventID != "" {
+			return fmt.Errorf("%w: delivery state requires request id", ErrInvalidChallenge)
+		}
+	} else if !state.DeliveryStatus.Valid() || state.DeliveryUpdatedAt == nil ||
+		state.DeliveryUpdatedAt.Before(state.CreatedAt) ||
+		state.DeliveryUpdatedAt.After(state.UpdatedAt) {
+		return fmt.Errorf("%w: delivery lifecycle attributes are invalid", ErrInvalidChallenge)
 	}
 	if state.Status == StatusCompleted {
 		if state.CompletedAt == nil ||

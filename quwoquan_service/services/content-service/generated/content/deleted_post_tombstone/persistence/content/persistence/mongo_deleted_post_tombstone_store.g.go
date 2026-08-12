@@ -41,7 +41,7 @@ func (s *MongoDeletedPostTombstoneStoreBase) EnsureIndexes(ctx context.Context) 
 			Keys: bson.D{
 				{Key: "expireAt", Value: 1},
 			},
-			Options: options.Index().SetName("idx_tombstone_expire"),
+			Options: options.Index().SetName("idx_tombstone_expire").SetExpireAfterSeconds(0),
 		},
 	}
 	_, err := s.coll.Indexes().CreateMany(ctx, models)

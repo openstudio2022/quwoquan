@@ -40,6 +40,22 @@ make -C quwoquan_service gate
 python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope service --mode check
 ```
 
+Prod 发布的对象模型兼容门禁必须显式绑定 hosted immutable baseline，不能加入只读源码
+`gate` 后用本地文件伪造通过：
+
+```bash
+make -C quwoquan_service verify-domain-model-compatibility \
+  DOMAIN_MODEL_BASELINE_RECEIPT=<hosted-full-or-100-receipt-readback.json> \
+  DOMAIN_MODEL_BASELINE_GRAPH=<exact-baseline-contract-graph.json> \
+  DOMAIN_MODEL_CURRENT_GRAPH=generated/contract_graph.json \
+  DOMAIN_MODEL_COMPATIBILITY_WINDOW=<minimum-build-window.json> \
+  DOMAIN_MODEL_STORAGE_MIGRATION_PLAN=<quiesced-migration.json>
+```
+
+该工具只写 `.qwq_output/env/repo/runs/domain-model-compatibility/report.json`，阻断
+错误 `major.minor`、未关闭的 App minimum window、非静默原子 storage migration
+以及任何 dual-read/dual-write；它不改写 metadata。
+
 ## 领域服务脚本示例
 
 - `search-service/tools/search_load_benchmark.py`

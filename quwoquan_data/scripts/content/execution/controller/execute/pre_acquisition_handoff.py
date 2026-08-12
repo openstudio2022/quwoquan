@@ -5,8 +5,6 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from core.source_digest import current_source_digest
-
 from .pre_acquisition_handoff_document import (
     HANDOFF_SCHEMA,
     PreAcquisitionHandoffError,
@@ -70,13 +68,14 @@ def guard_acquisition_source_identity(
     *,
     handoff_ref: Path | None,
     repo_root: Path | None = None,
+    frozen_external_input: bool = False,
 ) -> dict[str, Any]:
     """Reject stale manifest/handoff identity before any receipt or CAS write."""
+    del repo_root  # compatibility-only call shape; frozen admission never reads it.
     return _guard_acquisition_source_identity(
         manifest,
         handoff_ref=handoff_ref,
-        repo_root=repo_root,
-        source_digest_resolver=current_source_digest,
+        frozen_external_input=frozen_external_input,
     )
 
 

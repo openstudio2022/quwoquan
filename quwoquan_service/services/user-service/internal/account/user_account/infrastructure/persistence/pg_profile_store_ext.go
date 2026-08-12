@@ -223,21 +223,39 @@ func appendUserProfileSearchProjections(
 			!isUserProfileSearchProjectionEvent(projection.EventType) {
 			return errors.New("invalid user profile search projection")
 		}
-		if _, err := tx.Exec(
-			ctx,
-			`INSERT INTO user_profile_search_outbox (
-				event_id, user_id, profile_version, event_type, occurred_at,
-				next_attempt_at
-			) VALUES ($1, $2, $3, $4, $5, $5)
-			ON CONFLICT DO NOTHING`,
-			userProfileSearchProjectionEventID(
-				projection.UserID,
-				projection.ProfileVersion,
-				projection.EventType,
-			),
+		eventID := userProfileSearchProjectionEventID(
 			projection.UserID,
 			projection.ProfileVersion,
 			projection.EventType,
+		)
+		payload := projection.Payload
+		payload.EventID = eventID
+		payload.UserID = strings.TrimSpace(projection.UserID)
+		payload.ProfileVersion = projection.ProfileVersion
+		payload.UpdatedAt = payload.UpdatedAt.UTC()
+		if payload.UpdatedAt.IsZero() ||
+			(payload.Operation != "upsert" && payload.Operation != "delete") {
+			return errors.New("invalid user profile search projection payload")
+		}
+		if payload.IdentityTags == nil {
+			payload.IdentityTags = []string{}
+		}
+		payloadJSON, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("encode user profile search projection: %w", err)
+		}
+		if _, err := tx.Exec(
+			ctx,
+			`INSERT INTO user_profile_search_outbox (
+				event_id, user_id, profile_version, event_type, payload_json, occurred_at,
+				next_attempt_at
+			) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $6)
+			ON CONFLICT DO NOTHING`,
+			eventID,
+			projection.UserID,
+			projection.ProfileVersion,
+			projection.EventType,
+			string(payloadJSON),
 			projection.OccurredAt.UTC(),
 		); err != nil {
 			return fmt.Errorf("enqueue user profile search projection: %w", err)
@@ -263,7 +281,8 @@ func userProfileSearchProjectionEventID(
 func isUserProfileSearchProjectionEvent(eventType string) bool {
 	switch eventType {
 	case userevent.UserProfileUpdated,
-		userevent.UserAvatarUpdated:
+		userevent.UserAvatarUpdated,
+		userevent.UserAccountClosed:
 		return true
 	default:
 		return false

@@ -29,6 +29,9 @@ from quwoquan_ops.cli.lib.provider_runtime_composition import (
     compile_provider_runtime_composition,
     validate_provider_runtime_composition,
 )
+from quwoquan_ops.cli.lib.graphql_read_registry_package import (
+    validate_packaged_graphql_read_registry,
+)
 
 CANDIDATE_MANIFEST_SCHEMA = "stackctl-deployment-candidate"
 RUNTIME_CANDIDATE_TYPE = "runtime-full"
@@ -46,7 +49,23 @@ SPEC_REFS = (
     "runtime/runtime-data-engineering/SIT-001",
 )
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+_RELEASE_LIFECYCLE_CLASSES = frozenset({"research", "commercial"})
+_RELEASE_BINDING_FIELDS = frozenset(
+    {
+        "releaseId",
+        "releaseDigest",
+        "attestationRef",
+        "attestationDigest",
+        "releaseClass",
+        "productLifecycleState",
+    }
+)
+RELEASE_INPUT_CLASSIFICATIONS = frozenset(
+    {"research_inputs", "commercial_inputs", "mixed_inputs"}
+)
+CANDIDATE_VALIDATION_PURPOSES = frozenset({"self_verify", "currentness"})
 ROOT = Path(__file__).resolve().parents[3]
+CONTRACT_GRAPH_PATH = ROOT / "quwoquan_service/generated/contract_graph.json"
 LOG_SINK_ADAPTER_ID = "ext.obs.elasticsearch"
 _ELASTICSEARCH_IMAGE_LITERAL_RE = re.compile(
     r"^docker\.elastic\.co/elasticsearch/elasticsearch@(sha256:[0-9a-f]{64})$"
@@ -909,19 +928,81 @@ def _release_binding(path_value: str, *, label: str) -> dict[str, str]:
     if not str(path_value or "").strip():
         raise ValueError(f"{label} release attestation is required")
     path = path.resolve()
-    value = _read_object(path, label=f"{label} release attestation")
+    try:
+        encoded = path.read_bytes()
+        value = json.loads(encoded.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} release attestation is unreadable: {exc}") from exc
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} release attestation must be an object")
     release_id = str(value.get("releaseId") or "").strip()
     release_digest = str(value.get("payloadSha256") or "").strip()
+    release_class = str(value.get("releaseClass") or "").strip()
+    lifecycle = str(value.get("productLifecycleState") or "").strip()
     if value.get("schema") != "quwoquan_data.release_attestation":
         raise ValueError(f"{label} release attestation schema mismatch")
     if not release_id or _DIGEST.fullmatch(release_digest) is None:
         raise ValueError(f"{label} release identity is invalid")
+    if release_class not in _RELEASE_LIFECYCLE_CLASSES:
+        raise ValueError(f"{label} releaseClass is invalid")
+    if lifecycle not in _RELEASE_LIFECYCLE_CLASSES:
+        raise ValueError(f"{label} productLifecycleState is invalid")
+    if release_class != lifecycle:
+        raise ValueError(
+            f"{label} release lifecycle identity must keep "
+            "releaseClass equal to productLifecycleState"
+        )
     return {
         "releaseId": release_id,
         "releaseDigest": release_digest,
         "attestationRef": str(path),
-        "attestationDigest": _sha256_file(path),
+        "attestationDigest": "sha256:" + hashlib.sha256(encoded).hexdigest(),
+        "releaseClass": release_class,
+        "productLifecycleState": lifecycle,
     }
+
+
+def release_input_classification(release: object) -> str:
+    """Classify both immutable release inputs without claiming release readiness."""
+
+    if not isinstance(release, Mapping) or set(release) != {"candidate", "rollback"}:
+        raise ValueError("release input bindings must contain candidate and rollback")
+    classes: list[str] = []
+    for label in ("candidate", "rollback"):
+        binding = release.get(label)
+        if not isinstance(binding, Mapping) or set(binding) != _RELEASE_BINDING_FIELDS:
+            raise ValueError(f"{label} release input binding fields mismatch")
+        release_class = str(binding.get("releaseClass") or "").strip()
+        lifecycle = str(binding.get("productLifecycleState") or "").strip()
+        if release_class not in _RELEASE_LIFECYCLE_CLASSES:
+            raise ValueError(f"{label} releaseClass is invalid")
+        if lifecycle != release_class:
+            raise ValueError(
+                f"{label} release lifecycle identity must keep "
+                "releaseClass equal to productLifecycleState"
+            )
+        classes.append(release_class)
+    if classes == ["research", "research"]:
+        return "research_inputs"
+    if classes == ["commercial", "commercial"]:
+        return "commercial_inputs"
+    return "mixed_inputs"
+
+
+def canonical_contract_graph_digest() -> str:
+    """Digest the exact canonical ContractGraph bytes used by this package."""
+
+    path = CONTRACT_GRAPH_PATH
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("canonical ContractGraph is missing or unsafe")
+    try:
+        encoded = path.read_bytes()
+        payload = json.loads(encoded.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"canonical ContractGraph is unreadable: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("canonical ContractGraph must be a JSON object")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def local_elasticsearch_image_digest(image_reference: str) -> str:
@@ -1677,6 +1758,21 @@ def write_candidate_manifest(
         release_attestation,
         rollback_release_attestation,
     )
+    release_classification = release_input_classification(release)
+    contract_graph_digest = canonical_contract_graph_digest()
+    if (
+        fingerprint.get("releaseInputClassification") != release_classification
+        or fingerprint.get("contractGraphDigest") != contract_graph_digest
+    ):
+        raise ValueError("package fingerprint release identity drifted")
+    graphql_read_registry = validate_packaged_graphql_read_registry(
+        repo_root=ROOT,
+        candidate_root=candidate_root,
+        expected_environment=env_name,
+        expected_target=target_name,
+        expected_candidate_digest=str(package_snapshot["baselineId"]),
+        expected_descriptor=fingerprint.get("graphqlReadRegistry"),
+    )
 
     payload = {
         "schema": CANDIDATE_MANIFEST_SCHEMA,
@@ -1709,6 +1805,9 @@ def write_candidate_manifest(
             candidate_root,
         ),
         "release": release,
+        "releaseInputClassification": release_classification,
+        "contractGraphDigest": contract_graph_digest,
+        "graphqlReadRegistry": graphql_read_registry,
         "specRefs": list(SPEC_REFS),
     }
     validate_candidate_manifest(
@@ -1736,11 +1835,15 @@ def validate_candidate_manifest(
     expected_target: str,
     require_full: bool,
     candidate_root: Path | None = None,
+    purpose: str = "self_verify",
+    currentness_timeout_seconds: float = 120.0,
 ) -> dict[str, Any]:
     if candidate_root is None:
         raise ValueError(
             "runnable deployment candidate validation requires candidate_root"
         )
+    if purpose not in CANDIDATE_VALIDATION_PURPOSES:
+        raise ValueError("deployment candidate validation purpose is invalid")
     try:
         _validate_candidate_payload_tree(candidate_root)
     except _UnsafeCandidatePath as exc:
@@ -1764,6 +1867,9 @@ def validate_candidate_manifest(
         "observabilityLogSink",
         "providerRuntime",
         "release",
+        "releaseInputClassification",
+        "contractGraphDigest",
+        "graphqlReadRegistry",
         "specRefs",
     }
     if not isinstance(payload, dict) or set(payload) != required:
@@ -1795,6 +1901,7 @@ def validate_candidate_manifest(
         "configurationDigest",
         "runtimeConfigDigest",
         "environmentRuntimeDigest",
+        "contractGraphDigest",
     ):
         if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
             raise ValueError(f"deployment candidate {field} is invalid")
@@ -1816,6 +1923,7 @@ def validate_candidate_manifest(
         expected_environment=expected_environment,
         expected_target=expected_target,
         candidate_root=candidate_root,
+        require_current_contracts=purpose == "currentness",
     )
     _validate_candidate_app_runtime_binding(
         payload,
@@ -1830,18 +1938,51 @@ def validate_candidate_manifest(
         raise ValueError("full deployment candidate release binding mismatch")
     for label in ("candidate", "rollback"):
         binding = release.get(label)
-        if not isinstance(binding, dict) or set(binding) != {
-            "releaseId",
-            "releaseDigest",
-            "attestationRef",
-            "attestationDigest",
-        }:
+        if not isinstance(binding, dict) or set(binding) != _RELEASE_BINDING_FIELDS:
             raise ValueError(f"deployment candidate {label} release fields mismatch")
         if not str(binding.get("releaseId") or ""):
             raise ValueError(f"deployment candidate {label} releaseId is invalid")
         for field in ("releaseDigest", "attestationDigest"):
             if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
                 raise ValueError(f"deployment candidate {label} {field} is invalid")
+        attestation_ref = binding.get("attestationRef")
+        if not isinstance(attestation_ref, str) or not attestation_ref.strip():
+            raise ValueError(
+                f"deployment candidate {label} attestationRef is invalid"
+            )
+        if purpose == "currentness":
+            current = _release_binding(attestation_ref, label=label)
+            if current != binding:
+                raise ValueError(f"{label} release attestation bytes drifted")
+    expected_classification = release_input_classification(release)
+    if payload.get("releaseInputClassification") != expected_classification:
+        raise ValueError("deployment candidate release input classification drifted")
+    if (
+        purpose == "currentness"
+        and payload.get("contractGraphDigest") != canonical_contract_graph_digest()
+    ):
+        raise ValueError("deployment candidate ContractGraph bytes drifted")
+    graphql_read_registry = validate_packaged_graphql_read_registry(
+        repo_root=ROOT,
+        candidate_root=candidate_root,
+        expected_environment=expected_environment,
+        expected_target=expected_target,
+        expected_candidate_digest=str(payload.get("baselineId") or ""),
+        expected_descriptor=payload.get("graphqlReadRegistry"),
+        purpose=purpose,
+        currentness_timeout_seconds=currentness_timeout_seconds,
+    )
+    fingerprint = _read_candidate_object(
+        candidate_root,
+        "packages/app/package-fingerprint.json",
+        label="package fingerprint",
+    )
+    if (
+        fingerprint.get("releaseInputClassification") != expected_classification
+        or fingerprint.get("contractGraphDigest") != payload.get("contractGraphDigest")
+        or fingerprint.get("graphqlReadRegistry") != graphql_read_registry
+    ):
+        raise ValueError("package fingerprint release identity drifted")
     return payload
 
 
@@ -1876,6 +2017,7 @@ def validate_packaged_provider_runtime(
     candidate_root: Path | None,
     require_images: bool = True,
     verify_package_manifest: bool = True,
+    require_current_contracts: bool = True,
 ) -> dict[str, Any]:
     if candidate_root is None:
         raise ValueError(
@@ -1896,6 +2038,7 @@ def validate_packaged_provider_runtime(
         payload.get("composition"),
         expected_environment=expected_environment,
         expected_target=expected_target,
+        require_current_contracts=require_current_contracts,
     )
     composition_ref = _validate_candidate_artifact_ref(
         payload.get("compositionRef"),
@@ -2097,8 +2240,8 @@ def _validate_candidate_provider_oci_binding(
     if not isinstance(images, dict) or not isinstance(provider_images, dict):
         raise TypeError("deployment candidate OCI image closure is invalid")
     provider_roles = set(provider_images)
-    first_party_roles = set(first_party_service_names())
-    if set(images) != first_party_roles | provider_roles:
+    first_party_roles = set(images) - provider_roles
+    if not first_party_roles or provider_roles & first_party_roles:
         raise ValueError("deployment candidate OCI image role closure mismatch")
     if {role: images.get(role) for role in provider_roles} != provider_images:
         raise ValueError("deployment candidate Provider images differ from canonical OCI")
@@ -2163,6 +2306,8 @@ def load_candidate_manifest(
     baseline_id: str,
     *,
     require_full: bool,
+    purpose: str = "self_verify",
+    currentness_timeout_seconds: float = 120.0,
 ) -> dict[str, Any]:
     candidate_root = deployment_candidate_dir(target_name, baseline_id)
     payload = _read_candidate_object(
@@ -2176,4 +2321,6 @@ def load_candidate_manifest(
         expected_target=target_name,
         require_full=require_full,
         candidate_root=candidate_root,
+        purpose=purpose,
+        currentness_timeout_seconds=currentness_timeout_seconds,
     )

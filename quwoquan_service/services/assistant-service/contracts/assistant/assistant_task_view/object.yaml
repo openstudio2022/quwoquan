@@ -1,5 +1,5 @@
 kind: projection
-description: 助手学习事实与 SkillSubscription 事件按账号投影出的用户任务视图，是日程与待办列表的唯一读取模型。
+description: SkillSubscription 与 active immutable SkillCatalog 按账号联邦派生的日程任务视图，是 Skill Center 待办列表的唯一读取模型。
 identity:
   fields: [accountId]
   version_source: checkpoint
@@ -9,8 +9,8 @@ access:
   cross_context: public_contract_only
 relationships:
 - {name: account, target_object: user.UserAccount, reference_fields: [accountId], kind: reference, cardinality: '1:1', consistency: eventual, access: named_reader, on_delete: tombstone}
-- {name: learningFacts, target_object: assistant.AssistantLearningFact, reference_fields: [lastLearningFactId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
-- {name: subscriptions, target_object: assistant.SkillSubscription, reference_fields: [lastSubscriptionId], kind: projection_source, cardinality: '1:N', consistency: eventual, access: event, on_delete: tombstone}
+- {name: subscriptions, target_object: assistant.SkillSubscription, reference_fields: [subscriptionIds], kind: projection_source, cardinality: '1:N', consistency: runtime, access: named_reader, on_delete: tombstone}
+- {name: activeCatalog, target_object: assistant.SkillCatalog, reference_fields: [sourceSkillIds], kind: projection_source, cardinality: 'N:N', consistency: runtime, access: named_reader, on_delete: detach}
 search_policy:
   exposed: none
   not_exposed_reason: "服务内部投影，只供所属域 named Reader 消费，不构成独立检索结果类型。"
@@ -26,10 +26,11 @@ assistant_access:
     mode: none
     scopes: []
 business_rules:
-- 任务只由 typed 学习事实与订阅事实投影，不接受客户端直接写入视图。
-- 同一 taskId 只应用更高 source sequence，重复事件不得产生重复任务。
-- 账号关闭 tombstone 必须删除主体视图并保留 checkpoint 以阻断旧事件复活。
+- 任务只由 owner-scoped SkillSubscription 与同一 active immutable SkillCatalog 联邦读取，不接受客户端直接写入或物化第二份任务事实。
+- 同一 subscriptionId 只生成同 ID 的一个 task；active、paused、archived 分别映射 in_progress、pending、completed，dueAt 只来自 nextAttemptAt。
+- active catalog 必须提供非空 displayName；缺项、owner 漂移、未知状态或 reader 不可用时整次读取 fail-closed，禁止 raw skillId 与旧投影 fallback。
+- 账号关闭后 Subscription owner reader 返回空集合；TaskView 不保留可复活的本地行或 checkpoint。
 lifecycle:
-  checkpoint: stored_task_document_source_revision
-  rebuild: unsupported_until_canonical_task_projection_writer_exists
-  tombstone: delete_subject_tasks_keep_closure_checkpoint
+  checkpoint: skill_subscription_version_and_active_catalog_release_digest
+  rebuild: reread_owner_subscriptions_and_digest_verified_active_catalog
+  tombstone: owner_subscription_reader_returns_no_tasks_after_account_closure

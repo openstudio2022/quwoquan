@@ -388,6 +388,22 @@ _HomepageRemoteFacets _buildFacets(
           idempotencyKey: _idempotencyKey,
           actor: _actor,
         ),
+    claimRequestInvocationContext: (clientPageId, surface, {idempotencyKey}) =>
+        CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          idempotencyKey: idempotencyKey ?? _idempotencyKey,
+          actor: _actor,
+        ),
+    statusReportInvocationContext: (clientPageId, surface, {idempotencyKey}) =>
+        CloudOperationInvocationContext(
+          surfaceId: surface.id,
+          routeId: surface.routeId,
+          clientPageId: clientPageId,
+          idempotencyKey: idempotencyKey ?? _idempotencyKey,
+          actor: _actor,
+        ),
   );
   return (
     query: queries.query,

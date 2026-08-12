@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260810--travel-video-m1--china-dujiangyan-research-062aa4a3-epoch10-not-m100--scale-008",
+  "executionBinding": "frozen",
+  "objectRef": "都江堰_video",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:2eac8392103f636680c85b0c2a54b096bcef1ad46c72972cce3cce275f2586f4"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:929c8192552a84dee823fdb12db5268505f18376d3c0cdfdf0e2163dacf452f8"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:b7d26f7aec3ff373a55d31f505e784e4698ecbe50465cf913abf46cff3944938"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:d1d266f31196e6442b036f6b969b471d5d41c2d5d438ec933ddaa67d4544fabb"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:b77d7aeb079084674cfb295925b8a7aa10e6d92471d9ce6bea58aba31726c2b0"
+    }
+  ]
+}

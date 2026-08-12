@@ -45,6 +45,7 @@ business_rules:
 lifecycle:
   source_events:
   - ops.experiment.ExperimentPolicyActivated
+  - user.user_account.UserProfileSearchProjectionRequested
   - user.user_account.UserSuspended
   - user.user_account.UserRestored
   checkpoint: per_source_event_sequence
@@ -60,5 +61,10 @@ lifecycle:
   - name: ApplyAccountRestriction
     kind: projector
     facet: UserAccountRestrictionConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ApplyUserProfileSearchProjection
+    kind: projector
+    facet: UserProfileSearchProjectionConsumer
     method: processOnce
     idempotency: event_id

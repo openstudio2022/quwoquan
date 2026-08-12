@@ -173,7 +173,9 @@ def test_batch_reducer_passes_for_distinct_refs():
     assert gate["affectedRefs"] == []
 
 
-def test_batch_reducer_enforces_typed_article_media_coverage(monkeypatch):
+def test_batch_reducer_reports_typed_article_media_coverage_without_blocking(
+    monkeypatch,
+):
     monkeypatch.setattr(
         handoff.qg,
         "skeleton_similarity_issues",
@@ -215,10 +217,21 @@ def test_batch_reducer_enforces_typed_article_media_coverage(monkeypatch):
             "articleMediaIssue": "",
         }
     )
-    blocked = handoff.build_execution_reducer_gate(payload)
-    assert blocked["passed"] is False
-    assert "text-only-excess" in blocked["affectedRefs"]
-    assert any("article_media_coverage" in issue for issue in blocked["issues"])
+    reported = handoff.build_execution_reducer_gate(payload)
+    assert reported["passed"] is True
+    assert reported["affectedRefs"] == []
+    assert reported["imageCoverage"] == {
+        "articleCount": 11,
+        "illustratedCount": 9,
+        "textOnlyCount": 2,
+        "illustratedRate": 0.818182,
+        "textOnlyRate": 0.181818,
+        "modesByRef": {
+            **{f"illustrated-{index}": "illustrated" for index in range(9)},
+            "text-only-allowed": "text_only",
+            "text-only-excess": "text_only",
+        },
+    }
 
 
 def test_batch_reducer_rejects_missing_typed_article_media_closure():

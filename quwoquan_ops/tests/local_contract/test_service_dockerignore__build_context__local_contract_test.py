@@ -12,6 +12,7 @@ def test_service_dockerignore_excludes_rebuildable_root_artifacts() -> None:
     ignored = SERVICE_DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
 
     for path in (
+        ".qwq_output/",
         "/api",
         "/import",
         "/generated/contract_graph.json",

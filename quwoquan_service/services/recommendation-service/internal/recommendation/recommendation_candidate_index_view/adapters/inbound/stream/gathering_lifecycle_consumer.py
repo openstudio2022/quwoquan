@@ -20,6 +20,7 @@ from ....application.gathering_projector import (
 GATHERING_LIFECYCLE_STREAM = "events.circle.gatherings"
 CONSUMER_GROUP = "recommendation-gathering-candidate-v1"
 DEAD_LETTER_STREAM = "events.circle.gathering.recommendation_candidate.dlq"
+GATHERING_STREAM_POLL_BLOCK_MS = 100
 UPSERT_EVENTS = frozenset(
     {
         "GatheringPublished",
@@ -423,7 +424,7 @@ class GatheringLifecycleConsumer:
         def run() -> None:
             while not self._stop.is_set():
                 try:
-                    self.process_once(block_ms=1000)
+                    self.process_once(block_ms=GATHERING_STREAM_POLL_BLOCK_MS)
                 except Exception:
                     self._healthy = False
                     time.sleep(0.25)

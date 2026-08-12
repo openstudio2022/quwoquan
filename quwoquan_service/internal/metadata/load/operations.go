@@ -13,7 +13,13 @@ import (
 type serviceDocument struct {
 	CommercialDefaults commercialDocument          `yaml:"commercial_defaults"`
 	APIRoutes          []routeDocument             `yaml:"api_routes"`
+	GraphQLQueries     []graphQLQueryDocument      `yaml:"graphql_queries"`
 	RuntimeEntrypoints []runtimeEntrypointDocument `yaml:"runtime_entrypoints"`
+}
+
+type graphQLQueryDocument struct {
+	routeDocument `yaml:",inline"`
+	OperationType string `yaml:"operation_type"`
 }
 
 type commercialDocument struct {
@@ -56,6 +62,7 @@ type routeDocument struct {
 	RequestEntity   string `yaml:"request_entity"`
 	RequestBodyKind string `yaml:"request_body_kind"`
 	Transport       string `yaml:"transport"`
+	TransportRole   string `yaml:"transport_role"`
 	Streaming       *struct {
 		ResumeRequestField  string   `yaml:"resume_request_field"`
 		ResumeResponseField string   `yaml:"resume_response_field"`
@@ -186,11 +193,66 @@ func loadService(
 	if err := yaml.Unmarshal(data, &document); err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
-	operations := make([]ast.Operation, 0, len(document.APIRoutes))
+	type authoredOperation struct {
+		section string
+		index   int
+		route   routeDocument
+	}
+	authored := make([]authoredOperation, 0, len(document.APIRoutes)+len(document.GraphQLQueries))
 	for index, route := range document.APIRoutes {
+		authored = append(authored, authoredOperation{section: "api_routes", index: index, route: route})
+	}
+	for index, query := range document.GraphQLQueries {
+		if strings.TrimSpace(query.OperationType) != "query" {
+			return nil, nil, fmt.Errorf(
+				"%s: graphql_queries[%d].operation_type must be query",
+				path,
+				index,
+			)
+		}
+		route := query.routeDocument
+		if strings.TrimSpace(route.Application.Kind) != "query" {
+			return nil, nil, fmt.Errorf(
+				"%s: graphql_queries[%d].application.kind must be query",
+				path,
+				index,
+			)
+		}
+		route.Method = "POST"
+		route.Path = "/graphql"
+		route.Transport = "graphql"
+		if strings.TrimSpace(route.RequestBodyKind) == "" {
+			route.RequestBodyKind = "none"
+		}
+		if strings.TrimSpace(route.ResponseBodyKind) == "" {
+			route.ResponseBodyKind = "object"
+		}
+		route.SuccessStatus = 200
+		route.Actor = "none"
+		authMode := "required"
+		if strings.TrimSpace(route.Authorization.Principal) == "public" {
+			authMode = "public"
+		}
+		route.Security = map[string]string{"auth_mode": authMode}
+		authored = append(authored, authoredOperation{
+			section: "graphql_queries",
+			index:   index,
+			route:   route,
+		})
+	}
+
+	operations := make([]ast.Operation, 0, len(authored))
+	for _, authoredEntry := range authored {
+		index := authoredEntry.index
+		route := authoredEntry.route
 		localID := strings.TrimSpace(route.Operation)
 		if localID == "" {
-			return nil, nil, fmt.Errorf("%s: api_routes[%d].operation is required", path, index)
+			return nil, nil, fmt.Errorf(
+				"%s: %s[%d].operation is required",
+				path,
+				authoredEntry.section,
+				index,
+			)
 		}
 		kind, explicit, kindErr := resolveOperationKind(route.Method, route.Application.Kind)
 		if kindErr != nil {
@@ -340,6 +402,7 @@ func loadService(
 			RequestEntity:          strings.TrimSpace(route.RequestEntity),
 			RequestBodyKind:        strings.TrimSpace(route.RequestBodyKind),
 			Transport:              transport,
+			TransportRole:          ast.TransportRole(strings.TrimSpace(route.TransportRole)),
 			Streaming:              streaming,
 			RequestBindings:        requestBindings,
 			RequestConstants:       requestConstants,

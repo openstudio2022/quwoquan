@@ -1,85 +1,13 @@
 {
-  "description": "search-service alpha/local_contract 共享 fixture。热词仅用于 alpha 投影与 API 合同；production 由 search_queries 重建 rm_search_term_heat。",
-  "repositoryExpectations": {
-    "alpha": "mock",
-    "beta": "remote",
-    "gamma": "remote"
-  },
-  "seedSets": {
+  "schema": "search.static-contract-examples.v1",
+  "examples": {
     "search_hot_queries_core": {
       "hot_queries": [
-        {
-          "query": "旅行摄影",
-          "relevance": 9.8
-        },
-        {
-          "query": "城市漫步",
-          "relevance": 9.1
-        },
-        {
-          "query": "周末徒步",
-          "relevance": 8.7
-        },
-        {
-          "query": "咖啡地图",
-          "relevance": 8.2
-        },
-        {
-          "query": "日落机位",
-          "relevance": 7.9
-        },
-        {
-          "query": "露营",
-          "relevance": 7.5
-        },
-        {
-          "query": "小众博物馆",
-          "relevance": 7.1
-        },
-        {
-          "query": "海边拍照",
-          "relevance": 6.8
-        },
-        {
-          "query": "毕业季拍照",
-          "relevance": 6.5
-        },
-        {
-          "query": "古城夜游",
-          "relevance": 6.2
-        },
-        {
-          "query": "毕业旅行",
-          "relevance": 5.9
-        },
-        {
-          "query": "环岛骑行",
-          "relevance": 5.6
-        }
-      ]
-    },
-    "search_remote_acceptance": {
-      "queries": [
-        {
-          "query": "西湖",
-          "mode": "result",
-          "expectedTargets": ["article", "photo", "entity", "location"],
-          "minimumResultCount": 1
-        },
-        {
-          "query": "摄影",
-          "mode": "suggest",
-          "expectedTargets": ["photo", "article", "user", "circle"],
-          "minimumResultCount": 1
-        }
-      ],
-      "feedback": {
-        "eventType": "click",
-        "dedupeKeyFields": ["searchRequestId", "eventType", "objectId"]
-      },
-      "notes": [
-        "结果数据由 content/entity/circle/user/location canonical seed 经各域 search backfill 投影，不向 ES 直接灌第二份业务数据。",
-        "热词由 search_queries + search_feedback_events 重建，不在 beta/gamma 写死榜单。"
+        {"query": "旅行摄影", "relevance": 9.8},
+        {"query": "城市漫步", "relevance": 9.1},
+        {"query": "周末徒步", "relevance": 8.7},
+        {"query": "咖啡地图", "relevance": 8.2},
+        {"query": "日落机位", "relevance": 7.9}
       ]
     }
   }

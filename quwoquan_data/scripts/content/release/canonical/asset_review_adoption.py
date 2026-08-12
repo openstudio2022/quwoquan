@@ -116,10 +116,11 @@ def _professional_identity(
     relative = Path(receipt_ref)
     if (
         relative.is_absolute()
-        or len(relative.parts) != 2
-        or relative.parts[0] != "receipts"
+        or len(relative.parts) < 2
+        or relative.parts[-2] != "receipts"
         or relative.suffix != ".json"
         or ".." in relative.parts
+        or (asset_kind == "video" and len(relative.parts) != 2)
     ):
         raise ObjectTransactionError("professional asset acquisitionReceiptRef is non-canonical")
     if not content_sha256.startswith("sha256:") or len(content_sha256) != 71:

@@ -80,21 +80,23 @@ class ContentDistributionPolicy:
             raise ValueError("research image provider priority must start with pinterest")
         if self.image_generation_allowed or self.video_generation_allowed:
             raise ValueError("governed image/video generation must remain disabled")
-        if not (
+        if (
             self.require_m100_promotion_before_m1000
-            and self.require_m1000_promotion_before_m10000
-            and self.milestone_attainment_required
+            or self.require_m1000_promotion_before_m10000
+            or not self.milestone_attainment_required
         ):
-            raise ValueError("governed scale promotion and attainment gates are mandatory")
+            raise ValueError(
+                "scale targets remain measurable without predecessor promotion gates"
+            )
         if self.attainment_counting_mode != "cumulative_unique_finalized_objects":
             raise ValueError("milestone attainment must count cumulative unique finalized objects")
         if (
             not self.automatic_recovery_statistical
-            or self.automatic_recovery_non_blocking
+            or not self.automatic_recovery_non_blocking
         ):
-            raise ValueError("automatic recovery statistics must remain an M100+ promotion gate")
-        if self.video_popularity_non_blocking or not self.video_popularity_statistical:
-            raise ValueError("video popularity statistics must remain an M100+ promotion gate")
+            raise ValueError("automatic recovery must remain non-blocking statistics")
+        if not self.video_popularity_non_blocking or not self.video_popularity_statistical:
+            raise ValueError("video popularity must remain non-blocking statistics")
         target_rows = (
             dict(self.m100_targets),
             dict(self.m1000_targets),

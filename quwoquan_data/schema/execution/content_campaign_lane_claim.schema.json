@@ -55,6 +55,7 @@
         "starting",
         "running",
         "succeeded",
+        "delivery_pending",
         "failed",
         "timed_out",
         "interrupted",

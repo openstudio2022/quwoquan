@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
 )
 
 type redisSceneCfg struct {
@@ -46,7 +44,6 @@ type config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
-	ES    searchindex.ESConfig `yaml:"es"`
 	Redis struct {
 		General  redisSceneCfg `yaml:"general"`
 		Realtime redisSceneCfg `yaml:"realtime"`
@@ -54,6 +51,10 @@ type config struct {
 	Integration struct {
 		ExternalInteractionBaseURL string `yaml:"external_interaction_base_url"`
 	} `yaml:"integration"`
+	ResearchIdentity struct {
+		Enabled    bool `yaml:"enabled"`
+		TTLSeconds int  `yaml:"ttl_seconds"`
+	} `yaml:"research_identity"`
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {

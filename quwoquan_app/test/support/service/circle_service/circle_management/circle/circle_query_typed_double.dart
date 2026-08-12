@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Alpha/test only Circle query adapter.
 ///
@@ -8,10 +8,10 @@ import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
 /// has no dependency on App DTOs, Remote adapters, or retired repositories.
 final class InMemoryCircleQueryReader
     implements CircleQueryReader, CircleDiscoveryFeedQueryReader {
-  InMemoryCircleQueryReader({ObjectScenarioSeedReader? fixtures})
-    : _fixtures = fixtures ?? objectScenarioSeedReader;
+  InMemoryCircleQueryReader({ObjectContractExampleReader? fixtures})
+    : _fixtures = fixtures ?? objectContractExampleReader;
 
-  final ObjectScenarioSeedReader _fixtures;
+  final ObjectContractExampleReader _fixtures;
 
   @override
   Future<CirclePageSlice> list(CircleListQuery query) async {
@@ -139,14 +139,14 @@ final class InMemoryCircleQueryReader
 
   List<Circle> get _circles {
     final raw = _list(
-      _fixtures.requireSeedSet('circle', 'circle_core')['circles'],
+      _fixtures.requireExample('circle', 'circle_core')['circles'],
     );
     return raw.map(_circleProjection).toList(growable: false);
   }
 
   Map<String, Map<Object?, Object?>> get _statsByCircleId {
     final raw = _list(
-      _fixtures.requireSeedSet('circle', 'circle_profile_core')['stats'],
+      _fixtures.requireExample('circle', 'circle_profile_core')['stats'],
     );
     return <String, Map<Object?, Object?>>{
       for (final item in raw) _text(item['circleId']): item,
@@ -155,14 +155,14 @@ final class InMemoryCircleQueryReader
 
   Map<String, Object?> get _impactsByCircleId {
     final raw = _object(
-      _fixtures.requireSeedSet('circle', 'circle_profile_core')['impacts'],
+      _fixtures.requireExample('circle', 'circle_profile_core')['impacts'],
     );
     return raw.map((key, value) => MapEntry(key.toString(), value));
   }
 
   Map<String, Map<Object?, Object?>> get _postsById {
     final raw = _list(
-      _fixtures.requireSeedSet('content', 'content_discovery_core')['posts'],
+      _fixtures.requireExample('content', 'content_discovery_core')['posts'],
     );
     return <String, Map<Object?, Object?>>{
       for (final item in raw) _text(item['postId']): item,
@@ -174,7 +174,7 @@ final class InMemoryCircleQueryReader
     String? type,
   }) {
     final placements = _list(
-      _fixtures.requireSeedSet('circle', 'circle_profile_core')['placements'],
+      _fixtures.requireExample('circle', 'circle_profile_core')['placements'],
     );
     final normalizedType = type?.trim();
     return placements

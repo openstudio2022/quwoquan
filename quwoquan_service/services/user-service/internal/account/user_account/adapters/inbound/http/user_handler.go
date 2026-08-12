@@ -208,8 +208,8 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /users/{userId}/interest-profile", h.handleGetUserInterestProfile)
 
 	// Auth & Credentials
+	mux.HandleFunc("GET /auth/otp/readiness", h.handleOtpDeliveryReadiness)
 	mux.HandleFunc("POST /auth/otp/send", h.handleSendOtp)
-	mux.HandleFunc("POST /internal/auth/otp-deliveries:callback", h.handleOtpDeliveryCallback)
 	mux.HandleFunc("POST /auth/login/phone", h.handleLoginWithPhone)
 	mux.HandleFunc("POST /auth/authorization/alipay", h.handleCreateAlipayAuthorizationRequest)
 	mux.HandleFunc("POST /auth/login/wechat", h.handleLoginWithWechat)

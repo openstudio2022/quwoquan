@@ -45,11 +45,12 @@ func TestSignAndVerifyAccessTokenContract(t *testing.T) {
 	verifier := mustVerifier(t, config)
 
 	token, err := signer.Sign(TokenSubject{
-		AccountID:   "account-1",
-		PersonaID:   "persona-1",
-		Scopes:      []string{"user.read", "content.report.write"},
-		Permissions: []string{"report.create"},
-		Roles:       []string{"user"},
+		AccountID:     "account-1",
+		PersonaID:     "persona-1",
+		DeviceActorID: "device-1",
+		Scopes:        []string{"user.read", "content.report.write"},
+		Permissions:   []string{"report.create"},
+		Roles:         []string{"user"},
 	})
 	if err != nil {
 		t.Fatalf("sign: %v", err)
@@ -60,6 +61,7 @@ func TestSignAndVerifyAccessTokenContract(t *testing.T) {
 	}
 	if claims.Subject != "account-1" ||
 		claims.Persona != "persona-1" ||
+		claims.DeviceActorID != "device-1" ||
 		claims.AuthEpoch != 1 ||
 		claims.TokenVersion != config.TokenVersion ||
 		claims.Issuer != config.Issuer ||
@@ -247,8 +249,9 @@ func TestVerifyRejectsNonHS256HeaderEvenWithValidSignature(t *testing.T) {
 func TestMiddlewareUsesVerifiedPrincipalAndRejectsInvalidCredential(t *testing.T) {
 	config := testTokenConfig(TokenTypeAccess)
 	token, err := mustSigner(t, config).Sign(TokenSubject{
-		AccountID: "trusted-account",
-		PersonaID: "trusted-persona",
+		AccountID:     "trusted-account",
+		PersonaID:     "trusted-persona",
+		DeviceActorID: "trusted-device",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -269,11 +272,14 @@ func TestMiddlewareUsesVerifiedPrincipalAndRejectsInvalidCredential(t *testing.T
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set(clientUserIDHeader, "forged-account")
 	req.Header.Set(clientPersonaIDHeader, "forged-persona")
+	req.Header.Set(clientDeviceActorHdr, "forged-device")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, req)
 	if response.Code != http.StatusNoContent ||
 		seen.Actor.AccountID != "trusted-account" ||
-		seen.Actor.PersonaID != "trusted-persona" {
+		seen.Actor.PersonaID != "trusted-persona" ||
+		seen.Actor.DeviceActorID != "trusted-device" ||
+		req.Header.Get(clientDeviceActorHdr) != "trusted-device" {
 		t.Fatalf("status=%d principal=%+v", response.Code, seen)
 	}
 
@@ -289,6 +295,43 @@ func TestMiddlewareUsesVerifiedPrincipalAndRejectsInvalidCredential(t *testing.T
 	invalidHandler.ServeHTTP(invalidResponse, invalidRequest)
 	if invalidResponse.Code != http.StatusUnauthorized || nextCalled {
 		t.Fatalf("invalid credential status=%d next=%v", invalidResponse.Code, nextCalled)
+	}
+}
+
+func TestLegacyAccessTokenWithoutDeviceActorRemainsValid(t *testing.T) {
+	config := testTokenConfig(TokenTypeAccess)
+	token, err := mustSigner(t, config).Sign(TokenSubject{
+		AccountID: "legacy-account",
+		PersonaID: "legacy-persona",
+	})
+	if err != nil {
+		t.Fatalf("sign legacy access token: %v", err)
+	}
+	claims, err := mustVerifier(t, config).Verify(token)
+	if err != nil {
+		t.Fatalf("verify legacy access token: %v", err)
+	}
+	principal := principalFromClaims(*claims)
+	if principal.Actor.AccountID != "legacy-account" ||
+		principal.Actor.PersonaID != "legacy-persona" ||
+		principal.Actor.DeviceActorID != "" {
+		t.Fatalf("unexpected legacy principal: %+v", principal.Actor)
+	}
+	handler := Middleware(MiddlewareConfig{
+		AccessTokenVerifier: mustVerifier(t, config),
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if value := r.Header.Get(clientDeviceActorHdr); value != "" {
+			t.Fatalf("legacy token preserved forged device actor header %q", value)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/me", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set(clientDeviceActorHdr, "forged-device")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("legacy access token status=%d", response.Code)
 	}
 }
 

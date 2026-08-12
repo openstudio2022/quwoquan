@@ -396,6 +396,63 @@ void main() {
     );
 
     test(
+      'minimum-build 426 signals blocking recovery before preserving the canonical failure',
+      () async {
+        final signals = <CloudException>[];
+        http.Response responseFor(String code) => http.Response(
+          jsonEncode(<String, Object?>{
+            'code': code,
+            'userMessage': '当前版本已不受支持，请先完成更新',
+          }),
+          426,
+          headers: const <String, String>{
+            'content-type': 'application/json; charset=utf-8',
+          },
+        );
+        final client = CloudHttpClient(
+          client: MockClient(
+            (request) async => responseFor(
+              request.url.path == '/unrelated'
+                  ? 'GATEWAY.USER.unrelated_upgrade'
+                  : cloudClientUpgradeRequiredCode,
+            ),
+          ),
+          onClientUpgradeRequired: signals.add,
+          jsonBodyDecoder: CloudJsonBodyDecoder(maxResponseBytes: 4096),
+        );
+
+        await expectLater(
+          client.getJsonAbortable(
+            Uri.parse('https://api.example.test/content/feed'),
+            gatewayOrigin: Uri.parse('https://api.example.test'),
+            headers: const <String, String>{},
+            cancellation: CloudOperationCancellationSignal(),
+          ),
+          throwsA(
+            isA<CloudException>()
+                .having((error) => error.statusCode, 'statusCode', 426)
+                .having(
+                  (error) => error.code,
+                  'code',
+                  cloudClientUpgradeRequiredCode,
+                ),
+          ),
+        );
+        expect(signals, hasLength(1));
+
+        final raw = await client.get(
+          Uri.parse('https://api.example.test/legacy-business-read'),
+        );
+        expect(raw.statusCode, 426);
+        expect(signals, hasLength(2));
+
+        await client.get(Uri.parse('https://api.example.test/unrelated'));
+        expect(signals, hasLength(2));
+        client.close();
+      },
+    );
+
+    test(
       'streamed response crosses byte cap before full buffering or JSON decode',
       () async {
         var decodeCalls = 0;

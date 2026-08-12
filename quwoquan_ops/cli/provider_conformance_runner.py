@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -21,6 +24,146 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.lib.output_paths import env_run_dir, output_root
+from quwoquan_ops.cli.lib.startup_attempt_receipt import startup_attempt_path
+
+
+_RUNTIME_IDENTITY_ENV = "QWQ_PROVIDER_CONFORMANCE_RUNTIME_IDENTITY"
+_RUNTIME_IDENTITY_SCHEMA = "stackctl.provider_conformance_runtime_identity.v1"
+_RUNTIME_IDENTITY_COMMON_FIELDS = frozenset(
+    {
+        "schema",
+        "runtimeMode",
+        "environment",
+        "target",
+        "workload",
+        "startupAttemptId",
+        "providerRuntimeDigest",
+        "failureFree",
+        "nonPromotable",
+    }
+)
+_RUNTIME_IDENTITY_IMMUTABLE_FIELDS = frozenset({"candidateDigest"})
+_RUNTIME_IDENTITY_MUTABLE_FIELDS = frozenset(
+    {
+        "mutableComposeDigest",
+        "mutableConfigurationDigest",
+        "mutableStateDigest",
+        "mutableWorkspaceStatusDigest",
+        "mutableResolverHandoffDigest",
+        "mutableSourceRevision",
+    }
+)
+
+
+@dataclass(frozen=True)
+class _FrozenRuntimeIdentity:
+    runtime_mode: str
+    environment: str
+    target: str
+    startup_attempt_id: str
+    provider_runtime_digest: str
+    candidate_digest: str = ""
+
+
+def _freeze_nonprod_runtime_identity(environment: str) -> _FrozenRuntimeIdentity:
+    raw = os.environ.get(_RUNTIME_IDENTITY_ENV, "").strip()
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{environment} Provider conformance runtime identity handoff is invalid"
+        ) from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError(
+            f"{environment} Provider conformance runtime identity handoff is invalid"
+        )
+    runtime_mode = str(payload.get("runtimeMode") or "").strip()
+    mode_fields = (
+        _RUNTIME_IDENTITY_IMMUTABLE_FIELDS
+        if runtime_mode == "immutable_candidate"
+        else _RUNTIME_IDENTITY_MUTABLE_FIELDS
+        if runtime_mode == "test_live"
+        else frozenset()
+    )
+    expected_target = f"{environment}-local"
+    if (
+        not mode_fields
+        or set(payload) != _RUNTIME_IDENTITY_COMMON_FIELDS | mode_fields
+        or payload.get("schema") != _RUNTIME_IDENTITY_SCHEMA
+        or payload.get("environment") != environment
+        or payload.get("target") != expected_target
+        or payload.get("workload") != "full"
+        or payload.get("failureFree") is not True
+        or payload.get("nonPromotable") is not (runtime_mode == "test_live")
+        or not str(payload.get("startupAttemptId") or "").strip()
+    ):
+        raise ValueError(
+            f"{environment} Provider conformance runtime identity handoff "
+            "does not match the cell"
+        )
+    digest_fields = [
+        value for key, value in payload.items() if key.endswith("Digest")
+    ]
+    if any(
+        provider_conformance.SHA256_PATTERN.fullmatch(str(value or "")) is None
+        for value in digest_fields
+    ):
+        raise ValueError(
+            f"{environment} Provider conformance runtime identity handoff "
+            "contains an invalid digest"
+        )
+    if runtime_mode == "test_live" and re.fullmatch(
+        r"[0-9a-f]{40}",
+        str(payload.get("mutableSourceRevision") or ""),
+    ) is None:
+        raise ValueError(
+            f"{environment} Provider conformance mutable source identity is invalid"
+        )
+    return _FrozenRuntimeIdentity(
+        runtime_mode=runtime_mode,
+        environment=environment,
+        target=expected_target,
+        startup_attempt_id=str(payload["startupAttemptId"]),
+        provider_runtime_digest=str(payload["providerRuntimeDigest"]),
+        candidate_digest=str(payload.get("candidateDigest") or ""),
+    )
+
+
+@contextlib.contextmanager
+def _scoped_process_environment(values: Mapping[str, str]):
+    previous = {key: os.environ.get(key) for key in values}
+    os.environ.update({key: str(value) for key, value in values.items()})
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _runtime_environment_for_cell(
+    runtime_environments: Mapping[str, Mapping[str, str]] | None,
+    *,
+    environment: str,
+    execute: bool,
+) -> dict[str, str]:
+    if not execute or environment not in provider_conformance.ENVIRONMENTS:
+        return {}
+    selected = (
+        runtime_environments.get(environment)
+        if isinstance(runtime_environments, Mapping)
+        else None
+    )
+    if (
+        not isinstance(selected, Mapping)
+        or not str(selected.get(_RUNTIME_IDENTITY_ENV) or "").strip()
+    ):
+        raise ValueError(
+            f"{environment} Provider conformance runtime identity handoff is missing"
+        )
+    return {str(key): str(value) for key, value in selected.items()}
 
 
 def _digest_bytes(value: bytes) -> str:
@@ -80,6 +223,123 @@ def _require_formal_promotability(identity: Mapping[str, object]) -> None:
             "formal Provider producer requires clean reviewed CI authority "
             "and a canonical active candidate receipt"
         )
+
+
+def _resolve_immutable_execution_candidate(
+    runtime_identity: _FrozenRuntimeIdentity,
+    *,
+    registry: Mapping[str, Any],
+    commit: str,
+    image_digest: str,
+    contract_graph_digest: str,
+) -> dict[str, object]:
+    if runtime_identity.runtime_mode != "immutable_candidate":
+        raise ValueError("only immutable execution can resolve candidate evidence")
+    binding = provider_conformance.resolve_nonprod_active_candidate(
+        environment=runtime_identity.environment,
+        registry=registry,
+        commit=commit,
+        image_digest=image_digest,
+        contract_graph_digest=contract_graph_digest,
+    )
+    if binding.get("active") is not True:
+        raise ValueError(
+            "selected immutable Provider runtime is no longer the canonical "
+            f"active candidate: {binding.get('reason') or 'identity mismatch'}"
+        )
+    receipt_path = startup_attempt_path(runtime_identity.target)
+    try:
+        receipt_raw = receipt_path.read_bytes()
+        receipt = json.loads(receipt_raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "selected immutable Provider startup receipt is unreadable"
+        ) from exc
+    if (
+        not isinstance(receipt, Mapping)
+        or receipt.get("status") != "running"
+        or receipt.get("env") != runtime_identity.environment
+        or receipt.get("target") != runtime_identity.target
+        or receipt.get("workload") != "full"
+        or receipt.get("candidateDigest") != runtime_identity.candidate_digest
+        or receipt.get("attemptId") != runtime_identity.startup_attempt_id
+        or receipt.get("providerRuntimeDigest")
+        != runtime_identity.provider_runtime_digest
+        or receipt.get("failure") not in {None, ""}
+        or receipt.get("cleanupFailure") not in {None, ""}
+        or binding.get("receiptDigest") != _digest_bytes(receipt_raw)
+    ):
+        raise ValueError(
+            "selected immutable Provider runtime drifted from the frozen "
+            "candidate/startup/provider identity"
+        )
+    return dict(binding)
+
+
+def _postrun_nonprod_candidate(
+    runtime_identity: _FrozenRuntimeIdentity,
+    *,
+    pre_run_candidate: Mapping[str, object] | None,
+    case_result_path: Path,
+    registry: Mapping[str, Any],
+    commit: str,
+    image_digest: str,
+    contract_graph_digest: str,
+) -> dict[str, object]:
+    if runtime_identity.runtime_mode == "test_live":
+        return {
+            "active": False,
+            "receiptRef": "",
+            "receiptDigest": "",
+            "reason": "mutable test_live evidence is never promotable",
+        }
+    try:
+        post_run_candidate = _resolve_immutable_execution_candidate(
+            runtime_identity,
+            registry=registry,
+            commit=commit,
+            image_digest=image_digest,
+            contract_graph_digest=contract_graph_digest,
+        )
+        if (
+            not isinstance(pre_run_candidate, Mapping)
+            or pre_run_candidate.get("active") is not True
+            or post_run_candidate.get("receiptRef")
+            != pre_run_candidate.get("receiptRef")
+            or post_run_candidate.get("receiptDigest")
+            != pre_run_candidate.get("receiptDigest")
+        ):
+            raise ValueError(
+                "immutable Provider candidate receipt changed during execution"
+            )
+        return post_run_candidate
+    except (OSError, ValueError):
+        # A CaseResult written after the runtime identity drifted is not valid
+        # evidence and must not remain available for later aggregation.
+        case_result_path.unlink(missing_ok=True)
+        raise
+
+
+def _evidence_identity_for_runtime(
+    runtime_identity: _FrozenRuntimeIdentity | None,
+    *,
+    commit: str,
+    candidate: Mapping[str, object],
+) -> dict[str, object]:
+    candidate_bound = bool(
+        runtime_identity is None
+        or runtime_identity.runtime_mode == "immutable_candidate"
+    ) and candidate.get("active") is True
+    return provider_conformance.evidence_identity(
+        commit=commit,
+        candidate_receipt_bound=candidate_bound,
+        candidate_receipt_ref=(
+            str(candidate.get("receiptRef") or "") if candidate_bound else ""
+        ),
+        candidate_receipt_digest=(
+            str(candidate.get("receiptDigest") or "") if candidate_bound else ""
+        ),
+    )
 
 
 def _contract_graph_digest() -> str:
@@ -207,6 +467,7 @@ def preflight_environment_matrix(
     registry: Mapping[str, Any],
     compiled: Mapping[str, Any],
     sources: Mapping[tuple[str, str, str], Mapping[str, Any]],
+    runtime_environment: Mapping[str, str],
 ) -> str:
     """Fail the complete environment matrix before emitting any partial evidence."""
     issues: list[str] = []
@@ -220,18 +481,19 @@ def preflight_environment_matrix(
         issues.append(str(exc))
     commit = _current_commit()
     contract_graph_digest = _contract_graph_digest()
-    active_candidate = provider_conformance.resolve_nonprod_active_candidate(
-        environment=environment,
-        registry=registry,
-        commit=commit,
-        image_digest=image_digest,
-        contract_graph_digest=contract_graph_digest,
-    )
-    if active_candidate.get("active") is not True:
-        issues.append(
-            "canonical active Provider candidate is unavailable: "
-            + str(active_candidate.get("reason") or "unknown receipt failure")
-        )
+    try:
+        with _scoped_process_environment(runtime_environment):
+            runtime_identity = _freeze_nonprod_runtime_identity(environment)
+        if runtime_identity.runtime_mode == "immutable_candidate":
+            _resolve_immutable_execution_candidate(
+                runtime_identity,
+                registry=registry,
+                commit=commit,
+                image_digest=image_digest,
+                contract_graph_digest=contract_graph_digest,
+            )
+    except (OSError, ValueError) as exc:
+        issues.append(str(exc))
     selected = (compiled.get("selectedBindings") or {}).get(environment)
     if not isinstance(selected, Mapping):
         issues.append(f"compiled provider binding receipt has no {environment} environment")
@@ -288,6 +550,11 @@ def _execute_cell(
         raise ValueError(
             "--data-digest is forbidden; the test-owned CaseResult must report dataDigest"
         )
+    runtime_identity = (
+        _freeze_nonprod_runtime_identity(args.environment)
+        if args.environment in provider_conformance.ENVIRONMENTS
+        else None
+    )
     requested_image_digest = str(args.image_digest or "").strip()
     if args.environment in provider_conformance.ENVIRONMENTS:
         image_digest = provider_conformance.candidate_image_digest(
@@ -419,6 +686,19 @@ def _execute_cell(
     if adapter_digest is None:
         raise ValueError(f"adapter implementation path is missing: {adapter_path}")
     contract_graph_digest = _contract_graph_digest()
+    commit = _current_commit()
+    pre_run_candidate = (
+        _resolve_immutable_execution_candidate(
+            runtime_identity,
+            registry=registry,
+            commit=commit,
+            image_digest=image_digest,
+            contract_graph_digest=contract_graph_digest,
+        )
+        if runtime_identity is not None
+        and runtime_identity.runtime_mode == "immutable_candidate"
+        else None
+    )
     run_dir = env_run_dir(
         args.environment,
         "provider-conformance",
@@ -460,6 +740,18 @@ def _execute_cell(
         raise ValueError(
             "source-declared command did not write QWQ_PROVIDER_CONFORMANCE_RESULT_PATH"
         )
+    if runtime_identity is not None:
+        active_candidate = _postrun_nonprod_candidate(
+            runtime_identity,
+            pre_run_candidate=pre_run_candidate,
+            case_result_path=case_result_path,
+            registry=registry,
+            commit=commit,
+            image_digest=image_digest,
+            contract_graph_digest=contract_graph_digest,
+        )
+    else:
+        active_candidate = {}
     case_result, case_result_issues = provider_conformance.load_case_results(
         case_result_path,
         source=source,
@@ -470,16 +762,7 @@ def _execute_cell(
         raise ValueError("; ".join(case_result_issues))
     executed_at = datetime.now(timezone.utc).isoformat()
     case_result_bytes = case_result_path.read_bytes()
-    commit = _current_commit()
-    if args.environment in provider_conformance.ENVIRONMENTS:
-        active_candidate = provider_conformance.resolve_nonprod_active_candidate(
-            environment=args.environment,
-            registry=registry,
-            commit=commit,
-            image_digest=image_digest,
-            contract_graph_digest=contract_graph_digest,
-        )
-    else:
+    if runtime_identity is None:
         active_candidate = provider_conformance.resolve_prod_active_candidate(
             case_result_path=case_result_path,
             case_result=case_result,
@@ -490,11 +773,10 @@ def _execute_cell(
             contract_graph_digest=contract_graph_digest,
             adapter_digest=adapter_digest,
         )
-    identity = provider_conformance.evidence_identity(
+    identity = _evidence_identity_for_runtime(
+        runtime_identity,
         commit=commit,
-        candidate_receipt_bound=active_candidate.get("active") is True,
-        candidate_receipt_ref=str(active_candidate.get("receiptRef") or ""),
-        candidate_receipt_digest=str(active_candidate.get("receiptDigest") or ""),
+        candidate=active_candidate,
     )
     _require_formal_promotability(identity)
     report: dict[str, Any] = {
@@ -595,6 +877,7 @@ def main(
     argv: list[str] | None = None,
     *,
     evidence_paths_out: list[Path] | None = None,
+    runtime_environments: Mapping[str, Mapping[str, str]] | None = None,
 ) -> int:
     args = _build_parser().parse_args(argv)
     try:
@@ -610,6 +893,12 @@ def main(
             if not args.capability_id or args.adapter_id or args.environment or args.layer:
                 raise ValueError(
                     "--matrix requires --capability-id only; adapter/environment/layer derive from actual Bindings"
+                )
+            if args.execute and set(runtime_environments or {}) != set(
+                provider_conformance.ENVIRONMENTS
+            ):
+                raise ValueError(
+                    "Provider conformance matrix runtime identity handoff is incomplete"
                 )
             for environment in provider_conformance.ENVIRONMENTS:
                 binding = _selected_binding(
@@ -631,28 +920,49 @@ def main(
                             "layer": layer,
                         }
                     )
-                    evidence_paths.append(
-                        _execute_cell(
-                            cell_args,
-                            registry=registry,
-                            compiled=compiled,
-                            sources=sources,
-                        )
+                    runtime_environment = _runtime_environment_for_cell(
+                        runtime_environments,
+                        environment=environment,
+                        execute=bool(args.execute),
                     )
+                    with _scoped_process_environment(runtime_environment):
+                        evidence_paths.append(
+                            _execute_cell(
+                                cell_args,
+                                registry=registry,
+                                compiled=compiled,
+                                sources=sources,
+                            )
+                        )
         else:
             if not all((args.adapter_id, args.environment, args.layer)):
                 raise ValueError(
                     "single-cell execution requires --adapter-id --environment --layer; "
                     "--capability-id may disambiguate an adapter shared by typed Ports"
                 )
-            evidence_paths.append(
-                _execute_cell(
-                    args,
-                    registry=registry,
-                    compiled=compiled,
-                    sources=sources,
+            if (
+                args.execute
+                and args.environment in provider_conformance.ENVIRONMENTS
+                and set(runtime_environments or {}) != {args.environment}
+            ):
+                raise ValueError(
+                    "single-cell Provider conformance runtime identity handoff "
+                    "is incomplete"
                 )
+            runtime_environment = _runtime_environment_for_cell(
+                runtime_environments,
+                environment=args.environment,
+                execute=bool(args.execute),
             )
+            with _scoped_process_environment(runtime_environment):
+                evidence_paths.append(
+                    _execute_cell(
+                        args,
+                        registry=registry,
+                        compiled=compiled,
+                        sources=sources,
+                    )
+                )
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
         print(f"[provider_conformance_runner] GATE_BLOCK: {exc}", file=sys.stderr)
         return 1

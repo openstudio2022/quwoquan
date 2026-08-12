@@ -1,0 +1,19 @@
+query ContentPostDetailSemantic($postId: ID!, $semanticFirst: Int! = 30) {
+  contentPostDetailSemantic(postId: $postId) {
+    postId
+    contentType
+    tagRefs(first: $semanticFirst)
+    entityRefs(first: $semanticFirst)
+    semanticMentions(first: $semanticFirst) {
+      mentionId
+      kind
+      surface
+      location
+      rangeStart
+      rangeEnd
+      status
+      candidateId
+      targetRef
+    }
+  }
+}

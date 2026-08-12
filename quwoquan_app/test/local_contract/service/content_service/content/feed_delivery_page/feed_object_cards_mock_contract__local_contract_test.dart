@@ -11,7 +11,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
-import '../../../../../support/runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -73,7 +73,7 @@ void main() {
       // 池真相源：home_feed_core.featuredFeedPostIds（与云侧 rm_premium_pool
       // 物化集合、alpha runner adapter 同判定）；数据工程直供兜底。
       final rawPool =
-          objectScenarioSeedReader.contentSeedSet(
+          objectContractExampleReader.contentExample(
                 'home_feed_core',
               )?['featuredFeedPostIds']
               as List?;

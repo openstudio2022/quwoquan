@@ -35,7 +35,6 @@ from content.source.source_unit import resolve_entity_object_dir
 from core.qunar_template import is_qunar_url
 
 from content.source.research.source_quality import (
-    _ARTICLE_BASE_CATEGORIES,
     _candidate_gate,
     _collection_gate,
     _source_category,

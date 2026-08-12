@@ -6,6 +6,8 @@
     "creatorProfileId",
     "personaId",
     "authorId",
+    "version",
+    "admission",
     "isSystemBuiltin",
     "displayName",
     "userHandle",
@@ -34,6 +36,10 @@
     "creatorProfileId": { "type": "string" },
     "personaId": { "type": "string" },
     "authorId": { "type": "string" },
+    "version": {"type": "integer", "minimum": 1},
+    "admission": {
+      "$ref": "pool_admission.schema.json#/$defs/authorAdmission"
+    },
     "isSystemBuiltin": { "type": "boolean" },
     "displayName": { "type": "string" },
     "userHandle": { "type": "string" },
@@ -47,7 +53,7 @@
         "objectKey",
         "bytes",
         "mimeType",
-        "rightsSnapshotRef"
+        "evidenceRef"
       ],
       "properties": {
         "assetId": { "type": "string", "minLength": 1 },
@@ -62,7 +68,11 @@
         },
         "bytes": {"type": "integer", "minimum": 1},
         "mimeType": {"type": "string", "pattern": "^image/"},
-        "rightsSnapshotRef": {"type": "string", "minLength": 1}
+        "evidenceRef": {
+          "description": "头像格式、可读取、清晰度、安全与来源事实的证据引用；不包含环境使用范围，也不参与 Commercial 准入。",
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "headline": { "type": "string" },

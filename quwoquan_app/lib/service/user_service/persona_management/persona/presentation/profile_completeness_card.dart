@@ -100,7 +100,7 @@ class ProfileCompletenessCard extends StatelessWidget {
 
   static String _labelForMissingItem(String item) {
     switch (item) {
-      case 'avatar':
+      case 'avatarUrl':
         return ProfileText.profileCompletenessAvatar;
       case 'tags':
         return ProfileText.profileCompletenessTags;

@@ -2,6 +2,21 @@ part of 'search_network_results_page.dart';
 
 extension _SearchNetworkResultsPageStateDataNavigation
     on _SearchNetworkResultsPageState {
+  void _openSearchPageResult(SearchPageResultItem item) {
+    final action = item.action.trim();
+    final uri = Uri.tryParse(action);
+    if (uri == null || action.isEmpty) {
+      return;
+    }
+    if (!uri.hasScheme && action.startsWith('/')) {
+      context.push(action);
+      return;
+    }
+    if (uri.scheme == 'https') {
+      unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+    }
+  }
+
   Iterable<SearchHit> _hitsFromResponse(SearchResponse response) {
     if (response.hits.isNotEmpty) {
       return response.hits;

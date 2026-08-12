@@ -8,16 +8,45 @@ import pytest
 from content.execution.queue import backend as queue_backend
 from content.execution.queue import jobs
 from content.execution.queue.partition import partition_count, partition_key
+from content.execution.queue.reliabletask import job_set as job_set_module
+from content.execution.queue.reliabletask import jobs as reliable_jobs
 from content.execution.queue.reliabletask.attempt import (
     select_or_freeze_job_set_attempt,
 )
-from content.execution.queue.reliabletask import job_set as job_set_module
-from core.control_types import QueueBackend
+from content.execution.runtime_contract import canonical_sha256
+from core.control_types import QueueBackend, QueueJobStage
 from core.io import read_json, write_json
 
 EXECUTION_ID = "20260805--travel-image-m100--china--scale-101"
 M3_EXECUTION_ID = "20260805--travel-image-m3--china--scale-102"
 M10000_EXECUTION_ID = "20260805--travel-image-m10000--china--scale-103"
+M1000_EXECUTION_ID = "20260805--travel-image-m1000--china--scale-104"
+
+
+def test_python_go_task_digest_binds_integer_max_attempts() -> None:
+    execution_id = "20260719--travel-homepage-coverage--cn-zhejiang--canary-001"
+    entity_ref = "entity/地点/景区/001"
+    source_revision = "sha256:" + f"{2:064d}"
+    task = {
+        "entityRef": entity_ref,
+        "carrier": "homepage",
+        "sourceRevision": source_revision,
+        "idempotencyKey": (
+            f"{execution_id}|{entity_ref}|homepage|{source_revision}|author"
+        ),
+        "jobId": "job-001",
+        "executionId": execution_id,
+        "ref": entity_ref,
+        "stage": "author",
+        "partitionKey": entity_ref,
+        "maxAttempts": 3,
+    }
+    assert canonical_sha256([task]) == (
+        "sha256:dc34c4fcdb4316ce53ae642a595808acc1a61e8bc1d3a8331e6e1c9cd2311edd"
+    )
+    assert canonical_sha256([{**task, "maxAttempts": 2}]) != canonical_sha256(
+        [task]
+    )
 
 
 def _spec(
@@ -62,9 +91,10 @@ def _freeze(
     execution_id: str = EXECUTION_ID,
     approved_quota: int = 100,
     backend: QueueBackend = QueueBackend.RELIABLE_TASK,
+    spec_override: dict[str, object] | None = None,
 ) -> Path:
     root = tmp_path / "execution"
-    spec = _spec(approved_quota=approved_quota, backend=backend)
+    spec = spec_override or _spec(approved_quota=approved_quota, backend=backend)
     manifest = _manifest(execution_id)
     monkeypatch.setattr(queue_backend, "execution_root", lambda _execution_id: root)
     monkeypatch.setattr(job_set_module, "execution_root", lambda _execution_id: root)
@@ -73,75 +103,6 @@ def _freeze(
         queue_backend,
         "load_frozen_execution_manifest",
         lambda _execution_id: manifest,
-    )
-    monkeypatch.setattr(
-        queue_backend,
-        "load_frozen_target_set",
-        lambda _execution_id: {
-            "entityCatalogDigest": "sha256:" + "f" * 64,
-        },
-    )
-    monkeypatch.setattr(
-        queue_backend,
-        "load_frozen_campaign_observer_context",
-        lambda: SimpleNamespace(
-            execution_id=execution_id,
-            source_digest="sha256:" + "a" * 64,
-            entity_catalog_digest="sha256:" + "f" * 64,
-            as_envelope_document=lambda: {
-                "rootExecutionId": "20260805--travel-homepage-m100--china--scale-100",
-                "campaignRunId": "campaign-run-001",
-                "campaignGeneration": 2,
-                "campaignFencingToken": "sha256:" + "1" * 64,
-                "campaignPlanDigest": "sha256:" + "2" * 64,
-                "campaignSourceRevision": "sha256:" + "3" * 64,
-                "campaignEntityCatalogDigest": "sha256:" + "f" * 64,
-            },
-        ),
-    )
-    monkeypatch.setattr(
-        queue_backend,
-        "prepare_controller_observer_binary",
-        lambda: SimpleNamespace(
-            binding=SimpleNamespace(
-                as_document=lambda: {
-                    "observerBinaryRef": (
-                        "data/local/cache/reliabletask-observer-binaries/"
-                        + "d" * 64
-                        + "/data-content-worker"
-                    ),
-                    "observerBinarySha256": "sha256:" + "e" * 64,
-                }
-            ),
-        ),
-    )
-    monkeypatch.setattr(
-        queue_backend,
-        "load_frozen_observer_binary_binding",
-        lambda: SimpleNamespace(
-            as_document=lambda: {
-                "observerBinaryRef": (
-                    "data/local/cache/reliabletask-observer-binaries/"
-                    + "d" * 64
-                    + "/data-content-worker"
-                ),
-                "observerBinarySha256": "sha256:" + "e" * 64,
-            }
-        ),
-    )
-    monkeypatch.setattr(
-        queue_backend,
-        "load_frozen_campaign_worker_binary_binding",
-        lambda: SimpleNamespace(
-            as_document=lambda: {
-                "observerBinaryRef": (
-                    "data/local/cache/reliabletask-observer-binaries/"
-                    + "d" * 64
-                    + "/data-content-worker"
-                ),
-                "observerBinarySha256": "sha256:" + "e" * 64,
-            }
-        ),
     )
     return queue_backend.freeze_execution_queue_backend(
         execution_id,
@@ -154,37 +115,72 @@ def test_m100_backend_is_resolved_only_from_create_once_envelope(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    path = _freeze(tmp_path, monkeypatch)
+    path = _freeze(tmp_path, monkeypatch, backend=QueueBackend.LOCAL_FILE)
     envelope = read_json(path)
     assert envelope["scaleClass"] == "M100_PLUS"
-    assert envelope["queueBackend"] == "reliabletask"
-    assert envelope["observerBinaryRef"].endswith("/data-content-worker")
-    assert envelope["observerBinarySha256"] == "sha256:" + "e" * 64
-    assert envelope["campaignGeneration"] == 2
-    assert envelope["campaignSourceRevision"] == "sha256:" + "3" * 64
-    repeated = _freeze(tmp_path, monkeypatch)
+    assert envelope["queueBackend"] == "local_file"
+    assert envelope["poolDeliveryBackend"] == "reliabletask"
+    assert "observerBinaryRef" not in envelope
+    assert "campaignGeneration" not in envelope
+    repeated = _freeze(
+        tmp_path,
+        monkeypatch,
+        backend=QueueBackend.LOCAL_FILE,
+    )
     assert repeated == path
     assert read_json(repeated) == envelope
 
     resolved = jobs._backend_from_metadata(
         EXECUTION_ID,
         {},
-        QueueBackend.RELIABLE_TASK,
+        QueueBackend.LOCAL_FILE,
     )
-    assert resolved is QueueBackend.RELIABLE_TASK
+    assert resolved is QueueBackend.LOCAL_FILE
 
     with pytest.raises(ValueError, match="queue backend tamper"):
         jobs._backend_from_metadata(
             EXECUTION_ID,
             {},
-            QueueBackend.LOCAL_FILE,
+            QueueBackend.RELIABLE_TASK,
         )
     with pytest.raises(ValueError, match="queue backend tamper"):
         jobs._backend_from_metadata(
             EXECUTION_ID,
-            {"queueBackend": "local_file"},
+            {"queueBackend": "reliabletask"},
             None,
         )
+
+
+@pytest.mark.parametrize(
+    ("execution_id", "approved_quota"),
+    ((EXECUTION_ID, 100), (M1000_EXECUTION_ID, 1000)),
+)
+def test_scale_semantic_stages_never_use_delivery_transport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    execution_id: str,
+    approved_quota: int,
+) -> None:
+    _freeze(
+        tmp_path / execution_id,
+        monkeypatch,
+        execution_id=execution_id,
+        approved_quota=approved_quota,
+        backend=QueueBackend.LOCAL_FILE,
+    )
+    ctx = SimpleNamespace(
+        execution_id=execution_id,
+        spec=SimpleNamespace(
+            queue_policy=SimpleNamespace(backend=QueueBackend.LOCAL_FILE.value)
+        ),
+    )
+
+    assert reliable_jobs.uses_reliabletask(
+        ctx, stage=QueueJobStage.AUTHOR
+    ) is False
+    assert reliable_jobs.uses_reliabletask(
+        ctx, stage=QueueJobStage.PUBLISH
+    ) is True
 
 
 @pytest.mark.parametrize(
@@ -198,7 +194,7 @@ def test_partition_count_is_power_of_two_and_capped(
     assert partition_count(required_workers) == expected_count
 
 
-def test_m10000_backend_requires_reliabletask_and_governed_observer(
+def test_m10000_semantic_backend_is_independent_from_governed_pool_delivery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -211,17 +207,25 @@ def test_m10000_backend_requires_reliabletask_and_governed_observer(
     envelope = read_json(path)
     assert envelope["scaleClass"] == "M10000_PLUS"
     assert envelope["queueBackend"] == "reliabletask"
-    assert envelope["observerBinaryRef"].endswith("/data-content-worker")
-    assert envelope["campaignGeneration"] == 2
+    assert "observerBinaryRef" not in envelope
+    assert "campaignGeneration" not in envelope
 
-    with pytest.raises(ValueError, match="M10000_PLUS.*must be reliabletask"):
-        _freeze(
-            tmp_path / "local-backend",
-            monkeypatch,
-            execution_id=M10000_EXECUTION_ID,
-            approved_quota=10_000,
-            backend=QueueBackend.LOCAL_FILE,
-        )
+    local_path = _freeze(
+        tmp_path / "local-backend",
+        monkeypatch,
+        execution_id=M10000_EXECUTION_ID,
+        approved_quota=10_000,
+        backend=QueueBackend.LOCAL_FILE,
+    )
+    local_envelope = read_json(local_path)
+    assert local_envelope["queueBackend"] == "local_file"
+    assert local_envelope["poolDeliveryBackend"] == "reliabletask"
+    assert jobs._backend_from_metadata(
+        M10000_EXECUTION_ID,
+        {},
+        QueueBackend.RELIABLE_TASK,
+        stage=QueueJobStage.PUBLISH,
+    ) is QueueBackend.RELIABLE_TASK
 def test_reliabletask_stage_job_set_is_create_once_and_queue_mirror_independent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -241,6 +245,7 @@ def test_reliabletask_stage_job_set_is_create_once_and_queue_mirror_independent(
         "ref": "杭州西湖_image",
         "stage": "author",
         "partitionKey": "source-unit-001",
+        "maxAttempts": 3,
     }
 
     first = queue_backend.freeze_reliabletask_job_set(
@@ -349,6 +354,7 @@ def test_attempt_selector_dispatches_one_revision_set_per_fleet_request(
             "ref": "杭州西湖_image",
             "stage": "author",
             "partitionKey": "untrusted",
+            "maxAttempts": 3,
         }
 
     first_task = task("9")
@@ -383,6 +389,69 @@ def test_attempt_selector_dispatches_one_revision_set_per_fleet_request(
         active_tasks=[first_task],
         required_workers=1,
     ) == first
+
+
+def test_attempt_selector_refreezes_same_tasks_for_new_host_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def binding(generation: int) -> dict[str, object]:
+        digest = f"sha256:{generation:064x}"
+        return {
+            "hostSetId": "governed-workers",
+            "generation": generation,
+            "fencingToken": f"sha256:{generation + 10:064x}",
+            "hostSetDigest": digest,
+            "transportBinding": {
+                "mongoTransportDigest": "sha256:" + "8" * 64,
+                "redisTransportDigest": "sha256:" + "9" * 64,
+            },
+            "hosts": [{
+                "hostScopeId": "worker-alpha",
+                "workerCount": 1,
+                "partitionKeys": [str(value) for value in range(16)],
+                "runtimeProfileDigest": "sha256:" + "a" * 64,
+                "executorBundleRef": "data/executor/content-worker",
+                "executorBundleDigest": "sha256:" + "b" * 64,
+                "executorBundleFileSha256": "sha256:" + "c" * 64,
+                "sourceCapsuleId": "source-capsule",
+                "sourceCapsuleDigest": "sha256:" + "d" * 64,
+            }],
+        }
+
+    spec = _spec()
+    spec["executionPolicy"]["workerHostSetBinding"] = binding(1)
+    _freeze(tmp_path, monkeypatch, spec_override=spec)
+    revision = "sha256:" + "9" * 64
+    entity = "/entity/地点/景区/杭州西湖"
+    task = {
+        "entityRef": entity,
+        "carrier": "image",
+        "sourceRevision": revision,
+        "idempotencyKey": f"{EXECUTION_ID}|{entity}|image|{revision}|author",
+        "jobId": "image-author-generation-001",
+        "executionId": EXECUTION_ID,
+        "ref": "杭州西湖_image",
+        "stage": "author",
+        "partitionKey": "untrusted",
+        "maxAttempts": 3,
+    }
+    first = select_or_freeze_job_set_attempt(
+        EXECUTION_ID,
+        "author",
+        active_tasks=[task],
+        required_workers=1,
+    )
+    spec["executionPolicy"]["workerHostSetBinding"] = binding(2)
+    second = select_or_freeze_job_set_attempt(
+        EXECUTION_ID,
+        "author",
+        active_tasks=[task],
+        required_workers=1,
+    )
+    assert second["attemptOrdinal"] == 2
+    assert second["workerHostSetBinding"]["generation"] == 2
+    assert second["expectedTasks"] == first["expectedTasks"]
 
 
 def test_m100_backend_rejects_frozen_manifest_provider_profile_drift(
@@ -439,7 +508,7 @@ def test_m3_backend_is_resolved_only_from_create_once_envelope(
         jobs._backend_from_metadata(M3_EXECUTION_ID, {}, None)
 
 
-def test_below_m100_campaign_reliabletask_binds_worker_without_observer_claim(
+def test_semantic_freeze_never_binds_delivery_worker_or_campaign_context(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -458,8 +527,8 @@ def test_below_m100_campaign_reliabletask_binds_worker_without_observer_claim(
     envelope = read_json(path)
     assert envelope["scaleClass"] == "BELOW_M100"
     assert envelope["queueBackend"] == "reliabletask"
-    assert envelope["observerBinaryRef"].endswith("/data-content-worker")
-    assert envelope["observerBinarySha256"] == "sha256:" + "e" * 64
+    assert envelope["poolDeliveryBackend"] == "reliabletask"
+    assert "observerBinaryRef" not in envelope
     assert "rootExecutionId" not in envelope
     assert "campaignRunId" not in envelope
     assert "campaignFencingToken" not in envelope
@@ -484,14 +553,14 @@ def test_all_scales_require_the_create_once_backend_envelope(
         jobs._backend_from_metadata(M3_EXECUTION_ID, {}, QueueBackend.LOCAL_FILE)
 
 
-def test_legacy_reliabletask_envelope_without_binary_binding_fails_closed(
+def test_semantic_backend_envelope_rejects_legacy_observer_binding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = _freeze(tmp_path, monkeypatch)
     legacy = read_json(path)
-    legacy.pop("observerBinaryRef")
-    legacy.pop("observerBinarySha256")
+    legacy["observerBinaryRef"] = "data/local/cache/worker/data-content-worker"
+    legacy["observerBinarySha256"] = "sha256:" + "f" * 64
     stable = {key: value for key, value in legacy.items() if key != "envelopeDigest"}
     legacy["envelopeDigest"] = queue_backend._digest(stable)
     write_json(path, legacy)

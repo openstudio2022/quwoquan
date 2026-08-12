@@ -46,6 +46,9 @@
 ## Review 与测试要求
 
 - 每个服务改动都要覆盖 `local_contract` metadata/static/domain/application 模块、`api_integration` HTTP/真实存储/消息链路，涉及用户旅程或发布前验证时补 `user_acceptance`。
+- `local_contract` 只使用对象级 typed builder/generator、固定 seed/clock/ID 与最小 wire/golden；`api_integration` 只通过 application command/provider-state 构造最小前置状态。direct storage 仅限 persistence adapter、migration 与 corruption recovery 专项测试，不得作为一般 API 或环境数据准备入口。
+- 单个结构化 fixture 不得超过 64 KiB、500 个 scalar leaf 或 100 项单数组，同一 object support 下总量不得超过 256 KiB；超限改为 builder、固定 seed generator、immutable release 或独立 corpus，不得建立 fixture allowlist。
+- 独立 benchmark/eval corpus 必须有 manifest、digest 与 case count，只保存评测输入和期望；不得携带 `seedSets`、`repositoryExpectations`、`requiresSeedReset` 或环境 Repository 选择。执行模式、Actor 与可变状态由 runner/capability 控制面拥有。
 - 对象测试必须位于 `tests/<layer>/<context>/<object>/`；共享启动器只能放 `tests/support`，不得把兄弟对象测试借放到主对象目录。
 - 服务端 `api_integration` 真实 API 行为必须能回到 App 端 `local_contract` Mock/Provider/Widget 对应断言，避免 Mock 与 Remote 分裂。
 - 错误码链路的 `local_contract` 覆盖 metadata/codegen/硬编码扫描，`api_integration` 覆盖 HTTP 响应、trace/request id、Remote 映射输入；涉及用户恢复体验时补 App `user_acceptance`。

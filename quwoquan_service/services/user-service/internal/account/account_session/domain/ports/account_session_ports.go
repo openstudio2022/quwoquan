@@ -9,6 +9,7 @@ import (
 // AccountSession 事件类型：与 services/user-service/contracts/account/account_session/events.yaml 对齐。
 const (
 	AccountSessionAuthenticatedEvent = "AccountSessionAuthenticated"
+	AccountSessionRotatedEvent       = "AccountSessionRotated"
 	AccountSessionRevokedEvent       = "AccountSessionRevoked"
 )
 

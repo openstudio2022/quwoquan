@@ -54,12 +54,13 @@ final gatheringBoardChatReaderProvider = Provider<GatheringBoardChatReader>(
 
 /// Circle generated Remote 看板 reader。
 final gatheringBoardCircleReaderProvider = Provider<GatheringBoardCircleReader>(
-  (ref) => CircleProductionComposition.generatedAdapter<GatheringBoardCircleReader>(
-    CircleProductionAdapter.gatheringBoardCircle,
-    client: ref.watch(generatedCloudOperationClientProvider),
-    invocationContext: (clientPageId) =>
-        _circleBoardInvocationContext(ref, clientPageId),
-  ),
+  (ref) =>
+      CircleProductionComposition.generatedAdapter<GatheringBoardCircleReader>(
+        CircleProductionAdapter.gatheringBoardCircle,
+        client: ref.watch(generatedCloudOperationClientProvider),
+        invocationContext: (clientPageId) =>
+            _circleBoardInvocationContext(ref, clientPageId),
+      ),
 );
 
 /// 唯一 Board composition：Chat 先解析 canonical gatheringId，再读取 Circle。

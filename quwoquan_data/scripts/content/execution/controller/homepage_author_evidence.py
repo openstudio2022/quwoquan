@@ -176,24 +176,29 @@ def _finalize_existing_managed_author_outputs(ctx: ExecutionContext, state: Exec
                 article_markdown=visible_text,
                 cited_source_paths=[str(item) for item in cited_paths],
             )
+            finalized_fields = {
+                "ref": ref,
+                "generator": "image_evidence_pack",
+                "status": "completed",
+                "provider": outcome.provider.value,
+                "model": ctx.model,
+                "agentRunId": outcome.run_id or meta.get("agentRunId"),
+                "agentId": outcome.agent_id or meta.get("agentId"),
+                "citedSourcePaths": [str(item) for item in cited_paths],
+                "promptSha256": facts.get("promptSha256"),
+                "writingPackSha256": facts.get("writingPackSha256"),
+                "sourceBundleSha256": facts.get("sourceBundleSha256"),
+                "draftSha256": facts.get("draftSha256"),
+                "selfCheck": {"status": "passed", "issues": []},
+                "finalizedFromAgentRunHistory": True,
+            }
+            if all(meta.get(field) == value for field, value in finalized_fields.items()):
+                continue
             enriched_meta = dict(meta)
             enriched_meta.update(
                 {
-                    "ref": ref,
-                    "generator": "image_evidence_pack",
-                    "status": "completed",
-                    "provider": outcome.provider.value,
-                    "model": ctx.model,
-                    "agentRunId": outcome.run_id or meta.get("agentRunId"),
-                    "agentId": outcome.agent_id or meta.get("agentId"),
-                    "citedSourcePaths": [str(item) for item in cited_paths],
-                    "promptSha256": facts.get("promptSha256"),
-                    "writingPackSha256": facts.get("writingPackSha256"),
-                    "sourceBundleSha256": facts.get("sourceBundleSha256"),
-                    "draftSha256": facts.get("draftSha256"),
-                    "selfCheck": {"status": "passed", "issues": []},
+                    **finalized_fields,
                     "updatedAt": store.now_iso(),
-                    "finalizedFromAgentRunHistory": True,
                 }
             )
             write_json(draft_meta_path(ctx.execution_id, ref), enriched_meta)

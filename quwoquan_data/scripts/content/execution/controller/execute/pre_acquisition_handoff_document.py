@@ -13,7 +13,8 @@ from core import paths
 from core.io import read_json
 from core.schema import assert_valid
 from core.source_digest import (
-    SourceDigest,
+    ExecutionBundleIdentity,
+    SourceDefinitionSnapshot,
     content_source_revision,
 )
 from content.execution.campaign.scale import campaign_workload_targets
@@ -222,6 +223,7 @@ def build_pre_acquisition_handoff(
     campaign_sequence: int,
     campaign_retry_of: str | None,
     source_digest: Mapping[str, Any],
+    execution_bundle: Mapping[str, Any],
     entity_catalog_digest: str,
     workload_targets: Mapping[str, int],
     output_root: Path | None = None,
@@ -229,7 +231,8 @@ def build_pre_acquisition_handoff(
     """Build one canonical handoff without writing execution or campaign state."""
     resolved_output = (output_root or paths.OUTPUT_ROOT).expanduser().resolve()
     handoff_id_value = _safe_handoff_id(handoff_id)
-    source = SourceDigest.from_document(source_digest)
+    source = SourceDefinitionSnapshot.from_document(source_digest)
+    bundle = ExecutionBundleIdentity.from_document(execution_bundle)
     catalog_digest = str(entity_catalog_digest or "").strip()
     revision = content_source_revision(
         source_digest=source.digest,
@@ -285,6 +288,7 @@ def build_pre_acquisition_handoff(
         "campaignRetryOf": retry_of,
         "sourceRevision": revision,
         "sourceDigest": source.to_document(),
+        "executionBundle": bundle.to_document(),
         "entityCatalogDigest": catalog_digest,
         "workloadTargets": targets,
         "sourceMutationPolicy": {

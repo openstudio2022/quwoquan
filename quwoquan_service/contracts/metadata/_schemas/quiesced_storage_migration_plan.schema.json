@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/quiesced_storage_migration_plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "currentContractGraphDigest", "objects"],
+  "properties": {
+    "schema": { "const": "quiesced-storage-migration-plan" },
+    "currentContractGraphDigest": { "$ref": "#/$defs/digest" },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectId",
+          "mode",
+          "commandsPaused",
+          "backupVerified",
+          "validationVerified",
+          "atomicCutover",
+          "singleReaderWriter",
+          "dualRead",
+          "dualWrite",
+          "backupDigest",
+          "validationDigest"
+        ],
+        "properties": {
+          "objectId": { "type": "string", "minLength": 1 },
+          "mode": { "const": "quiesced_atomic" },
+          "commandsPaused": { "const": true },
+          "backupVerified": { "const": true },
+          "validationVerified": { "const": true },
+          "atomicCutover": { "const": true },
+          "singleReaderWriter": { "const": true },
+          "dualRead": { "const": false },
+          "dualWrite": { "const": false },
+          "backupDigest": { "$ref": "#/$defs/digest" },
+          "validationDigest": { "$ref": "#/$defs/digest" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -75,6 +75,19 @@ def resolve_domain_etype(
     mapped = TYPE_TO_DOMAIN_ETYPE.get(hint)
     if mapped is not None:
         return mapped
+    # Canonical entity object paths often carry the governed top-level type as
+    # a short directory segment (for example ``主题乐园``).  Resolve that
+    # segment from the Entity taxonomy instead of maintaining another partial
+    # allowlist here.  Semantic aliases such as ``山峰`` still use the explicit
+    # mapping above; unknown or cross-domain ambiguous names remain fail-closed.
+    from governance.coverage.entity_type_taxonomy import known_entity_type_paths
+
+    canonical_matches = sorted(
+        path for path in known_entity_type_paths() if path.rsplit("/", 1)[-1] == hint
+    )
+    if len(canonical_matches) == 1:
+        domain, entity_type = canonical_matches[0].split("/", 1)
+        return domain, entity_type
     if allow_default_on_unknown:
         return DEFAULT_DOMAIN_ETYPE
     raise ValueError(f"unknown entityType hint: {etype_hint!r}")

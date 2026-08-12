@@ -133,6 +133,12 @@ def test_video_schema_conditional_branch_frozen():
         "sourceAssetRefs",
         "rightsRefs",
     } <= required
+    digest_ref = {"$ref": "#/$defs/sha256Digest"}
+    assert contains["properties"]["sha256"] == digest_ref
+    assert contains["properties"]["posterSha256"] == digest_ref
+    assert schema["$defs"]["sha256Digest"]["pattern"] == (
+        "^sha256:[0-9a-f]{64}$"
+    )
     alternatives = [
         {tuple(item["required"]) for item in branch["anyOf"]}
         for branch in contains["allOf"]

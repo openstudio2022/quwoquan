@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api-edge.local/graphql-read/persisted-query-registry.schema.json",
+  "$defs": {
+    "assemblySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceField", "strategy"],
+      "properties": {
+        "sourceField": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"},
+        "strategy": {"enum": ["merge_object", "assign_key", "replace"]},
+        "targetKey": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"}
+      },
+      "oneOf": [
+        {
+          "properties": {"strategy": {"enum": ["merge_object", "replace"]}},
+          "not": {"required": ["targetKey"]}
+        },
+        {
+          "properties": {"strategy": {"const": "assign_key"}},
+          "required": ["targetKey"]
+        }
+      ]
+    },
+    "assemblyMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetField", "sources"],
+      "properties": {
+        "targetField": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"},
+        "presenceSourceField": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"},
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/assemblySource"}
+        }
+      }
+    },
+    "appClientBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundleId", "role", "selectedFields", "assemblyMappings"],
+      "properties": {
+        "bundleId": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*(\\.[a-zA-Z][A-Za-z0-9]*)+$"},
+        "role": {"enum": ["base", "extension"]},
+        "supportedContentTypes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+        },
+        "requiredForContentTypes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+        },
+        "selectedFields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"}
+        },
+        "assemblyMappings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/assemblyMapping"}
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {"role": {"const": "base"}},
+          "required": ["supportedContentTypes"],
+          "not": {"required": ["requiredForContentTypes"]}
+        },
+        {
+          "properties": {"role": {"const": "extension"}},
+          "required": ["requiredForContentTypes"],
+          "not": {"required": ["supportedContentTypes"]}
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidateDigest", "schemaDigest", "entries"],
+  "properties": {
+    "candidateDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "schemaDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sha256Hash",
+          "operationName",
+          "operationType",
+          "canonicalOperationId",
+          "objectIds",
+          "authorization",
+          "costModelVersion",
+          "costPlanDigest",
+          "cost",
+          "costPlan",
+          "paginationVariables",
+          "executorKey"
+        ],
+        "properties": {
+          "sha256Hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "operationName": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"},
+          "operationType": {"const": "query"},
+          "canonicalOperationId": {"type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$"},
+          "objectIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"}
+          },
+          "authorization": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["principal", "scopes", "ownershipPolicy"],
+            "properties": {
+              "principal": {"enum": ["public", "account", "persona", "device", "service", "operator", "admin"]},
+              "scopes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+              "ownershipPolicy": {"type": "string", "minLength": 1}
+            }
+          },
+          "costModelVersion": {"const": "graphql-cost-v1"},
+          "costPlanDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "cost": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "depth",
+              "topLevelFields",
+              "complexity",
+              "variablesMaxBytes",
+              "pageSizeMax",
+              "maxOwnerCalls",
+              "maxBatchKeys",
+              "maxResponseBytes",
+              "sloRef"
+            ],
+            "properties": {
+              "depth": {"type": "integer", "minimum": 1, "maximum": 5},
+              "topLevelFields": {"type": "integer", "minimum": 1, "maximum": 5},
+              "complexity": {"type": "integer", "minimum": 1, "maximum": 1000},
+              "variablesMaxBytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+              "pageSizeMax": {"type": "integer", "minimum": 1, "maximum": 100},
+              "maxOwnerCalls": {"type": "integer", "minimum": 1, "maximum": 64},
+              "maxBatchKeys": {"type": "integer", "minimum": 1, "maximum": 10000},
+              "maxResponseBytes": {"type": "integer", "minimum": 1, "maximum": 4194304},
+              "sloRef": {"type": "string", "pattern": "^[^\\s:]+:[^\\s]+$", "maxLength": 512},
+              "depthExceptionRef": {"type": "string", "pattern": "^[^\\s:]+:[^\\s]+$", "maxLength": 512},
+              "topLevelExceptionRef": {"type": "string", "pattern": "^[^\\s:]+:[^\\s]+$", "maxLength": 512},
+              "complexityExceptionRef": {"type": "string", "pattern": "^[^\\s:]+:[^\\s]+$", "maxLength": 512}
+            }
+          },
+          "costPlan": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["baseComplexity", "listMultipliers", "maxOwnerCalls", "maxBatchKeys", "maxResponseBytes"],
+            "properties": {
+              "baseComplexity": {"type": "integer", "minimum": 1, "maximum": 1000},
+              "listMultipliers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["variablePath", "coefficient", "defaultValue", "maximumValue"],
+                  "properties": {
+                    "variablePath": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*(\\.[_A-Za-z][_0-9A-Za-z]*)*$"},
+                    "coefficient": {"type": "integer", "minimum": 1},
+                    "defaultValue": {"type": "integer", "minimum": 1, "maximum": 100},
+                    "maximumValue": {"type": "integer", "minimum": 1, "maximum": 100}
+                  }
+                }
+              },
+              "maxOwnerCalls": {"type": "integer", "minimum": 1, "maximum": 64},
+              "maxBatchKeys": {"type": "integer", "minimum": 1, "maximum": 10000},
+              "maxResponseBytes": {"type": "integer", "minimum": 1, "maximum": 4194304}
+            }
+          },
+          "paginationVariables": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[_A-Za-z][_0-9A-Za-z]*(\\.[_A-Za-z][_0-9A-Za-z]*)*$"}
+          },
+          "executorKey": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*(\\.[a-zA-Z][A-Za-z0-9]*)+$"},
+          "appClientBundle": {"$ref": "#/$defs/appClientBundle"}
+        }
+      }
+    }
+  }
+}

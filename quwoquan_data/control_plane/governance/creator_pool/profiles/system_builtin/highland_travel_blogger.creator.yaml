@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_highland_travel_blogger_001
 personaId: builtin_highland_travel_blogger
 authorId: builtin_highland_travel_blogger
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 高原慢旅笔记
 userHandle: highland_slow_travel
@@ -57,4 +63,4 @@ avatarAsset:
   objectKey: media/objects/sha256/69/01/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.webp
   bytes: 281734
   mimeType: image/webp
-  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_highland_travel_blogger_001/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.json
+  evidenceRef: evidence/avatar_rights/qwq_creator_highland_travel_blogger_001/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.json

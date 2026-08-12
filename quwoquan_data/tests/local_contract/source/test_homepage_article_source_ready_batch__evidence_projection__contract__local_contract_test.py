@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 from pathlib import Path
 
 import pytest
-
 from content.source.research.homepage_article_source_ready_batch import (
     HomepageArticleSourceReadyBatchError,
     freeze_homepage_article_source_ready_batch,
 )
+from content.source.research.homepage_article_seed_selection import seed_id
+
 from quwoquan_data.tests.local_contract.source.test_scale_source_pool_homepage_article__catalog_projection__contract__local_contract_test import (
     IDENTITY,
     _article_candidate,
@@ -47,16 +47,99 @@ def _write_content(root: Path, ref: str, seed: str | bytes) -> dict[str, str]:
     return {"ref": ref, "contentSha256": digest, "fileSha256": digest}
 
 
-def _provenance(root: Path, *, prefix: str, coverage_ref: str, coverage_digest: str) -> dict[str, object]:
+def _seed_selection(
+    root: Path,
+    candidates: list[tuple[str, dict[str, object]]],
+) -> dict[str, str]:
+    seeds = []
+    for carrier, candidate in candidates:
+        source = candidate["primarySource"] if carrier == "homepage" else candidate
+        assert isinstance(source, dict)
+        entity_ref = str(candidate["entityRef"])
+        entity_type = "/".join(entity_ref.split("/")[2:4])
+        coverage_key = {
+            "coverageEntityIdentity": f"batch-test:{carrier}:{entity_ref}",
+            "coverageRecordDigest": "sha256:" + "e" * 64,
+            "entityRef": entity_ref,
+            "carrier": carrier,
+            "sourceUrl": source["sourceUrl"],
+        }
+        historical_baseline = {
+            "candidateId": f"historical-{candidate['candidateId']}",
+            "bodyContentSha256": source["bodyContentSha256"],
+        }
+        seeds.append({
+            "seedOrigin": "legacy_hint",
+            "seedId": seed_id(
+                seed_origin="legacy_hint",
+                coverage_key=coverage_key,
+            ),
+            "coverageKey": coverage_key,
+            "candidateName": entity_ref.rsplit("/", 1)[-1],
+            "province": "浙江省",
+            "city": "杭州市",
+            "district": "西湖区",
+            "entityType": entity_type,
+            "sourceKind": "wikipedia",
+            "extractor": "wikipedia_api",
+            "historicalBaseline": historical_baseline,
+        })
+    stable = {
+        "schema": "quwoquan_data.homepage_article_seed_selection",
+        "seedSetId": "batch-test-seeds",
+        "counts": {
+            "homepage": sum(carrier == "homepage" for carrier, _ in candidates),
+            "article": sum(carrier == "article" for carrier, _ in candidates),
+        },
+        "seeds": seeds,
+    }
+    document = {**stable, "selectionDigest": _digest(stable)}
+    ref = "seed-selection.json"
+    _write_json(root / ref, document)
+    return {
+        "ref": ref,
+        "digest": str(document["selectionDigest"]),
+        "fileSha256": _file_sha(root / ref),
+    }
+
+
+def _provenance(
+    root: Path,
+    *,
+    prefix: str,
+    coverage_ref: str,
+    coverage_digest: str,
+    seed_binding: dict[str, str],
+    candidate: dict[str, object],
+    carrier: str,
+) -> dict[str, object]:
     bindings: list[dict[str, str]] = []
     for name in ("discovery", "acquisition", "rights", "quality"):
         ref = f"provenance/{prefix}-{name}.json"
         _write_json(root / ref, {"schema": f"test.{name}", "candidate": prefix})
         bindings.append({"ref": ref, "fileSha256": _file_sha(root / ref)})
+    seed_document = json.loads((root / seed_binding["ref"]).read_text(encoding="utf-8"))
+    seed = next(
+        row
+        for row in seed_document["seeds"]
+        if row["coverageKey"]["carrier"] == carrier
+        and row["coverageKey"]["entityRef"] == candidate["entityRef"]
+    )
     return {
         "coverageProjectionRef": coverage_ref,
         "coverageProjectionDigest": coverage_digest,
         "coverageProjectionFileSha256": _file_sha(root / coverage_ref),
+        "seedSelectionRef": seed_binding["ref"],
+        "seedSelectionDigest": seed_binding["digest"],
+        "seedSelectionFileSha256": seed_binding["fileSha256"],
+        "seedOrigin": seed["seedOrigin"],
+        "seedId": seed["seedId"],
+        "coverageKey": seed["coverageKey"],
+        "historicalComparison": {
+            "candidateId": seed["historicalBaseline"]["candidateId"],
+            "bodyContentSha256": seed["historicalBaseline"]["bodyContentSha256"],
+            "bodyComparison": "same",
+        },
         "discoveryEvidenceRef": bindings[0]["ref"],
         "discoveryEvidenceFileSha256": bindings[0]["fileSha256"],
         "acquisitionEvidenceRefs": [bindings[1]],
@@ -72,6 +155,8 @@ def _capsule(
     candidate: dict[str, object],
     coverage_ref: str,
     coverage_digest: str,
+    seed_binding: dict[str, str],
+    index: int = 0,
 ) -> tuple[dict[str, object], str]:
     candidate_id = str(candidate["candidateId"])
     if carrier == "homepage":
@@ -79,7 +164,9 @@ def _capsule(
         hero = candidate["hero"]
         assert isinstance(primary, dict) and isinstance(hero, dict)
         body = _write_content(
-            root, str(primary["bodyEvidenceRef"]), "body:homepage-west-lake-0"
+            root,
+            str(primary["bodyEvidenceRef"]),
+            f"body:homepage-west-lake-{index}",
         )
         media = [{
             "assetId": hero["assetId"],
@@ -87,12 +174,14 @@ def _capsule(
             **_write_content(
                 root,
                 str(hero["assetRef"]),
-                _image_bytes("homepage-west-lake-0:hero-0"),
+                _image_bytes(f"homepage-west-lake-{index}:hero-{index}"),
             ),
         }]
     else:
         body = _write_content(
-            root, str(candidate["bodyEvidenceRef"]), "body:article-hangzhou-0"
+            root,
+            str(candidate["bodyEvidenceRef"]),
+            f"body:article-hangzhou-{index}",
         )
         media = []
         for asset in candidate["assets"]:
@@ -104,7 +193,9 @@ def _capsule(
                 **_write_content(
                     root,
                     str(asset["assetRef"]),
-                    _image_bytes(f"article-hangzhou-0:article-0-{role}"),
+                    _image_bytes(
+                        f"article-hangzhou-{index}:article-{index}-{role}"
+                    ),
                 ),
             })
     stable: dict[str, object] = {
@@ -118,29 +209,37 @@ def _capsule(
             prefix=candidate_id,
             coverage_ref=coverage_ref,
             coverage_digest=coverage_digest,
+            seed_binding=seed_binding,
+            candidate=candidate,
+            carrier=carrier,
         ),
     }
     capsule = {**stable, "capsuleDigest": _digest(stable)}
-    ref = f"capsules/{carrier}.json"
+    ref = f"capsules/{carrier}-{index}.json"
     _write_json(root / ref, capsule)
     return capsule, ref
 
 
-def _batch(root: Path) -> tuple[dict[str, object], Path]:
+def _batch(root: Path, *, index: int = 0) -> tuple[dict[str, object], Path]:
     coverage_digest = "sha256:" + "f" * 64
-    coverage_ref = "coverage/projection.json"
+    coverage_ref = f"coverage/projection-{index}.json"
     _write_json(
         root / coverage_ref,
         {"schema": "test.coverage_projection", "projectionDigest": coverage_digest},
     )
-    homepage = _homepage_candidate()
-    article = _article_candidate()
+    homepage = _homepage_candidate(index)
+    article = _article_candidate(index)
+    seed_binding = _seed_selection(
+        root, [("homepage", homepage), ("article", article)]
+    )
     homepage_capsule, homepage_ref = _capsule(
         root,
         carrier="homepage",
         candidate=homepage,
         coverage_ref=coverage_ref,
         coverage_digest=coverage_digest,
+        seed_binding=seed_binding,
+        index=index,
     )
     article_capsule, article_ref = _capsule(
         root,
@@ -148,10 +247,12 @@ def _batch(root: Path) -> tuple[dict[str, object], Path]:
         candidate=article,
         coverage_ref=coverage_ref,
         coverage_digest=coverage_digest,
+        seed_binding=seed_binding,
+        index=index,
     )
     stable: dict[str, object] = {
         "schema": "quwoquan_data.homepage_article_source_ready_batch",
-        "sourceSetId": "m100-homepage-article-source-set",
+        "sourceSetId": f"m100-homepage-article-source-set-{index}",
         "targetScale": "M100",
         **IDENTITY,
         "createdAt": "2026-08-08T00:00:00Z",
@@ -160,10 +261,12 @@ def _batch(root: Path) -> tuple[dict[str, object], Path]:
             "digest": coverage_digest,
             "fileSha256": _file_sha(root / coverage_ref),
         },
+        "seedSelection": seed_binding,
         "candidateCapsules": [
             {
                 "carrier": "homepage",
                 "candidateId": homepage["candidateId"],
+                "evidenceRootRef": ".",
                 "ref": homepage_ref,
                 "digest": homepage_capsule["capsuleDigest"],
                 "fileSha256": _file_sha(root / homepage_ref),
@@ -171,6 +274,7 @@ def _batch(root: Path) -> tuple[dict[str, object], Path]:
             {
                 "carrier": "article",
                 "candidateId": article["candidateId"],
+                "evidenceRootRef": ".",
                 "ref": article_ref,
                 "digest": article_capsule["capsuleDigest"],
                 "fileSha256": _file_sha(root / article_ref),
@@ -179,7 +283,7 @@ def _batch(root: Path) -> tuple[dict[str, object], Path]:
         "counts": {"homepage": 1, "article": 1},
     }
     batch = {**stable, "sourceSetDigest": _digest(stable)}
-    path = root / "batch.json"
+    path = root / "batches" / f"batch-{index}.json"
     _write_json(path, batch)
     return batch, path
 
@@ -221,7 +325,7 @@ def test_batch_rejects_physical_or_identity_drift(tmp_path: Path, tamper: str) -
             "tampered", encoding="utf-8"
         )
     elif tamper == "capsule":
-        capsule_path = evidence_root / "capsules/homepage.json"
+        capsule_path = evidence_root / "capsules/homepage-0.json"
         capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
         capsule["candidate"]["candidateId"] = "drift"
         _write_json(capsule_path, capsule)
@@ -230,7 +334,7 @@ def test_batch_rejects_physical_or_identity_drift(tmp_path: Path, tamper: str) -
         batch["sourceSetDigest"] = _digest(stable)
         _write_json(batch_path, batch)
     elif tamper == "identity":
-        capsule_path = evidence_root / "capsules/article.json"
+        capsule_path = evidence_root / "capsules/article-0.json"
         capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
         capsule["sourceDigest"] = "sha256:" + "9" * 64
         stable_capsule = {
@@ -244,7 +348,7 @@ def test_batch_rejects_physical_or_identity_drift(tmp_path: Path, tamper: str) -
         batch["sourceSetDigest"] = _digest(stable)
         _write_json(batch_path, batch)
     else:
-        target = evidence_root / "capsules/homepage.json"
+        target = evidence_root / "capsules/homepage-0.json"
         saved = target.read_bytes()
         target.unlink()
         outside = tmp_path / "outside.json"

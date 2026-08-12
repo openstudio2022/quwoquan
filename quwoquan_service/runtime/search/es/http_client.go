@@ -17,7 +17,17 @@ import (
 	rtsearch "quwoquan_service/runtime/search"
 )
 
-var ErrIndexSchemaIncompatible = errors.New("search index schema is incompatible")
+var (
+	ErrDependencyUnavailable   = errors.New("search dependency is unavailable")
+	ErrIndexSchemaIncompatible = errors.New("search index schema is incompatible")
+)
+
+// IsDependencyUnavailable reports whether an operation failed for a bounded,
+// recoverable transport or server-capacity reason. Authentication, request and
+// schema errors deliberately remain non-retryable.
+func IsDependencyUnavailable(err error) bool {
+	return errors.Is(err, ErrDependencyUnavailable)
+}
 
 // Config is the ES/OpenSearch connection + index configuration. It is supplied by
 // the service from its package effective config (schema defaults plus one environment override)
@@ -217,6 +227,14 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 				truncateBytes(mappingData, 300),
 			)
 		}
+		if retryableDependencyStatus(mappingStatus) {
+			return fmt.Errorf(
+				"%w: es update mapping status %d: %s",
+				ErrDependencyUnavailable,
+				mappingStatus,
+				truncateBytes(mappingData, 300),
+			)
+		}
 		return fmt.Errorf(
 			"es: update mapping status %d: %s",
 			mappingStatus,
@@ -224,6 +242,13 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 		)
 	}
 	if status != http.StatusNotFound {
+		if retryableDependencyStatus(status) {
+			return fmt.Errorf(
+				"%w: es head index status %d",
+				ErrDependencyUnavailable,
+				status,
+			)
+		}
 		return fmt.Errorf("es: head index status %d", status)
 	}
 	createStatus, createData, createErr := c.send(ctx, http.MethodPut, "/"+c.index, BuildCreateIndexBody(c.cfg.Schema), "application/json")
@@ -234,6 +259,14 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 		// Tolerate a concurrent creator winning the race.
 		if createStatus == http.StatusBadRequest && bytes.Contains(createData, []byte("resource_already_exists_exception")) {
 			return nil
+		}
+		if retryableDependencyStatus(createStatus) {
+			return fmt.Errorf(
+				"%w: es create index status %d: %s",
+				ErrDependencyUnavailable,
+				createStatus,
+				truncateBytes(createData, 300),
+			)
 		}
 		return fmt.Errorf("es: create index status %d: %s", createStatus, truncateBytes(createData, 300))
 	}
@@ -303,7 +336,18 @@ func (c *Client) send(ctx context.Context, method, path string, body any, conten
 	if lastErr == nil {
 		lastErr = fmt.Errorf("no endpoints")
 	}
-	return 0, nil, fmt.Errorf("es: all endpoints failed: %w", lastErr)
+	if ctx.Err() != nil {
+		return 0, nil, ctx.Err()
+	}
+	return 0, nil, fmt.Errorf(
+		"%w: es all endpoints failed: %v",
+		ErrDependencyUnavailable,
+		lastErr,
+	)
+}
+
+func retryableDependencyStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
 }
 
 func (c *Client) applyAuth(req *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -51,8 +52,9 @@ func (c *Checker) Register(name string, fn CheckFunc) {
 }
 
 type Result struct {
-	Status string            `json:"status"`
-	Checks map[string]string `json:"checks,omitempty"`
+	Status       string            `json:"status"`
+	FailedChecks []string          `json:"failedChecks,omitempty"`
+	Checks       map[string]string `json:"checks,omitempty"`
 }
 
 func (c *Checker) Check(ctx context.Context) Result {
@@ -64,6 +66,7 @@ func (c *Checker) Check(ctx context.Context) Result {
 	c.mu.RUnlock()
 
 	results := make(map[string]string, len(checks))
+	failedChecks := make([]string, 0)
 	allOK := true
 
 	type checkResult struct {
@@ -92,6 +95,7 @@ func (c *Checker) Check(ctx context.Context) Result {
 		healthCheckDuration.WithLabelValues(r.name).Observe(r.duration.Seconds())
 		if r.err != nil {
 			results[r.name] = r.err.Error()
+			failedChecks = append(failedChecks, r.name)
 			healthCheckStatus.WithLabelValues(r.name).Set(0)
 			allOK = false
 		} else {
@@ -107,7 +111,8 @@ func (c *Checker) Check(ctx context.Context) Result {
 	if !allOK {
 		status = "degraded"
 	}
-	return Result{Status: status, Checks: results}
+	sort.Strings(failedChecks)
+	return Result{Status: status, FailedChecks: failedChecks, Checks: results}
 }
 
 func (c *Checker) Handler() http.HandlerFunc {

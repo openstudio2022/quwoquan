@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_supported_api_metadata_discovery_receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "discoveryId", "receiptDigest", "status", "sourceRevision",
+    "sourceDigest", "entityCatalogDigest", "discoveryPlanId", "discoveryPlanDigest",
+    "handoffId", "handoffRevision", "handoffDigest", "entityCatalogRef", "requestedProviders",
+    "observedAt", "targetCandidateCount", "queryCount", "completedQueryCount",
+    "candidateCount", "excludedCount", "shortfallCount", "items", "exclusions", "failures",
+    "catalogRef", "catalogDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_supported_api_metadata_discovery_receipt"},
+    "discoveryId": {"type": "string", "pattern": "^professional-image-supported-api-metadata-discovery-[0-9a-f]{16}$"},
+    "receiptDigest": {"$ref": "#/$defs/sha256"},
+    "status": {"enum": ["partial", "completed"]},
+    "sourceRevision": {"$ref": "#/$defs/sha256"},
+    "sourceDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "discoveryPlanId": {"type": "string", "pattern": "^professional-image-discovery-[0-9a-f]{16}$"},
+    "discoveryPlanDigest": {"$ref": "#/$defs/sha256"},
+    "handoffId": {"type": "string", "minLength": 1},
+    "handoffRevision": {"type": "integer", "minimum": 1},
+    "handoffDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogRef": {"type": "string", "minLength": 1},
+    "requestedProviders": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"enum": ["wikimedia_commons", "openverse"]}
+    },
+    "observedAt": {"type": "string", "format": "date-time"},
+    "targetCandidateCount": {"type": "integer", "minimum": 1},
+    "queryCount": {"type": "integer", "minimum": 1},
+    "completedQueryCount": {"type": "integer", "minimum": 0},
+    "candidateCount": {"type": "integer", "minimum": 0},
+    "excludedCount": {"type": "integer", "minimum": 0},
+    "shortfallCount": {"type": "integer", "minimum": 0},
+    "items": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/item"}
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/exclusion"}
+    },
+    "failures": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/failure"}
+    },
+    "catalogRef": {"type": "string"},
+    "catalogDigest": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"const": ""}]}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queryId", "discoveryCandidateId", "entityId", "status", "evidenceRef", "evidenceSha256", "transportEvidenceRef", "transportEvidenceSha256", "candidateCount", "excludedCount"],
+      "properties": {
+        "queryId": {"type": "string", "pattern": "^(commons|openverse)-query-[0-9a-f]{16}$"},
+        "discoveryCandidateId": {"type": "string", "pattern": "^(wikimedia_commons|openverse):[0-9a-f]{16}$"},
+        "entityId": {"type": "string", "minLength": 1},
+        "status": {"enum": ["completed", "failed"]},
+        "evidenceRef": {"type": "string"},
+        "evidenceSha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"const": ""}]},
+        "transportEvidenceRef": {"type": "string"},
+        "transportEvidenceSha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"const": ""}]},
+        "candidateCount": {"type": "integer", "minimum": 0},
+        "excludedCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queryId", "failureCode", "retryable", "detail"],
+      "properties": {
+        "queryId": {"type": "string", "pattern": "^(commons|openverse)-query-[0-9a-f]{16}$"},
+        "failureCode": {"enum": ["DATA.SOURCE.SUPPORTED_API_RATE_LIMITED", "DATA.SOURCE.SUPPORTED_API_METADATA_INVALID", "DATA.SOURCE.SUPPORTED_API_UNAVAILABLE"]},
+        "retryable": {"type": "boolean"},
+        "detail": {"type": "string", "minLength": 1}
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queryId", "fileTitle", "failureCode", "detail"],
+      "properties": {
+        "queryId": {"type": "string", "pattern": "^(commons|openverse)-query-[0-9a-f]{16}$"},
+        "fileTitle": {"type": "string", "minLength": 1},
+        "failureCode": {"enum": ["DATA.SOURCE.WATERMARK_BLOCKED", "DATA.SOURCE.SUPPORTED_API_METADATA_INVALID", "DATA.SOURCE.DUPLICATE"]},
+        "detail": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

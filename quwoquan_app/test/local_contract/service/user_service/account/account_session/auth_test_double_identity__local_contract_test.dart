@@ -113,7 +113,13 @@ void main() {
       expect(result.activePersona?.personaId, expectedPersonaId);
     }
 
-    final otp = await challenge.sendOtp(SendOtpCommand(phone: '18013813909'));
+    final otp = await challenge.sendOtp(
+      SendOtpCommand(
+        phone: '18013813909',
+        platform: OtpClientPlatform.acceptance,
+      ),
+      idempotencyKey: 'auth-test-double-otp-000000000001',
+    );
     expect(otp.maskedPhone, '180****3909');
 
     final binding = await credentialWriter.bindPhoneCredential(

@@ -228,7 +228,7 @@ class _RecoveryContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = _copyFor(snapshot.phase);
+    final content = _copyFor(snapshot);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -451,7 +451,8 @@ class _RecoveryCopy {
   final String subtitle;
 }
 
-_RecoveryCopy _copyFor(RecoveryPhase phase) {
+_RecoveryCopy _copyFor(RecoverySnapshot snapshot) {
+  final phase = snapshot.phase;
   switch (phase) {
     case RecoveryPhase.startupChecking:
       return const _RecoveryCopy(
@@ -459,10 +460,15 @@ _RecoveryCopy _copyFor(RecoveryPhase phase) {
         FoundationText.startupRecoveryChecking,
       );
     case RecoveryPhase.startupUpdateRequired:
-      return const _RecoveryCopy(
-        FoundationText.startupRecoveryUpdateTitle,
-        FoundationText.startupRecoveryUpdateMessage,
-      );
+      return snapshot.requiresUpdate
+          ? const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateTitle,
+              FoundationText.startupRecoveryUpdateMessage,
+            )
+          : const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateAvailableTitle,
+              FoundationText.startupRecoveryUpdateAvailableMessage,
+            );
     case RecoveryPhase.startupLatest:
       return const _RecoveryCopy(
         FoundationText.startupRecoveryLatestTitle,
@@ -489,10 +495,15 @@ _RecoveryCopy _copyFor(RecoveryPhase phase) {
         FoundationText.startupRecoveryChecking,
       );
     case RecoveryPhase.runtimeUpdateRequired:
-      return const _RecoveryCopy(
-        FoundationText.startupRecoveryUpdateTitle,
-        FoundationText.runtimeRecoveryUpdateMessage,
-      );
+      return snapshot.requiresUpdate
+          ? const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateTitle,
+              FoundationText.runtimeRecoveryUpdateMessage,
+            )
+          : const _RecoveryCopy(
+              FoundationText.startupRecoveryUpdateAvailableTitle,
+              FoundationText.runtimeRecoveryUpdateAvailableMessage,
+            );
     case RecoveryPhase.runtimeLatest:
       return const _RecoveryCopy(
         FoundationText.startupRecoveryLatestTitle,

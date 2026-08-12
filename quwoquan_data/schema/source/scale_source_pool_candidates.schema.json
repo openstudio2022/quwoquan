@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/source/scale_source_pool_candidates.schema.json",
-  "title": "Digest-bound four-carrier scale source-pool candidates",
+  "title": "Digest-bound carrier-selective scale source-pool candidates",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,6 +10,7 @@
     "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
+    "activeCarriers",
     "projectionBindings",
     "candidateCounts",
     "candidates",
@@ -21,15 +22,23 @@
     "sourceRevision": { "$ref": "#/$defs/sha256" },
     "sourceDigest": { "$ref": "#/$defs/sha256" },
     "entityCatalogDigest": { "$ref": "#/$defs/sha256" },
+    "activeCarriers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": { "enum": ["homepage", "article", "image", "video"] }
+    },
     "projectionBindings": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 1,
       "maxItems": 2,
-      "prefixItems": [
-        { "$ref": "#/$defs/homepageArticleBinding" },
-        { "$ref": "#/$defs/imageVideoBinding" }
-      ],
-      "items": false
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/homepageArticleBinding" },
+          { "$ref": "#/$defs/imageVideoBinding" }
+        ]
+      }
     },
     "candidateCounts": {
       "type": "array",
@@ -45,7 +54,7 @@
     },
     "candidates": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 1,
       "items": { "type": "object" }
     },
     "candidatesDigest": { "$ref": "#/$defs/sha256" }
@@ -98,7 +107,7 @@
       "required": ["carrier", "candidateCount"],
       "properties": {
         "carrier": { "enum": ["homepage", "article", "image", "video"] },
-        "candidateCount": { "type": "integer", "minimum": 1 }
+        "candidateCount": { "type": "integer", "minimum": 0 }
       }
     },
     "homepageCount": {

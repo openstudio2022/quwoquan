@@ -29,14 +29,20 @@
       "enum": [
         "source_drift",
         "controller_interrupted_before_claim",
-        "claimed_execution_source_drift"
+        "claimed_execution_source_drift",
+        "post_publish_partial_terminal",
+        "mixed_finalized_partial_terminal",
+        "terminal_unpublished_source_drift"
       ]
     },
     "errorCode": {
       "enum": [
         "DATA.CAMPAIGN.FAILED_EXECUTION_SOURCE_DRIFT",
         "DATA.CAMPAIGN.CONTROLLER_INTERRUPTED_BEFORE_CLAIM",
-        "DATA.CAMPAIGN.CLAIMED_EXECUTION_SOURCE_DRIFT"
+        "DATA.CAMPAIGN.CLAIMED_EXECUTION_SOURCE_DRIFT",
+        "DATA.CAMPAIGN.POST_PUBLISH_PARTIAL_TERMINAL",
+        "DATA.CAMPAIGN.MIXED_FINALIZED_PARTIAL_TERMINAL",
+        "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_SOURCE_DRIFT"
       ]
     },
     "originalSourceIdentity": {
@@ -73,7 +79,10 @@
     "executionEvidence": {
       "oneOf": [
         { "$ref": "#/$defs/executionAbsence" },
-        { "$ref": "#/$defs/claimedExecutionSupersessions" }
+        { "$ref": "#/$defs/claimedExecutionSupersessions" },
+        { "$ref": "#/$defs/postPublishPartialTerminal" },
+        { "$ref": "#/$defs/mixedFinalizedPartialTerminal" },
+        { "$ref": "#/$defs/terminalUnpublishedPartial" }
       ]
     },
     "blockerEvidence": { "$ref": "#/$defs/fileEvidence" },
@@ -142,6 +151,69 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "post_publish_partial_terminal" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.POST_PUBLISH_PARTIAL_TERMINAL"
+          },
+          "campaignEvidence": {
+            "$ref": "#/$defs/sourceDriftCampaignEvidence"
+          },
+          "executionEvidence": {
+            "$ref": "#/$defs/postPublishPartialTerminal"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "mixed_finalized_partial_terminal" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.MIXED_FINALIZED_PARTIAL_TERMINAL"
+          },
+          "campaignEvidence": {
+            "$ref": "#/$defs/sourceDriftCampaignEvidence"
+          },
+          "executionEvidence": {
+            "$ref": "#/$defs/mixedFinalizedPartialTerminal"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "terminal_unpublished_source_drift" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "properties": {
+          "errorCode": {
+            "const": "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_SOURCE_DRIFT"
+          },
+          "campaignEvidence": {
+            "$ref": "#/$defs/sourceDriftCampaignEvidence"
+          },
+          "executionEvidence": {
+            "$ref": "#/$defs/terminalUnpublishedPartial"
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -195,6 +267,410 @@
         "previousStatus": { "type": "string", "minLength": 1 }
       }
     },
+    "postPublishPartialTerminal": {
+      "type": "object",
+      "required": [
+        "lanes",
+        "partialPublish",
+        "allLanesFinalizedCount",
+        "immutableReleaseEvidencePresent",
+        "reviewedClosureAdoptionPresent",
+        "evidenceDisposition",
+        "excludedFromFinalized",
+        "eligibleForRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/terminalExecution" }
+        },
+        "partialPublish": { "$ref": "#/$defs/preservedArticlePublish" },
+        "allLanesFinalizedCount": { "const": 0 },
+        "immutableReleaseEvidencePresent": { "const": false },
+        "reviewedClosureAdoptionPresent": { "const": false },
+        "evidenceDisposition": { "const": "preserved_unadopted" },
+        "excludedFromFinalized": { "const": true },
+        "eligibleForRelease": { "const": false }
+      }
+    },
+    "mixedFinalizedPartialTerminal": {
+      "type": "object",
+      "required": [
+        "lanes",
+        "observedFinalizedCount",
+        "immutableReleaseEvidencePresent",
+        "reviewedClosureAdoptionPresent",
+        "evidenceDisposition",
+        "excludedFromRetryRelease",
+        "eligibleForRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/mixedFinalizedExecution" },
+              { "$ref": "#/$defs/mixedFailedExecution" }
+            ]
+          },
+          "allOf": [
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "homepage" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "article" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "image" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "video" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        },
+        "observedFinalizedCount": { "const": 3 },
+        "immutableReleaseEvidencePresent": { "const": false },
+        "reviewedClosureAdoptionPresent": { "const": false },
+        "evidenceDisposition": { "const": "preserved_unadopted" },
+        "excludedFromRetryRelease": { "const": true },
+        "eligibleForRelease": { "const": false }
+      }
+    },
+    "mixedFinalizedExecution": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionRootRef",
+        "executionRootExists",
+        "terminalStatus",
+        "claim",
+        "reportStatus",
+        "observedFinalizedCount",
+        "publishReceipt",
+        "publishRef",
+        "canonicalManifests",
+        "publishSelectionFinalizedCount",
+        "evidenceDisposition",
+        "excludedFromRetryRelease",
+        "eligibleForRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionRootRef": { "type": "string", "minLength": 1 },
+        "executionRootExists": { "const": true },
+        "terminalStatus": { "const": "finalized" },
+        "claim": { "$ref": "#/$defs/fileEvidence" },
+        "reportStatus": { "const": "finalized" },
+        "observedFinalizedCount": { "const": 1 },
+        "publishReceipt": { "$ref": "#/$defs/fileEvidence" },
+        "publishRef": { "$ref": "#/$defs/fileEvidence" },
+        "canonicalManifests": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/canonicalManifestEvidence" }
+        },
+        "publishSelectionFinalizedCount": { "const": 1 },
+        "evidenceDisposition": { "const": "preserved_unadopted" },
+        "excludedFromRetryRelease": { "const": true },
+        "eligibleForRelease": { "const": false }
+      }
+    },
+    "terminalUnpublishedPartial": {
+      "type": "object",
+      "required": [
+        "lanes",
+        "observedFinalizedCount",
+        "reviewQualifiedLaneCount",
+        "campaignPublishReceiptsPresent",
+        "campaignPublishRefsPresent",
+        "preparedObjectTransactionCount",
+        "objectTransactionAppliedEvidencePresent",
+        "immutableReleaseEvidencePresent",
+        "reviewedClosureAdoptionPresent",
+        "evidenceDisposition",
+        "excludedFromRetryRelease",
+        "eligibleForRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lanes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/terminalUnpublishedExecution" },
+          "allOf": [
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "homepage" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "article" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "image" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": { "carrier": { "const": "video" } },
+                "required": ["carrier"]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ]
+        },
+        "observedFinalizedCount": { "const": 0 },
+        "reviewQualifiedLaneCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "campaignPublishReceiptsPresent": { "const": false },
+        "campaignPublishRefsPresent": { "const": false },
+        "preparedObjectTransactionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "objectTransactionAppliedEvidencePresent": { "const": false },
+        "immutableReleaseEvidencePresent": { "const": false },
+        "reviewedClosureAdoptionPresent": { "const": false },
+        "evidenceDisposition": { "const": "failed_unpublished" },
+        "excludedFromRetryRelease": { "const": true },
+        "eligibleForRelease": { "const": false }
+      }
+    },
+    "terminalUnpublishedExecution": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionRootRef",
+        "executionRootExists",
+        "terminalStatus",
+        "claim",
+        "reportStatus",
+        "reviewReceiptPresent",
+        "reviewReceipt",
+        "reviewStatus",
+        "reviewQualifiedCount",
+        "observedFinalizedCount",
+        "publishReceiptPresent",
+        "publishRefPresent",
+        "preparedObjectTransactions",
+        "objectTransactionAppliedEvidencePresent",
+        "evidenceDisposition",
+        "excludedFromRetryRelease",
+        "eligibleForRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionRootRef": { "type": "string", "minLength": 1 },
+        "executionRootExists": { "const": true },
+        "terminalStatus": { "const": "failed" },
+        "claim": { "$ref": "#/$defs/fileEvidence" },
+        "reportStatus": { "const": "blocked" },
+        "reviewReceiptPresent": { "type": "boolean" },
+        "reviewReceipt": {
+          "oneOf": [
+            { "$ref": "#/$defs/fileEvidence" },
+            { "type": "null" }
+          ]
+        },
+        "reviewStatus": {
+          "type": ["string", "null"],
+          "enum": ["qualified", "partial", "blocked", null]
+        },
+        "reviewQualifiedCount": { "type": "integer", "minimum": 0 },
+        "observedFinalizedCount": { "const": 0 },
+        "publishReceiptPresent": { "const": false },
+        "publishRefPresent": { "const": false },
+        "preparedObjectTransactions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/preparedObjectTransactionEvidence" }
+        },
+        "objectTransactionAppliedEvidencePresent": { "const": false },
+        "evidenceDisposition": { "const": "failed_unpublished" },
+        "excludedFromRetryRelease": { "const": true },
+        "eligibleForRelease": { "const": false }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "reviewReceiptPresent": { "const": true } },
+            "required": ["reviewReceiptPresent"]
+          },
+          "then": {
+            "properties": {
+              "reviewReceipt": { "$ref": "#/$defs/fileEvidence" },
+              "reviewStatus": { "enum": ["qualified", "partial", "blocked"] }
+            }
+          },
+          "else": {
+            "properties": {
+              "reviewReceipt": { "type": "null" },
+              "reviewStatus": { "type": "null" },
+              "reviewQualifiedCount": { "const": 0 }
+            }
+          }
+        }
+      ]
+    },
+    "mixedFailedExecution": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionRootRef",
+        "executionRootExists",
+        "terminalStatus",
+        "claim",
+        "reportStatus",
+        "observedFinalizedCount",
+        "publishReceiptPresent",
+        "publishRefPresent",
+        "objectTransactionEvidencePresent",
+        "evidenceDisposition",
+        "excludedFromRetryRelease",
+        "eligibleForRelease"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionRootRef": { "type": "string", "minLength": 1 },
+        "executionRootExists": { "const": true },
+        "terminalStatus": { "const": "failed" },
+        "claim": { "$ref": "#/$defs/fileEvidence" },
+        "reportStatus": { "const": "blocked" },
+        "observedFinalizedCount": { "const": 0 },
+        "publishReceiptPresent": { "const": false },
+        "publishRefPresent": { "const": false },
+        "objectTransactionEvidencePresent": { "const": false },
+        "evidenceDisposition": { "const": "failed_unpublished" },
+        "excludedFromRetryRelease": { "const": true },
+        "eligibleForRelease": { "const": false }
+      }
+    },
+    "canonicalManifestEvidence": {
+      "type": "object",
+      "required": [
+        "objectKind",
+        "objectRef",
+        "canonicalManifestRef",
+        "canonicalManifestSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "objectKind": { "enum": ["entities", "posts"] },
+        "objectRef": { "type": "string", "minLength": 1 },
+        "canonicalManifestRef": { "type": "string", "minLength": 1 },
+        "canonicalManifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "terminalExecution": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionRootRef",
+        "executionRootExists"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "enum": ["homepage", "article", "image", "video"] },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionRootRef": { "type": "string", "minLength": 1 },
+        "executionRootExists": { "const": true }
+      }
+    },
+    "preservedArticlePublish": {
+      "type": "object",
+      "required": [
+        "carrier",
+        "executionId",
+        "executionState",
+        "publishReport",
+        "publishRef",
+        "transactionId",
+        "objectRef",
+        "objectTransactionPackage",
+        "auditReport",
+        "applyReport",
+        "applyCompletion",
+        "pointer",
+        "canonicalManifestRef",
+        "canonicalManifestSha256",
+        "afterMerkle",
+        "researchAcceptedCount",
+        "finalizedObjectCount"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "carrier": { "const": "article" },
+        "executionId": { "type": "string", "minLength": 1 },
+        "executionState": { "$ref": "#/$defs/fileEvidence" },
+        "publishReport": { "$ref": "#/$defs/fileEvidence" },
+        "publishRef": { "$ref": "#/$defs/fileEvidence" },
+        "transactionId": { "type": "string", "minLength": 1 },
+        "objectRef": { "type": "string", "minLength": 1 },
+        "objectTransactionPackage": { "$ref": "#/$defs/fileEvidence" },
+        "auditReport": { "$ref": "#/$defs/fileEvidence" },
+        "applyReport": { "$ref": "#/$defs/fileEvidence" },
+        "applyCompletion": { "$ref": "#/$defs/fileEvidence" },
+        "pointer": { "$ref": "#/$defs/fileEvidence" },
+        "canonicalManifestRef": { "type": "string", "minLength": 1 },
+        "canonicalManifestSha256": { "$ref": "#/$defs/sha256" },
+        "afterMerkle": { "$ref": "#/$defs/sha256" },
+        "researchAcceptedCount": { "const": 1 },
+        "finalizedObjectCount": { "const": 0 }
+      }
+    },
     "sourceDriftCampaignEvidence": {
       "type": "object",
       "required": ["plan", "report", "runtimeSnapshot", "claims"],
@@ -237,6 +713,22 @@
     "sha256": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "preparedObjectTransactionEvidence": {
+      "type": "object",
+      "required": [
+        "transactionId",
+        "package",
+        "objectManifest",
+        "state"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "transactionId": { "type": "string", "minLength": 1 },
+        "package": { "$ref": "#/$defs/fileEvidence" },
+        "objectManifest": { "$ref": "#/$defs/fileEvidence" },
+        "state": { "const": "prepared_unapplied" }
+      }
     },
     "fileEvidence": {
       "type": "object",

@@ -62,6 +62,13 @@ func NewRankingDecorator(termHeat TermHeatProvider, experiments *Experiments, bo
 	return &RankingDecorator{termHeat: termHeat, experiments: experiments, boost: boost, logger: logger}
 }
 
+func (d *RankingDecorator) PolicyDigest() string {
+	if d == nil || d.experiments == nil {
+		return ""
+	}
+	return d.experiments.PolicyDigest()
+}
+
 // Decorate assigns the bucket, fetches related terms (best-effort) and, for the
 // term_heat arm, re-ranks hits by blending the base score with the search-term
 // heat boost. RankPosition is renumbered after any re-rank so the published

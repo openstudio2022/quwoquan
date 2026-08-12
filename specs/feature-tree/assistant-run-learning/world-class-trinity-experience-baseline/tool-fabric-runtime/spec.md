@@ -56,6 +56,13 @@
 - AgentLoop 必须停在等待确认状态；`ApproveTool` 只提交批准或拒绝，批准设备动作只签发短期 `DeviceActionPermit`，不代表原生执行成功。
 - App 仅在 permit 的 target、expiry、capability、device 与 input digest 全部匹配时调用 Device bridge，并通过独立回执 command 恢复同一 Run；拒绝、权限拒绝、平台不可用、原生失败或重放均不得伪造成功或重复外部副作用。
 
+<a id="req-005"></a>
+### REQ-005 多检索词 fan-out 必须显式、逐项计费且保持结果桶顺序
+
+- Tool metadata 声明的并行输入只能在冻结的来源广度、最大查询数和剩余工具调用预算内执行；每个 subquery 在进入 owner/Provider 前分别占用一次工具调用预算。
+- 多 query 结果必须按计划顺序保留独立结果桶，不得把不同 query 的 score 混排，也不得隐藏额外 fan-out。
+- 任一预算、输入或执行身份不满足时必须在调用 owner/Provider 前拒绝整个未开始的超额部分，不得把截断或自动 fallback 伪装成完整检索。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/assistant-service/contracts/_shared/assistant_tool_metadata/schema.yaml`
@@ -91,6 +98,13 @@
 - THEN Run 停在等待确认状态，确认前不会合成成功结果。
 - AND 用户批准时服务端先签发短期 DeviceActionPermit；App 验证绑定后调用原生桥，再以独立设备回执恢复同一 Run。
 - AND 拒绝、权限拒绝、平台不可用或原生失败均不得伪造成功，重复请求最多产生一次系统日历副作用。
+
+<a id="gwt-004"></a>
+### GWT-004 多 query 检索逐项占用预算
+
+- GIVEN 一个研究 Tool 收到冻结计划中的多个检索维度且剩余预算有限
+- WHEN Tool Fabric 在进入 owner 或 Provider 前核算执行成本
+- THEN 实际 subquery 数与工具调用预算消耗、独立结果桶和可审计执行数一致，任何超额分支均在外部调用前被拒绝
 
 ## 6. 依赖
 

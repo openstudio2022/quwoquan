@@ -1,4 +1,34 @@
 overrides:
+  sys.api-edge.graphql_read.enabled: true
+  sys.api-edge.graphql_read.registry_file: graphql-read-registry.json
+  sys.api-edge.graphql_read.candidate_digest: package-required
+  sys.api-edge.graphql_read.schema_file: graphql-read-schema.graphqls
+  sys.api-edge.graphql_read.schema_digest: package-required
+  sys.api-edge.graphql_read.trusted_public_keys_json: package-required
+  sys.api-edge.graphql_read.owner_timeout_ms: 1500
+  sys.api-edge.minimum_build.source_digest: sha256:58e1a1719f13584026275e3d901a0050b05431aedc305911df50dc6c227ae381
+  sys.api-edge.minimum_build.android: 1
+  sys.api-edge.minimum_build.ios: 1
+  sys.api-edge.minimum_build.web: 1
+  sys.api-edge.minimum_build.exempt_paths: [/ops/app-recovery/version]
+  sys.api-edge.rollout.enabled: true
+  sys.api-edge.rollout.policy_file: rollout/routing_policy.yaml
+  sys.api-edge.rollout.policy_sha256: sha256:aa2e052da0033d081cdcb1f1a7d6b8942fdedf2d3f46f5cb6dc425baed2974b5
+  sys.api-edge.candidate_upstreams.assistant: http://host.containers.internal:29230
+  sys.api-edge.candidate_upstreams.chat: http://host.containers.internal:29200
+  sys.api-edge.candidate_upstreams.circle: http://host.containers.internal:29300
+  sys.api-edge.candidate_upstreams.content: http://host.containers.internal:29220
+  sys.api-edge.candidate_upstreams.entity: http://host.containers.internal:29290
+  sys.api-edge.candidate_upstreams.integration: http://host.containers.internal:29310
+  sys.api-edge.candidate_upstreams.notification: http://host.containers.internal:29320
+  sys.api-edge.candidate_upstreams.ops: http://host.containers.internal:29250
+  sys.api-edge.candidate_upstreams.platform_ops: http://host.containers.internal:29260
+  sys.api-edge.candidate_upstreams.realtime: http://host.containers.internal:29340
+  sys.api-edge.candidate_upstreams.recommendation: http://host.containers.internal:29240
+  sys.api-edge.candidate_upstreams.rtc: http://host.containers.internal:29350
+  sys.api-edge.candidate_upstreams.search: http://host.containers.internal:29280
+  sys.api-edge.candidate_upstreams.tag: http://host.containers.internal:29270
+  sys.api-edge.candidate_upstreams.user: http://host.containers.internal:29210
   sys.api-edge.redis.admission.mode: cluster
   sys.api-edge.redis.admission.addrs: [redis-admission-0:6379, redis-admission-1:6379, redis-admission-2:6379]
   sys.api-edge.redis.admission.tls: true
@@ -15,5 +45,6 @@ overrides:
   sys.api-edge.rate_limit.operation.content_post_get_feed.window_seconds: 1
   sys.api-edge.rate_limit.operation.content_post_get_feed.state_failure: fail_closed
 secretRefs:
+  sys.api-edge.rollout.allocation_key: API_EDGE_ROLLOUT_ALLOCATION_KEY
   sys.api-edge.redis.admission.password: API_EDGE_REDIS_PASSWORD
 externalBindings: {}

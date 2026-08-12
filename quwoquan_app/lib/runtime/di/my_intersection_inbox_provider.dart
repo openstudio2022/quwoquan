@@ -89,6 +89,8 @@ class MyIntersectionPreviewNotifier
 }
 
 class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
+  int _requestEpoch = 0;
+
   @override
   MyIntersectionListState build() => const MyIntersectionListState();
 
@@ -99,6 +101,7 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
     String sourceRef = '',
     String timeBucket = '',
   }) async {
+    final requestEpoch = ++_requestEpoch;
     state = state.copyWith(
       dimension: dimension,
       filter: filter,
@@ -115,7 +118,7 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
         sourceRef: sourceRef.isEmpty ? null : sourceRef,
         timeBucket: timeBucket.isEmpty ? null : timeBucket,
       );
-      if (!ref.mounted) return;
+      if (!ref.mounted || requestEpoch != _requestEpoch) return;
       state = state.copyWith(items: items, isLoading: false);
       // 清红点走 IntersectionVisitState typed 写面；失败不阻断列表展示，
       // 水位单调收敛下次进入可重放（降级容忍），异常经结构化遥测上报。
@@ -130,7 +133,7 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
                       'MyIntersectionInbox.dimension',
                     ),
             );
-        if (!ref.mounted) return;
+        if (!ref.mounted || requestEpoch != _requestEpoch) return;
         ref.read(myIntersectionSummaryProvider.notifier).load();
       } catch (visitError, stackTrace) {
         unawaited(
@@ -144,7 +147,7 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
         );
       }
     } catch (e) {
-      if (!ref.mounted) return;
+      if (!ref.mounted || requestEpoch != _requestEpoch) return;
       state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }

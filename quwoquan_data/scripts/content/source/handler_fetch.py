@@ -1,37 +1,51 @@
 """Per-entity download fetch implementation."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from core.data_issue import DataIssueCode, DataIssueError, DataIssueLane, DataIssueStage, DataRecoveryAction, data_issue
-from core.paths import execution_source_unit_dir
 from core.article_commercial_policy import article_commercial_closure_enabled
+from core.data_issue import (
+    DataIssueCode,
+    DataIssueError,
+    DataIssueLane,
+    DataIssueStage,
+    DataRecoveryAction,
+    data_issue,
+)
+from core.paths import execution_source_unit_dir
+
 from content.execution import store
-from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
-from content.source.source_unit import find_source_unit_raw_snapshot, write_source_unit
-from content.source.source_inputs import manual_body_note, source_frontmatter
+from content.homepage.quality_policy import (
+    homepage_body_char_minimum,
+    homepage_fact_char_minimum,
+    homepage_fact_count_minimum,
+)
+from content.post.article.evidence_text import (
+    clean_source_markdown,
+    score_source_markdown,
+)
+from content.source import handler_fetch_contract
+from content.source.contracts import MediaProvenance
 from content.source.fetch_payload import fetch_source_payload
 from content.source.handler_fetch_images import prepare_entity_images
-from content.source.contracts import MediaProvenance
-
-from content.source.handler_plan import _write_download_progress
-from content.source.handler_images import _cached_source_quality_if_better, _find_source_unit_by_plan_key, _image_lane_source_unit_dirs, _move_rejected_source_unit
-from content.source.image_download import _download_source_unit_images
-from content.source.handler_fetch_media import EntityMediaClosureInput, close_entity_media
-from content.source.handler_fetch_setup import prepare_entity_fetch_plan
-from content.source.inline_images import build_inline_image_candidates
-from core.source_fidelity import assess_source_content_fidelity
-from content.source.handler_fetch_contract import (
-    canonicalize_source_url as _canonicalize_source_url,
-    homepage_base_draft_admission,
-    is_non_open_baike_source as _is_non_open_baike_source,
-    publishable_homepage_source_image_count as _publishable_homepage_source_image_count,
-    requires_factual_compression as _requires_factual_compression,
-    require_source_candidate_admission,
-    source_fetch_failure_issue as _source_fetch_failure_issue,
+from content.source.handler_fetch_media import (
+    EntityMediaClosureInput,
+    close_entity_media,
 )
-from content.homepage.quality_policy import homepage_body_char_minimum, homepage_fact_char_minimum, homepage_fact_count_minimum
+from content.source.handler_fetch_setup import prepare_entity_fetch_plan
+from content.source.handler_images import (
+    _cached_source_quality_if_better,
+    _find_source_unit_by_plan_key,
+    _image_lane_source_unit_dirs,
+    _move_rejected_source_unit,
+)
+from content.source.handler_plan import _write_download_progress
+from content.source.image_download import _download_source_unit_images
+from content.source.inline_images import build_inline_image_candidates
+from content.source.source_inputs import manual_body_note, source_frontmatter
+from content.source.source_unit import find_source_unit_raw_snapshot, write_source_unit
 
 
 def _fetch_download_entity(
@@ -156,7 +170,7 @@ def _fetch_download_entity(
 
     for ordinal, source in enumerate(sources, start=1):
         try:
-            require_source_candidate_admission(
+            handler_fetch_contract.require_source_candidate_admission(
                 source,
                 require_commercial_article_binding=(
                     commercial_article_closure
@@ -228,7 +242,7 @@ def _fetch_download_entity(
         except DataIssueError:
             raise
         except Exception as exc:  # boundary conversion to a stable typed issue
-            source_fetch_issue = _source_fetch_failure_issue(
+            source_fetch_issue = handler_fetch_contract.source_fetch_failure_issue(
                 source,
                 entity_id=entity_id,
                 error=exc,
@@ -238,34 +252,18 @@ def _fetch_download_entity(
         if note:
             source_md = source_md.rstrip() + f"\n\n{note}\n"
         clean_md = clean_source_markdown(source_md, raw_format=raw_format)
+        fidelity_issue = None
         if rendered_text:
             publishable_rendered_text = clean_source_markdown(
                 rendered_text,
                 raw_format=raw_format,
             )
-            fidelity = assess_source_content_fidelity(
-                publishable_rendered_text,
-                clean_md,
+            fidelity_issue = handler_fetch_contract.source_content_fidelity_issue(
+                source,
+                entity_id=entity_id,
+                rendered_text=publishable_rendered_text,
+                candidate_text=clean_md,
             )
-            if not fidelity.complete:
-                raise DataIssueError(
-                    (
-                        data_issue(
-                            DataIssueCode.SOURCE_CONTENT_INCOMPLETE,
-                            stage=DataIssueStage.DOWNLOAD_FETCH,
-                            ref=entity_id,
-                            lane=DataIssueLane.HOMEPAGE,
-                            recovery=DataRecoveryAction.REPLACE_SOURCE,
-                            message="MediaWiki rendered prose was not preserved in source.clean.md",
-                            attributes={
-                                "sourceId": source["source_id"],
-                                "authoritativeParagraphCount": fidelity.authoritative_paragraph_count,
-                                "matchedParagraphCount": fidelity.matched_paragraph_count,
-                                "missingPreview": fidelity.missing_paragraphs[0][:240],
-                            },
-                        ),
-                    )
-                )
         assessment = score_source_markdown(source["source_id"], source_md, entity_name=entity_id)
         quality_value = assessment.quality
         quality_score = assessment.score
@@ -279,8 +277,11 @@ def _fetch_download_entity(
                 f"errorType={dict(source_fetch_issue.attributes).get('errorType', '')}",
                 flush=True,
             )
-
-        canonical_url = _canonicalize_source_url(str(source.get("url") or ""))
+        if fidelity_issue is not None:
+            quality_value = "Reject"
+            quality_score = 0
+            quality_reasons.append(fidelity_issue.code.value)
+        canonical_url = handler_fetch_contract.canonicalize_source_url(str(source.get("url") or ""))
         if canonical_url and canonical_url in seen_canonical_urls:
             quality_value = "Reject"
             quality_score = 0
@@ -295,7 +296,7 @@ def _fetch_download_entity(
             and str(source.get("sourceRole") or "") != "support"
         ):
             resolved_title = str(fetch_runtime.get("resolvedTitle") or "").strip()
-            homepage_admission = homepage_base_draft_admission(
+            homepage_admission = handler_fetch_contract.homepage_base_draft_admission(
                 source,
                 source_text=fetched_text or clean_md,
                 entity_id=entity_id,
@@ -309,9 +310,8 @@ def _fetch_download_entity(
                 quality_value = "Reject"
                 quality_score = 0
                 quality_reasons.append(homepage_admission.issue_code.value)
-
         compression_note: dict = {}
-        if quality_value != "Reject" and _requires_factual_compression(source):
+        if quality_value != "Reject" and handler_fetch_contract.requires_factual_compression(source):
             from core.factual_compression import factual_compress_text
 
             compressed = factual_compress_text(clean_md or fetched_text, entity_name=entity_id)
@@ -519,7 +519,7 @@ def _fetch_download_entity(
             )
             continue
         if str(source.get("researchLane") or "") == "homepage":
-            kept_source_homepage_images += _publishable_homepage_source_image_count(
+            kept_source_homepage_images += handler_fetch_contract.publishable_homepage_source_image_count(
                 source_images
             )
         written_source_dirs.add(unit_dir)

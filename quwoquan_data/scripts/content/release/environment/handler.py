@@ -62,6 +62,9 @@ from content.release.environment.release_runtime import (
     assert_target_action_allowed as _assert_environment_action_allowed,
 )
 from content.release.environment.release_runtime import (
+    assert_environment_release_policy,
+)
+from content.release.environment.release_runtime import (
     load_release,
     release_has_posts,
     release_requires_full_sync,
@@ -162,6 +165,28 @@ def _write_applied_ref(*, run: Path, env: str, release_id: str) -> None:
     )
 
 
+def _restore_previous_release(
+    *,
+    environment: str,
+    failed_release_id: str,
+    previous_release_id: str,
+) -> None:
+    """Replay a verified previous release through the formal importers."""
+
+    rollback_release(
+        argparse.Namespace(
+            to_release=previous_release_id,
+            from_release_id=failed_release_id,
+            env=environment,
+            run_id=f"restore-{_now_compact()}",
+            import_to_db=True,
+            dry_run=False,
+            confirm_prod_apply=False,
+        ),
+        dependencies=_operation_dependencies(),
+    )
+
+
 def _assert_target_action_allowed(
     *,
     target: EnvironmentReleaseTarget,
@@ -187,7 +212,9 @@ def _operation_dependencies() -> ShipOperationDependencies:
         run_root=_run_root,
         sync_media=_sync_media,
         write_applied_ref=_write_applied_ref,
+        restore_previous_release=_restore_previous_release,
         assert_target_action_allowed=_assert_target_action_allowed,
+        assert_environment_release_policy=assert_environment_release_policy,
         resolve_environment_release_target=resolve_environment_release_target,
         require_environment_readiness=require_environment_readiness,
         run_tag_importer=_run_tag_importer,

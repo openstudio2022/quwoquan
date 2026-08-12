@@ -1,0 +1,47 @@
+description: persisted GraphQL 只读入口的 canonical 拒绝与 owner 故障语义。
+errors:
+- code: GATEWAY.USER.graphql_request_invalid
+  reason: graphql_request_invalid
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ExecutePersistedGraphQLQuery]}
+  - {surface: graphql, operations: [SearchPage]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: graphqlRequestInvalid
+  go_const: ErrGraphqlRequestInvalid
+  user_message: {zh: 查询请求无效，请刷新后重试, en: The query request is invalid}
+- code: GATEWAY.USER.persisted_query_unknown
+  reason: persisted_query_unknown
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ExecutePersistedGraphQLQuery]}
+  - {surface: graphql, operations: [SearchPage]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: persistedQueryUnknown
+  go_const: ErrPersistedQueryUnknown
+  user_message: {zh: 查询版本不可用，请更新或刷新应用, en: This query version is unavailable}
+- code: GATEWAY.USER.graphql_query_forbidden
+  reason: graphql_query_forbidden
+  http_status: 403
+  emitted_by:
+  - {surface: http, operations: [ExecutePersistedGraphQLQuery]}
+  - {surface: graphql, operations: [SearchPage]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: graphqlQueryForbidden
+  go_const: ErrGraphqlQueryForbidden
+  user_message: {zh: 当前身份无法执行此查询, en: This query is not allowed for the current identity}
+- code: GATEWAY.MIDDLEWARE.graphql_owner_unavailable
+  reason: graphql_owner_unavailable
+  http_status: 503
+  emitted_by:
+  - {surface: http, operations: [ExecutePersistedGraphQLQuery]}
+  - {surface: graphql, operations: [SearchPage]}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  disruption_level: snackbar
+  dart_const: graphqlOwnerUnavailable
+  go_const: ErrGraphqlOwnerUnavailable
+  user_message: {zh: 查询服务暂不可用，请稍后重试, en: The query service is temporarily unavailable}

@@ -13,6 +13,7 @@ from core.io import read_json
 from core.paths import STAGE_COMPOSE, execution_root
 from core.quality_gates import WRITING_INTENTS, writing_intent_issues
 from core.qunar_template import qunar_article_base_block_reason
+from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 from governance.coverage.distribution import asset_contract_missing_fields
 from governance.creators.assignment import (
     creator_assignment_issues,
@@ -21,7 +22,6 @@ from governance.creators.assignment import (
 
 from content.post.article.base_draft import base_draft_readiness, load_base_draft_text
 from content.post.content_plan import (
-    ARTICLE_BASE_SOURCE_CATEGORIES,
     ARTICLE_BASE_SOURCE_ROLES,
     ARTICLE_MIN_BASE_DRAFT_CHARS,
     ARTICLE_SUPPORTING_ONLY_CATEGORIES,

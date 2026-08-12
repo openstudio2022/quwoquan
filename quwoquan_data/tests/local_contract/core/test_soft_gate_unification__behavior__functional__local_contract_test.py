@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import json
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -25,6 +26,9 @@ import os  # noqa: E402
 from core import quality_gates as qg  # noqa: E402
 from content.post.article import base_draft  # noqa: E402
 from content.post.article import route_core  # noqa: E402
+from content.post.article.route_review_fallback import _review_fallback_stage  # noqa: E402
+from content.post.article.entity_review import _entity_fallback_stage  # noqa: E402
+from content.release.canonical import integrity  # noqa: E402
 from verify.verify_content_quality import _semantic_gate_issues  # noqa: E402
 
 
@@ -46,6 +50,53 @@ def test_is_soft_quality_gate_classification():
     # 硬门（图文闭环/语域/联系方式/去重）不得被误判为软门。
     for hard in ("imageGate", "registerMismatch", "contactInfo", "skeletonSimilarity", "baseDraftFidelity"):
         assert qg.is_soft_quality_gate(hard) is False, hard
+
+
+def test_commercial_near_copy_is_authoring_diagnostic_but_release_hard_gate():
+    """轻编辑不得因来源模式回卷；同一诊断仍由 release integrity fail closed。"""
+
+    checks = {
+        "commercialNearCopy": {
+            "passed": False,
+            "issues": [
+                "factual_reference_only article containment 0.916 > 0.550"
+            ],
+            "suggestions": ["保留来源归因并记录重复度诊断。"],
+        }
+    }
+
+    blocking, suggestions, diagnostic_failed = route_core.aggregate_checks(checks)
+
+    assert blocking == []
+    assert diagnostic_failed == 1
+    assert any("commercialNearCopy" in item for item in suggestions)
+    assert _review_fallback_stage(checks) == "review"
+    assert _entity_fallback_stage(checks) == "review"
+    assert qg.is_authoring_diagnostic_gate("commercialNearCopy") is True
+    assert qg.is_soft_quality_gate("commercialNearCopy") is False
+    assert "commercialNearCopy" in integrity.ARTICLE_HARD_CHECKS
+
+    with tempfile.TemporaryDirectory(prefix="article_release_near_copy_") as raw:
+        runtime_post = Path(raw)
+        review_dir = runtime_post / "5.review"
+        review_dir.mkdir(parents=True)
+        (review_dir / "review.json").write_text(
+            json.dumps(
+                {
+                    "decision": "approved",
+                    "checks": {
+                        "commercialNearCopy": checks["commercialNearCopy"],
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        release_issues = integrity._review_gate_issues("posts/article/x", runtime_post)
+    assert any(
+        "hard review check failed: commercialNearCopy" in issue
+        for issue in release_issues
+    )
 
 
 def test_word_gate_single_source_thresholds():

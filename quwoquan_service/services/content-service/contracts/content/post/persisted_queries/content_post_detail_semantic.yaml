@@ -1,0 +1,29 @@
+schema: qwq.object-owned-internal-persisted-graphql.v1
+canonicalOperationId: content.post.GetPostSemantic
+objectId: content.post
+document: content_post_detail_semantic.graphql
+operationName: ContentPostDetailSemantic
+operationType: query
+sha256Hash: b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04
+assemblyProjectionId: content.post.ContentPostDetailSlice
+appClientBundle:
+  bundleId: content.post.ContentPostDetail
+  role: extension
+  requiredForContentTypes: [article, image, micro, video]
+runtimeRequest:
+  method: POST
+  path: /internal/graphql
+  contentType: application/json
+  queryText: forbidden
+  onlineRegistration: forbidden
+  mutation: forbidden
+  contractGraphHeader: X-Contract-Graph-SHA256
+  trustedServicePrincipal:
+    subject: service:api-edge
+    scope: content.post.graphql.read
+variables:
+  required: [postId]
+  generatedDefaults: {semanticFirst: 30}
+  additionalProperties: false
+response:
+  rootField: contentPostDetailSemantic

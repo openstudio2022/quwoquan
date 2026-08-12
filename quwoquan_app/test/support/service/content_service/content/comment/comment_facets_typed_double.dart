@@ -1,13 +1,13 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// local_contract Comment/ContentReaction 对象替身。
 final class InMemoryContentCommentFacet implements ContentCommentFacet {
   InMemoryContentCommentFacet({
-    ObjectScenarioSeedReader? fixtures,
+    ObjectContractExampleReader? fixtures,
     this.actorId = 'fixture_user_current',
-  }) : _items = _readItems(fixtures ?? objectScenarioSeedReader, actorId);
+  }) : _items = _readItems(fixtures ?? objectContractExampleReader, actorId);
 
   final String actorId;
   List<CommentListItem> _items;
@@ -381,14 +381,14 @@ final class InMemoryContentCommentFacet implements ContentCommentFacet {
   }
 
   static List<CommentListItem> _readItems(
-    ObjectScenarioSeedReader fixtures,
+    ObjectContractExampleReader fixtures,
     String actorId,
   ) {
     final root = fixtures.document('content');
-    if (root['seedSets'] is! Map) {
-      throw FormatException('Content alpha fixture seedSets is missing');
+    if (root['examples'] is! Map) {
+      throw FormatException('Content alpha fixture examples is missing');
     }
-    final seed = (root['seedSets'] as Map)['comment_thread_core'];
+    final seed = (root['examples'] as Map)['comment_thread_core'];
     if (seed is! Map || seed['comments'] is! List) {
       throw FormatException('comment_thread_core fixture is missing');
     }

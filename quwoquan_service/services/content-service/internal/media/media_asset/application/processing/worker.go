@@ -53,13 +53,14 @@ const (
 
 var errMediaProcessingLeaseLost = errors.New("media processing worker lease lost")
 
-// Worker is the sole production consumer of media-processing work in the media
+// MediaProcessingHandler is the sole production consumer of media-processing
+// work in the media
 // outbox. It fulfils the
 // `MediaAssetCreated -> media-processing` contract declared in
 // services/content-service/contracts/media/media_asset/events.yaml: every uploaded image or
 // video asset is probed, normalized and recorded ready/rejected, so publication
 // can reach ready state without fixtures or test-only processing-result calls.
-type Worker struct {
+type MediaProcessingHandler struct {
 	source       OutboxSource
 	assets       AssetSnapshotLoader
 	checkpoints  CheckpointStore
@@ -80,42 +81,42 @@ type Worker struct {
 	lastFailure error
 }
 
-type WorkerOption func(*Worker)
+type MediaProcessingHandlerOption func(*MediaProcessingHandler)
 
-func WithConsumer(consumer string) WorkerOption {
-	return func(w *Worker) {
+func WithConsumer(consumer string) MediaProcessingHandlerOption {
+	return func(w *MediaProcessingHandler) {
 		if consumer = strings.TrimSpace(consumer); consumer != "" {
 			w.consumer = consumer
 		}
 	}
 }
 
-func WithObserver(observer Observer) WorkerOption {
-	return func(w *Worker) {
+func WithObserver(observer Observer) MediaProcessingHandlerOption {
+	return func(w *MediaProcessingHandler) {
 		if observer != nil {
 			w.observer = observer
 		}
 	}
 }
 
-func WithClock(now func() time.Time) WorkerOption {
-	return func(w *Worker) {
+func WithClock(now func() time.Time) MediaProcessingHandlerOption {
+	return func(w *MediaProcessingHandler) {
 		if now != nil {
 			w.now = now
 		}
 	}
 }
 
-func WithLeaseOwner(owner string) WorkerOption {
-	return func(w *Worker) {
+func WithLeaseOwner(owner string) MediaProcessingHandlerOption {
+	return func(w *MediaProcessingHandler) {
 		if owner = strings.TrimSpace(owner); owner != "" {
 			w.leaseOwner = owner
 		}
 	}
 }
 
-func WithLeaseTTL(ttl time.Duration) WorkerOption {
-	return func(w *Worker) {
+func WithLeaseTTL(ttl time.Duration) MediaProcessingHandlerOption {
+	return func(w *MediaProcessingHandler) {
 		if ttl > 0 {
 			w.leaseTTL = ttl
 		}
@@ -125,8 +126,8 @@ func WithLeaseTTL(ttl time.Duration) WorkerOption {
 func WithArtifactCleanup(
 	store ArtifactCleanupStore,
 	reclaimer ArtifactReclaimer,
-) WorkerOption {
-	return func(w *Worker) {
+) MediaProcessingHandlerOption {
+	return func(w *MediaProcessingHandler) {
 		if store != nil && reclaimer != nil {
 			w.cleanupStore = store
 			w.reclaimer = reclaimer
@@ -134,15 +135,15 @@ func WithArtifactCleanup(
 	}
 }
 
-func NewWorker(
+func NewMediaProcessingHandler(
 	source OutboxSource,
 	assets AssetSnapshotLoader,
 	checkpoints CheckpointStore,
 	processor Processor,
 	recorder ResultRecorder,
 	poisons PoisonEventRecorder,
-	options ...WorkerOption,
-) *Worker {
+	options ...MediaProcessingHandlerOption,
+) *MediaProcessingHandler {
 	if source == nil || assets == nil || checkpoints == nil ||
 		processor == nil || recorder == nil || poisons == nil {
 		panic("media processing worker requires outbox source, asset loader, checkpoints, processor, result recorder and poison recorder")
@@ -151,7 +152,7 @@ func NewWorker(
 	if !ok {
 		panic("media processing worker requires a checkpoint store with durable lease controls")
 	}
-	worker := &Worker{
+	handler := &MediaProcessingHandler{
 		source:      source,
 		assets:      assets,
 		checkpoints: checkpoints,
@@ -165,15 +166,15 @@ func NewWorker(
 		now:         time.Now,
 	}
 	for _, option := range options {
-		option(worker)
+		option(handler)
 	}
-	return worker
+	return handler
 }
 
-// Drain consumes at most limit durable media facts. Content-level failures
+// Process consumes at most limit durable media facts. Content-level failures
 // record the asset as rejected and advance; infrastructure failures leave the
 // event for replay so nothing is silently dropped.
-func (w *Worker) Drain(ctx context.Context, limit int) (int, error) {
+func (w *MediaProcessingHandler) Process(ctx context.Context, limit int) (int, error) {
 	limit = normalizedBatchLimit(limit)
 	if w.leases == nil || strings.TrimSpace(w.leaseOwner) == "" || w.leaseTTL <= 0 {
 		return 0, errors.New("media processing worker lease is not configured")
@@ -262,7 +263,7 @@ func normalizedBatchLimit(limit int) int {
 	return limit
 }
 
-func (w *Worker) handleEvent(
+func (w *MediaProcessingHandler) handleEvent(
 	ctx context.Context,
 	event mediaports.OutboxEvent,
 ) error {
@@ -384,7 +385,7 @@ func classifyProcessingEvent(
 	return processingEventUnknown
 }
 
-func (w *Worker) cleanupDiscardedAsset(
+func (w *MediaProcessingHandler) cleanupDiscardedAsset(
 	ctx context.Context,
 	event mediaports.OutboxEvent,
 ) error {
@@ -433,7 +434,7 @@ func (w *Worker) cleanupDiscardedAsset(
 	return nil
 }
 
-func (w *Worker) handleEventUnderLease(
+func (w *MediaProcessingHandler) handleEventUnderLease(
 	ctx context.Context,
 	event mediaports.OutboxEvent,
 ) error {
@@ -493,7 +494,7 @@ func (w *Worker) handleEventUnderLease(
 	}
 }
 
-func (w *Worker) quarantine(
+func (w *MediaProcessingHandler) quarantine(
 	ctx context.Context,
 	event mediaports.OutboxEvent,
 	reason string,
@@ -526,7 +527,7 @@ func mediaProcessingResultIdempotencyKey(eventID string) string {
 	return "media-processing-result:" + strings.TrimSpace(eventID)
 }
 
-func (w *Worker) observe(
+func (w *MediaProcessingHandler) observe(
 	mediaType string,
 	inputSizeClass string,
 	result string,
@@ -575,7 +576,7 @@ func nonNegativeAge(age time.Duration) time.Duration {
 	return age
 }
 
-func (w *Worker) observeCompleteToReady(
+func (w *MediaProcessingHandler) observeCompleteToReady(
 	mediaType string,
 	inputSizeClass string,
 	duration time.Duration,
@@ -585,13 +586,13 @@ func (w *Worker) observeCompleteToReady(
 	}
 }
 
-func (w *Worker) observePoison(reason string, eventAge time.Duration) {
+func (w *MediaProcessingHandler) observePoison(reason string, eventAge time.Duration) {
 	if w.observer != nil {
 		w.observer.Poisoned(reason, eventAge)
 	}
 }
 
-func (w *Worker) observePoisonQuarantineFailure(reason string) {
+func (w *MediaProcessingHandler) observePoisonQuarantineFailure(reason string) {
 	if w.observer != nil {
 		w.observer.PoisonQuarantineFailed(reason)
 	}
@@ -608,7 +609,7 @@ func newLeaseOwner() string {
 // Run drains until the application context ends. A failed batch is retried
 // after interval without advancing its checkpoint, matching the Post outbox
 // relay semantics.
-func (w *Worker) Run(ctx context.Context, interval time.Duration) error {
+func (w *MediaProcessingHandler) Run(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
 		interval = time.Second
 	}
@@ -616,7 +617,7 @@ func (w *Worker) Run(ctx context.Context, interval time.Duration) error {
 	defer ticker.Stop()
 
 	for {
-		if _, err := w.Drain(ctx, maxBatchSize); err != nil {
+		if _, err := w.Process(ctx, maxBatchSize); err != nil {
 			w.recordFailure(err)
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -640,7 +641,7 @@ func (w *Worker) Run(ctx context.Context, interval time.Duration) error {
 // Live proves the in-process worker module is wired. It deliberately does not
 // inspect scan freshness: liveness answers whether this process should be
 // restarted, while readiness determines whether it can accept media work.
-func (w *Worker) Live() error {
+func (w *MediaProcessingHandler) Live() error {
 	if w == nil {
 		return fmt.Errorf("media processing worker is not configured")
 	}
@@ -650,7 +651,7 @@ func (w *Worker) Live() error {
 // Ready reports whether the worker recently completed a scan. Video
 // processing is minute-grade work, so staleness tolerance is far looser than
 // event relays; the readiness boundary owns the exact threshold.
-func (w *Worker) Ready(maxStaleness time.Duration) error {
+func (w *MediaProcessingHandler) Ready(maxStaleness time.Duration) error {
 	if err := w.Live(); err != nil {
 		return err
 	}
@@ -674,14 +675,14 @@ func (w *Worker) Ready(maxStaleness time.Duration) error {
 	return nil
 }
 
-func (w *Worker) recordSuccess() {
+func (w *MediaProcessingHandler) recordSuccess() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.lastSuccess = w.now().UTC()
 	w.lastFailure = nil
 }
 
-func (w *Worker) recordFailure(err error) {
+func (w *MediaProcessingHandler) recordFailure(err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.lastFailure = err

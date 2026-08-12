@@ -70,7 +70,12 @@ func (s *AuthService) issueLoginResult(
 		return nil, err
 	}
 
-	accessToken, err := s.issueAccessToken(ownerID, activePersona, security.AuthEpoch)
+	accessToken, err := s.issueAccessToken(
+		ownerID,
+		activePersona,
+		deviceID,
+		security.AuthEpoch,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +196,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ 
 	accessToken, err := s.issueAccessToken(
 		issued.AccountID,
 		activePersona,
+		issued.DeviceID,
 		security.AuthEpoch,
 	)
 	if err != nil {
@@ -256,6 +262,7 @@ func generateToken() (string, error) {
 func (s *AuthService) issueAccessToken(
 	ownerID string,
 	activePersona *model.Persona,
+	deviceID string,
 	authEpoch int64,
 ) (string, error) {
 	if s.accessSigner == nil {
@@ -266,8 +273,21 @@ func (s *AuthService) issueAccessToken(
 		persona = activePersona.PersonaID
 	}
 	return s.accessSigner.Sign(rtauth.TokenSubject{
-		AccountID: ownerID,
-		PersonaID: persona,
-		AuthEpoch: authEpoch,
+		AccountID:     ownerID,
+		PersonaID:     persona,
+		DeviceActorID: deriveDeviceActorID(deviceID),
+		AuthEpoch:     authEpoch,
 	})
+}
+
+// deriveDeviceActorID mirrors the App's frozen installation-actor bytes. This
+// is a one-way installation identifier, not a credential or negotiable model
+// version. Changing these bytes would reshuffle every active rollout cohort.
+func deriveDeviceActorID(deviceID string) string {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte("qwq-device-actor-v1:" + deviceID))
+	return hex.EncodeToString(digest[:16])
 }

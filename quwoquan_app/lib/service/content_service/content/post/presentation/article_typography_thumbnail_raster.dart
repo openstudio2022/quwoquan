@@ -214,11 +214,13 @@ class _ArticleTypographyThumbnailStripState
             });
           }
           unawaited(
-            ref.read(exceptionTelemetryPortProvider).recordHandledException(
-              source: 'content.article_typography.capture_thumbnail',
-              error: error,
-              stackTrace: stackTrace,
-            ),
+            ref
+                .read(exceptionTelemetryPortProvider)
+                .recordHandledException(
+                  source: 'content.article_typography.capture_thumbnail',
+                  error: error,
+                  stackTrace: stackTrace,
+                ),
           );
         }
       }

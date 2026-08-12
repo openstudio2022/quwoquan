@@ -10,7 +10,7 @@
     "publicContentDistribution": false,
     "sharingDisabled": true,
     "exportDisabled": true,
-    "searchIndexingDisabled": true,
+    "searchIndexingDisabled": false,
     "internalAppSignatureRequired": true,
     "researchBadgeRequired": true,
     "shortLivedSignedMediaUrlsRequired": true,

@@ -41,6 +41,14 @@ def _explicit_research_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
         "content.source.professional_video_acquisition.guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
     )
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.load_bound_safety_evidence",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.validate_video_safety_payload",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def _write_video(path: Path, *, moving: bool, seed: int) -> None:
@@ -168,6 +176,7 @@ def _item(
             "reviewedAt": "2026-08-05T02:05:00Z",
             "reviewer": "local-contract-reviewer",
             "evidenceRef": f"evidence/{asset_id}.json",
+            "safetyEvidenceFileSha256": "sha256:" + "f" * 64,
         },
         "popularitySignals": {
             "playCount": play,
@@ -308,6 +317,80 @@ def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_acc
     )
     assert [spec["professionalAssetId"] for spec in specs] == ["higher", "lower"]
     assert all(spec["premiumPlayableEligible"] is True for spec in specs)
+
+
+def test_reference_only_manual_video_records_rights_without_blocking_research(
+    tmp_path: Path,
+) -> None:
+    manual_root = tmp_path / "manual"
+    manual_root.mkdir()
+    _write_video(manual_root / "youtube.mp4", moving=True, seed=31)
+    item = _item(
+        "youtube-manual",
+        "youtube.mp4",
+        counts=(None, None, None, None, None),
+    )
+    item.update(
+        provider="youtube",
+        platform="YouTube",
+        displayName="YouTube research reference",
+        sourceUrl="https://www.youtube.com/watch?v=research-reference",
+        termsUrl="https://www.youtube.com/static?template=terms",
+        popularitySignals={
+            **item["popularitySignals"],
+            "provider": "youtube",
+        },
+    )
+    manifest_path = tmp_path / "youtube.json"
+    write_json(manifest_path, _manifest([item], manifest_id="youtube-research"))
+
+    receipt, _receipt_path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=tmp_path / "acquisition",
+    )
+
+    row = receipt["assets"][0]
+    assert receipt["acceptedAssetCount"] == 1
+    assert row["acquisitionStatus"] == "acquired"
+    assert row["rightsStatus"] == "unverified"
+    assert row["authorizationRequired"] is True
+    assert row["distributionDecision"] == "research_allowed"
+    assert row["planVideoSpec"]["publicationAdmission"] == "research_release"
+    assert row["planVideoSpec"]["commercialAuthorizationStatus"] == "unverified"
+
+
+def test_reference_only_video_forbids_unapproved_network_acquisition(
+    tmp_path: Path,
+) -> None:
+    item = _item(
+        "youtube-public-direct",
+        "",
+        counts=(None, None, None, None, None),
+        acquisition_path="public_direct",
+        asset_url="https://cdn.youtube.example.test/video.mp4",
+    )
+    item.update(
+        provider="youtube",
+        platform="YouTube",
+        displayName="YouTube research reference",
+        sourceUrl="https://www.youtube.com/watch?v=research-reference",
+        termsUrl="https://www.youtube.com/static?template=terms",
+        popularitySignals={
+            **item["popularitySignals"],
+            "provider": "youtube",
+        },
+    )
+    manifest_path = tmp_path / "youtube-public-direct.json"
+    write_json(manifest_path, _manifest([item], manifest_id="youtube-public-direct"))
+
+    with pytest.raises(ValueError, match="public_direct is not allowed"):
+        acquire_professional_videos(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            output_root=tmp_path / "acquisition",
+        )
 
 
 def test_prior_receipt_deduplication_is_scoped_to_exact_source_identity(
@@ -507,10 +590,7 @@ def test_popularity_never_invents_comparability(tmp_path: Path) -> None:
         )
 
 
-def test_acquisition_physically_consumes_popular_catalog_binding(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
+def test_acquisition_physically_consumes_popular_catalog_binding(tmp_path: Path) -> None:
     manual_root = tmp_path / "manual"
     manual_root.mkdir()
     _write_video(manual_root / "high.mp4", moving=True, seed=21)
@@ -580,10 +660,6 @@ def test_acquisition_physically_consumes_popular_catalog_binding(
         popularCandidateId=candidate["candidateId"], popularCatalogRef=catalog_ref,
         popularCatalogDigest=catalog["catalogDigest"],
         popularCatalogFileSha256=catalog_sha,
-    )
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.assert_video_source_admitted",
-        lambda *_args, **_kwargs: None,
     )
     manifest_path = tmp_path / "popular.json"
     write_json(manifest_path, _manifest(

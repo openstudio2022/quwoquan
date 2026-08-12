@@ -6,12 +6,14 @@ import hashlib
 import json
 
 import pytest
-
 from content.execution.campaign.plan_source_pool import aggregate_plan_source_pool
-from content.execution.planning.source_pool_policy import requires_scale_source_pool
+from content.execution.planning.source_pool_policy import (
+    allows_scale_source_pool,
+    requires_scale_source_pool,
+    source_pool_policy_fields,
+)
 from content.execution.request import RuntimeExecutionRequest
 from core.schema import assert_valid
-
 
 DIGEST = "sha256:" + "a" * 64
 BINDING = {
@@ -80,6 +82,7 @@ def test_runtime_request_round_trip_preserves_source_pool_exactly() -> None:
             "requiredWorkers": 1,
             "partitionCount": 16,
             "capacityPlanDigest": DIGEST,
+            "workerHostSetBinding": None,
             "topic": None,
             "sourceProviders": [],
             "targetNames": [],
@@ -137,12 +140,68 @@ def test_campaign_plan_scale_pool_matches_canonical_execution_id_shape() -> None
 
 
 def test_source_pool_requirement_uses_canonical_execution_identity() -> None:
-    assert requires_scale_source_pool(
-        "20260808--travel-homepage-m100--china--scale-001"
-    )
-    assert requires_scale_source_pool(
-        "20260808--travel-video-m10000--china--scale-001"
-    )
-    assert not requires_scale_source_pool(
-        "20260808--travel-article-m1--china--scale-001"
-    )
+    m100 = "20260808--travel-homepage-m100--china--scale-001"
+    m1000 = "20260808--travel-video-m1000--china--scale-001"
+    m10000 = "20260808--travel-video-m10000--china--scale-001"
+    m1 = "20260808--travel-article-m1--china--scale-001"
+
+    assert allows_scale_source_pool(m100)
+    assert allows_scale_source_pool(m1000)
+    assert not requires_scale_source_pool(m100)
+    assert not requires_scale_source_pool(m1000)
+    assert source_pool_policy_fields(
+        m100,
+        binding=None,
+        evidence_root_ref=None,
+        selection=None,
+    ) == {}
+    assert requires_scale_source_pool(m10000)
+    assert not allows_scale_source_pool(m1)
+    with pytest.raises(ValueError, match="M10000 execution requires source pool"):
+        source_pool_policy_fields(
+            m10000,
+            binding=None,
+            evidence_root_ref=None,
+            selection=None,
+        )
+    with pytest.raises(ValueError, match="below-M100"):
+        source_pool_policy_fields(
+            m1,
+            binding=BINDING,
+            evidence_root_ref="data/local/workspace/source-pool/evidence",
+            selection=_selection("article"),
+        )
+
+
+def test_m100_plan_schema_allows_a_target_bound_wave_without_scale_pool() -> None:
+    execution_ids = {
+        carrier: f"20260808--travel-{carrier}-m100--china--scale-002"
+        for carrier in ("homepage", "article", "image", "video")
+    }
+    lane_inputs = {
+        carrier: {
+            "executionId": execution_id,
+            "externalInputRefs": [],
+            "externalInputsDigest": DIGEST,
+        }
+        for carrier, execution_id in execution_ids.items()
+    }
+    plan = {
+        "schema": "quwoquan_data.content_campaign_plan",
+        "rootExecutionId": execution_ids["homepage"],
+        "executionMode": "central",
+        "scale": "M100",
+        "gitBranch": "dev1.0",
+        "gitCommitSha": "a" * 40,
+        "sourceRevision": DIGEST,
+        "sourceDigest": "sha256:" + "b" * 64,
+        "entityCatalogDigest": "sha256:" + "c" * 64,
+        "semanticSelectionId": "not_applicable",
+        "laneExternalInputs": lane_inputs,
+        "externalInputsDigest": DIGEST,
+        "submissionDigests": {carrier: DIGEST for carrier in execution_ids},
+        "executionIds": execution_ids,
+        "frozenAt": "2026-08-08T00:00:00Z",
+        "planDigest": DIGEST,
+    }
+    assert_valid(plan, "execution", "content_campaign_plan")

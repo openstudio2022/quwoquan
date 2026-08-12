@@ -1,8 +1,24 @@
 from __future__ import annotations
 
 import pytest
-
-from core.control_types import ContentType, ExecutionStage, ExecutionStateStatus, StageStatus
+from content.execution import target_integrity
+from content.execution.agent import auto_research
+from content.execution.context import ExecutionContext
+from content.execution.controller import completion as execution_completion
+from content.execution.controller import stage_download_build
+from content.execution.planning import source_ready_scope
+from content.execution.recovery import (
+    download_unresolved,
+    post_recovery,
+    stage_reset,
+)
+from content.homepage import homepage
+from core.control_types import (
+    ContentType,
+    ExecutionStage,
+    ExecutionStateStatus,
+    StageStatus,
+)
 from core.data_issue import (
     DataIssueCode,
     DataIssueLane,
@@ -10,17 +26,6 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
-from content.execution.agent import auto_research
-from content.execution.context import ExecutionContext
-from content.execution.controller import completion as execution_completion
-from content.execution.controller import stage_download_build
-from content.execution.recovery import download_repair
-from content.execution.recovery import download_unresolved
-from content.execution.recovery import post_recovery
-from content.execution.recovery import stage_reset
-from content.execution import target_integrity
-from content.execution.planning import source_ready_scope
-from content.homepage import homepage
 from core.io import read_json, write_json
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
@@ -168,6 +173,15 @@ def test_readiness_quota_projection_covers_every_content_type():
         for content_type in ContentType
     }
     assert _quota_by_lane(spec)[ContentType.VIDEO.value] == 1
+
+
+def test_readiness_audit_reads_planned_entities_from_canonical_owner():
+    from content.execution.planning import readiness_audit
+
+    assert (
+        readiness_audit.execution_planned_entity_ids.__module__
+        == "content.execution.planning.execution_plan_readback"
+    )
 
 
 def test_download_plan_availability_persists_frozen_target_failure(monkeypatch, tmp_path):

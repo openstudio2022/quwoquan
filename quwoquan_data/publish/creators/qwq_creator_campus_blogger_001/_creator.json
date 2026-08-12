@@ -1,0 +1,12 @@
+{
+  "schema": "quwoquan_data.creator_object",
+  "creatorId": "qwq_creator_campus_blogger_001",
+  "profileRef": "profile.json",
+  "assetsRef": "assets.refs.json",
+  "worksRefsRef": "works.refs.ndjson",
+  "tagRefs": [
+    "Format/内容角度/测评/校园评测",
+    "Topic/教育成长/校园生活"
+  ],
+  "entityRefs": []
+}

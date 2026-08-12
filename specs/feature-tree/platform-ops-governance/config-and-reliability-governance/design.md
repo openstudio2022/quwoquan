@@ -35,12 +35,12 @@
 <a id="dec-002"></a>
 ### DEC-002 Hosted receipt 是生产发布的唯一可提升事实
 - 决策：`prod-hosted` 发布先写入 service-plane 的不可变 receipt，再从同一受控平面回读并校验；本机 `.qwq_output` 或 runner 目录只允许保存 readback cache，不得作为 rollout、rollback 或 readiness 的事实来源。
-- receipt：绑定 release manifest、候选 image/config/ContractGraph/adapter digest、CAS generation、gray stage、SLO 与 post-check 摘要、last-good target 和 rollback outcome；`gray-initial → carry-on → full`、`rolled_back` 与 `rollback_failed` 是互斥的状态事实。
+- receipt：绑定 release manifest、`campaignId`、候选 image/config/ContractGraph/adapter digest、`allocationKeyId`、`subjectKind`、阶段 audience 摘要、CAS generation、`canary → 5 → 20 → 50 → 100` stage、SLO 与 post-check 摘要、last-good target 和 rollback outcome；每个阶段、`rolled_back` 与 `rollback_failed` 都是独立且互斥的状态事实。
 - 理由：本机缓存、日志和人工 ref 无法证明托管环境实际应用了候选版本，也无法在多 runner 下可靠阻止陈旧状态提升。
 - 被否决方案：只同步本地 ledger 后立即宣称成功、仅凭 operator sidecar 的任意 `receipt:*` 字符串，或把回滚成功与回滚失败折叠为同一状态。
 - 约束与影响：Provider Conformance 仅接受 `receipt:hosted:<sha256>` 的 last-good/rollback ref，并由 `stackctl hosted-release-receipt` 从 hosted service plane 拉取、校验 candidate digest 后确认。SSH 凭据、托管平面、真实 Provider/设备或审批缺失时必须失败且不得写 ready。
 - 关联要求：`REQ-002`
-- 影响 Story：[`reliability-policy-control`](./reliability-policy-control/spec.md)
+- 影响 Story：[`reliability-policy-control`](./reliability-policy-control/spec.md) 的 hosted receipt 准出链路。
 - 关联验收：`SIT-001`、`GWT-002`
 
 <a id="dec-003"></a>
@@ -52,6 +52,18 @@
 - 关联要求：`REQ-002`
 - 影响 Story：[`config-source-governance`](./config-source-governance/spec.md)、[`reliability-policy-control`](./reliability-policy-control/spec.md)
 - 关联验收：`SIT-001`、`GWT-001`、`GWT-002`
+
+<a id="dec-004"></a>
+### DEC-004 生产灰度按可信安装实例稳定分桶并单调扩张
+- 决策：生产灰度只发生在 `prod` 环境内，由 `api-edge` 按可信 `deviceActorId` 裁决 stable/candidate 服务池；Android、iOS、Web 分别使用固定 context key 哈希和相同 basis-point 阈值抽样，百分比表示每个已选平台的合格去重安装实例比例，不表示请求量比例。
+- 决策：活动内 `campaignId`、candidate digest、`allocationKeyId` 与 `subjectKind=device_actor` 不可变；阶段阈值只允许从 canary 依次扩大到 5%、20%、50%、100%，已建立的 candidate assignment 在同一活动中保持 candidate。平台、App Build、地域或运营商 audience 只能保持或扩大，任何收缩只能通过整个 campaign rollback 完成。
+- 决策：地域和运营商默认全选并只作分层观测；定向时由可信代理源 IP 和固定摘要的 GeoIP/ASN 数据派生，命中后持久化 assignment，因此旅行、网络切换或归属变化不改变 cohort。`unknown` 是合法分层值，不能因不可识别而静默排除。
+- 理由：稳定 subject 与单调阈值同时保证比例接近期望值、少数平台有样本、用户不在 stable/candidate 间漂移，并使阶段提升可回放和审计。
+- 被否决方案：请求级随机、账号级分桶、让 Android 请求量吞并 iOS/Web 样本、由 App 自报可信地域/运营商、阶段间修改盐值或缩小过滤集合，以及把 Caddy 作为业务路由器。
+- 约束与影响：assignment store 必须复制并持久化；不可用、数据丢失、candidate digest 漂移、默认平台缺样本或相邻阶段集合不满足包含关系属于 critical failure，campaign 自动进入 `rolled_back`，不得重新分桶或以内存状态继续。
+- 关联要求：`REQ-002`
+- 影响 Story：[`reliability-policy-control`](./reliability-policy-control/spec.md)
+- 关联验收：`SIT-001`、`GWT-003`、`GWT-004`
 
 ## 5. 失败与恢复
 
@@ -65,3 +77,4 @@
 - 各服务自治维护 `sys.*` 配置来源，平台运维控制面统一发布、灰度、审计和回滚口径。
 - 配置内容摘要、镜像精确身份与托管 receipt 分别证明其所属事实，并由同一候选发布关联；不得互相推断或复制兼容范围。
 - 高风险配置和镜像发布必须可审计、可回读、可回滚；任一身份缺失或漂移均不得产生成功事实。
+- 每阶段必须分别观测去重安装实例、去重账号和请求三个比例，并按 target、platform、App Version/Build、region、carrier 与 canonical operation 分层；过滤后的 eligible 占比与全体占比必须同时展示，不得用请求占比冒充安装实例占比。

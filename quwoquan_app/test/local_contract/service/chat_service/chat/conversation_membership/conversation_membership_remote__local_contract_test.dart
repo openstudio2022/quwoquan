@@ -9,6 +9,7 @@
 // readiness_case: conversation_membership_update_group_admins_app_local
 // readiness_case: conversation_membership_list_members_app_local
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/adapters/chat_member_repository_remote.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/adapters/conversation_membership_remote.dart';
 import 'package:quwoquan_app/runtime/transport/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -164,6 +165,61 @@ void main() {
       });
     },
   );
+
+  test(
+    'member repository consumes every cursor page and rejects cycles',
+    () async {
+      final executor = _RoutingExecutor();
+      final client = GeneratedCloudOperationClient(executor);
+      final query = RemoteChatConversationMembershipQuery(
+        client: client,
+        invocationContext: _queryContext,
+      );
+      final writer = RemoteChatConversationMembershipCommandWriter(
+        client: client,
+        invocationContext: _commandContext,
+      );
+      final repository = RemoteChatMemberRepository(
+        membershipQuery: query,
+        membershipCommandWriter: writer,
+      );
+
+      final members = await repository.listMembers(
+        conversationId: 'conversation-1',
+        limit: 200,
+      );
+
+      expect(members.map((member) => member.userId), <String>[
+        'persona-2',
+        'persona-3',
+      ]);
+      expect(
+        executor.payloads.map((payload) => payload.queryParameters['limit']),
+        <String?>['50', '50'],
+      );
+      expect(
+        executor.payloads.map((payload) => payload.queryParameters['cursor']),
+        <String?>[null, 'next-member-token'],
+      );
+
+      final cyclicExecutor = _RoutingExecutor(cyclicMemberCursor: true);
+      final cyclicClient = GeneratedCloudOperationClient(cyclicExecutor);
+      final cyclicRepository = RemoteChatMemberRepository(
+        membershipQuery: RemoteChatConversationMembershipQuery(
+          client: cyclicClient,
+          invocationContext: _queryContext,
+        ),
+        membershipCommandWriter: RemoteChatConversationMembershipCommandWriter(
+          client: cyclicClient,
+          invocationContext: _commandContext,
+        ),
+      );
+      await expectLater(
+        cyclicRepository.listMembers(conversationId: 'conversation-1'),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
 }
 
 CloudOperationInvocationContext _queryContext(String clientPageId) {
@@ -187,6 +243,9 @@ CloudOperationInvocationContext _commandContext(
 }
 
 final class _RoutingExecutor implements CloudOperationExecutor {
+  _RoutingExecutor({this.cyclicMemberCursor = false});
+
+  final bool cyclicMemberCursor;
   final List<String> operationIds = <String>[];
   final List<CloudOperationContract> operations = <CloudOperationContract>[];
   final List<CloudOperationInvocationContext> contexts =
@@ -204,14 +263,31 @@ final class _RoutingExecutor implements CloudOperationExecutor {
     operationIds.add(operation.canonicalOperationId);
     operations.add(operation);
     contexts.add(context);
-    payloads.add(requestEncoder());
-    return responseDecoder(_responseFor(operation.canonicalOperationId));
+    final payload = requestEncoder();
+    payloads.add(payload);
+    return responseDecoder(
+      _responseFor(
+        operation.canonicalOperationId,
+        payload,
+        cyclicMemberCursor: cyclicMemberCursor,
+      ),
+    );
   }
 }
 
-Object? _responseFor(String operationId) {
+Object? _responseFor(
+  String operationId,
+  CloudOperationRequestPayload payload, {
+  required bool cyclicMemberCursor,
+}) {
   if (operationId ==
       AppCloudOperationIds.chatConversationMembershipListMembers) {
+    if (payload.queryParameters['cursor'] == 'next-member-token') {
+      return <String, Object?>{
+        'items': <Object?>[_secondMember],
+        'nextCursor': cyclicMemberCursor ? 'next-member-token' : null,
+      };
+    }
     return <String, Object?>{
       'items': <Object?>[_member],
       'nextCursor': 'next-member-token',
@@ -228,5 +304,16 @@ const Map<String, Object?> _member = <String, Object?>{
   'role': 'admin',
   'memberType': 'user',
   'joinedAt': '2026-07-20T08:00:00Z',
+  'isCurrentUser': false,
+};
+
+const Map<String, Object?> _secondMember = <String, Object?>{
+  'userId': 'persona-3',
+  'userHandle': 'xiaosan_public',
+  'displayName': '小三',
+  'avatarUrl': '',
+  'role': 'member',
+  'memberType': 'user',
+  'joinedAt': '2026-07-20T09:00:00Z',
   'isCurrentUser': false,
 };

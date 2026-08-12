@@ -14,10 +14,14 @@ if str(SCRIPTS) not in sys.path:
 
 from core import source_digest as source_digest_module  # noqa: E402
 from core.source_digest import (  # noqa: E402
+    ExecutionBundleIdentity,
     SourceDigest,
     SourceDigestError,
+    SourceDefinitionSnapshot,
     _iter_files,
     current_source_digest,
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
 )
 from content.execution import workspace  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
@@ -57,6 +61,35 @@ def test_source_digest__rejects_runtime_output_as_input__contract__local_contrac
         raise AssertionError("runtime output must never become a source digest input")
 
 
+def test_source_identity_splits_definitions_from_execution_bundle() -> None:
+    snapshot = current_source_definition_snapshot().to_document()
+    bundle = current_execution_bundle_identity().to_document()
+
+    assert SourceDefinitionSnapshot.from_document(snapshot).to_document() == snapshot
+    assert ExecutionBundleIdentity.from_document(bundle).to_document() == bundle
+    assert "quwoquan_data/scripts" not in snapshot["inputs"]
+    assert "quwoquan_data/scripts" in bundle["inputs"]
+    assert "quwoquan_data/reference" in snapshot["inputs"]
+
+
+def test_frozen_identity_parsers_never_read_a_live_repository(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = current_source_definition_snapshot().to_document()
+    bundle = current_execution_bundle_identity().to_document()
+
+    monkeypatch.setattr(
+        source_digest_module,
+        "_digest_roots",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("live source tree read")
+        ),
+    )
+
+    assert SourceDefinitionSnapshot.from_document(snapshot).digest == snapshot["digest"]
+    assert ExecutionBundleIdentity.from_document(bundle).digest == bundle["digest"]
+
+
 def test_source_digest__ignores_empty_directory_markers__contract__local_contract(
     tmp_path: Path,
 ) -> None:
@@ -67,22 +100,33 @@ def test_source_digest__ignores_empty_directory_markers__contract__local_contrac
     assert _iter_files(tmp_path) == (source,)
 
 
-def test_source_digest__execution_manifest_drift_has_a_stable_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_source_digest__frozen_execution_manifest_does_not_read_live_tree() -> None:
     execution_id = "20260727--travel-homepage-coverage--test-region-a--pilot-001"
     ExecutionFixtureBuilder(execution_id).build()
+    frozen = workspace.load_execution_manifest(execution_id)
+    assert frozen["executionId"] == execution_id
+
+
+def test_existing_v2_manifest_resume_never_reads_live_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_id = "20260727--travel-homepage-coverage--test-region-b--pilot-001"
+    frozen = ExecutionFixtureBuilder(execution_id).build()
+
     monkeypatch.setattr(
         workspace,
-        "current_source_digest",
-        lambda: SourceDigest("sha256:" + "0" * 64),
+        "current_execution_bundle_identity",
+        lambda: (_ for _ in ()).throw(AssertionError("live execution bundle read")),
+    )
+    monkeypatch.setattr(
+        workspace,
+        "current_source_definition_snapshot",
+        lambda: (_ for _ in ()).throw(AssertionError("live source definition read")),
     )
 
-    with pytest.raises(workspace.ExecutionSourceDigestDriftError, match="sourceDigest drift"):
-        workspace.load_execution_manifest(execution_id)
+    resumed = ExecutionFixtureBuilder(execution_id).build()
 
-    frozen = workspace.load_frozen_execution_manifest(execution_id)
-    assert frozen["executionId"] == execution_id
+    assert resumed == frozen
 
 
 def test_source_digest__persistent_cache_rehashes_only_changed_input(

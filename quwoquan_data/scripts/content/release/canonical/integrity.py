@@ -46,6 +46,7 @@ ARTICLE_HARD_CHECKS = {
     "generatorProvenance",
     "factTraceability",
     "baseDraftFidelity",
+    "commercialNearCopy",
     "sectionBalance",
     "timelineOrder",
     "registerMismatch",

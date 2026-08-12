@@ -20,7 +20,6 @@ import (
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 
@@ -32,9 +31,11 @@ import (
 	appealobservability "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/observability"
 	appealpersistence "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/persistence"
 	accountsessionadapter "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/application"
+	accountsessionhttp "quwoquan_service/services/user-service/internal/account/account_session/adapters/inbound/http"
 	accountsessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	accountsessionpersistence "quwoquan_service/services/user-service/internal/account/account_session/infrastructure/persistence"
 	challengeadapter "quwoquan_service/services/user-service/internal/account/authentication_challenge/adapters/inbound/application"
+	challengestream "quwoquan_service/services/user-service/internal/account/authentication_challenge/adapters/inbound/stream"
 	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
 	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
 	credentialhttp "quwoquan_service/services/user-service/internal/account/credential_binding/adapters/inbound/http"
@@ -58,6 +59,7 @@ import (
 	useraccountobservability "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/observability"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	profileprojection "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/profileprojection"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
 	useraccountprojection "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
@@ -192,6 +194,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("user-service message transport preflight failed: %v", err)
 	}
+	researchAuditTransport, _ := messageTransport.(runtimemessaging.DurableRecordAppender)
+	researchSessionHandler, err := buildResearchSessionHandler(
+		appEnv,
+		cfg,
+		researchAuditTransport,
+	)
+	if err != nil {
+		log.Fatalf("research identity composition failed: %v", err)
+	}
+	managedAcceptanceIdentity, err := loadManagedAcceptanceIdentity()
+	if err != nil && cfg.ResearchIdentity.Enabled {
+		log.Fatalf("managed acceptance identity composition failed: %v", err)
+	}
 	redisClient := redisRouter.Scene("general")
 
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -299,24 +314,6 @@ func main() {
 		log.Fatalf("ProfileUpdateProposal Store init failed: %v", err)
 	}
 
-	// 5b. Search index (ES) — write side of user.search_index_worker. Disabled
-	// (no-op) unless es.enabled / SEARCH_ES_* are set, so the primary write path
-	// is unaffected in alpha and any env without the shared cluster.
-	searchindex.ApplyESEnvOverrides(&cfg.ES)
-	searchBuilt, err := searchindex.Build(cfg.ES, profileStore)
-	if err != nil {
-		log.Fatalf("user-service search index build failed: %v", err)
-	}
-	if searchBuilt.Client != nil {
-		if err := searchBuilt.EnsureIndex(ctx); err != nil {
-			// UserProfile remains authoritative in Postgres. SearchIndexView is a
-			// best-effort derived projection, so transient ES failure degrades
-			// health without taking profile commands offline.
-			log.Printf("WARN: user-service search index ensure failed: %v", err)
-		}
-		log.Printf("user-service search index enabled: %s", searchBuilt.Client.IndexName())
-	}
-
 	// 6. Caches
 	profileCache := usercache.NewProfileCache(redisClient)
 	// The domain MQ publisher remains the immediate profile-event path. Ordinary
@@ -325,12 +322,6 @@ func main() {
 	relationshipEventPublisher := mq.NewEventPublisher(messageTransport)
 	var userEventPublisher application.UserEventPublisher = relationshipEventPublisher
 	accountCloseProjections := searchindex.ComposePublisher()
-	if searchBuilt.Projector != nil {
-		accountCloseProjections = searchindex.ComposePublisher(
-			accountCloseProjections,
-			searchBuilt.Projector,
-		)
-	}
 	if mongoDB != nil {
 		mongoCleanupProjector :=
 			useraccountprojection.NewMongoCleanupProjector(mongoDB)
@@ -632,6 +623,24 @@ func main() {
 			authenticationChallengeStore,
 			challengeapp.OTPCredentialVerifier{},
 		)
+	challengeDeliveryTransport, ok := messageTransport.(challengestream.DurableMessageTransport)
+	if !ok {
+		log.Fatal("AuthenticationChallenge delivery results require durable message transport")
+	}
+	challengeDeliveryConsumer, err :=
+		challengestream.NewAuthenticationChallengeDeliveryResultConsumer(
+			challengeDeliveryTransport,
+			authenticationChallenges,
+			fmt.Sprintf("user-authentication-challenge-%d", os.Getpid()),
+			nil,
+		)
+	if err != nil {
+		log.Fatalf("AuthenticationChallenge delivery consumer init failed: %v", err)
+	}
+	if err := challengeDeliveryConsumer.EnsureGroup(ctx); err != nil {
+		log.Fatalf("AuthenticationChallenge delivery consumer preflight failed: %v", err)
+	}
+	go challengeDeliveryConsumer.Run(ctx)
 	accountAppealStore, err := appealpersistence.NewPostgresStore(pgPool)
 	if err != nil {
 		log.Fatalf("AccountAppealIntake store init failed: %v", err)
@@ -709,6 +718,10 @@ func main() {
 		application.WithAccessTokenSigner(accessSigner),
 		application.WithAccountSecurityReader(accountEnforcementStore),
 		application.WithDefaultNicknamePrefix(getenvOrDefault("USER_DEFAULT_NICKNAME_PREFIX", "新同学")),
+		application.WithManagedAcceptanceIdentity(
+			managedAcceptanceIdentity.Phone,
+			managedAcceptanceIdentity.AccountID,
+		),
 	)
 	federatedLogins, err := newFederatedLoginBindings(authService)
 	if err != nil &&
@@ -748,41 +761,46 @@ func main() {
 	}
 
 	healthChecker := rthealth.NewChecker()
-	if ping := searchBuilt.HealthPing(); ping != nil {
-		healthChecker.Register("elasticsearch", ping)
+	profileSearchOutboxStore, err :=
+		useraccountpersistence.NewUserProfileSearchOutboxStore(pgPool)
+	if err != nil {
+		log.Fatalf("UserProfile search outbox store init failed: %v", err)
 	}
-	if searchBuilt.Projector != nil {
-		profileSearchOutboxStore, err :=
-			useraccountpersistence.NewUserProfileSearchOutboxStore(pgPool)
-		if err != nil {
-			log.Fatalf("UserProfile search outbox store init failed: %v", err)
-		}
-		profileSearchOutboxRelay, err :=
-			useraccountapp.NewUserProfileSearchOutboxRelay(
-				profileSearchOutboxStore,
-				searchBuilt.Projector,
-				fmt.Sprintf("user-service-search-%d", os.Getpid()),
-				useraccountapp.WithUserProfileSearchOutboxObserver(
-					useraccountobservability.ProfileSearchOutboxObserver{},
-				),
-			)
-		if err != nil {
-			log.Fatalf("UserProfile search outbox relay init failed: %v", err)
-		}
-		healthChecker.Register(
-			"user_profile_search_outbox_relay",
-			func(hctx context.Context) error {
-				return profileSearchOutboxRelay.Healthy(hctx, 15*time.Second)
-			},
+	profileSearchPublisher, err := profileprojection.NewStreamPublisher(messageTransport)
+	if err != nil {
+		log.Fatalf("UserProfile search stream publisher init failed: %v", err)
+	}
+	profileSearchOutboxRelay, err :=
+		useraccountapp.NewUserProfileSearchOutboxRelay(
+			profileSearchOutboxStore,
+			profileSearchPublisher,
+			fmt.Sprintf("user-service-profile-search-%d", os.Getpid()),
+			useraccountapp.WithUserProfileSearchOutboxObserver(
+				useraccountobservability.ProfileSearchOutboxObserver{},
+			),
 		)
-		go profileSearchOutboxRelay.Run(ctx)
+	if err != nil {
+		log.Fatalf("UserProfile search outbox relay init failed: %v", err)
 	}
+	healthChecker.Register(
+		"user_profile_search_outbox_relay",
+		func(hctx context.Context) error {
+			return profileSearchOutboxRelay.Healthy(hctx, 15*time.Second)
+		},
+	)
+	go profileSearchOutboxRelay.Run(ctx)
 	healthChecker.Register("postgres", func(hctx context.Context) error {
 		return pgPool.Ping(hctx)
 	})
 	healthChecker.Register("redis", func(hctx context.Context) error {
 		return redisRouter.PingAll(hctx)
 	})
+	healthChecker.Register(
+		"authentication_challenge_delivery_consumer",
+		func(context.Context) error {
+			return challengeDeliveryConsumer.Healthy(15 * time.Second)
+		},
+	)
 	if mongoDB != nil {
 		healthChecker.Register("mongodb", func(hctx context.Context) error {
 			return mongoClient.Ping(hctx, nil)
@@ -920,6 +938,7 @@ func main() {
 	)
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	accountsessionhttp.RegisterResearchSessionRoutes(serviceMux, researchSessionHandler)
 	personaHostAuthorityHandler.RegisterRoutes(serviceMux)
 	accountAppealHandler.RegisterRoutes(serviceMux)
 	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)
@@ -932,37 +951,11 @@ func main() {
 	outerMux := buildUserHTTPMux(handler, healthChecker)
 
 	// 8.1 Observability middleware
-	instanceID, _ := os.Hostname()
-	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
-	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
-	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
-		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
-		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
-		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
-	)
+	corsHandler, closeObservedHandler, err := buildObservedUserHandler(outerMux)
 	if err != nil {
-		log.Fatalf("user-service runtime log exporter init failed: %v", err)
+		log.Fatalf("user-service observability middleware init failed: %v", err)
 	}
-	defer runtimeLogExporter.Close()
-	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
-	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
-	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
-	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
-	if err != nil {
-		log.Fatalf("user-service process logger init failed: %v", err)
-	}
-	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
-	if err != nil {
-		log.Fatalf("user-service exception logger init failed: %v", err)
-	}
-	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
-		Service:           "user-service",
-		ServiceName:       "user-service",
-		ServiceInstanceID: instanceID,
-	}, ioLogger, processLogger, exceptionLogger)
-	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
+	defer closeObservedHandler()
 
 	// 8.2 Interest profile projector: consume content's UserInterestRecomputed
 	// and maintain the user-domain rm_user_profile_view interest read model.

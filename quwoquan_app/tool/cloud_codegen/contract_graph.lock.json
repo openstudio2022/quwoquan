@@ -1330,9 +1330,6 @@
         "ASSISTANT.USER.device_action_permit_invalid",
         "ASSISTANT.USER.device_action_permit_expired",
         "ASSISTANT.USER.device_action_permit_replayed",
-        "ASSISTANT.SYSTEM.device_action_unavailable",
-        "ASSISTANT.USER.device_action_permission_denied",
-        "ASSISTANT.SYSTEM.device_action_failed",
         "ASSISTANT.SYSTEM.run_storage_unavailable"
       ],
       "facadeMethod": "submitDeviceActionReceipt",
@@ -10884,7 +10881,6 @@
       "domain": "circle",
       "errorCodes": [
         "CIRCLE.USER.gathering_host_authority_invalid",
-        "CIRCLE.USER.gathering_policy_denied",
         "CIRCLE.USER.gathering_idempotency_conflict",
         "CIRCLE.DEPENDENCY.gathering_target_unavailable",
         "CIRCLE.SYSTEM.gathering_storage_failed"
@@ -11481,9 +11477,6 @@
         "CIRCLE.USER.gathering_disclosure_invalid",
         "CIRCLE.USER.gathering_schedule_invalid",
         "CIRCLE.USER.gathering_control_required",
-        "CIRCLE.USER.gathering_qualification_required",
-        "CIRCLE.USER.gathering_commercial_authority_required",
-        "CIRCLE.USER.gathering_policy_denied",
         "CIRCLE.USER.gathering_version_conflict",
         "CIRCLE.USER.gathering_idempotency_conflict",
         "CIRCLE.DEPENDENCY.gathering_room_provision_pending",
@@ -15285,6 +15278,94 @@
       "transport": "json"
     },
     {
+      "actorRequirement": "account",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "content.post.GetResearchReleaseReadback",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeResearchReleaseReadbackView",
+        "responseType": "ResearchReleaseReadbackView"
+      },
+      "commercial": {
+        "blockReason": "research-only internal App readback is never a commercial content surface",
+        "explicit": true,
+        "gapId": "CONTENT_POST_RESEARCH_ONLY",
+        "status": "blocked",
+        "targetStory": "multi-carrier-release"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.unauthorized",
+        "CONTENT.USER.research_identity_invalid",
+        "CONTENT.SYSTEM.required_dependency_unavailable",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getResearchReleaseReadback",
+      "facet": "ResearchReleaseReadbackQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetResearchReleaseReadback",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "authenticated_account_research_attestation",
+      "pagination": null,
+      "pathTemplate": "/content/research/readback",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "none",
+        "requestClassification": "SECRET",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 1,
+        "retryMode": "none",
+        "timeoutMilliseconds": 800
+      },
+      "requestBindings": {
+        "header": [
+          {
+            "field": "researchIdentityAttestation",
+            "name": "X-Research-Identity-Attestation",
+            "required": true
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "ResearchReleaseReadbackQuery",
+      "responseAdmission": null,
+      "responseBody": "ResearchReleaseReadbackView",
+      "responseBodyKind": "object",
+      "responseEntity": "ResearchReleaseReadbackView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "environment",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "content_research_release_readback",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
@@ -17030,6 +17111,89 @@
     },
     {
       "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "entity.homepage_claim_request.GetMyPendingHomepageClaimRequest",
+      "clientContract": {
+        "dartImport": "../entity/entity_operation_contracts.g.dart",
+        "responseDecoder": "decodeHomepageClaimRequestView",
+        "responseType": "HomepageClaimRequestView"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "entity",
+      "errorCodes": [
+        "ENTITY.USER.claim_not_found",
+        "ENTITY.USER.permission_denied",
+        "ENTITY.USER.invalid_argument",
+        "ENTITY.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getMyPending",
+      "facet": "HomepageClaimQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetMyPendingHomepageClaimRequest",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "entity.homepage_claim_request",
+      "ownershipPolicy": "author_self",
+      "pagination": null,
+      "pathTemplate": "/homepages/{homepageId}/claim-requests/mine",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "redacted",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "homepageId",
+            "name": "homepageId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetMyPendingHomepageClaimRequestQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "HomepageClaimRequestView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "entity/entity_homepage/homepage_claim_request/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homepageClaim"
+      ],
+      "telemetry": {
+        "attributes": [
+          "homepage_id",
+          "outcome"
+        ],
+        "metric": "entity_homepage_claim_mine_get",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
       "aggregateOwner": "HomepageReview",
       "authMode": "required",
       "canonicalOperationId": "entity.homepage_review.CreateHomepageReview",
@@ -17547,6 +17711,173 @@
         "trace": true
       },
       "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "entity.homepage_status_report.GetMyPendingHomepageStatusReport",
+      "clientContract": {
+        "dartImport": "../entity/entity_operation_contracts.g.dart",
+        "responseDecoder": "decodeHomepageStatusReportView",
+        "responseType": "HomepageStatusReportView"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "entity",
+      "errorCodes": [
+        "ENTITY.USER.status_report_not_found",
+        "ENTITY.USER.permission_denied",
+        "ENTITY.USER.invalid_argument",
+        "ENTITY.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getMyPending",
+      "facet": "HomepageStatusReportQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetMyPendingHomepageStatusReport",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "entity.homepage_status_report",
+      "ownershipPolicy": "author_self",
+      "pagination": null,
+      "pathTemplate": "/homepages/{homepageId}/status-reports/mine",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "redacted",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "homepageId",
+            "name": "homepageId"
+          }
+        ],
+        "query": [
+          {
+            "field": "reason",
+            "name": "reason",
+            "required": true
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetMyPendingHomepageStatusReportQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "HomepageStatusReportView",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 300
+      },
+      "sourcePath": "entity/entity_homepage/homepage_status_report/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homepageStatusReport"
+      ],
+      "telemetry": {
+        "attributes": [
+          "homepage_id",
+          "reason",
+          "outcome"
+        ],
+        "metric": "entity_homepage_status_report_mine_get",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
+      "clientContract": {
+        "dartImport": "../gateway/gateway_operation_contracts.g.dart",
+        "responseDecoder": "decodeSearchPageSlice",
+        "responseType": "SearchPageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "gateway",
+      "errorCodes": [
+        "GATEWAY.USER.graphql_request_invalid",
+        "GATEWAY.USER.persisted_query_unknown",
+        "GATEWAY.USER.graphql_query_forbidden",
+        "GATEWAY.MIDDLEWARE.graphql_owner_unavailable"
+      ],
+      "facadeMethod": "searchPage",
+      "facet": "SearchPageQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "SearchPage",
+      "method": "POST",
+      "mutationTarget": "",
+      "objectId": "gateway.persisted_query_execution",
+      "ownershipPolicy": "public_search_discovery",
+      "pagination": null,
+      "pathTemplate": "/graphql",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 2000
+      },
+      "requestBindings": null,
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "SearchPageInput",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "object",
+      "responseEntity": "SearchPageSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.5,
+        "latencyP95Milliseconds": 1500
+      },
+      "sourcePath": "gateway/graphql_read/persisted_query_execution/operations.yaml",
+      "streaming": null,
+      "successStatus": 200,
+      "surfaceIds": [
+        "globalSearchNetworkResults"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "owner_target"
+        ],
+        "metric": "gateway_graphql_search_page_execute",
+        "trace": true
+      },
+      "transport": "graphql"
     },
     {
       "actorRequirement": "account",
@@ -18262,7 +18593,6 @@
       "concurrency": {},
       "domain": "integration",
       "errorCodes": [
-        "INTEGRATION.USER.location_unavailable",
         "INTEGRATION.USER.location_permission_required",
         "INTEGRATION.MIDDLEWARE.upstream_timeout",
         "INTEGRATION.MIDDLEWARE.location_provider_unavailable",
@@ -18361,7 +18691,6 @@
       "concurrency": {},
       "domain": "integration",
       "errorCodes": [
-        "INTEGRATION.USER.location_unavailable",
         "INTEGRATION.USER.invalid_argument",
         "INTEGRATION.MIDDLEWARE.upstream_timeout",
         "INTEGRATION.MIDDLEWARE.location_provider_rate_limited",
@@ -19464,7 +19793,6 @@
       "domain": "realtime",
       "errorCodes": [
         "REALTIME.USER.unauthorized",
-        "REALTIME.USER.rate_limited",
         "REALTIME.SYSTEM.account_security_authority_unavailable",
         "REALTIME.SYSTEM.internal_error"
       ],
@@ -21188,7 +21516,6 @@
       "concurrency": {},
       "domain": "search",
       "errorCodes": [
-        "SEARCH.USER.recent_entry_not_found",
         "SEARCH.USER.recent_version_conflict",
         "SEARCH.USER.recent_idempotency_conflict",
         "SEARCH.SYSTEM.recent_storage_failed"
@@ -21508,6 +21835,7 @@
       "domain": "search",
       "errorCodes": [
         "SEARCH.USER.invalid_argument",
+        "SEARCH.USER.forbidden",
         "SEARCH.MIDDLEWARE.unavailable"
       ],
       "facadeMethod": "search",
@@ -21977,6 +22305,93 @@
       "transport": "json"
     },
     {
+      "actorRequirement": "account",
+      "aggregateOwner": "AccountSession",
+      "authMode": "required",
+      "canonicalOperationId": "user.account_session.IssueWhitelistedResearchSession",
+      "clientContract": {
+        "dartImport": "../user/user_operation_contracts.g.dart",
+        "responseDecoder": "decodeWhitelistedResearchSession",
+        "responseType": "WhitelistedResearchSession"
+      },
+      "commercial": {
+        "blockReason": "research-only identity attestation is never a commercial session",
+        "explicit": true,
+        "gapId": "USER_ACCOUNT_SESSION_RESEARCH_ONLY",
+        "status": "blocked",
+        "targetStory": "multi-carrier-release"
+      },
+      "concurrency": {},
+      "domain": "user",
+      "errorCodes": [
+        "USER.USER.unauthorized",
+        "USER.USER.forbidden",
+        "USER.AUTH.account_security_unavailable",
+        "USER.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "issueWhitelistedResearchSession",
+      "facet": "ResearchSessionCommandFacade",
+      "invariantTarget": "AccountSession",
+      "kind": "command",
+      "localOperationId": "IssueWhitelistedResearchSession",
+      "method": "POST",
+      "mutationTarget": "AccountSession",
+      "objectId": "user.account_session",
+      "ownershipPolicy": "authenticated_account_research_allowlist",
+      "pagination": null,
+      "pathTemplate": "/auth/research/session",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "none",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SECRET"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 1,
+        "retryMode": "none",
+        "timeoutMilliseconds": 800
+      },
+      "requestBindings": {
+        "injected": [
+          {
+            "field": "accountId",
+            "name": "authenticatedAccountId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "IssueWhitelistedResearchSessionCommand",
+      "responseAdmission": null,
+      "responseBody": "WhitelistedResearchSession",
+      "responseBodyKind": "object",
+      "responseEntity": "WhitelistedResearchSession",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 800
+      },
+      "sourcePath": "user/account/account_session/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "appShell"
+      ],
+      "telemetry": {
+        "attributes": [
+          "environment",
+          "outcome",
+          "error_code"
+        ],
+        "metric": "user_research_session_issue",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
       "actorRequirement": "none",
       "aggregateOwner": "AccountSession",
       "authMode": "public",
@@ -22074,7 +22489,6 @@
         "USER.AUTH.carrier_unavailable",
         "USER.AUTH.carrier_token_invalid",
         "USER.AUTH.carrier_provider_timeout",
-        "USER.AUTH.carrier_phone_mismatch",
         "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
@@ -22245,7 +22659,6 @@
         "USER.AUTH.otp_expired",
         "USER.AUTH.otp_mismatch",
         "USER.AUTH.otp_attempts_exceeded",
-        "USER.AUTH.login_locked",
         "USER.AUTH.consent_required",
         "USER.AUTH.credential_conflict",
         "USER.AUTH.account_suspended",
@@ -22719,6 +23132,79 @@
     },
     {
       "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "public",
+      "canonicalOperationId": "user.authentication_challenge.GetOtpDeliveryReadiness",
+      "clientContract": {
+        "dartImport": "../user/user_operation_contracts.g.dart",
+        "responseDecoder": "decodeOtpDeliveryReadiness",
+        "responseType": "OtpDeliveryReadiness"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "user",
+      "errorCodes": [
+        "USER.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getOtpDeliveryReadiness",
+      "facet": "AuthenticationChallengeQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetOtpDeliveryReadiness",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "user.authentication_challenge",
+      "ownershipPolicy": "authentication_challenge_bootstrap",
+      "pagination": null,
+      "pathTemplate": "/auth/otp/readiness",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 1,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1200
+      },
+      "requestBindings": null,
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "OtpDeliveryReadinessQuery",
+      "responseAdmission": null,
+      "responseBody": "OtpDeliveryReadiness",
+      "responseBodyKind": "object",
+      "responseEntity": "OtpDeliveryReadiness",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "user/account/authentication_challenge/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "login"
+      ],
+      "telemetry": {
+        "attributes": [
+          "environment",
+          "outcome"
+        ],
+        "metric": "user_auth_otp_delivery_readiness",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
       "aggregateOwner": "AuthenticationChallenge",
       "authMode": "public",
       "canonicalOperationId": "user.authentication_challenge.ResolveOneTapLoginHint",
@@ -22821,6 +23307,7 @@
       "errorCodes": [
         "USER.USER.invalid_argument",
         "USER.AUTH.otp_rate_limited",
+        "USER.AUTH.otp_idempotency_conflict",
         "USER.AUTH.otp_provider_failed",
         "USER.SYSTEM.internal_error"
       ],
@@ -22844,10 +23331,10 @@
       },
       "reliability": {
         "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 1,
-        "retryMode": "none",
-        "timeoutMilliseconds": 1200
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 3000
       },
       "requestBindings": null,
       "requestBodyKind": "object",
@@ -22874,7 +23361,8 @@
           "platform",
           "outcome",
           "error_code",
-          "delivery_status"
+          "delivery_status",
+          "idempotent_replay"
         ],
         "metric": "user_auth_otp_send",
         "trace": true
@@ -28343,13 +28831,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "77111acbfd979e9f67300112509962053a1b201413cc9c4c2e36be0c74f4db68"
+    "sha256": "d67da22282049a51bf2e832278ca0239eec7efd64e892ae3a8cd6d314f8098f8"
   },
   "contractGraph": {
-    "compilerHash": "sha256:5d75695d2a498578e51f8510f72ea57cf831db26a508c62d6be60ca962abc187",
+    "compilerHash": "sha256:1d83f04abfc24ec7d9a326cfea80d1d4ed72786482e1e1044e7409f0b78b91b7",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4",
-    "sourceDigestSetSha256": "e8b2f4c1f46265f22c1999d9b0f1e84929c34a0d74993875447ba9fc5a44f101"
+    "sha256": "647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1",
+    "sourceDigestSetSha256": "2bf4699f7b0f501fca816a364c46fc9528b6e7f1bd3cea825da6f52d32c5bd01"
   },
   "generator": "app-cloud-handoff"
 }

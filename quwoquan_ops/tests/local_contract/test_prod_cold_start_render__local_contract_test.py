@@ -57,15 +57,15 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
         self.assertNotIn("tls internal", caddy)
         self.assertNotIn("quwoquan.com", caddy)
 
-    def test_stable_router_only_targets_gray_before_full_promotion(self) -> None:
+    def test_caddy_never_owns_stable_candidate_business_routing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
-            render._write_caddyfile(output, "prod", "gray-initial")
+            render._write_caddyfile(output, "prod", "5")
             initial = (output / "runtime" / "Caddyfile").read_text(encoding="utf-8")
-            render._write_caddyfile(output, "prod", "full")
+            render._write_caddyfile(output, "prod", "100")
             full = (output / "runtime" / "Caddyfile").read_text(encoding="utf-8")
-        self.assertIn("@gray_userids", initial)
-        self.assertIn("host.containers.internal:29000", initial)
+        self.assertNotIn("@gray_", initial)
+        self.assertNotIn("host.containers.internal:29000", initial)
         self.assertNotIn("@gray_", full)
 
     def test_prod_proxy_exposes_acme_ports_and_support_image_is_digest_pinned(self) -> None:

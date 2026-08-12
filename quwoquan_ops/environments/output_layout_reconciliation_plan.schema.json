@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_ops/environments/output_layout_reconciliation_plan.schema.json",
+  "title": "Immutable output layout reconciliation plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schemaVersion",
+    "createdAt",
+    "status",
+    "repositoryRoot",
+    "outputRoot",
+    "canonicalTruth",
+    "canonicalIssueCount",
+    "canonicalIssueDigest",
+    "unscopedIssues",
+    "probeIssues",
+    "excludedResourceClasses",
+    "records",
+    "actionCount",
+    "noOp",
+    "blockers",
+    "planDigest"
+  ],
+  "properties": {
+    "schema": {"const": "stackctl-output-layout-reconciliation-plan"},
+    "schemaVersion": {"const": 1},
+    "createdAt": {"type": "string", "minLength": 1},
+    "status": {"enum": ["ready", "blocked"]},
+    "repositoryRoot": {"type": "string", "minLength": 1},
+    "outputRoot": {"type": "string", "minLength": 1},
+    "canonicalTruth": {
+      "type": "object",
+      "minProperties": 3,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "canonicalIssueCount": {"type": "integer", "minimum": 0},
+    "canonicalIssueDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "unscopedIssues": {"type": "array", "items": {"type": "string"}},
+    "probeIssues": {"type": "array", "items": {"type": "string"}},
+    "excludedResourceClasses": {
+      "const": [
+        "named_volumes",
+        "environment_runtime",
+        "source_truth",
+        "data_release"
+      ]
+    },
+    "records": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/record"}
+    },
+    "actionCount": {"type": "integer", "minimum": 0},
+    "noOp": {"type": "boolean"},
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "planDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "snapshot": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "mode",
+        "pathByteLength",
+        "byteCount",
+        "entryCount",
+        "mtimeNs",
+        "sha256"
+      ],
+      "properties": {
+        "kind": {"enum": ["file", "directory", "symlink", "other"]},
+        "mode": {"type": "integer", "minimum": 0},
+        "pathByteLength": {"type": "integer", "minimum": 1},
+        "byteCount": {"type": "integer", "minimum": 0},
+        "entryCount": {"type": "integer", "minimum": 1},
+        "mtimeNs": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activeProcess",
+        "openFileDescriptor",
+        "protectedReceipt",
+        "protectedDataRelease",
+        "protectedQuarantine",
+        "secretMaterial",
+        "sourceTruth",
+        "sourcePath",
+        "environmentRuntime",
+        "namedVolume"
+      ],
+      "properties": {
+        "activeProcess": {"type": "boolean"},
+        "openFileDescriptor": {"type": "boolean"},
+        "protectedReceipt": {"type": "boolean"},
+        "protectedDataRelease": {"type": "boolean"},
+        "protectedQuarantine": {"type": "boolean"},
+        "secretMaterial": {"type": "boolean"},
+        "sourceTruth": {"type": "boolean"},
+        "sourcePath": {"type": "boolean"},
+        "environmentRuntime": {"type": "boolean"},
+        "namedVolume": {"const": false}
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "producerGroup",
+        "producer",
+        "target",
+        "violations",
+        "snapshot",
+        "activeProcessPids",
+        "openFileDescriptorPids",
+        "disposition",
+        "canonicalDestination",
+        "operation",
+        "flags",
+        "blockers",
+        "action"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "producerGroup": {"type": "string", "minLength": 1},
+        "producer": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1},
+        "violations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["line", "reason"],
+            "properties": {
+              "line": {"type": ["integer", "null"], "minimum": 1},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "snapshot": {"$ref": "#/$defs/snapshot"},
+        "activeProcessPids": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+        "openFileDescriptorPids": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+        "disposition": {
+          "enum": [
+            "move_to_canonical_cache",
+            "move_to_canonical_process",
+            "owner_destination_required",
+            "security_owner_review",
+            "source_owner_migration_required",
+            "out_of_scope_source",
+            "out_of_scope_data",
+            "out_of_scope_environment_runtime"
+          ]
+        },
+        "canonicalDestination": {"type": ["string", "null"]},
+        "operation": {"enum": ["move", "none"]},
+        "flags": {"$ref": "#/$defs/flags"},
+        "blockers": {"type": "array", "items": {"type": "string"}},
+        "action": {"type": "boolean"}
+      }
+    }
+  }
+}

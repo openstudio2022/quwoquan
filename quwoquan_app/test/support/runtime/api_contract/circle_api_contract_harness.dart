@@ -11,6 +11,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle_gro
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group_membership/application/public/circle_group_membership_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/application/public/circle_file_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_post_placement/application/public/circle_post_placement_commands.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -39,12 +40,15 @@ final class CircleApiContractHarness {
     required this.lifecycle,
     required this.query,
     required this.membership,
+    required this.membershipQueries,
+    required this.pendingMemberships,
     required this.fileWriter,
     required this.fileReader,
     required this.groupCommands,
     required this.groupQueries,
     required this.groupMembershipCommands,
     required this.groupMembershipQueries,
+    required this.postPlacement,
   });
 
   static Future<CircleApiContractHarness> create() async {
@@ -121,6 +125,20 @@ final class CircleApiContractHarness {
         client: client,
         invocationContext: invocationContext,
       ),
+      membershipQueries:
+          CircleProductionComposition.generatedAdapter<CircleMembershipQueries>(
+            CircleProductionAdapter.membership,
+            client: client,
+            invocationContext: invocationContext,
+          ),
+      pendingMemberships:
+          CircleProductionComposition.generatedAdapter<
+            PendingCircleMemberships
+          >(
+            CircleProductionAdapter.membership,
+            client: client,
+            invocationContext: invocationContext,
+          ),
       fileWriter:
           CircleProductionComposition.generatedAdapter<CircleFileWriter>(
             CircleProductionAdapter.file,
@@ -161,6 +179,18 @@ final class CircleApiContractHarness {
             client: client,
             invocationContext: invocationContext,
           ),
+      postPlacement:
+          CircleProductionComposition.generatedAdapter<
+            CirclePostPlacementCommands
+          >(
+            CircleProductionAdapter.postPlacement,
+            client: client,
+            invocationContext: (String clientPageId, String idempotencyKey) =>
+                harness._postPlacementInvocationContext(
+                  clientPageId,
+                  idempotencyKey,
+                ),
+          ),
     );
     return harness;
   }
@@ -174,12 +204,15 @@ final class CircleApiContractHarness {
   final CircleLifecycleCommandWriter lifecycle;
   final CircleQueryReader query;
   final CircleMembershipCommands membership;
+  final CircleMembershipQueries membershipQueries;
+  final PendingCircleMemberships pendingMemberships;
   final CircleFileWriter fileWriter;
   final CircleFileReader fileReader;
   final CircleGroupCommands groupCommands;
   final CircleGroupQueries groupQueries;
   final CircleGroupMembershipCommands groupMembershipCommands;
   final CircleGroupMembershipQueries groupMembershipQueries;
+  final CirclePostPlacementCommands postPlacement;
 
   AuthSessionGrant? _session;
   String? _ownerId;
@@ -269,6 +302,9 @@ final class CircleApiContractHarness {
       CircleRequestPageIds.updateCircleGroupMemberRole ||
       CircleRequestPageIds.getMyCircleGroupMembership ||
       CircleRequestPageIds.listCircleGroupMemberships ||
+      CircleRequestPageIds.getMyCircleMembership ||
+      CircleRequestPageIds.listCircleMemberships ||
+      CircleRequestPageIds.listPendingCircleMemberships ||
       CircleRequestPageIds.listCircleFiles ||
       CircleRequestPageIds.getCircleFile ||
       CircleRequestPageIds.createCircleFile ||
@@ -308,6 +344,38 @@ final class CircleApiContractHarness {
       routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
       clientPageId: clientPageId,
       idempotencyKey: 'circle-api-account-cleanup-$_ownerId',
+      actor: CloudOperationActorContext(
+        accountId: _ownerId,
+        personaId: _personaId,
+        deviceActorId: circleApiContractDeviceId,
+      ),
+    );
+  }
+
+  CloudOperationInvocationContext _postPlacementInvocationContext(
+    String clientPageId,
+    String idempotencyKey,
+  ) {
+    switch (clientPageId) {
+      case CircleRequestPageIds.placePostInCircle:
+      case CircleRequestPageIds.removePostFromCircle:
+      case CircleRequestPageIds.pinCirclePost:
+      case CircleRequestPageIds.featureCirclePost:
+        break;
+      default:
+        throw StateError(
+          'Unsupported Circle post placement clientPageId: $clientPageId',
+        );
+    }
+    final normalizedKey = idempotencyKey.trim();
+    if (normalizedKey.isEmpty) {
+      throw StateError('Circle post placement requires an idempotency key');
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.circleDetail.id,
+      routeId: AppUiSurfaces.circleDetail.routeId,
+      clientPageId: clientPageId,
+      idempotencyKey: normalizedKey,
       actor: CloudOperationActorContext(
         accountId: _ownerId,
         personaId: _personaId,

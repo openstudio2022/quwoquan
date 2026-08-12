@@ -17,7 +17,7 @@ func TestWithCORSAllowsLocalhostPreflight(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Method", http.MethodPatch)
 	req.Header.Set(
 		"Access-Control-Request-Headers",
-		"Authorization, Idempotency-Key, If-Match, X-Client-Page-Id, X-Client-Session-Id, X-Client-User-Id",
+		"Authorization, Idempotency-Key, If-Match, X-Client-Page-Id, X-Client-Session-Id, X-Client-User-Id, X-Research-Identity-Attestation",
 	)
 
 	rr := httptest.NewRecorder()
@@ -43,6 +43,7 @@ func TestWithCORSAllowsLocalhostPreflight(t *testing.T) {
 		"X-Client-Page-Id",
 		"X-Client-Session-Id",
 		"X-Client-User-Id",
+		"X-Research-Identity-Attestation",
 	} {
 		if !strings.Contains(allowHeaders, header) {
 			t.Fatalf("allow headers %q missing %s", allowHeaders, header)

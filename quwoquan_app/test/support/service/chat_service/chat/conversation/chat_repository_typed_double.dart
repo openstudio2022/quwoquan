@@ -332,8 +332,9 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsViewData settings,
-  ) async => _engine.updateGroupSettings(conversationId, <String, Object?>{
+    ChatGroupSettingsViewData settings, {
+    String? idempotencyKey,
+  }) async => _engine.updateGroupSettings(conversationId, <String, Object?>{
     'nameEditableByAdminOnly': settings.nameEditableByAdminOnly,
     'conversationType': settings.conversationType,
     'circleId': settings.circleId,
@@ -343,20 +344,23 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<void> updateAnnouncement(
     String conversationId,
-    String announcement,
-  ) async => _engine.updateAnnouncement(conversationId, announcement);
+    String announcement, {
+    String? idempotencyKey,
+  }) async => _engine.updateAnnouncement(conversationId, announcement);
 
   @override
   Future<void> transferOwnership(
     String conversationId,
-    String newOwnerId,
-  ) async => _engine.transferOwnership(conversationId, newOwnerId);
+    String newOwnerId, {
+    String? idempotencyKey,
+  }) async => _engine.transferOwnership(conversationId, newOwnerId);
 
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
-    List<String> adminIds,
-  ) async => _engine.updateGroupAdmins(conversationId, adminIds);
+    List<String> adminIds, {
+    String? idempotencyKey,
+  }) async => _engine.updateGroupAdmins(conversationId, adminIds);
 
   @override
   Future<void> dissolveConversation(String conversationId) async =>

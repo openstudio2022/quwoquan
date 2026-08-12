@@ -121,3 +121,56 @@ def test_freeze_catalog_cli_has_no_free_form_candidate_bypass(capsys) -> None:
     for retired in ("freeze-homepage-catalog", "freeze-article-catalog"):
         with pytest.raises(SystemExit):
             parser.parse_args(["source-pool", retired, "--help"])
+
+
+def test_merge_catalog_cli_passes_exact_identity_and_members(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    import content.source.research.handler_cli as handler
+
+    members = [tmp_path / "member-0.json", tmp_path / "member-1.json"]
+    captured: dict[str, object] = {}
+
+    def merge(**kwargs):
+        captured.update(kwargs)
+        return {
+            "schema": "quwoquan_data.homepage_article_source_ready_aggregate_result",
+            "sourceSetDigest": "sha256:" + "a" * 64,
+            "counts": {"homepage": 2, "article": 2},
+        }
+
+    monkeypatch.setattr(handler, "merge_homepage_article_source_ready_batches", merge)
+    values = [
+        "source-pool",
+        "merge-homepage-article",
+        "--source-ready-manifest",
+        str(members[0]),
+        "--source-ready-manifest",
+        str(members[1]),
+        "--source-set-id",
+        "aggregate-1",
+        "--target-scale",
+        "M100",
+        "--source-revision",
+        "sha256:" + "1" * 64,
+        "--source-digest",
+        "sha256:" + "2" * 64,
+        "--entity-catalog-digest",
+        "sha256:" + "3" * 64,
+        "--created-at",
+        "2026-08-08T00:00:00Z",
+        "--output-root",
+        str(tmp_path / "output"),
+    ]
+
+    parsed = _parser().parse_args(values)
+    parsed.handler(parsed)
+
+    assert captured["batch_manifests"] == members
+    assert captured["source_set_id"] == "aggregate-1"
+    assert captured["target_scale"] == "M100"
+    assert captured["output_root"] == tmp_path / "output"
+    assert json.loads(capsys.readouterr().out)["counts"] == {
+        "homepage": 2,
+        "article": 2,
+    }

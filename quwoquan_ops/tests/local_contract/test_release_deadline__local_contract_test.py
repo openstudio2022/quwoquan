@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import time
 import unittest
+from unittest import mock
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.common import run
@@ -20,6 +21,26 @@ class ReleaseDeadlineContractTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 124)
         self.assertIn("deterministic deadline", result.stderr)
+
+    def test_operator_interrupt_is_forwarded_to_managed_process_group(self) -> None:
+        process = mock.Mock()
+        process.pid = 43120
+        process.wait.side_effect = [KeyboardInterrupt, 0]
+        with (
+            mock.patch(
+                "quwoquan_ops.cli.lib.common.subprocess.Popen",
+                return_value=process,
+            ),
+            mock.patch("quwoquan_ops.cli.lib.common.os.killpg") as killpg,
+        ):
+            result = run(
+                [sys.executable, "-c", "pass"],
+                timeout_seconds=30,
+            )
+
+        killpg.assert_called_once_with(process.pid, __import__("signal").SIGINT)
+        self.assertEqual(result.returncode, 130)
+        self.assertIn("managed child process was stopped", result.stderr)
 
 
 if __name__ == "__main__":

@@ -16,9 +16,6 @@
     "authorizationRequiredAssetIds",
     "researchAcceptedCount",
     "commercialAcceptedCount",
-    "sourceRevision",
-    "sourceDigest",
-    "entityCatalogDigest",
     "sourceOwner",
     "readinessPhase",
     "manifestDigest",
@@ -38,6 +35,10 @@
     "homepageApiVerificationRef",
     "postApiVerificationRef",
     "mediaManifestRef",
+    "appUatEnvelope",
+    "appUatEnvelopeDigest",
+    "activationEnvelope",
+    "activationEnvelopeDigest",
     "verifiedAt",
     "verificationChecksum",
     "passed"
@@ -58,6 +59,11 @@
     "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceIdentities": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sourceIdentity"}
+    },
+    "sourceIdentitySetDigest": {"$ref": "#/$defs/digest"},
     "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "mediaManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -161,6 +167,9 @@
         "videoAttribution": {"type": "string", "minLength": 1}
       }
     },
+    "appUatEnvelopeDigest": {"$ref": "#/$defs/digest"},
+    "activationEnvelope": {"$ref": "#/$defs/activationEnvelope"},
+    "activationEnvelopeDigest": {"$ref": "#/$defs/digest"},
     "feedQueries": {
       "type": "array",
       "minItems": 5,
@@ -210,6 +219,12 @@
     "passed": {"const": true}
   },
   "allOf": [
+    {
+      "anyOf": [
+        {"required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"]},
+        {"required": ["sourceIdentities", "sourceIdentitySetDigest"]}
+      ]
+    },
     {
       "if": {
         "properties": {"readinessPhase": {"const": "research"}},
@@ -325,6 +340,187 @@
     }
   ],
   "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceIdentity": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
+          "properties": {
+            "sourceRevision": {"$ref": "#/$defs/digest"},
+            "sourceDigest": {"$ref": "#/$defs/digest"},
+            "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["identityKind", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "executionIds"],
+          "properties": {
+            "identityKind": {"const": "legacy_canonical_migration"},
+            "sourceDigest": {"$ref": "#/$defs/digest"},
+            "canonicalObjectDigest": {"$ref": "#/$defs/digest"},
+            "migrationEvidenceDigest": {"$ref": "#/$defs/digest"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        }
+      ]
+    },
+    "researchIsolationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyRef",
+        "policyDigest",
+        "verificationRef",
+        "verificationDigest",
+        "subjectHash"
+      ],
+      "properties": {
+        "policyRef": {
+          "type": "string",
+          "pattern": "^quwoquan_ops/environments/(alpha|beta|gamma|prod)/runtime\\.yaml$"
+        },
+        "policyDigest": {"$ref": "#/$defs/digest"},
+        "verificationRef": {
+          "type": "string",
+          "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/research-isolation-verification\\.json$"
+        },
+        "verificationDigest": {"$ref": "#/$defs/digest"},
+        "subjectHash": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "previousEnvironmentActivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "readinessRef",
+        "readinessDigest",
+        "verifyRunId",
+        "activationEnvelopeDigest",
+        "appUatEnvelopeDigest"
+      ],
+      "properties": {
+        "environment": {"enum": ["alpha", "beta", "gamma"]},
+        "readinessRef": {
+          "type": "string",
+          "pattern": "^env/(alpha|beta|gamma)/runs/data-release/.+/.+/release-readiness\\.json$"
+        },
+        "readinessDigest": {"$ref": "#/$defs/digest"},
+        "verifyRunId": {"type": "string", "minLength": 1},
+        "activationEnvelopeDigest": {"$ref": "#/$defs/digest"},
+        "appUatEnvelopeDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "activationEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "environment",
+        "releaseId",
+        "manifestDigest",
+        "releaseClass",
+        "productLifecycleState",
+        "readinessPhase",
+        "importRunId",
+        "verifyRunId",
+        "importReportRef",
+        "importReportDigest",
+        "appUatEnvelopeDigest"
+      ],
+      "properties": {
+        "schema": {"const": "quwoquan_data.environment_activation_envelope"},
+        "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+        "releaseId": {"type": "string", "minLength": 1},
+        "manifestDigest": {"$ref": "#/$defs/digest"},
+        "sourceRevision": {"$ref": "#/$defs/digest"},
+        "sourceDigest": {"$ref": "#/$defs/digest"},
+        "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+        "sourceIdentities": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sourceIdentity"}
+        },
+        "sourceIdentitySetDigest": {"$ref": "#/$defs/digest"},
+        "milestone": {"enum": ["M100", "M1000", "M10000"]},
+        "previousEnvironmentActivation": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/previousEnvironmentActivation"}
+          ]
+        },
+        "releaseClass": {"enum": ["research", "commercial"]},
+        "productLifecycleState": {"enum": ["research", "commercial"]},
+        "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
+        "importRunId": {"type": "string", "minLength": 1},
+        "verifyRunId": {"type": "string", "minLength": 1},
+        "importReportRef": {
+          "type": "string",
+          "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/import\\.json$"
+        },
+        "importReportDigest": {"$ref": "#/$defs/digest"},
+        "appUatEnvelopeDigest": {"$ref": "#/$defs/digest"},
+        "researchIsolationPolicy": {"$ref": "#/$defs/researchIsolationPolicy"}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["milestone"]},
+          "then": {
+            "required": [
+              "previousEnvironmentActivation",
+              "sourceIdentities",
+              "sourceIdentitySetDigest"
+            ],
+            "properties": {
+              "readinessPhase": {"const": "research"},
+              "releaseClass": {"const": "research"},
+              "productLifecycleState": {"const": "research"}
+            }
+          },
+          "else": {
+            "not": {"required": ["previousEnvironmentActivation"]}
+          }
+        },
+        {
+          "anyOf": [
+            {"required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"]},
+            {"required": ["sourceIdentities", "sourceIdentitySetDigest"]}
+          ]
+        },
+        {
+          "if": {
+            "properties": {"readinessPhase": {"const": "research"}},
+            "required": ["readinessPhase"]
+          },
+          "then": {
+            "required": ["researchIsolationPolicy"],
+            "properties": {
+              "releaseClass": {"const": "research"},
+              "productLifecycleState": {"const": "research"}
+            }
+          },
+          "else": {
+            "not": {"required": ["researchIsolationPolicy"]}
+          }
+        },
+        {
+          "if": {
+            "properties": {"readinessPhase": {"const": "commercial"}},
+            "required": ["readinessPhase"]
+          },
+          "then": {
+            "properties": {
+              "releaseClass": {"const": "commercial"},
+              "productLifecycleState": {"const": "commercial"}
+            }
+          }
+        }
+      ]
+    },
     "operationEvidence": {
       "type": "object",
       "additionalProperties": false,

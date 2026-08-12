@@ -1,0 +1,30 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "creatorId": "qwq_creator_student_mentor_001",
+  "userId": "builtin_student_mentor",
+  "authorId": "builtin_student_mentor",
+  "version": 1,
+  "admission": {
+    "processResult": "completed",
+    "qualityResult": "passed",
+    "evidenceRef": "evidence/system_builtin_author_admission.json",
+    "evidenceDigest": "sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e"
+  },
+  "status": "active",
+  "personaId": "builtin_student_mentor",
+  "displayName": "学长姐备忘录",
+  "userHandle": "senior_notes",
+  "headline": "写新生攻略、选课经验和备考路径的学长姐型作者",
+  "bio": "把报到、选课、考研和求职拆成时间线与 checklist，尽量给到可执行建议。",
+  "creatorArchetype": "student_mentor",
+  "publicProfileTagRefs": [
+    "Format/内容角度/攻略/新生攻略",
+    "Topic/教育成长/学业学术/选课指南",
+    "Topic/教育成长/校园生活/开学季"
+  ],
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_supported_api_reviewer_result.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "candidateId", "contentSha256", "reviewRequestRef", "reviewRequestSha256", "semanticTaskRequestRef",
+    "semanticTaskRequestSha256", "semanticTaskAttemptRef", "semanticTaskAttemptSha256",
+    "provider", "model", "runId", "reviewedAt", "resultSha256", "judgment", "judgmentDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_supported_api_reviewer_result"},
+    "candidateId": {"type": "string", "minLength": 1},
+    "contentSha256": {"$ref": "#/$defs/sha256"},
+    "reviewRequestRef": {"$ref": "#/$defs/safeRef"},
+    "reviewRequestSha256": {"$ref": "#/$defs/sha256"},
+    "semanticTaskRequestRef": {"$ref": "#/$defs/safeRef"},
+    "semanticTaskRequestSha256": {"$ref": "#/$defs/sha256"},
+    "semanticTaskAttemptRef": {"$ref": "#/$defs/safeRef"},
+    "semanticTaskAttemptSha256": {"$ref": "#/$defs/sha256"},
+    "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
+    "model": {"type": "string", "minLength": 1},
+    "runId": {"type": "string", "minLength": 1},
+    "reviewedAt": {"type": "string", "format": "date-time"},
+    "resultSha256": {"$ref": "#/$defs/sha256"},
+    "judgment": {"$ref": "#/$defs/judgment"},
+    "judgmentDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "judgment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status", "entityMatch", "privacyRisk", "minorRisk",
+        "maliciousMediaRisk", "watermarkStatus", "qualityStatus", "findings"
+      ],
+      "properties": {
+        "status": {"enum": ["passed", "blocked"]},
+        "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+        "privacyRisk": {"enum": ["none", "present", "unknown"]},
+        "minorRisk": {"enum": ["none", "present", "unknown"]},
+        "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
+        "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+        "qualityStatus": {"enum": ["passed", "blocked"]},
+        "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

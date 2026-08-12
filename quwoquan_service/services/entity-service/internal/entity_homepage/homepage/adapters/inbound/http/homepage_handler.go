@@ -56,6 +56,7 @@ func (h *Handler) WithStatusReportHandler(handler statusReportHTTPHandler) *Hand
 type claimRequestHTTPHandler interface {
 	ListQueue(http.ResponseWriter, *http.Request)
 	Create(http.ResponseWriter, *http.Request, string)
+	GetMine(http.ResponseWriter, *http.Request, string)
 	Review(http.ResponseWriter, *http.Request, string, string)
 }
 
@@ -70,6 +71,7 @@ type homepageReviewHTTPHandler interface {
 type statusReportHTTPHandler interface {
 	ListQueue(http.ResponseWriter, *http.Request)
 	Create(http.ResponseWriter, *http.Request, string)
+	GetMine(http.ResponseWriter, *http.Request, string)
 	Review(http.ResponseWriter, *http.Request, string, string)
 }
 
@@ -383,6 +385,10 @@ func (h *Handler) handleClaimRequests(
 		h.claims.Create(w, r, homepageID)
 		return
 	}
+	if len(segments) == 3 && segments[2] == "mine" && r.Method == http.MethodGet {
+		h.claims.GetMine(w, r, homepageID)
+		return
+	}
 	if len(segments) == 3 && r.Method == http.MethodPost && strings.HasSuffix(segments[2], ":review") {
 		claimRequestID := strings.TrimSuffix(segments[2], ":review")
 		h.claims.Review(w, r, homepageID, claimRequestID)
@@ -403,6 +409,10 @@ func (h *Handler) handleStatusReports(
 	}
 	if len(segments) == 2 && r.Method == http.MethodPost {
 		h.statusReports.Create(w, r, homepageID)
+		return
+	}
+	if len(segments) == 3 && segments[2] == "mine" && r.Method == http.MethodGet {
+		h.statusReports.GetMine(w, r, homepageID)
 		return
 	}
 	if len(segments) == 3 && r.Method == http.MethodPost && strings.HasSuffix(segments[2], ":review") {

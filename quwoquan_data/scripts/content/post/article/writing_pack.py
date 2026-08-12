@@ -202,14 +202,17 @@ def build_writing_pack(
         "sourceUrls": [str(x) for x in source_urls if x],
         "sourcePaths": [str(x) for x in source_paths if x],
         "writingIntent": brief.get("writingIntent"),
+        **(
+            {"articleCategory": brief["articleCategory"]}
+            if brief.get("articleCategory")
+            else {}
+        ),
         "baseSourceRef": brief.get("baseSourceRef"),
         "allowedContactNumbers": list(verified_contacts),
         "baseSourceReusePolicy": brief.get("baseSourceReusePolicy"),
         "sourceUseMode": brief.get("sourceUseMode"),
         "bannedRegisterTerms": [str(x) for x in (brief.get("bannedRegisterTerms") or []) if x],
     }
-
-
 
 
 

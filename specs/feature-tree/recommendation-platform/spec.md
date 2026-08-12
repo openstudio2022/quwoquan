@@ -60,6 +60,7 @@
 - 上游事实只经 typed event/query 进入对象本地 projection；任何 Recommendation 查询只读本服务 `storage.yaml` 声明的集合。
 - 领域边界、上下游依赖、工程映射和服务治理清晰。
 - evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
+- Redis Stream consumer group 初始化必须幂等；成功空轮询使用有界、可取消且按 consumer 隔离的退避，长时间空闲不得发生指数溢出，实际消息到达必须立即重置退避并保持低延迟。
 
 ## 6. 领域验收
 

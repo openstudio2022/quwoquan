@@ -132,14 +132,18 @@ def main() -> int:
         or "--env" not in dev_session_help.stdout
         or "--target" not in dev_session_help.stdout
         or "--all-nonprod" not in dev_session_help.stdout
-        or "--release-attestation" not in dev_session_help.stdout
-        or "--rollback-release-attestation" not in dev_session_help.stdout
+        or "--release-id" not in dev_session_help.stdout
+        or "--verify-run-id" not in dev_session_help.stdout
+        or "--manifest-digest" not in dev_session_help.stdout
+        or "--lifecycle-exit-ref" not in dev_session_help.stdout
         or "--launch-app" not in dev_session_help.stdout
         or "--gateway-base-url" in dev_session_help.stdout
+        or "--release-attestation" in dev_session_help.stdout
+        or "--rollback-release-attestation" in dev_session_help.stdout
     ):
         issues.append(
-            "stackctl dev-session must expose canonical target/release/App inputs "
-            "and forbid endpoint overrides"
+            "stackctl dev-session must expose canonical target/content-binding/App "
+            "inputs and forbid retired attestation or endpoint overrides"
         )
 
     provider_config_help = run(
@@ -200,7 +204,7 @@ def main() -> int:
         deploy_help.returncode != 0
         or "--mode" not in deploy_help.stdout
         or "--stage" not in deploy_help.stdout
-        or "carry-on" not in deploy_help.stdout
+        or "canary/5/20/50/100" not in deploy_help.stdout
     ):
         issues.append("stackctl deploy --help must expose --mode and all rollout stages")
 

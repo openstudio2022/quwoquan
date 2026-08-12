@@ -12,10 +12,13 @@ from core.control_types import (
     ImageCountPolicy,
     ModalityContract,
 )
-from content.source.contracts import QualifiedHomepageSource
-from content.execution.planning.spec_execution_policy import ExecutionPolicy
-from content.execution.planning.source_pool_policy import requires_scale_source_pool
 
+from content.execution.planning.source_pool_policy import (
+    allows_scale_source_pool,
+    requires_scale_source_pool,
+)
+from content.execution.planning.spec_execution_policy import ExecutionPolicy
+from content.source.contracts import QualifiedHomepageSource
 
 EXECUTION_SPEC_SCHEMA = "quwoquan.content.execution_spec"
 
@@ -484,8 +487,11 @@ class ExecutionSpec:
                 "queuePolicy.heartbeatSeconds must be less than leaseSeconds"
             )
         scale_pool_required = requires_scale_source_pool(self.execution_id)
+        scale_pool_allowed = allows_scale_source_pool(self.execution_id)
         has_scale_pool = self.execution_policy.scale_source_pool is not None
-        if scale_pool_required != has_scale_pool:
+        if (scale_pool_required and not has_scale_pool) or (
+            has_scale_pool and not scale_pool_allowed
+        ):
             raise ValueError(
                 "DATA.SOURCE.POOL_SHORTFALL: executionPolicy source pool intent drift"
             )

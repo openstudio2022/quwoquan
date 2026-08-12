@@ -7,7 +7,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/runtime/contractfixture"
 	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 	filemodel "quwoquan_service/services/circle-service/internal/circle_management/circle_file/domain/model"
 	groupmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/model"
@@ -20,10 +19,6 @@ type contractSeedEvidence struct {
 	TargetStore       string
 	InsertedCount     int
 	VerifiedEndpoints []string
-}
-
-type circleFixturePack struct {
-	SeedSets map[string]circleFixtureSeedSet `json:"seedSets"`
 }
 
 type circleFixtureSeedSet struct {
@@ -108,13 +103,7 @@ type circleFixtureFile struct {
 func seedCircleContractFixture(t *testing.T, seedRef string) contractSeedEvidence {
 	t.Helper()
 	ctx := context.Background()
-	pack, err := contractfixture.LoadRepositoryJSON[circleFixturePack](
-		"quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json",
-	)
-	if err != nil {
-		t.Fatalf("load circle fixture: %v", err)
-	}
-	seedSet, ok := pack.SeedSets[seedRef]
+	seedSet, ok := buildCircleContractSeed(seedRef)
 	if !ok {
 		t.Fatalf("circle seed ref not found: %s", seedRef)
 	}
@@ -183,6 +172,67 @@ func seedCircleContractFixture(t *testing.T, seedRef string) contractSeedEvidenc
 			"/circles/fixture_circle_photo/files",
 		},
 	}
+}
+
+// buildCircleContractSeed 构造对象级最小前置状态。边界数量由测试内 builder
+// 生成，不再从跨环境 scenario dump 反序列化整包业务数据。
+func buildCircleContractSeed(seedRef string) (circleFixtureSeedSet, bool) {
+	if seedRef != "circle_core" {
+		return circleFixtureSeedSet{}, false
+	}
+	const at = "2026-05-06T00:00:00Z"
+	photo := circleFixtureCircle{
+		ID: "fixture_circle_photo", Name: "契约摄影社", Description: "摄影对象级契约圈子。",
+		CoverURL: "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png",
+		OwnerID:  "fixture_user_owner", OwnerDisplayName: "契约摄影社主理人",
+		CategoryID: "humanity", SubCategory: "影像", DomainID: "culture_arts",
+		MemberCount: 3, PostCount: 18, WeeklyActiveCount: 3,
+		Visibility: "public", JoinPolicy: "approval",
+		DefaultPublicGroupID: "fixture_group_photo_public",
+		ConversationID:       "fixture_conv_circle_photo", AutoSyncChat: true,
+		CreatedAt: at, UpdatedAt: at,
+	}
+	travel := circleFixtureCircle{
+		ID: "fixture_circle_travel", Name: "契约旅行手账", Description: "旅行对象级契约圈子。",
+		CoverURL: "media/image/s/archived-image/circle/fixture_circle_travel/v1/cover.png",
+		OwnerID:  "fixture_user_travel_owner", OwnerDisplayName: "契约旅行圈主",
+		CategoryID: "travel", SubCategory: "攻略", DomainID: "culture_arts",
+		MemberCount: 1, PostCount: 3, WeeklyActiveCount: 1,
+		Visibility: "public", JoinPolicy: "open",
+		DefaultPublicGroupID: "fixture_group_travel_public",
+		ConversationID:       "fixture_conv_circle_travel", AutoSyncChat: true,
+		CreatedAt: at, UpdatedAt: at,
+	}
+	return circleFixtureSeedSet{
+		Circles: []circleFixtureCircle{photo, travel},
+		Groups: map[string][]circleFixtureGroup{
+			photo.ID: {{
+				ID: "fixture_group_photo_public", Version: 1, CircleID: photo.ID,
+				GroupType: "public_group", Name: "契约摄影社公开群",
+				Description: "契约摄影社默认公开群。", Visibility: "public",
+				JoinPolicy: "apply_only", CreatedByPersonaID: photo.OwnerID,
+				ConversationID: photo.ConversationID, StorageEnabled: true,
+				NoticeEnabled: true, IsDefaultPublicGroup: true, Status: "active",
+				CreatedAt: at, UpdatedAt: at,
+			}},
+		},
+		Members: map[string][]circleFixtureMember{
+			photo.ID: {
+				{ID: "fixture_member_photo_fixture_user_owner", CircleID: photo.ID, PersonaID: photo.OwnerID, Role: "owner", JoinedAt: at, LastActiveAt: at, Contribution: 10},
+				{ID: "fixture_member_photo_fixture_user_photo", CircleID: photo.ID, PersonaID: "fixture_user_photo", Role: "member", JoinedAt: at, LastActiveAt: at, Contribution: 3},
+				{ID: "fixture_member_photo_fixture_user_photography_01", CircleID: photo.ID, PersonaID: "fixture_user_photography_01", Role: "member", JoinedAt: at, LastActiveAt: at, Contribution: 3},
+			},
+		},
+		Files: map[string][]circleFixtureFile{
+			photo.ID: {{
+				ID: "fixture_file_photo_guide", Version: 1, CircleID: photo.ID,
+				GroupID: "fixture_group_photo_public", Name: "摄影路线指南.png",
+				FileType: "image", MimeType: "image/png", SizeBytes: 4096,
+				UploaderPersonaID: photo.OwnerID, Status: "active",
+				CreatedAt: at, UpdatedAt: at,
+			}},
+		},
+	}, true
 }
 
 func resetCircleFixtureNamespace(t *testing.T) {

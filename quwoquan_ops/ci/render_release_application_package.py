@@ -34,8 +34,8 @@ DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 GIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 TREE_DIGEST_PATTERN = re.compile(r"(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})")
 SPECIAL_SCHEMAS = {
-    "publicWeb": "qwq.public-web.release",
-    "android": "qwq.android.official-release",
+    "publicWeb": "client-app.web.official-release",
+    "android": "client-app.android.official-release",
     "opsPortal": "qwq.ops_portal_package",
 }
 PAYLOAD_NAMES = {

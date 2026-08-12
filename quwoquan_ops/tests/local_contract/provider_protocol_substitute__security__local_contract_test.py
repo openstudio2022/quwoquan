@@ -55,12 +55,24 @@ class ProviderProtocolSubstituteSecurityTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("PROVIDER_SUBSTITUTE_TLS_CERT_FILE", debug_compose)
-        self.assertIn("https://127.0.0.1:18089/healthz", debug_compose)
-        self.assertIn(
-            "--ca-certificate=/run/secrets/provider-protocol-substitute/ca.crt",
-            debug_compose,
-        )
+        self.assertIn("/usr/local/bin/provider-protocol-substitute", debug_compose)
+        self.assertIn('"healthcheck"', debug_compose)
         self.assertNotIn("--no-check-certificate", debug_compose)
+        healthcheck_source = (
+            WORKLOAD
+            / "cmd/provider-protocol-substitute/main.go"
+        ).read_text(encoding="utf-8")
+        self.assertIn("https://127.0.0.1:18089/healthz", healthcheck_source)
+        self.assertIn(
+            "/run/secrets/provider-protocol-substitute/ca.crt",
+            healthcheck_source,
+        )
+        healthcheck_impl = (
+            WORKLOAD
+            / "cmd/provider-protocol-substitute/healthcheck.go"
+        ).read_text(encoding="utf-8")
+        self.assertIn("tls.VersionTLS13", healthcheck_impl)
+        self.assertNotIn("InsecureSkipVerify", healthcheck_impl)
         local_runtime = (
             ROOT
             / "quwoquan_ops/environments/compose/"

@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260808--travel-article-m1--china-nanxun-town-bootstrap-not-m100--scale-003",
+  "executionBinding": "frozen",
+  "objectRef": "南浔镇__article_frontier_wikipedia_zh_bcf4de2a48d9",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-990ad263-5290-42cb-b953-a14343642889",
+    "resultHash": "sha256:7b60f1f0a68835c6c17673de7dcf9279ae03b1464446a3aa116a3ec8996477d7"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

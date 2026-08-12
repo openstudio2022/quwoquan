@@ -25,6 +25,7 @@ final class CloudOperationHeaderFactory {
     if (client.sessionId.trim().isEmpty ||
         client.platform.trim().isEmpty ||
         client.appVersion.trim().isEmpty ||
+        client.appBuild.trim().isEmpty ||
         client.locale.trim().isEmpty) {
       throw StateError('Cloud client context is incomplete');
     }
@@ -81,6 +82,7 @@ final class CloudOperationHeaderFactory {
       'X-Client-Sent-At': now.toUtc().toIso8601String(),
       'X-Client-Device-Platform': client.platform,
       'X-Client-App-Version': client.appVersion,
+      'X-Client-App-Build': client.appBuild,
       'X-Client-Locale': client.locale,
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,

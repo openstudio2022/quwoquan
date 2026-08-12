@@ -1,0 +1,19 @@
+services:
+  # Beta full runtime enables the canonical Elasticsearch-backed projection.
+  # Compose replaces depends_on across files, so this environment entry owns
+  # the complete dependency set and waits for the real ES health check.
+  content-service:
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      recommendation-service:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+x-qwq-workloads: [full, content-commercial]

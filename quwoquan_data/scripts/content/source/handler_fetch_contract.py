@@ -1,10 +1,12 @@
 """Typed source-fetch identity, rights, and media-count helpers."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
 
+from core.control_types import ContentType
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
@@ -13,7 +15,7 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
-from core.control_types import ContentType
+
 from content.source.contracts import SourceCandidate
 
 
@@ -96,6 +98,56 @@ def source_fetch_failure_issue(
     )
 
 
+def source_content_fidelity_issue(
+    source: Mapping[str, Any],
+    *,
+    entity_id: str,
+    rendered_text: str,
+    candidate_text: str,
+) -> DataIssue | None:
+    """Return an object-level rejection without aborting later source candidates."""
+    from core.source_fidelity import assess_source_content_fidelity
+
+    fidelity = assess_source_content_fidelity(rendered_text, candidate_text)
+    if fidelity.complete:
+        return None
+    entity_token = re.sub(r"\s+", "", str(entity_id or "")).casefold()
+    candidate_token = re.sub(r"\s+", "", str(candidate_text or "")).casefold()
+    if (
+        entity_token
+        and entity_token in candidate_token
+        and all(
+            entity_token
+            not in re.sub(r"\s+", "", paragraph).casefold()
+            for paragraph in fidelity.missing_paragraphs
+        )
+    ):
+        # Broad registry-admitted pages can contain unrelated city/province
+        # sections that the wikitext renderer intentionally drops.  They are
+        # not part of this execution's target evidence.  Preserve the strict
+        # gate whenever target-owned prose is absent.
+        return None
+    raw_lane = str(source.get("researchLane") or DataIssueLane.ALL.value)
+    try:
+        lane = DataIssueLane(raw_lane)
+    except ValueError:
+        lane = DataIssueLane.ALL
+    return data_issue(
+        DataIssueCode.SOURCE_CONTENT_INCOMPLETE,
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        ref=entity_id,
+        lane=lane,
+        recovery=DataRecoveryAction.REPLACE_SOURCE,
+        message="MediaWiki rendered prose was not preserved in source.clean.md",
+        attributes={
+            "sourceId": str(source.get("source_id") or ""),
+            "authoritativeParagraphCount": fidelity.authoritative_paragraph_count,
+            "matchedParagraphCount": fidelity.matched_paragraph_count,
+            "missingPreview": fidelity.missing_paragraphs[0][:240],
+        },
+    )
+
+
 def require_source_candidate_admission(
     source: Mapping[str, Any],
     *,
@@ -167,7 +219,8 @@ __all__ = [
     "homepage_base_draft_admission",
     "is_non_open_baike_source",
     "publishable_homepage_source_image_count",
-    "requires_factual_compression",
     "require_source_candidate_admission",
+    "requires_factual_compression",
+    "source_content_fidelity_issue",
     "source_fetch_failure_issue",
 ]

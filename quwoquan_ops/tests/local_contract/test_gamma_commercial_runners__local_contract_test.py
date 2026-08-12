@@ -65,7 +65,8 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
 
         self.assertIn("health --target", api_runner)
         self.assertIn("run_local_gamma_release_consumer_api.py", api_runner)
-        self.assertIn("open_reference_acceptance_session", api_runner)
+        self.assertIn("QWQ_TEST_DATA_ACCESS_TOKEN", api_runner)
+        self.assertNotIn("open_reference_acceptance_session", api_runner)
         self.assertIn(
             "test/api_integration/service/content_service/content/content_behavior_fact/"
             "onboarding_interest_gamma__api_integration_test.dart",
@@ -183,7 +184,8 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         )
         self.assertTrue(assistant["stopOnFailure"])
         runner = (ROOT / assistant["argv"][1]).read_text(encoding="utf-8")
-        self.assertIn("open_reference_acceptance_session", runner)
+        self.assertIn("QWQ_TEST_DATA_ACCESS_TOKEN", runner)
+        self.assertNotIn("open_reference_acceptance_session", runner)
         self.assertIn(
             "assistant_learning_remote_roundtrip__api_integration_test.dart",
             runner,
@@ -222,7 +224,8 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         )
         self.assertTrue(proposal["stopOnFailure"])
         runner = (ROOT / proposal["argv"][1]).read_text(encoding="utf-8")
-        self.assertIn("open_reference_acceptance_session", runner)
+        self.assertIn("QWQ_TEST_DATA_ACCESS_TOKEN", runner)
+        self.assertNotIn("open_reference_acceptance_session", runner)
         self.assertIn(
             "profile_update_proposal_remote_roundtrip__api_integration_test.dart",
             runner,

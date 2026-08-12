@@ -374,7 +374,10 @@ String _stringValue(Object? value) => value?.toString().trim() ?? '';
 AssistantUsePolicy? _assistantUsePolicyValue(Object? value) {
   final text = _stringValue(value);
   if (text.isEmpty) return null;
-  return AssistantUsePolicy.fromWire(text, 'QwqMarkdownFrontMatter.assistantUsePolicy');
+  return AssistantUsePolicy.fromWire(
+    text,
+    'QwqMarkdownFrontMatter.assistantUsePolicy',
+  );
 }
 
 List<String> _stringListValue(Object? value) {

@@ -39,6 +39,14 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
         "content.source.professional_video_acquisition.guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
     )
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.load_bound_safety_evidence",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        "content.source.professional_video_acquisition.validate_video_safety_payload",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def _write_motion_video(path: Path, *, variant: int = 0) -> None:
@@ -122,6 +130,7 @@ def _video_item(
             "reviewedAt": "2026-08-05T02:05:00Z",
             "reviewer": "local-contract-reviewer",
             "evidenceRef": f"evidence/{asset_id}.json",
+            "safetyEvidenceFileSha256": "sha256:" + "f" * 64,
         },
         "popularitySignals": {
             "playCount": play_count,

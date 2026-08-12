@@ -1,8 +1,12 @@
+import 'package:quwoquan_app/service/user_service/relationship/greeting_request/application/public/greeting_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Alpha-only 打招呼请求状态机；production 依赖图不可达。
 final class InMemoryGreetingRequestFacet
-    implements GreetingRequestCommandWriter, GreetingRequestQuery {
+    implements
+        GreetingRequestCommandWriter,
+        GreetingRequestQuery,
+        GreetingRequestIntentCommandWriter {
   InMemoryGreetingRequestFacet({
     this.requesterPersonaId = 'fixture_user_current',
     Iterable<GreetingRequestRecord> seedInbox = const <GreetingRequestRecord>[],
@@ -61,6 +65,12 @@ final class InMemoryGreetingRequestFacet
   }
 
   @override
+  Future<GreetingRequestRecord> replyGreetingWithIntent(
+    ReplyGreetingCommand command, {
+    required String idempotencyKey,
+  }) => replyGreeting(command);
+
+  @override
   Future<GreetingRequestRecord> ignoreGreeting(
     IgnoreGreetingCommand command,
   ) async {
@@ -72,6 +82,12 @@ final class InMemoryGreetingRequestFacet
   }
 
   @override
+  Future<GreetingRequestRecord> ignoreGreetingWithIntent(
+    IgnoreGreetingCommand command, {
+    required String idempotencyKey,
+  }) => ignoreGreeting(command);
+
+  @override
   Future<GreetingRequestRecord> cancelGreeting(
     CancelGreetingCommand command,
   ) async {
@@ -81,6 +97,12 @@ final class InMemoryGreetingRequestFacet
       status: GreetingRequestStatus.cancelled,
     );
   }
+
+  @override
+  Future<GreetingRequestRecord> cancelGreetingWithIntent(
+    CancelGreetingCommand command, {
+    required String idempotencyKey,
+  }) => cancelGreeting(command);
 
   GreetingRequestSlice _slice(
     List<GreetingRequestRecord> source,

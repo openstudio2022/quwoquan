@@ -1,11 +1,15 @@
 read_model: AppReleaseRecoveryView
 source_entities:
 - AppRelease
-description: 启动和运行时恢复页读取的平台当前发布版本与受信更新、恢复地址。
+description: 启动和运行时恢复页读取的平台当前发布版本、最小支持版本、派生更新状态与受信更新/恢复地址。
 fields:
+- {name: platform, type: string}
 - {name: latestVersion, type: string}
 - {name: latestBuild, type: string}
-- {name: updateUrl, type: string, nullable: true}
+- {name: minimumSupportedVersion, type: string}
+- {name: minimumSupportedBuild, type: string}
+- {name: updateState, type: enum, enum_ref: AppReleaseUpdateState}
+- {name: updateUrl, type: string}
 - {name: recoveryUrl, type: string}
 consistency: strong_config_release
 readers:

@@ -1,0 +1,409 @@
+{
+  "candidateDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "schemaDigest": "sha256:47ce15291c4ba56466d18aac4bab795a44eee3c6bb9a49cb7a89b6445e9a4acd",
+  "entries": [
+    {
+      "sha256Hash": "119359eb546ba50284ad676377ca69138129ca01d605688310292ca156848b38",
+      "operationName": "ContentPostDetailArticleRenderAssets",
+      "operationType": "query",
+      "canonicalOperationId": "content.post.GetPostArticleRenderAssets",
+      "objectIds": [
+        "content.post"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "visibility_filtered"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:07d28b797f5fcd3ceb47d3e96876107887b48d5b0ec1cca50b7485e1a27d5c16",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 344,
+        "variablesMaxBytes": 1024,
+        "pageSizeMax": 20,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 344,
+        "listMultipliers": [
+          {
+            "variablePath": "articleAssetFirst",
+            "coefficient": 16,
+            "defaultValue": 20,
+            "maximumValue": 20
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "articleAssetFirst"
+      ],
+      "executorKey": "content.post.getPost",
+      "appClientBundle": {
+        "bundleId": "content.post.ContentPostDetail",
+        "role": "extension",
+        "requiredForContentTypes": [
+          "article"
+        ],
+        "selectedFields": [
+          "articleAssetManifestSummary",
+          "articleAssets",
+          "articleFontPreset",
+          "articleMarkdown",
+          "articleMarkdownDigest",
+          "articleRenderProfileSummary",
+          "articleTemplate",
+          "contentType",
+          "contentVertical",
+          "markdownDialect",
+          "postId"
+        ],
+        "assemblyMappings": [
+          {
+            "targetField": "articleAssetManifest",
+            "presenceSourceField": "articleAssetManifestSummary",
+            "sources": [
+              {
+                "sourceField": "articleAssetManifestSummary",
+                "strategy": "merge_object"
+              },
+              {
+                "sourceField": "articleAssets",
+                "strategy": "assign_key",
+                "targetKey": "assets"
+              }
+            ]
+          },
+          {
+            "targetField": "articleRenderProfile",
+            "sources": [
+              {
+                "sourceField": "articleRenderProfileSummary",
+                "strategy": "replace"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "sha256Hash": "2251d9dca6cc14a77ff40eb630223df0b432095a98c7bd3f9f72d2e8d0752c18",
+      "operationName": "ContentPostDetailMedia",
+      "operationType": "query",
+      "canonicalOperationId": "content.post.GetPostMedia",
+      "objectIds": [
+        "content.post"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "visibility_filtered"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:8e3d4c3e89cf3628dcc2456e238b32235a7919f371d75e016aeaeb73f420eb79",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 316,
+        "variablesMaxBytes": 1024,
+        "pageSizeMax": 20,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 316,
+        "listMultipliers": [
+          {
+            "variablePath": "mediaFirst",
+            "coefficient": 15,
+            "defaultValue": 20,
+            "maximumValue": 20
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "mediaFirst"
+      ],
+      "executorKey": "content.post.getPost",
+      "appClientBundle": {
+        "bundleId": "content.post.ContentPostDetail",
+        "role": "extension",
+        "requiredForContentTypes": [
+          "image",
+          "video"
+        ],
+        "selectedFields": [
+          "contentType",
+          "coverFrameTimeMs",
+          "coverStrategy",
+          "durationMs",
+          "height",
+          "mediaAssetIds",
+          "mediaItems",
+          "mediaUrls",
+          "postId",
+          "thumbnailUrl",
+          "videoUrl",
+          "width"
+        ],
+        "assemblyMappings": []
+      }
+    },
+    {
+      "sha256Hash": "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b",
+      "operationName": "ContentPostDetailBase",
+      "operationType": "query",
+      "canonicalOperationId": "content.post.GetPost",
+      "objectIds": [
+        "content.post"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "visibility_filtered"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:b0db9d7b0d7d40c0b53b885cbcd8b1c56a757c8d0f4288f330f62e95f9a1a1f4",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 56,
+        "variablesMaxBytes": 1024,
+        "pageSizeMax": 1,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 65536,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 56,
+        "listMultipliers": [],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 65536
+      },
+      "paginationVariables": [],
+      "executorKey": "content.post.getPost",
+      "appClientBundle": {
+        "bundleId": "content.post.ContentPostDetail",
+        "role": "base",
+        "supportedContentTypes": [
+          "article",
+          "image",
+          "micro",
+          "video"
+        ],
+        "selectedFields": [
+          "assistantUsePolicy",
+          "authorAvatarUrl",
+          "authorDisplayName",
+          "authorId",
+          "body",
+          "canonicalEntityId",
+          "commentCount",
+          "contentIdentity",
+          "contentType",
+          "coverUrl",
+          "createdAt",
+          "geoTagRef",
+          "likeCount",
+          "location",
+          "locationName",
+          "postId",
+          "primaryHomepageId",
+          "primaryHomepageSnapshot",
+          "primaryHomepageType",
+          "publishedAt",
+          "shareCount",
+          "sourceAttribution",
+          "status",
+          "summary",
+          "title",
+          "updatedAt",
+          "viewCount",
+          "visibility",
+          "visitedAt"
+        ],
+        "assemblyMappings": []
+      }
+    },
+    {
+      "sha256Hash": "894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58",
+      "operationName": "SearchPage",
+      "operationType": "query",
+      "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
+      "objectIds": [
+        "gateway.persisted_query_execution"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "public_search_discovery"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:8334f410ec252f08e4010d59ffd0976a638b477612690442e74d4108eb134a7b",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 208,
+        "variablesMaxBytes": 4096,
+        "pageSizeMax": 20,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:search.search_index_view.Search"
+      },
+      "costPlan": {
+        "baseComplexity": 208,
+        "listMultipliers": [
+          {
+            "variablePath": "input.first",
+            "coefficient": 10,
+            "defaultValue": 20,
+            "maximumValue": 20
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "input.first"
+      ],
+      "executorKey": "search.searchIndexView.searchPage"
+    },
+    {
+      "sha256Hash": "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
+      "operationName": "ContentPostDetailSemantic",
+      "operationType": "query",
+      "canonicalOperationId": "content.post.GetPostSemantic",
+      "objectIds": [
+        "content.post"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "visibility_filtered"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:31e13a48d8e438321fbfd0198c2b48d4646a834aa94cc00a9171dcc7216e38d8",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 339,
+        "variablesMaxBytes": 1024,
+        "pageSizeMax": 30,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 65536,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 339,
+        "listMultipliers": [
+          {
+            "variablePath": "semanticFirst",
+            "coefficient": 11,
+            "defaultValue": 30,
+            "maximumValue": 30
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 65536
+      },
+      "paginationVariables": [
+        "semanticFirst"
+      ],
+      "executorKey": "content.post.getPost",
+      "appClientBundle": {
+        "bundleId": "content.post.ContentPostDetail",
+        "role": "extension",
+        "requiredForContentTypes": [
+          "article",
+          "image",
+          "micro",
+          "video"
+        ],
+        "selectedFields": [
+          "contentType",
+          "entityRefs",
+          "postId",
+          "semanticMentions",
+          "tagRefs"
+        ],
+        "assemblyMappings": []
+      }
+    },
+    {
+      "sha256Hash": "c9206041dca121c2df985c47f57601ccbc256047ade5e4496b2274fd9f9d02fa",
+      "operationName": "ContentPostDetailArticleEntities",
+      "operationType": "query",
+      "canonicalOperationId": "content.post.GetPostArticleEntities",
+      "objectIds": [
+        "content.post"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "visibility_filtered"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:367e9388a9c7d75638efdebb4143cb58c2992e7e9c08ca07675f2dbb26ed3cba",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 185,
+        "variablesMaxBytes": 1024,
+        "pageSizeMax": 30,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 131072,
+        "sloRef": "slo:gateway.graphql_read.detail"
+      },
+      "costPlan": {
+        "baseComplexity": 185,
+        "listMultipliers": [
+          {
+            "variablePath": "entityMentionFirst",
+            "coefficient": 6,
+            "defaultValue": 30,
+            "maximumValue": 30
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 131072
+      },
+      "paginationVariables": [
+        "entityMentionFirst"
+      ],
+      "executorKey": "content.post.getPost",
+      "appClientBundle": {
+        "bundleId": "content.post.ContentPostDetail",
+        "role": "extension",
+        "requiredForContentTypes": [
+          "article"
+        ],
+        "selectedFields": [
+          "contentType",
+          "entityMentions",
+          "postId"
+        ],
+        "assemblyMappings": []
+      }
+    }
+  ]
+}

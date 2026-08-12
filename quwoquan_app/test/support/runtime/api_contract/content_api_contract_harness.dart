@@ -1,8 +1,12 @@
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_command_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/comment/adapters/comment_facets_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/content_reaction/adapters/post_reaction_facets_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/adapters/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_publication_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_delete_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/adapters/profile_interaction_activity_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_read_fact/adapters/profile_interaction_read_fact_remote.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_command_remote.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
@@ -10,8 +14,10 @@ import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
+import 'package:quwoquan_app/runtime/transport/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'production_cloud_operation_telemetry_evidence.dart';
@@ -28,10 +34,15 @@ final class ContentApiContractHarness {
   ContentApiContractHarness._({
     required this._httpClient,
     required this.telemetry,
+    required this._accountLifecycle,
     required this.feed,
     required this.posts,
     required this.postDeletion,
     required this.publication,
+    required this.comments,
+    required this.reactions,
+    required this.profileInteractions,
+    required this.profileInteractionReads,
     required this.behaviors,
     required this.reports,
     required this.session,
@@ -43,6 +54,7 @@ final class ContentApiContractHarness {
     }
     final tokenProvider = _MutableAccessTokenProvider();
     final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);
+    late ContentApiContractHarness harness;
     const clientContext = _ContentApiClientContext();
     final telemetry = await ProductionCloudOperationTelemetryEvidence.start(
       clientContextProvider: clientContext,
@@ -135,9 +147,23 @@ final class ContentApiContractHarness {
         );
       }
 
-      return ContentApiContractHarness._(
+      CloudOperationInvocationContext commentContext(
+        String clientPageId, {
+        required bool command,
+      }) => harness._commentInvocationContext(clientPageId, command: command);
+
+      CloudOperationInvocationContext profileInteractionContext(
+        String clientPageId,
+      ) => harness._profileInteractionInvocationContext(clientPageId);
+
+      harness = ContentApiContractHarness._(
         httpClient: httpClient,
         telemetry: telemetry,
+        accountLifecycle: RemoteAccountLifecycleCommandWriter(
+          client: client,
+          invocationContext: (clientPageId) =>
+              harness._accountInvocationContext(clientPageId),
+        ),
         feed: RemoteContentDiscoveryFeedQuery(
           client: client,
           invocationContext: queryContext,
@@ -155,6 +181,22 @@ final class ContentApiContractHarness {
           client: client,
           invocationContext: commandContext,
         ),
+        comments: RemoteContentCommentFacet(
+          client: client,
+          invocationContext: commentContext,
+        ),
+        reactions: RemoteContentPostReactionFacet(
+          client: client,
+          invocationContext: commentContext,
+        ),
+        profileInteractions: RemoteProfileInteractionActivityQuery(
+          client: client,
+          invocationContext: profileInteractionContext,
+        ),
+        profileInteractionReads: RemoteProfileInteractionReadFactWriter(
+          client: client,
+          invocationContext: profileInteractionContext,
+        ),
         behaviors: RemoteContentBehaviorCommandAdapter(
           client: client,
           invocationContext: queryContext,
@@ -165,6 +207,7 @@ final class ContentApiContractHarness {
         ),
         session: session,
       );
+      return harness;
     } catch (_) {
       httpClient.close();
       await telemetry.dispose();
@@ -174,21 +217,145 @@ final class ContentApiContractHarness {
 
   final CloudHttpClient _httpClient;
   final ProductionCloudOperationTelemetryEvidence telemetry;
+  final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   final RemoteContentDiscoveryFeedQuery feed;
   final RemoteContentPostReaderAdapter posts;
   final RemoteContentPostDeleteCommandWriter postDeletion;
   final RemoteContentPostPublicationWriter publication;
+  final RemoteContentCommentFacet comments;
+  final RemoteContentPostReactionFacet reactions;
+  final RemoteProfileInteractionActivityQuery profileInteractions;
+  final RemoteProfileInteractionReadFactWriter profileInteractionReads;
   final RemoteContentBehaviorCommandAdapter behaviors;
   final RemoteContentReportAdapter reports;
   final AuthSessionGrant session;
+  String? _activeIdempotencyKey;
+  var _closed = false;
+
+  Future<T> withIdempotencyKey<T>(
+    String idempotencyKey,
+    Future<T> Function() operation,
+  ) async {
+    final normalized = idempotencyKey.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(idempotencyKey, 'idempotencyKey');
+    }
+    if (_activeIdempotencyKey != null) {
+      throw StateError('Content API contract commands must be sequential');
+    }
+    _activeIdempotencyKey = normalized;
+    try {
+      return await operation();
+    } finally {
+      _activeIdempotencyKey = null;
+    }
+  }
 
   Future<void> close() async {
+    if (_closed) {
+      return;
+    }
+    _closed = true;
     try {
+      await _accountLifecycle.closeAccount(
+        CloseAccountCommand(
+          clientRequestId: 'content-api-cleanup-${session.ownerId}',
+        ),
+      );
       await telemetry.waitForEvents(minimumCount: 1);
     } finally {
       _httpClient.close();
       await telemetry.dispose();
     }
+  }
+
+  CloudOperationInvocationContext _commentInvocationContext(
+    String clientPageId, {
+    required bool command,
+  }) {
+    switch (clientPageId) {
+      case ContentRequestPageIds.createComment:
+      case ContentRequestPageIds.deleteComment:
+      case ContentRequestPageIds.pinComment:
+      case ContentRequestPageIds.unpinComment:
+      case ContentRequestPageIds.listComments:
+      case ContentRequestPageIds.listCommentReplies:
+      case ContentRequestPageIds.listCommentsByAuthor:
+      case ContentRequestPageIds.listCommentsForPostAuthor:
+      case ContentRequestPageIds.reactToComment:
+      case ContentRequestPageIds.getContentReactionState:
+      case ContentRequestPageIds.likePost:
+      case ContentRequestPageIds.unlikePost:
+        break;
+      default:
+        throw StateError(
+          'Unsupported Content comment/reaction clientPageId: $clientPageId',
+        );
+    }
+    final idempotencyKey = command ? _activeIdempotencyKey : null;
+    if (command && idempotencyKey == null) {
+      throw StateError(
+        'Content comment/reaction command requires an explicit idempotency key',
+      );
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.workBrowser.id,
+      routeId: AppUiSurfaces.workBrowser.routeId,
+      clientPageId: clientPageId,
+      idempotencyKey: idempotencyKey,
+      actor: CloudOperationActorContext(
+        accountId: session.ownerId,
+        personaId: session.activePersona?.personaId,
+        deviceActorId: contentApiContractDeviceId,
+      ),
+    );
+  }
+
+  CloudOperationInvocationContext _accountInvocationContext(
+    String clientPageId,
+  ) {
+    if (clientPageId != UserRequestPageIds.closeAccount) {
+      throw StateError(
+        'Unsupported Content account cleanup clientPageId: $clientPageId',
+      );
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.settingsAccountSecurity.id,
+      routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
+      clientPageId: clientPageId,
+      idempotencyKey: 'content-api-account-cleanup-${session.ownerId}',
+      actor: CloudOperationActorContext(
+        accountId: session.ownerId,
+        personaId: session.activePersona?.personaId,
+        deviceActorId: contentApiContractDeviceId,
+      ),
+    );
+  }
+
+  CloudOperationInvocationContext _profileInteractionInvocationContext(
+    String clientPageId,
+  ) {
+    switch (clientPageId) {
+      case ContentRequestPageIds.listProfileInteractionActivitiesReceived:
+      case ContentRequestPageIds.listProfileInteractionActivitiesSent:
+      case ContentRequestPageIds.appendProfileInteractionReadFact:
+        break;
+      default:
+        throw StateError(
+          'Unsupported Content profile interaction clientPageId: '
+          '$clientPageId',
+        );
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.profileHome.id,
+      routeId: AppUiSurfaces.profileHome.routeId,
+      clientPageId: clientPageId,
+      actor: CloudOperationActorContext(
+        accountId: session.ownerId,
+        personaId: session.activePersona?.personaId,
+        deviceActorId: contentApiContractDeviceId,
+      ),
+    );
   }
 }
 

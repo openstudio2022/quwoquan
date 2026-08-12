@@ -18,5 +18,6 @@ abstract interface class HomepageStatusReportCommandWriter {
   Future<HomepageStatusReportView> createStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
+    String? clientRequestId,
   });
 }

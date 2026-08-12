@@ -41,7 +41,21 @@ def build_canonical(root: Path) -> Path:
             "entityRefs": [],
         },
     )
-    write_json(creator / "profile.json", {"creatorId": CREATOR_ID})
+    write_json(
+        creator / "profile.json",
+        {
+            "creatorId": CREATOR_ID,
+            "authorId": CREATOR_ID,
+            "version": 1,
+            "status": "active",
+            "admission": {
+                "processResult": "completed",
+                "qualityResult": "passed",
+                "evidenceRef": "fixture-author-evidence.json",
+                "evidenceDigest": "sha256:" + "a" * 64,
+            },
+        },
+    )
     write_json(creator / "assets.refs.json", {"assets": []})
     (creator / "works.refs.ndjson").write_text("", encoding="utf-8")
     return canonical
@@ -149,6 +163,7 @@ def build_package(
         object_root / "evidence/rights.json",
         {
             "schema": "quwoquan_data.asset_rights_closure",
+            "publishMediaMode": "not_applicable",
             "assets": [
                 {
                     "assetId": "cover",
@@ -269,6 +284,7 @@ def build_package(
             "schema": transaction.PACKAGE_SCHEMA,
             "transactionId": TRANSACTION_ID,
             "executionId": "20260711--travel-homepage-coverage--cn-test--pilot-001",
+            "publishMediaMode": "not_applicable",
             "sourcePolicyRevision": SOURCE_POLICY,
             "target": {
                 "layoutSchema": transaction.LAYOUT_SCHEMA,

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "authorIds",
+    "processResult",
+    "qualityResult",
+    "checks",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.author_admission_evidence"},
+    "authorIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "processResult": {"const": "completed"},
+    "qualityResult": {"const": "passed"},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "disclosure", "avatarQuality"],
+      "properties": {
+        "profile": {"const": "passed"},
+        "disclosure": {"const": "passed"},
+        "avatarQuality": {
+          "description": "头像只检查格式、可读取、清晰度与安全；不检查 Research/Commercial 授权范围。",
+          "const": "passed"
+        }
+      }
+    },
+    "recordedAt": {"type": "string", "minLength": 1}
+  }
+}

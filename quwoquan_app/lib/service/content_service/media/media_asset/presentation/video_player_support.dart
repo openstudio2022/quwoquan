@@ -9,20 +9,30 @@ final class PlayableVideoSource {
     required this.createController,
   });
 
-  factory PlayableVideoSource.cachedFile(String path) {
+  factory PlayableVideoSource.cachedFile(
+    String path, {
+    VideoViewType? viewType,
+  }) {
     return PlayableVideoSource._(
       label: 'cache',
-      createController: () =>
-          AppVideoPlayerControllerFactory.localFilePath(path),
+      createController: () => AppVideoPlayerControllerFactory.localFilePath(
+        path,
+        viewType: viewType,
+      ),
     );
   }
 
-  factory PlayableVideoSource.network(Uri uri, {VideoFormat? formatHint}) {
+  factory PlayableVideoSource.network(
+    Uri uri, {
+    VideoFormat? formatHint,
+    VideoViewType? viewType,
+  }) {
     return PlayableVideoSource._(
       label: 'network',
       createController: () => AppVideoPlayerControllerFactory.networkUri(
         uri,
         formatHint: formatHint,
+        viewType: viewType,
       ),
     );
   }

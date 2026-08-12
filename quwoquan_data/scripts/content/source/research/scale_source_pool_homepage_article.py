@@ -21,13 +21,19 @@ from core.schema import load_schema, validate_strict
 from content.source.research.article_source_unit_catalog import (
     validate_article_source_unit_catalog,
 )
-from content.source.research.homepage_source_unit_catalog import (
-    validate_homepage_source_unit_catalog,
-)
 from content.source.research.homepage_article_source_ready_batch import (
     load_homepage_article_source_ready_batch,
 )
-
+from content.source.research.homepage_source_unit_catalog import (
+    validate_homepage_source_unit_catalog,
+)
+from content.source.research.scale_source_pool_member_binding import (
+    source_ready_member_binding,
+)
+from content.source.research.scale_source_pool_rights import (
+    EmptyMediaRightsError,
+    aggregate_media_rights,
+)
 
 PROJECTION_INVALID = "DATA.SOURCE.INVALID_EVIDENCE"
 PROJECTION_SCHEMA = "quwoquan_data.scale_source_pool_homepage_article_projection"
@@ -156,27 +162,32 @@ def _identity(document: Mapping[str, Any]) -> tuple[str, str, str]:
     )
 
 
+def _candidates_by_id(
+    rows: Sequence[Mapping[str, Any]], *, carrier: str
+) -> dict[str, Mapping[str, Any]]:
+    candidates: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        candidate_id = str(row.get("candidateId") or "").strip()
+        if not candidate_id or candidate_id in candidates:
+            raise ScaleSourcePoolProjectionError(
+                [f"{carrier} candidates require unique non-empty candidateId"]
+            )
+        candidates[candidate_id] = row
+    return candidates
+
+
 def _aggregate_rights(rows: Sequence[Mapping[str, Any]]) -> tuple[str, str]:
-    statuses = {str(row.get("rightsStatus") or "") for row in rows}
-    if "unknown" in statuses:
-        rights_status = "unknown"
-    elif "unverified" in statuses:
-        rights_status = "unverified"
-    else:
-        rights_status = "verified"
-    decisions = {str(row.get("distributionDecision") or "") for row in rows}
-    decision = (
-        "research_allowed"
-        if "research_allowed" in decisions
-        else "commercial_allowed"
-    )
-    return rights_status, decision
+    try:
+        return aggregate_media_rights(rows)
+    except EmptyMediaRightsError as exc:
+        raise ScaleSourcePoolProjectionError([str(exc)]) from exc
 
 
 def _bindings(
     *,
     carrier: str,
     candidate_id: str,
+    evidence_root_ref: str,
     evidence_digest: str,
     evidence_ref: str,
     file_sha256: str,
@@ -203,12 +214,14 @@ def _bindings(
             }
         )
         result[f"{prefix}FileSha256"] = file_sha256
+    result["sourceReadyEvidenceRootRef"] = evidence_root_ref
     return result
 
 
 def _homepage_row(
     candidate: Mapping[str, Any],
     *,
+    evidence_root_ref: str,
     evidence_digest: str,
     evidence_ref: str,
     file_sha256: str,
@@ -222,6 +235,7 @@ def _homepage_row(
     bindings = _bindings(
         carrier="homepage",
         candidate_id=candidate_id,
+        evidence_root_ref=evidence_root_ref,
         evidence_digest=evidence_digest,
         evidence_ref=evidence_ref,
         file_sha256=file_sha256,
@@ -269,6 +283,7 @@ def _homepage_row(
         "sourceRevision": candidate["sourceRevision"],
         "sourceDigest": candidate["sourceDigest"],
         "entityCatalogDigest": candidate["entityCatalogDigest"],
+        "sourceAttribution": dict(candidate["sourceAttribution"]),
         **bindings,
         "provider": primary["platform"],
         "contentSha256": _canonical_digest(
@@ -292,16 +307,29 @@ def _homepage_row(
 def _article_row(
     candidate: Mapping[str, Any],
     *,
+    evidence_root_ref: str,
     evidence_digest: str,
     evidence_ref: str,
     file_sha256: str,
 ) -> dict[str, Any]:
     candidate_id = str(candidate["candidateId"])
     assets = [row for row in candidate["assets"] if isinstance(row, Mapping)]
-    rights_status, decision = _aggregate_rights(assets)
+    publish_media_mode = str(candidate["publishMediaMode"])
+    if assets:
+        rights_status, decision = _aggregate_rights(assets)
+    else:
+        attribution = candidate["sourceAttribution"]
+        assert isinstance(attribution, Mapping)
+        rights_status = (
+            "verified"
+            if attribution.get("commercialAuthorizationStatus") == "verified"
+            else "unverified"
+        )
+        decision = "research_allowed"
     bindings = _bindings(
         carrier="article",
         candidate_id=candidate_id,
+        evidence_root_ref=evidence_root_ref,
         evidence_digest=evidence_digest,
         evidence_ref=evidence_ref,
         file_sha256=file_sha256,
@@ -317,6 +345,16 @@ def _article_row(
                 "bodyEvidenceRef",
                 "bodyContentSha256",
             )
+        }
+        | {
+            key: candidate[key]
+            for key in (
+                "articleCategory",
+                "writingIntent",
+                "topicTagRefs",
+                "sourceClassification",
+            )
+            if key in candidate
         },
         acquisition=[
             {
@@ -373,6 +411,8 @@ def _article_row(
         "sourceRevision": candidate["sourceRevision"],
         "sourceDigest": candidate["sourceDigest"],
         "entityCatalogDigest": candidate["entityCatalogDigest"],
+        "sourceAttribution": dict(candidate["sourceAttribution"]),
+        "publishMediaMode": publish_media_mode,
         **bindings,
         "provider": candidate["platform"],
         "contentSha256": _canonical_digest(
@@ -431,18 +471,24 @@ def _validate_rows(rows: Sequence[Mapping[str, Any]]) -> None:
 def project_scale_source_pool_homepage_article(
     *,
     evidence_root: Path,
-    homepage_catalog_ref: str,
-    homepage_catalog_digest: str,
-    homepage_catalog_file_sha256: str,
-    article_catalog_ref: str,
-    article_catalog_digest: str,
-    article_catalog_file_sha256: str,
+    homepage_catalog_ref: str | None,
+    homepage_catalog_digest: str | None,
+    homepage_catalog_file_sha256: str | None,
+    article_catalog_ref: str | None,
+    article_catalog_digest: str | None,
+    article_catalog_file_sha256: str | None,
     source_ready_set_ref: str,
     source_ready_set_digest: str,
     source_ready_set_file_sha256: str,
+    active_carriers: Sequence[str] = ("homepage", "article"),
 ) -> dict[str, Any]:
     """Return deterministic scale candidates without writing any output."""
 
+    selected_carriers = tuple(dict.fromkeys(active_carriers))
+    if not selected_carriers or not set(selected_carriers) <= {"homepage", "article"}:
+        raise ScaleSourcePoolProjectionError(
+            ["active homepage/article carriers must be a non-empty governed subset"]
+        )
     root = evidence_root.expanduser().absolute()
     try:
         mode = root.lstat().st_mode
@@ -454,20 +500,37 @@ def project_scale_source_pool_homepage_article(
         raise ScaleSourcePoolProjectionError(
             [f"evidence root must be a real directory: {root}"]
         )
-    homepage, homepage_ref, homepage_file_sha = _load_catalog(
-        root=root,
-        ref=homepage_catalog_ref,
-        expected_catalog_digest=homepage_catalog_digest,
-        expected_file_sha256=homepage_catalog_file_sha256,
-        carrier="homepage",
-    )
-    article, article_ref, article_file_sha = _load_catalog(
-        root=root,
-        ref=article_catalog_ref,
-        expected_catalog_digest=article_catalog_digest,
-        expected_file_sha256=article_catalog_file_sha256,
-        carrier="article",
-    )
+    catalog_inputs = {
+        "homepage": (
+            homepage_catalog_ref,
+            homepage_catalog_digest,
+            homepage_catalog_file_sha256,
+        ),
+        "article": (
+            article_catalog_ref,
+            article_catalog_digest,
+            article_catalog_file_sha256,
+        ),
+    }
+    catalogs: dict[str, tuple[dict[str, Any], str, str]] = {}
+    for carrier in selected_carriers:
+        ref, digest, file_sha = catalog_inputs[carrier]
+        if not all(
+            isinstance(value, str) and value for value in (ref, digest, file_sha)
+        ):
+            raise ScaleSourcePoolProjectionError(
+                [f"active {carrier} requires its exact catalog binding"]
+            )
+        assert isinstance(ref, str)
+        assert isinstance(digest, str)
+        assert isinstance(file_sha, str)
+        catalogs[carrier] = _load_catalog(
+            root=root,
+            ref=ref,
+            expected_catalog_digest=digest,
+            expected_file_sha256=file_sha,
+            carrier=carrier,
+        )
     source_set_path = _catalog_file(
         root, source_ready_set_ref, label="sourceReadySetRef"
     )
@@ -476,10 +539,12 @@ def project_scale_source_pool_homepage_article(
             ["source-ready set fileSha256 drift"]
         )
     try:
+        source_set_root = source_set_path.parent.parent
+        source_set_root_ref = source_set_root.relative_to(root).as_posix() or "."
         loaded_batch = load_homepage_article_source_ready_batch(
-            source_set_path, evidence_root=root
+            source_set_path, evidence_root=source_set_root
         )
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         raise ScaleSourcePoolProjectionError(
             [f"source-ready set is invalid: {exc}"]
         ) from exc
@@ -489,38 +554,54 @@ def project_scale_source_pool_homepage_article(
     homepage_batch = loaded_batch["homepageCandidates"]
     article_batch = loaded_batch["articleCandidates"]
     bindings = loaded_batch["capsuleBindings"]
-    if homepage.get("candidates") != homepage_batch or article.get("candidates") != article_batch:
-        raise ScaleSourcePoolProjectionError(
-            ["aggregate catalogs drift from immutable candidate capsules"]
-        )
+    batch_candidates = {"homepage": homepage_batch, "article": article_batch}
+    for carrier in selected_carriers:
+        catalog = catalogs[carrier][0]
+        if _candidates_by_id(
+            catalog["candidates"], carrier=f"{carrier} catalog"
+        ) != _candidates_by_id(
+            batch_candidates[carrier], carrier=f"{carrier} batch"
+        ):
+            raise ScaleSourcePoolProjectionError(
+                ["aggregate catalogs drift from immutable candidate capsules"]
+            )
     if not isinstance(bindings, Mapping):
         raise ScaleSourcePoolProjectionError(["source-ready capsule bindings are missing"])
-    homepage_identity = _identity(homepage)
-    article_identity = _identity(article)
-    if homepage_identity != article_identity:
+    identities = {_identity(catalogs[carrier][0]) for carrier in selected_carriers}
+    if len(identities) != 1:
         raise ScaleSourcePoolProjectionError(
             ["homepage/article catalog source identity drift"]
         )
-    rows = [
-        *(
-            _homepage_row(
-                candidate,
-                evidence_digest=str(bindings[str(candidate["candidateId"])]["digest"]),
-                evidence_ref=str(bindings[str(candidate["candidateId"])]["ref"]),
-                file_sha256=str(bindings[str(candidate["candidateId"])]["fileSha256"]),
+    source_identity = next(iter(identities))
+    rows: list[dict[str, Any]] = []
+    for carrier in selected_carriers:
+        candidates = catalogs[carrier][0]["candidates"]
+        for candidate in candidates:
+            candidate_id = str(candidate["candidateId"])
+            binding = bindings.get(candidate_id)
+            if not isinstance(binding, Mapping):
+                raise ScaleSourcePoolProjectionError(
+                    [f"{candidate_id} source-ready capsule binding is missing"]
+                )
+            try:
+                member_root_ref, member_capsule_ref = source_ready_member_binding(
+                    binding, candidate_id=candidate_id
+                )
+            except ValueError as exc:
+                raise ScaleSourcePoolProjectionError([exc]) from exc
+            projected_member_root = Path(source_set_root_ref)
+            if member_root_ref != ".":
+                projected_member_root /= member_root_ref
+            row_builder = _homepage_row if carrier == "homepage" else _article_row
+            rows.append(
+                row_builder(
+                    candidate,
+                    evidence_root_ref=projected_member_root.as_posix(),
+                    evidence_digest=str(binding["digest"]),
+                    evidence_ref=member_capsule_ref,
+                    file_sha256=str(binding["fileSha256"]),
+                )
             )
-            for candidate in homepage["candidates"]
-        ),
-        *(
-            _article_row(
-                candidate,
-                evidence_digest=str(bindings[str(candidate["candidateId"])]["digest"]),
-                evidence_ref=str(bindings[str(candidate["candidateId"])]["ref"]),
-                file_sha256=str(bindings[str(candidate["candidateId"])]["fileSha256"]),
-            )
-            for candidate in article["candidates"]
-        ),
-    ]
     rows = sorted(
         rows,
         key=lambda row: (str(row["carrier"]), str(row["objectRef"])),
@@ -528,22 +609,19 @@ def project_scale_source_pool_homepage_article(
     _validate_rows(rows)
     stable: dict[str, Any] = {
         "schema": PROJECTION_SCHEMA,
-        "sourceRevision": homepage_identity[0],
-        "sourceDigest": homepage_identity[1],
-        "entityCatalogDigest": homepage_identity[2],
+        "sourceRevision": source_identity[0],
+        "sourceDigest": source_identity[1],
+        "entityCatalogDigest": source_identity[2],
         "catalogBindings": [
-            {
-                "carrier": "homepage",
-                "catalogRef": homepage_ref,
-                "catalogDigest": homepage_catalog_digest,
-                "catalogFileSha256": homepage_file_sha,
-            },
-            {
-                "carrier": "article",
-                "catalogRef": article_ref,
-                "catalogDigest": article_catalog_digest,
-                "catalogFileSha256": article_file_sha,
-            },
+            *(
+                {
+                    "carrier": carrier,
+                    "catalogRef": catalogs[carrier][1],
+                    "catalogDigest": str(catalogs[carrier][0]["catalogDigest"]),
+                    "catalogFileSha256": catalogs[carrier][2],
+                }
+                for carrier in selected_carriers
+            ),
             {
                 "carrier": "homepage_article_source_set",
                 "catalogRef": source_ready_set_ref,
@@ -556,7 +634,7 @@ def project_scale_source_pool_homepage_article(
                 "carrier": carrier,
                 "candidateCount": sum(row["carrier"] == carrier for row in rows),
             }
-            for carrier in ("homepage", "article")
+            for carrier in selected_carriers
         ],
         "rows": rows,
     }

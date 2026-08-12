@@ -201,7 +201,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             "publicWeb": self._write_json(
                 root / "sources/web.json",
                 {
-                    "schema": "qwq.public-web.release",
+                    "schema": "client-app.web.official-release",
                     "sourceGitSha": source_identity["gitSha"],
                     "sourceTreeDigest": source_identity["treeDigest"],
                     "contentSHA256": finalizer.sha256_tree(
@@ -212,7 +212,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             "androidOfficialRelease": self._write_json(
                 root / "sources/android.json",
                 {
-                    "schema": "qwq.android.official-release",
+                    "schema": "client-app.android.official-release",
                     "sourceGitSha": source_identity["gitSha"],
                     "sourceTreeDigest": source_identity["treeDigest"],
                     "packagedAPK": "quwoquan.apk",

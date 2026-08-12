@@ -1236,6 +1236,7 @@ api_routes:
     description: 仅供已登记的 api-edge/assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag 资源服务 readiness 验证账号安全权威的服务身份、scope、路由与 PostgreSQL 读取链路；任何未登记的 service principal 即使持有同 scope 也必须拒绝。使用保留的不可解析 probe subject，不返回或持久化任意账号资料。
     method: GET
     operation: CheckAccountSecurityAuthority
+    transport_role: readiness
     commercial:
       status: ready
     path: /internal/user/account-security/health

@@ -52,6 +52,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # /healthz 对公开 AccountSecurityAuthority 做 fail-closed 探测；若不把
+      # 真实 owner 纳入启动依赖，首次全栈 up 会在 Product Ops unhealthy 上
+      # 等待，而 user-service 尚未创建，形成确定的启动顺序死锁。
+      user-service:
+        condition: service_healthy
     ports:
       - "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:

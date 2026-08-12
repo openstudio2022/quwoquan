@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import shutil
 from pathlib import Path
 
 import pytest
+from content.execution.closure.pool_delivery import write_pool_delivery_intent
+from content.release.canonical import creator_projection
+from content.release.canonical import handler as release_handler
 from content.release.canonical import object_transaction_audit as transaction
 from content.release.canonical.application import (
     apply_object_transaction,
@@ -18,8 +22,10 @@ from content.release.canonical.object_transaction import (
     _source_assets_by_ref,
     build_entity_object_transaction_package,
 )
+from content.templates.registry import TemplateRegistry
 from core import paths as core_paths
 from core.tree_integrity import tree_integrity_stats
+from governance.creators.assignment import creator_assignment_from_profile
 from PIL import Image
 from support import execution_manifest_fixture
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
@@ -30,11 +36,86 @@ from support.object_transaction_fixtures import (
     build_package,
 )
 
+
+def test_object_transaction_rollback_cli_binds_exact_roots_and_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    parser = argparse.ArgumentParser()
+    release_handler.register_parser(
+        parser.add_subparsers(dest="command", required=True)
+    )
+    output_root = tmp_path / "output"
+    publish_root = tmp_path / "publish"
+    observed: dict[str, object] = {}
+
+    def _rollback(**kwargs: object) -> dict[str, object]:
+        observed.update(kwargs)
+        return {
+            "schema": "quwoquan_data.object_transaction_rollback",
+            "transactionId": "transaction-cli-001",
+            "status": "rolled_back",
+        }
+
+    monkeypatch.setattr(release_handler, "rollback_object_transaction", _rollback)
+    args = parser.parse_args(
+        [
+            "release",
+            "object-transaction",
+            "rollback",
+            "--transaction-id",
+            "transaction-cli-001",
+            "--output-root",
+            str(output_root),
+            "--publish-root",
+            str(publish_root),
+        ]
+    )
+    args.handler(args)
+
+    assert observed == {
+        "publish_root": publish_root.resolve(),
+        "output_root": output_root.resolve(),
+        "transaction_id": "transaction-cli-001",
+    }
+    assert json.loads(capsys.readouterr().out)["status"] == "rolled_back"
+
 BUILT_EXECUTION_ID = (
     "20260808--travel-homepage-canonical-assets--contract-region-a--pilot-015"
 )
 BUILT_OBJECT_REF = "地点/景区/真实构建地点"
 BUILT_ASSET_ID = "homepage-cover"
+DATA_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "quwoquan_data"
+)
+
+
+def _source_attribution() -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorId": None,
+        "originalCreatorName": "Fixture Photographer",
+        "originalCreatorProfileUrl": None,
+        "platform": "Wikimedia Commons",
+        "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Cover.png",
+        "originalAssetUrl": "https://upload.wikimedia.org/example/cover.png",
+        "attributionText": "Fixture Photographer / CC BY 4.0",
+        "rightsBasis": "CC BY 4.0",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "authorizationProofUrl": None,
+        "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-08T00:00:00Z",
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -74,6 +155,20 @@ def _build_approved_entity_execution(
     entity_asset.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source_asset, entity_asset)
     source_asset_ref = source_asset.relative_to(execution_root).as_posix()
+    creator = creator_assignment_from_profile(
+        TemplateRegistry.load().creators["qwq_creator_travel_blogger_001"]
+    )
+    creator_profile = TemplateRegistry.load().creators[
+        "qwq_creator_travel_blogger_001"
+    ]
+    avatar = creator_profile["avatarAsset"]
+    avatar_object_key = str(avatar["objectKey"])
+    isolated_publish = tmp_path / "creator-publish"
+    avatar_target = isolated_publish / avatar_object_key
+    avatar_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(DATA_ROOT / "publish" / avatar_object_key, avatar_target)
+    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", isolated_publish)
+    attribution = _source_attribution()
     _write_json(
         source_asset.parent / "index.json",
         {
@@ -102,14 +197,17 @@ def _build_approved_entity_execution(
         entity_root / "_entity.json",
         {
             "entityRef": f"/entity/{BUILT_OBJECT_REF}",
-            "tagRefs": [],
+            **creator,
+            "tagRefs": ["Topic/旅行/玩法/文化体验"],
             "primarySource": {"sourceKind": "wikipedia"},
+            "sourceAttribution": attribution,
         },
     )
     _write_json(
         entity_root / "manifest.json",
         {
             "vertical": "travel",
+            "sourceAttribution": attribution,
             "assets": [
                 {
                     "assetId": BUILT_ASSET_ID,
@@ -208,11 +306,22 @@ def test_entity_transaction_builder_projects_one_asset_identity_consistently(
     )
     package_root = execution_root / "evidence/object-transactions" / transaction_id
 
+    intent, _intent_path = write_pool_delivery_intent(
+        BUILT_EXECUTION_ID,
+        carrier="homepage",
+        object_ref=f"/entity/{BUILT_OBJECT_REF}",
+        content_object_dir=f"entities/{BUILT_OBJECT_REF}",
+        root=execution_root,
+        publish_root=tmp_path / "canonical-publish",
+        reservation_root=tmp_path / "delivery-reservations",
+    )
+
     package = build_entity_object_transaction_package(
         execution_root=execution_root,
         object_ref=BUILT_OBJECT_REF,
         transaction_id=transaction_id,
         package_root=package_root,
+        pool_delivery_intent=intent,
     )
 
     manifest = json.loads(
@@ -252,6 +361,65 @@ def test_entity_transaction_builder_projects_one_asset_identity_consistently(
         cas_ref["sha256"],
         cas_ref["bytes"],
     )
+
+
+def test_entity_transaction_projects_legacy_research_asset_to_editorial_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_root, transaction_id = _build_approved_entity_execution(
+        tmp_path,
+        monkeypatch,
+    )
+    entity_root = execution_root / "entities" / BUILT_OBJECT_REF
+    manifest_path = entity_root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_asset = manifest["assets"][0]
+    manifest_asset.pop("usageScope")
+    manifest_asset["rightsAuditStatus"] = "unverified"
+    manifest_asset["rightsAuditIssues"] = [
+        "imageRights: missing required field usageScope"
+    ]
+    _write_json(manifest_path, manifest)
+
+    source_index_path = execution_root / "sources/commons/assets/index.json"
+    source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
+    source_asset = source_index["assets"][0]
+    source_asset.pop("usageScope")
+    source_asset.update(
+        acquisitionStatus="acquired",
+        distributionDecision="research_allowed",
+        rightsAuditStatus="unverified",
+        rightsAuditIssues=["imageRights: missing required field usageScope"],
+    )
+    _write_json(source_index_path, source_index)
+
+    intent, _intent_path = write_pool_delivery_intent(
+        BUILT_EXECUTION_ID,
+        carrier="homepage",
+        object_ref=f"/entity/{BUILT_OBJECT_REF}",
+        content_object_dir=f"entities/{BUILT_OBJECT_REF}",
+        root=execution_root,
+        publish_root=tmp_path / "canonical-publish",
+        reservation_root=tmp_path / "delivery-reservations",
+    )
+    package_root = execution_root / "evidence/object-transactions" / transaction_id
+    build_entity_object_transaction_package(
+        execution_root=execution_root,
+        object_ref=BUILT_OBJECT_REF,
+        transaction_id=transaction_id,
+        package_root=package_root,
+        pool_delivery_intent=intent,
+    )
+
+    rights = json.loads(
+        (package_root / "object/rights.json").read_text(encoding="utf-8")
+    )
+    assert rights["assets"][0]["usageScope"] == "editorial"
+    assert rights["assets"][0]["rightsAuditStatus"] == "unverified"
+    assert rights["assets"][0]["rightsAuditIssues"] == [
+        "imageRights: missing required field usageScope"
+    ]
 
 
 def test_entity_transaction_rejects_manifest_asset_digest_drift(
@@ -313,7 +481,7 @@ def test_apply_is_atomic_create_once_idempotent_and_has_no_layout_parent(
     assert rerun["idempotent"] is True
 
 
-def test_first_transaction_initializes_missing_canonical_publish_root(
+def test_content_transaction_requires_independently_admitted_author(
     tmp_path: Path,
 ) -> None:
     canonical = build_canonical(tmp_path)
@@ -321,25 +489,19 @@ def test_first_transaction_initializes_missing_canonical_publish_root(
     shutil.rmtree(canonical)
     output = tmp_path / ".qwq_output"
 
-    audit = transaction.audit_object_transaction(
-        publish_root=canonical,
-        output_root=output,
-        package_root=package,
-        transaction_id=TRANSACTION_ID,
-        expected_canonical_merkle=load_or_bootstrap_inventory(canonical)["stats"][
-            "merkleRoot"
-        ],
-    )
-    applied = apply_object_transaction(
-        publish_root=canonical,
-        output_root=output,
-        package_root=package,
-        transaction_id=TRANSACTION_ID,
-        dry_run_attestation_sha256=str(audit["dryRunAttestationSha256"]),
-    )
-
-    assert applied["status"] == "applied"
-    assert (canonical / "entities" / OBJECT_REF / "_entity.json").is_file()
+    with pytest.raises(
+        transaction.ObjectTransactionError,
+        match="DATA.POOL.AUTHOR_NOT_ADMITTED",
+    ):
+        transaction.audit_object_transaction(
+            publish_root=canonical,
+            output_root=output,
+            package_root=package,
+            transaction_id=TRANSACTION_ID,
+            expected_canonical_merkle=load_or_bootstrap_inventory(canonical)["stats"][
+                "merkleRoot"
+            ],
+        )
 
 
 def test_rollback_restores_before_merkle_and_preserves_transaction_evidence(

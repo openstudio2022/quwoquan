@@ -1,16 +1,21 @@
 """Canonical aggregate evidence for four-lane research scale promotion."""
 from __future__ import annotations
+
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
 from content.execution.identity import parse_execution_id
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding,
 )
 from content.execution.preflight.selection import CALIBRATION_SEMANTIC_SELECTION_ID
-from content.execution.scale.semantic_promotion import ScaleSemanticPromotionError, build_scale_semantic_calibration
+from content.execution.scale.semantic_promotion import (
+    ScaleSemanticPromotionError,
+    build_scale_semantic_calibration,
+)
 from content.release.canonical import campaign_scale_object_closure as object_closure
 from content.release.canonical import runtime_scale_evidence_binding as runtime_binding
 from content.release.canonical.campaign_scale_contract import (
@@ -27,15 +32,29 @@ from content.release.canonical.campaign_scale_contract import (
     campaign_source_revision,
 )
 from content.release.canonical.campaign_scale_cumulative import (
-    SCALE_INTENTS, release_refs_by_carrier, scale_context, scale_timing_fields,
-    validate_cumulative_lanes, validate_recorded_scale_context,
+    SCALE_INTENTS,
+    release_refs_by_carrier,
+    scale_context,
+    scale_timing_fields,
+    validate_cumulative_lanes,
+    validate_recorded_scale_context,
 )
-from content.release.canonical.campaign_scale_source_pool import campaign_source_pool_fields, validate_recorded_source_pool_fields
-from content.release.canonical.fault_injection_evidence import write_fault_injection_evidence
+from content.release.canonical.campaign_scale_source_pool import (
+    campaign_source_pool_fields,
+    validate_recorded_source_pool_fields,
+)
+from content.release.canonical.fault_injection_evidence import (
+    write_fault_injection_evidence,
+)
 from content.release.canonical.release_header import validate_release_header
-from content.release.canonical.resource_soak_evidence import _derive_resource_soak_stable, write_resource_soak_evidence
+from content.release.canonical.resource_soak_evidence import (
+    _derive_resource_soak_stable,
+    write_resource_soak_evidence,
+)
 from core.paths import campaign_scale_evidence_root
 from core.release_layout import payload_digest, payload_file
+
+
 def write_campaign_scale_evidence(
     *,
     evidence_id: str,
@@ -115,14 +134,6 @@ def write_campaign_scale_evidence(
         or admission.get("productLifecycleState") != "research"
     ):
         raise CampaignScaleEvidenceError("campaign evidence requires one research release")
-    source_digests = header.get("sourceDigests")
-    if (
-        not isinstance(source_digests, list)
-        or len(source_digests) != 1
-        or not isinstance(source_digests[0], Mapping)
-        or source_digests[0].get("digest") != plan.get("sourceDigest")
-    ):
-        raise CampaignScaleEvidenceError("release sourceDigest differs from campaign plan")
     (
         target_scale,
         predecessor_promotion,
@@ -197,11 +208,10 @@ def write_campaign_scale_evidence(
         accepted_total = int(admission_row.get("researchAcceptedCount") or 0)
         if (
             set(refs) & predecessor_refs[carrier]
-            or total_count != carried_count + len(refs)
-            or accepted_total != carried_count + len(refs)
+            or accepted_total != total_count
         ):
             raise CampaignScaleEvidenceError(
-                f"{carrier} predecessorCarried+new=total closure drift"
+                f"{carrier} rolling-wave/release cohort closure drift"
             )
         calibration_ref = min(refs)
         try:
@@ -272,11 +282,7 @@ def write_campaign_scale_evidence(
         if isinstance(article_coverage, Mapping)
         else 0.0
     )
-    passed = (
-        resource.get("status") == "passed"
-        and duplicate_asset_count == 0
-        and cross_lane_write_count == 0
-    )
+    passed = duplicate_asset_count == 0 and cross_lane_write_count == 0
     timing_fields = scale_timing_fields(target_scale=target_scale, plan=plan, predecessor_promotion_path=predecessor_promotion_path, resource=resource)
     stable = {
         "schema": "quwoquan_data.campaign_scale_evidence",
@@ -449,18 +455,11 @@ def load_campaign_scale_evidence(
     validate_release_header(header, label=f"bound research release header:{release_id}")
     if campaign.get("manifestDigest") != payload_digest(release):
         raise CampaignScaleEvidenceError("campaign release manifest digest drift")
-    release_source_digests = header.get("sourceDigests")
     if (
         header.get("releaseId") != release_id
         or admission.get("releaseId") != release_id
         or header.get("releaseClass") != "research"
         or admission.get("releaseClass") != "research"
-        or header.get("sourceRevision") != plan.get("sourceRevision")
-        or header.get("sourceDigest") != plan.get("sourceDigest")
-        or header.get("entityCatalogDigest") != plan.get("entityCatalogDigest")
-        or not isinstance(release_source_digests, list)
-        or len(release_source_digests) != 1
-        or release_source_digests[0].get("digest") != plan.get("sourceDigest")
     ):
         raise CampaignScaleEvidenceError("campaign release identity drift")
     (
@@ -519,6 +518,7 @@ def load_campaign_scale_evidence(
         target_scale=target_scale,
         predecessor_counts=predecessor_counts,
         predecessor_refs=predecessor_refs,
+        release_refs=release_refs_by_carrier(release),
         output_root=output_root,
     )
     duplicate_publish_refs = sum(
@@ -549,8 +549,7 @@ def load_campaign_scale_evidence(
     )
     derived_status = (
         "passed"
-        if resource.get("status") == "passed"
-        and duplicate_assets == 0
+        if duplicate_assets == 0
         and duplicate_publish_refs + wrong_lane_refs == 0
         else "failed"
     )

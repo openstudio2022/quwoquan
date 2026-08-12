@@ -35,6 +35,23 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
             "boundedLoginFailureKind",
         ):
             self.assertIn(sanitizer, source)
+        for bounded_result in (
+            '"accepted"',
+            '"idempotent_replay"',
+            '"delivery_confirming"',
+            '"sent_unconfirmed"',
+            '"delivery_failed"',
+            '"rate_limited"',
+            '"decode_contract_violation"',
+            '"login_success"',
+        ):
+            self.assertIn(bounded_result, source)
+        for bounded_operation in (
+            '"confirm_otp_delivery"',
+            '"confirm_otp_delivery_5s"',
+            '"confirm_otp_delivery_15s"',
+        ):
+            self.assertIn(bounded_operation, source)
         for forbidden_label in (
             '[]string{"flowId"',
             '[]string{"requestId"',
@@ -61,7 +78,10 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         self.assertIn("http_server_error_codes_total", expressions)
         self.assertIn("ops_login_funnel_events_total", expressions)
         self.assertIn("ops_login_operation_events_total", expressions)
+        self.assertIn("ops_login_operation_duration_seconds_bucket", expressions)
         self.assertIn("ops_login_state_dwell_seconds_bucket", expressions)
+        self.assertIn('result="login_success"', expressions)
+        self.assertIn('confirm_otp_delivery(_5s|_15s)?', expressions)
 
         rollup_path = (
             ROOT
@@ -151,6 +171,22 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         operation_failure = rules["LoginClientOperationFailureRateHigh"]
         self.assertIn("ops_login_operation_events_total", operation_failure["expr"])
         self.assertIn("> 0.05", operation_failure["expr"])
+
+        delivery_unknown = rules["OtpDeliveryConfirmationUnknownHigh"]
+        self.assertEqual(delivery_unknown["for"], "10m")
+        self.assertIn('operation="confirm_otp_delivery_15s"', delivery_unknown["expr"])
+        self.assertIn('result="delivery_confirming"', delivery_unknown["expr"])
+        self.assertIn("> 0.02", delivery_unknown["expr"])
+
+        delivery_failed = rules["OtpDeliveryFailureRateHigh"]
+        self.assertEqual(delivery_failed["for"], "10m")
+        self.assertIn('result="delivery_failed"', delivery_failed["expr"])
+        self.assertIn("> 0.02", delivery_failed["expr"])
+
+        completion = rules["LoginCompletionRateLow"]
+        self.assertEqual(completion["for"], "15m")
+        self.assertIn('result="login_success"', completion["expr"])
+        self.assertIn("< 0.80", completion["expr"])
 
         binding = rules["LoginPhoneBindingAbandonmentHigh"]
         self.assertIn('action="login_phone_binding"', binding["expr"])

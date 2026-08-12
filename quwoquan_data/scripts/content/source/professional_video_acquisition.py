@@ -12,7 +12,7 @@ from core.content_source_registry import load_content_source_registry
 from core.io import read_json
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
-from core.video_source_admission import assert_video_source_admitted
+from core.video_source_admission import assert_video_acquisition_path_allowed
 from governance.coverage.distribution import (
     AcquisitionStatus,
     DistributionDecision,
@@ -25,10 +25,15 @@ from governance.coverage.distribution import (
 from content.execution.controller.execute.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
+from content.source.professional_safety_evidence import (
+    load_bound_safety_evidence,
+    validate_video_safety_payload,
+)
 from content.source.professional_video_catalog_binding import (
     POPULAR_BINDING_FIELDS,
     resolve_popular_candidate_binding,
 )
+from content.source.professional_video_plan_spec import build_video_plan_spec
 from content.source.professional_video_popularity import (
     apply_popularity_percentiles,
     initial_popularity_signals,
@@ -124,11 +129,11 @@ def _validate_item(
         if lifecycle is ProductLifecycleState.RESEARCH
         else "commercial_release"
     )
-    assert_video_source_admitted(
+    assert_video_acquisition_path_allowed(
         registry,
         source_id=str(item["provider"]),
         source_kind=str(item["sourceKind"]),
-        publication_admission=publication,
+        acquisition_path=str(item["acquisitionPath"]),
     )
     path = str(item["acquisitionPath"])
     asset_url = str(item["assetUrl"]).strip()
@@ -306,6 +311,7 @@ def _acquire_item(
     item: Mapping[str, Any],
     *,
     rights: RightsStatus,
+    safety_evidence: Mapping[str, Any],
     manual_root: Path | None,
     output_root: Path,
     temporary_root: Path,
@@ -355,6 +361,13 @@ def _acquire_item(
     )
     try:
         probe = probe_professional_video(cas_path)
+        validate_video_safety_payload(
+            safety_evidence,
+            item,
+            content_sha256=content_sha256,
+            size_bytes=cas_path.stat().st_size,
+            media_probe=probe,
+        )
         row["mediaProbe"] = probe
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         row.update(
@@ -390,47 +403,6 @@ def _acquire_item(
     return row
 
 
-def _plan_spec(row: Mapping[str, Any], *, receipt_ref: str, publication: str) -> dict[str, Any]:
-    digest = str(row["contentSha256"])
-    proof = str(row["authorizationProof"]).strip()
-    original_asset = str(row["assetUrl"] or row["sourceUrl"])
-    probe = row["mediaProbe"]
-    assert isinstance(probe, Mapping)
-    return {
-        "sourceId": str(row["provider"]),
-        "sourceKind": str(row["sourceKind"]),
-        "ordinal": 1,
-        "title": str(row["title"]),
-        "relevance": str(row["relevance"]),
-        "platform": str(row["platform"]),
-        "assetUrl": f"cas://sha256/{digest.removeprefix('sha256:')}",
-        "originalAssetUrl": original_asset,
-        "sourcePostUrl": str(row["sourceUrl"]),
-        "authorizationProofUrl": proof if proof.startswith("https://") else "",
-        "termsUrl": str(row["termsUrl"]),
-        "rightsBasis": str(row["license"]),
-        "originalCreatorName": str(row["creator"]),
-        "attributionText": f"{row['title']} — {row['creator']} — {row['license']} — {row['sourceUrl']}",
-        "commercialAuthorizationStatus": (
-            "verified" if row["distributionDecision"] == "commercial_allowed" else "unverified"
-        ),
-        "rightsStatus": str(row["rightsStatus"]),
-        "rightsIssues": list(row["rightsIssues"]),
-        "publicationAdmission": publication,
-        "modelReleaseStatus": str(row["modelReleaseStatus"]),
-        "propertyReleaseStatus": str(row["propertyReleaseStatus"]),
-        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
-        "durationSeconds": int(probe["durationMs"]) / 1000,
-        "sizeBytes": int(row["bytes"]),
-        "mediaProbe": dict(probe),
-        "popularitySignals": dict(row["popularitySignals"]),
-        "professionalAcquisitionReceiptRef": receipt_ref,
-        "professionalAssetId": str(row["assetId"]),
-        "professionalContentSha256": digest,
-        "premiumPlayableEligible": True,
-    }
-
-
 def acquire_professional_videos(
     manifest_path: Path,
     *,
@@ -456,7 +428,9 @@ def acquire_professional_videos(
     if len(asset_ids) != len(set(asset_ids)):
         raise ValueError("professional video acquisition assetId values must be unique")
     provider_labels: dict[str, tuple[str, str]] = {}
-    validated: list[tuple[dict[str, Any], RightsStatus, str]] = []
+    validated: list[
+        tuple[dict[str, Any], RightsStatus, str, dict[str, Any]]
+    ] = []
     popular_bindings: dict[str, dict[str, Any]] = {}
     catalog_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
     registry = load_content_source_registry()
@@ -467,6 +441,12 @@ def acquire_professional_videos(
             item,
             registry=registry,
             lifecycle=lifecycle,
+        )
+        safety_evidence = load_bound_safety_evidence(
+            item,
+            evidence_root=root,
+            kind="video",
+            manual_root=manual_root,
         )
         popular = resolve_popular_candidate_binding(
             item,
@@ -481,7 +461,7 @@ def acquire_professional_videos(
         if str(item["provider"]) in provider_labels and provider_labels[str(item["provider"])] != label:
             raise ValueError(f"{item['assetId']}: provider displayName/platform are inconsistent")
         provider_labels[str(item["provider"])] = label
-        validated.append((item, rights, publication))
+        validated.append((item, rights, publication, safety_evidence))
     manifest_digest = document_digest(manifest)
     receipt_ref = f"receipts/{manifest_digest.removeprefix('sha256:')}.json"
     receipt_path = root / receipt_ref
@@ -513,12 +493,13 @@ def acquire_professional_videos(
                     _acquire_item,
                     item,
                     rights=rights,
+                    safety_evidence=safety_evidence,
                     manual_root=manual_root,
                     output_root=root,
                     temporary_root=temporary_root,
                     lifecycle=lifecycle,
                 )
-                for item, rights, _publication in validated
+                for item, rights, _publication, safety_evidence in validated
             ]
             acquired_rows = [future.result() for future in futures]
         for row in acquired_rows:
@@ -558,7 +539,11 @@ def acquire_professional_videos(
     publication = validated[0][2]
     for row in rows:
         if row["distributionDecision"] in ACCEPTED_DECISIONS:
-            row["planVideoSpec"] = _plan_spec(row, receipt_ref=receipt_ref, publication=publication)
+            row["planVideoSpec"] = build_video_plan_spec(
+                row,
+                receipt_ref=receipt_ref,
+                publication=publication,
+            )
     planned = len(rows)
     downloaded = sum(row["acquisitionStatus"] == "acquired" for row in rows)
     accepted = sum(row["distributionDecision"] in ACCEPTED_DECISIONS for row in rows)

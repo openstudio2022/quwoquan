@@ -4,7 +4,8 @@
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 /// user_acceptance Patrol: release-bound 核心 Remote readback 组合旅程。
 ///
-/// 覆盖 startup/feed/entity/article/image/video/Creator/avatar/login-user/chat/recovery。
+/// 覆盖 startup/feed/entity/article/image/video/Creator/avatar/recovery。
+/// 登录后联系人、会话、消息与本人主页由 content-free BASIC 单轨验收。
 library;
 
 import 'package:flutter/widgets.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 
@@ -49,11 +51,8 @@ const _videoAttribution = String.fromEnvironment(
 
 const _feedCardProbeKeys = <ValueKey<String>>[
   ValueKey<String>('home-feed-card-0'),
+  ValueKey<String>('feed-patch-reporter-0'),
   ValueKey<String>('dual-discovery-card-0'),
-];
-const _profileProbeKeys = <ValueKey<String>>[
-  ValueKey<String>('profile-header-avatar'),
-  ValueKey<String>('profile-shell-summary-card'),
 ];
 const _videoProbeKeys = <ValueKey<String>>[
   ValueKey<String>('works-video-stage-$_videoWorkId-0'),
@@ -65,6 +64,7 @@ void main() {
   patrolTest(
     'environment_app_core_readback',
     tags: ['user-acceptance', 'app-core-readback', 'environment-smoke'],
+    skip: !kRunPatrolAcceptance,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
     ($) async {
       await launchEnvironmentPatrolApp($);
@@ -81,12 +81,12 @@ void main() {
       );
       _expectReleaseInputs();
 
-      final provision = await provisionPatrolCoreChatConversation($);
       await _expectHomeFeed($);
       await _expectReleaseSurface(
         $,
         AppRoutePaths.homepageDetail(id: _homepageId),
         _homepageTitle,
+        readyFinder: find.byKey(TestKeys.homepageDetailPage),
       );
       await _expectReleaseSurface(
         $,
@@ -95,6 +95,7 @@ void main() {
           source: 'releaseReadback',
         ),
         _articleTitle,
+        readyFinder: find.byKey(TestKeys.worksImmersivePager),
       );
       for (final projection in <String>[_creatorName, _tagLabel]) {
         expect(
@@ -112,12 +113,9 @@ void main() {
           source: 'releaseReadback',
         ),
         _imageTitle,
+        readyFinder: find.byKey(TestKeys.worksImmersivePager),
       );
       await _expectFeaturedVideoBook($);
-      await patrolGoTo($, AppRoutePaths.chat);
-      await _expectProvisionedChatInbox($, provision);
-      await patrolGoTo($, AppRoutePaths.profile);
-      await _expectProfileMatchesSession($);
       await patrolGoTo(
         $,
         AppRoutePaths.workBrowser(
@@ -179,14 +177,58 @@ void _expectReleaseInputs() {
 Future<void> _expectReleaseSurface(
   PatrolIntegrationTester $,
   String route,
-  String expectedTitle,
-) async {
+  String expectedTitle, {
+  required Finder readyFinder,
+}) async {
   await patrolGoTo($, route);
+  final retryFinder = find.text(ContentText.tryAgain);
+  await _waitForAnyFinder($, <Finder>[readyFinder, retryFinder]);
+  if (readyFinder.evaluate().isEmpty && retryFinder.evaluate().isNotEmpty) {
+    await $(ContentText.tryAgain).tap();
+    await _waitForAnyFinder($, <Finder>[readyFinder]);
+  }
   expect(
-    await _waitForAnyFinder($, <Finder>[find.textContaining(expectedTitle)]),
-    isTrue,
-    reason: 'release $_releaseId surface must render its expected title',
+    readyFinder,
+    findsOneWidget,
+    reason:
+        'release $_releaseId route $route must reach its production surface; '
+        'visible text=${_visibleTextSnapshot()}',
   );
+  final titleFinder = find.textContaining(expectedTitle, findRichText: true);
+  final rendered = await _waitForAnyFinder($, <Finder>[titleFinder]);
+  expect(
+    rendered,
+    isTrue,
+    reason:
+        'release $_releaseId surface $route must render its expected title '
+        '"$expectedTitle"; visible text=${_visibleTextSnapshot()}',
+  );
+}
+
+String _visibleTextSnapshot() {
+  final values = <String>{};
+  for (final element in find.byType(Text).evaluate()) {
+    final widget = element.widget as Text;
+    final value = (widget.data ?? widget.textSpan?.toPlainText() ?? '').trim();
+    if (value.isNotEmpty) {
+      values.add(value);
+    }
+  }
+  for (final element in find.byType(RichText).evaluate()) {
+    final value = (element.widget as RichText).text.toPlainText().trim();
+    if (value.isNotEmpty) {
+      values.add(value);
+    }
+  }
+  return values
+      .take(30)
+      .map((value) {
+        final compact = value.replaceAll(RegExp(r'\s+'), ' ');
+        return compact.length <= 120
+            ? compact
+            : '${compact.substring(0, 120)}…';
+      })
+      .join(' | ');
 }
 
 Future<void> _expectHomeFeed(PatrolIntegrationTester $) async {
@@ -259,61 +301,6 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
     isTrue,
     reason: 'video book tab must show a real video stage',
   );
-}
-
-Future<void> _expectProvisionedChatInbox(
-  PatrolIntegrationTester $,
-  PatrolCoreChatProvision provision,
-) async {
-  final rowKey = ValueKey<String>('chat-inbox-row-${provision.conversationId}');
-  final visible = await _waitForAnyFinder($, <Finder>[
-    find.byKey(rowKey),
-    find.textContaining(provision.messageText),
-  ]);
-  expect(
-    visible,
-    isTrue,
-    reason:
-        'message inbox must show the Remote-provisioned conversation '
-        '(${provision.conversationId})',
-  );
-  await $.tap(find.byKey(rowKey));
-  await $.pump();
-  await $.pump(const Duration(seconds: 1));
-  final opened = await _waitForAnyFinder($, <Finder>[
-    find.textContaining(provision.messageText),
-  ]);
-  expect(
-    opened,
-    isTrue,
-    reason: 'opening the provisioned conversation must show the seeded message',
-  );
-}
-
-Future<void> _expectProfileMatchesSession(PatrolIntegrationTester $) async {
-  final session = patrolAuthenticatedSession(patrolMountedContainer());
-  final visible = await _waitForAnyKey($, _profileProbeKeys);
-  expect(visible, isTrue, reason: 'my profile shell must render');
-  expect(
-    session.ownerId.trim(),
-    isNotEmpty,
-    reason: 'profile journey requires authenticated owner id',
-  );
-  expect(
-    session.activePersonaId.trim(),
-    isNotEmpty,
-    reason: 'profile journey requires authenticated persona id',
-  );
-  final profile = patrolMountedContainer()
-      .read(profileNotifierProvider(session.activePersonaId))
-      .profile;
-  expect(
-    profile,
-    isNotNull,
-    reason: 'my profile must resolve the authenticated Remote identity',
-  );
-  expect(profile!.personaId, session.activePersonaId);
-  expect(profile.ownerUserId, session.ownerId);
 }
 
 Future<void> _expectVideoPlayback(PatrolIntegrationTester $) async {

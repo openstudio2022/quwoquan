@@ -20,29 +20,29 @@ var (
 // AppErrorFromConfigInstanceReportUnauthorized returns *AppError for OPS.USER.config_instance_report_unauthorized (user_message from errors.yaml).
 func AppErrorFromConfigInstanceReportUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigInstanceReportUnauthorized.Error()))
-	return rerrors.NewAppError(code, "实例配置报告服务身份未授权", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "实例配置报告服务身份未授权", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConfigInstanceReportInvalid returns *AppError for OPS.USER.config_instance_report_invalid (user_message from errors.yaml).
 func AppErrorFromConfigInstanceReportInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigInstanceReportInvalid.Error()))
-	return rerrors.NewAppError(code, "实例配置报告无效", debugMessage).WithMetadata("config_instance_report_invalid", 400).WithRecovery("configure", 0)
+	return rerrors.NewAppError(code, "实例配置报告无效", debugMessage).WithMetadata("config_instance_report_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConfigInstanceReportConflict returns *AppError for OPS.USER.config_instance_report_conflict (user_message from errors.yaml).
 func AppErrorFromConfigInstanceReportConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigInstanceReportConflict.Error()))
-	return rerrors.NewAppError(code, "实例配置报告与当前候选版本不一致", debugMessage).WithMetadata("config_instance_report_conflict", 409).WithRecovery("refresh", 0)
+	return rerrors.NewAppError(code, "实例配置报告与当前候选版本不一致", debugMessage).WithMetadata("config_instance_report_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromConfigInstanceReportCandidateUnavailable returns *AppError for OPS.SYSTEM.config_instance_report_candidate_unavailable (user_message from errors.yaml).
 func AppErrorFromConfigInstanceReportCandidateUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigInstanceReportCandidateUnavailable.Error()))
-	return rerrors.NewAppError(code, "当前发布候选尚未就绪", debugMessage).WithMetadata("config_instance_report_candidate_unavailable", 503).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "当前发布候选尚未就绪", debugMessage).WithMetadata("config_instance_report_candidate_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 2)
 }
 
 // AppErrorFromConfigInstanceReportStorageFailed returns *AppError for OPS.SYSTEM.config_instance_report_storage_failed (user_message from errors.yaml).
 func AppErrorFromConfigInstanceReportStorageFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConfigInstanceReportStorageFailed.Error()))
-	return rerrors.NewAppError(code, "实例配置报告保存失败", debugMessage).WithMetadata("config_instance_report_storage_failed", 500).WithRecovery("retry", 2)
+	return rerrors.NewAppError(code, "实例配置报告保存失败", debugMessage).WithMetadata("config_instance_report_storage_failed", 500).WithRecoveryDirective("retry", "snackbar", 2)
 }

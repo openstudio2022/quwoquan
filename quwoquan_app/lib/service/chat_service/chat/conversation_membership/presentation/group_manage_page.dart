@@ -17,6 +17,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
+import 'package:uuid/uuid.dart';
 
 /// 群管理页 — 群主/管理员专属管理入口
 class GroupManagePage extends ConsumerStatefulWidget {
@@ -34,6 +35,91 @@ class GroupManagePage extends ConsumerStatefulWidget {
 }
 
 class _GroupManagePageState extends ConsumerState<GroupManagePage> {
+  bool _settingsSubmitting = false;
+
+  Widget _buildLoadErrorCard(BuildContext context, Object error) {
+    return AppSectionErrorCard(
+      semantic: runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.sectionLoad,
+        scope: UiErrorScope.section,
+      ),
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          await ref
+              .read(conversationMembersProvider(widget.conversationId).notifier)
+              .load();
+        }
+      },
+    );
+  }
+
+  Future<void> _updateGroupSettings(
+    bool value, {
+    String? idempotencyKey,
+  }) async {
+    if (_settingsSubmitting) return;
+    final key = idempotencyKey ?? const Uuid().v4();
+    setState(() {
+      _settingsSubmitting = true;
+    });
+    try {
+      final notifier = ref.read(
+        conversationMembersProvider(widget.conversationId).notifier,
+      );
+      final current = ref
+          .read(conversationMembersProvider(widget.conversationId))
+          .groupSettings;
+      await notifier.updateGroupSettings(
+        current.copyWith(nameEditableByAdminOnly: value),
+        idempotencyKey: key,
+      );
+      if (mounted) {
+        setState(() {
+          _settingsSubmitting = false;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _settingsSubmitting = false);
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: UiErrorSemantic(
+          category: resolved.category,
+          scope: resolved.scope,
+          title: resolved.title,
+          message: resolved.message,
+          secondaryMessage: resolved.secondaryMessage,
+          primaryAction: const UiErrorAction(
+            type: UiErrorActionType.retry,
+            label: ContentText.tryAgain,
+          ),
+          secondaryAction: resolved.secondaryAction,
+          dismissible: resolved.dismissible,
+          sourceCode: resolved.sourceCode,
+          failureKind: resolved.failureKind,
+          recoveryAction: resolved.recoveryAction,
+          presentation: resolved.presentation,
+          tone: resolved.tone,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _updateGroupSettings(value, idempotencyKey: key);
+          }
+        },
+      );
+    }
+  }
+
   Future<void> _onConfirmDissolve() async {
     try {
       await widget.conversationDissolver.dissolveConversation(
@@ -161,6 +247,17 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                 return UiRecoveryOutcome.cancelled;
               },
             )
+          : !membersState.isLoading && !membersState.isAdminOrOwner
+          ? AppPageErrorState(
+              semantic: runtimeErrorSemantic(
+                context,
+                error: StateError(
+                  'group management requires an owner or administrator',
+                ),
+                category: UiErrorCategory.permissionRequired,
+                scope: UiErrorScope.page,
+              ),
+            )
           : circleGroupID.isNotEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -171,6 +268,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                 bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
               ),
               children: [
+                if (loadError != null) _buildLoadErrorCard(context, loadError),
                 SettingsInsetGroupedSection(
                   isDark: isDark,
                   density: SettingsInsetSectionDensity.compact,
@@ -214,6 +312,8 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                   bottom: AppSpacing.xl + MediaQuery.paddingOf(context).bottom,
                 ),
                 children: [
+                  if (loadError != null)
+                    _buildLoadErrorCard(context, loadError),
                   SettingsInsetGroupedSection(
                     isDark: isDark,
                     density: SettingsInsetSectionDensity.compact,
@@ -224,15 +324,12 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                           label: ChatText.nameEditableByAdminOnly,
                           trailing: CupertinoSwitch(
                             value: groupSettings.nameEditableByAdminOnly,
-                            onChanged: membersState.isLoading
+                            onChanged:
+                                membersState.isLoading ||
+                                    _settingsSubmitting ||
+                                    !membersState.isAdminOrOwner
                                 ? null
-                                : (v) {
-                                    notifier.updateGroupSettings(
-                                      groupSettings.copyWith(
-                                        nameEditableByAdminOnly: v,
-                                      ),
-                                    );
-                                  },
+                                : _updateGroupSettings,
                             activeTrackColor: SettingsSemanticConstants
                                 .switchActiveTrackColor,
                             inactiveTrackColor:

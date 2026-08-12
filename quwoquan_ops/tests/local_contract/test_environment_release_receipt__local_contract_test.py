@@ -22,6 +22,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
     candidate_id = "sha256:" + "c" * 64
     source_git_sha = "a" * 40
     source_tree_digest = "sha1:" + "b" * 40
+    contract_graph_digest = "sha256:" + "9" * 64
     image_digest = "sha256:" + "e" * 64
     image_ref = "ghcr.io/owner/repo/gateway@" + image_digest
 
@@ -30,6 +31,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "status": status,
             "candidateId": self.candidate_id,
             "artifactDigest": "sha256:" + "d" * 64,
+            "contractGraphDigest": self.contract_graph_digest,
             "source": {
                 "gitSha": self.source_git_sha,
                 "treeDigest": self.source_tree_digest,
@@ -49,6 +51,8 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "target": f"{environment}-local",
             "steps": [{"name": "compose", "exitCode": 0}],
             "formalRelease": True,
+            "releaseInputClassification": "commercial_inputs",
+            "contractGraphDigest": self.contract_graph_digest,
             "runtimeMode": "immutable-oci",
             "runtimeCandidateDigest": self.candidate_id,
             "runtimeImages": {
@@ -100,12 +104,16 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
         candidate = {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": "pilot-003",
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
             "payloadSha256": "sha256:" + "6" * 64,
             "recordedAt": "2026-07-28T00:00:05Z",
         }
         rollback = {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": "pilot-002",
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
             "payloadSha256": "sha256:" + "7" * 64,
             "recordedAt": "2026-07-28T00:00:04Z",
         }
@@ -144,6 +152,8 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "artifactDigest": "sha256:" + "d" * 64,
             "sourceGitSha": self.source_git_sha,
             "sourceTreeDigest": self.source_tree_digest,
+            "releaseInputClassification": "commercial_inputs",
+            "contractGraphDigest": self.contract_graph_digest,
             "endedAt": "2026-07-28T00:00:10Z",
         }
 
@@ -250,6 +260,23 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
         ):
             self._render(root=Path(temporary), package=payload)
 
+    def test_package_release_and_graph_identity_are_required(self) -> None:
+        cases = (
+            ("releaseInputClassification", None, "release input classification"),
+            ("releaseInputClassification", "research_inputs", "commercial release inputs"),
+            ("contractGraphDigest", None, "ContractGraph"),
+            ("contractGraphDigest", "sha256:" + "8" * 64, "ContractGraph"),
+        )
+        for field, value, message in cases:
+            with self.subTest(field=field, value=value), tempfile.TemporaryDirectory(
+            ) as temporary, self.assertRaisesRegex(ValueError, message):
+                package = self._package()
+                if value is None:
+                    package.pop(field)
+                else:
+                    package[field] = value
+                self._render(root=Path(temporary), package=package)
+
     def test_beta_device_matrix_must_bind_exact_candidate_and_source(self) -> None:
         devices = {
             "schema": "release-device-matrix-evidence",
@@ -300,6 +327,26 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
         up["destructiveActions"] = ["wipe-postgres-migration-drift"]
         with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
             ValueError, "immutable candidate runtime"
+        ):
+            self._render(root=Path(temporary), extra={"up": up})
+
+    def test_formal_runtime_rejects_research_or_mixed_release_inputs(self) -> None:
+        for classification in ("research_inputs", "mixed_inputs"):
+            up = self._runtime_up("alpha")
+            up["releaseInputClassification"] = classification
+            with self.subTest(classification=classification), tempfile.TemporaryDirectory(
+            ) as temporary, self.assertRaisesRegex(
+                ValueError,
+                "commercial release inputs",
+            ):
+                self._render(root=Path(temporary), extra={"up": up})
+
+    def test_formal_runtime_rejects_contract_graph_drift(self) -> None:
+        up = self._runtime_up("alpha")
+        up["contractGraphDigest"] = "sha256:" + "8" * 64
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+            ValueError,
+            "ContractGraph",
         ):
             self._render(root=Path(temporary), extra={"up": up})
 

@@ -1,0 +1,42 @@
+{
+  "executionId": "20260809--travel-video-m1--china-panda-base-research-fefb5847-not-m100--scale-003",
+  "agentRunId": "run-08c51dfc-0a8b-4b1d-80ec-5b094ddb5366",
+  "agentModel": "auto",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "preserved_authorized",
+  "sources": [
+    {
+      "assetRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__6bcbc9ef/assets/source.webm",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_10.webm",
+      "rightsRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__6bcbc9ef/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__6bcbc9ef/media/probe.json",
+      "watermarkEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__6bcbc9ef/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__6bcbc9ef/rights/audio_rights_evidence.json",
+      "sha256": "sha256:f1063a2c681ee13fe0d04c527405c9cd9ed3317acc093f7f5076d8731024a374",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "RG72",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_10.webm",
+      "originalAssetUrl": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_10.webm",
+      "attributionText": "成都大熊猫繁育研究基地内的大熊猫竹林活动实拍 — RG72 — CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_10.webm",
+      "rightsBasis": "CC BY-SA 4.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "research_release",
+      "authorizationProofUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "unverified",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-09T05:16:20.762412+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY-SA 4.0"
+    }
+  ]
+}

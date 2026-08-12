@@ -157,7 +157,7 @@ AssistantEvalScenarioPack _loadLocalAssistantEvalScenarioPack() {
   }
   const fixturePath =
       'quwoquan_service/services/assistant-service/tests/support/'
-      'contract_fixtures/scenarios/assistant_skill_eval_scenarios.json';
+      'eval_corpora/assistant_skill_eval_scenarios.json';
   final candidates = <File>[
     File('../$fixturePath'),
     File(fixturePath),

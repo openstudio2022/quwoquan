@@ -10,12 +10,13 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrOtpExpired          = errors.New("USER.AUTH.otp_expired")
-	ErrOtpMismatch         = errors.New("USER.AUTH.otp_mismatch")
-	ErrOtpAttemptsExceeded = errors.New("USER.AUTH.otp_attempts_exceeded")
-	ErrOtpRateLimited      = errors.New("USER.AUTH.otp_rate_limited")
-	ErrOtpProviderFailed   = errors.New("USER.AUTH.otp_provider_failed")
-	ErrChallengeConsumed   = errors.New("USER.AUTH.challenge_consumed")
+	ErrOtpExpired             = errors.New("USER.AUTH.otp_expired")
+	ErrOtpMismatch            = errors.New("USER.AUTH.otp_mismatch")
+	ErrOtpAttemptsExceeded    = errors.New("USER.AUTH.otp_attempts_exceeded")
+	ErrOtpRateLimited         = errors.New("USER.AUTH.otp_rate_limited")
+	ErrOtpIdempotencyConflict = errors.New("USER.AUTH.otp_idempotency_conflict")
+	ErrOtpProviderFailed      = errors.New("USER.AUTH.otp_provider_failed")
+	ErrChallengeConsumed      = errors.New("USER.AUTH.challenge_consumed")
 )
 
 // AppErrorFromOtpExpired returns *AppError for USER.AUTH.otp_expired (user_message from errors.yaml).
@@ -39,7 +40,13 @@ func AppErrorFromOtpAttemptsExceeded(debugMessage string) *rerrors.AppError {
 // AppErrorFromOtpRateLimited returns *AppError for USER.AUTH.otp_rate_limited (user_message from errors.yaml).
 func AppErrorFromOtpRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpRateLimited.Error()))
-	return rerrors.NewAppError(code, "尝试次数较多", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "inlineCard", 60)
+	return rerrors.NewAppError(code, "获取过于频繁", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "inlineCard", 60)
+}
+
+// AppErrorFromOtpIdempotencyConflict returns *AppError for USER.AUTH.otp_idempotency_conflict (user_message from errors.yaml).
+func AppErrorFromOtpIdempotencyConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrOtpIdempotencyConflict.Error()))
+	return rerrors.NewAppError(code, "本次验证码请求已失效，请重新获取", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromOtpProviderFailed returns *AppError for USER.AUTH.otp_provider_failed (user_message from errors.yaml).

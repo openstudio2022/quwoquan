@@ -23,6 +23,7 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(path))
 
 from content.execution.planning.recipe import model as recipe, checkpoint as recipe_checkpoint
+from content.execution.planning.recipe import request as recipe_request
 from content.execution.identity import (
     build_execution_id,
     parse_execution_id,
@@ -107,10 +108,17 @@ def test_recipe_schema_rejects_missing_or_unknown_lifecycle() -> None:
         assert_valid(payload, "execution", "content_recipe")
 
 
-def test_article_recipe_does_not_narrow_selection_to_scenic_subtype() -> None:
-    article = recipe.load_recipe("content/travel/article/article")
+def test_travel_recipes_do_not_narrow_selection_to_scenic_subtype() -> None:
+    refs = (
+        "content/travel/homepage/homepage",
+        "content/travel/article/article",
+        "content/travel/image/image",
+        "content/travel/video/video",
+    )
 
-    assert article["selection"]["category"] == "地点"
+    assert {
+        recipe.load_recipe(ref)["selection"]["category"] for ref in refs
+    } == {"地点"}
 
 
 def test_travel_video_recipe_uses_the_governed_codex_terra_binding() -> None:
@@ -449,6 +457,64 @@ def test_retry_without_predecessor_requires_explicit_targets(monkeypatch) -> Non
     ) == ("测试实体乙", "测试实体甲")
 
 
+def test_retry_unfinished_scope_narrows_exact_target_and_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/china"
+    reference_root.mkdir(parents=True)
+    captured: dict[str, object] = {}
+    retry_of = "20260812--travel-article-m100--china--scale-010"
+    object_ref = "剑门关__article-source-e9057f23e3d3ebb5c74f"
+    scope = SimpleNamespace(
+        target_names=("剑门关",),
+        target_rows=({"entityType": "地点/景区", "name": "剑门关"},),
+    )
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe, "OUTPUT_ROOT", tmp_path / "output")
+    monkeypatch.setattr(
+        recipe_request,
+        "load_retry_unfinished_scope",
+        lambda *_args, **_kwargs: scope,
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_retry_target_names",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("broad predecessor target set must not be consumed")
+        ),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_run_execution",
+        lambda args, **_kwargs: captured.update(vars(args)),
+    )
+
+    recipe.handle_execute(
+        argparse.Namespace(
+            execution_id="20260812--travel-article-m100--china--scale-011",
+            retry_of=retry_of,
+            retry_unfinished_refs=[object_ref],
+            family="content/travel/article/article",
+            region_ref="china",
+            selector="all",
+            count=1,
+            quota=1,
+            target_names=["剑门关"],
+            topic="m100-article-wave",
+            source_providers=[],
+            stage="plan-only",
+            recover_stage=None,
+            recovery_reason=None,
+        )
+    )
+
+    assert captured["retry_of"] == retry_of
+    assert captured["retry_unfinished_refs"] == (object_ref,)
+    assert captured["target_names"] == ("剑门关",)
+    assert captured["inherited_targets"] == scope.target_rows
+
+
 def test_existing_homepage_retry_does_not_reopen_predecessor_evidence(
     monkeypatch,
     tmp_path: Path,
@@ -687,15 +753,18 @@ def test_task_facade_exposes_only_durable_commands() -> None:
     choices = re.search(r"^  \{([^}]+)\}$", result.stdout, flags=re.MULTILINE)
     assert choices is not None
     assert choices.group(1).split(",") == [
-        "preflight",
-        "prepare-campaign",
-        "execute",
-        "discard",
+            "preflight",
+            "prepare-campaign",
+            "execute",
+            "drain-pool-delivery",
+            "discard",
         "supersede-execution",
         "plan-images",
-        "probe-images",
-        "acquire-images",
-        "acquire-videos",
+            "probe-images",
+            "acquire-images",
+            "prepare-image-supported-api-input",
+            "prepare-video-manual-input",
+            "acquire-videos",
         "review-asset",
         "reconcile-stale",
         "reconcile-failed-campaign",

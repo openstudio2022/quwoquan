@@ -59,6 +59,48 @@ class SearchDegradeSignal {
   final SearchObjectType? objectType;
 }
 
+/// API Edge `SearchPage` flat card；objectRef 始终保持 opaque。
+final class SearchPageResultItem {
+  const SearchPageResultItem({
+    required this.objectRef,
+    required this.resultType,
+    required this.title,
+    this.subtitle,
+    this.snippet,
+    this.thumbnailUrl,
+    required this.action,
+  });
+
+  factory SearchPageResultItem.fromWireSlice(SearchPageItem value) =>
+      SearchPageResultItem(
+        objectRef: value.objectRef,
+        resultType: value.resultType,
+        title: value.title,
+        subtitle: value.subtitle,
+        snippet: value.snippet,
+        thumbnailUrl: value.thumbnailUrl,
+        action: value.action,
+      );
+
+  final String objectRef;
+  final SearchPageObjectType resultType;
+  final String title;
+  final String? subtitle;
+  final String? snippet;
+  final String? thumbnailUrl;
+  final String action;
+}
+
+final class SearchPageResultFacet {
+  const SearchPageResultFacet({required this.key, required this.count});
+
+  factory SearchPageResultFacet.fromWireSlice(SearchPageFacet value) =>
+      SearchPageResultFacet(key: value.key, count: value.count);
+
+  final String key;
+  final int count;
+}
+
 /// 统一检索命中项。wire 枚举来自 `quwoquan_cloud_contracts` Search owner，
 /// 默认值与执行策略来自 `search_execution_policy.g.dart`，展示分区元数据来自
 /// `search_display_metadata.g.dart`。
@@ -132,6 +174,9 @@ class SearchResponse {
     this.degradeSignals = const <SearchDegradeSignal>[],
     this.relatedTerms = const <String>[],
     this.searchRequestId,
+    this.pageItems = const <SearchPageResultItem>[],
+    this.pageFacets = const <SearchPageResultFacet>[],
+    this.nextCursor,
   });
 
   final SearchRequest request;
@@ -145,6 +190,11 @@ class SearchResponse {
   /// 云侧单次搜索请求 ID（响应 envelope `requestId`），
   /// 是搜索反馈（impression/click）归因锚点；本地扇出为 null 时不上报反馈。
   final String? searchRequestId;
+
+  /// 新 build 的正式云结果；不映射为旧 SearchHit/SearchResponseView。
+  final List<SearchPageResultItem> pageItems;
+  final List<SearchPageResultFacet> pageFacets;
+  final String? nextCursor;
 
   List<SearchHit> get hits =>
       sections.expand((section) => section.hits).toList(growable: false);

@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260810--travel-video-m1--china-dujiangyan-research-062aa4a3-epoch10-not-m100--scale-008",
+  "executionBinding": "frozen",
+  "objectRef": "都江堰_video",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-32604bc8-1afc-43f5-91da-690e51aa6a5b",
+    "resultHash": "sha256:c329a60bec2356ecc25e4a858653d1b7788733144bee32eb44473f1c040c88d4"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

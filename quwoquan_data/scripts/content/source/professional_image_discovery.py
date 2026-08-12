@@ -66,9 +66,14 @@ def _load_catalog(path: Path = CATALOG_PATH) -> tuple[dict[str, Any], str, str]:
         raise ProfessionalImageDiscoveryError(
             "providerOrder must name every provider exactly once"
         )
-    if provider_order[0] != "pinterest" or "tuchong" not in provider_order[1:]:
+    if (
+        provider_order[0] != "pinterest"
+        or "tuchong" not in provider_order[1:]
+        or "openverse" not in provider_order[1:]
+    ):
         raise ProfessionalImageDiscoveryError(
-            "professional image catalog must keep Pinterest first and Tuchong supplemental"
+            "professional image catalog must keep Pinterest first and "
+            "Tuchong/Openverse supplemental"
         )
     priorities = [int(row["priority"]) for row in payload["providers"]]
     if len(priorities) != len(set(priorities)):

@@ -22,7 +22,13 @@ from typing import Any
 from core import paths
 from core.io import read_json
 from core.schema import assert_valid
-from core.source_digest import SourceDigest, current_source_digest
+from core.source_digest import (
+    SourceDefinitionSnapshot,
+    SourceDigest,
+    SourceDigestError,
+    current_source_definition_snapshot,
+    current_source_digest,
+)
 
 from content.execution.identity import validate_execution_id
 from content.execution.terminal_state_integrity import verify_terminal_state_integrity
@@ -414,10 +420,24 @@ def validate_execution_supersession_receipt(
         if receipt["processEvidence"].get("livenessProbe") != _LIVENESS_PROBE:
             raise ValueError("execution supersession liveness probe drift")
     source = receipt.get("manifestSourceDigest")
+    source_kind = None
     if source is not None:
-        SourceDigest.from_document(source)
-    SourceDigest.from_document(receipt["observedSourceDigest"])
+        source_kind = _source_identity_kind(source)
+    observed_kind = _source_identity_kind(receipt["observedSourceDigest"])
+    if source_kind is not None and source_kind != observed_kind:
+        raise ValueError("execution supersession source identity kind drift")
     return receipt
+
+
+def _source_identity_kind(document: object) -> str:
+    """Validate one legacy or v2 source identity without weakening either shape."""
+
+    try:
+        SourceDefinitionSnapshot.from_document(document)
+        return "source_definition_snapshot"
+    except SourceDigestError:
+        SourceDigest.from_document(document)
+        return "legacy_source_digest"
 
 
 def load_execution_supersession_receipt(
@@ -478,11 +498,26 @@ def supersede_execution(
         manifest_path = root / _ANCHOR_REFS["executionManifest"]
         manifest = _optional_object(manifest_path)
         manifest_source = None
+        source_definition_identity = False
         if manifest is not None:
-            manifest_source = SourceDigest.from_document(
-                manifest.get("sourceDigest")
-            ).to_document()
-        observed_source = current_source_digest(repo_root=source_repo).to_document()
+            raw_manifest_source = manifest.get("sourceDigest")
+            try:
+                manifest_source = SourceDefinitionSnapshot.from_document(
+                    raw_manifest_source
+                ).to_document()
+                source_definition_identity = True
+                observed_source = current_source_definition_snapshot(
+                    repo_root=source_repo
+                ).to_document()
+            except SourceDigestError:
+                manifest_source = SourceDigest.from_document(
+                    raw_manifest_source
+                ).to_document()
+                observed_source = current_source_digest(
+                    repo_root=source_repo
+                ).to_document()
+        else:
+            observed_source = current_source_digest(repo_root=source_repo).to_document()
         if normalized_reason == "source_drift":
             if manifest_source is None or manifest_source == observed_source:
                 raise ValueError("source_drift supersession requires manifest drift")
@@ -538,7 +573,12 @@ def supersede_execution(
             path=path,
             execution_root=root,
         )
-        if current_source_digest(repo_root=source_repo).to_document() != observed_source:
+        observed_again = (
+            current_source_definition_snapshot(repo_root=source_repo).to_document()
+            if source_definition_identity
+            else current_source_digest(repo_root=source_repo).to_document()
+        )
+        if observed_again != observed_source:
             raise ValueError("source changed while writing supersession receipt")
         current_inventory, current_inventory_digest = _root_inventory(root)
         if (

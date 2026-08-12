@@ -284,57 +284,66 @@ final class RemoteChatConversationRepository
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsViewData settings,
-  ) async {
-    await _conversationCommandWriter.updateGroupGovernanceSettings(
-      ChatUpdateGroupGovernanceSettingsCommand(
-        conversationId: conversationId,
-        nameEditableByAdminOnly: settings.nameEditableByAdminOnly,
-      ),
-      idempotencyKey: _resolveIdempotencyKey(null),
-    );
+    ChatGroupSettingsViewData settings, {
+    String? idempotencyKey,
+  }) async {
+    final receipt = await _conversationCommandWriter
+        .updateGroupGovernanceSettings(
+          ChatUpdateGroupGovernanceSettingsCommand(
+            conversationId: conversationId,
+            nameEditableByAdminOnly: settings.nameEditableByAdminOnly,
+          ),
+          idempotencyKey: _resolveIdempotencyKey(idempotencyKey),
+        );
+    _requireSuccessfulCommandReceipt(receipt.status);
   }
 
   @override
   Future<void> updateAnnouncement(
     String conversationId,
-    String announcement,
-  ) async {
-    await _conversationCommandWriter.updateAnnouncement(
+    String announcement, {
+    String? idempotencyKey,
+  }) async {
+    final receipt = await _conversationCommandWriter.updateAnnouncement(
       ChatUpdateAnnouncementCommand(
         conversationId: conversationId,
         announcement: announcement,
       ),
-      idempotencyKey: _resolveIdempotencyKey(null),
+      idempotencyKey: _resolveIdempotencyKey(idempotencyKey),
     );
+    _requireSuccessfulCommandReceipt(receipt.status);
   }
 
   @override
   Future<void> transferOwnership(
     String conversationId,
-    String newOwnerId,
-  ) async {
-    await _membershipCommandWriter.transferOwnership(
+    String newOwnerId, {
+    String? idempotencyKey,
+  }) async {
+    final receipt = await _membershipCommandWriter.transferOwnership(
       ChatTransferConversationOwnershipCommand(
         conversationId: conversationId,
         newOwnerId: newOwnerId,
       ),
-      idempotencyKey: _resolveIdempotencyKey(null),
+      idempotencyKey: _resolveIdempotencyKey(idempotencyKey),
     );
+    _requireSuccessfulCommandReceipt(receipt.status);
   }
 
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
-    List<String> adminIds,
-  ) async {
-    await _membershipCommandWriter.updateAdmins(
+    List<String> adminIds, {
+    String? idempotencyKey,
+  }) async {
+    final receipt = await _membershipCommandWriter.updateAdmins(
       ChatUpdateConversationAdminsCommand(
         conversationId: conversationId,
         adminIds: adminIds,
       ),
-      idempotencyKey: _resolveIdempotencyKey(null),
+      idempotencyKey: _resolveIdempotencyKey(idempotencyKey),
     );
+    _requireSuccessfulCommandReceipt(receipt.status);
   }
 
   @override
@@ -342,6 +351,14 @@ final class RemoteChatConversationRepository
     await _conversationCommandWriter.dissolveConversation(
       ChatDissolveConversationCommand(conversationId: conversationId),
       idempotencyKey: _resolveIdempotencyKey(null),
+    );
+  }
+}
+
+void _requireSuccessfulCommandReceipt(String status) {
+  if (status.trim() != 'ok') {
+    throw const FormatException(
+      'Chat governance command returned a non-canonical receipt',
     );
   }
 }

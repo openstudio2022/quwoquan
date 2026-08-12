@@ -25,6 +25,7 @@ type CommandFacet interface {
 	CreateChallenge(context.Context, CreateChallengeCommand) (ChallengeCommandResult, error)
 	VerifyChallenge(context.Context, VerifyChallengeCommand) (ChallengeCommandResult, error)
 	CancelChallenge(context.Context, CancelChallengeCommand) (ChallengeCommandResult, error)
+	ReportDeliveryResult(context.Context, ReportDeliveryResultCommand) (ChallengeCommandResult, error)
 }
 
 type AuthenticationChallengeCommandFacade struct {
@@ -91,15 +92,17 @@ func (facade *AuthenticationChallengeCommandFacade) CreateChallenge(
 		)
 	}
 	aggregate, err := challengemodel.New(challengemodel.CreateParams{
-		ID:               command.ID,
-		AccountID:        command.AccountID,
-		Purpose:          command.Purpose,
-		Channel:          command.Channel,
-		DestinationHash:  command.DestinationHash,
-		SecretRef:        command.SecretRef,
-		BindingTicketRef: command.BindingTicketRef,
-		ExpiresAt:        command.ExpiresAt,
-		CreatedAt:        facade.now().UTC(),
+		ID:                command.ID,
+		AccountID:         command.AccountID,
+		Purpose:           command.Purpose,
+		Channel:           command.Channel,
+		DestinationHash:   command.DestinationHash,
+		SecretRef:         command.SecretRef,
+		BindingTicketRef:  command.BindingTicketRef,
+		DeliveryRequestID: command.DeliveryRequestID,
+		DeliveryStatus:    command.DeliveryStatus,
+		ExpiresAt:         command.ExpiresAt,
+		CreatedAt:         facade.now().UTC(),
 	})
 	if err != nil {
 		return ChallengeCommandResult{}, mapChallengeError(err)
@@ -121,6 +124,55 @@ func (facade *AuthenticationChallengeCommandFacade) CreateChallenge(
 		Challenge:        result.Aggregate.Snapshot(),
 		IdempotentReplay: result.Replayed,
 	}, nil
+}
+
+func (facade *AuthenticationChallengeCommandFacade) ReportDeliveryResult(
+	ctx context.Context,
+	command ReportDeliveryResultCommand,
+) (ChallengeCommandResult, error) {
+	requestID := strings.TrimSpace(command.RequestID)
+	if requestID == "" {
+		return ChallengeCommandResult{}, generated.AppErrorFromInvalidArgument(
+			"delivery request id is required",
+		)
+	}
+	for attempt := 0; attempt < challengeCommitAttempts; attempt++ {
+		aggregate, found, err := facade.store.LoadByDeliveryRequestID(ctx, requestID)
+		if err != nil {
+			return ChallengeCommandResult{}, mapChallengeError(err)
+		}
+		if !found {
+			return ChallengeCommandResult{}, challengegenerated.AppErrorFromOtpExpired(
+				"authentication challenge delivery request is absent",
+			)
+		}
+		expectedVersion := aggregate.Snapshot().Version
+		mutation, err := aggregate.ApplyDeliveryResult(challengemodel.DeliveryResult{
+			EventID:    command.EventID,
+			RequestID:  requestID,
+			Status:     command.Status,
+			OccurredAt: command.OccurredAt,
+		})
+		if err != nil {
+			return ChallengeCommandResult{}, mapChallengeError(err)
+		}
+		if !mutation.Changed {
+			return ChallengeCommandResult{
+				Challenge:        aggregate.Snapshot(),
+				IdempotentReplay: true,
+			}, nil
+		}
+		err = facade.store.Commit(ctx, expectedVersion, mutation.Aggregate)
+		if errors.Is(err, challengemodel.ErrVersionConflict) &&
+			attempt+1 < challengeCommitAttempts {
+			continue
+		}
+		if err != nil {
+			return ChallengeCommandResult{}, mapChallengeError(err)
+		}
+		return ChallengeCommandResult{Challenge: mutation.Aggregate.Snapshot()}, nil
+	}
+	panic("unreachable AuthenticationChallenge delivery CAS retry")
 }
 
 func (facade *AuthenticationChallengeCommandFacade) VerifyChallenge(
@@ -332,7 +384,7 @@ func verificationCommandResult(
 func mapChallengeError(err error) error {
 	switch {
 	case errors.Is(err, challengeports.ErrIdempotencyConflict):
-		return generated.AppErrorFromInvalidArgument(
+		return challengegenerated.AppErrorFromOtpIdempotencyConflict(
 			"authentication challenge idempotency key was reused for another target",
 		)
 	case errors.Is(err, challengemodel.ErrInvalidChallenge):

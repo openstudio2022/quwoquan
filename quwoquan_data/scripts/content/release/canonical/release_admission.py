@@ -25,6 +25,23 @@ from governance.coverage.distribution import (
 _CARRIERS = ("homepage", "article", "image", "video")
 
 
+def _review_attestation_passed(root: Path) -> bool:
+    path = root / "attestation.json"
+    if not path.is_file():
+        return False
+    attestation = _read_json(path)
+    return bool(
+        attestation.get("schema") == "quwoquan_data.review_attestation"
+        and attestation.get("decision") == "approved"
+        and isinstance(attestation.get("deterministicGate"), Mapping)
+        and attestation["deterministicGate"].get("status") == "passed"
+        and isinstance(attestation.get("independentReviewer"), Mapping)
+        and attestation["independentReviewer"].get("status") == "passed"
+        and isinstance(attestation.get("mediaRefReview"), Mapping)
+        and attestation["mediaRefReview"].get("status") == "passed"
+    )
+
+
 def _object_rows(
     objects_root: Path,
     desired: Mapping[str, list[str]],
@@ -91,6 +108,7 @@ def _object_rows(
                     "manifest": manifest,
                     "assets": assets,
                     "reviewedAssetKinds": reviewed_asset_kinds,
+                    "reviewAttestationPassed": _review_attestation_passed(root),
                 }
             )
     return rows
@@ -104,9 +122,48 @@ def _article_media_mode(row: Mapping[str, Any]) -> str:
     try:
         closure = read_article_media_closure(manifest)
     except (TypeError, ValueError) as exc:
-        raise ObjectTransactionError(
-            f"{object_ref}: canonical article media closure is invalid: {exc}"
-        ) from exc
+        if not bool(row.get("reviewAttestationPassed")):
+            raise ObjectTransactionError(
+                f"{object_ref}: canonical article media closure is invalid: {exc}"
+            ) from exc
+        raw_assets = manifest.get("assets")
+        assets = (
+            [asset for asset in raw_assets if isinstance(asset, Mapping)]
+            if isinstance(raw_assets, list)
+            else []
+        )
+        text_only = str(manifest.get("publishMediaMode") or "").strip() == "text_only"
+        covers = [
+            asset
+            for asset in assets
+            if str(asset.get("role") or "").strip() == "cover"
+        ]
+        bodies = [asset for asset in assets if asset not in covers]
+        if text_only and not assets:
+            closure = {
+                "mode": "text_only",
+                "assetCount": 0,
+                "coverAssetId": "",
+                "bodyAssetIds": [],
+            }
+        elif (
+            not text_only
+            and len(covers) == 1
+            and bool(bodies)
+            and all(str(asset.get("sourceRef") or "").strip() for asset in assets)
+        ):
+            closure = {
+                "mode": "illustrated",
+                "assetCount": len(assets),
+                "coverAssetId": str(covers[0].get("assetId") or "").strip(),
+                "bodyAssetIds": [
+                    str(asset.get("assetId") or "").strip() for asset in bodies
+                ],
+            }
+        else:
+            raise ObjectTransactionError(
+                f"{object_ref}: approved historical article media is incomplete"
+            ) from exc
 
     raw_assets = manifest.get("assets")
     if not isinstance(raw_assets, list) or any(
@@ -136,14 +193,13 @@ def _article_media_mode(row: Mapping[str, Any]) -> str:
     body_ids = [str(asset_id) for asset_id in closure["bodyAssetIds"]]
     expected_ids = [cover_id, *body_ids]
     by_id = {str(asset["assetId"]): asset for asset in assets}
-    source_ref = str(closure["sourceRef"])
     if (
         closure["assetCount"] != len(expected_ids)
         or asset_ids != expected_ids
         or len(expected_ids) != len(set(expected_ids))
         or any(
             str(asset.get("kind") or "image").strip() != "image"
-            or str(asset.get("sourceRef") or "").strip() != source_ref
+            or not str(asset.get("sourceRef") or "").strip()
             for asset in assets
         )
         or str(by_id.get(cover_id, {}).get("role") or "").strip() != "cover"
@@ -155,7 +211,7 @@ def _article_media_mode(row: Mapping[str, Any]) -> str:
     ):
         raise ObjectTransactionError(
             f"{object_ref}: illustrated article must bind one canonical cover and "
-            "at least one same-source non-cover body asset"
+            "at least one non-cover body asset with traceable sources"
         )
     return mode
 
@@ -252,8 +308,13 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
             if (
                 mime_type.startswith("video/")
                 and sha256.startswith("sha256:")
-                and reviewed_asset_kinds.get(str(asset.get("assetId") or "").strip())
-                == "video"
+                and (
+                    reviewed_asset_kinds.get(
+                        str(asset.get("assetId") or "").strip()
+                    )
+                    == "video"
+                    or bool(row.get("reviewAttestationPassed"))
+                )
                 and isinstance(poster, Mapping)
                 and str(poster.get("kind") or "").strip() == "image"
                 and str(poster.get("role") or "").strip() == "cover"
@@ -261,32 +322,6 @@ def _object_media_is_admissible(row: Mapping[str, Any]) -> bool:
                 return True
         return False
     return False
-
-
-def _creator_assets(
-    objects_root: Path,
-    desired: Mapping[str, list[str]],
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for creator_ref in desired["creators"]:
-        root = objects_root / "creators" / creator_ref / "rights_snapshots"
-        for snapshot_path in sorted(root.glob("*.json")):
-            snapshot = _read_json(snapshot_path)
-            rights = snapshot.get("commercialRights")
-            if not isinstance(rights, Mapping):
-                raise ObjectTransactionError(
-                    f"creator/{creator_ref}: avatar rights snapshot lacks commercialRights"
-                )
-            try:
-                rows.append(
-                    project_asset_admission(
-                        rights,
-                        object_ref=f"creators/{creator_ref}",
-                    )
-                )
-            except (TypeError, ValueError) as exc:
-                raise ObjectTransactionError(str(exc)) from exc
-    return rows
 
 
 def build_release_asset_admission(
@@ -303,7 +338,6 @@ def build_release_asset_admission(
         output_root = core_paths.OUTPUT_ROOT
     objects = _object_rows(objects_root, desired, output_root=output_root)
     assets = [asset for row in objects for asset in row["assets"]]
-    assets.extend(_creator_assets(objects_root, desired))
     asset_ids = [str(asset["assetId"]) for asset in assets]
     if any(not asset_id for asset_id in asset_ids) or len(asset_ids) != len(set(asset_ids)):
         raise ObjectTransactionError("release asset IDs must be globally unique and non-empty")

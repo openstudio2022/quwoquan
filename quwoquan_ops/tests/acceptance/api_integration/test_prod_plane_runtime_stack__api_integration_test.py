@@ -20,6 +20,7 @@ from quwoquan_ops.cli.prod import render_prod_plane_stack as render
 ROOT = Path(__file__).resolve().parents[4]
 CANDIDATE_DIGEST = "sha256:" + ("b" * 64)
 ARTIFACT_DIGEST = "sha256:" + ("c" * 64)
+POLICY_PATH = ROOT / "quwoquan_ops/environments/prod/rollout/routing_policy.yaml"
 
 
 class ProdPlaneRuntimeStackTest(unittest.TestCase):
@@ -288,6 +289,10 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertFalse(
                 (out_dir / "runtime/config-root/quwoquan_service").exists()
             )
+            runtime_policy = out_dir / "runtime/config-root/rollout/routing_policy.yaml"
+            portal_policy = out_dir / "runtime/config-root/gray-routing/policy.yaml"
+            self.assertEqual(runtime_policy.read_bytes(), POLICY_PATH.read_bytes())
+            self.assertEqual(portal_policy.read_bytes(), POLICY_PATH.read_bytes())
 
     def test_prevalidate_render_is_isolated_digest_pinned_and_systemd_owned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

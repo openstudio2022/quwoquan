@@ -700,6 +700,15 @@ readiness_cases:
     executions:
       - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
       - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_settings_blocked_keywords_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: settings.blocked_keywords}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/account/user_settings/blocked_keywords_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
   - case_id: user_settings_get_privacy_settings_app_api
     spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/spec.md#gwt-001
     producer: app

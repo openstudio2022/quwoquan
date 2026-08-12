@@ -201,12 +201,16 @@ def carrier_affinity(creator: dict[str, Any], carrier: str) -> float:
 
 
 def _tag_prefix_hit(scope_refs: list[str], tags: list[str], region_name: str) -> bool:
-    """范围 ref 命中：与内容标签互为前缀（行政区/题材树自上而下），或与 region 名相关。"""
+    """范围 ref 命中：内容必须等于或落入作者声明范围，或命中 region。
+
+    内容携带 ``Topic/旅行`` 这种祖先标签，只说明它属于旅行垂类，不能反向
+    证明它属于作者声明的 ``高原秘境`` 等子主题。
+    """
     for ref in scope_refs:
         if region_name and (ref.endswith(region_name) or region_name and region_name in ref):
             return True
         for tag in tags:
-            if tag == ref or tag.startswith(ref + "/") or ref.startswith(tag + "/"):
+            if tag == ref or tag.startswith(ref + "/"):
                 return True
     return False
 

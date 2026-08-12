@@ -42,7 +42,7 @@ def _report(
         "environment": {
             "target": target,
             "env": env,
-            "rolloutStage": stage or ("gray-initial" if target == "prod-hosted" else "local"),
+            "rolloutStage": stage or ("canary" if target == "prod-hosted" else "local"),
             "mediaVideoBaseUrl": "https://cdn.gamma.example.invalid/media/video",
             "commitSha": "abcdef0123456789",
             "configHash": _sha256_digest(f"runtime-media-config:{target}"),
@@ -618,7 +618,7 @@ class RuntimeMediaPlaybackEvidenceContractTest(unittest.TestCase):
 
         issues = validate_evidence_document(evidence)
 
-        self.assertTrue(any("gray-initial|carry-on|full" in issue for issue in issues), issues)
+        self.assertTrue(any("canary|5|20|50|100" in issue for issue in issues), issues)
         self.assertTrue(any("fixture/mock/seed/test" in issue for issue in issues), issues)
 
     def test_matrix_validates_every_report(self) -> None:
@@ -627,7 +627,7 @@ class RuntimeMediaPlaybackEvidenceContractTest(unittest.TestCase):
         gamma = _report()
         production = [
             _report(target="prod-hosted", env="prod", stage=stage)
-            for stage in ("gray-initial", "carry-on", "full")
+            for stage in ("canary", "5", "20", "50", "100")
         ]
         alpha["environment"]["configHash"] = _sha256_digest("matrix-config")  # type: ignore[index]
         beta["environment"]["configHash"] = _sha256_digest("matrix-config")  # type: ignore[index]
@@ -671,7 +671,7 @@ class RuntimeMediaPlaybackEvidenceContractTest(unittest.TestCase):
 
         self.assertTrue(any("重复 target/stage" in issue for issue in issues), issues)
         self.assertTrue(any("beta-local/local" in issue for issue in issues), issues)
-        self.assertTrue(any("prod-hosted/carry-on" in issue for issue in issues), issues)
+        self.assertTrue(any("prod-hosted/20" in issue for issue in issues), issues)
 
 
 if __name__ == "__main__":

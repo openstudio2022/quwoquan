@@ -1,12 +1,6 @@
 # Contract Scenario Fixtures
 
-`test_fixtures` 只保存 `local_contract` 与 `api_integration` 测试树使用的对象级 typed double 资产。它不参与环境 package、runtime bootstrap 或 user_acceptance 数据供给。
-
-## 目录约定
-
-```text
-contracts/metadata/{domain}/test_fixtures/scenarios/{domain}_scenarios.json
-```
+`test_fixtures` 只保存 `local_contract` 与 `api_integration` 测试树使用的最小媒体样本与对象级 typed double 资产。它不参与环境 package、runtime bootstrap 或 user_acceptance 数据供给。
 
 ## 环境约定
 
@@ -14,10 +8,8 @@ contracts/metadata/{domain}/test_fixtures/scenarios/{domain}_scenarios.json
 - `alpha` / `beta` / `gamma`：内容由 canonical immutable release 激活；账号、评论、圈子、会话和消息由 `stackctl verify` 使用真实非生产主体调用公开 command/event 创建。
 - `prod`：不包含或读取本目录，也不执行任何 nonprod provision runner。
 
-## 字段约定
+## 资产约定
 
-- `seedSets`：仅用于测试进程内 typed double 初始化。
-- `scenarios`：测试入口，只引用 `seedRefs` 与断言期望。
-- `repositoryExpectations`：测试 double 的对象级契约。
-- `remoteExpectations`：API integration 的契约断言，不是环境 seed。
-- `uiExpectations`：页面层可见文案、首屏关键元素等断言。
+- 对象级输入由测试语言自身的 typed builder/generator 构造，不在本目录维护场景 dump 或环境数据源选择。
+- 仅在解码、媒体处理等确需字节样本时保存最小文件，并由测试直接声明业务断言。
+- 大规模评测数据使用独立 corpus + manifest + digest；环境交易事实继续由所属领域公开 command/event 创建。

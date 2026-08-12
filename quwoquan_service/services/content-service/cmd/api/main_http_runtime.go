@@ -24,6 +24,7 @@ func buildContentHTTPServer(
 	addr string,
 	instanceID string,
 	handler http.Handler,
+	internalGraphQLHandler http.Handler,
 	feedConfig feedRuntimeConfig,
 	healthChecker *rthealth.Checker,
 	accessTokenConfig rtauth.TokenConfig,
@@ -32,6 +33,9 @@ func buildContentHTTPServer(
 	processLogger *robs.ProcessTraceLogger,
 	exceptionLogger *robs.ExceptionLogger,
 ) *http.Server {
+	if internalGraphQLHandler == nil {
+		log.Fatal("content-service internal GraphQL handler is not configured")
+	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
 		log.Fatalf("access token verifier invalid: %v", err)
@@ -57,7 +61,7 @@ func buildContentHTTPServer(
 		[]rtgov.OperationAdmissionPolicy{feedAdmissionPolicy},
 		writeContentFeedAdmissionRejection,
 	)(sensitiveOperationGuard)
-	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
+	generatedOperationGuard := rtauth.EnforceRuntimeOperationContract(
 		contentDescriptors,
 	)(admissionGuard)
 
@@ -69,6 +73,11 @@ func buildContentHTTPServer(
 	// restart storm that abandons FFmpeg work during a transient outage.
 	outerMux.HandleFunc("/livez", contentLivenessHandler)
 	outerMux.HandleFunc("/startupz", healthChecker.Handler())
+	// Owner-internal persisted GraphQL is deliberately outside the generated
+	// public REST operation router. It still traverses the credential verifier,
+	// and its handler requires the exact api-edge service subject, scope,
+	// persisted hash and ContractGraph digest before touching the read port.
+	outerMux.Handle("POST /internal/graphql", internalGraphQLHandler)
 	outerMux.Handle("/", generatedOperationGuard)
 
 	observedHandler := rthttp.NewHTTPServerMiddleware(

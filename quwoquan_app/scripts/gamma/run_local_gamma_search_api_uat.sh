@@ -87,19 +87,14 @@ import os
 import sys
 from pathlib import Path
 
-from quwoquan_ops.cli.lib.local_environment_auth import (
-    open_reference_acceptance_session,
-)
-
 gateway, output = sys.argv[1:3]
-session = open_reference_acceptance_session(
-    gateway,
-    environment="gamma",
-    target_name="gamma-local",
-)
+del gateway
+access_token = os.environ.get("QWQ_TEST_DATA_ACCESS_TOKEN", "").strip()
+if not access_token:
+    raise SystemExit("GATE_BLOCK: typed test-data actor token is missing")
 path = Path(output)
 path.write_text(
-    json.dumps({"TEST_AUTH_TOKEN": session.access_token}, ensure_ascii=False) + "\n",
+    json.dumps({"TEST_AUTH_TOKEN": access_token}, ensure_ascii=False) + "\n",
     encoding="utf-8",
 )
 os.chmod(path, 0o600)

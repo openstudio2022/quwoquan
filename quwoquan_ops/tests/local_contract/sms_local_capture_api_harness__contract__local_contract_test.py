@@ -11,8 +11,10 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import ssl
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 
@@ -146,6 +148,84 @@ class SMSLocalCaptureAPIHarnessContractTest(unittest.TestCase):
         self.assertNotIn('environment = "gamma"', source)
         self.assertNotIn('target_name = "gamma-local"', source)
 
+    def test_live_journey_binds_target_ca_to_each_local_managed_tls_probe(
+        self,
+    ) -> None:
+        module = _load_module(LIVE_JOURNEY_SOURCE, "otp_local_capture_tls_routes")
+        target_tls = mock.sentinel.target_tls
+
+        probes = module._runtime_probes(
+            api_base="https://api.alpha.quwoquan.com",
+            user_health="http://127.0.0.1:17240/healthz",
+            integration_health="http://127.0.0.1:17320/healthz",
+            substitute_health="https://127.0.0.1:17330/healthz",
+            local_tls=target_tls,
+        )
+
+        self.assertEqual(
+            probes,
+            (
+                (
+                    "api-edge",
+                    "https://api.alpha.quwoquan.com/healthz",
+                    target_tls,
+                ),
+                ("user-service", "http://127.0.0.1:17240/healthz", None),
+                (
+                    "integration-service",
+                    "http://127.0.0.1:17320/healthz",
+                    None,
+                ),
+                (
+                    "sms-provider-substitute",
+                    "https://127.0.0.1:17330/healthz",
+                    target_tls,
+                ),
+            ),
+        )
+
+    def test_live_probe_accepts_target_ca_and_fails_closed_for_unknown_ca(
+        self,
+    ) -> None:
+        module = _load_module(LIVE_JOURNEY_SOURCE, "otp_local_capture_tls_probe")
+        target_tls = mock.sentinel.target_tls
+
+        class _Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+        def open_url(
+            _url: str,
+            *,
+            timeout: float,
+            context: object,
+        ) -> _Response:
+            self.assertEqual(timeout, 2.0)
+            if context is not target_tls:
+                raise urllib.error.URLError(
+                    ssl.SSLCertVerificationError(
+                        1,
+                        "certificate verify failed: unknown ca",
+                    )
+                )
+            return _Response()
+
+        with mock.patch.object(module.urllib.request, "urlopen", side_effect=open_url):
+            self.assertFalse(
+                module._probe("https://api.alpha.quwoquan.com/healthz")
+            )
+            self.assertTrue(
+                module._probe(
+                    "https://api.alpha.quwoquan.com/healthz",
+                    context=target_tls,
+                )
+            )
+
     def test_live_journey_requires_candidate_bound_sms_composition(self) -> None:
         module = _load_module(LIVE_JOURNEY_SOURCE, "otp_local_capture_live_journey")
         baseline_id = "sha256:" + "b" * 64
@@ -168,6 +248,7 @@ class SMSLocalCaptureAPIHarnessContractTest(unittest.TestCase):
             )
             manifest = {
                 "runtimeConfigDigest": runtime_config_digest,
+                "configurationDigest": runtime_config_digest,
                 "environmentRuntimeDigest": environment_runtime_digest,
                 "providerRuntime": {
                     "composition": {
@@ -222,13 +303,14 @@ class SMSLocalCaptureAPIHarnessContractTest(unittest.TestCase):
                     return_value=startup,
                 ),
             ):
-                target, runtime, loaded_manifest, loaded_baseline = (
+                target, runtime, loaded_manifest, loaded_baseline, loaded_startup = (
                     module._load_package_bound_runtime("beta")
                 )
         self.assertEqual(target, "beta-local")
         self.assertEqual(runtime["portProfile"], "beta-local")
         self.assertIs(loaded_manifest, manifest)
         self.assertEqual(loaded_baseline, baseline_id)
+        self.assertIs(loaded_startup, startup)
         load_manifest.assert_called_once_with(
             "beta",
             "beta-local",

@@ -1,8 +1,12 @@
 overrides:
+  sys.user-service.research_identity.enabled: true
+  sys.user-service.research_identity.ttl_seconds: 300
   sys.user-service.es.enabled: true
   sys.user-service.redis.general.addr: redis:6379
   sys.user-service.integration.external_interaction_base_url: http://integration-service:18086
 secretRefs:
+  sys.user-service.research_identity.attestation_key_base64: USER_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64
+  sys.user-service.research_identity.account_id_allowlist_json: USER_RESEARCH_IDENTITY_ACCOUNT_ID_ALLOWLIST_JSON
   sys.user-service.mongodb.uri: MONGODB_URI
   sys.user-service.postgres.dsn: POSTGRES_DSN
   sys.user-service.redis.general.password: REDIS_PASSWORD

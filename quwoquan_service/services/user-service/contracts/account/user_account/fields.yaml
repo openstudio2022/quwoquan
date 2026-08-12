@@ -417,6 +417,8 @@ fields:
 enums:
   UserSyncPatchKind:
     values: [user_avatar_updated, conversation_avatar_updated]
+  UserProfileSearchProjectionOperation:
+    values: [upsert, delete]
 types:
   UserSyncHintEventPayload:
     description: durable UserSyncPatch 已提交后的最小实时提示；客户端只使用 latestSyncSeq 触发 typed PullUserSync，不解析业务补丁。
@@ -2064,6 +2066,20 @@ types:
         log_policy: metadata_only
         api_exposure: internal
         ops_exposure: read
+  UserProfileSearchProjectionEvent:
+    description: User/Persona 公共资料投向 Search 的自包含 durable 快照；Search 只消费本事件，不回读 User 数据库，也不接受 User 直写搜索 Provider。
+    fields:
+      - {name: eventId, source: eventId, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: hash, api_exposure: internal, ops_exposure: read}
+      - {name: userId, source: userId, type: string, constraints: [NOT_BLANK], classification: PRIVATE, log_policy: hash, api_exposure: internal, ops_exposure: read}
+      - {name: profileVersion, source: profileVersion, type: int64, constraints: [NOT_NULL, POSITIVE], classification: INTERNAL, log_policy: metadata_only, api_exposure: internal, ops_exposure: read, semantic_type: aggregate_version}
+      - {name: operation, source: operation, type: enum, enum_ref: UserProfileSearchProjectionOperation, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: nickname, source: nickname, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: avatarUrl, source: avatarUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: bio, source: bio, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: identityTags, source: identityTags, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: followerCount, source: followerCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: postCount, source: postCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read}
+      - {name: updatedAt, source: updatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: internal, ops_exposure: read, semantic_type: instant}
   ProfileQrCardWire:
     description: 我的二维码卡片 wire；payload 为公开主页 HTTPS link + 可撤销 token 摘要，不包含手机号或 bearer token
     fields:

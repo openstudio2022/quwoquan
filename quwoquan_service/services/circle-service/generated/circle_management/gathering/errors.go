@@ -43,9 +43,6 @@ var (
 	ErrGatheringControlRequired               = errors.New("CIRCLE.USER.gathering_control_required")
 	ErrGatheringSafetyTerminationDenied       = errors.New("CIRCLE.USER.gathering_safety_termination_denied")
 	ErrGatheringSafetyAuthorityUnavailable    = errors.New("CIRCLE.DEPENDENCY.gathering_safety_authority_unavailable")
-	ErrGatheringQualificationRequired         = errors.New("CIRCLE.USER.gathering_qualification_required")
-	ErrGatheringCommercialAuthorityRequired   = errors.New("CIRCLE.USER.gathering_commercial_authority_required")
-	ErrGatheringPolicyDenied                  = errors.New("CIRCLE.USER.gathering_policy_denied")
 	ErrGatheringTargetUnavailable             = errors.New("CIRCLE.DEPENDENCY.gathering_target_unavailable")
 	ErrGatheringVersionConflict               = errors.New("CIRCLE.USER.gathering_version_conflict")
 	ErrGatheringIdempotencyConflict           = errors.New("CIRCLE.USER.gathering_idempotency_conflict")
@@ -248,24 +245,6 @@ func AppErrorFromGatheringSafetyTerminationDenied(debugMessage string) *rerrors.
 func AppErrorFromGatheringSafetyAuthorityUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGatheringSafetyAuthorityUnavailable.Error()))
 	return rerrors.NewAppError(code, "安全授权服务暂时不可用，请稍后重试", debugMessage).WithMetadata("gathering_safety_authority_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
-}
-
-// AppErrorFromGatheringQualificationRequired returns *AppError for CIRCLE.USER.gathering_qualification_required (user_message from errors.yaml).
-func AppErrorFromGatheringQualificationRequired(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringQualificationRequired.Error()))
-	return rerrors.NewAppError(code, "发布此活动需要补充有效资质", debugMessage).WithMetadata("gathering_qualification_required", 422).WithRecoveryDirective("surface", "inlineCard", 0)
-}
-
-// AppErrorFromGatheringCommercialAuthorityRequired returns *AppError for CIRCLE.USER.gathering_commercial_authority_required (user_message from errors.yaml).
-func AppErrorFromGatheringCommercialAuthorityRequired(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringCommercialAuthorityRequired.Error()))
-	return rerrors.NewAppError(code, "该活动需要有效的商业主体授权", debugMessage).WithMetadata("gathering_commercial_authority_required", 422).WithRecoveryDirective("surface", "inlineCard", 0)
-}
-
-// AppErrorFromGatheringPolicyDenied returns *AppError for CIRCLE.USER.gathering_policy_denied (user_message from errors.yaml).
-func AppErrorFromGatheringPolicyDenied(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGatheringPolicyDenied.Error()))
-	return rerrors.NewAppError(code, "当前政策不允许创建或发布此活动", debugMessage).WithMetadata("gathering_policy_denied", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromGatheringTargetUnavailable returns *AppError for CIRCLE.DEPENDENCY.gathering_target_unavailable (user_message from errors.yaml).

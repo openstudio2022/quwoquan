@@ -1,9 +1,93 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"quwoquan_service/internal/metadata/ast"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/graph"
 )
+
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/autonomous-web-exploration/spec.md#gwt-005
+func TestAssistantSearchAccessIsGeneratedFromObjectContracts(t *testing.T) {
+	registry := searchRegistryDocument{ObjectTypes: []searchObjectType{
+		{ID: "content.post", Domain: "content", OwnerObject: "content.post", ExecutionStrategy: "remote_only"},
+		{ID: "user.profile", Domain: "user", OwnerObject: "user.user_account", ExecutionStrategy: "remote_only"},
+		{ID: "tag", Domain: "tag", OwnerObject: "tag.tag_node_view", ExecutionStrategy: "filter_only"},
+		{ID: "web.document", Domain: "external", OwnerObject: "assistant.assistant_run", ExecutionStrategy: "remote_only"},
+	}}
+	objects := map[string]assistantSearchObjectDocument{
+		"content.post": {
+			AssistantAccess: assistantAccessDocument{
+				Read: assistantAccessMode{Mode: "public"},
+				Cite: assistantAccessMode{Mode: "public_citation"},
+			},
+		},
+		"user.user_account": {
+			AssistantAccess: assistantAccessDocument{
+				Read: assistantAccessMode{Mode: "owner_scoped"},
+				Cite: assistantAccessMode{Mode: "none"},
+			},
+		},
+		"tag.tag_node_view": {},
+		"assistant.assistant_run": {
+			SearchPolicy: searchPolicyDocument{Exposed: "remote_provider"},
+		},
+	}
+
+	rendered, err := renderAssistantSearchAccess(registry, objects)
+	if err != nil {
+		t.Fatalf("render assistant search access: %v", err)
+	}
+	for _, expected := range []string{
+		`"content.post"`, `"web.document"`, `AssistantSearchAccessPolicyDigest`,
+	} {
+		if !bytes.Contains(rendered, []byte(expected)) {
+			t.Fatalf("generated access is missing %s:\n%s", expected, rendered)
+		}
+	}
+	for _, forbidden := range []string{`"user.profile"`, `"tag"`} {
+		if bytes.Contains(rendered, []byte(forbidden)) {
+			t.Fatalf("generated access unexpectedly includes %s:\n%s", forbidden, rendered)
+		}
+	}
+}
+
+func TestAssistantSearchAccessDiscoversObjectsOnlyFromContractGraphSource(t *testing.T) {
+	source := contractcodegen.NewSourceFromGraph(
+		"/path/that/must/not/be-scanned",
+		&graph.ContractGraph{Documents: []ast.SourceDocument{
+			jsonSourceDocument("_shared/search_objects.yaml", `{
+				"object_types":[
+					{"id":"content.post","domain":"content","owner_object":"content.post","execution_strategy":"remote_only"},
+					{"id":"web.document","domain":"external","owner_object":"assistant.assistant_run","execution_strategy":"remote_only"}
+				]
+			}`),
+			jsonSourceDocument("content/content/post/object.yaml", `{
+				"assistant_access":{"read":{"mode":"public"},"cite":{"mode":"public_citation"}}
+			}`),
+			jsonSourceDocument("assistant/assistant/assistant_run/object.yaml", `{
+				"search_policy":{"exposed":"remote_provider"}
+			}`),
+		}},
+	)
+	rendered, err := generateAssistantSearchAccess(source)
+	if err != nil {
+		t.Fatalf("generate from ContractGraph Source: %v", err)
+	}
+	for _, expected := range []string{`"content.post"`, `"web.document"`} {
+		if !bytes.Contains(rendered, []byte(expected)) {
+			t.Fatalf("generated access is missing %s:\n%s", expected, rendered)
+		}
+	}
+}
+
+func jsonSourceDocument(path, content string) ast.SourceDocument {
+	return ast.SourceDocument{Path: path, Content: json.RawMessage(content)}
+}
 
 func TestMutatingToolRequiresCapabilityIntersectionPolicy(t *testing.T) {
 	valid := map[string]any{

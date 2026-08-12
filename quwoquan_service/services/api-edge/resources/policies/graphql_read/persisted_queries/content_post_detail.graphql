@@ -1,0 +1,62 @@
+query ContentPostDetailBase($postId: ID!) {
+  contentPostDetailBase(postId: $postId) {
+    postId
+    contentType
+    contentIdentity
+    assistantUsePolicy
+    authorId
+    authorDisplayName
+    authorAvatarUrl
+    title
+    body
+    summary
+    coverUrl
+    sourceAttribution {
+      isOriginal
+      originalCreatorId
+      originalCreatorName
+      originalCreatorProfileUrl
+      platform
+      sourcePostUrl
+      originalAssetUrl
+      attributionText
+      rightsBasis
+      commercialAuthorizationStatus
+      publicationAdmission
+      authorizationProofUrl
+      termsUrl
+      riskAcceptanceId
+      watermarkStatus
+      audioRightsStatus
+      modelReleaseStatus
+      propertyReleaseStatus
+      collectedAt
+      takedownPolicy
+    }
+    location {
+      latitude
+      longitude
+    }
+    locationName
+    geoTagRef
+    visitedAt
+    primaryHomepageId
+    canonicalEntityId
+    primaryHomepageType
+    primaryHomepageSnapshot {
+      canonicalEntityId
+      title
+      subtitle
+      coverUrl
+    }
+    status
+    visibility
+    likeCount
+    commentCount
+    shareCount
+    viewCount
+    createdAt
+    updatedAt
+    publishedAt
+  }
+}

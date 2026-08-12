@@ -91,6 +91,7 @@ func (s *AuthService) completeFederatedPhoneBinding(
 	accessToken, err := s.issueAccessToken(
 		prepared.ownerID,
 		prepared.persona,
+		command.DeviceID,
 		prepared.authEpoch,
 	)
 	if err != nil {

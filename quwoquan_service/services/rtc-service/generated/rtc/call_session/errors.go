@@ -32,101 +32,101 @@ var (
 // AppErrorFromInvalidArgument returns *AppError for RTC.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "通话操作请求格式无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "通话操作请求格式无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCallNotFound returns *AppError for RTC.USER.call_not_found (user_message from errors.yaml).
 func AppErrorFromCallNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCallNotFound.Error()))
-	return rerrors.NewAppError(code, "通话不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "通话不存在", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for RTC.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAccountSecurityDenied returns *AppError for RTC.USER.account_security_denied (user_message from errors.yaml).
 func AppErrorFromAccountSecurityDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountSecurityDenied.Error()))
-	return rerrors.NewAppError(code, "登录凭据已失效，请重新登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "登录凭据已失效，请重新登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAlreadyInCall returns *AppError for RTC.USER.already_in_call (user_message from errors.yaml).
 func AppErrorFromAlreadyInCall(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAlreadyInCall.Error()))
-	return rerrors.NewAppError(code, "你正在通话中，请先结束当前通话", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "你正在通话中，请先结束当前通话", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCallFull returns *AppError for RTC.USER.call_full (user_message from errors.yaml).
 func AppErrorFromCallFull(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCallFull.Error()))
-	return rerrors.NewAppError(code, "通话人数已达上限", debugMessage).WithMetadata("limit_exceeded", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "通话人数已达上限", debugMessage).WithMetadata("limit_exceeded", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCallEnded returns *AppError for RTC.USER.call_ended (user_message from errors.yaml).
 func AppErrorFromCallEnded(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCallEnded.Error()))
-	return rerrors.NewAppError(code, "通话已结束", debugMessage).WithMetadata("invalid_state", 410).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "通话已结束", debugMessage).WithMetadata("invalid_state", 410).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromNotParticipant returns *AppError for RTC.USER.not_participant (user_message from errors.yaml).
 func AppErrorFromNotParticipant(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotParticipant.Error()))
-	return rerrors.NewAppError(code, "你不是该通话的参与者", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "你不是该通话的参与者", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromNotMutual returns *AppError for RTC.USER.not_mutual (user_message from errors.yaml).
 func AppErrorFromNotMutual(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotMutual.Error()))
-	return rerrors.NewAppError(code, "互相关注后可发起 1 对 1 实时通话", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "互相关注后可发起 1 对 1 实时通话", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromBlocked returns *AppError for RTC.USER.blocked (user_message from errors.yaml).
 func AppErrorFromBlocked(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrBlocked.Error()))
-	return rerrors.NewAppError(code, "当前关系不允许发起通话", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前关系不允许发起通话", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromCannotAnswer returns *AppError for RTC.USER.cannot_answer (user_message from errors.yaml).
 func AppErrorFromCannotAnswer(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCannotAnswer.Error()))
-	return rerrors.NewAppError(code, "无法接听，通话状态异常", debugMessage).WithMetadata("invalid_state", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "无法接听，通话状态异常", debugMessage).WithMetadata("invalid_state", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromInvalidCallAction returns *AppError for RTC.USER.invalid_call_action (user_message from errors.yaml).
 func AppErrorFromInvalidCallAction(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidCallAction.Error()))
-	return rerrors.NewAppError(code, "当前通话状态无法执行该操作", debugMessage).WithMetadata("invalid_state", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "当前通话状态无法执行该操作", debugMessage).WithMetadata("invalid_state", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromScreenShareConflict returns *AppError for RTC.USER.screen_share_conflict (user_message from errors.yaml).
 func AppErrorFromScreenShareConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrScreenShareConflict.Error()))
-	return rerrors.NewAppError(code, "已有参与者正在共享屏幕", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "已有参与者正在共享屏幕", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromIdempotencyConflict returns *AppError for RTC.USER.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "请求重复且内容不一致，请重新发起", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请求重复且内容不一致，请重新发起", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromMediaTransportUnavailable returns *AppError for RTC.SYSTEM.media_transport_unavailable (user_message from errors.yaml).
 func AppErrorFromMediaTransportUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrMediaTransportUnavailable.Error()))
-	return rerrors.NewAppError(code, "通话服务暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_error", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "通话服务暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_error", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromAccountSecurityUnavailable returns *AppError for RTC.SYSTEM.account_security_unavailable (user_message from errors.yaml).
 func AppErrorFromAccountSecurityUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountSecurityUnavailable.Error()))
-	return rerrors.NewAppError(code, "账号安全校验暂不可用，请稍后重试", debugMessage).WithMetadata("upstream_error", 503).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "账号安全校验暂不可用，请稍后重试", debugMessage).WithMetadata("upstream_error", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromInternalError returns *AppError for RTC.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "通话服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "通话服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("surface", "inlineCard", 0)
 }

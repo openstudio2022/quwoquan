@@ -1,775 +1,333 @@
-"""Canonical nonprod phone authentication contract.
-
-spec_ref: specs/feature-tree/spec.md#uat-009
-"""
-
 from __future__ import annotations
 
-import base64
 import hashlib
-import hmac
 import json
-import os
+import stat
 import tempfile
-from types import SimpleNamespace
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from quwoquan_ops.cli.lib import local_environment_auth
+from quwoquan_ops.cli.lib.local_environment_auth import (
+    LocalAcceptanceActor,
+    LocalAcceptanceSession,
+)
 
 
-def _test_auth(
-    environment: str,
-    *,
-    secret: str | None = None,
-    issuer: str | None = None,
-    audience: str = "quwoquan-app",
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        environment={
-            "AUTH_JWT_SECRET": secret or f"{environment}-jwt-secret",
-            "AUTH_JWT_ISSUER": issuer or f"quwoquan.{environment}.local",
-            "AUTH_JWT_AUDIENCE": audience,
-            "AUTH_JWT_TOKEN_VERSION": "1",
-        }
+def _actor() -> LocalAcceptanceActor:
+    return LocalAcceptanceActor(
+        role="primary",
+        session=LocalAcceptanceSession(
+            owner_id="owner-1",
+            persona_id="persona-1",
+            access_token="access-secret",
+            refresh_token="refresh-secret",
+        ),
+        challenge_id="challenge-1",
+        account_state="active",
+        identity_origin="phone",
     )
 
 
-def _test_access_token(
-    *,
-    environment: str = "gamma",
-    target_name: str = "gamma-local",
-    owner_id: str = "owner-token",
-    persona_id: str = "persona-token",
-    secret: str | None = None,
-    issuer: str | None = None,
-    audience: str = "quwoquan-app",
-) -> str:
-    with mock.patch.object(
-        local_environment_auth,
-        "prepare_local_environment_auth",
-        return_value=_test_auth(
-            environment,
-            secret=secret,
-            issuer=issuer,
-            audience=audience,
-        ),
-    ):
-        return local_environment_auth._mint_local_access_token(
-            environment=environment,
-            target_name=target_name,
-            owner_id=owner_id,
-            persona_id=persona_id,
+class LocalEnvironmentTestDataAuthContractTest(unittest.TestCase):
+    def test_identity_set_is_target_scoped_mode_0600_and_grows_deterministically(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            secret_root = Path(directory) / "gamma-local" / "secrets"
+            path = secret_root / "test-data-identity-set.json"
+            with mock.patch.object(
+                local_environment_auth,
+                "_test_data_identity_set_path",
+                return_value=(secret_root, path),
+            ):
+                first = local_environment_auth.materialize_test_data_identity_set(
+                    environment="gamma",
+                    target_name="gamma-local",
+                    identity_set_id="typed-instance-a",
+                    actor_count=1,
+                )
+                second = local_environment_auth.materialize_test_data_identity_set(
+                    environment="gamma",
+                    target_name="gamma-local",
+                    identity_set_id="typed-instance-a",
+                    actor_count=2,
+                )
+
+            self.assertEqual(first, second)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["schema"], "qwq.test_data_identity_set.v1")
+            self.assertEqual(payload["target"], "gamma-local")
+            phones = payload["identitySetPhones"]["typed-instance-a"]
+            self.assertEqual(len(phones), 2)
+            self.assertEqual(len(phones), len(set(phones)))
+            self.assertNotIn("datasetEpoch", payload)
+            self.assertNotIn("accessToken", path.read_text(encoding="utf-8"))
+            self.assertNotIn("refreshToken", path.read_text(encoding="utf-8"))
+
+    def test_typed_session_derives_an_instance_bound_identity_set(self) -> None:
+        actor = _actor()
+        with (
+            mock.patch.object(
+                local_environment_auth,
+                "materialize_test_data_identity_set",
+            ) as materialize,
+            mock.patch.object(
+                local_environment_auth,
+                "open_local_phone_acceptance_session",
+                return_value=actor,
+            ) as open_phone,
+        ):
+            actual = local_environment_auth.open_test_data_acceptance_session(
+                "https://api.gamma.quwoquan.com",
+                environment="gamma",
+                target_name="gamma-local",
+                test_data_instance_id="case-run-123",
+                actor_role="primary",
+                actor_index=0,
+            )
+
+        identity_scope = hashlib.sha256(b"case-run-123").hexdigest()
+        identity_set_id = "typed-" + identity_scope[:40]
+        self.assertIs(actual, actor)
+        materialize.assert_called_once_with(
+            environment="gamma",
+            target_name="gamma-local",
+            identity_set_id=identity_set_id,
+            actor_count=1,
+        )
+        open_phone.assert_called_once_with(
+            "https://api.gamma.quwoquan.com",
+            environment="gamma",
+            target_name="gamma-local",
+            test_data_instance_id=identity_scope,
+            identity_set_id=identity_set_id,
+            actor_role="primary",
+            actor_index=0,
+            timeout_seconds=30.0,
         )
 
+    def test_new_case_instance_cannot_reuse_an_identity_set(self) -> None:
+        observed: list[str] = []
 
-class LocalEnvironmentPhoneAuthContractTest(unittest.TestCase):
-    def test_phone_actor_uses_public_otp_login_and_me(self) -> None:
+        def record(**kwargs: object) -> None:
+            observed.append(str(kwargs["identity_set_id"]))
+
+        with (
+            mock.patch.object(
+                local_environment_auth,
+                "materialize_test_data_identity_set",
+                side_effect=record,
+            ),
+            mock.patch.object(
+                local_environment_auth,
+                "open_local_phone_acceptance_session",
+                return_value=_actor(),
+            ),
+        ):
+            for instance_id in ("case-result-a", "case-result-b"):
+                local_environment_auth.open_test_data_acceptance_session(
+                    "https://api.gamma.quwoquan.com",
+                    environment="gamma",
+                    target_name="gamma-local",
+                    test_data_instance_id=instance_id,
+                    actor_role="primary",
+                    actor_index=0,
+                )
+
+        self.assertEqual(len(observed), 2)
+        self.assertNotEqual(observed[0], observed[1])
+
+    def test_actor_auth_uses_instance_bound_deterministic_otp_idempotency(self) -> None:
+        instance_scope = hashlib.sha256(b"case-run-123").hexdigest()
         responses = [
             {"challengeId": "challenge-1"},
             {
                 "ownerId": "owner-1",
                 "activePersona": {"personaId": "persona-1"},
-                "accessToken": "secret-token",
+                "accessToken": "access-1",
+                "refreshToken": "refresh-1",
                 "accountState": "active",
                 "identityOrigin": "phone",
             },
-        ]
-        with tempfile.TemporaryDirectory() as directory:
-            secret_root = Path(directory) / "alpha-local/secrets"
-            secret_root.mkdir(parents=True)
-            pool = secret_root / "identity-pool.json"
-            pool.write_text(
-                json.dumps(
-                    {
-                        "schema": "qwq.nonprod_acceptance_identity_pool",
-                        "target": "alpha-local",
-                        "datasetPhones": {
-                            "nonprod_reference_identity": ["+8613800000001"]
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-            pool.chmod(0o600)
-            with (
-                mock.patch.dict(
-                    os.environ,
-                    {
-                        "QWQ_NONPROD_ACCEPTANCE_IDENTITY_POOL": str(pool),
-                    },
-                    clear=False,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "deployment_target_path",
-                    return_value=secret_root,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "request_local_environment_public_json",
-                    side_effect=responses,
-                ) as public_request,
-                mock.patch.object(
-                    local_environment_auth,
-                    "request_local_environment_json",
-                    return_value={"ownerId": "owner-1"},
-                ) as authenticated_request,
-                mock.patch(
-                    "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
-                    return_value=SimpleNamespace(code="654321"),
-                ) as capture_read,
-            ):
-                actor = local_environment_auth.open_local_phone_acceptance_session(
-                    "https://api.alpha.quwoquan.local:17000",
-                    environment="alpha",
-                    target_name="alpha-local",
-                    dataset_epoch="a" * 64,
-                    dataset_id="nonprod_reference_identity",
+        ] * 2
+        with (
+            mock.patch.object(
+                local_environment_auth,
+                "_test_data_actor_phone",
+                return_value="+999300000001000",
+            ),
+            mock.patch.object(local_environment_auth, "_clear_local_otp_send_throttle"),
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_public_json",
+                side_effect=responses,
+            ) as public_request,
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_json",
+                return_value={"ownerId": "owner-1"},
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
+                return_value=SimpleNamespace(code="123456"),
+            ),
+        ):
+            for _ in range(2):
+                local_environment_auth.open_local_phone_acceptance_session(
+                    "https://api.gamma.quwoquan.com",
+                    environment="gamma",
+                    target_name="gamma-local",
+                    test_data_instance_id=instance_scope,
+                    identity_set_id="typed-instance",
                     actor_role="primary",
                     actor_index=0,
                 )
 
-        self.assertEqual(actor.session.owner_id, "owner-1")
-        self.assertEqual(actor.session.persona_id, "persona-1")
-        self.assertEqual(actor.challenge_id, "challenge-1")
-        self.assertEqual(public_request.call_count, 2)
-        otp_body = public_request.call_args_list[0].kwargs["body"]
-        login_body = public_request.call_args_list[1].kwargs["body"]
-        self.assertEqual(otp_body["sourceOperation"], "NonprodAcceptanceProvision")
-        self.assertEqual(login_body["otpCode"], "654321")
-        self.assertEqual(login_body["agreementVersion"], "2026-06")
-        self.assertNotIn(otp_body["phone"], repr(actor))
-        self.assertNotIn("secret-token", repr(actor))
-        capture_read.assert_called_once_with(
-            environment="alpha",
-            target_name="alpha-local",
-            recipient="+8613800000001",
-            timeout_seconds=30.0,
-        )
-        authenticated_request.assert_called_once()
+        send_calls = public_request.call_args_list[::2]
+        idempotency_keys = [
+            call.kwargs["headers"]["Idempotency-Key"] for call in send_calls
+        ]
+        self.assertEqual(len(set(idempotency_keys)), 1)
+        expected = hashlib.sha256(
+            (
+                f"gamma-local/{instance_scope}/"
+                "user.acceptance.authenticated_actors/primary/"
+                "user.authentication_challenge.SendOtp/send-otp-000"
+            ).encode("utf-8")
+        ).hexdigest()
+        self.assertEqual(idempotency_keys, [expected, expected])
 
-    def test_prod_is_fail_closed_before_transport(self) -> None:
-        with self.assertRaisesRegex(ValueError, "forbidden for Prod"):
-            local_environment_auth.open_local_phone_acceptance_session(
-                "https://api.quwoquan.com",
-                environment="prod",
-                target_name="prod-sim",
-                dataset_epoch="b" * 64,
-                dataset_id="nonprod_reference_identity",
+    def test_research_identity_login_uses_the_pre_runtime_subject_and_owner(self) -> None:
+        instance_scope = hashlib.sha256(b"research-runtime-proof").hexdigest()
+        responses = [
+            {"challengeId": "challenge-research"},
+            {
+                "ownerId": "owner-research",
+                "activePersona": {"personaId": "persona-research"},
+                "accessToken": "access-research",
+                "refreshToken": "refresh-research",
+                "accountState": "active",
+                "identityOrigin": "phone",
+            },
+        ]
+        with (
+            mock.patch.object(
+                local_environment_auth,
+                "load_local_research_identity_binding",
+                return_value={
+                    "phone": "+999300000001999",
+                    "accountId": "owner-research",
+                },
+            ),
+            mock.patch.object(local_environment_auth, "_clear_local_otp_send_throttle"),
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_public_json",
+                side_effect=responses,
+            ) as public_request,
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_json",
+                return_value={"ownerId": "owner-research"},
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
+                return_value=SimpleNamespace(code="123456"),
+            ),
+        ):
+            actor = local_environment_auth.open_local_phone_acceptance_session(
+                "https://api.alpha.quwoquan.com",
+                environment="alpha",
+                target_name="alpha-local",
+                test_data_instance_id=instance_scope,
+                identity_set_id="research-identity",
                 actor_role="primary",
                 actor_index=0,
             )
 
-    def test_public_request_rejects_identity_headers(self) -> None:
-        with self.assertRaisesRegex(ValueError, "cannot inject identity"):
-            local_environment_auth.request_local_environment_public_json(
-                "https://api.alpha.quwoquan.local:17000",
-                path="/auth/otp/send",
-                headers={"X-Client-User-Id": "forged"},
-            )
-
-    def test_reference_session_reuses_cache_without_otp(self) -> None:
-        epoch = "c" * 64
-        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
-        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret_root = root / "gamma-local/secrets"
-            secret_root.mkdir(parents=True)
-            runs = root / "runs/nonprod-data" / epoch
-            runs.mkdir(parents=True)
-            (runs / "nonprod_reference_identity.json").write_text(
-                json.dumps(
-                    {
-                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
-                        "target": "gamma-local",
-                        "baselineId": baseline,
-                        "packageDigest": package,
-                        "datasetId": "nonprod_reference_identity",
-                        "datasetEpoch": epoch,
-                        "status": "passed",
-                        "cleanupState": "retained",
-                        "expiresAt": "2099-01-01T00:00:00+00:00",
-                        "actorReceiptRefs": [
-                            {
-                                "role": "primary",
-                                "ownerId": "owner-cache",
-                                "accountState": "active",
-                                "identityOrigin": "phone",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            cache = secret_root / "nonprod-reference-session.cache.json"
-            cached_token = _test_access_token(
-                owner_id="owner-cache",
-                persona_id="persona-cache",
-            )
-            cache.write_text(
-                json.dumps(
-                    {
-                        "schema": "qwq.nonprod_reference_session_cache",
-                        "target": "gamma-local",
-                        "baselineId": baseline,
-                        "packageDigest": package,
-                        "datasetEpoch": epoch,
-                        "actorIndex": 0,
-                        "ownerId": "owner-cache",
-                        "personaId": "persona-cache",
-                        "accessToken": cached_token,
-                        "expiresAt": "2099-01-01T00:00:00+00:00",
-                    }
-                ),
-                encoding="utf-8",
-            )
-            cache.chmod(0o600)
-            candidate_dir = root / "candidate"
-            candidate_dir.mkdir()
-            (candidate_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"baselineId": baseline, "packageDigest": package},
-                ),
-                encoding="utf-8",
-            )
-            with (
-                mock.patch.object(
-                    local_environment_auth,
-                    "active_deployment_candidate",
-                    return_value={
-                        "baselineId": baseline,
-                        "candidateDir": str(candidate_dir),
-                    },
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "env_runs_root",
-                    return_value=root / "runs",
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "deployment_target_path",
-                    return_value=secret_root,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "prepare_local_environment_auth",
-                    return_value=_test_auth("gamma"),
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "request_local_environment_json",
-                    return_value={"ownerId": "owner-cache"},
-                ) as me_request,
-                mock.patch.object(
-                    local_environment_auth,
-                    "open_local_phone_acceptance_session",
-                    side_effect=AssertionError("cache hit must not resend OTP"),
-                ),
-            ):
-                session = local_environment_auth.open_reference_acceptance_session(
-                    "https://api.gamma.quwoquan.com:19000",
-                    environment="gamma",
-                    target_name="gamma-local",
-                )
-
-        self.assertEqual(session.owner_id, "owner-cache")
-        self.assertEqual(session.persona_id, "persona-cache")
-        self.assertEqual(session.access_token, cached_token)
-        me_request.assert_called_once()
-
-    def test_cached_reference_session_rejects_jwt_identity_and_environment_drift(
-        self,
-    ) -> None:
-        baseline = "sha256:" + "1" * 64
-        package = "sha256:" + "2" * 64
-        epoch = "3" * 64
-        expected_owner = "owner-token"
-        expected_persona = "persona-token"
-        invalid_tokens = {
-            "owner": _test_access_token(
-                owner_id="other-owner",
-                persona_id=expected_persona,
-            ),
-            "persona": _test_access_token(
-                owner_id=expected_owner,
-                persona_id="other-persona",
-            ),
-            "environment": _test_access_token(
-                environment="beta",
-                target_name="beta-local",
-                owner_id=expected_owner,
-                persona_id=expected_persona,
-            ),
-            "audience": _test_access_token(
-                owner_id=expected_owner,
-                persona_id=expected_persona,
-                audience="other-audience",
-            ),
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            secret_root = Path(directory) / "gamma-local/secrets"
-            secret_root.mkdir(parents=True)
-            cache = secret_root / "nonprod-reference-session.cache.json"
-            for mismatch, token in invalid_tokens.items():
-                with self.subTest(mismatch=mismatch):
-                    cache.write_text(
-                        json.dumps(
-                            {
-                                "schema": "qwq.nonprod_reference_session_cache",
-                                "target": "gamma-local",
-                                "baselineId": baseline,
-                                "packageDigest": package,
-                                "datasetEpoch": epoch,
-                                "actorIndex": 0,
-                                "ownerId": expected_owner,
-                                "personaId": expected_persona,
-                                "accessToken": token,
-                                "expiresAt": "2099-01-01T00:00:00+00:00",
-                            }
-                        ),
-                        encoding="utf-8",
-                    )
-                    cache.chmod(0o600)
-                    with (
-                        mock.patch.object(
-                            local_environment_auth,
-                            "deployment_target_path",
-                            return_value=secret_root,
-                        ),
-                        mock.patch.object(
-                            local_environment_auth,
-                            "prepare_local_environment_auth",
-                            return_value=_test_auth("gamma"),
-                        ),
-                        mock.patch.object(
-                            local_environment_auth,
-                            "request_local_environment_json",
-                            side_effect=AssertionError(
-                                "mismatched JWT must fail before /me"
-                            ),
-                        ),
-                    ):
-                        session = (
-                            local_environment_auth._try_cached_reference_session(
-                                "https://api.gamma.quwoquan.com:19000",
-                                environment="gamma",
-                                target_name="gamma-local",
-                                baseline_id=baseline,
-                                package_digest=package,
-                                dataset_epoch=epoch,
-                                actor_index=0,
-                                owner_id=expected_owner,
-                                timeout_seconds=1.0,
-                            )
-                        )
-
-                    self.assertIsNone(session)
-                    self.assertFalse(cache.exists())
-
-    def test_retained_session_rejects_minted_jwt_identity_and_environment_drift(
-        self,
-    ) -> None:
-        expected_owner = "owner-retained"
-        expected_persona = "persona-retained"
-        invalid_tokens = {
-            "owner": _test_access_token(
-                owner_id="other-owner",
-                persona_id=expected_persona,
-            ),
-            "persona": _test_access_token(
-                owner_id=expected_owner,
-                persona_id="other-persona",
-            ),
-            "environment": _test_access_token(
-                environment="beta",
-                target_name="beta-local",
-                owner_id=expected_owner,
-                persona_id=expected_persona,
-            ),
-            "audience": _test_access_token(
-                owner_id=expected_owner,
-                persona_id=expected_persona,
-                audience="other-audience",
-            ),
-        }
-        for mismatch, token in invalid_tokens.items():
-            with self.subTest(mismatch=mismatch):
-                with (
-                    mock.patch.object(
-                        local_environment_auth,
-                        "_mint_local_access_token",
-                        return_value=token,
-                    ),
-                    mock.patch.object(
-                        local_environment_auth,
-                        "prepare_local_environment_auth",
-                        return_value=_test_auth("gamma"),
-                    ),
-                    mock.patch.object(
-                        local_environment_auth,
-                        "request_local_environment_json",
-                        side_effect=AssertionError(
-                            "mismatched minted JWT must fail before /me"
-                        ),
-                    ),
-                ):
-                    session = (
-                        local_environment_auth._restore_retained_reference_session(
-                            "https://api.gamma.quwoquan.com:19000",
-                            environment="gamma",
-                            target_name="gamma-local",
-                            owner_id=expected_owner,
-                            persona_id=expected_persona,
-                            timeout_seconds=1.0,
-                        )
-                    )
-
-                self.assertIsNone(session)
-
-    def test_reference_session_rechecks_cache_under_lock_without_otp(self) -> None:
-        epoch = "d" * 64
-        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
-        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret_root = root / "gamma-local/secrets"
-            secret_root.mkdir(parents=True)
-            runs = root / "runs/nonprod-data" / epoch
-            runs.mkdir(parents=True)
-            (runs / "nonprod_reference_identity.json").write_text(
-                json.dumps(
-                    {
-                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
-                        "target": "gamma-local",
-                        "baselineId": baseline,
-                        "packageDigest": package,
-                        "datasetId": "nonprod_reference_identity",
-                        "datasetEpoch": epoch,
-                        "status": "passed",
-                        "cleanupState": "retained",
-                        "expiresAt": "2099-01-01T00:00:00+00:00",
-                        "actorReceiptRefs": [
-                            {
-                                "role": "primary",
-                                "ownerId": "owner-lock",
-                                "accountState": "active",
-                                "identityOrigin": "phone",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            candidate_dir = root / "candidate"
-            candidate_dir.mkdir()
-            (candidate_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"baselineId": baseline, "packageDigest": package},
-                ),
-                encoding="utf-8",
-            )
-            peer_session = local_environment_auth.LocalAcceptanceSession(
-                owner_id="owner-lock",
-                persona_id="persona-lock",
-                access_token="peer-token",
-            )
-            with (
-                mock.patch.object(
-                    local_environment_auth,
-                    "active_deployment_candidate",
-                    return_value={
-                        "baselineId": baseline,
-                        "candidateDir": str(candidate_dir),
-                    },
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "env_runs_root",
-                    return_value=root / "runs",
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "deployment_target_path",
-                    return_value=secret_root,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_try_cached_reference_session",
-                    side_effect=[None, peer_session],
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_clear_local_otp_send_throttle",
-                    side_effect=AssertionError("peer cache hit must not clear OTP"),
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "open_local_phone_acceptance_session",
-                    side_effect=AssertionError("peer cache hit must not resend OTP"),
-                ),
-            ):
-                session = local_environment_auth.open_reference_acceptance_session(
-                    "https://api.gamma.quwoquan.com:19000",
-                    environment="gamma",
-                    target_name="gamma-local",
-                )
-
-        self.assertEqual(session.access_token, "peer-token")
-
-    def test_retained_receipt_clears_otp_throttle_before_single_provision(
-        self,
-    ) -> None:
-        epoch = "e" * 64
-        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
-        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret_root = root / "gamma-local/secrets"
-            secret_root.mkdir(parents=True)
-            runs = root / "runs/nonprod-data" / epoch
-            runs.mkdir(parents=True)
-            (runs / "nonprod_reference_identity.json").write_text(
-                json.dumps(
-                    {
-                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
-                        "target": "gamma-local",
-                        "baselineId": baseline,
-                        "packageDigest": package,
-                        "datasetId": "nonprod_reference_identity",
-                        "datasetEpoch": epoch,
-                        "status": "passed",
-                        "cleanupState": "retained",
-                        "expiresAt": "2099-01-01T00:00:00+00:00",
-                        "actorReceiptRefs": [
-                            {
-                                "role": "primary",
-                                "ownerId": "owner-provision",
-                                "accountState": "active",
-                                "identityOrigin": "phone",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            candidate_dir = root / "candidate"
-            candidate_dir.mkdir()
-            (candidate_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"baselineId": baseline, "packageDigest": package},
-                ),
-                encoding="utf-8",
-            )
-            actor = local_environment_auth.LocalAcceptanceActor(
-                role="primary",
-                session=local_environment_auth.LocalAcceptanceSession(
-                    owner_id="owner-provision",
-                    persona_id="persona-provision",
-                    access_token="fresh-token",
-                ),
-                challenge_id="challenge-provision",
-                account_state="active",
-                identity_origin="phone",
-            )
-            with (
-                mock.patch.object(
-                    local_environment_auth,
-                    "active_deployment_candidate",
-                    return_value={
-                        "baselineId": baseline,
-                        "candidateDir": str(candidate_dir),
-                    },
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "env_runs_root",
-                    return_value=root / "runs",
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "deployment_target_path",
-                    return_value=secret_root,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_try_cached_reference_session",
-                    return_value=None,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_restore_retained_reference_session",
-                    return_value=None,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_nonprod_acceptance_phone",
-                    return_value="+8613900001001",
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_clear_local_otp_send_throttle",
-                ) as clear_throttle,
-                mock.patch.object(
-                    local_environment_auth,
-                    "open_local_phone_acceptance_session",
-                    return_value=actor,
-                ) as open_phone,
-            ):
-                session = local_environment_auth.open_reference_acceptance_session(
-                    "https://api.gamma.quwoquan.com:19000",
-                    environment="gamma",
-                    target_name="gamma-local",
-                )
-                self.assertEqual(session.access_token, "fresh-token")
-                clear_throttle.assert_called_once_with(
-                    target_name="gamma-local",
-                    phone="+8613900001001",
-                )
-                open_phone.assert_called_once()
-                cache = secret_root / "nonprod-reference-session.cache.json"
-                self.assertTrue(cache.is_file())
-
-    def test_retained_receipt_restores_session_without_otp(self) -> None:
-        epoch = "f" * 64
-        baseline = "sha256:91e4ec0346e6856159480135150a31020240f414ef940064f3da96de718a39dd"
-        package = "sha256:b7e8e5147c91f8a823198dfe83b3096677ff4c8ef5dd4f21e2d4634787f2bf29"
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            secret_root = root / "gamma-local/secrets"
-            secret_root.mkdir(parents=True)
-            runs = root / "runs/nonprod-data" / epoch
-            runs.mkdir(parents=True)
-            (runs / "nonprod_reference_identity.json").write_text(
-                json.dumps(
-                    {
-                        "schema": "qwq.nonprod_acceptance_dataset_receipt",
-                        "target": "gamma-local",
-                        "baselineId": baseline,
-                        "packageDigest": package,
-                        "datasetId": "nonprod_reference_identity",
-                        "datasetEpoch": epoch,
-                        "status": "passed",
-                        "cleanupState": "retained",
-                        "expiresAt": "2099-01-01T00:00:00+00:00",
-                        "actorReceiptRefs": [
-                            {
-                                "role": "primary",
-                                "ownerId": "owner-restore",
-                                "personaIds": ["persona-restore"],
-                                "accountState": "active",
-                                "identityOrigin": "phone",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            candidate_dir = root / "candidate"
-            candidate_dir.mkdir()
-            (candidate_dir / "manifest.json").write_text(
-                json.dumps(
-                    {"baselineId": baseline, "packageDigest": package},
-                ),
-                encoding="utf-8",
-            )
-            restored = local_environment_auth.LocalAcceptanceSession(
-                owner_id="owner-restore",
-                persona_id="persona-restore",
-                access_token="restored-token",
-            )
-            with (
-                mock.patch.object(
-                    local_environment_auth,
-                    "active_deployment_candidate",
-                    return_value={
-                        "baselineId": baseline,
-                        "candidateDir": str(candidate_dir),
-                    },
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "env_runs_root",
-                    return_value=root / "runs",
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "deployment_target_path",
-                    return_value=secret_root,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_try_cached_reference_session",
-                    return_value=None,
-                ),
-                mock.patch.object(
-                    local_environment_auth,
-                    "_restore_retained_reference_session",
-                    return_value=restored,
-                ) as restore,
-                mock.patch.object(
-                    local_environment_auth,
-                    "open_local_phone_acceptance_session",
-                    side_effect=AssertionError("retained restore must not resend OTP"),
-                ),
-            ):
-                session = local_environment_auth.open_reference_acceptance_session(
-                    "https://api.gamma.quwoquan.com:19000",
-                    environment="gamma",
-                    target_name="gamma-local",
-                )
-                self.assertEqual(session.access_token, "restored-token")
-                restore.assert_called_once()
-                self.assertTrue(
-                    (secret_root / "nonprod-reference-session.cache.json").is_file()
-                )
-
-    def test_mint_local_access_token_reuses_auth_jwt_without_otp(self) -> None:
-        auth = SimpleNamespace(
-            environment={
-                "AUTH_JWT_SECRET": "unit-test-auth-jwt-secret",
-                "AUTH_JWT_ISSUER": "gamma-local-issuer",
-                "AUTH_JWT_AUDIENCE": "gamma-local-audience",
-                "AUTH_JWT_TOKEN_VERSION": "1",
-            }
+        self.assertEqual(actor.session.owner_id, "owner-research")
+        self.assertEqual(
+            public_request.call_args_list[0].kwargs["body"]["phone"],
+            "+999300000001999",
         )
+
+    def test_research_identity_login_rejects_owner_readback_drift(self) -> None:
+        instance_scope = hashlib.sha256(b"research-runtime-proof").hexdigest()
+        with (
+            mock.patch.object(
+                local_environment_auth,
+                "load_local_research_identity_binding",
+                return_value={
+                    "phone": "+999300000001999",
+                    "accountId": "expected-owner",
+                },
+            ),
+            mock.patch.object(local_environment_auth, "_clear_local_otp_send_throttle"),
+            mock.patch.object(
+                local_environment_auth,
+                "request_local_environment_public_json",
+                side_effect=[
+                    {"challengeId": "challenge-research"},
+                    {
+                        "ownerId": "other-owner",
+                        "activePersona": {"personaId": "persona-research"},
+                        "accessToken": "access-research",
+                        "refreshToken": "refresh-research",
+                    },
+                ],
+            ),
+            mock.patch(
+                "quwoquan_ops.cli.lib.local_sms_provider_debug.read_latest_debug_otp",
+                return_value=SimpleNamespace(code="123456"),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "managed acceptance identity"):
+                local_environment_auth.open_local_phone_acceptance_session(
+                    "https://api.alpha.quwoquan.com",
+                    environment="alpha",
+                    target_name="alpha-local",
+                    test_data_instance_id=instance_scope,
+                    identity_set_id="research-identity",
+                    actor_role="primary",
+                    actor_index=0,
+                )
+
+    def test_prod_is_rejected_before_identity_materialization(self) -> None:
+        with self.assertRaisesRegex(ValueError, "forbidden for Prod"):
+            local_environment_auth.materialize_test_data_identity_set(
+                environment="prod",
+                target_name="prod-sim",
+                identity_set_id="typed-prod",
+                actor_count=1,
+            )
+
+    def test_runtime_preflight_cleanup_uses_public_close_account_operation(
+        self,
+    ) -> None:
         with mock.patch.object(
             local_environment_auth,
-            "prepare_local_environment_auth",
-            return_value=auth,
-        ) as prepare:
-            token = local_environment_auth._mint_local_access_token(
-                environment="gamma",
-                target_name="gamma-local",
-                owner_id="owner-mint",
-                persona_id="persona-mint",
+            "request_local_environment_json",
+            return_value={"status": "closed"},
+        ) as request:
+            local_environment_auth.close_test_data_acceptance_actor(
+                "https://api.gamma.quwoquan.com",
+                actor=_actor(),
+                test_data_instance_id="case-run-123",
             )
 
-        prepare.assert_called_once_with("gamma", "gamma-local")
-        parts = token.split(".")
-        self.assertEqual(len(parts), 3)
-
-        def _pad(segment: str) -> bytes:
-            return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
-
-        claims = json.loads(_pad(parts[1]).decode("utf-8"))
-        self.assertEqual(claims["sub"], "owner-mint")
-        self.assertEqual(claims["psn"], "persona-mint")
-        self.assertEqual(claims["tkn"], "access")
-        self.assertEqual(claims["iss"], "gamma-local-issuer")
-        self.assertEqual(claims["aud"], "gamma-local-audience")
-        digest = hmac.new(
-            b"unit-test-auth-jwt-secret",
-            f"{parts[0]}.{parts[1]}".encode("ascii"),
-            hashlib.sha256,
-        ).digest()
+        kwargs = request.call_args.kwargs
+        self.assertEqual(kwargs["session"].owner_id, "owner-1")
+        self.assertEqual(kwargs["body"].keys(), {"clientRequestId"})
         self.assertEqual(
-            base64.urlsafe_b64encode(digest).decode("ascii").rstrip("="),
-            parts[2],
+            kwargs["headers"],
+            {"Idempotency-Key": kwargs["body"]["clientRequestId"]},
         )
+        self.assertNotIn("access-secret", json.dumps(kwargs["body"]))
+        self.assertNotIn("refresh-secret", json.dumps(kwargs["body"]))
 
 
 if __name__ == "__main__":

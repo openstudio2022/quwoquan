@@ -446,6 +446,94 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: greeting_request_list_greeting_inbox_app_local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListGreetingInbox}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: greeting_request_list_greeting_outbox_app_local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ListGreetingOutbox}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: greeting_request_reply_greeting_request_app_local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: ReplyGreetingRequest}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: greeting_request_ignore_greeting_request_app_local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: IgnoreGreetingRequest}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: greeting_request_cancel_greeting_request_app_local
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: CancelGreetingRequest}
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: greeting_request_send_greeting_request_app_api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: SendGreetingRequest}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/greeting_request/greeting_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: greeting_request_list_greeting_inbox_app_api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListGreetingInbox}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/greeting_request/greeting_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: greeting_request_list_greeting_outbox_app_api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListGreetingOutbox}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/greeting_request/greeting_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: greeting_request_reply_greeting_request_app_api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ReplyGreetingRequest}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/greeting_request/greeting_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: greeting_request_ignore_greeting_request_app_api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: IgnoreGreetingRequest}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/greeting_request/greeting_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: greeting_request_cancel_greeting_request_app_api
+    spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: CancelGreetingRequest}
+    runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/greeting_request/greeting_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
   - case_id: list-greeting-inbox-local
     spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
     producer: service

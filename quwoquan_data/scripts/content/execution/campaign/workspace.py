@@ -15,7 +15,11 @@ from typing import Any
 from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
-from core.source_digest import current_source_digest
+from core.source_digest import (
+    ExecutionBundleIdentity,
+    SourceDefinitionSnapshot,
+    current_source_definition_snapshot,
+)
 
 from content.execution.campaign.external_inputs import (
     external_inputs_digest as refs_digest,
@@ -73,9 +77,11 @@ class SourceCapsule:
     path: Path
     ref: str
     capsule_digest: str
+    git_branch: str
     commit_sha: str
     source_revision: str
     source_digest: str
+    execution_bundle_digest: str
     entity_catalog_digest: str
     external_inputs_digest: str
     lane_external_inputs: dict[str, dict[str, Any]]
@@ -175,6 +181,7 @@ def assert_frozen_main_tree(
     git_branch: str,
     commit_sha: str,
     source_digest: str,
+    execution_bundle_digest: str,
 ) -> None:
     """Verify only governed revision inputs, not unrelated monorepo changes."""
     assert_frozen_revision(
@@ -182,6 +189,7 @@ def assert_frozen_main_tree(
         git_branch=git_branch,
         commit_sha=commit_sha,
         source_digest=source_digest,
+        execution_bundle_digest=execution_bundle_digest,
     )
 
 
@@ -191,6 +199,7 @@ def assert_frozen_revision(
     git_branch: str,
     commit_sha: str,
     source_digest: str,
+    execution_bundle_digest: str,
 ) -> None:
     observed_branch = current_branch(repo_root)
     if observed_branch != git_branch:
@@ -204,11 +213,19 @@ def assert_frozen_revision(
             "campaign commit drift: "
             f"frozen={commit_sha} current={observed_commit}"
         )
-    observed_digest = current_source_digest(repo_root=repo_root).digest
+    observed_digest = current_source_definition_snapshot(repo_root=repo_root).digest
     if observed_digest != source_digest:
         raise ValueError(
             "campaign sourceDigest drift: "
             f"frozen={source_digest} current={observed_digest}"
+        )
+    from core.source_digest import current_execution_bundle_identity
+
+    observed_bundle = current_execution_bundle_identity(repo_root=repo_root).digest
+    if observed_bundle != execution_bundle_digest:
+        raise ValueError(
+            "campaign execution bundle drift: "
+            f"frozen={execution_bundle_digest} current={observed_bundle}"
         )
 
 
@@ -257,9 +274,11 @@ def _capsule_tree_digest(root: Path) -> str:
 
 def _capsule_identity(
     *,
+    git_branch: str,
     commit_sha: str,
     source_revision: str,
     source_digest: str,
+    execution_bundle: dict[str, Any],
     entity_catalog_digest: str,
     lane_external_inputs: dict[str, dict[str, Any]],
     external_inputs_digest: str,
@@ -269,9 +288,11 @@ def _capsule_identity(
     stable = {
         "schema": CAPSULE_SCHEMA,
         "format": CAPSULE_FORMAT,
+        "gitBranch": git_branch,
         "gitCommitSha": commit_sha,
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,
+        "executionBundle": execution_bundle,
         "entityCatalogDigest": entity_catalog_digest,
         "roots": list(roots),
         "laneExternalInputs": lane_external_inputs,
@@ -322,7 +343,7 @@ def _tree_is_read_only(root: Path) -> bool:
     return True
 
 
-def _load_capsule(
+def load_source_capsule_manifest(
     runtime_paths: CampaignRuntimePaths,
     path: Path,
     *,
@@ -348,12 +369,15 @@ def _load_capsule(
         raise ValueError("campaign capsule identity digest drift")
     if manifest.get("treeDigest") != _capsule_tree_digest(path):
         raise ValueError("campaign capsule tree digest drift")
-    observed_digest = current_source_digest(repo_root=path).digest
+    observed_digest = SourceDefinitionSnapshot.build(repo_root=path).digest
     if observed_digest != stable["sourceDigest"]:
         raise ValueError(
             "campaign capsule sourceDigest mismatch: "
             f"{observed_digest} != {stable['sourceDigest']}"
         )
+    observed_bundle = ExecutionBundleIdentity.build(repo_root=path).digest
+    if observed_bundle != stable["executionBundle"]["digest"]:
+        raise ValueError("campaign capsule executionBundle mismatch")
     for carrier, lane in stable["laneExternalInputs"].items():
         if lane["externalInputsDigest"] != refs_digest(lane["externalInputRefs"]):
             raise ValueError(
@@ -376,9 +400,11 @@ def _load_capsule(
         path=path,
         ref=_portable_ref(path, runtime_paths.output_root),
         capsule_digest=capsule_digest,
+        git_branch=str(stable["gitBranch"]),
         commit_sha=str(stable["gitCommitSha"]),
         source_revision=str(stable["sourceRevision"]),
         source_digest=str(stable["sourceDigest"]),
+        execution_bundle_digest=str(stable["executionBundle"]["digest"]),
         entity_catalog_digest=str(stable["entityCatalogDigest"]),
         external_inputs_digest=str(stable["externalInputsDigest"]),
         lane_external_inputs={
@@ -396,9 +422,11 @@ def _load_capsule(
 def prepare_source_capsule(
     runtime_paths: CampaignRuntimePaths,
     *,
+    git_branch: str,
     commit_sha: str,
     source_revision: str,
     source_digest: str,
+    execution_bundle: dict[str, Any],
     entity_catalog_digest: str,
     lane_external_inputs: dict[str, dict[str, Any]],
     external_inputs_digest: str,
@@ -439,6 +467,7 @@ def prepare_source_capsule(
     roots = campaign_snapshot_roots(
         runtime_paths.repo_root,
         expected_digest=source_digest,
+        expected_execution_bundle=str(execution_bundle["digest"]),
     )
     source_pool_snapshot_root_ref, source_pool_snapshot_digest = (
         resolve_capsule_scale_source_pool_identity(
@@ -455,9 +484,11 @@ def prepare_source_capsule(
         source_pool_snapshot_digest,
     )
     stable, capsule_digest = _capsule_identity(
+        git_branch=git_branch,
         commit_sha=commit_sha,
         source_revision=source_revision,
         source_digest=source_digest,
+        execution_bundle=execution_bundle,
         entity_catalog_digest=entity_catalog_digest,
         lane_external_inputs=capsule_lanes,
         external_inputs_digest=external_inputs_digest,
@@ -473,7 +504,7 @@ def prepare_source_capsule(
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         if capsule_path.is_dir():
             try:
-                return _load_capsule(
+                return load_source_capsule_manifest(
                     runtime_paths,
                     capsule_path,
                     stable=stable,
@@ -491,6 +522,7 @@ def prepare_source_capsule(
                 temp_root,
                 roots=roots,
                 expected_digest=source_digest,
+                expected_execution_bundle=str(execution_bundle["digest"]),
             )
             for carrier, lane in capsule_lanes.items():
                 materialize_external_input_bundle(
@@ -524,7 +556,7 @@ def prepare_source_capsule(
         finally:
             if temp_root.exists():
                 _remove_tree(temp_root)
-        return _load_capsule(
+        return load_source_capsule_manifest(
             runtime_paths,
             capsule_path,
             stable=stable,
@@ -588,6 +620,7 @@ __all__ = [
     "current_branch",
     "current_commit",
     "lane_execution_root",
+    "load_source_capsule_manifest",
     "prepare_lane_workspace",
     "prepare_source_capsule",
     "release_lane_workspace",

@@ -6,6 +6,7 @@ import argparse
 from collections.abc import Callable
 
 from core.control_types import TargetSelector
+from content.execution.planning.rewrite import REWRITE_REASONS
 from content.execution.model_contract import SEMANTIC_SELECTION_IDS
 
 
@@ -21,17 +22,39 @@ def register_recipe_parser(
     parser.add_argument("--execution-id", required=True, help="唯一 executionId")
     parser.add_argument("--retry-of", help="新 sequence 重试时指向原 executionId")
     parser.add_argument(
+        "--retry-unfinished-ref",
+        dest="retry_unfinished_refs",
+        action="append",
+        default=[],
+        help="仅 semantic dispatch 可提供；逐项绑定 predecessor exact unfinished object ref",
+    )
+    parser.add_argument(
+        "--rewrite-content-id",
+        help="只改写这一稳定 contentId；必须与 expected version/reason 成组提供",
+    )
+    parser.add_argument(
+        "--expected-version",
+        type=int,
+        help="当前池版本；匹配后新版本严格加一",
+    )
+    parser.add_argument(
+        "--rewrite-reason",
+        choices=REWRITE_REASONS,
+        help="定向改写原因",
+    )
+    parser.add_argument(
         "--semantic-selection-id",
         choices=SEMANTIC_SELECTION_IDS,
         help=(
             "受治理语义执行选择；省略表示新 execution 使用 default，resume 使用"
-            "已冻结 manifest 值。cursor_auto 只允许新的 retryOf execution"
+            "已冻结 manifest 值。cursor_grok 是 Cursor 精确主轨；cursor_auto 只允许"
+            "绑定 typed provider/model failure journal 的新 retryOf execution"
         ),
     )
     parser.add_argument(
         "--semantic-preflight-receipt",
         help=(
-            "受治理 semantic preflight/soak create-once receipt；cursor_auto "
+            "受治理 semantic preflight/soak create-once receipt；Cursor selection "
             "必须提供并冻结到 execution manifest"
         ),
     )
@@ -114,6 +137,7 @@ def register_recipe_parser(
         "--capacity-plan-digest",
         help="四 lane 共用的 governed capacityPlan digest",
     )
+    parser.add_argument("--worker-host-set-binding-json")
     parser.add_argument("--scale-source-pool-id")
     parser.add_argument("--scale-source-pool-target-scale")
     parser.add_argument("--scale-source-pool-plan-ref")

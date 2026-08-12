@@ -364,3 +364,35 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_post_reaction_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: content_reaction_get_content_reaction_state_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetContentReactionState}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: content_reaction_like_post_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: LikePost}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: content_reaction_react_to_comment_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ReactToComment}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: content_reaction_unlike_post_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UnlikePost}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/content_reaction/content_reaction_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

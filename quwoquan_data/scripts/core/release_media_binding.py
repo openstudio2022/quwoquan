@@ -34,13 +34,15 @@ def bind_release_object_media_assets(
             raise ValueError(f"release MediaAsset identity invalid or duplicated: {asset_id}")
         authority[asset_id] = row
 
-    def bind(node: Any, *, source: Path) -> None:
+    def bind(node: Any, *, source: Path) -> bool:
         if isinstance(node, list):
+            changed = False
             for item in node:
-                bind(item, source=source)
-            return
+                changed = bind(item, source=source) or changed
+            return changed
         if not isinstance(node, dict):
-            return
+            return False
+        changed = False
         asset_id = str(node.get("assetId") or "").strip()
         if asset_id:
             row = authority.get(asset_id)
@@ -57,12 +59,19 @@ def bind_release_object_media_assets(
                 raise ValueError(f"release object asset kind drift: {source}:{asset_id}")
             if declared_sha256 and declared_sha256 != sha256:
                 raise ValueError(f"release object asset sha256 drift: {source}:{asset_id}")
-            node["kind"] = kind
-            node["sha256"] = sha256
+            if node.get("kind") != kind:
+                node["kind"] = kind
+                changed = True
+            if node.get("sha256") != sha256:
+                node["sha256"] = sha256
+                changed = True
             for field in _PRIVATE_MEDIA_FIELDS:
-                node.pop(field, None)
+                if field in node:
+                    node.pop(field)
+                    changed = True
         for value in node.values():
-            bind(value, source=source)
+            changed = bind(value, source=source) or changed
+        return changed
 
     # Release objects are consumer payloads, not a copy of canonical private
     # storage metadata. Sanitize governed consumer JSON so asset.refs and rights
@@ -76,7 +85,8 @@ def bind_release_object_media_assets(
         if "asset_reviews" in relative.parts:
             continue
         document = json.loads(path.read_text(encoding="utf-8"))
-        bind(document, source=path)
+        if not bind(document, source=path):
+            continue
         path.write_text(
             json.dumps(document, ensure_ascii=False, separators=(",", ":")) + "\n",
             encoding="utf-8",

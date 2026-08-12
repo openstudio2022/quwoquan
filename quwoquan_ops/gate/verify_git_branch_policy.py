@@ -24,11 +24,20 @@ def _run_git(*args: str) -> list[str]:
     return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
 
 
-def load_policy() -> tuple[set[str], set[str]]:
+def load_policy() -> tuple[set[str], set[str], set[str]]:
     payload = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8")) or {}
     allowed_local = {str(name).strip() for name in payload.get("allowed_local_branches", []) if str(name).strip()}
     allowed_remote = {str(name).strip() for name in payload.get("allowed_remote_branches", []) if str(name).strip()}
-    return allowed_local, allowed_remote
+    pull_request_prefixes = {
+        str(prefix).strip()
+        for prefix in payload.get("pull_request_branch_prefixes", [])
+        if str(prefix).strip()
+    }
+    return allowed_local, allowed_remote, pull_request_prefixes
+
+
+def _matches_pull_request_prefix(branch: str | None, prefixes: set[str]) -> bool:
+    return bool(branch) and any(branch.startswith(prefix) for prefix in prefixes)
 
 
 def pull_request_branch_from_environment(environment: dict[str, str]) -> str | None:
@@ -45,25 +54,46 @@ def branch_policy_issues(
     *,
     allowed_local: set[str],
     allowed_remote: set[str],
+    pull_request_prefixes: set[str],
     local_branches: list[str],
     remote_branches: list[str],
     current_branch: str | None,
     ci_head_branch: str | None = None,
 ) -> list[str]:
     issues: list[str] = []
+    active_pull_request_branch = (
+        current_branch
+        if _matches_pull_request_prefix(current_branch, pull_request_prefixes)
+        else None
+    )
     if not current_branch:
-        if ci_head_branch in allowed_local:
+        if ci_head_branch in allowed_local or _matches_pull_request_prefix(
+            ci_head_branch, pull_request_prefixes
+        ):
             # GitHub pull_request checks out the synthetic merge commit detached.
             # The source branch is still required to be the sole allowed local
             # development branch; arbitrary detached local work stays forbidden.
             pass
         else:
-            issues.append("detached HEAD is forbidden; work on dev1.0 and merge to main explicitly")
-    elif current_branch not in allowed_local:
-        issues.append(f"current branch '{current_branch}' is not allowed; only {sorted(allowed_local)} may receive commits")
+            issues.append(
+                "detached HEAD is forbidden; work on main or an active pull-request branch"
+            )
+    elif current_branch not in allowed_local and active_pull_request_branch is None:
+        issues.append(
+            f"current branch '{current_branch}' is not allowed; main is the only long-lived branch"
+        )
 
-    extra_local = sorted(branch for branch in local_branches if branch not in allowed_local)
-    extra_remote = sorted(branch for branch in remote_branches if branch not in allowed_remote)
+    permitted_local = allowed_local | ({active_pull_request_branch} if active_pull_request_branch else set())
+    reviewed_pull_request_branch = (
+        ci_head_branch
+        if _matches_pull_request_prefix(ci_head_branch, pull_request_prefixes)
+        else active_pull_request_branch
+    )
+    permitted_remote = allowed_remote | (
+        {reviewed_pull_request_branch} if reviewed_pull_request_branch else set()
+    )
+    extra_local = sorted(branch for branch in local_branches if branch not in permitted_local)
+    extra_remote = sorted(branch for branch in remote_branches if branch not in permitted_remote)
     if extra_local:
         issues.append(f"unexpected local branches: {', '.join(extra_local)}")
     if extra_remote:
@@ -72,7 +102,7 @@ def branch_policy_issues(
 
 
 def current_repo_issues() -> list[str]:
-    allowed_local, allowed_remote = load_policy()
+    allowed_local, allowed_remote, pull_request_prefixes = load_policy()
     local_branches = _run_git("for-each-ref", "--format=%(refname:short)", "refs/heads")
     remote_branches = [
         ref[len("origin/") :]
@@ -80,16 +110,19 @@ def current_repo_issues() -> list[str]:
         if ref not in {"origin", "origin/HEAD"}
     ]
     current_branch = None
+    ci_head_branch = pull_request_branch_from_environment(dict(os.environ))
     try:
         current_branch = _run_git("symbolic-ref", "--quiet", "--short", "HEAD")[0]
     except (subprocess.CalledProcessError, IndexError):
-        current_branch = pull_request_branch_from_environment(dict(os.environ))
+        current_branch = ci_head_branch
     return branch_policy_issues(
         allowed_local=allowed_local,
         allowed_remote=allowed_remote,
+        pull_request_prefixes=pull_request_prefixes,
         local_branches=local_branches,
         remote_branches=remote_branches,
         current_branch=current_branch,
+        ci_head_branch=ci_head_branch,
     )
 
 

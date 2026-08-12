@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 import io
 import json
@@ -81,8 +82,13 @@ class ProtectedOTPBrokerSecurityTest(unittest.TestCase):
                 binding.certificate_digest,
                 subject._sha256_file(tls.certificate_path),
             )
+            self.assertEqual(
+                base64.b64decode(binding.ca_certificate_base64, validate=True),
+                tls.ca_path.read_bytes(),
+            )
             self.assertNotIn(binding.token, binding.url)
             self.assertNotIn(binding.token, repr(binding))
+            self.assertNotIn(binding.ca_certificate_base64, repr(binding))
 
             parsed = urllib.parse.urlparse(binding.url)
             with socket.create_connection(
@@ -146,6 +152,55 @@ class ProtectedOTPBrokerSecurityTest(unittest.TestCase):
                 urllib.request.urlopen(request, timeout=3, context=context)
             self.assertEqual(rejected.exception.code, 401)
             self.assertEqual(calls, 0)
+
+    def test_dual_platform_broker_consumes_one_fresh_capture_per_device(self) -> None:
+        codes = iter(("482731", "615204"))
+
+        def reader(**_kwargs: object) -> ProtectedDebugOTP:
+            code = next(codes)
+            return ProtectedDebugOTP(
+                request_id="request-" + code,
+                expires_at="2026-08-03T10:05:00Z",
+                code=code,
+            )
+
+        broker = ProtectedOTPBroker(
+            environment="alpha",
+            target_name="alpha-local",
+            recipient="+8613800000000",
+            reader=reader,
+            max_consumptions=2,
+        )
+        with _started_https_broker(broker) as (binding, context, _tls):
+            request = urllib.request.Request(
+                binding.url,
+                data=b"",
+                method="POST",
+                headers={"Authorization": "Bearer " + binding.token},
+            )
+            for expected in ("482731", "615204"):
+                with urllib.request.urlopen(
+                    request,
+                    timeout=3,
+                    context=context,
+                ) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                self.assertEqual(payload, {"code": expected})
+
+            with self.assertRaises(urllib.error.HTTPError) as exhausted:
+                urllib.request.urlopen(request, timeout=3, context=context)
+            self.assertEqual(exhausted.exception.code, 404)
+
+    def test_broker_rejects_unbounded_device_consumption(self) -> None:
+        reader = lambda **_kwargs: ProtectedDebugOTP("", "", "123456")
+        with self.assertRaisesRegex(ValueError, "one or two"):
+            ProtectedOTPBroker(
+                environment="alpha",
+                target_name="alpha-local",
+                recipient="+8613800000000",
+                reader=reader,
+                max_consumptions=3,
+            )
 
     def test_broker_rejects_cleartext_and_untrusted_tls(self) -> None:
         calls = 0

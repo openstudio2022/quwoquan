@@ -28,7 +28,7 @@ def test_stackctl_command_details__preserves_distinct_failure_lines__observabili
     ]
 
 
-def test_stackctl_command_details__bounds_output_and_keeps_evidence_pointer__observability__local_contract() -> None:
+def test_stackctl_command_details__bounds_output_and_keeps_terminal_blocker__observability__local_contract() -> None:
     result = subprocess.CompletedProcess(
         args=["child"],
         returncode=1,
@@ -38,7 +38,13 @@ def test_stackctl_command_details__bounds_output_and_keeps_evidence_pointer__obs
 
     details = stackctl._command_details(result)
 
-    assert details[: stackctl.COMMAND_SUMMARY_DETAIL_LIMIT] == [
-        f"failure-{index}" for index in range(stackctl.COMMAND_SUMMARY_DETAIL_LIMIT)
+    split = stackctl.COMMAND_SUMMARY_DETAIL_LIMIT // 2
+    assert details[:split] == [f"failure-{index}" for index in range(split)]
+    assert details[split] == "... 1 command output line(s) omitted ..."
+    assert details[split + 1 :] == [
+        f"failure-{index}"
+        for index in range(
+            split + 1,
+            stackctl.COMMAND_SUMMARY_DETAIL_LIMIT + 1,
+        )
     ]
-    assert details[-1] == "additional command output retained in report.json"

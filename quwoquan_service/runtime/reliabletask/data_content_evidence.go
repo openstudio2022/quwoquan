@@ -49,7 +49,7 @@ func (fn DataContentResultVerifierFunc) VerifyDataContentResult(
 
 // DataContentFilesystemEvidenceVerifier verifies the immutable Python object
 // transaction apply report and the current canonical object before a publish
-// task may be counted as commercially accepted.
+// task may be counted as canonically accepted in either lifecycle state.
 type DataContentFilesystemEvidenceVerifier struct {
 	PublishRoot  string
 	EvidenceRoot string
@@ -73,7 +73,8 @@ func (v DataContentFilesystemEvidenceVerifier) VerifyDataContentResult(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if result.AcceptanceClass != DataContentAcceptanceCommercialCanonical {
+	if result.AcceptanceClass != DataContentAcceptanceCommercialCanonical &&
+		result.AcceptanceClass != DataContentAcceptanceResearchCanonical {
 		return nil
 	}
 	publishRoot, err := existingDataContentRoot(v.PublishRoot, "publishRoot")
@@ -98,20 +99,20 @@ func (v DataContentFilesystemEvidenceVerifier) VerifyDataContentResult(
 	}
 	if apply.Schema != dataContentObjectTransactionApplySchema ||
 		apply.Status != "applied" {
-		return fmt.Errorf("reliabletask commercial result apply report is not applied")
+		return fmt.Errorf("reliabletask canonical result apply report is not applied")
 	}
 	if strings.TrimSpace(apply.TransactionID) != strings.TrimSpace(result.ObjectTransactionID) ||
 		strings.TrimSpace(apply.ExecutionID) != item.ExecutionID {
-		return fmt.Errorf("reliabletask commercial result apply report binding mismatch")
+		return fmt.Errorf("reliabletask canonical result apply report binding mismatch")
 	}
 	if !validDataContentSHA256(apply.ObjectClosureDigest) {
-		return fmt.Errorf("reliabletask commercial result object closure digest is invalid")
+		return fmt.Errorf("reliabletask canonical result object closure digest is invalid")
 	}
 	canonicalRef := filepath.ToSlash(
 		filepath.Join(strings.TrimSpace(apply.ObjectKind), strings.TrimSpace(apply.ObjectRef)),
 	)
 	if canonicalRef != strings.TrimSpace(result.CanonicalObjectRef) {
-		return fmt.Errorf("reliabletask commercial result canonical object binding mismatch")
+		return fmt.Errorf("reliabletask canonical result canonical object binding mismatch")
 	}
 	canonicalRoot, err := resolveDataContentRelativeDirectory(
 		publishRoot,
@@ -126,7 +127,7 @@ func (v DataContentFilesystemEvidenceVerifier) VerifyDataContentResult(
 		return err
 	}
 	if merkle != strings.TrimSpace(result.CanonicalObjectSHA256) {
-		return fmt.Errorf("reliabletask commercial result canonical object digest mismatch")
+		return fmt.Errorf("reliabletask canonical result canonical object digest mismatch")
 	}
 	return nil
 }

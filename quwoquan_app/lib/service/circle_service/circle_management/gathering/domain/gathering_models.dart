@@ -208,6 +208,20 @@ final class GatheringVersionCommandInput {
   final int expectedGatheringVersion;
 }
 
+final class GatheringAvailabilityWatchCommandInput {
+  const GatheringAvailabilityWatchCommandInput({
+    required this.idempotencyKey,
+    required this.gatheringId,
+    required this.expectedGatheringVersion,
+    required this.expectedWatchVersion,
+  });
+
+  final String idempotencyKey;
+  final String gatheringId;
+  final int expectedGatheringVersion;
+  final int expectedWatchVersion;
+}
+
 final class GatheringParticipationCommandInput {
   const GatheringParticipationCommandInput({
     required this.idempotencyKey,

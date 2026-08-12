@@ -25,7 +25,7 @@ func TestMediaProcessingWorkerRecordsReadyAndAdvancesCheckpoint(t *testing.T) {
 		outcome: mediaprocessing.ProcessOutcome{Descriptor: descriptor},
 	}
 	recorder := &workerResultRecorder{asset: asset}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		&workerAssetLoader{assets: map[string]*mediamodel.MediaAsset{asset.ID(): asset}},
 		checkpoints,
@@ -34,7 +34,7 @@ func TestMediaProcessingWorkerRecordsReadyAndAdvancesCheckpoint(t *testing.T) {
 		&workerPoisonEvents{},
 	)
 
-	processed, err := worker.Drain(context.Background(), 10)
+	processed, err := worker.Process(context.Background(), 10)
 
 	if err != nil || processed != 1 {
 		t.Fatalf("drain ready event: processed=%d err=%v", processed, err)
@@ -72,7 +72,7 @@ func TestMediaProcessingWorkerReplaysDiscardCleanupBeforeCheckpoint(t *testing.T
 		PrivateObjectKeys: []string{"media/cas/sha256/aa/source.jpg"},
 	}}
 	reclaimer := &workerArtifactReclaimer{err: errors.New("temporary object outage")}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		&workerAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 		checkpoints,
@@ -82,7 +82,7 @@ func TestMediaProcessingWorkerReplaysDiscardCleanupBeforeCheckpoint(t *testing.T
 		mediaprocessing.WithArtifactCleanup(cleanup, reclaimer),
 	)
 
-	if processed, err := worker.Drain(context.Background(), 10); err == nil || processed != 0 {
+	if processed, err := worker.Process(context.Background(), 10); err == nil || processed != 0 {
 		t.Fatalf("first cleanup must retain checkpoint: processed=%d err=%v", processed, err)
 	}
 	if checkpoints.current != "" || cleanup.markCalls != 0 {
@@ -90,7 +90,7 @@ func TestMediaProcessingWorkerReplaysDiscardCleanupBeforeCheckpoint(t *testing.T
 	}
 
 	reclaimer.err = nil
-	processed, err := worker.Drain(context.Background(), 10)
+	processed, err := worker.Process(context.Background(), 10)
 	if err != nil || processed != 1 {
 		t.Fatalf("replay cleanup: processed=%d err=%v", processed, err)
 	}
@@ -115,7 +115,7 @@ func TestMediaProcessingWorkerRecordsReadyImageDescriptor(t *testing.T) {
 		outcome: mediaprocessing.ProcessOutcome{Descriptor: descriptor},
 	}
 	recorder := &workerResultRecorder{asset: asset}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		&workerAssetLoader{assets: map[string]*mediamodel.MediaAsset{asset.ID(): asset}},
 		checkpoints,
@@ -124,7 +124,7 @@ func TestMediaProcessingWorkerRecordsReadyImageDescriptor(t *testing.T) {
 		&workerPoisonEvents{},
 	)
 
-	processed, err := worker.Drain(context.Background(), 10)
+	processed, err := worker.Process(context.Background(), 10)
 
 	if err != nil || processed != 1 {
 		t.Fatalf("drain ready image event: processed=%d err=%v", processed, err)
@@ -161,7 +161,7 @@ func TestMediaProcessingWorkerRecordsContentRejectionAndAdvancesCheckpoint(t *te
 		Reason: "uploaded media has no decodable video stream",
 	}}
 	recorder := &workerResultRecorder{asset: asset}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		&workerAssetLoader{assets: map[string]*mediamodel.MediaAsset{asset.ID(): asset}},
 		checkpoints,
@@ -170,7 +170,7 @@ func TestMediaProcessingWorkerRecordsContentRejectionAndAdvancesCheckpoint(t *te
 		&workerPoisonEvents{},
 	)
 
-	processed, err := worker.Drain(context.Background(), 10)
+	processed, err := worker.Process(context.Background(), 10)
 
 	if err != nil || processed != 1 {
 		t.Fatalf("drain rejected event: processed=%d err=%v", processed, err)
@@ -197,7 +197,7 @@ func TestMediaProcessingWorkerReplaysAfterCheckpointFailureWithoutRepeatingTermi
 		Descriptor: processingDescriptor(asset.ID(), asset.Version()+1),
 	}}
 	recorder := &workerResultRecorder{asset: asset}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		&workerAssetLoader{assets: map[string]*mediamodel.MediaAsset{asset.ID(): asset}},
 		checkpoints,
@@ -206,13 +206,13 @@ func TestMediaProcessingWorkerReplaysAfterCheckpointFailureWithoutRepeatingTermi
 		&workerPoisonEvents{},
 	)
 
-	if processed, err := worker.Drain(context.Background(), 10); err == nil || processed != 0 {
+	if processed, err := worker.Process(context.Background(), 10); err == nil || processed != 0 {
 		t.Fatalf("checkpoint failure must leave event replayable: processed=%d err=%v", processed, err)
 	}
 	if checkpoints.current != "" {
 		t.Fatalf("failed save advanced checkpoint to %q", checkpoints.current)
 	}
-	if processed, err := worker.Drain(context.Background(), 10); err != nil || processed != 1 {
+	if processed, err := worker.Process(context.Background(), 10); err != nil || processed != 1 {
 		t.Fatalf("replay terminal event: processed=%d err=%v", processed, err)
 	}
 	if processor.calls != 1 || recorder.calls != 1 {
@@ -231,7 +231,7 @@ func TestMediaProcessingWorkerDoesNotAdvanceOnInfrastructureFailure(t *testing.T
 	asset := processingAsset(t, "media-worker-infra", "video", true)
 	checkpoints := &workerCheckpointStore{}
 	recorder := &workerResultRecorder{asset: asset}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		&workerOutboxSource{events: []mediaports.OutboxEvent{
 			processingEvent("evt-worker-infra", asset.ID(), "cp-infra"),
 		}},
@@ -242,7 +242,7 @@ func TestMediaProcessingWorkerDoesNotAdvanceOnInfrastructureFailure(t *testing.T
 		&workerPoisonEvents{},
 	)
 
-	if processed, err := worker.Drain(context.Background(), 10); err == nil || processed != 0 {
+	if processed, err := worker.Process(context.Background(), 10); err == nil || processed != 0 {
 		t.Fatalf("infrastructure failure must stop drain: processed=%d err=%v", processed, err)
 	}
 	if checkpoints.current != "" || recorder.calls != 0 {
@@ -276,7 +276,7 @@ func TestMediaProcessingWorkerSkipsUploadSessionAndUnrelatedFacts(t *testing.T) 
 	checkpoints := &workerCheckpointStore{}
 	processor := &workerProcessor{}
 	recorder := &workerResultRecorder{}
-	worker := mediaprocessing.NewWorker(
+	worker := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		&workerAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 		checkpoints,
@@ -285,7 +285,7 @@ func TestMediaProcessingWorkerSkipsUploadSessionAndUnrelatedFacts(t *testing.T) 
 		&workerPoisonEvents{},
 	)
 
-	processed, err := worker.Drain(context.Background(), 10)
+	processed, err := worker.Process(context.Background(), 10)
 
 	if err != nil || processed != 2 {
 		t.Fatalf("drain skipped facts: processed=%d err=%v", processed, err)

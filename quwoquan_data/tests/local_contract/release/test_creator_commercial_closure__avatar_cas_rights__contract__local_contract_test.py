@@ -1,4 +1,4 @@
-"""Release-selected creators require traceable avatar/CAS/rights closure."""
+"""Release-selected creators require avatar identity/CAS quality closure only."""
 
 from __future__ import annotations
 
@@ -7,16 +7,13 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
-
 ROOT = Path(__file__).resolve().parents[4]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from content.release.canonical.creator_commercial_closure import (  # noqa: E402
-    creator_commercial_closure_issues,
+from content.release.canonical.creator_avatar_quality import (  # noqa: E402
+    creator_avatar_quality_issues,
 )
 
 
@@ -132,7 +129,7 @@ def test_creator_commercial_closure__missing_avatar_blocks_release(
     _write(creator / "profile.json", {"creatorId": "creator-a"})
     _write(creator / "assets.refs.json", {"assets": []})
 
-    assert creator_commercial_closure_issues(tmp_path) == [
+    assert creator_avatar_quality_issues(tmp_path) == [
         {"code": "creator_avatar_missing", "ref": "creator-a"}
     ]
 
@@ -143,61 +140,32 @@ def test_creator_commercial_closure__traceable_avatar_passes(
     creator, rights = _traceable_creator(tmp_path)
     _write(creator / "rights_snapshots/avatar-a.json", rights)
 
-    assert creator_commercial_closure_issues(tmp_path) == []
+    assert creator_avatar_quality_issues(tmp_path) == []
 
 
-def test_creator_commercial_closure__identifiable_person_requires_obtained_model_release(
+def test_creator_avatar_quality__rights_and_model_release_do_not_filter_author(
     tmp_path: Path,
 ) -> None:
     creator, rights = _traceable_creator(tmp_path)
     rights["depictsIdentifiablePerson"] = True
     _write(creator / "rights_snapshots/avatar-a.json", rights)
 
-    assert creator_commercial_closure_issues(tmp_path) == [
-        {"code": "creator_avatar_model_release_invalid", "ref": "creator-a"}
-    ]
-
-    rights["commercialRights"]["modelReleaseStatus"] = "obtained"
+    rights["commercialRights"]["rightsAuditStatus"] = "unverified"
+    rights["commercialRights"]["rightsAuditIssues"] = ["commercial proof unavailable"]
+    rights["commercialRights"]["usageScope"] = "editorial"
+    rights["commercialRights"]["modelReleaseStatus"] = "editorial_only"
     _write(creator / "rights_snapshots/avatar-a.json", rights)
-    assert creator_commercial_closure_issues(tmp_path) == []
+
+    assert creator_avatar_quality_issues(tmp_path) == []
 
 
-def test_creator_commercial_closure__subject_identity_is_required(
+def test_creator_avatar_quality__evidence_identity_is_required(
     tmp_path: Path,
 ) -> None:
     creator, rights = _traceable_creator(tmp_path)
-    rights.pop("depictsIdentifiablePerson")
+    rights["manifestAsset"]["sha256"] = "sha256:" + "f" * 64
     _write(creator / "rights_snapshots/avatar-a.json", rights)
 
-    assert creator_commercial_closure_issues(tmp_path) == [
-        {"code": "creator_avatar_subject_identity_missing", "ref": "creator-a"}
-    ]
-
-
-@pytest.mark.parametrize(
-    ("field", "value", "expected_code"),
-    [
-        ("rightsAuditStatus", "unverified", "creator_avatar_rights_unverified"),
-        ("usageScope", "editorial", "creator_avatar_rights_scope_invalid"),
-        ("licenseName", "", "creator_avatar_license_invalid"),
-        ("attribution", "", "creator_avatar_attribution_missing"),
-        (
-            "modelReleaseStatus",
-            "editorial_only",
-            "creator_avatar_model_release_invalid",
-        ),
-    ],
-)
-def test_creator_commercial_closure__commercial_rights_fail_closed(
-    tmp_path: Path,
-    field: str,
-    value: object,
-    expected_code: str,
-) -> None:
-    creator, rights = _traceable_creator(tmp_path)
-    rights["commercialRights"][field] = value
-    _write(creator / "rights_snapshots/avatar-a.json", rights)
-
-    assert creator_commercial_closure_issues(tmp_path) == [
-        {"code": expected_code, "ref": "creator-a"}
+    assert creator_avatar_quality_issues(tmp_path) == [
+        {"code": "creator_avatar_quality_evidence_missing", "ref": "creator-a"}
     ]

@@ -3,6 +3,10 @@
   "description": "作品 manifest — posts/{type}/{angle}/{title}/{seq}/manifest.json",
   "type": "object",
   "$defs": {
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "sourceFact": {
       "oneOf": [
         { "type": "string", "minLength": 1 },
@@ -102,6 +106,29 @@
     }
   },
   "properties": {
+    "schema": {"type": "string"},
+    "contentId": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "sourceType": {"enum": ["data", "user"]},
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionId", "sourceRevision", "sourceDigest",
+        "entityCatalogDigest", "identityDigest"
+      ],
+      "properties": {
+        "executionId": {"type": "string", "minLength": 1},
+        "sourceRevision": {"$ref": "#/$defs/sha256Digest"},
+        "sourceDigest": {"$ref": "#/$defs/sha256Digest"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256Digest"},
+        "identityDigest": {"$ref": "#/$defs/sha256Digest"}
+      }
+    },
+    "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "variantPurpose": {"enum": ["original", "commercial_variant"]},
+    "admission": {"$ref": "pool_admission.schema.json#/$defs/contentAdmission"},
+    "status": {"enum": ["active", "retired", "deleted"]},
     "vertical": { "type": "string", "minLength": 1 },
     "topicId": { "type": "string", "description": "如'峨眉山_金顶日出攻略'" },
     "contentType": { "type": "string", "enum": ["article", "image", "video"] },
@@ -203,6 +230,7 @@
     "articleRenderProfile": { "type": "object" },
     "publishLayout": { "type": "string" },
     "publishAngle": { "type": "string" },
+    "articleCategory": {"const": "photography"},
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
     "createdAt": { "type": "string", "format": "date-time", "description": "内容首次创建时间（来自 draft_meta 事实）" },
@@ -245,6 +273,19 @@
   },
   "required": ["vertical", "topicId", "contentType", "contentIdentity", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"],
   "allOf": [
+    {
+      "if": {
+        "required": ["schema"],
+        "properties": {"schema": {"const": "quwoquan_data.post_object"}}
+      },
+      "then": {
+        "required": ["contentId", "version", "sourceType", "sourceIdentity", "payloadDigest", "variantPurpose", "admission", "status"],
+        "properties": {
+          "sourceType": {"const": "data"},
+          "status": {"const": "active"}
+        }
+      }
+    },
     {
       "if": {
         "properties": { "contentType": { "const": "image" } },
@@ -296,7 +337,9 @@
               "properties": {
                 "kind": { "const": "video" },
                 "mimeType": { "const": "video/mp4" },
+                "sha256": { "$ref": "#/$defs/sha256Digest" },
                 "posterAssetId": { "type": "string", "minLength": 1 },
+                "posterSha256": { "$ref": "#/$defs/sha256Digest" },
                 "sourceAssetRefs": { "type": "array", "minItems": 1 },
                 "rightsRefs": { "type": "array", "minItems": 1 }
               },

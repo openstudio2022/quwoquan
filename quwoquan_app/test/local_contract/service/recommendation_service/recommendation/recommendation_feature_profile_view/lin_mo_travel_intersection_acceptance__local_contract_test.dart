@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +20,7 @@ import 'package:quwoquan_cloud_contracts/generated/content_contracts.dart'
 
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
 
 final class _NoopIntersectionVisitWriter implements IntersectionVisitWriter {
   const _NoopIntersectionVisitWriter();
@@ -36,7 +34,7 @@ final class _NoopIntersectionVisitWriter implements IntersectionVisitWriter {
 /// 林墨「旅行摄影」交集/影响力实例化验收（WS-ACC，§22 覆盖矩阵）。
 ///
 /// 三段闭环，全部 CI 安全（不依赖 contract fixture profile）：
-///   1. 数据实例化：直接读取主 seed（content_scenarios.json），断言林墨三元组
+///   1. 数据实例化：读取固定 seed 的对象 builder，断言林墨三元组
 ///      `(基kind + vertical=travel_photography + objectKind∈{route,photo_spot,gear,place,circle,person})`
 ///      铺满维度/生命周期，route/photo_spot/gear 落点为 homepageDetail，影响力实例齐备。
 ///   2. 生命周期显隐过滤：`filterDefaultInboxLifecycle` 端侧单源（expired 不进 UI、
@@ -311,22 +309,9 @@ void main() {
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _loadIntersectionCoreSeed() {
-  const relative =
-      'quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json';
-  final candidates = <String>[
-    '../$relative',
-    relative,
-    '../../$relative',
-    '/Users/zhaoyuxi/Projects/quwoquan/$relative',
-  ];
-  for (final path in candidates) {
-    final file = File(path);
-    if (!file.existsSync()) continue;
-    final decoded = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-    final seedSets = (decoded['seedSets'] as Map).cast<String, dynamic>();
-    return (seedSets['intersection_core'] as Map).cast<String, dynamic>();
-  }
-  fail('未找到主 seed 文件 content_scenarios.json（cwd=${Directory.current.path}）');
+  return objectContractExampleReader
+      .requireExample('content', 'intersection_core')
+      .cast<String, dynamic>();
 }
 
 IntersectionReason _reason(String id, {required String lifecycleState}) {

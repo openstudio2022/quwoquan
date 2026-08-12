@@ -110,11 +110,13 @@ class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
       await _seekToCurrentRangeStart();
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'content.video_editor.initialize',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.video_editor.initialize',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       if (!mounted) {
         return;
@@ -157,11 +159,13 @@ class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
       });
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'content.video_editor.extract_frames',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.video_editor.extract_frames',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       if (!mounted) {
         return;

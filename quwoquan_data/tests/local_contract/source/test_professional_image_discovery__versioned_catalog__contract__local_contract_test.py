@@ -27,7 +27,7 @@ def test_professional_image_discovery_is_pinterest_first_and_tuchong_supplementa
     )
 
     assert path.is_file()
-    assert plan["candidateCount"] == 12
+    assert plan["candidateCount"] == 16
     assert plan["providerCandidateCounts"] == [
         {"provider": "pinterest", "displayName": "Pinterest", "plannedAssetCount": 4},
         {"provider": "tuchong", "displayName": "图虫", "plannedAssetCount": 4},
@@ -36,6 +36,7 @@ def test_professional_image_discovery_is_pinterest_first_and_tuchong_supplementa
             "displayName": "Wikimedia Commons",
             "plannedAssetCount": 4,
         },
+        {"provider": "openverse", "displayName": "Openverse", "plannedAssetCount": 4},
     ]
     pinterest = [row for row in plan["candidates"] if row["provider"] == "pinterest"]
     tuchong = [row for row in plan["candidates"] if row["provider"] == "tuchong"]
@@ -43,6 +44,7 @@ def test_professional_image_discovery_is_pinterest_first_and_tuchong_supplementa
         row for row in plan["candidates"]
         if row["provider"] == "wikimedia_commons"
     ]
+    openverse = [row for row in plan["candidates"] if row["provider"] == "openverse"]
     assert all(row["priority"] == 0 for row in pinterest)
     assert all(row["manualSearchRequired"] is True for row in pinterest)
     assert all(row["discoveryUrl"] == "https://www.pinterest.com/" for row in pinterest)
@@ -76,6 +78,11 @@ def test_professional_image_discovery_is_pinterest_first_and_tuchong_supplementa
     assert classify_image_provider(source_id="wikimedia_commons")[
         "acquisitionPaths"
     ] == ["manual_file", "supported_api"]
+    assert all(row["priority"] == 3 for row in openverse)
+    assert all(row["acquisitionPaths"] == ["supported_api"] for row in openverse)
+    assert classify_image_provider(source_id="openverse")["acquisitionPaths"] == [
+        "supported_api"
+    ]
 
     replay, replay_path = create_professional_image_discovery_plan(
         entities=["乌镇", "西湖"],
@@ -96,6 +103,7 @@ def test_professional_image_discovery_rejects_provider_priority_drift(tmp_path: 
         "tuchong",
         "pinterest",
         "wikimedia_commons",
+        "openverse",
     ]
     path = tmp_path / "catalog.yaml"
     path.write_text(yaml.safe_dump(catalog, allow_unicode=True), encoding="utf-8")

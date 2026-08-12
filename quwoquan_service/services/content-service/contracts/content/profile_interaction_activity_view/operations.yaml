@@ -209,3 +209,19 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/profile_interaction_activity_view/profile_interaction_activity_remote_api_path__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: profile_interaction_activity_view_list_profile_interaction_activities_received_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListProfileInteractionActivitiesReceived}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/profile_interaction_activity_view/profile_interaction_activity_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_interaction_activity_view_list_profile_interaction_activities_sent_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListProfileInteractionActivitiesSent}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/profile_interaction_activity_view/profile_interaction_activity_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

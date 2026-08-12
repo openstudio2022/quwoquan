@@ -23,7 +23,7 @@
       "type": "string",
       "enum": [
         "dry-run",
-        "active"
+        "imported"
       ]
     },
     "environment": {
@@ -64,6 +64,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "articleLoaded": {"type": "integer", "minimum": 0},
+        "imageLoaded": {"type": "integer", "minimum": 0},
+        "videoLoaded": {"type": "integer", "minimum": 0},
+        "researchLoaded": {"type": "integer", "minimum": 0},
+        "commercialLoaded": {"type": "integer", "minimum": 0},
         "postsUpserted": {
           "type": "integer",
           "minimum": 0
@@ -76,7 +81,13 @@
           "type": "integer",
           "minimum": 0
         },
-        "candidateEventsPublished": {
+        "outboxEventsReady": {
+          "description": "本次 imported candidate 对应的 durable Post lifecycle 事件总数；Search 与 Recommendation 从同一 outbox 派生，但该计数不得推进 active pointer。",
+          "type": "integer",
+          "minimum": 0
+        },
+        "outboxEventsAppended": {
+          "description": "本次调用新追加的事件数；同一 releaseId + digest 幂等重放时允许为 0。",
           "type": "integer",
           "minimum": 0
         },
@@ -101,6 +112,9 @@
         "required": [
           "postRef",
           "postId",
+          "contentId",
+          "contentVersion",
+          "usageScope",
           "contentType",
           "authorId"
         ],
@@ -108,6 +122,9 @@
         "properties": {
           "postRef": {"type": "string", "pattern": "^(article|image|video)/[^/].*$"},
           "postId": {"type": "string", "minLength": 1},
+          "contentId": {"type": "string", "minLength": 1},
+          "contentVersion": {"type": "integer", "minimum": 1},
+          "usageScope": {"enum": ["research", "commercial"]},
           "contentType": {"enum": ["article", "image", "video"]},
           "authorId": {"type": "string", "minLength": 1}
         }

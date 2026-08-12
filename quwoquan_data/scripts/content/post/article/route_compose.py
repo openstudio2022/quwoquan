@@ -218,8 +218,18 @@ def _compose_payload_from_pack(
         "assets": assets,
         "publishMediaMode": pack.get("publishMediaMode") or brief.get("publishMediaMode"),
         "baseSourceRef": pack.get("baseSourceRef") or brief.get("baseSourceRef"),
+        **(
+            {"writingIntent": pack.get("writingIntent") or brief.get("writingIntent")}
+            if pack.get("writingIntent") or brief.get("writingIntent")
+            else {}
+        ),
         "publishLayout": "image" if carrier == "image" else "travel",
         "publishAngle": _publish_angle(brief),
+        **(
+            {"articleCategory": brief["articleCategory"]}
+            if brief.get("articleCategory")
+            else {}
+        ),
         "publishTitle": (
             _compact_public_text(meta.get("title") or public_title_hint, 80)
             if carrier == "image"

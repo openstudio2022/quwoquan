@@ -121,6 +121,9 @@ func (g *ContractGraph) Coverage() Coverage {
 		result.OpenAPIOperations = len(openAPITransports)
 		operationTransports := map[string]struct{}{}
 		for _, operation := range g.Operations {
+			if operation.Transport == "graphql" {
+				continue
+			}
 			operationTransports[operation.Method+" "+operation.PathTemplate] = struct{}{}
 		}
 		for _, transport := range openAPITransports {

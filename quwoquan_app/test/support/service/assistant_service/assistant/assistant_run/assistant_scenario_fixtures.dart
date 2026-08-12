@@ -6,7 +6,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'assistant_facets_typed_double.dart';
 
 const String assistantScenarioFixtureName =
-    'quwoquan_service/services/assistant-service/tests/support/contract_fixtures/scenarios/assistant_scenarios.json';
+    'quwoquan_service/services/assistant-service/tests/support/eval_corpora/assistant_runtime_smoke_scenarios.json';
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
   'ASSISTANT_SCENARIO_FIXTURE_JSON_B64',
 );
@@ -14,25 +14,15 @@ const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(
 class AssistantScenarioPack {
   const AssistantScenarioPack({
     required this.schema,
-    required this.repositoryExpectations,
-    required this.seedSets,
     required this.scenarios,
   });
 
   final String schema;
-  final Map<String, String> repositoryExpectations;
-  final Map<String, dynamic> seedSets;
   final List<AssistantScenario> scenarios;
 
   factory AssistantScenarioPack.fromJson(Map<String, dynamic> json) {
     return AssistantScenarioPack(
       schema: (json['schema'] ?? '').toString(),
-      repositoryExpectations:
-          (json['repositoryExpectations'] as Map? ?? const <String, dynamic>{})
-              .map((key, value) => MapEntry(key.toString(), value.toString())),
-      seedSets:
-          (json['seedSets'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
       scenarios: ((json['scenarios'] as List?) ?? const <dynamic>[])
           .whereType<Map>()
           .map((item) => AssistantScenario.fromJson(item.cast()))
@@ -56,7 +46,6 @@ class AssistantScenario {
     required this.skillId,
     required this.domainId,
     required this.question,
-    required this.seedRefs,
     required this.expectedAnswerFragments,
     required this.expectedEvents,
     required this.alphaMockStream,
@@ -70,7 +59,6 @@ class AssistantScenario {
   final String skillId;
   final String domainId;
   final String question;
-  final List<String> seedRefs;
   final List<String> expectedAnswerFragments;
   final List<String> expectedEvents;
   final AssistantAlphaMockStream alphaMockStream;
@@ -85,7 +73,6 @@ class AssistantScenario {
       skillId: (json['skillId'] ?? '').toString(),
       domainId: (json['domainId'] ?? '').toString(),
       question: (json['question'] ?? '').toString(),
-      seedRefs: _stringList(json['seedRefs']),
       expectedAnswerFragments: _stringList(json['expectedAnswerFragments']),
       expectedEvents: _stringList(json['expectedEvents']),
       alphaMockStream: AssistantAlphaMockStream.fromJson(
@@ -172,19 +159,13 @@ class AssistantRemoteExpectations {
 class AssistantScenarioEnvironment {
   const AssistantScenarioEnvironment({
     required this.enabled,
-    required this.repository,
-    required this.requiresSeedReset,
   });
 
   final bool enabled;
-  final String repository;
-  final bool requiresSeedReset;
 
   factory AssistantScenarioEnvironment.fromJson(Map<String, dynamic> json) {
     return AssistantScenarioEnvironment(
       enabled: json['enabled'] == true,
-      repository: (json['repository'] ?? '').toString(),
-      requiresSeedReset: json['requiresSeedReset'] == true,
     );
   }
 }

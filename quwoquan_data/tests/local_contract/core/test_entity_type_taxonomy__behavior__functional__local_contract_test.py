@@ -27,6 +27,7 @@ from governance.coverage.entity_type_taxonomy import (
     resolve_primary_entity_type,
 )
 from core.paths import _REPO_DATA_ROOT
+from governance.coverage.entity_extract import require_domain_etype
 
 
 # ---------- 裁决 6：主类型判定优先级 ----------
@@ -97,6 +98,19 @@ def test_entity_type_tag_node_exists_contract_tree():
     assert entity_type_tag_node_exists("Entity/地点/景区/5A景区")
     assert not entity_type_tag_node_exists("Entity/地点/景区/不存在叶子")
     assert not entity_type_tag_node_exists("")
+
+
+@pytest.mark.parametrize(
+    "short_type",
+    ["主题乐园", "温泉", "宗教场所", "公园", "博物馆", "古镇"],
+)
+def test_entity_object_short_type_resolves_from_canonical_taxonomy(short_type):
+    assert require_domain_etype(short_type) == ("地点", short_type)
+
+
+def test_entity_object_unknown_short_type_remains_fail_closed():
+    with pytest.raises(ValueError, match="unknown entityType hint"):
+        require_domain_etype("非受治理类型")
 
 
 def test_known_entity_type_paths_raises_on_missing_tree(tmp_path):

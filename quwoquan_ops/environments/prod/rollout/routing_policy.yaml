@@ -1,43 +1,58 @@
-# prod 灰度路由策略（IaC 唯一真相源）
+# prod 生产灰度策略（IaC 唯一真相源）
 #
-# 语义：
-# - 公网边缘（prod 栈 Caddy）按请求头做维度匹配；命中任一启用维度即路由到
-#   灰度栈 edge（OR 语义），未命中走稳定栈。
-# - 灰度流量默认打到更高版本服务（gray 栈先于 prod 栈升级）。
-# - 服务实例无状态：同版本任意实例可服务同一请求；跨版本粘滞由本策略维度保证。
-# - 本文件随发布 PR 变更并经 render_prod_plane_stack.py 编译进 Caddyfile；
-#   不提供任何在线编辑入口。Portal 只读展示。
-#
-# 维度与请求头对应（契约：contracts/metadata/_shared/openapi_common.yaml）：
-# - appVersions -> X-Client-App-Version（精确匹配，发布时列出目标灰度版本号）
-# - userIds     -> X-Client-User-Id（灰度白名单用户）
-# - provinces/carriers 必须等待可信 edge attestation（mTLS 或等价证明）后才可启用；
-#   当前 renderer/门禁拒绝这两个维度，绝不信任 App 自报 header。
-#
-# 头缺失 = 该维度不匹配；不做任何猜测或默认命中。
+# Caddy 不解析本策略，只终止 TLS、服务静态资源并覆盖可信源 IP。
+# API Edge 使用经验签 principal 中的 deviceActorId 和发布包内密钥引用做裁决。
+# 策略只随受审计发布包变更；Portal 只读，不存在在线注册或编辑入口。
 policy:
   enabled: true
-  grayUpstream: "http://host.containers.internal:29000"
-  grayUpstreamTlsInsecureSkipVerify: false # 同机容器桥接，不经过公网；禁止伪造 internal CA
-  stageDimensions:
-    gray-initial:
-      appVersions: []
-      userIds: [ops-release-canary]
-      provinces: []
-      carriers: []
-    carry-on:
-      appVersions: ["1.1.0"]
-      userIds: [ops-release-canary]
-      provinces: []
-      carriers: []
-    full:
-      appVersions: []
-      userIds: []
-      provinces: []
-      carriers: []
+  campaignId: release-2026-08-10-001
+  candidateDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  allocationKeyId: rollout-key-2026-01
+  subjectKind: device_actor
+  stage: canary
+  status: active
+  candidateUpstream: http://host.containers.internal:29000
+  assignmentTtlDaysAfterCampaign: 30
+
+  internalCanary:
+    accountIds: [ops-release-canary]
+    deviceActorIds: []
+
+  stages:
+    canary:
+      basisPoints: 0
+      appVersions: {mode: supported, values: []}
+      platforms: {mode: include, values: [android, ios, web]}
+      regions: {mode: all, values: []}
+      carriers: {mode: all, values: []}
+    "5":
+      basisPoints: 500
+      appVersions: {mode: supported, values: []}
+      platforms: {mode: include, values: [android, ios, web]}
+      regions: {mode: all, values: []}
+      carriers: {mode: all, values: []}
+    "20":
+      basisPoints: 2000
+      appVersions: {mode: supported, values: []}
+      platforms: {mode: include, values: [android, ios, web]}
+      regions: {mode: all, values: []}
+      carriers: {mode: all, values: []}
+    "50":
+      basisPoints: 5000
+      appVersions: {mode: supported, values: []}
+      platforms: {mode: include, values: [android, ios, web]}
+      regions: {mode: all, values: []}
+      carriers: {mode: all, values: []}
+    "100":
+      basisPoints: 10000
+      appVersions: {mode: supported, values: []}
+      platforms: {mode: include, values: [android, ios, web]}
+      regions: {mode: all, values: []}
+      carriers: {mode: all, values: []}
+
   syntheticCanary:
     path: /healthz
     requests: 120
     intervalMs: 50
     headers:
-      X-Client-User-Id: ops-release-canary
+      X-Release-Canary-Actor: ops-release-canary

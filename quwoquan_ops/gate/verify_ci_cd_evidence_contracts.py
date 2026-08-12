@@ -142,8 +142,8 @@ SCHEMA_REGISTRIES = {
     "quwoquan_ops/cli/prod/collect_release_artifact_descriptors.py": (
         "EVIDENCE_SOURCE_SCHEMAS",
         {
-            "publicWeb": "qwq.public-web.release",
-            "androidOfficialRelease": "qwq.android.official-release",
+            "publicWeb": "client-app.web.official-release",
+            "androidOfficialRelease": "client-app.android.official-release",
             "opsPortal": "qwq.ops_portal_package",
             "contractGraph": "qwq.contract-graph",
             "providerEvidence": "provider-conformance-readiness",
@@ -317,9 +317,11 @@ REQUIRED_SOURCE_TOKENS = {
         'if [[ -s "$SUMMARY" ]]',
         "PROD_RELEASE_STATUS",
         "render_hosted_release_stage_report.py",
-        "gray_initial_receipt_id",
-        "carry_on_receipt_id",
-        "full_receipt_id",
+        "canary_receipt_id",
+        "percent_5_receipt_id",
+        "percent_20_receipt_id",
+        "percent_50_receipt_id",
+        "percent_100_receipt_id",
         "PROD_EDGE_SSH_KEY_FILE=$EDGE_KEY_FILE",
         "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE",
         "PROD_PROVIDER_CANDIDATE_IMAGE_DIGEST",
@@ -363,17 +365,17 @@ REQUIRED_SOURCE_TOKENS = {
         '"artifactDigest"',
     ),
     "quwoquan_ops/cli/lib/android_official_release.py": (
-        '"schema": "qwq.android.official-release"',
+        '"schema": "client-app.android.official-release"',
     ),
     "quwoquan_ops/cli/lib/web_official_release.py": (
-        '"schema": "qwq.public-web.release"',
+        '"schema": "client-app.web.official-release"',
     ),
     "quwoquan_ops/cli/lib/official_distribution_release.py": (
-        '"qwq.public-web.release"',
-        '"qwq.android.official-release"',
+        '"client-app.web.official-release"',
+        '"client-app.android.official-release"',
     ),
     "quwoquan_ops/cli/prod/prevalidate_android_distribution.py": (
-        '"schema": "qwq.android.distribution-prevalidation"',
+        '"schema": "client-app.android.distribution-prevalidation"',
     ),
     "quwoquan_ops/cli/prod/build_portal_release.py": (
         '"schema": "qwq.ops_portal_application"',

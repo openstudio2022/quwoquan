@@ -92,6 +92,13 @@ final class _ProductOpsRecoveryRuntimeOperations
     return RecoveryVersionResponse(
       latestVersion: facts.latestVersion,
       latestBuild: facts.latestBuild,
+      minimumSupportedVersion: facts.minimumSupportedVersion,
+      minimumSupportedBuild: facts.minimumSupportedBuild,
+      updateState: switch (facts.updateState) {
+        AppReleaseUpdateState.none => RecoveryUpdateState.none,
+        AppReleaseUpdateState.available => RecoveryUpdateState.available,
+        AppReleaseUpdateState.required => RecoveryUpdateState.required,
+      },
       updateUrl: facts.updateUrl ?? '',
       recoveryUrl: facts.recoveryUrl,
     );

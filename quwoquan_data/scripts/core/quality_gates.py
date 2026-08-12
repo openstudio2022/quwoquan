@@ -122,10 +122,24 @@ SOFT_QUALITY_GATES: frozenset[str] = frozenset(
     }
 )
 
+# Authoring-stage diagnostics are recorded in the review check set and affect
+# the score/suggestions, but do not rewind a light-edit draft.  They remain
+# release hard gates: canonical release integrity independently requires the
+# same named check to be present and passed.
+AUTHORING_DIAGNOSTIC_GATES: frozenset[str] = frozenset(
+    {"commercialNearCopy"}
+)
+
 
 def is_soft_quality_gate(name: str) -> bool:
     """该评审/校验门是否为非致命软门（命中只软扣分+建议，不 hard-block）。"""
     return str(name or "").strip() in SOFT_QUALITY_GATES
+
+
+def is_authoring_diagnostic_gate(name: str) -> bool:
+    """Whether a failed authoring check is diagnostic until release audit."""
+
+    return str(name or "").strip() in AUTHORING_DIAGNOSTIC_GATES
 
 
 # 写作主线一致性：命中桶数下限由各 intent 的 requireBuckets 决定。

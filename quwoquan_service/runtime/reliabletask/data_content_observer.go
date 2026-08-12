@@ -36,6 +36,7 @@ type DataContentExecutionObservationTask struct {
 	EntityRef      string `json:"entityRef"`
 	Stage          string `json:"stage"`
 	SourceRevision string `json:"sourceRevision"`
+	MaxAttempts    int    `json:"maxAttempts"`
 	Status         string `json:"status"`
 	Attempts       int    `json:"attempts"`
 	CreatedAt      string `json:"createdAt"`
@@ -420,6 +421,9 @@ func observeDataContentTask(
 			"reliabletask observer Mongo task campaign generation/source identity drift",
 		)
 	}
+	maxAttempts, maxAttemptsErr := strconv.Atoi(
+		strings.TrimSpace(task.Payload["maxAttempts"]),
+	)
 	job := DataContentJob{
 		EntityRef:            task.Payload["entityRef"],
 		Carrier:              task.Payload["carrier"],
@@ -430,12 +434,13 @@ func observeDataContentTask(
 		Stage:                task.Payload["stage"],
 		PartitionKey:         task.Payload["partitionKey"],
 		IdempotencyKey:       task.Payload["idempotencyKey"],
+		MaxAttempts:          maxAttempts,
 		JobSetEnvelopeDigest: task.Payload["jobSetEnvelopeDigest"],
 		JobSetDigest:         task.Payload["jobSetDigest"],
 		ActualTaskDigest:     task.Payload["actualTaskDigest"],
 	}
 	expectedKey, err := job.ValidateIdentity()
-	if err != nil || strings.TrimSpace(task.IdempotencyKey) != expectedKey {
+	if maxAttemptsErr != nil || err != nil || strings.TrimSpace(task.IdempotencyKey) != expectedKey {
 		return DataContentExecutionObservationTask{}, false, false, errors.New(
 			"reliabletask observer Mongo task source identity drift",
 		)
@@ -470,6 +475,7 @@ func observeDataContentTask(
 		EntityRef:      strings.TrimSpace(job.EntityRef),
 		Stage:          strings.TrimSpace(job.Stage),
 		SourceRevision: strings.TrimSpace(job.SourceRevision),
+		MaxAttempts:    job.MaxAttempts,
 		Status:         task.Status,
 		Attempts:       task.Attempts,
 		CreatedAt:      timestamp(task.CreatedAt),

@@ -120,14 +120,27 @@ class PublicApiClient:
         request_id: str,
         trace_id: str,
         content_type: str = "",
+        session_header_name: str = "X-Client-Session-Id",
         extra_headers: Mapping[str, str] | None = None,
     ) -> dict[str, str]:
         if not page_id.strip():
             raise PublicApiClientError("public API pageId must not be empty")
+        if session_header_name not in {
+            "X-Client-Session-Id",
+            "X-Session-Id",
+        }:
+            raise PublicApiClientError("public API session header name is invalid")
+        if extra_headers and any(
+            key.lower() in {"x-client-session-id", "x-session-id"}
+            for key in extra_headers
+        ):
+            raise PublicApiClientError(
+                "public API session header must use the typed request option"
+            )
         headers = {
             "Accept": "application/json",
             "X-Client-Page-Id": page_id,
-            "X-Client-Session-Id": self.session_id,
+            session_header_name: self.session_id,
             "X-Client-Sent-At": started_at,
             "X-Client-Device-Platform": self.platform,
             "X-Client-App-Version": self.app_version,
@@ -152,6 +165,7 @@ class PublicApiClient:
         page_id: str,
         query: Mapping[str, str] | None = None,
         body: Mapping[str, Any] | None = None,
+        session_header_name: str = "X-Client-Session-Id",
         extra_headers: Mapping[str, str] | None = None,
     ) -> PublicApiResponse:
         normalized_path = f"/{path.lstrip('/')}"
@@ -180,6 +194,7 @@ class PublicApiClient:
                 request_id=request_id,
                 trace_id=trace_id,
                 content_type="application/json" if body is not None else "",
+                session_header_name=session_header_name,
                 extra_headers=extra_headers,
             ),
             method=method,
@@ -196,16 +211,33 @@ class PublicApiClient:
             status = int(exc.code)
             raw = exc.read()
         except (URLError, OSError) as exc:
-            raise PublicApiClientError(f"{method} {url} failed: {exc}") from exc
+            raise PublicApiClientError(
+                "public API request failed: "
+                "status=transport_error canonicalErrorCode=none "
+                f"requestId={request_id} traceId={trace_id} "
+                "requestSummary="
+                f"method={method},path={normalized_path},pageId={page_id} "
+                f"cause={type(exc).__name__}"
+            ) from exc
         ended_at = self._utc_now()
         duration_ms = max(0, int((time.monotonic_ns() - started_monotonic) / 1_000_000))
         try:
             payload = json.loads(raw.decode("utf-8")) if raw else {}
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise PublicApiClientError(f"{method} {url} returned invalid JSON") from exc
+            raise PublicApiClientError(
+                "public API returned invalid JSON: "
+                f"status={status} canonicalErrorCode=none "
+                f"requestId={request_id} traceId={trace_id} "
+                "requestSummary="
+                f"method={method},path={normalized_path},pageId={page_id}"
+            ) from exc
         if not isinstance(payload, Mapping):
             raise PublicApiClientError(
-                f"{method} {url} returned a non-object JSON payload"
+                "public API returned non-object JSON: "
+                f"status={status} canonicalErrorCode=none "
+                f"requestId={request_id} traceId={trace_id} "
+                "requestSummary="
+                f"method={method},path={normalized_path},pageId={page_id}"
             )
         return PublicApiResponse(
             status=status,
@@ -306,6 +338,24 @@ class PublicApiClient:
         query: Mapping[str, str] | None = None,
     ) -> PublicApiResponse:
         return self._request_json("GET", path, page_id=page_id, query=query)
+
+    def post_json(
+        self,
+        path: str,
+        *,
+        page_id: str,
+        body: Mapping[str, Any],
+        session_header_name: str = "X-Client-Session-Id",
+        extra_headers: Mapping[str, str] | None = None,
+    ) -> PublicApiResponse:
+        return self._request_json(
+            "POST",
+            path,
+            page_id=page_id,
+            body=body,
+            session_header_name=session_header_name,
+            extra_headers=extra_headers,
+        )
 
     def get_bytes(
         self,

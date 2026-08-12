@@ -44,22 +44,6 @@ func (s *MongoMediaStore) EnsureIndexes(ctx context.Context) error {
 	if err := ensureMediaOutboxIndexes(ctx, s.assetOutbox, "idx_media_asset_outbox"); err != nil {
 		return err
 	}
-	if _, err := s.processingDeadLetters.Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			Keys: bson.D{{Key: "consumer", Value: 1}, {Key: "quarantinedAt", Value: -1}},
-			Options: options.Index().SetName(
-				"idx_media_processing_dead_letters_consumer_time",
-			),
-		},
-		{
-			Keys: bson.D{{Key: "aggregateId", Value: 1}, {Key: "quarantinedAt", Value: -1}},
-			Options: options.Index().SetName(
-				"idx_media_processing_dead_letters_aggregate_time",
-			),
-		},
-	}); err != nil {
-		return fmt.Errorf("create media processing dead-letter indexes: %w", err)
-	}
 	return nil
 }
 

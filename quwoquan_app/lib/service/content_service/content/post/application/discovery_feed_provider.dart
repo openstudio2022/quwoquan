@@ -7,6 +7,7 @@ import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/
     show DiscoveryFeedRouteRegistry, kFeedSortRecommend;
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/discovery_feed_load_result.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -18,6 +19,8 @@ import 'package:quwoquan_app/service/content_service/content/post/application/co
 import 'package:quwoquan_app/service/content_service/content/post/domain/discovery_feed_resident_page_window.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
+export 'package:quwoquan_app/service/content_service/content/post/application/public/discovery_feed_load_result.dart';
 
 part 'discovery_feed_loading.dart';
 part 'discovery_feed_pagination_lifecycle.dart';
@@ -274,28 +277,6 @@ typedef DiscoveryFeedQuery = ({
   String? identity,
   String? type,
 });
-
-enum DiscoveryFeedLoadTerminal {
-  content,
-  canonicalEmpty,
-  retainedContent,
-  stillBlocked,
-  superseded,
-  cancelled,
-}
-
-/// 一次 Feed generation 的权威终态；Widget 不得在 await 后再读共享状态猜测结果。
-final class DiscoveryFeedLoadResult {
-  const DiscoveryFeedLoadResult({
-    required this.terminal,
-    required this.generation,
-    this.failure,
-  });
-
-  final DiscoveryFeedLoadTerminal terminal;
-  final int generation;
-  final Object? failure;
-}
 
 /// 将 surface tab id 映射到统一 discovery feed 查询。
 ///

@@ -1099,6 +1099,14 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_remote_api_path__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_get_circle_stats_app_api
+    spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetCircleStats}
+    runner_source_path: quwoquan_app/test/api_integration/service/circle_service/circle_management/circle/circle_lifecycle__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
   - case_id: circle_create_circle_app_local
     spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
     producer: app

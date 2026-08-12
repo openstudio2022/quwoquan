@@ -61,7 +61,11 @@
 - 端侧实例记录只用于诊断与 stop/list，不得演化为服务端多套编排。
 - 环境矩阵、业务数据清单与 runbook 明确“端侧可多实例、本机商业 runtime 串行单套”的统一口径。
 - Prod `stackctl up` 只消费已激活的不可变候选；Alpha/Beta/Gamma 开发者冷/热一键会话由 `stackctl dev-session` 从当前工作树实时编排 render、full up、health 与可选 App handoff，App launcher 不得反向拥有环境生命周期。
+- test-live render 必须直接消费当前工作树的第一方 Compose、目标环境 overlay 与 runtime config，并按 target 物化 local-managed TLS、认证 secret、mTLS、对象存储和 Provider substitute；不得读取、创建或激活 immutable candidate/package。Compose project 固定为 `quwoquan_<environment>_test_live`，全部公开端口必须落在该 target 的 canonical 1000 端口块，任一 target/env/project/端口、Compose digest、TLS 或 secret 归属漂移均在 up 前 `GATE_BLOCK`。
+- test-live 的 Compose render/build/up 失败属于启动失败并阻断 App handoff；Compose 已成功启动后的服务 health 不健康只形成结构化 `warning`，保留真实 compile/launch 与 health phase，不得把环境宣称为健康，也不得削弱 Prod 的 immutable candidate 准入。
 - `stackctl dev-session --all-nonprod` 必须按 Alpha→Beta→Gamma 串行执行并保留每个 target 的 compile/launch、告警与 health 结果；严格 runtime health 失败不抹除可编译事实，也不产生环境健康伪成功。
+- test-live runtime 不拥有非内容 UAT 业务数据。`stackctl verify` 必须从当前选中 CaseResult 的强类型请求图按 target 创建独立 Actor 与交易事实，只加载领域依赖闭包，并在同一 TestDataSession 内完成 provision、业务正文、readback 与 cleanup；执行前必须匹配当前 running runtime、canonical topology、候选绑定和所需 Provider readiness，任一缺失、漂移或创建失败均 `GATE_BLOCK`，结果始终为 run-bound、`nonPromotable=true`。
+- test-live 内容绑定默认关闭。显式选择时必须在本次 `running` mutable startup receipt 之后，以完整 `releaseId + verifyRunId + manifestDigest`（commercial 另需 `lifecycleExitRef`）创建 target/attempt-scoped、create-once 的 run-bound binding，再只把同一绑定中的 releaseId、manifestDigest 与 readiness receipt digest 交给 App handoff。缺参、部分参数、跨环境、旧 attempt、symlink/TOCTOU、implicit latest、candidate 或 package 全部失败。consumer release 可不带 lifecycle，但所有 test-live binding 均为 `nonPromotable=true`。
 - full runtime 已健康运行时，`content-release/content-commercial` 任务必须复用它且不得改写 full startup receipt；无 full runtime 的独立 bounded workload 才拥有自己的启动与停止事实。
 - bounded workload 正常、失败或取消后必须恢复进入前 runtime 状态；恢复失败保留 partial/typed blocker，禁止把原本健康的 full runtime 写成 stopped。
 
@@ -97,6 +101,7 @@
   `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`，记录设备覆盖与 Android 真机 waiver；
   final acceptance 与 release receipt 必须拒绝其关闭正式发布 blocker。
 - THEN `dev-session --all-nonprod` 复用同一串行资源合同；source/config 漂移只进入告警，严格 health 结果保持真实且不得冒充 compile/launch 失败。
+- AND 单 target `dev-session` 未显式提供内容四元时保持 unbound 并报告 warning；提供完整当前 attempt 的 run-bound binding 时，App handoff 的内容三元必须与 binding 精确一致，且不得将该绑定写成 immutable candidate、package 或可晋级 release receipt。
 - AND 任一启动、清理、证据或身份失败返回 canonical `GATE_BLOCK`，完成 partial teardown，
   不覆盖旧报告、不继续下一个 target、不产生伪成功事实。
 

@@ -9,6 +9,11 @@ from typing import Any
 from core.article_package import sha256_file
 from core.io import read_json, write_json
 from core.paths import execution_root
+from core.source_attribution import canonical_source_attribution
+
+from content.release.canonical.pool_source_attribution import (
+    source_attribution_complete,
+)
 
 
 def _safe_source_unit_id(meta: Mapping[str, Any], unit_dir: Path) -> str:
@@ -30,7 +35,7 @@ def _materialize_homepage_source_catalog(
     *,
     fallback_title: str,
     source_refs: Sequence[str] = (),
-) -> tuple[dict[str, Any], list[str], str, str]:
+) -> tuple[dict[str, Any], list[str], str, str, dict[str, Any]]:
     """把最终文本/图片来源闭包进对象 evidence。"""
     from core.public_source_url import normalize_public_https_url, normalize_public_source_url
     from core.schema import assert_valid
@@ -42,6 +47,7 @@ def _materialize_homepage_source_catalog(
     ordered_refs = list(dict.fromkeys([source_ref, *source_refs]))
     catalog_sources: list[dict[str, Any]] = []
     primary_compact: dict[str, Any] | None = None
+    primary_attribution: dict[str, Any] | None = None
     primary_evidence_ref = ""
     for current_ref in ordered_refs:
         source_path = execution_root(execution_id) / current_ref
@@ -105,9 +111,15 @@ def _materialize_homepage_source_catalog(
         evidence_ref = f"evidence/sources/{source_unit_id}/meta.json"
         catalog_sources.append({**compact_meta, "evidenceRef": evidence_ref})
         if is_primary:
+            attribution = canonical_source_attribution(meta.get("sourceAttribution"))
+            if not source_attribution_complete({"sourceAttribution": attribution}):
+                raise ValueError(
+                    "homepage primary sourceAttribution is incomplete"
+                )
             primary_compact = compact_meta
+            primary_attribution = attribution
             primary_evidence_ref = evidence_ref
-    if primary_compact is None:
+    if primary_compact is None or primary_attribution is None:
         raise ValueError("homepage primary source evidence was not materialized")
     catalog_source = {**primary_compact, "evidenceRef": primary_evidence_ref}
     catalog = {
@@ -140,4 +152,5 @@ def _materialize_homepage_source_catalog(
         [str(primary_compact["sourceUrl"])],
         primary_evidence_ref,
         sha256_file(catalog_path),
+        primary_attribution,
     )

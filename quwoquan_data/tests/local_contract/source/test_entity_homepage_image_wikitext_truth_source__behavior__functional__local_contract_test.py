@@ -88,7 +88,7 @@ _FILE_INFO = {
                 "height": 2128,
                 "extmetadata": {
                     "LicenseShortName": {"value": "CC BY-SA 2.5"},
-                    "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/2.5"},
+                    "LicenseUrl": {"value": "http://creativecommons.org/licenses/by-sa/2.5"},
                     "Artist": {"value": "Contributor C"},
                 },
             }
@@ -207,6 +207,18 @@ def test_mediawiki_page_images_keeps_public_domain_image_without_license_url():
     assert taian["license"] == "Public domain"
     assert taian["termsUrl"] == "https://commons.wikimedia.org/wiki/File:TaiAn_GuZhen.jpg"
     assert taian["authorizationProof"].startswith("https://commons.wikimedia.org/wiki/File:")
+
+
+def test_mediawiki_page_images_upgrades_creative_commons_terms_url_to_https():
+    images = _run_with_fake_wiki_api(
+        lambda: _mediawiki_page_images(
+            "zh.wikipedia.org", "青城山", entity_id="青城山", limit=10
+        )
+    )
+    by_key = {_file_match_key(img["fileTitle"]): img for img in images}
+    baizhang = by_key[_file_match_key("File:BaiZhangQiao.jpg")]
+
+    assert baizhang["termsUrl"] == "https://creativecommons.org/licenses/by-sa/2.5"
 
 
 def test_mediawiki_page_images_caption_comes_from_wikitext_placement():
@@ -395,6 +407,35 @@ def test_mediawiki_page_image_uses_sanitized_commons_caption_when_placement_has_
     captions = {_file_match_key(image["fileTitle"]): image["caption"] for image in images}
 
     assert captions[key] == "中国四川测试实体丙冰川森林公园"
+
+
+def test_mediawiki_page_image_preserves_commons_subject_beside_placement_caption(
+    monkeypatch,
+) -> None:
+    key = _file_match_key("File:WuLongGou.jpg")
+    monkeypatch.setitem(
+        _FILE_INFO[key]["imageinfo"][0]["extmetadata"],
+        "ImageDescription",
+        {"value": "Giant pandas at Chengdu Research Base"},
+    )
+    monkeypatch.setitem(
+        _FILE_INFO[key]["imageinfo"][0]["extmetadata"],
+        "Categories",
+        {"value": "Chengdu Research Base of Giant Panda Breeding"},
+    )
+
+    images = _run_with_fake_wiki_api(
+        lambda: _mediawiki_page_images(
+            "zh.wikipedia.org", "青城山", entity_id="青城山", limit=10
+        )
+    )
+    row = next(image for image in images if _file_match_key(image["fileTitle"]) == key)
+
+    assert row["caption"] == "五龙沟"
+    assert row["visualSubject"] == (
+        "Giant pandas at Chengdu Research Base "
+        "Chengdu Research Base of Giant Panda Breeding"
+    )
 
 
 def test_homepage_source_images_are_same_source_only_no_search_pool_urls():

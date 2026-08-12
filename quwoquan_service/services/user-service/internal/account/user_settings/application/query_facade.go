@@ -64,7 +64,7 @@ func (facade *UserSettingsQueryFacade) GetPrivacySettings(
 		FeedPreference:    clonePointer(snapshot.Privacy.FeedPreference),
 		AssistantEnabled:  snapshot.Privacy.AssistantEnabled,
 		BlockedKeywords: append(
-			[]string(nil),
+			[]string{},
 			snapshot.Privacy.BlockedKeywords...,
 		),
 		Version:   snapshot.Version,

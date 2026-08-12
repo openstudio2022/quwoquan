@@ -1,7 +1,23 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.support import Any, ExecutionContext, ExecutionStateTransition, Mapping, Path, datetime, execution_root, load_execution_state, re, read_json, store
-from content.execution.queue.reliabletask.attempt import latest_attempt_report_path_from_root
+
+from content.execution.queue.reliabletask.attempt import (
+    latest_attempt_report_path_from_root,
+)
+from content.execution.support import (
+    Any,
+    ExecutionContext,
+    ExecutionStateTransition,
+    Mapping,
+    Path,
+    datetime,
+    execution_root,
+    load_execution_state,
+    re,
+    read_json,
+    store,
+)
+
 
 def _parse_iso_seconds(value: object) -> float | None:
     text = str(value or "").strip()
@@ -49,10 +65,7 @@ def _reliabletask_accepted_throughput(root: Path) -> dict[str, Any] | None:
     canonical_accepted = (
         decoded.research_accepted_count + decoded.commercial_accepted_count
     )
-    finalized = int(report.get("finalizedObjectCount") or 0)
-    # Dead publish jobs may still finalize via absorption; readiness must honor
-    # finalizedObjectCount whenever the fleet report already passed.
-    accepted = max(canonical_accepted, finalized)
+    accepted = canonical_accepted
     required_quota = int(report.get("requiredQuota") or 0)
     if (
         report.get("passed") is not True
@@ -135,8 +148,9 @@ def _review_repaired_refs(ctx: ExecutionContext) -> set[str]:
     return repaired
 
 def _agent_active_throughput(state: ExecutionStateTransition) -> dict[str, Any]:
-    from content.execution.agent.history import state_managed_agent_runs
     from core.control_types import ExecutionStage
+
+    from content.execution.agent.history import state_managed_agent_runs
 
     agent_runs = state_managed_agent_runs(state)
     source_stage = ExecutionStage.POST_AUTHOR
@@ -231,8 +245,9 @@ def _homepage_agent_review_stats(
             run_id = str(meta.get("agentRunId") or "").strip()
             if run_id:
                 run_id_to_entity[run_id] = meta_path.parent.parent.name
-    from content.execution.agent.history import state_managed_agent_runs
     from core.control_types import ExecutionStage
+
+    from content.execution.agent.history import state_managed_agent_runs
 
     attempts_by_entity: dict[str, list[str]] = {}
     for row in state_managed_agent_runs(state):
@@ -267,9 +282,9 @@ def _homepage_agent_review_stats(
 
 def _write_execution_metrics(ctx: ExecutionContext, state: ExecutionStateTransition) -> None:
     """Persist production-readiness metrics derived from batch artifacts and real usage."""
+    from content.execution.agent.history import state_managed_agent_runs
     from content.post import object_index as content_object
     from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity
-    from content.execution.agent.history import state_managed_agent_runs
 
     state.agent_run_history = [
         run.to_document() for run in state_managed_agent_runs(state)[-20:]

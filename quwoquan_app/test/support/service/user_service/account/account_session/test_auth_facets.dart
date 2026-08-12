@@ -23,14 +23,25 @@ class TestAuthFacets
       FixtureUserResolver.currentUserVariantPersonaId;
 
   @override
-  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
+  Future<OtpDeliveryReadinessSnapshot> getOtpDeliveryReadiness() async {
+    return const OtpDeliveryReadinessSnapshot(
+      availability: OtpDeliveryReadinessAvailability.ready,
+      retryAfterSeconds: 0,
+    );
+  }
+
+  @override
+  Future<OtpChallengeIssueResult> sendOtp(
+    SendOtpCommand command, {
+    required String idempotencyKey,
+  }) async {
     final phone = command.phone;
     return OtpChallengeIssueResult(
       maskedPhone: phone.length > 7
           ? '${phone.substring(0, 3)}****${phone.substring(phone.length - 4)}'
           : phone,
       expiresInSeconds: 300,
-      deliveryStatus: 'queued',
+      deliveryStatus: OtpDeliveryStatus.queued,
       retryAfterSeconds: 0,
       requestId: 'test_otp_request',
       challengeId: 'test_otp_challenge',

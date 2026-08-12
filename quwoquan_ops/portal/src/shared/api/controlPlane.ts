@@ -1113,24 +1113,36 @@ export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
   return payload.items;
 }
 
-export type GrayRoutingStage = 'gray-initial' | 'carry-on' | 'full';
+export type GrayRoutingStage = 'canary' | '5' | '20' | '50' | '100';
+
+export interface RolloutSelector {
+  mode: 'all' | 'include' | 'supported';
+  values: string[];
+}
 
 export interface GrayRoutingStageDimensions {
-  appVersions: string[];
-  userIds: string[];
-  provinces: string[];
-  carriers: string[];
+  basisPoints: number;
+  appVersions: RolloutSelector;
+  platforms: RolloutSelector;
+  regions: RolloutSelector;
+  carriers: RolloutSelector;
 }
 
 export interface GrayRoutingPolicyResponse {
   policy: {
     enabled: boolean;
-    grayUpstream: string;
-    grayUpstreamTlsInsecureSkipVerify: boolean;
-    stageDimensions: Record<GrayRoutingStage, GrayRoutingStageDimensions>;
+    campaignId: string;
+    candidateDigest: string;
+    allocationKeyId: string;
+    subjectKind: 'device_actor';
+    stage: GrayRoutingStage;
+    status: 'active' | 'paused' | 'rolled_back' | 'complete';
+    candidateUpstream: string;
+    assignmentTtlDaysAfterCampaign: number;
+    internalCanary: { accountIds: string[]; deviceActorIds: string[] };
+    stages: Record<GrayRoutingStage, GrayRoutingStageDimensions>;
   };
-  sourcePath: string;
-  rawYaml: string;
+  source: { path: string; sha256: string };
 }
 
 export async function fetchGrayRoutingPolicy(): Promise<GrayRoutingPolicyResponse> {

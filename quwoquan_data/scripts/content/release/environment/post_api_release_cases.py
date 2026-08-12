@@ -27,11 +27,12 @@ class CreatorProfileCase:
     creator_ref: str
     author_id: str
     persona_id: str
-    avatar_asset_id: str
+    display_name: str
+    avatar_asset_id: str | None
     avatar_url: str
-    avatar_bytes: int
-    avatar_sha256: str
-    avatar_mime_type: str
+    avatar_bytes: int | None
+    avatar_sha256: str | None
+    avatar_mime_type: str | None
 
 
 def _normalized_post_ref(value: object) -> str:
@@ -135,8 +136,8 @@ def read_post_and_creator_cases(
         raise PostApiVerificationError("release desired state schema is invalid")
     if str(desired.get("releaseId") or "") != release_id:
         raise PostApiVerificationError("release desired state releaseId mismatch")
-    if report.get("status") != "active":
-        raise PostApiVerificationError("post importer report is not active")
+    if report.get("status") != "imported":
+        raise PostApiVerificationError("post importer report is not imported")
     if creator_report.get("status") != "active":
         raise PostApiVerificationError("creator importer report is not active")
     if str(report.get("environment") or "") != environment.value:
@@ -199,10 +200,29 @@ def read_post_and_creator_cases(
             "personaId",
             endpoint=f"creator profile {creator_ref}",
         )
+        display_name = _required_text(
+            profile,
+            "displayName",
+            endpoint=f"creator profile {creator_ref}",
+        )
         if author_id in creators_by_author:
             raise PostApiVerificationError(f"duplicate creator authorId: {author_id}")
+        raw_avatar_asset = profile.get("avatarAsset")
+        if raw_avatar_asset is None:
+            creators_by_author[author_id] = CreatorProfileCase(
+                creator_ref=creator_ref,
+                author_id=author_id,
+                persona_id=persona_id,
+                display_name=display_name,
+                avatar_asset_id=None,
+                avatar_url="",
+                avatar_bytes=None,
+                avatar_sha256=None,
+                avatar_mime_type=None,
+            )
+            continue
         avatar_asset = _object(
-            profile.get("avatarAsset"),
+            raw_avatar_asset,
             label=f"creator avatar binding {creator_ref}",
         )
         avatar_asset_id = _required_text(
@@ -248,6 +268,7 @@ def read_post_and_creator_cases(
             creator_ref=creator_ref,
             author_id=author_id,
             persona_id=persona_id,
+            display_name=display_name,
             avatar_asset_id=avatar_asset_id,
             avatar_url=f"{media_origin}/{public_slice_key}",
             avatar_bytes=avatar_bytes,

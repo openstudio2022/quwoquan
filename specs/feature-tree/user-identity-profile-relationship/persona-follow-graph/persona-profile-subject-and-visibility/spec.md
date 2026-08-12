@@ -40,6 +40,8 @@
 - 停用后的 `ProfileSubject` 是否继续开放公开页，由 user 域可见性策略统一决定；第一版允许公开页关闭，但记录对象仍应使用快照正常渲染。
 - 内部身份引用统一使用 `profileSubjectId` 或 `personaId`。
 - 停用分身不得继续作为新动作主体，但其记录归因必须可追踪、可渲染、可审计。
+- Data 平台虚拟作者只有在作者记录 `completed + passed + active` 后，才能通过正式 release-import 投影为公开 Persona/ProfileSubject；真实用户 Persona 仍只由 User command/outbox 创建、更新或退役，Data release 不得修改或删除真实用户 Persona。
+- 平台虚拟作者头像和真实用户头像都只受格式、可读取、清晰度与安全质量约束，不区分 Research/Commercial，也不参与关联内容的 commercial eligibility；外部资料原作者只保留在内容来源署名，不自动创建 Persona。
 
 ## 4. 契约引用
 

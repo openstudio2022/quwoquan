@@ -10,8 +10,8 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.release.canonical.object_transaction_audit import validate_publish_invariants
-from content.release.canonical.creator_commercial_closure import (
-    creator_commercial_closure_issues,
+from content.release.canonical.creator_avatar_quality import (
+    creator_avatar_quality_issues,
 )
 from core.paths import PUBLISH_ROOT
 from verify.verify_publish_purity import publish_structure_issues
@@ -19,7 +19,7 @@ from verify.verify_publish_purity import publish_structure_issues
 
 def main() -> int:
     report = validate_publish_invariants(PUBLISH_ROOT)
-    creator_issues = creator_commercial_closure_issues(PUBLISH_ROOT)
+    creator_issues = creator_avatar_quality_issues(PUBLISH_ROOT)
     structure_issues = publish_structure_issues(PUBLISH_ROOT)
     issues = [*report["issues"], *creator_issues]
     if structure_issues or issues:

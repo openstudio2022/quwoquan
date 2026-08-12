@@ -327,6 +327,7 @@ DART_WIRE_ID_KEY = re.compile(
 GO_JSON_ID_TAG = re.compile(r"""json\s*:\s*["']_id["']""")
 GO_BSON_ID_TAG = re.compile(r"""bson\s*:\s*["']_id["']""")
 GO_MAP_ID_KEY = re.compile(r"""["']_id["']\s*:""")
+GO_BSON_MAP_ID_KEY = re.compile(r"""\bbson\.M\s*\{[^\n]*["']_id["']\s*:""")
 MULTI_KEY_HELPER_ID = re.compile(
     r"(?:_firstNonEmpty|mapListFirstPresent|mapListFirstNonEmpty)\s*\([^)]*['\"]_id['\"]",
     re.I | re.DOTALL,
@@ -1513,6 +1514,8 @@ def scan_file(path: Path, inv: Inventory) -> None:
                 or "/domain/" in rel
                 or "/generated/" in rel
             ):
+                if GO_BSON_MAP_ID_KEY.search(line):
+                    continue
                 if _is_test_path(rel) and NEGATIVE_ID_TEST_LINE.search(line):
                     continue
                 inv.add("wire_id_key", path, f"L{lineno}: {line.strip()[:140]}")

@@ -361,8 +361,7 @@ class _CenteredScrollableTabBarState
   Widget build(BuildContext context) {
     _syncAnchorMode(force: false);
 
-    final currentIsDark =
-        (widget.isDark ?? ref.watch(isDarkProvider))!;
+    final currentIsDark = (widget.isDark ?? ref.watch(isDarkProvider))!;
     final isVideoImmersion = widget.transparentBackground;
     final bg = isVideoImmersion
         ? AppColors.transparent

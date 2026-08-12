@@ -20,12 +20,12 @@ type UserRelationshipGate struct {
 }
 
 type relationshipCapabilityResponse struct {
-	CanCreateDirectConversation bool `json:"canCreateDirectConversation"`
-	CanSendMessage              bool `json:"canSendMessage"`
-	HasFormalConversation       bool `json:"hasFormalConversation"`
-	IsMutual                    bool `json:"isMutual"`
-	IsBlocked                   bool `json:"isBlocked"`
-	IsBlockedBy                 bool `json:"isBlockedBy"`
+	RelationState               string `json:"relationState"`
+	CanCreateDirectConversation bool   `json:"canCreateDirectConversation"`
+	CanSendMessage              bool   `json:"canSendMessage"`
+	HasFormalConversation       bool   `json:"hasFormalConversation"`
+	IsBlocked                   bool   `json:"isBlocked"`
+	IsBlockedBy                 bool   `json:"isBlockedBy"`
 }
 
 func NewUserRelationshipGate(baseURL string, client *http.Client) *UserRelationshipGate {
@@ -99,7 +99,7 @@ func (g *UserRelationshipGate) GetCapability(
 		CanCreateDirectConversation: payload.CanCreateDirectConversation,
 		CanSendMessage:              payload.CanSendMessage,
 		HasFormalConversation:       payload.HasFormalConversation,
-		IsMutual:                    payload.IsMutual,
+		IsMutual:                    strings.TrimSpace(payload.RelationState) == "mutual",
 		IsBlocked:                   payload.IsBlocked,
 		IsBlockedBy:                 payload.IsBlockedBy,
 	}, nil

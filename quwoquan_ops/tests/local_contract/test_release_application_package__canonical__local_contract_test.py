@@ -121,7 +121,7 @@ def test_bundle_requires_every_real_environment_surface_payload(
     _write_json(
         web_manifest,
         {
-            "schema": "qwq.public-web.release",
+            "schema": "client-app.web.official-release",
             "environment": "prod",
             "contentSHA256": web_digest,
         },
@@ -147,7 +147,7 @@ def test_bundle_requires_every_real_environment_surface_payload(
     _write_json(
         android_manifest,
         {
-            "schema": "qwq.android.official-release",
+            "schema": "client-app.android.official-release",
             "platform": "android",
             "packagedAPK": apk.name,
             "apkSHA256": hashlib.sha256(apk.read_bytes()).hexdigest(),

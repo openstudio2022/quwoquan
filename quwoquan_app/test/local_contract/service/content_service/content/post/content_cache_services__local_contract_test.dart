@@ -64,6 +64,89 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('CachedContentRepository', () {
+    test('冷启动本地 hydration 超时仍在请求期限内访问 Remote，重试创建新 hydration', () async {
+      final firstRead = Completer<String?>();
+      final backend = _SequencedQuerySnapshotPersistenceBackend(
+        <Future<String?> Function()>[() => firstRead.future, () async => null],
+      );
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        hydrationDeadline: const Duration(milliseconds: 20),
+        persistenceBackend: backend,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      final canonicalEmpty = Completer<DiscoveryFeedPage>()
+        ..complete(
+          const DiscoveryFeedPage(
+            items: <ContentPostViewData>[],
+            outcome: ContentFeedOutcome.empty,
+            emptyReason: ContentFeedEmptyReason.noActiveRelease,
+          ),
+        );
+      final delegate = _CountingContentRepository()
+        ..pendingFeedPage = canonicalEmpty;
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: store,
+      );
+      final stopwatch = Stopwatch()..start();
+
+      final first = await repo.listDiscoveryFeedPage(
+        category: 'moment',
+        deadlineAt: DateTime.now().add(const Duration(seconds: 6)),
+      );
+
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 6)));
+      expect(first.isCanonicalEmpty, isTrue);
+      expect(first.emptyReason, ContentFeedEmptyReason.noActiveRelease);
+      expect(delegate.feedRequestCount, 1);
+      expect(backend.readCallCount, 1);
+
+      final retried = await repo.listDiscoveryFeedPage(
+        category: 'moment',
+        deadlineAt: DateTime.now().add(const Duration(seconds: 6)),
+      );
+      expect(retried.isCanonicalEmpty, isTrue);
+      expect(backend.readCallCount, 2);
+      await retried.revalidation;
+      expect(delegate.feedRequestCount, 2);
+    });
+
+    test('本地 hydration 失败只视为 cache miss，不吞掉 Remote 错误', () async {
+      final backend = _SequencedQuerySnapshotPersistenceBackend(
+        <Future<String?> Function()>[
+          () => Future<String?>.error(StateError('preferences unavailable')),
+        ],
+      );
+      final delegate = _CountingContentRepository()..failFeedRequests = true;
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: ContentQuerySnapshotStore(
+          persistToPreferences: true,
+          persistenceBackend: backend,
+          telemetrySink: const NoopCacheTelemetrySink(),
+        ),
+      );
+
+      await expectLater(
+        repo.listDiscoveryFeedPage(
+          category: 'moment',
+          deadlineAt: DateTime.now().add(const Duration(seconds: 6)),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'feed offline',
+          ),
+        ),
+      );
+      expect(backend.readCallCount, 1);
+      expect(delegate.feedRequestCount, 1);
+    });
+
     test('快照 hydration 永久阻塞时取消立即终止且不请求远端', () async {
       final delegate = _CountingContentRepository();
       final hydration = Completer<void>();
@@ -1096,6 +1179,30 @@ class _ControlledQuerySnapshotPersistenceBackend
       _concurrentWrites -= 1;
     }
   }
+}
+
+class _SequencedQuerySnapshotPersistenceBackend
+    implements ContentQuerySnapshotPersistenceBackend {
+  _SequencedQuerySnapshotPersistenceBackend(this._reads);
+
+  final List<Future<String?> Function()> _reads;
+  int readCallCount = 0;
+
+  @override
+  Future<String?> read(String storageKey) {
+    final index = readCallCount;
+    readCallCount += 1;
+    if (index >= _reads.length) {
+      throw StateError('unexpected persistence read ${index + 1}');
+    }
+    return _reads[index]();
+  }
+
+  @override
+  Future<void> remove(String storageKey) async {}
+
+  @override
+  Future<void> write(String storageKey, String payload) async {}
 }
 
 class _CountingContentRepository extends Fake

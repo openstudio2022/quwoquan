@@ -28,6 +28,7 @@ var (
 	ErrRunInvalidArgument              = errors.New("ASSISTANT.USER.run_invalid_argument")
 	ErrRunNotFound                     = errors.New("ASSISTANT.USER.run_not_found")
 	ErrRunPolicyUnavailable            = errors.New("ASSISTANT.SYSTEM.run_policy_unavailable")
+	ErrRunReasoningProfileUnavailable  = errors.New("ASSISTANT.SYSTEM.run_reasoning_profile_unavailable")
 	ErrRunSkillDisabled                = errors.New("ASSISTANT.USER.run_skill_disabled")
 	ErrRunSkillPackageUnavailable      = errors.New("ASSISTANT.SYSTEM.run_skill_package_unavailable")
 	ErrRunStateConflict                = errors.New("ASSISTANT.USER.run_state_conflict")
@@ -66,13 +67,13 @@ func AppErrorFromDelegatedApprovalInvalid(debugMessage string) *rterr.AppError {
 // AppErrorFromDeviceActionFailed returns *AppError for ASSISTANT.SYSTEM.device_action_failed (user_message from errors.yaml).
 func AppErrorFromDeviceActionFailed(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.device_action_failed")
-	return rterr.NewAppError(code, "设备操作未完成，请重试", debugMessage).WithMetadata("device_action_failed", 500).WithRecoveryDirective("retry", "snackbar", 0)
+	return rterr.NewAppError(code, "设备操作未完成，请重试", debugMessage).WithMetadata("device_action_failed", 0).WithRecoveryDirective("retry", "snackbar", 0)
 }
 
 // AppErrorFromDeviceActionPermissionDenied returns *AppError for ASSISTANT.USER.device_action_permission_denied (user_message from errors.yaml).
 func AppErrorFromDeviceActionPermissionDenied(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.device_action_permission_denied")
-	return rterr.NewAppError(code, "请在系统设置中允许此设备操作后重试", debugMessage).WithMetadata("device_action_permission_denied", 403).WithRecoveryDirective("surface", "permissionCard", 0)
+	return rterr.NewAppError(code, "请在系统设置中允许此设备操作后重试", debugMessage).WithMetadata("device_action_permission_denied", 0).WithRecoveryDirective("surface", "permissionCard", 0)
 }
 
 // AppErrorFromDeviceActionPermitExpired returns *AppError for ASSISTANT.USER.device_action_permit_expired (user_message from errors.yaml).
@@ -96,7 +97,7 @@ func AppErrorFromDeviceActionPermitReplayed(debugMessage string) *rterr.AppError
 // AppErrorFromDeviceActionUnavailable returns *AppError for ASSISTANT.SYSTEM.device_action_unavailable (user_message from errors.yaml).
 func AppErrorFromDeviceActionUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.device_action_unavailable")
-	return rterr.NewAppError(code, "当前设备暂不支持此操作，请手动完成", debugMessage).WithMetadata("device_action_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rterr.NewAppError(code, "当前设备暂不支持此操作，请手动完成", debugMessage).WithMetadata("device_action_unavailable", 0).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromFinanceProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.finance_provider_unavailable (user_message from errors.yaml).
@@ -157,6 +158,12 @@ func AppErrorFromRunNotFound(debugMessage string) *rterr.AppError {
 func AppErrorFromRunPolicyUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_policy_unavailable")
 	return rterr.NewAppError(code, "助手策略暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
+}
+
+// AppErrorFromRunReasoningProfileUnavailable returns *AppError for ASSISTANT.SYSTEM.run_reasoning_profile_unavailable (user_message from errors.yaml).
+func AppErrorFromRunReasoningProfileUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.run_reasoning_profile_unavailable")
+	return rterr.NewAppError(code, "当前推理配置无法满足本次任务要求", debugMessage).WithMetadata("run_reasoning_profile_unavailable", 0).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromRunSkillDisabled returns *AppError for ASSISTANT.USER.run_skill_disabled (user_message from errors.yaml).

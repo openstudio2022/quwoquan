@@ -111,6 +111,22 @@ func gatheringOptionalProviderState(
 	return state
 }
 
+// canonicalToolUnavailability is the production availability side of the
+// canonical Tool Catalog. Location tools remain declared so packages and
+// clients share stable identities, but Integration currently declares both
+// public-provider bindings not_required and exposes no ready binding receipt.
+// They therefore must not enter the executable/model registry until that owner
+// supplies the real provider binding and probe evidence.
+func canonicalToolUnavailability(
+	appEnv string,
+	configProvider runtimeconfig.RuntimeConfigProvider,
+) map[string]tool.UnavailableBinding {
+	state := gatheringOptionalProviderState(appEnv, configProvider)
+	return tool.UnavailableCanonicalBindings(tool.RuntimeAvailability{
+		LocationPublicProviderReady: state.MapAvailable,
+	})
+}
+
 func generatedGatheringToolAvailability(
 	catalog tooling.GatheringBindingCatalog,
 ) map[string]tooling.GatheringToolAvailability {

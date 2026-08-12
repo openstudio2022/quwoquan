@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
 // readiness_case: homepage_claim_request_create_homepage_claim_request_app_local
+// readiness_case: homepage_claim_request_get_my_pending_homepage_claim_request_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/adapters/homepage_claim_request_remote.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
@@ -17,6 +19,7 @@ void main() {
 
     final result = await writer.createClaimRequest(
       homepageId: 'homepage-1',
+      clientRequestId: 'claim-intent-1',
       draft: HomepageClaimRequestDraft(
         claimTier: 'verified',
         contactPhone: '13800000000',
@@ -73,12 +76,48 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('本人待审认领 Remote 执行 canonical GET 并 typed decode', () async {
+    final executor = _RecordingExecutor(response: _claimResponse());
+    final reader = RemoteHomepageClaimRequestReader(
+      client: GeneratedCloudOperationClient(executor),
+      invocationContext: _queryContext,
+    );
+
+    final result = await reader.getMyPendingClaimRequest(
+      homepageId: 'homepage-1',
+    );
+
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds
+          .entityHomepageClaimRequestGetMyPendingHomepageClaimRequest,
+    );
+    expect(executor.operation?.method, 'GET');
+    expect(
+      executor.operation?.pathTemplate,
+      '/homepages/{homepageId}/claim-requests/mine',
+    );
+    expect(executor.pathParameters, <String, String>{
+      'homepageId': 'homepage-1',
+    });
+    expect(executor.queryParameters, isEmpty);
+    expect(
+      executor.context?.clientPageId,
+      EntityRequestPageIds.getMyPendingHomepageClaimRequest,
+    );
+    expect(executor.context?.idempotencyKey, isNull);
+    expect(result.claimRequestId, 'claim-1');
+    expect(result.requesterPersonaId, 'persona-1');
+    expect(result.status, HomepageClaimReviewStatus.pendingReview);
+  });
 }
 
 CloudOperationInvocationContext _context(
   String clientPageId,
-  AppUiSurface surface,
-) => CloudOperationInvocationContext(
+  AppUiSurface surface, {
+  String? idempotencyKey,
+}) => CloudOperationInvocationContext(
   surfaceId: surface.id,
   routeId: surface.routeId,
   clientPageId: clientPageId,
@@ -86,7 +125,21 @@ CloudOperationInvocationContext _context(
     accountId: 'account-1',
     personaId: 'persona-1',
   ),
-  idempotencyKey: 'claim-intent-1',
+  idempotencyKey: idempotencyKey ?? 'claim-intent-fallback',
+);
+
+CloudOperationInvocationContext _queryContext(
+  String clientPageId,
+  AppUiSurface surface, {
+  String? idempotencyKey,
+}) => CloudOperationInvocationContext(
+  surfaceId: surface.id,
+  routeId: surface.routeId,
+  clientPageId: clientPageId,
+  actor: const CloudOperationActorContext(
+    accountId: 'account-1',
+    personaId: 'persona-1',
+  ),
 );
 
 Map<String, Object?> _claimResponse() => <String, Object?>{
@@ -105,6 +158,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
   CloudOperationContract? operation;
   CloudOperationInvocationContext? context;
   Map<String, String> pathParameters = const <String, String>{};
+  Map<String, String> queryParameters = const <String, String>{};
   Object? body;
 
   @override
@@ -118,6 +172,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     this.context = context;
     final payload = requestEncoder();
     pathParameters = payload.pathParameters;
+    queryParameters = payload.queryParameters;
     body = payload.body;
     return responseDecoder(response);
   }

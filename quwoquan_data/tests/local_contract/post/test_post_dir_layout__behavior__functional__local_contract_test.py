@@ -20,32 +20,89 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import hashlib
 import os
+import shutil
 import tempfile
+
+import pytest
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 _OUTPUT_ROOT = Path(tempfile.mkdtemp(prefix="post_dir_layout_output_"))
 
+from content.execution import workspace as execution_workspace  # noqa: E402
+from content.execution.closure.pool_delivery import (
+    write_pool_delivery_intent,  # noqa: E402
+)
+from content.execution.stage_reports import write_stage_result  # noqa: E402
+from content.post.article.draft_io import (  # noqa: E402
+    write_agent_draft,
+    write_writing_pack,
+)
+from content.post.materialize_apply import materialize_posts  # noqa: E402
+from content.post.materialize_contract import _materialized_asset_refs  # noqa: E402
+from content.post.materialize_residue_cleanup import (
+    prune_materialized_post_refs,  # noqa: E402
+)
 from content.post.object_index import register_content_object  # noqa: E402
-from content.post.article.draft_io import write_agent_draft  # noqa: E402
-from core.io import read_json  # noqa: E402
+from content.release.canonical import creator_projection, post_transaction  # noqa: E402
+from content.release.canonical.post_transaction import (  # noqa: E402
+    build_post_object_transaction_package,
+)
+from content.source.source_unit import write_source_unit  # noqa: E402
+from content.templates.registry import TemplateRegistry  # noqa: E402
+from core.io import read_json, write_json  # noqa: E402
 from core.paths import (  # noqa: E402
+    ensure_execution_command_layout,
+    ensure_execution_layout,
     execution_command_root,
     execution_entity_object_dir,
     execution_root,
-    ensure_execution_command_layout,
-    ensure_execution_layout,
 )
-from content.execution.stage_reports import write_stage_result  # noqa: E402
-from content.post.materialize_apply import materialize_posts  # noqa: E402
-from content.post.materialize_contract import _materialized_asset_refs  # noqa: E402
-from content.post.materialize_residue_cleanup import prune_materialized_post_refs  # noqa: E402
-from content.source.source_unit import write_source_unit  # noqa: E402
+from core.source_digest import current_source_digest  # noqa: E402
+from governance.creators.assignment import creator_assignment_from_profile  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-article-layout--test-region-b--pilot-001"
 ANGLE = "攻略"
+
+
+@pytest.fixture(autouse=True)
+def _freeze_source_digest_during_one_test(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frozen = current_source_digest()
+    monkeypatch.setattr(
+        execution_workspace,
+        "current_source_digest",
+        lambda: frozen,
+    )
+
+
+def _source_attribution() -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorId": None,
+        "originalCreatorName": "都江堰来源编辑",
+        "originalCreatorProfileUrl": None,
+        "platform": "Curated Research",
+        "sourcePostUrl": "https://example.com/dujiangyan",
+        "originalAssetUrl": "https://example.com/dujiangyan",
+        "attributionText": "都江堰来源编辑 / internal research",
+        "rightsBasis": "factual reference only",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "authorizationProofUrl": None,
+        "termsUrl": None,
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-07-11T00:00:00Z",
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
 
 
 def _retarget_roots() -> None:
@@ -54,7 +111,19 @@ def _retarget_roots() -> None:
 
 def _seed_post(ref: str, publish_title: str, source_ref: str) -> None:
     article = f"# {publish_title}\n\n正文：{ref} 的真实内容展开。"
+    creator = creator_assignment_from_profile(
+        TemplateRegistry.load().creators["qwq_creator_travel_blogger_001"]
+    )
     register_content_object(EXECUTION_ID, ref, content_type="article", angle=ANGLE, title=publish_title)
+    write_writing_pack(
+        EXECUTION_ID,
+        ref,
+        {
+            "carrier": "article",
+            "baseSourceRef": source_ref,
+            "sourcePaths": [source_ref],
+        },
+    )
     write_stage_result(EXECUTION_ID, "post", "review", ref, {"decision": "approved"})
     write_stage_result(
         EXECUTION_ID, "post", "compose", ref,
@@ -64,7 +133,9 @@ def _seed_post(ref: str, publish_title: str, source_ref: str) -> None:
             "title": publish_title,
             "publishTitle": publish_title,
             "carrier": "article",
-            "entityRefs": [],
+            "vertical": "travel",
+            **creator,
+            "entityRefs": ["/entity/地点/景区/都江堰"],
             "tagRefs": ["Topic/旅行", "Format/内容角度/攻略"],
             "assets": [],
             "publishMediaMode": "text_only",
@@ -92,10 +163,9 @@ def _posts_root() -> Path:
 
 def _materialize() -> tuple[Path, list[Path]]:
     _retarget_roots()
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
     ensure_execution_layout(EXECUTION_ID)
     ensure_execution_command_layout(EXECUTION_ID, "post")
-    import shutil
-
     # 清理对象树 + 路由，保证可重复运行。
     execution_dir = execution_root(EXECUTION_ID)
     for sub in (execution_dir / "posts", execution_dir / "_shared"):
@@ -105,8 +175,15 @@ def _materialize() -> tuple[Path, list[Path]]:
     if post_results.exists():
         shutil.rmtree(post_results)
     build_execution_fixture(EXECUTION_ID)
+    entity_dir = execution_entity_object_dir(
+        EXECUTION_ID, "地点", "景区", "都江堰"
+    )
+    write_json(
+        entity_dir / "_entity.json",
+        {"entityRef": "/entity/地点/景区/都江堰"},
+    )
     source_manifest = write_source_unit(
-        execution_entity_object_dir(EXECUTION_ID, "地点", "景区", "都江堰"),
+        entity_dir,
         ordinal=1,
         source_id="base",
         source_md="# 都江堰来源\n\n用于文章目录布局契约的来源证据。",
@@ -117,6 +194,10 @@ def _materialize() -> tuple[Path, list[Path]]:
         title="都江堰来源",
         target_ref="/entity/地点/景区/都江堰",
         execution_id=EXECUTION_ID,
+        source_use_mode="factual_reference_only",
+        research_lane="article",
+        publish_media_mode="text_only",
+        source={"sourceAttribution": _source_attribution()},
     )
     source_ref = str(source_manifest["sourceRef"])
     # 同一 (type,angle,title) 两篇（ref 排序 a<b → 1,2），另一标题一篇。
@@ -211,6 +292,11 @@ def test_publish_angle_derives_category_from_carrier_and_intent():
     assert _publish_angle({"carrier": "article", "writingIntent": "planning_consultation"}) == "攻略"
     assert _publish_angle({"carrier": "article", "writingIntent": "decision_experience"}) == "体验"
     assert _publish_angle({"carrier": "article", "writingIntent": "post_trip_journal"}) == "游记"
+    assert _publish_angle({
+        "carrier": "article",
+        "articleCategory": "photography",
+        "writingIntent": "planning_consultation",
+    }) == "摄影"
     # 缺失/未知 intent 回退「攻略」，templateId 不再影响 angle。
     assert _publish_angle({"carrier": "article"}) == "攻略"
     assert _publish_angle({"templateId": "线路_自驾路书"}) == "攻略"
@@ -231,6 +317,61 @@ def test_promote_rglob_locates_object_layout():
         assert len(rel.parts) == 4, rel  # <type>/<angle>/<title>/<seq>
         assert rel.parts[1] == ANGLE, rel
         assert rel.parts[3].isdigit(), rel
+
+
+def test_materialize_review_intent_and_transaction_share_reserved_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Production materialization freezes the identity consumed by delivery."""
+
+    posts, _materialized = _materialize()
+    object_dir = posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1"
+    execution_dir = execution_root(EXECUTION_ID)
+    content_object_dir = object_dir.relative_to(execution_dir).as_posix()
+    publish_root = tmp_path / "canonical-publish"
+    reservation_root = tmp_path / "delivery-reservations"
+
+    profile = TemplateRegistry.load().creators[
+        "qwq_creator_travel_blogger_001"
+    ]
+    avatar_object_key = str(profile["avatarAsset"]["objectKey"])
+    avatar_target = publish_root / avatar_object_key
+    avatar_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(
+        DATA_ROOT / "publish" / avatar_object_key,
+        avatar_target,
+    )
+    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", publish_root)
+    monkeypatch.setattr(post_transaction, "PUBLISH_ROOT", publish_root)
+
+    intent, _intent_path = write_pool_delivery_intent(
+        EXECUTION_ID,
+        carrier="article",
+        object_ref="都江堰_a",
+        content_object_dir=content_object_dir,
+        root=execution_dir,
+        publish_root=publish_root,
+        reservation_root=reservation_root,
+    )
+    canonical_ref = content_object_dir.removeprefix("posts/")
+    transaction_id = (
+        f"{EXECUTION_ID}--post-"
+        f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
+    )
+    package_root = tmp_path / "object-transactions" / transaction_id
+    build_post_object_transaction_package(
+        execution_root=execution_dir,
+        object_ref=canonical_ref,
+        transaction_id=transaction_id,
+        package_root=package_root,
+        pool_delivery_intent=intent,
+    )
+    canonical_manifest = read_json(package_root / "object/manifest.json")
+
+    assert canonical_manifest["contentId"] == intent["contentId"]
+    assert canonical_manifest["version"] == intent["version"]
+    assert canonical_manifest["sourceAttribution"] == _source_attribution()
 
 
 def _run_all() -> None:

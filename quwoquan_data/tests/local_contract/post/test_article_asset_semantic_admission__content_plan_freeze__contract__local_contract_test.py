@@ -71,7 +71,7 @@ def test_content_plan_excludes_off_entity_closing_before_freeze(
     )
     monkeypatch.setattr(
         content_plan_assets,
-        "_canonical_article_asset_issue",
+        "_canonical_image_asset_issue",
         lambda *_args: "",
     )
 
@@ -197,6 +197,65 @@ def test_target_section_does_not_admit_subject_mentioned_only_in_other_section()
     assert "frozen source body" in issue
 
 
+def test_exact_frozen_page_title_admits_representative_assets() -> None:
+    row = _row(
+        "little-lotus-manor.jpg",
+        "小蓮莊",
+        "小蓮莊",
+    )
+    row["pageResolvedTitle"] = "南浔镇"
+
+    assert article_asset_semantic_issue(
+        row,
+        entity_id="南浔镇",
+        entity_aliases=("南浔古镇",),
+        article_text="",
+    ) == ""
+
+    row["pageResolvedTitle"] = "南浔区"
+    issue = article_asset_semantic_issue(
+        row,
+        entity_id="南浔镇",
+        entity_aliases=("南浔古镇",),
+        article_text="",
+    )
+    assert "frozen source body" in issue
+
+
+def test_broad_province_source_does_not_admit_unrelated_figure_block() -> None:
+    article_text = (
+        "### 大型城市\n\n"
+        "杭州市以茶、丝绸和西湖而闻名。\n\n"
+        ":::figure\n"
+        "位于大渔湾海滨的浙江省苍南县金乡镇渔岙村。\n"
+        ":::\n\n"
+        "## 观光\n\n杭州西湖 千岛湖 江郎山\n"
+    )
+
+    issue = article_asset_semantic_issue(
+        _row(
+            "yuao.jpg",
+            "Yu'ao Village 渔岙村潮间带渔港",
+            "浙江省苍南县金乡镇渔岙村",
+        ),
+        entity_id="杭州西湖",
+        entity_aliases=("西湖",),
+        article_text=article_text,
+    )
+    assert "frozen source body" in issue
+
+    assert article_asset_semantic_issue(
+        _row(
+            "broken-bridge.jpg",
+            "断桥一带的西湖与杭州城",
+            "杭州西湖断桥实景",
+        ),
+        entity_id="杭州西湖",
+        entity_aliases=("西湖",),
+        article_text=article_text,
+    ) == ""
+
+
 def test_canonical_duplicates_are_removed_before_article_refs_freeze(
     monkeypatch,
     tmp_path: Path,
@@ -223,7 +282,7 @@ def test_canonical_duplicates_are_removed_before_article_refs_freeze(
     )
     monkeypatch.setattr(
         content_plan_assets,
-        "_canonical_article_asset_issue",
+        "_canonical_image_asset_issue",
         lambda _source_dir, row: (
             "canonical image identity duplicated" if row["fileName"] == "001_old.jpg" else ""
         ),

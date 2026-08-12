@@ -34,18 +34,6 @@ func (s *MongoUserAccountStoreBase) EnsureIndexes(ctx context.Context) error {
 		},
 		{
 			Keys: bson.D{
-				{Key: "activityLevel", Value: 1},
-			},
-			Options: options.Index().SetName("idx_upv_activity"),
-		},
-		{
-			Keys: bson.D{
-				{Key: "interestTags", Value: 1},
-			},
-			Options: options.Index().SetName("idx_upv_interest"),
-		},
-		{
-			Keys: bson.D{
 				{Key: "segments", Value: 1},
 			},
 			Options: options.Index().SetName("idx_upv_segments"),

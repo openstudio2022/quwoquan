@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/homepage-source-5fed98bb721384c2f817/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "homepage-source-5fed98bb721384c2f817",
+    "entityName": "杭州宋城",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T07:26:24Z",
+    "snapshotHash": "sha256:bc22d5fa73271ee5da808b5487fa7ea8756aab8fbad6e7333c5b7eb72980abcf",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/homepage-source-5fed98bb721384c2f817/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "homepage-source-5fed98bb721384c2f817",
+      "entityName": "杭州宋城",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+      "title": "维基百科",
+      "fetchedAt": "2026-08-12T07:26:24Z",
+      "snapshotHash": "sha256:bc22d5fa73271ee5da808b5487fa7ea8756aab8fbad6e7333c5b7eb72980abcf",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/homepage-source-5fed98bb721384c2f817/meta.json"
+    }
+  ]
+}

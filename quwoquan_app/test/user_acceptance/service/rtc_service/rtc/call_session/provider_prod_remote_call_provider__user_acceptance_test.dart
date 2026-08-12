@@ -33,7 +33,7 @@ const _expectedCallerName = String.fromEnvironment(
 void main() {
   patrolTest(
     'Prod Remote 双向来电通过真实系统展示、媒体、屏幕共享和 PiP 挂断',
-    tags: const ['provider', 'rtc', 'two_device', 'prod_remote'],
+    tags: const ['provider', 'rtc', 'two-device'],
     skip: !kRunPatrolAcceptance,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 30)),
     ($) async {

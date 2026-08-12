@@ -1,4 +1,4 @@
-description: AssistantTaskView 的唯一任务列表读取入口。
+description: AssistantTaskView 从 owner SkillSubscription 与 active immutable SkillCatalog 联邦派生任务的唯一读取入口。
 api_routes:
 - method: GET
   path: /assistant/tasks
@@ -20,7 +20,7 @@ api_routes:
   security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
 readiness_cases:
 - case_id: list-assistant-tasks-local
-  spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
+  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002
   producer: service
   layer: local_contract
   target: {kind: operation, id: ListAssistantTasks}
@@ -28,7 +28,7 @@ readiness_cases:
   executions:
   - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
 - case_id: list-assistant-tasks-api
-  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002
   producer: service
   layer: api_integration
   target: {kind: operation, id: ListAssistantTasks}
@@ -36,10 +36,18 @@ readiness_cases:
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: assistant_task_view_list_assistant_tasks_app_local
-  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002
   producer: app
   layer: local_contract
   target: {kind: operation, id: ListAssistantTasks}
   runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_task_view/assistant_task_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_task_view_list_assistant_tasks_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: ListAssistantTasks}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_task_view/assistant_task_view_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

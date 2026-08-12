@@ -23,6 +23,9 @@ def package_android_official_release(
     download_origin: str,
     expected_package: str,
     expected_signing_certificate_sha256: str,
+    minimum_supported_version: str,
+    minimum_supported_build: str,
+    minimum_supported_build_evidence_path: Path | None = None,
     verify_remote: bool = False,
     apkanalyzer: str = "",
     apksigner: str = "",
@@ -56,6 +59,23 @@ def package_android_official_release(
         raise AndroidOfficialReleaseError(f"APK build number is invalid: {build_number}")
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}(?:[-.][A-Za-z0-9]+)*", version_name):
         raise AndroidOfficialReleaseError(f"APK version name is invalid: {version_name}")
+    minimum_supported_version = minimum_supported_version.strip()
+    minimum_supported_build = minimum_supported_build.strip()
+    if not re.fullmatch(
+        r"[0-9]+(?:\.[0-9]+){1,3}(?:[-.][A-Za-z0-9]+)*",
+        minimum_supported_version,
+    ):
+        raise AndroidOfficialReleaseError(
+            "Android minimum supported version must be explicitly declared"
+        )
+    if not re.fullmatch(r"[1-9][0-9]{0,17}", minimum_supported_build):
+        raise AndroidOfficialReleaseError(
+            "Android minimum supported build must be explicitly declared"
+        )
+    if int(minimum_supported_build) > int(build_number):
+        raise AndroidOfficialReleaseError(
+            "Android minimum supported build cannot exceed the packaged build"
+        )
 
     signer_output = _tool_output(
         [signer, "verify", "--print-certs", str(apk_path)],
@@ -112,7 +132,7 @@ def package_android_official_release(
     packaged_apk = release_dir / artifact_name
     shutil.copy2(apk_path, packaged_apk)
     manifest: dict[str, object] = {
-        "schema": "qwq.android.official-release",
+        "schema": "client-app.android.official-release",
         "platform": "android",
         "versionName": version_name,
         "buildNumber": build_number,
@@ -125,9 +145,29 @@ def package_android_official_release(
         "apkHostAllowlist": [urlparse(download_origin).hostname],
         "publicOrigin": public_origin,
         "recoveryUrl": public_origin.rstrip("/") + "/download",
+        "updateUrl": apk_url,
+        "minimumSupportedVersion": minimum_supported_version,
+        "minimumSupportedBuild": minimum_supported_build,
         "packagedAPK": packaged_apk.name,
         "remoteVerified": verify_remote,
     }
+    if minimum_supported_build_evidence_path is not None:
+        source_evidence = minimum_supported_build_evidence_path.expanduser().resolve()
+        if not source_evidence.is_file():
+            raise AndroidOfficialReleaseError(
+                "Android minimum supported build increase evidence is missing"
+            )
+        try:
+            evidence = json.loads(source_evidence.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise AndroidOfficialReleaseError(
+                "Android minimum supported build increase evidence is invalid"
+            ) from error
+        if not isinstance(evidence, dict):
+            raise AndroidOfficialReleaseError(
+                "Android minimum supported build increase evidence must be an object"
+            )
+        manifest["minimumSupportedBuildIncreaseEvidence"] = evidence
     manifest_path = release_dir / "manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -135,9 +175,12 @@ def package_android_official_release(
     )
     environment = {
         "PRODUCT_OPS_APP_RELEASE_PUBLIC_ORIGIN": public_origin,
-        "PRODUCT_OPS_APP_RELEASE_RECOVERY_URL": manifest["recoveryUrl"],
         "PRODUCT_OPS_ANDROID_LATEST_VERSION": version_name,
         "PRODUCT_OPS_ANDROID_LATEST_BUILD": build_number,
+        "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_VERSION": minimum_supported_version,
+        "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_BUILD": minimum_supported_build,
+        "PRODUCT_OPS_ANDROID_UPDATE_URL": manifest["updateUrl"],
+        "PRODUCT_OPS_ANDROID_RECOVERY_URL": manifest["recoveryUrl"],
         "PRODUCT_OPS_ANDROID_APK_URL": apk_url,
         "PRODUCT_OPS_ANDROID_APK_HOST_ALLOWLIST": urlparse(download_origin).hostname,
         "PRODUCT_OPS_ANDROID_APK_PACKAGE_NAME": package_name,

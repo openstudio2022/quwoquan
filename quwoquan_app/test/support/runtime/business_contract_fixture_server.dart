@@ -12,6 +12,8 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentType;
 
+import 'fixtures/object_contract_example_reader.dart';
+
 const String businessFixtureCurrentUserId = 'fixture_user_current';
 
 class _BusinessFixtures {
@@ -42,72 +44,74 @@ class _BusinessFixtures {
   final Map<String, dynamic> rtcSeed;
 
   static _BusinessFixtures load() {
-    final content = _loadFixture(
-      '../quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json',
-    );
-    final chat = _loadFixture(
-      '../quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json',
-    );
-    final circle = _loadFixture(
-      '../quwoquan_service/services/circle-service/tests/support/contract_fixtures/scenarios/circle_scenarios.json',
-    );
-    final user = _loadFixture(
-      '../quwoquan_service/services/user-service/tests/support/contract_fixtures/scenarios/user_scenarios.json',
-    );
-    final entity = _loadFixture(
-      '../quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.json',
-    );
-    final integration = _loadFixture(
-      '../quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json',
-    );
-    final notification = _loadFixture(
-      '../quwoquan_service/services/notification-service/tests/support/contract_fixtures/scenarios/notification_scenarios.json',
-    );
-    final rtc = _loadFixture(
-      '../quwoquan_service/services/rtc-service/tests/support/contract_fixtures/scenarios/rtc_scenarios.json',
-    );
+    final content = objectContractExampleReader
+        .document('content')
+        .cast<String, dynamic>();
+    final chat = objectContractExampleReader
+        .document('chat')
+        .cast<String, dynamic>();
+    final circle = objectContractExampleReader
+        .document('circle')
+        .cast<String, dynamic>();
+    final user = objectContractExampleReader
+        .document('user')
+        .cast<String, dynamic>();
+    final entity = objectContractExampleReader
+        .document('entity')
+        .cast<String, dynamic>();
+    final integration = objectContractExampleReader
+        .document('integration')
+        .cast<String, dynamic>();
+    final notification = objectContractExampleReader
+        .document('notification')
+        .cast<String, dynamic>();
+    final rtc = objectContractExampleReader
+        .document('rtc')
+        .cast<String, dynamic>();
     return _BusinessFixtures(
       contentSeed:
-          (content['seedSets']
+          (content['examples']
                   as Map<String, dynamic>)['content_discovery_core']
               as Map<String, dynamic>,
       chatSeed:
-          (chat['seedSets'] as Map<String, dynamic>)['chat_core']
+          (chat['examples'] as Map<String, dynamic>)['chat_core']
               as Map<String, dynamic>,
       chatContactsSeed:
-          (chat['seedSets'] as Map<String, dynamic>)['chat_contacts_core']
+          (chat['examples'] as Map<String, dynamic>)['chat_contacts_core']
               as Map<String, dynamic>,
       circleSeed: _canonicalCircleSeed(
-        (circle['seedSets'] as Map<String, dynamic>)['circle_core']
+        (circle['examples'] as Map<String, dynamic>)['circle_core']
             as Map<String, dynamic>,
       ),
       circleHomeSeed:
-          (circle['seedSets'] as Map<String, dynamic>)['circle_home_feed_core']
+          (circle['examples'] as Map<String, dynamic>)['circle_home_feed_core']
               as Map<String, dynamic>,
       userSeed:
-          (user['seedSets'] as Map<String, dynamic>)['user_profile_core']
+          (user['examples'] as Map<String, dynamic>)['user_profile_core']
               as Map<String, dynamic>,
       userFeedSeed:
-          (user['seedSets'] as Map<String, dynamic>)['profile_feed_core']
+          (user['examples'] as Map<String, dynamic>)['profile_feed_core']
               as Map<String, dynamic>,
-      entitySeed:
-          (entity['seedSets'] as Map<String, dynamic>)['entity_homepage_core']
-              as Map<String, dynamic>,
-      integrationSeed:
-          (integration['seedSets'] as Map<String, dynamic>)['location_poi_core']
-              as Map<String, dynamic>,
-      notificationSeed:
-          (notification['seedSets']
-                  as Map<String, dynamic>)['notification_core']
-              as Map<String, dynamic>,
-      rtcSeed:
-          (rtc['seedSets'] as Map<String, dynamic>)['rtc_core']
-              as Map<String, dynamic>,
+      entitySeed: _example(entity, 'entity_homepage_core'),
+      integrationSeed: _example(integration, 'location_poi_core'),
+      notificationSeed: _example(notification, 'notification_core'),
+      rtcSeed: _example(rtc, 'rtc_core'),
     );
   }
 
-  static Map<String, dynamic> _loadFixture(String path) {
-    return json.decode(File(path).readAsStringSync()) as Map<String, dynamic>;
+  static Map<String, dynamic> _example(
+    Map<String, dynamic> document,
+    String key,
+  ) {
+    final examples = document['examples'];
+    if (examples is! Map<String, dynamic>) {
+      throw FormatException('$key contract examples are missing');
+    }
+    final value = examples[key];
+    if (value is! Map<String, dynamic>) {
+      throw FormatException('$key contract example is missing');
+    }
+    return value;
   }
 
   static Map<String, dynamic> _canonicalCircleSeed(
@@ -350,7 +354,7 @@ final class BusinessContractFixtureServer {
       if (path == '/rtc/calls') {
         _writeJson(request, {
           'items': _fixtures.rtcSeed['sessions'],
-          'participants': _fixtures.rtcSeed['participants'],
+          'participants': _fixtures.rtcSeed['participants'] ?? const [],
         });
         return;
       }

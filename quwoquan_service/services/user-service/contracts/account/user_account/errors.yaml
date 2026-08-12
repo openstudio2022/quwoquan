@@ -52,6 +52,7 @@ errors:
     - SearchSocialRelations
     - SuspendAccount
     - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.account_session.IssueWhitelistedResearchSession
     - user.account_session.Logout
     - user.contact_discovery_record.DismissContactDiscovery
     - user.contact_discovery_record.GetLatestContactDiscovery
@@ -122,6 +123,7 @@ errors:
     - RestoreAccount
     - SuspendAccount
     - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.account_session.IssueWhitelistedResearchSession
     - user.device_registration.InvalidateDevicePushEndpoint
     - user.device_registration.RemoveDevicePushEndpoint
     - user.device_registration.ResolveIncomingCallPushDestinations
@@ -260,6 +262,7 @@ errors:
     - user.account_appeal_intake.ClaimAccountAppealIntake
     - user.account_appeal_intake.IssueAccountAppealCredential
     - user.account_appeal_intake.SubmitAccountAppealIntake
+    - user.account_session.IssueWhitelistedResearchSession
     - user.account_session.LoginAnonymous
     - user.account_session.LoginOneTap
     - user.account_session.LoginWithAlipay
@@ -269,6 +272,7 @@ errors:
     - user.account_session.Logout
     - user.account_session.RefreshToken
     - user.authentication_challenge.CreateAlipayAuthorizationRequest
+    - user.authentication_challenge.GetOtpDeliveryReadiness
     - user.authentication_challenge.ResolveOneTapLoginHint
     - user.authentication_challenge.SendOtp
     - user.contact_discovery_record.DismissContactDiscovery

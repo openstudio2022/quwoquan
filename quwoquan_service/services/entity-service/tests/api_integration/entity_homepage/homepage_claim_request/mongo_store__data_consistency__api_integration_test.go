@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
 // readiness_case: list-homepage-claim-requests-api
 // readiness_case: create-homepage-claim-request-api
+// readiness_case: get-my-pending-homepage-claim-request-api
 // readiness_case: review-homepage-claim-request-api
 package api_integration
 
@@ -115,6 +117,11 @@ func TestHomepageClaimRequestMongoPacket(t *testing.T) {
 	replayed, err := facade.Create(claimContext("claim-create"), command)
 	if err != nil || replayed.ClaimRequestID != created.ClaimRequestID {
 		t.Fatalf("claim receipt replay mismatch: %+v err=%v", replayed, err)
+	}
+	mine, err := facade.GetMyPending(ctx, created.HomepageID, command.ActorPersonaID)
+	if err != nil || mine.ClaimRequestID != created.ClaimRequestID ||
+		mine.Status != claimmodel.StatusPendingReview {
+		t.Fatalf("read pending claim through MongoDB: %+v err=%v", mine, err)
 	}
 	changed := command
 	changed.Note = "different digest"

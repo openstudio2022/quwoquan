@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Alpha/test-only FilterCatalogRelease reader。
 ///
@@ -16,7 +16,7 @@ final class InMemoryFilterCatalogQuery implements ContentFilterCatalogQuery {
 }
 
 FilterCatalogSlice _snapshotFromCanonicalRelease() {
-  final envelope = objectScenarioSeedReader.releaseObject(
+  final envelope = objectContractExampleReader.releaseObject(
     'quwoquan_data/reference/filter_catalog/releases/'
     'filter-catalog-20260720-001/filter_catalog_release.json',
   );

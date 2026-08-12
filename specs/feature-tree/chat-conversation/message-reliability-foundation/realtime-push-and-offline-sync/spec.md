@@ -87,7 +87,7 @@
 
 ## 4. 契约引用
 
-- 测试 fixture：`quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json`
+- local_contract 对象构造器：`quwoquan_app/test/support/runtime/fixtures/object_contract_example_builders.dart#buildObjectContractExampleDocument(chat)`；环境会话与消息通过 typed capability 和公开 command 构造。
 - canonical：`quwoquan_service/services/realtime-gateway/contracts/realtime/connection/operations.yaml`
 - canonical：`quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/realtime/realtime_operation_contracts.g.dart`
 - canonical：`quwoquan_app/lib/runtime/transport/generated/realtime/realtime_request_page_ids.g.dart`

@@ -22,3 +22,16 @@ events:
   - reason
   no_consumer_reason: Session revocation is enforced by the authoritative session store; the persisted event currently has
     no relay.
+- name: AccountSessionRotated
+  description: refresh token 成功轮换时，与旧 session 的 rotated 状态和新 active session 在同一事务提交的持久化审计事实。
+  delivery_semantics: transactional_event_log
+  payload_entity: AccountSession
+  payload_fields:
+  - sessionId
+  - accountId
+  - deviceId
+  - lineageId
+  - rotatedToSessionId
+  - rotatedAt
+  no_consumer_reason: Session rotation is enforced synchronously by the authoritative session store; the persisted event currently
+    has no relay.

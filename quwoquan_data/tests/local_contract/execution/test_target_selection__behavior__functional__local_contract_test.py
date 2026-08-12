@@ -102,6 +102,45 @@ def test_select_targets_uses_static_coverage_identity_only(tmp_path: Path):
     assert report["selectedCount"] == 1
 
 
+@pytest.mark.parametrize(("intent", "quota"), (("m100", 100), ("m1000", 1000)))
+def test_scale_selection_uses_local_semantic_backend_and_independent_delivery(
+    intent: str,
+    quota: int,
+) -> None:
+    spec = build_execution_spec(
+        execution_id=(
+            f"20260811--travel-article-{intent}--china--scale-{quota:04d}"
+        ),
+        name=f"{intent} semantic delivery split",
+        title=f"{intent} semantic delivery split",
+        region="中国",
+        category="旅行",
+        targets=[
+            {"name": f"候选-{index:04d}", "entityType": "地点/城市"}
+            for index in range(quota)
+        ],
+        created_by="contract-test",
+        entity_articles_per_target=1,
+        entity_homepages_per_target=0,
+        image_works_per_target=0,
+        video_works_per_target=0,
+        target_entity_count=quota,
+        approved_quota=quota,
+        oversample_factor=1.0,
+        required_workers=1,
+        partition_count=16,
+        capacity_plan_digest="sha256:" + "1" * 64,
+    )
+
+    assert spec["queuePolicy"]["backend"] == "local_file"
+    assert spec["queuePolicy"]["reliableTask"] == {
+        "taskType": "data.content_object.execute",
+        "queue": "reliabletask.data.content_supply",
+        "store": "MongoStore",
+        "readyIndex": "RedisReadyIndex",
+    }
+
+
 def test_select_targets_preserves_leaf_name_as_canonical_alias(tmp_path: Path):
     path = tmp_path / "杭州市.yaml"
     path.write_text(

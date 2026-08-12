@@ -1,0 +1,47 @@
+description: 生产灰度的最小权威 assignment 状态；不保存原始安装标识。
+fields:
+- name: campaignId
+  source: campaignId
+  type: string
+  constraints: [PK]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: subjectDigest
+  source: subjectDigest
+  type: string
+  constraints: [PK, SHA256]
+  classification: SENSITIVE
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: none
+  role: authoritative_state
+- name: target
+  source: target
+  type: string
+  constraints: [NOT_NULL, ENUM_candidate]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: assignedAt
+  source: assignedAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: expiresAt
+  source: expiresAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state

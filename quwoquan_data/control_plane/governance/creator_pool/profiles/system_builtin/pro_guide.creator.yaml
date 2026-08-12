@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_pro_guide_001
 personaId: builtin_travel_pro_guide
 authorId: builtin_travel_pro_guide
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 讲解员小周
 userHandle: guide_zhou

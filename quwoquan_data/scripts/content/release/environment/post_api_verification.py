@@ -1,18 +1,14 @@
 """Verify release-imported posts through the public content API."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import yaml
-
-from core.control_types import ContentType
-from core.io import write_json
-from core.paths import OUTPUT_ROOT, REPO_ROOT
-from core.schema import assert_valid
 from content.release.environment.post_api_media_verification import (
     PostApiCase,
     PostApiVerificationError,
@@ -21,6 +17,12 @@ from content.release.environment.post_api_media_verification import (
     _required_text,
     _verify_binary_media,
     _verify_source_attribution,
+)
+from content.release.environment.post_api_projection_verification import (
+    reject_unknown_content_post_projection_fields as _reject_unknown_content_post_projection_fields,
+)
+from content.release.environment.post_api_projection_verification import (
+    verify_search_projection as _verify_search_projection,
 )
 from content.release.environment.post_api_release_cases import (
     CreatorProfileCase,
@@ -31,7 +33,10 @@ from content.release.environment.public_api_client import (
     PublicApiClientError,
 )
 from content.release.model import DeploymentEnvironment
-
+from core.control_types import ContentType
+from core.io import write_json
+from core.paths import OUTPUT_ROOT, REPO_ROOT
+from core.schema import assert_valid
 
 CONTENT_POST_OPERATIONS_PATH = (
     REPO_ROOT
@@ -52,6 +57,15 @@ def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
 def _public_media_path(url: str) -> str:
     parts = urlsplit(str(url or "").strip())
     return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def _optional_text(payload: Mapping[str, Any], field: str, *, endpoint: str) -> str:
+    value = payload.get(field)
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise PostApiVerificationError(f"{endpoint} {field} must be a string or null")
+    return value.strip()
 
 
 def _post_feed_page_limit() -> int:
@@ -88,7 +102,11 @@ def _post_feed_page_limit() -> int:
     raise PostApiVerificationError("GetFeed route contract is missing")
 
 
-def _verify_detail(client: PublicApiClient, case: PostApiCase) -> dict[str, Any]:
+def _verify_detail(
+    client: PublicApiClient,
+    case: PostApiCase,
+    creator: CreatorProfileCase,
+) -> dict[str, Any]:
     response = client.get_json(
         f"content/posts/{quote(case.post_id, safe='')}",
         page_id=POST_DETAIL_PAGE_ID,
@@ -100,6 +118,22 @@ def _verify_detail(client: PublicApiClient, case: PostApiCase) -> dict[str, Any]
         raise PostApiVerificationError(f"post detail id mismatch for {case.post_ref}")
     if _required_text(payload, "authorId", endpoint="post detail") != case.author_id:
         raise PostApiVerificationError(f"post detail author mismatch for {case.post_ref}")
+    if (
+        _required_text(payload, "authorDisplayName", endpoint="post detail")
+        != creator.display_name
+    ):
+        raise PostApiVerificationError(
+            f"post detail author display name mismatch for {case.post_ref}"
+        )
+    detail_avatar_url = (
+        _required_text(payload, "authorAvatarUrl", endpoint="post detail")
+        if creator.avatar_url
+        else _optional_text(payload, "authorAvatarUrl", endpoint="post detail")
+    )
+    if _public_media_path(detail_avatar_url) != _public_media_path(creator.avatar_url):
+        raise PostApiVerificationError(
+            f"post detail author avatar mismatch for {case.post_ref}"
+        )
     if _required_text(payload, "contentType", endpoint="post detail") != case.content_type.value:
         raise PostApiVerificationError(f"post detail content type mismatch for {case.post_ref}")
     if _required_text(payload, "contentIdentity", endpoint="post detail") != "work":
@@ -163,7 +197,7 @@ def _verify_author_profile(
         raise PostApiVerificationError(
             f"creator public profile lacks display name for {creator.creator_ref}"
         )
-    avatar_url = _required_text(
+    avatar_url = _optional_text(
         response.payload,
         "avatarUrl",
         endpoint="creator public profile",
@@ -173,6 +207,31 @@ def _verify_author_profile(
     if _public_media_path(avatar_url) != _public_media_path(creator.avatar_url):
         raise PostApiVerificationError(
             f"creator public avatar URL drift for {creator.creator_ref}"
+        )
+    if creator.avatar_asset_id is None:
+        if avatar_url:
+            raise PostApiVerificationError(
+                f"creator public avatar unexpectedly exists for {creator.creator_ref}"
+            )
+        return {
+            "creatorRef": creator.creator_ref,
+            "authorId": creator.author_id,
+            "personaId": creator.persona_id,
+            "profileStatus": response.status,
+            "avatarAssetId": None,
+            "avatarUrl": "",
+            "avatarMediaReady": False,
+            "avatarProbeCount": 0,
+            "avatarProbe": None,
+            "usesPlatformDefaultAvatar": True,
+        }
+    if (
+        creator.avatar_bytes is None
+        or creator.avatar_sha256 is None
+        or creator.avatar_mime_type is None
+    ):
+        raise PostApiVerificationError(
+            f"creator avatar authority is incomplete for {creator.creator_ref}"
         )
     avatar_probe = _verify_binary_media(
         client,
@@ -192,6 +251,7 @@ def _verify_author_profile(
         "avatarMediaReady": True,
         "avatarProbeCount": 1,
         "avatarProbe": avatar_probe,
+        "usesPlatformDefaultAvatar": False,
     }
 
 
@@ -199,8 +259,10 @@ def _feed_item_matches_release(
     item: Mapping[str, Any],
     *,
     cases_by_id: Mapping[str, PostApiCase],
+    creators_by_author: Mapping[str, CreatorProfileCase],
     endpoint: str,
 ) -> str | None:
+    _reject_unknown_content_post_projection_fields(item, endpoint=endpoint)
     post_id = _required_text(item, "postId", endpoint=endpoint)
     case = cases_by_id.get(post_id)
     if case is None:
@@ -211,6 +273,24 @@ def _feed_item_matches_release(
         )
     if _required_text(item, "authorId", endpoint=endpoint) != case.author_id:
         raise PostApiVerificationError(f"{endpoint} author mismatch for {case.post_ref}")
+    creator = creators_by_author.get(case.author_id)
+    if creator is None:
+        raise PostApiVerificationError(
+            f"{endpoint} creator closure is missing for {case.post_ref}"
+        )
+    if _required_text(item, "authorDisplayName", endpoint=endpoint) != creator.display_name:
+        raise PostApiVerificationError(
+            f"{endpoint} author display name mismatch for {case.post_ref}"
+        )
+    item_avatar_url = (
+        _required_text(item, "authorAvatarUrl", endpoint=endpoint)
+        if creator.avatar_url
+        else _optional_text(item, "authorAvatarUrl", endpoint=endpoint)
+    )
+    if _public_media_path(item_avatar_url) != _public_media_path(creator.avatar_url):
+        raise PostApiVerificationError(
+            f"{endpoint} author avatar mismatch for {case.post_ref}"
+        )
     if _required_text(item, "contentType", endpoint=endpoint) != case.content_type.value:
         raise PostApiVerificationError(
             f"{endpoint} content type mismatch for {case.post_ref}"
@@ -222,6 +302,7 @@ def _verify_visible_release_feed(
     client: PublicApiClient,
     *,
     cases_by_id: Mapping[str, PostApiCase],
+    creators_by_author: Mapping[str, CreatorProfileCase],
     name: str,
     query: dict[str, str],
 ) -> dict[str, Any]:
@@ -232,7 +313,15 @@ def _verify_visible_release_feed(
     )
     if response.status != HTTPStatus.OK:
         raise PostApiVerificationError(f"{name} feed returned non-200")
-    items = response.payload.get("items")
+    payload = response.payload
+    if not isinstance(payload, dict):
+        raise PostApiVerificationError(
+            f"{name} feed response payload must be an object"
+        )
+    object_cards = payload.get("objectCards")
+    if not isinstance(object_cards, list):
+        raise PostApiVerificationError(f"{name} feed lacks objectCards array")
+    items = payload.get("items")
     if not isinstance(items, list):
         raise PostApiVerificationError(f"{name} feed lacks items")
     matched = sorted(
@@ -242,6 +331,7 @@ def _verify_visible_release_feed(
             post_id := _feed_item_matches_release(
                 _object(raw, label=f"{name} feed item {index}"),
                 cases_by_id=cases_by_id,
+                creators_by_author=creators_by_author,
                 endpoint=f"{name} feed",
             )
         )
@@ -266,6 +356,7 @@ def _verify_visible_release_feed(
 def _verify_typed_feed(
     client: PublicApiClient,
     cases: list[PostApiCase],
+    creators_by_author: Mapping[str, CreatorProfileCase],
     *,
     include_premium_stream: bool,
 ) -> tuple[dict[str, int], list[dict[str, Any]]]:
@@ -279,6 +370,7 @@ def _verify_typed_feed(
         _verify_visible_release_feed(
             client,
             cases_by_id=cases_by_id,
+            creators_by_author=creators_by_author,
             name="discovery_work",
             query={"identity": "work", "limit": str(page_limit)},
         )
@@ -316,15 +408,14 @@ def _verify_typed_feed(
                 raise PostApiVerificationError("typed feed lacks items")
             for index, raw in enumerate(items):
                 item = _object(raw, label=f"typed feed {content_type.value} item {index}")
-                post_id = _required_text(item, "postId", endpoint="typed feed")
-                expected_case = expected.get(post_id)
-                if expected_case is None:
-                    continue
-                _feed_item_matches_release(
+                post_id = _feed_item_matches_release(
                     item,
                     cases_by_id=expected,
+                    creators_by_author=creators_by_author,
                     endpoint=f"typed {content_type.value} feed",
                 )
+                if post_id is None:
+                    continue
                 seen.add(post_id)
                 feed_status[post_id] = response.status
             next_cursor = str(response.payload.get("nextCursor") or "").strip()
@@ -354,6 +445,7 @@ def _verify_typed_feed(
         _verify_visible_release_feed(
             client,
             cases_by_id=cases_by_id,
+            creators_by_author=creators_by_author,
             name="homepage_recommend",
             query={
                 "sort": "recommend",
@@ -367,6 +459,7 @@ def _verify_typed_feed(
             _verify_visible_release_feed(
                 client,
                 cases_by_id=cases_by_id,
+                creators_by_author=creators_by_author,
                 name="premium_stream",
                 query={
                     "sort": "recommend",
@@ -422,6 +515,7 @@ def write_post_api_verification(
         feed_status, feed_queries = _verify_typed_feed(
             client,
             cases,
+            creators_by_author,
             include_premium_stream=readiness_phase in {"research", "commercial"},
         )
         creator_rows = [
@@ -435,9 +529,15 @@ def write_post_api_verification(
             str(row["authorId"]): int(row["profileStatus"])
             for row in creator_rows
         }
+        search_queries = _verify_search_projection(
+            client,
+            release_root=release_root,
+            cases=cases,
+            creators_by_author=creators_by_author,
+        )
         rows = []
         for case in cases:
-            detail = _verify_detail(client, case)
+            detail = _verify_detail(client, case, creators_by_author[case.author_id])
             rows.append(
                 {
                     "postRef": case.post_ref,
@@ -475,6 +575,7 @@ def write_post_api_verification(
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
         "feedQueries": feed_queries,
+        "searchQueries": search_queries,
         "creators": creator_rows,
         "posts": rows,
         "issues": [],

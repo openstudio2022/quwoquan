@@ -60,7 +60,15 @@ def _article_semantic_scope(
     entity_id: str,
     entity_aliases: tuple[str, ...],
 ) -> str:
-    """Prefer the Markdown section explicitly owned by the target entity."""
+    """Return only source blocks explicitly owned by the target entity.
+
+    A province/city source can mention the target once while also containing
+    unrelated places and their figures.  Falling back to the whole document
+    lets any of those figures pass merely because their caption occurs
+    somewhere in the broad source.  When there is no target-owned heading,
+    retain only paragraph/figure blocks that themselves name the target or one
+    of its frozen aliases.
+    """
     lines = str(article_text or "").splitlines()
     aliases = tuple(
         value.casefold()
@@ -79,7 +87,12 @@ def _article_semantic_scope(
                 end = next_index
                 break
         return "\n".join(lines[index:end])
-    return str(article_text or "")
+    blocks = re.split(r"\n\s*\n", str(article_text or ""))
+    return "\n\n".join(
+        block
+        for block in blocks
+        if any(alias in block.casefold() for alias in aliases)
+    )
 
 
 def article_asset_semantic_issue(
@@ -137,6 +150,9 @@ def article_asset_semantic_issue(
         if token
     )
     if evidence_token and any(alias in evidence_token for alias in aliases):
+        return ""
+    page_title = _semantic_token(row.get("pageResolvedTitle"))
+    if page_title and page_title in aliases:
         return ""
     body_token = _semantic_token(
         _article_semantic_scope(

@@ -6,8 +6,13 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from content.release.canonical import object_transaction as transaction_module
 from content.release.canonical import object_transaction_audit as audit_module
-from content.release.canonical.application import apply_object_transaction
+from content.release.canonical.application import (
+    apply_object_transaction,
+    replay_object_transaction,
+    rollback_object_transaction,
+)
 from content.release.canonical.canonical_inventory import (
     apply_inventory_delta,
     canonical_inventory_path,
@@ -28,14 +33,42 @@ def _bytes(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
+def _refresh_package(
+    package_root: Path,
+    *,
+    transaction_id: str,
+    execution_id: str,
+) -> None:
+    package_path = package_root / "object_transaction_package.json"
+    package = json.loads(package_path.read_text(encoding="utf-8"))
+    object_root = package_root / "object"
+    package["transactionId"] = transaction_id
+    package["executionId"] = execution_id
+    package["objectClosureDigest"] = transaction_module._closure_digest(
+        object_root=object_root,
+        object_kind="entities",
+        object_ref=str(package["target"]["objectRef"]),
+        target_schema=str(package["target"]["objectSchema"]),
+        source_policy_revision=str(package["sourcePolicyRevision"]),
+        closure=package["closure"],
+        cas_rows=[dict(row) for row in package["closure"]["casRefs"]],
+        review=transaction_module._review_binding(object_root, package),
+    )
+    package_path.write_text(
+        json.dumps(package, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
 def test_transaction_persists_only_delta_not_whole_canonical_tree(
     tmp_path: Path,
 ) -> None:
     canonical = build_canonical(tmp_path)
     large_existing_payload = "x" * (2 * 1024 * 1024)
     profile = canonical / "creators/creator_a/profile.json"
+    existing_profile = json.loads(profile.read_text(encoding="utf-8"))
     profile.write_text(
-        json.dumps({"creatorId": "creator_a", "padding": large_existing_payload}),
+        json.dumps({**existing_profile, "padding": large_existing_payload}),
         encoding="utf-8",
     )
     package = build_package(tmp_path, canonical)
@@ -107,6 +140,98 @@ def test_object_hot_path_defers_full_closure_scan_until_release(
     )
 
     assert applied["status"] == "applied"
+
+
+def test_existing_object_is_atomically_replaced_and_stale_files_roll_back(
+    tmp_path: Path,
+) -> None:
+    canonical = build_canonical(tmp_path)
+    first_package = build_package(tmp_path / "first", canonical)
+    obsolete = first_package / "object/evidence/obsolete.json"
+    obsolete.parent.mkdir(parents=True, exist_ok=True)
+    obsolete.write_text('{"obsolete":true}', encoding="utf-8")
+    _refresh_package(
+        first_package,
+        transaction_id="object-first",
+        execution_id="20260711--travel-homepage-coverage--cn-test--pilot-001",
+    )
+    output = tmp_path / ".qwq_output"
+    first_audit = audit_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=first_package,
+        transaction_id="object-first",
+        expected_canonical_merkle=load_or_bootstrap_inventory(canonical)["stats"][
+            "merkleRoot"
+        ],
+    )
+    apply_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=first_package,
+        transaction_id="object-first",
+        dry_run_attestation_sha256=str(first_audit["dryRunAttestationSha256"]),
+    )
+
+    target = canonical / "entities/地点/景区/真实地点"
+    before_entity = (target / "_entity.json").read_bytes()
+    assert (target / "evidence/obsolete.json").is_file()
+    second_package = build_package(
+        tmp_path / "second",
+        canonical,
+        entity_extra={"summary": "current research revision"},
+    )
+    _refresh_package(
+        second_package,
+        transaction_id="object-second",
+        execution_id="20260711--travel-homepage-coverage--cn-test--pilot-002",
+    )
+    second_audit = audit_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=second_package,
+        transaction_id="object-second",
+        expected_canonical_merkle=load_or_bootstrap_inventory(canonical)["stats"][
+            "merkleRoot"
+        ],
+    )
+    applied = apply_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=second_package,
+        transaction_id="object-second",
+        dry_run_attestation_sha256=str(second_audit["dryRunAttestationSha256"]),
+    )
+    delta = json.loads(
+        (
+            output
+            / "data/local/workspace/object-transactions/object-second/delta/manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert applied["status"] == "applied"
+    assert json.loads((target / "_entity.json").read_text())["summary"] == (
+        "current research revision"
+    )
+    assert not (target / "evidence/obsolete.json").exists()
+    assert {row["operation"] for row in delta["entries"]} >= {"replace", "delete"}
+
+    rollback_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        transaction_id="object-second",
+    )
+    assert (target / "_entity.json").read_bytes() == before_entity
+    assert (target / "evidence/obsolete.json").is_file()
+    replay_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        transaction_id="object-second",
+    )
+    assert json.loads((target / "_entity.json").read_text())["summary"] == (
+        "current research revision"
+    )
+    assert not (target / "evidence/obsolete.json").exists()
 
 
 def test_cross_campaign_apply_uses_publish_root_fence_and_merkle_cas(

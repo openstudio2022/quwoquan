@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/pool_object_record.schema.json",
+  "title": "Immutable pool admission record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "objectType", "objectId", "objectRef", "recordSequence", "contentVersion", "status",
+    "processResult", "qualityResult", "eligibilityResult", "usageScope",
+    "evidenceRef", "evidenceDigest", "payloadDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_object_record"},
+    "objectType": {"enum": ["author", "homepage", "content"]},
+    "objectId": {"type": "string", "minLength": 1},
+    "objectRef": {"type": "string", "minLength": 1},
+    "recordSequence": {"type": "integer", "minimum": 1},
+    "contentVersion": {"type": "integer", "minimum": 1},
+    "status": {"enum": ["active", "retired", "deleted"]},
+    "processResult": {"enum": ["completed", "failed"]},
+    "qualityResult": {"enum": ["passed", "failed"]},
+    "eligibilityResult": {"enum": ["passed", "pending", "failed"]},
+    "usageScope": {"type": ["string", "null"], "enum": ["research", "commercial", null]},
+    "evidenceRef": {"type": "string", "minLength": 1},
+    "evidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceIdentity": {"$ref": "#/$defs/sourceIdentity"},
+    "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"objectType": {"enum": ["homepage", "content"]}}, "required": ["objectType"]},
+      "then": {"required": ["canonicalObjectDigest", "sourceIdentity", "sourceAttribution"]}
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceIdentity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
+          "properties": {
+            "executionId": {"type": "string", "minLength": 1},
+            "sourceRevision": {"$ref": "#/$defs/digest"},
+            "sourceDigest": {"$ref": "#/$defs/digest"},
+            "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+            "identityDigest": {"$ref": "#/$defs/digest"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["identityKind", "executionId", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "identityDigest"],
+          "properties": {
+            "identityKind": {"const": "legacy_canonical_migration"},
+            "executionId": {"type": "string", "minLength": 1},
+            "sourceDigest": {"$ref": "#/$defs/digest"},
+            "canonicalObjectDigest": {"$ref": "#/$defs/digest"},
+            "migrationEvidenceDigest": {"$ref": "#/$defs/digest"},
+            "identityDigest": {"$ref": "#/$defs/digest"}
+          }
+        }
+      ]
+    }
+  }
+}

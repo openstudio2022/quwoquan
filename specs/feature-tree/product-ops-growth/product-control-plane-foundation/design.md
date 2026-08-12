@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)：读取每个平台唯一已发布版本，并把公众 iOS PWA、Android 官网 APK 和通用恢复页投影为公开只读恢复结果。
+- [`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)：读取 Android、iOS、Web 各自唯一的 latest/minimum 已发布版本事实，并把官方更新与通用恢复页投影为公开只读恢复结果。
 - [`account-moderation-and-appeal-enforcement`](./account-moderation-and-appeal-enforcement/spec.md)：唯一 `AccountEnforcementCase` 聚合承接显式 moderation/appeal，原子提交双签终态、不可变 decision 与持久化 HTTP outbox，并以同 decision receipt/DLQ 完成恢复。
 - [`product-control-plane-contract`](./product-control-plane-contract/spec.md)：每个控制面动作必须声明 operation scope；危险动作必须记录操作者、目标、原因、revision 与结果，失败时不得生成成功审计。
 
@@ -50,11 +50,13 @@
 - 账号治理指标仅使用固定 operation/action/outcome/state 维度；账号、reviewer、evidence、intake、token 与原始 payload 禁止进入 metric label、运行日志或 DLQ。
 
 <a id="dec-002"></a>
-### DEC-002 官网只分发经过发布门禁的不可变 Android APK
-- 决策：Android 正式 APK 由发布流水线使用生产密钥签名、验证包名/Build/证书摘要和 SHA-256 后上传到官方 CDN 的不可变对象键。产品运维配置只在对象可下载且校验一致后原子切换 latest 指针。官网下载端点只重定向该已确认对象。公众 iOS 只返回官方 PWA 安装与网页版地址，已认证且设备已登记的内测成员才可使用受控 Ad Hoc 通道。
-- 理由：版本查询、官网页面和二进制必须共享同一发布事实，避免页面显示新版但下载到旧包、调试签名包或第三方地址。
-- 被否决方案：运行时扫描对象存储猜测最新版、覆盖同名 APK、在应用内下载并安装、Android 跳第三方商店、使用 debug 签名发布、公众 iOS 跳 App Store 或分发 IPA。
-- 约束与影响：正式签名材料只由 CI Secret 注入。服务端和客户端仅接受 HTTPS 白名单，下载失败不得回退到未知镜像。
+### DEC-002 各平台只投影经过发布门禁的 latest/minimum 与官方恢复事实
+- 决策：Android 正式 APK 由发布流水线使用生产密钥签名、验证包名/Build/证书摘要和 SHA-256 后上传到官方 CDN 的不可变对象键。
+- 决策：iOS 使用正式 App Store 或受控内测通道，Web 使用当前不可变发布和 service-worker/cache 恢复链路。产品运维配置只在对应平台的更新与恢复通道可读回后，原子发布 `latest`、`minimumSupported` 与官方 URL 事实。
+- 理由：版本查询、最低支持门、官网页面和分发内容必须共享同一发布事实，避免页面显示新版但下载到旧包、低于 minimum 后又被普通业务面阻断恢复，或不同控制面读取到不同版本策略。
+- 被否决方案：运行时扫描对象存储猜测最新版、覆盖同名 APK、在应用内绕过系统静默安装 iOS、使用 debug 签名发布、按领域对象或 stable/candidate 分别维护 minimum，以及下载失败回退未知镜像。
+- 约束与影响：正式签名材料只由 CI Secret 注入，服务端和客户端仅接受 HTTPS 白名单。
+- 约束与影响：最低支持 Build 是全局平台兼容政策，不参与领域模型版本或生产灰度路由。提升前必须先 `would_block` 观测并满足支持窗口，正式值与 API Edge 只读投影由同一环境发布包原子更新。
 - 关联要求：`REQ-001`
 - 影响 Story：[`app-release-recovery-routing`](./app-release-recovery-routing/spec.md)
 - 关联验收：`SIT-001`

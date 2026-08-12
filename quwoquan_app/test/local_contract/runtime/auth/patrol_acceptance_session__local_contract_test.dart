@@ -1,9 +1,13 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 
 void main() {
   group('Patrol acceptance session contract', () {
+    tearDown(resetPatrolAcceptanceSessionForTest);
+
     test(
       'preserves the real owner and persona as distinct actor identities',
       () {
@@ -34,6 +38,52 @@ void main() {
       },
     );
 
+    test(
+      'unauthenticated auth entry mounts a guest session without credentials',
+      () {
+        final session = buildPatrolUnauthenticatedAuthEntrySession();
+
+        expect(session.isAuthenticated, isFalse);
+        expect(session.status, AuthSessionStatus.guest);
+        expect(session.accessToken, isEmpty);
+        expect(session.refreshToken, isEmpty);
+        expect(session.ownerId, isEmpty);
+        expect(session.activePersonaId, isEmpty);
+        expect(session.installId, isNotEmpty);
+      },
+    );
+
+    test('host runner installs a complete runtime session before launch', () {
+      final session = installPatrolAcceptanceSessionForRunner(
+        accessToken: 'runtime-access',
+        refreshToken: 'runtime-refresh',
+        ownerId: 'runtime-owner',
+        personaId: 'runtime-persona',
+      );
+
+      expect(session.isAuthenticated, isTrue);
+      expect(session.accessToken, 'runtime-access');
+      expect(session.refreshToken, 'runtime-refresh');
+      expect(session.ownerId, 'runtime-owner');
+      expect(session.activePersonaId, 'runtime-persona');
+    });
+
+    test(
+      'command actor resolves from authenticated session before projection',
+      () {
+        final container = ProviderContainer(
+          overrides: [
+            authSessionControllerProvider.overrideWith(
+              _PatrolContractAuthSession.new,
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        expect(container.read(resolvedActivePersonaIdProvider), 'persona-live');
+      },
+    );
+
     for (final missing in const <String>[
       'accessToken',
       'refreshToken',
@@ -53,4 +103,16 @@ void main() {
       });
     }
   });
+}
+
+final class _PatrolContractAuthSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-live',
+    refreshToken: 'refresh-live',
+    ownerId: 'owner-live',
+    activePersonaId: 'persona-live',
+    accountState: 'active',
+  );
 }

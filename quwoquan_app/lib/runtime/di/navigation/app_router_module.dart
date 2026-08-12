@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/di/navigation/app_router.dart' deferred as impl;
+import 'package:quwoquan_app/runtime/di/navigation/app_router.dart'
+    deferred as impl;
 
 bool _libraryLoaded = false;
 Future<void>? _activeLoad;

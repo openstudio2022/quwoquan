@@ -422,7 +422,7 @@ final class InMemoryGatheringPort
 
   @override
   Future<GatheringCommandResult> watchAvailability(
-    GatheringVersionCommandInput input,
+    GatheringAvailabilityWatchCommandInput input,
   ) async {
     watchCalls += 1;
     return _result();

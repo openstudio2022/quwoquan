@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect authoritative post-full Prod soak SLO, alert, and health observations."""
+"""Collect authoritative post-100 Prod soak SLO, alert, and health observations."""
 
 from __future__ import annotations
 
@@ -48,19 +48,19 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _wait_for_authoritative_window(
-    full_readback: dict[str, Any],
+    terminal_readback: dict[str, Any],
     *,
     service: str,
     required_seconds: int,
 ) -> None:
-    receipt = _validate_receipt_readback(full_readback, service=service)
+    receipt = _validate_receipt_readback(terminal_readback, service=service)
     if (
-        receipt.get("triggerStage") != "full"
-        or receipt.get("stage") != "full"
+        receipt.get("triggerStage") != "100"
+        or receipt.get("stage") != "100"
         or receipt.get("decision") != "continue"
         or receipt.get("rollbackOutcome") != "not_triggered"
     ):
-        raise ValueError("full hosted receipt is not a successful rollout")
+        raise ValueError("100 hosted receipt is not a successful rollout")
     started_at = dt.datetime.fromisoformat(
         str(receipt["verifiedAt"]).replace("Z", "+00:00")
     )
@@ -68,7 +68,7 @@ def _wait_for_authoritative_window(
         started_at + dt.timedelta(seconds=required_seconds) - _utc_now()
     ).total_seconds()
     if remaining > required_seconds + 300:
-        raise ValueError("full hosted receipt is future-dated")
+        raise ValueError("100 hosted receipt is future-dated")
     if remaining > 0:
         time.sleep(remaining)
 
@@ -123,7 +123,10 @@ def collect(
     policy = yaml.safe_load(soak_policy_path.read_text(encoding="utf-8"))
     if not isinstance(policy, dict) or not isinstance(policy.get("readback"), dict):
         raise ValueError("soak policy is invalid")
-    required_seconds = _window_seconds(policy["readback"].get("window"))
+    soak_window = str(
+        policy["readback"].get("post_100_soak_window") or ""
+    ).strip()
+    required_seconds = _window_seconds(soak_window)
     _wait_for_authoritative_window(
         _load_object(full_readback_path, "full hosted readback"),
         service=service,
@@ -159,6 +162,7 @@ def collect(
         prometheus_url,
         prometheus_service,
         deadline_epoch=deadline_epoch,
+        window_override=soak_window,
     )
     alerts = _read_alertmanager(alertmanager_url)
     _write_json(slo_output, slo)

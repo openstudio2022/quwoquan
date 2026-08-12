@@ -2,6 +2,7 @@ package searchindex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,18 +16,21 @@ import (
 // ES/OpenSearch cluster + index, so endpoints/credentials are injected via the
 // shared SEARCH_ES_* env (deploy secrets), never hardcoded.
 type ESConfig struct {
-	Enabled          bool     `yaml:"enabled"`
-	Endpoints        []string `yaml:"endpoints"`
-	Username         string   `yaml:"username"`
-	Password         string   `yaml:"password"`
-	APIKey           string   `yaml:"apiKey"`
-	Index            string   `yaml:"index"`
-	RequestTimeoutMs int      `yaml:"requestTimeoutMs"`
-	InsecureTLS      bool     `yaml:"insecureTls"`
-	Shards           int      `yaml:"shards"`
-	Replicas         int      `yaml:"replicas"`
-	Synonyms         []string `yaml:"synonyms"`
-	EmbeddingDims    int      `yaml:"embeddingDims"`
+	Enabled                 bool     `yaml:"enabled"`
+	Endpoints               []string `yaml:"endpoints"`
+	Username                string   `yaml:"username"`
+	Password                string   `yaml:"password"`
+	APIKey                  string   `yaml:"apiKey"`
+	Index                   string   `yaml:"index"`
+	RequestTimeoutMs        int      `yaml:"requestTimeoutMs"`
+	StartupTimeoutMs        int      `yaml:"startupTimeoutMs"`
+	StartupInitialBackoffMs int      `yaml:"startupInitialBackoffMs"`
+	StartupMaxBackoffMs     int      `yaml:"startupMaxBackoffMs"`
+	InsecureTLS             bool     `yaml:"insecureTls"`
+	Shards                  int      `yaml:"shards"`
+	Replicas                int      `yaml:"replicas"`
+	Synonyms                []string `yaml:"synonyms"`
+	EmbeddingDims           int      `yaml:"embeddingDims"`
 }
 
 // Built holds the assembled write-side index components. When ES is disabled all
@@ -36,6 +40,21 @@ type Built struct {
 	Client    *es.Client
 	Indexer   *es.Indexer
 	Projector *Projector
+	startup   startupRetryPolicy
+}
+
+var ErrSearchIndexStartupTimeout = errors.New("search index startup timed out")
+
+const (
+	defaultStartupTimeout        = 60 * time.Second
+	defaultStartupInitialBackoff = 100 * time.Millisecond
+	defaultStartupMaxBackoff     = 2 * time.Second
+)
+
+type startupRetryPolicy struct {
+	timeout        time.Duration
+	initialBackoff time.Duration
+	maxBackoff     time.Duration
 }
 
 // Build assembles the write-time search index from config. An explicitly
@@ -49,6 +68,10 @@ func Build(cfg ESConfig, reader PostReader, opts ...Option) (Built, error) {
 		return Built{}, fmt.Errorf(
 			"Post search projection requires endpoints and reader",
 		)
+	}
+	startup, err := startupPolicy(cfg)
+	if err != nil {
+		return Built{}, err
 	}
 	client, err := es.NewClient(es.Config{
 		Endpoints:      cfg.Endpoints,
@@ -73,15 +96,119 @@ func Build(cfg ESConfig, reader PostReader, opts ...Option) (Built, error) {
 		Client:    client,
 		Indexer:   indexer,
 		Projector: NewProjector(indexer, reader, opts...),
+		startup:   startup,
 	}, nil
 }
 
-// EnsureIndex creates the unified index when ES is enabled (no-op otherwise).
+// EnsureIndex creates the unified index when ES is enabled. Recoverable remote
+// startup failures are retried within the configured bounded policy.
 func (b Built) EnsureIndex(ctx context.Context) error {
+	return b.EnsureIndexReady(ctx)
+}
+
+// EnsureIndexReady waits only for typed recoverable transport, capacity and
+// server failures. Authentication, configuration and schema failures return on
+// the first attempt; the caller remains fail-closed when the deadline expires.
+func (b Built) EnsureIndexReady(ctx context.Context) error {
 	if b.Client == nil {
 		return nil
 	}
-	return b.Client.EnsureIndex(ctx)
+	startupCtx, cancel := context.WithTimeout(ctx, b.startup.timeout)
+	defer cancel()
+
+	backoff := b.startup.initialBackoff
+	var lastErr error
+	for {
+		err := b.Client.EnsureIndex(startupCtx)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if startupCtx.Err() != nil {
+			return b.startupDeadlineError(ctx, lastErr)
+		}
+		if !es.IsDependencyUnavailable(err) {
+			return err
+		}
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-startupCtx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return b.startupDeadlineError(ctx, lastErr)
+		case <-timer.C:
+		}
+		if backoff < b.startup.maxBackoff {
+			backoff *= 2
+			if backoff > b.startup.maxBackoff {
+				backoff = b.startup.maxBackoff
+			}
+		}
+	}
+}
+
+func (b Built) startupDeadlineError(ctx context.Context, lastErr error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("search index startup canceled: %w", ctx.Err())
+	}
+	return fmt.Errorf(
+		"%w after %s: %v",
+		ErrSearchIndexStartupTimeout,
+		b.startup.timeout,
+		lastErr,
+	)
+}
+
+func startupPolicy(cfg ESConfig) (startupRetryPolicy, error) {
+	timeout, err := configuredDuration(
+		"startupTimeoutMs",
+		cfg.StartupTimeoutMs,
+		defaultStartupTimeout,
+	)
+	if err != nil {
+		return startupRetryPolicy{}, err
+	}
+	initialBackoff, err := configuredDuration(
+		"startupInitialBackoffMs",
+		cfg.StartupInitialBackoffMs,
+		defaultStartupInitialBackoff,
+	)
+	if err != nil {
+		return startupRetryPolicy{}, err
+	}
+	maxBackoff, err := configuredDuration(
+		"startupMaxBackoffMs",
+		cfg.StartupMaxBackoffMs,
+		defaultStartupMaxBackoff,
+	)
+	if err != nil {
+		return startupRetryPolicy{}, err
+	}
+	if initialBackoff > maxBackoff {
+		return startupRetryPolicy{}, fmt.Errorf(
+			"Post search projection requires startupInitialBackoffMs <= startupMaxBackoffMs",
+		)
+	}
+	return startupRetryPolicy{
+		timeout:        timeout,
+		initialBackoff: initialBackoff,
+		maxBackoff:     maxBackoff,
+	}, nil
+}
+
+func configuredDuration(name string, milliseconds int, fallback time.Duration) (time.Duration, error) {
+	if milliseconds < 0 {
+		return 0, fmt.Errorf("Post search projection requires non-negative %s", name)
+	}
+	if milliseconds == 0 {
+		return fallback, nil
+	}
+	return time.Duration(milliseconds) * time.Millisecond, nil
 }
 
 // HealthPing returns an ES liveness probe when ES is enabled, else nil.

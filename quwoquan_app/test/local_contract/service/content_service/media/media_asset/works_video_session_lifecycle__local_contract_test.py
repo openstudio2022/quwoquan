@@ -9,12 +9,20 @@ CANVAS = (
     APP_DIR
     / "lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_canvas.dart"
 )
+HOME_FEED_COMPOSITION = (
+    APP_DIR / "lib/runtime/di/presentation/home_feed_cross_object_composition.dart"
+)
+CONTROLLER_FACTORY = (
+    APP_DIR / "lib/runtime/platform/video_player_controller_factory.dart"
+)
 
 
 class WorksVideoSessionLifecycleContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = CANVAS.read_text(encoding="utf-8")
+        cls.home_feed_source = HOME_FEED_COMPOSITION.read_text(encoding="utf-8")
+        cls.controller_factory_source = CONTROLLER_FACTORY.read_text(encoding="utf-8")
         cls.canvas_state = cls.source.split(
             "class _WorksVideoCanvasState", 1
         )[1].split("class _WorksVideoEpisodeStage extends", 1)[0]
@@ -50,6 +58,25 @@ class WorksVideoSessionLifecycleContractTest(unittest.TestCase):
         super_dispose = self.episode_state.index("super.dispose();")
         self.assertLess(untrack, dispose)
         self.assertLess(dispose, super_dispose)
+
+    def test_current_and_preheated_episodes_use_texture_renderer(self) -> None:
+        self.assertIn(
+            "widget.isVisible && (isCurrent || shouldPreheat)",
+            self.canvas_state,
+        )
+        self.assertIn("child: _WorksVideoEpisodeStage(", self.canvas_state)
+        self.assertIn("viewType: VideoViewType.textureView", self.episode_state)
+
+    def test_home_inline_player_keeps_android_platform_view_default(self) -> None:
+        home_player = self.home_feed_source.split(
+            "static Widget videoPlayer(", 1
+        )[1].split("static Widget videoCenterPlayGlyph", 1)[0]
+        self.assertIn("return VideoPlayerWidget(", home_player)
+        self.assertNotIn("viewType:", home_player)
+        self.assertIn(
+            "viewType: viewType ?? preferredViewType",
+            self.controller_factory_source,
+        )
 
 
 if __name__ == "__main__":

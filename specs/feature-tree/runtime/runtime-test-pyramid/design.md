@@ -62,6 +62,18 @@
 - 影响 Story：[`three-layer-evidence`](./three-layer-evidence/spec.md)、[`branch-coverage-governance`](./branch-coverage-governance/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-004"></a>
+### DEC-004 测试数据随依赖真实度逐层构造而不跨层提升
+
+- 决策：local_contract 使用对象级强类型 builder/generator 和最小 contract example。api_integration 使用真实进程的 application command/provider-state。user_acceptance 使用 immutable reference release 与公开 command 驱动的强类型环境 capability。
+- 决策：Benchmark/Eval corpus 是独立制品并绑定 manifest/digest，不进入普通 fixture；外部 Provider 状态只通过其 sandbox/test-clock API 按用例创建。
+- 理由：同一场景 dump 被三层共享会把本地假设带入真实环境，也会让 fixture 大小替代业务覆盖；各层按自己的真实边界构造最小数据才能准确表达证据等级。
+- 被否决方案：全层共享巨型 JSON、api_integration 直接 seed 通用业务数据、UAT 注入 projection、复制 Prod 数据库、把 fake gateway 放入 user_acceptance。
+- 约束与影响：fixture 预算由物理树动态扫描，不维护例外清单；超限迁移不得减少 case、断言和错误路径。
+- 关联要求：`REQ-004`、`REQ-005`
+- 影响 Story：[`three-layer-evidence`](./three-layer-evidence/spec.md) 的分层数据边界。
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

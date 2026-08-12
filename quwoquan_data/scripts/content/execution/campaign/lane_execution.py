@@ -14,6 +14,7 @@ from core.runtime_policy import active_runtime_policy
 
 from content.execution.campaign.external_inputs import verify_external_input_refs
 from content.execution.campaign.lane import LaneRunner
+from content.execution.campaign.lane_command import lane_argv as _lane_argv
 from content.execution.campaign.lane_process_result import (
     lane_process_evidence as _lane_process_evidence,
 )
@@ -63,76 +64,6 @@ def _verify_workspace_external_inputs(workspace: CampaignLaneWorkspace) -> None:
         source_digest=workspace.capsule.source_digest,
         entity_catalog_digest=workspace.capsule.entity_catalog_digest,
     )
-
-
-def _lane_argv(submission: dict[str, Any], *, stage: str) -> list[str]:
-    argv = [
-        "task",
-        "execute",
-        "--execution-id",
-        str(submission["executionId"]),
-        "--campaign-root-execution-id",
-        str(submission["rootExecutionId"]),
-        "--family",
-        str(submission["familyRef"]),
-        "--region-ref",
-        str(submission["regionRef"]),
-        "--selector",
-        str(submission["selector"]),
-        "--quota",
-        str(submission["quota"]),
-        "--count",
-        str(submission["count"]),
-        "--required-workers",
-        str(submission["requiredWorkers"]),
-        "--partition-count",
-        str(submission["partitionCount"]),
-        "--capacity-plan-digest",
-        str(submission["capacityPlanDigest"]),
-        "--stage",
-        stage,
-        "--semantic-selection-id",
-        str(submission["semanticSelectionId"]),
-    ]
-    retry_of = str(submission.get("retryOf") or "").strip()
-    if retry_of:
-        argv.extend(["--retry-of", retry_of])
-    semantic_preflight = submission.get("semanticPreflightReceipt")
-    if isinstance(semantic_preflight, dict):
-        argv.extend(
-            [
-                "--semantic-preflight-receipt",
-                str(semantic_preflight["receiptRef"]),
-            ]
-        )
-    topic = str(submission.get("topic") or "").strip()
-    if topic:
-        argv.extend(["--topic", topic])
-    for provider in submission.get("sourceProviders") or []:
-        argv.extend(["--source-provider", str(provider)])
-    for name in submission.get("targetNames") or []:
-        argv.extend(["--target", str(name)])
-    pool = submission.get("scaleSourcePool")
-    selection = submission.get("sourcePoolSelection")
-    if isinstance(pool, dict) and isinstance(selection, dict):
-        argv.extend(
-            [
-                "--scale-source-pool-id", str(pool["poolId"]),
-                "--scale-source-pool-target-scale", str(pool["targetScale"]),
-                "--scale-source-pool-plan-ref", str(pool["planRef"]),
-                "--scale-source-pool-plan-digest", str(pool["planDigest"]),
-                "--scale-source-pool-plan-file-sha256", str(pool["planFileSha256"]),
-                "--source-pool-source-revision", str(pool["sourceRevision"]),
-                "--source-pool-source-digest", str(pool["sourceDigest"]),
-                "--source-pool-entity-catalog-digest", str(pool["entityCatalogDigest"]),
-                "--source-pool-evidence-root-ref", str(submission["sourcePoolEvidenceRootRef"]),
-                "--source-pool-carrier", str(selection["carrier"]),
-                "--source-pool-selection-digest", str(selection["selectionDigest"]),
-            ]
-        )
-        for candidate_id in selection["candidateIds"]:
-            argv.extend(["--source-pool-candidate-id", str(candidate_id)])
-    return argv
 
 
 def _process_group_rss_bytes(pgid: int) -> int:
@@ -427,6 +358,8 @@ def run_lane(
     run_session: CampaignRunSession,
     observer_binary_binding: ReliableTaskObserverBinaryBinding | None,
     fleet_transport_binding: FrozenReliableTaskFleetBinding | None,
+    recover_stage: str | None = None,
+    recovery_reason: str | None = None,
 ) -> tuple[int, str | None]:
     log_path = (
         campaign_root(root_execution_id, root=runtime.campaigns_root)
@@ -456,8 +389,8 @@ def run_lane(
             "QWQ_OUTPUT_ROOT": str(runtime.output_root),
             "QWQ_PUBLISH_ROOT": str(runtime.publish_root),
             CAMPAIGN_ROOT_ENV: root_execution_id,
-            "QWQ_FROZEN_MAIN_BRANCH": str(submission["gitBranch"]),
-            "QWQ_FROZEN_MAIN_COMMIT": str(submission["gitCommitSha"]),
+            "QWQ_FROZEN_MAIN_BRANCH": workspace.capsule.git_branch,
+            "QWQ_FROZEN_MAIN_COMMIT": workspace.capsule.commit_sha,
             "QWQ_FROZEN_SOURCE_DIGEST": str(
                 (submission.get("sourceDigest") or {}).get("digest") or ""
             ),
@@ -486,7 +419,17 @@ def run_lane(
         if fleet_transport_binding.root_execution_id != root_execution_id:
             raise ValueError("campaign fleet transport root execution drift")
         env.update(fleet_transport_binding.environment())
-    command = [sys.executable, "-B", str(cli), *_lane_argv(submission, stage=stage)]
+    command = [
+        sys.executable,
+        "-B",
+        str(cli),
+        *_lane_argv(
+            submission,
+            stage=stage,
+            recover_stage=recover_stage,
+            recovery_reason=recovery_reason,
+        ),
+    ]
     execution_id = str(submission["executionId"])
     _verify_workspace_external_inputs(workspace)
     run_session.lane_checkpoint(

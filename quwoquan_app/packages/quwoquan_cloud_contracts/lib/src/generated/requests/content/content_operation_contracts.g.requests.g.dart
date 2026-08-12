@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -1790,6 +1790,29 @@ final class RequestContentMediaOriginalAccessCommand {
   };
 }
 
+final class ResearchReleaseReadbackQuery {
+  ResearchReleaseReadbackQuery({
+    required String researchIdentityAttestation,
+  }) : researchIdentityAttestation = researchIdentityAttestation {
+    if (this.researchIdentityAttestation.isEmpty) {
+      throw ArgumentError.value(this.researchIdentityAttestation, "researchIdentityAttestation", 'must not be blank');
+    }
+  }
+
+  final String researchIdentityAttestation;
+
+  factory ResearchReleaseReadbackQuery.fromWire(Map<String, Object?> map, [String path = "ResearchReleaseReadbackQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"X-Research-Identity-Attestation"}, path);
+    return ResearchReleaseReadbackQuery(
+      researchIdentityAttestation: _generatedRequestString(map["X-Research-Identity-Attestation"], '$path.X-Research-Identity-Attestation'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "X-Research-Identity-Attestation": this.researchIdentityAttestation,
+  };
+}
+
 final class SelectAutoContentMediaCoverCommand {
   SelectAutoContentMediaCoverCommand({
     required String mediaId,
@@ -2407,6 +2430,14 @@ CloudOperationRequestPayload encodeContentPostGetPostGeneratedRequest(ContentPos
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "postId": request.postId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeContentPostGetResearchReleaseReadbackGeneratedRequest(ResearchReleaseReadbackQuery request) {
+  return CloudOperationRequestPayload(
+    headers: <String, String>{
+      "X-Research-Identity-Attestation": request.researchIdentityAttestation,
     },
   );
 }

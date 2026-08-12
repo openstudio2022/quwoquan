@@ -49,11 +49,12 @@
 - `prod-sim` 仍使用 DNS-01 公共 CA，`prod-hosted` 只接受公共 CA；任何 Prod package 必须拒绝 local-managed CA、信任材料与 resolver handoff。
 - 非生产 Web 产物必须 `noindex` 且保持环境访问控制；四环境分别拥有 DNS、证书、配置与发布物，不从 Prod 继承。
 - `stackctl status` 是严格只读诊断：只能读取既有进程、package、receipt 与 HTTP 状态，禁止创建或刷新 secret、物化 Provider、启动服务、执行修复或改变环境事实；缺失依赖必须以失败状态返回。
-- `stackctl package` 的 immutable candidate 合同只用于 Prod 发布：开始与结束必须校验同一完整受管 workspace snapshot，将 staged、unstaged、untracked 输入绑定为唯一 `baselineId`，在 target-scoped 临时目录完成后原子发布；已存在候选只能在全部 digest 一致时复用，禁止覆盖。
+- `stackctl package` 的 immutable candidate 合同用于显式内容验收与 Prod 发布。package plan 必须先派生本次实际读取的 `deploymentInputClosure`，在短 capture 窗口把 staged、unstaged、untracked 精确字节复制到 target-scoped、只读、content-addressed package input capsule，并绑定唯一 `baselineId`；capture 期间闭包变化使该次 capture fail closed 并可重试。
+- capsule 不得 hardlink 回 live tree，不得跟随仓库外 symlink，且拒绝 FIFO、device 与 socket。App、Service、Ops、ContractGraph、GraphQL、OCI 与 candidate/rollback release 只能从同一 capsule 构建。长构建结束只复核 capsule manifest/tree digest、各 artifact 的同 capsule provenance 与 candidate CAS，不再比较 live workspace；capsule 封存后的任意工作区变化不影响该 candidate。已存在 candidate 只能在全部 package digest 一致时复用且禁止覆盖。
 - 完整候选根 `manifest.json` 必须绑定 canonical unversioned schema identity、source/workspace/package/build input/image/runtime digest、正式规格引用，以及候选和回滚 Data release attestation。
 - 每个第一方镜像的 build input 必须覆盖服务 owner 与实际编译消费的共享 runtime、generated ContractGraph binding、platform package 和 module lock，不能只散列 owner 目录。
 - 包内 OCI manifest 必须记录实际 image ID；`up` 只能使用该精确 ID，不能使用可漂移 tag。
-- Prod 的 `stackctl up / health / verify` 只能消费已激活的不可变候选及其唯一 `environment_runtime.yaml`，不得隐式 package、build、重新解析工作树 URL 或重选候选；工作区与 active candidate 漂移必须阻断发布。
+- immutable candidate 的 `up / health / verify / down / rollback` 只能消费候选内部自验证通过的 manifest、签名、GraphQL registry、镜像、release 与唯一 `environment_runtime.yaml`，不得隐式 package、build、从当前工作树重建候选内容或重选候选。候选与当前源码不同只影响 `currentness` 和晋级声明，不得阻止精确旧候选的 status、启动、诊断、验收或退出；候选自身字节漂移仍须阻断。
 - Alpha/Beta/Gamma 的 `stackctl dev-session` 是开发者显式拥有的可变冷/热编排入口：直接从当前受治理拓扑与工作树实时 render 临时 runtime config、Compose 与 App handoff，不创建或激活 immutable candidate，也不要求 Data release attestation。开始/结束 source、config 与 generated digest 的变化写入 `mutableWorkspaceWarnings`，不得阻止编译或 App handoff；严格 health/verify 仍独立返回真实失败。
 - `dev-session --all-nonprod` 在单工作站按 Alpha→Beta→Gamma 串行运行；隔离 runner 可并行执行不同 target，但不得共享端口、Compose project、secret、CA、release 或 runtime receipt。
 - full runtime 是 App 会话的唯一 baseline。bounded content workload 在 full 健康时只复用其能力且不得覆盖 baseline receipt；独立 bounded runtime 必须使用 workload-scoped receipt，并在结束后恢复进入前状态。
@@ -63,10 +64,10 @@
 <a id="req-003"></a>
 ### REQ-003 双端本地运行持有可释放 consumer lease
 
-- `quwoquan_app/run.sh -d <device>` 是显式选择设备、持有 consumer lease 与准备平台 transport 的 canonical launcher；IDE launch profile 可以薄包装该入口。
-- `quwoquan_app/run.sh --env alpha|beta|gamma -d <device>` 是推荐入口；裸 `flutter run` 与 IDE 直接 Flutter Debug 默认选择 metadata 声明的 `alpha-local`，并允许 `--dart-define=APP_RUNTIME_ENV=alpha|beta|gamma` 或 `QWQ_ENVIRONMENT` 选择对应 canonical local target，禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。
+- `quwoquan_app/run.sh --mode content-live -d <device>` 是显式选择设备、持有 consumer lease、准备平台 transport 并验证真实首页/视频书内容的 canonical launcher，也是未指定 mode 时的默认；`--mode ui-only` 只允许调试安全 Shell 与页面布局且生成 `nonPromotable=true` 证据。IDE launch profile 可以薄包装该入口。
+- `quwoquan_app/run.sh --mode content-live --env alpha|beta|gamma -d <device>` 是内容联调入口；裸 `flutter run` 与 IDE 直接 Flutter Debug 默认选择 metadata 声明的 `alpha-local`，并允许 `--dart-define=APP_RUNTIME_ENV=alpha|beta|gamma` 或 `QWQ_ENVIRONMENT` 选择对应 canonical local target，禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。
 - direct Debug 必须把当前 topology 派生的 test-live runtime config 与 native manifest 交给 Dart 冷启动和 Hot Restart，不得在 App 代码中复制 Alpha endpoint。该配置记录可变摘要供诊断，但摘要变化不得阻止测试编译。
-- `app_effective_launch_manifest` 在 `test_live` 中显式声明 `contentBindingState=unbound`，不得伪造 releaseId 或 receipt；Prod release manifest 才必须直接包含 `contentReleaseId`、`contentManifestDigest` 与 `contentReadinessReceiptDigest`，其 canonical digest 覆盖三项内容身份。
+- `app_effective_launch_manifest` 在 `test_live` 未显式选择内容时声明 `contentBindingState=unbound`，不得伪造 releaseId 或 receipt。显式提供当前 `running` mutable attempt 的 run-bound 内容绑定时，必须一次性携带同一 canonical Data release 的 `contentReleaseId`、`contentManifestDigest` 与 `contentReadinessReceiptDigest`，缺一即失败，且不得读取 implicit latest、immutable candidate 或 package。该绑定始终 `nonPromotable`。Prod release manifest 仍只接受 immutable release 的完整三元，canonical digest 覆盖三项内容身份。
 - direct Debug 只允许在未显式提供 target、launch mode 或任一 digest 时，把 `APP_RUNTIME_ENV`/`QWQ_ENVIRONMENT` 当作三环境选择器并生成完整 handoff；两个选择器冲突、Prod、任意 target override、过期/缺失 manifest 或摘要不一致均 fail-closed。Profile、Release 与 Prod direct build 禁止隐式推断。
 - Android 从 topology 推导包名、设备与全部 `adb reverse` 端口，在 Flutter 构建前获取 release-bound lease；canonical launcher 通过 `trap` 在退出时释放，裸 Debug 的 provisional lease 在 App 停止后由 liveness 判为 stale 并等待显式 GC。
 - iOS Simulator 同源准备环境包、系统公共 CA 预检、native runtime manifest 与 provisional lease。iOS lease 绑定 platform、Simulator UDID、bundle ID、target、启动宽限期与 handoff digest；宽限期后必须结合 `simctl get_app_container`、Simulator `user/<uid>` launchd 域中的 `UIKitApplication:<bundleId>` service 与 executable path 判定前台、后台或挂起进程。
@@ -75,8 +76,12 @@
 - 两者都连接完整 Remote topology，并消费同一 handoff 的 runtime package，禁止 alpha runner、fixture override 或只提供 mock/public-plane 子集的本地进程。
 - Gradle/Xcode 对 canonical launcher 验证其完整 runtime package、制品摘要与设备证明；对 direct Debug 只允许从 metadata/topology 构建所选 canonical handoff并获取本平台 consumer lease，不得启动或修复环境、推断 URL、复制配置或吞掉准备脚本失败。
 - iOS Profile/Release、显式非 Alpha 环境与 Beta/Gamma/Prod 均必须携带 canonical launcher 的 target、Dart defines digest、runtime config digest 与 immutable effective manifest digest，缺一即在安装前 `GATE_BLOCK`。
-- Alpha/Beta/Gamma test-live 的 runtime/Provider/content 不健康、startup receipt 缺失、active candidate 过期以及 source/config/generated digest 漂移只形成结构化告警，不得使 Xcode/Gradle build phase 失败。依赖解析、真实编译、设备选择、target 冲突、无法生成最小 handoff、Prod endpoint/credential 泄露与不安全 secret 仍必须在构建前硬阻断。
-- App launcher 不拥有环境生命周期，不得隐式执行 `stackctl up/down/repair`，只可调用只读 `stackctl app-debug-preflight/status`。test-live 预检以 `warning` + exit 0 报告服务、Provider、内容与漂移问题。严格 health/verify 继续失败并由明确 owner 恢复环境。
+- Alpha/Beta/Gamma 的 `ui-only` 或裸 direct Debug 中，runtime/Provider/content 不健康、startup receipt 缺失、active candidate 过期以及 source/config/generated digest 漂移只形成结构化告警，不得使 Xcode/Gradle build phase 失败；其 Remote 内容请求必须停在 canonical `no_active_release` 或 typed unavailable，不得持续请求已知不可达服务。`content-live` 必须在构建前验证 runtime running、完整内容三元、API/Media/Search/Recommendation 与 release readiness，任一缺失均以 typed blocker 停止。依赖解析、真实编译、设备选择、target 冲突、无法生成最小 handoff、Prod endpoint/credential 泄露与不安全 secret 在两种 mode 下均须硬阻断。
+- `app-debug-preflight` 必须显式选择 `test_live` 或 `immutable_candidate`，不得以默认 mode 替调用方决定严格度。receipt 的 `details` 只记录安全编译/启动 blocker，`warnings` 只记录 test-live readiness 诊断；`gate_block` 对应非零退出，`warning|passed` 对应零退出，平台启动器不得重新解释同一事实的严重级别。
+- test-live 中缺失、停止、过期或漂移的 runtime/startup/service/Provider/TLS/trust/transport lease/content binding 必须保留完整脱敏诊断并继续构建；失效的存量内容 binding 按 unbound 忽略。非法环境/target、环境命名空间逃逸、显式 handoff 冲突或不完整、无法生成 canonical runtime package/native manifest、工具链/真实编译失败与不可用设备仍阻断。`immutable_candidate`、严格 health/verify、内容 UAT 与 Prod 不复用该降级。
+- App launcher 不拥有环境生命周期，默认不得隐式执行 `stackctl up/down/repair`，只可调用只读 `stackctl app-debug-preflight/status`。
+- 只有操作者显式传入 `--ensure-runtime` 时，`content-live` 才可委托 `stackctl` 启动当前已选 immutable candidate，且不得执行 package、repair 或重选 release。
+- `ui-only` 预检以 `warning` + exit 0 报告服务、Provider、内容与漂移问题；`content-live` 必须消费严格 delivery 结果，不得把 warning 重新解释为内容可用。
 - direct Debug 与 canonical launcher 在安装前必须调用 `stackctl app-debug-preflight`。Alpha/Beta/Gamma test-live 只校验安全环境选择与最小 handoff并收集运行时诊断，不委托商业 `app-content-preflight`；Prod release 启动继续验证 immutable candidate、必要服务/Provider，并委托 `app-content-preflight` 绑定 commercial readiness、rollback/replay、首页/视频书、Creator 与媒体证据。
 - 每次 Dart isolate 启动必须先生成新 `attemptId`，再调用原生 `beginStartupAttempt(attemptId)`。原生返回 `attemptKind=cold|hotRestart`、`processElapsedMs`、`attemptElapsedMs` 与 `deadlineOrigin=nativeProcess|dartHotRestart`。
 - `startup_attempt_started` 只能在 native runtime package 已水合且 `configurationState=complete` 后发送；Cold Start 的 6 秒预算可使用进程时钟，Hot Restart 只能使用本次 attempt 时钟。进程总存活时间只作诊断，不得写入 `welcomeExitMs` 或消耗 Hot Restart 预算。
@@ -98,6 +103,7 @@
 - WHEN 参与者执行“环境拓扑与打包”对应的公开行为。
 - THEN 各环境 `runtime.yaml` 均声明完整 `edge / media / service / data` 子网与结构化 `urlRoles`。
 - AND `stackctl package --env prod --target prod-sim|prod-hosted` 分别生成 target 隔离的 App 包，包内 URL 与 resolver 生成的 `publicBases` 一致，且 `prod-hosted` 仍拒绝本地或测试 host。
+- AND immutable package 在开始时复制精确输入闭包到只读 capsule，所有 App/Service/GraphQL/OCI artifact 绑定同一 capsule identity；封存后 live Data/App/Service 修改不使当前构建失败，下一次 capture 才观察这些变化并生成新的 candidate identity。
 - AND Alpha/Beta/Gamma `dev-session` 从当前工作树与 topology 实时 render target 隔离的 test-live runtime，不创建 immutable candidate；工作区或配置变化进入告警，严格 health/verify 仍如实失败。
 - AND Prod `stackctl package / up / health / verify` 只读取 immutable active candidate，重复 package 只在完整 manifest 和全部 digest 相同的情况下返回原始 receipt，不隐式重建或覆盖候选。
 - AND `dev-session --all-nonprod` 顺序生成三份 target 隔离的 compile/launch、告警与 health 结果，单个 target 的 runtime health 失败不得抹除其真实编译结果。
@@ -108,17 +114,17 @@
 <a id="gwt-002"></a>
 ### GWT-002 Android 与 iOS App 会话保护本地运行时
 
-- GIVEN 开发者通过 `quwoquan_app/run.sh --env alpha|beta|gamma -d <device>`，或在没有显式 handoff identity 时通过裸 `flutter run`，默认启动 Alpha App，或以 `APP_RUNTIME_ENV`/`QWQ_ENVIRONMENT` 显式选择对应环境。
+- GIVEN 开发者通过 `quwoquan_app/run.sh --mode content-live|ui-only --env alpha|beta|gamma -d <device>`，或在没有显式 handoff identity 时通过裸 `flutter run`，默认选择 Alpha App，或以 `APP_RUNTIME_ENV`/`QWQ_ENVIRONMENT` 显式选择对应环境。
 - WHEN Flutter 构建、运行、正常退出或异常退出，或并行环境任务尝试 down/强制清理。
 - THEN Android lease 在构建前绑定设备、包名、release handoff 与 topology 端口。
 - AND canonical launcher 退出时由 trap 释放 Android lease，裸 Debug 在 App 停止后由 liveness 判为 stale。
 - AND iOS Simulator lease 在构建前绑定设备、bundle ID、target 与 handoff digest，并通过 user launchd application service 与安装容器 executable 保活。
 - AND consumer lease 的只读状态检查不删除 stale lease。
 - AND 本地 Alpha 与 Beta/Gamma/Prod 使用同一 production Remote composition；首页、视频与 Creator 由已激活 release 提供，消息和我的主页由真实身份经领域公开 command/event 形成并由真实服务 query 提供，启动器和 UAT 不得隐式切入 Mock、fixture 或残缺 public plane。
-- AND target/env 冲突、Prod endpoint/credential 泄露、依赖或真实编译失败时 App 在安装前失败；runtime digest、系统信任、Android `adb reverse`、API/User/Integration/SMS Provider/content 不可用时 test-live 记录告警并继续编译启动，严格环境验收仍失败。
+- AND target/env 冲突、Prod endpoint/credential 泄露、依赖或真实编译失败时 App 在安装前失败；`ui-only` 对 runtime、系统信任、transport、API 与内容不可用记录告警并进入非晋级安全 Shell，`content-live` 对 runtime、release binding、API、Media、Search、Recommendation 或 readiness 不可用在 Flutter 安装前返回 typed blocker。
 - AND 裸 Android/iOS Debug `flutter run` 使用 `direct_flutter_run` canonical Alpha/Beta/Gamma handoff，冷启动与 Hot Restart 后环境、target 与 digest 保持一致并进入安全 Shell。
 - AND 冷启动和连续 Hot Restart 均先完成 `beginStartupAttempt`，再以 `configurationState=complete` 发送 attempt 事件；Hot Restart 的 `welcomeExitMs` 始终相对本次 attempt 且不超过 6000ms。
-- AND test-live 无内容绑定时只接受 canonical `outcome=empty + emptyReason=no_active_release` 或 typed unavailable，不以普通空列表冒充成功；Prod 安装前内容预检仍绑定 active candidate、commercial readiness 与 rollback/replay，任一 release-bound 证据缺失均阻断。
+- AND test-live 无内容绑定时只接受 canonical `outcome=empty + emptyReason=no_active_release` 或 typed unavailable，不以普通空列表冒充成功。显式 run-bound 时只消费当前 mutable attempt 已校验的完整内容三元，不从 latest/candidate/package 推导身份且不产生可晋级证据。Prod 安装前内容预检仍绑定 active candidate、commercial readiness 与 rollback/replay，任一 release-bound 证据缺失均阻断。
 - AND `stackctl app-content-uat` 只有在 Alpha/Beta/Gamma 同 baseline、releaseId、manifest digest 与 `appUatEnvelope` 的预检、字面 `flutter run`、首页 Feed、核心 readback、视频播放，以及受控 API Edge 故障下的错误文案与同安装恢复均通过时生成 passed receipt；故障控制只作用于 runtime receipt 绑定的精确容器且始终恢复，任何 target 失败时保留已有证据并停止后续 App 执行。
 - AND 显式但不完整的 handoff、Profile/Release 与非 Alpha direct build 在安装前失败，用户不得看到由开发配置缺失制造的启动恢复页。
 

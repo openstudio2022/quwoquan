@@ -10,6 +10,12 @@ import (
 )
 
 type postManifest struct {
+	ContentID             string                             `json:"contentId"`
+	Version               int64                              `json:"version"`
+	PoolSourceType        string                             `json:"sourceType"`
+	VariantPurpose        string                             `json:"variantPurpose"`
+	Admission             ContentAdmission                   `json:"admission"`
+	PoolStatus            string                             `json:"status"`
 	ContentType           string                             `json:"contentType"`
 	ContentIdentity       string                             `json:"contentIdentity"`
 	Title                 string                             `json:"title"`
@@ -50,6 +56,53 @@ type postManifest struct {
 	CreatedAt             string                             `json:"createdAt"`
 	UpdatedAt             string                             `json:"updatedAt"`
 	PublishedAt           string                             `json:"publishedAt"`
+}
+
+type ContentAdmission struct {
+	ProcessResult  string `json:"processResult" bson:"processResult"`
+	QualityResult  string `json:"qualityResult" bson:"qualityResult"`
+	UsageScope     string `json:"usageScope" bson:"usageScope"`
+	EvidenceRef    string `json:"evidenceRef" bson:"evidenceRef"`
+	EvidenceDigest string `json:"evidenceDigest" bson:"evidenceDigest"`
+}
+
+func normalizeImportedContentPoolRecord(m *postManifest, postRef string) error {
+	fieldsPresent := strings.TrimSpace(m.ContentID) != "" || m.Version != 0 ||
+		strings.TrimSpace(m.PoolSourceType) != "" || strings.TrimSpace(m.VariantPurpose) != "" ||
+		strings.TrimSpace(m.Admission.ProcessResult) != "" || strings.TrimSpace(m.PoolStatus) != ""
+	if !fieldsPresent {
+		// Pre-pool immutable releases remain research-only while the versioned
+		// canonical pool is migrated. New writers always emit the full record.
+		m.ContentID = "qwq_data_" + LegacyRuntimePostID(postRef)
+		m.Version = 1
+		m.PoolSourceType = "data"
+		m.VariantPurpose = "original"
+		m.Admission = ContentAdmission{
+			ProcessResult: "completed",
+			QualityResult: "passed",
+			UsageScope:    "research",
+			EvidenceRef:   "attestation.json",
+		}
+		m.PoolStatus = "active"
+		return nil
+	}
+	if strings.TrimSpace(m.ContentID) == "" || m.Version < 1 ||
+		m.PoolSourceType != "data" || m.PoolStatus != "active" ||
+		m.Admission.ProcessResult != "completed" || m.Admission.QualityResult != "passed" ||
+		!sha256Pattern.MatchString(strings.TrimSpace(m.Admission.EvidenceDigest)) ||
+		strings.TrimSpace(m.Admission.EvidenceRef) == "" {
+		return fmt.Errorf("%s: canonical content pool admission is incomplete", postRef)
+	}
+	if m.VariantPurpose != "original" && m.VariantPurpose != "commercial_variant" {
+		return fmt.Errorf("%s: canonical content variantPurpose is invalid", postRef)
+	}
+	if m.Admission.UsageScope != "research" && m.Admission.UsageScope != "commercial" {
+		return fmt.Errorf("%s: canonical content usageScope is invalid", postRef)
+	}
+	if m.VariantPurpose == "commercial_variant" && m.Admission.UsageScope != "commercial" {
+		return fmt.Errorf("%s: commercial content variant is not commercially admitted", postRef)
+	}
+	return nil
 }
 
 func parseManifestTime(ref string, field string, raw string) (time.Time, error) {

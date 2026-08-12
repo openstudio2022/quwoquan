@@ -7,7 +7,7 @@ _LOCAL_PROCESS_PROBE_TIMEOUT_SECONDS = active_runtime_policy().local_process_pro
 
 def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) -> list[str]:
     """托管任务启动前失败快返；不创建 batch/runtime。"""
-    from content.execution.agent.agent_conflicts import _cleanup_managed_local_workspace_conflicts, _cross_task_managed_data_cli_conflicts, _managed_local_workspace_conflicts, _managed_workspace_conflicts_for_provider
+    from content.execution.agent.agent_conflicts import _cleanup_managed_local_workspace_conflicts, _cross_task_managed_data_cli_conflicts, _managed_execution_resource_conflicts, _managed_local_workspace_conflicts, _managed_workspace_conflicts_for_provider
     from content.execution.agent.agent_runner import _redact_managed_secret
     issues: list[str] = []
     agent_provider = _normalize_managed_agent_provider(getattr(args, "agent_provider", None))
@@ -96,6 +96,11 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
                 _managed_local_workspace_conflicts(Path.cwd()),
                 agent_provider,
             )
+            conflicts = _managed_execution_resource_conflicts(
+                conflicts,
+                execution_id=execution_id,
+                execution_root=execution_root(execution_id),
+            )
         # 孤儿 bridge 自动回收：父进程已死（ppid=1）的 cursor-sdk-bridge 无归属，
         # 历史上会让 resume 循环反复 BLOCK 直至崩溃；确认孤儿后直接回收，
         # 不要求 --force-clean-workspace-agent-state。
@@ -140,6 +145,11 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
                 conflicts = _managed_workspace_conflicts_for_provider(
                     _managed_local_workspace_conflicts(Path.cwd()),
                     agent_provider,
+                )
+                conflicts = _managed_execution_resource_conflicts(
+                    conflicts,
+                    execution_id=execution_id,
+                    execution_root=execution_root(execution_id),
                 )
                 if cross_task_conflicts:
                     cross_task_pids = {

@@ -36,20 +36,17 @@ from quwoquan_ops.ci.device_matrix.evidence import (
 
 REPO_ROOT = _find_repo_root()
 APP_DIR = REPO_ROOT / "quwoquan_app"
-ASSISTANT_SERVICE_DIR = (
-    REPO_ROOT / "quwoquan_service" / "services" / "assistant-service"
-)
 DEFAULT_REPORT_PATH = REPO_ROOT / ".qwq_output" / "env" / "beta" / "runs" / "assistant-device-matrix" / "report.json"
 TEST_PATH = "test/user_acceptance/service/assistant_service/assistant/assistant_run/assistant_environment_smoke__user_acceptance_test.dart"
 ASSISTANT_SCENARIO_FIXTURE = (
     REPO_ROOT
     / "quwoquan_service"
-    / "contracts"
-    / "metadata"
-    / "assistant"
-    / "test_fixtures"
-    / "scenarios"
-    / "assistant_scenarios.json"
+    / "services"
+    / "assistant-service"
+    / "tests"
+    / "support"
+    / "eval_corpora"
+    / "assistant_runtime_smoke_scenarios.json"
 )
 
 
@@ -195,53 +192,9 @@ def gateway_for_device(device: dict[str, Any], args: argparse.Namespace) -> str:
     return args.ios_gateway_base_url
 
 
-def clean_ports(ports: list[int]) -> None:
-    for port in ports:
-        subprocess.run(
-            ["bash", "-lc", f"lsof -tiTCP:{port} -sTCP:LISTEN | xargs -r kill"],
-            cwd=str(REPO_ROOT),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-
-
-def start_process(
-    command: list[str],
-    *,
-    cwd: Path,
-    env: dict[str, str] | None = None,
-    log_path: Path,
-) -> subprocess.Popen[str]:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_file = log_path.open("w", encoding="utf-8")
-    return subprocess.Popen(
-        command,
-        cwd=str(cwd),
-        env=env,
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-        text=True,
-        start_new_session=True,
-    )
-
-
-def stop_process(process: subprocess.Popen[str] | None) -> None:
-    if process is None or process.poll() is not None:
-        return
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-        process.wait(timeout=10)
-    except Exception:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except Exception:
-            pass
-
-
 def wait_for_gateway(base_url: str, timeout_seconds: int) -> bool:
     deadline = time.monotonic() + timeout_seconds
-    url = base_url.rstrip("/") + "/assistant/skill-subscriptions"
+    url = base_url.rstrip("/") + "/healthz"
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=3) as response:
@@ -250,58 +203,6 @@ def wait_for_gateway(base_url: str, timeout_seconds: int) -> bool:
         except (urllib.error.URLError, TimeoutError, OSError):
             time.sleep(1)
     return False
-
-
-def start_beta_stack(
-    args: argparse.Namespace,
-    report_path: Path,
-    report: dict[str, Any],
-) -> tuple[subprocess.Popen[str], subprocess.Popen[str]]:
-    clean_ports([args.gateway_port, args.assistant_port])
-    logs_dir = report_path.parent / "assistant_device_matrix_logs"
-    assistant_log = logs_dir / "assistant-service-beta.log"
-    gateway_log = logs_dir / "assistant-beta-gateway.log"
-    assistant_env = os.environ.copy()
-    assistant_env["APP_ENV"] = "beta"
-    assistant_env["ASSISTANT_SCENARIO_SEED_REFS"] = args.assistant_seed_refs
-    assistant_env.setdefault("ASSISTANT_MODEL_API_KEY", os.environ.get("ASSISTANT_MODEL_API_KEY", ""))
-    if assistant_env.get("ASSISTANT_MODEL_PROVIDER") in {"deterministic", "fake"}:
-        assistant_env["ALLOW_DETERMINISTIC_BETA"] = "1"
-    assistant_process = start_process(
-        ["go", "run", "./cmd/api"],
-        cwd=ASSISTANT_SERVICE_DIR,
-        env=assistant_env,
-        log_path=assistant_log,
-    )
-    gateway_process = start_process(
-        [
-            "python3",
-            "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py",
-            "--listen-host",
-            "127.0.0.1",
-            "--listen-port",
-            str(args.gateway_port),
-            "--upstream-host",
-            "127.0.0.1",
-            "--upstream-port",
-            str(args.assistant_port),
-        ],
-        cwd=REPO_ROOT,
-        log_path=gateway_log,
-    )
-    report["betaServices"]["started"] = True
-    report["betaServices"]["logs"] = {
-        "assistantService": str(assistant_log.relative_to(REPO_ROOT)),
-        "gateway": str(gateway_log.relative_to(REPO_ROOT)),
-    }
-    gateway_base = args.gateway_health_url.rstrip("/")
-    report["betaServices"]["gatewayReachable"] = wait_for_gateway(
-        gateway_base,
-        args.service_start_timeout_seconds,
-    )
-    return assistant_process, gateway_process
-
-
 def collect_real_chain_evidence(args: argparse.Namespace, report: dict[str, Any]) -> None:
     beta_runs = [run for run in report.get("runs", []) if run.get("env") == "beta"]
     if not beta_runs:
@@ -322,16 +223,11 @@ def collect_real_chain_evidence(args: argparse.Namespace, report: dict[str, Any]
             f"assistant-beta-turn-{run.get('deviceId', 'unknown')}-{index}"
             for index, run in enumerate(beta_runs, start=1)
         ],
-        "seedRefs": [
-            ref.strip()
-            for ref in args.assistant_seed_refs.split(",")
-            if ref.strip()
-        ],
         "toolCalls": ["web_search"],
         "searchProvider": "duckduckgo_html",
         "modelProvider": os.environ.get("ASSISTANT_MODEL_PROVIDER", "openai_compatible"),
         "answerFragments": answer_fragments[:12] or ["股票", "天气", "行程"],
-        "logs": report.get("betaServices", {}).get("logs", {}),
+        "gatewayBaseUrl": args.gateway_health_url.rstrip("/"),
     }
 
 
@@ -555,10 +451,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ios-gateway-base-url", required=True)
     parser.add_argument("--android-gateway-base-url", required=True)
     parser.add_argument("--gateway-health-url", required=True)
-    parser.add_argument("--gateway-port", type=int, default=18080)
-    parser.add_argument("--assistant-port", type=int, default=18087)
-    parser.add_argument("--skip-beta-services", action="store_true")
-    parser.add_argument("--assistant-seed-refs", default="assistant_p0_core")
     parser.add_argument("--service-start-timeout-seconds", type=int, default=45)
     parser.add_argument("--test-timeout-seconds", type=int, default=420)
     parser.add_argument("--remote-retry-attempts", type=int, default=2)
@@ -591,145 +483,90 @@ def main() -> int:
         "runs": [],
         "deviceInventoryPath": "",
         "evidenceRoot": "",
-        "betaServices": {
-            "required": "beta" in requested_envs,
-            "started": False,
+        "environmentGateway": {
+            "baseUrl": args.gateway_health_url.rstrip("/"),
             "gatewayReachable": False,
-            "memoryFallback": True,
-            "restartCount": 0,
-            "assistantPort": args.assistant_port,
-            "gatewayPort": args.gateway_port,
-            "logs": {},
-            "seedRefs": args.assistant_seed_refs,
+            "composition": "production-remote",
         },
     }
 
-    assistant_process: subprocess.Popen[str] | None = None
-    gateway_process: subprocess.Popen[str] | None = None
-    try:
-        model_provider = os.environ.get("ASSISTANT_MODEL_PROVIDER", "openai_compatible")
-        if (
-            "beta" in requested_envs
-            and not args.skip_beta_services
-            and model_provider not in {"deterministic", "fake"}
-            and not os.environ.get("ASSISTANT_MODEL_API_KEY", "").strip()
-        ):
-            report["status"] = "gate_block"
-            report["failureCategory"] = "missing_model_api_key"
-            report["blockingReason"] = (
-                "APP_ENV=beta requires ASSISTANT_MODEL_API_KEY for model_provider=openai_compatible"
-            )
-            report["retryable"] = False
-            report["failureReason"] = (
-                "GATE_BLOCK: APP_ENV=beta requires ASSISTANT_MODEL_API_KEY "
-                "for model_provider=openai_compatible"
-            )
-            report["realChainEvidence"] = {
-                "runIds": [],
-                "turnIds": [],
-                "seedRefs": [
-                    ref.strip()
-                    for ref in args.assistant_seed_refs.split(",")
-                    if ref.strip()
-                ],
-                "toolCalls": [],
-                "searchProvider": "duckduckgo_html",
-                "modelProvider": model_provider,
-                "answerFragments": [],
-                "missing": ["ASSISTANT_MODEL_API_KEY"],
-            }
-            return write_report_and_exit(report, report_path, 2)
-        devices = discover_devices()
-        if args.device_id:
-            allowed = set(args.device_id)
-            devices = [device for device in devices if device["id"] in allowed]
-        if not devices:
-            report["status"] = "failed"
-            report["failureCategory"] = "device_not_found"
-            report["blockingReason"] = "no mobile Flutter devices available"
-            report["retryable"] = True
-            report["failureReason"] = "no mobile Flutter devices available"
-            return write_report_and_exit(report, report_path, 1)
-
-        for device in devices:
-            device["gatewayBaseUrl"] = gateway_for_device(device, args)
-        report["devices"] = devices
-        evidence_root = report_path.parent / "assistant_device_matrix_logs"
-        report["evidenceRoot"] = repo_relative(evidence_root)
-        report["deviceInventoryPath"] = write_discovered_devices_snapshot(
-            evidence_root / "discovered_devices.json",
-            devices,
-            suite="assistant-device-matrix",
-            requested_environments=requested_envs,
-            extra={"reportPath": repo_relative(report_path)},
+    report["environmentGateway"]["gatewayReachable"] = wait_for_gateway(
+        args.gateway_health_url,
+        args.service_start_timeout_seconds,
+    )
+    if not report["environmentGateway"]["gatewayReachable"]:
+        report["status"] = "gate_block"
+        report["failureCategory"] = "gateway_unreachable"
+        report["blockingReason"] = (
+            "canonical environment gateway health check failed; "
+            "start it through stackctl before UAT"
         )
+        report["retryable"] = True
+        return write_report_and_exit(report, report_path, 2)
 
-        if "beta" in requested_envs and not args.skip_beta_services:
-            assistant_process, gateway_process = start_beta_stack(
-                args, report_path, report
-            )
-            if not report["betaServices"]["gatewayReachable"]:
-                report["status"] = "failed"
+    devices = discover_devices()
+    if args.device_id:
+        allowed = set(args.device_id)
+        devices = [device for device in devices if device["id"] in allowed]
+    if not devices:
+        report["status"] = "failed"
+        report["failureCategory"] = "device_not_found"
+        report["blockingReason"] = "no mobile Flutter devices available"
+        report["retryable"] = True
+        report["failureReason"] = "no mobile Flutter devices available"
+        return write_report_and_exit(report, report_path, 1)
+
+    for device in devices:
+        device["gatewayBaseUrl"] = gateway_for_device(device, args)
+    report["devices"] = devices
+    evidence_root = report_path.parent / "assistant_device_matrix_logs"
+    report["evidenceRoot"] = repo_relative(evidence_root)
+    report["deviceInventoryPath"] = write_discovered_devices_snapshot(
+        evidence_root / "discovered_devices.json",
+        devices,
+        suite="assistant-device-matrix",
+        requested_environments=requested_envs,
+        extra={"reportPath": repo_relative(report_path)},
+    )
+
+    failed = False
+    for env_name in requested_envs:
+        for device in devices:
+            if not wait_for_gateway(args.gateway_health_url.rstrip("/"), 5):
+                report["status"] = "gate_block"
                 report["failureCategory"] = "gateway_unreachable"
-                report["blockingReason"] = "beta gateway health check failed"
+                report["blockingReason"] = "canonical gateway became unavailable"
                 report["retryable"] = True
-                report["failureReason"] = "beta gateway health check failed"
-                return write_report_and_exit(report, report_path, 1)
-
-        failed = False
-        for env_name in requested_envs:
-            for device in devices:
-                if env_name == "beta" and not args.skip_beta_services:
-                    if not wait_for_gateway(args.gateway_health_url.rstrip("/"), 5):
-                        stop_process(gateway_process)
-                        stop_process(assistant_process)
-                        report["betaServices"]["restartCount"] += 1
-                        assistant_process, gateway_process = start_beta_stack(
-                            args, report_path, report
-                        )
-                        if not report["betaServices"]["gatewayReachable"]:
-                            report["status"] = "failed"
-                            report["failureCategory"] = "gateway_unreachable"
-                            report["blockingReason"] = "beta gateway health check failed before device run"
-                            report["retryable"] = True
-                            report["failureReason"] = (
-                                "beta gateway health check failed before device run"
-                            )
-                            return write_report_and_exit(report, report_path, 1)
-                result = run_matrix_test(
-                    env_name,
-                    device,
-                    args,
-                    evidence_root=evidence_root,
-                )
-                report["runs"].append(result)
-                failed = failed or result["exitCode"] != 0
-        collect_real_chain_evidence(args, report)
-        report["status"] = "failed" if failed else "passed"
-        if failed:
-            first_failed = next(
-                (item for item in report["runs"] if int(item.get("exitCode", 0) or 0) != 0),
-                {},
+                return write_report_and_exit(report, report_path, 2)
+            result = run_matrix_test(
+                env_name,
+                device,
+                args,
+                evidence_root=evidence_root,
             )
-            report["failureCategory"] = str(first_failed.get("failureCategory") or "test_body_failed")
-            report["blockingReason"] = str(
-                first_failed.get("failureReason")
-                or first_failed.get("outputSummary")
-                or "assistant device matrix failed"
-            )
-            report["retryable"] = report["failureCategory"] in {
-                "device_bridge_failed",
-                "gateway_or_transport_flake",
-                "gateway_unreachable",
-                "test_timeout",
-                "device_not_found",
-            }
-        return write_report_and_exit(report, report_path, 1 if failed else 0)
-    finally:
-        stop_process(gateway_process)
-        stop_process(assistant_process)
-        if "beta" in requested_envs and not args.skip_beta_services:
-            clean_ports([args.gateway_port, args.assistant_port])
+            report["runs"].append(result)
+            failed = failed or result["exitCode"] != 0
+    collect_real_chain_evidence(args, report)
+    report["status"] = "failed" if failed else "passed"
+    if failed:
+        first_failed = next(
+            (item for item in report["runs"] if int(item.get("exitCode", 0) or 0) != 0),
+            {},
+        )
+        report["failureCategory"] = str(first_failed.get("failureCategory") or "test_body_failed")
+        report["blockingReason"] = str(
+            first_failed.get("failureReason")
+            or first_failed.get("outputSummary")
+            or "assistant device matrix failed"
+        )
+        report["retryable"] = report["failureCategory"] in {
+            "device_bridge_failed",
+            "gateway_or_transport_flake",
+            "gateway_unreachable",
+            "test_timeout",
+            "device_not_found",
+        }
+    return write_report_and_exit(report, report_path, 1 if failed else 0)
 
 
 def write_report_and_exit(report: dict[str, Any], report_path: Path, code: int) -> int:

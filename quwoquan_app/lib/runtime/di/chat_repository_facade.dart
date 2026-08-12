@@ -278,22 +278,46 @@ final class ComposedChatRepository implements ChatRepository {
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsViewData settings,
-  ) => _groupAdmin.updateGroupSettings(conversationId, settings);
+    ChatGroupSettingsViewData settings, {
+    String? idempotencyKey,
+  }) => _groupAdmin.updateGroupSettings(
+    conversationId,
+    settings,
+    idempotencyKey: idempotencyKey,
+  );
 
   @override
-  Future<void> updateAnnouncement(String conversationId, String announcement) =>
-      _groupAdmin.updateAnnouncement(conversationId, announcement);
+  Future<void> updateAnnouncement(
+    String conversationId,
+    String announcement, {
+    String? idempotencyKey,
+  }) => _groupAdmin.updateAnnouncement(
+    conversationId,
+    announcement,
+    idempotencyKey: idempotencyKey,
+  );
 
   @override
-  Future<void> transferOwnership(String conversationId, String newOwnerId) =>
-      _groupAdmin.transferOwnership(conversationId, newOwnerId);
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId, {
+    String? idempotencyKey,
+  }) => _groupAdmin.transferOwnership(
+    conversationId,
+    newOwnerId,
+    idempotencyKey: idempotencyKey,
+  );
 
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
-    List<String> adminIds,
-  ) => _groupAdmin.updateGroupAdmins(conversationId, adminIds);
+    List<String> adminIds, {
+    String? idempotencyKey,
+  }) => _groupAdmin.updateGroupAdmins(
+    conversationId,
+    adminIds,
+    idempotencyKey: idempotencyKey,
+  );
 
   @override
   Future<void> dissolveConversation(String conversationId) =>

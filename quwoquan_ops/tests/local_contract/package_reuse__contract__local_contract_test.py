@@ -13,6 +13,13 @@ from quwoquan_ops.cli.lib import package_reuse
 
 
 class PackageReuseContractTest(unittest.TestCase):
+    release_input_classification = "commercial_inputs"
+    contract_graph_digest = "sha256:" + "9" * 64
+    graphql_read_registry = {
+        "schema": "stackctl-graphql-read-registry-package",
+        "candidateDigest": "sha256:" + "8" * 64,
+    }
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -142,15 +149,32 @@ class PackageReuseContractTest(unittest.TestCase):
         )
 
     def _write(self, services: list[str] | None = None) -> Path:
+        capsule = self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
+        if not capsule.exists():
+            package_reuse.materialize_package_input_capsule(
+                package_reuse.deployment_input_roots(
+                    "alpha",
+                    "alpha-local",
+                    services
+                    if services is not None
+                    else ["content-service", "user-service"],
+                ),
+                capsule_root=capsule,
+            )
         path = package_reuse.write_package_fingerprint(
             "alpha",
             "alpha-local",
             report_dir=".qwq_output/env/alpha/runs/package",
             include_services=True,
             details=["ready"],
+            release_input_classification=self.release_input_classification,
+            contract_graph_digest=self.contract_graph_digest,
+            graphql_read_registry=self.graphql_read_registry,
             service_packages=services
             if services is not None
             else ["content-service", "user-service"],
+            candidate_root=self.candidate_root,
+            expected_snapshot=package_reuse.verify_package_input_capsule(capsule),
         )
         fingerprint = json.loads(path.read_text(encoding="utf-8"))
         self.active_baseline_id = fingerprint["baselineId"]
@@ -162,6 +186,9 @@ class PackageReuseContractTest(unittest.TestCase):
                     "workspaceStatusDigest": fingerprint["workspaceStatusDigest"],
                     "workspaceDigest": fingerprint["deploymentInputs"]["digest"],
                     "packageDigest": fingerprint["packageContent"]["digest"],
+                    "releaseInputClassification": self.release_input_classification,
+                    "contractGraphDigest": self.contract_graph_digest,
+                    "graphqlReadRegistry": self.graphql_read_registry,
                 }
             )
             + "\n",
@@ -170,10 +197,15 @@ class PackageReuseContractTest(unittest.TestCase):
         return path
 
     def test_workspace_drift_reports_start_and_end_identity(self) -> None:
-        start = package_reuse.workspace_snapshot()
-        changed = self.root / "quwoquan_ops/new-runtime-input.txt"
+        roots = package_reuse.deployment_input_roots(
+            "alpha",
+            "alpha-local",
+            ["content-service", "user-service"],
+        )
+        start = package_reuse.workspace_snapshot(deployment_roots=roots)
+        changed = self.root / "quwoquan_service/new-runtime-input.txt"
         changed.write_text("changed during package\n", encoding="utf-8")
-        end = package_reuse.workspace_snapshot()
+        end = package_reuse.workspace_snapshot(deployment_roots=roots)
 
         details = package_reuse.workspace_drift_details(start, end)
 
@@ -195,7 +227,45 @@ class PackageReuseContractTest(unittest.TestCase):
         )
         self.assertEqual(package_reuse.workspace_drift_details(end, end), [])
 
-    def test_reuse_binds_current_managed_inputs_and_package_bytes(self) -> None:
+    def test_capsule_captures_current_tree_when_tracked_file_is_deleted(self) -> None:
+        deleted = self.root / "quwoquan_service/deleted-test-fixture.bin"
+        deleted.write_bytes(b"test-only\n")
+        subprocess.run(["git", "add", str(deleted)], cwd=self.root, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Package Contract",
+                "-c",
+                "user.email=package-contract@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "tracked fixture",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        deleted.unlink()
+
+        capsule_root = self.root / "deployment/deleted-input-capsule"
+        manifest = package_reuse.materialize_package_input_capsule(
+            package_reuse.deployment_input_roots(
+                "alpha", "alpha-local", ["content-service", "user-service"]
+            ),
+            capsule_root=capsule_root,
+        )
+
+        self.assertFalse(
+            (capsule_root / "repo/quwoquan_service/deleted-test-fixture.bin").exists()
+        )
+        self.assertNotIn(
+            "quwoquan_service/deleted-test-fixture.bin",
+            {entry["logicalPath"] for entry in manifest["entries"]},
+        )
+        package_reuse.verify_package_input_capsule(capsule_root)
+
+    def test_self_verify_ignores_current_source_but_rejects_package_drift(self) -> None:
         self._write()
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
         self.assertTrue(ok, detail)
@@ -204,31 +274,81 @@ class PackageReuseContractTest(unittest.TestCase):
             self.candidate_root,
         )
 
-        input_path = self.root / "quwoquan_ops/source.txt"
+        input_path = (
+            self.root
+            / "quwoquan_service/services/content-service/source.txt"
+        )
         input_path.write_text("changed\n", encoding="utf-8")
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
-        self.assertFalse(ok)
-        self.assertIn("baselineId mismatch", detail)
+        self.assertTrue(ok, detail)
 
-        input_path.write_text("ops-source\n", encoding="utf-8")
+        ok, detail = package_reuse.can_reuse_package(
+            "alpha",
+            "alpha-local",
+            purpose="currentness",
+        )
+        self.assertFalse(ok)
+        self.assertIn("deployment input digest mismatch", detail)
+
+        input_path.write_text("content-source\n", encoding="utf-8")
         package_path = self.service_root / "content-service/provenance.json"
         package_path.write_text('{"changed":true}\n', encoding="utf-8")
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
         self.assertFalse(ok)
         self.assertIn("package content digest mismatch", detail)
 
-    def test_untracked_managed_input_invalidates_reuse(self) -> None:
+    def test_untracked_closure_input_only_invalidates_currentness(self) -> None:
         self._write()
-        untracked = self.root / "quwoquan_ops/new_runtime_input.txt"
+        untracked = self.root / "quwoquan_service/new_runtime_input.txt"
         untracked.write_text("new input\n", encoding="utf-8")
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
-        self.assertFalse(ok)
-        self.assertTrue(
-            "baselineId mismatch" in detail
-            or "workspaceStatusDigest mismatch" in detail
-            or "deployment input digest mismatch" in detail,
-            detail,
+        self.assertTrue(ok, detail)
+        ok, detail = package_reuse.can_reuse_package(
+            "alpha",
+            "alpha-local",
+            purpose="currentness",
         )
+        self.assertFalse(ok)
+        self.assertIn("deployment input digest mismatch", detail)
+
+    def test_declared_deployment_closure_excludes_unrelated_repository_roots(self) -> None:
+        roots = package_reuse.deployment_input_roots(
+            "alpha",
+            "alpha-local",
+            ["content-service", "user-service"],
+        )
+
+        self.assertIn("quwoquan_app/configs/alpha/app_runtime.yaml", roots)
+        self.assertIn("quwoquan_ops/cli/print_local_port_profile.py", roots)
+        self.assertIn("quwoquan_service", roots)
+        self.assertIn("quwoquan_service/generated/contract_graph.json", roots)
+        self.assertIn("quwoquan_service/contracts/metadata", roots)
+        self.assertIn("quwoquan_service/tools/codegen_graphql_read_registry", roots)
+        self.assertIn(
+            "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
+            roots,
+        )
+        self.assertNotIn("quwoquan_data", roots)
+        self.assertNotIn("specs", roots)
+        self.assertNotIn(".github", roots)
+
+    def test_release_attestations_are_exact_deployment_inputs(self) -> None:
+        candidate = self.root / "attestations/candidate.json"
+        rollback = self.root / "attestations/rollback.json"
+        candidate.parent.mkdir(parents=True)
+        candidate.write_text("{}\n", encoding="utf-8")
+        rollback.write_text("{}\n", encoding="utf-8")
+
+        roots = package_reuse.deployment_input_roots(
+            "alpha",
+            "alpha-local",
+            ["content-service", "user-service"],
+            release_attestation=str(candidate),
+            rollback_release_attestation=str(rollback),
+        )
+
+        self.assertIn(str(candidate), roots)
+        self.assertIn(str(rollback), roots)
 
     def test_old_or_identity_drifted_fingerprint_is_rejected(self) -> None:
         path = self._write()
@@ -256,12 +376,64 @@ class PackageReuseContractTest(unittest.TestCase):
                 ok, detail = package_reuse.can_reuse_package(
                     "alpha",
                     "alpha-local",
+                    purpose="currentness",
                 )
                 self.assertFalse(ok, detail)
         path.write_text(
             json.dumps(canonical, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+
+    def test_release_and_contract_graph_identity_are_closed_and_cross_bound(self) -> None:
+        path = self._write()
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            canonical["releaseInputClassification"],
+            self.release_input_classification,
+        )
+        self.assertEqual(
+            canonical["contractGraphDigest"],
+            self.contract_graph_digest,
+        )
+
+        cases = {
+            "missing classification": {
+                key: value
+                for key, value in canonical.items()
+                if key != "releaseInputClassification"
+            },
+            "unknown classification": {
+                **canonical,
+                "releaseInputClassification": "preview_inputs",
+            },
+            "missing ContractGraph": {
+                key: value
+                for key, value in canonical.items()
+                if key != "contractGraphDigest"
+            },
+            "invalid ContractGraph": {
+                **canonical,
+                "contractGraphDigest": "sha256:invalid",
+            },
+        }
+        for label, payload in cases.items():
+            with self.subTest(label=label):
+                path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+                ok, detail = package_reuse.can_reuse_package(
+                    "alpha",
+                    "alpha-local",
+                )
+                self.assertFalse(ok)
+                self.assertIn("fingerprint rejected", detail)
+
+        path.write_text(json.dumps(canonical) + "\n", encoding="utf-8")
+        candidate_path = self.candidate_root / "manifest.json"
+        candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+        candidate["contractGraphDigest"] = "sha256:" + "8" * 64
+        candidate_path.write_text(json.dumps(candidate) + "\n", encoding="utf-8")
+        ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
+        self.assertFalse(ok)
+        self.assertIn("contractGraphDigest mismatch", detail)
 
     def test_partial_service_package_cannot_claim_full_reuse(self) -> None:
         self._write(["content-service"])

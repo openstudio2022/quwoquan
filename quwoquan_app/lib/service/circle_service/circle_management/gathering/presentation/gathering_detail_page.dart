@@ -216,10 +216,11 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
         await _runAction(
           'watch-availability',
           (writer, value) => writer.watchAvailability(
-            GatheringVersionCommandInput(
+            GatheringAvailabilityWatchCommandInput(
               idempotencyKey: _idempotencyKey(public, 'watch-availability'),
               gatheringId: public.gatheringId,
               expectedGatheringVersion: public.aggregateVersion,
+              expectedWatchVersion: 0,
             ),
           ),
         );

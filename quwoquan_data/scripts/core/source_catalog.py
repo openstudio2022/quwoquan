@@ -17,6 +17,27 @@ from core.paths import CONTROL_PLANE_CATALOGS_ROOT
 
 SOURCE_CATALOG_PATH = CONTROL_PLANE_CATALOGS_ROOT / "source_catalog.yaml"
 
+# Article base-source admission is shared by discovery, planning, content-plan
+# validation, and the execution completion gate.  Keep the closed set here so
+# a source accepted upstream cannot be rejected later by a drifted copy.
+ARTICLE_BASE_SOURCE_CATEGORIES = frozenset(
+    {
+        "travelogue",
+        "guidebook",
+        "travel_guide",
+        "wikivoyage",
+        "official_article",
+        "vertical_professional",
+        "ugc_longform",
+        "community_post",
+        "media_article",
+        "platform_article",
+        "forum_thread",
+        "review_note",
+        "encyclopedia",
+    }
+)
+
 # 通用兜底/未知平台不计入类别覆盖。
 _GENERIC_PLATFORMS = {"", "web", "unknown"}
 
@@ -197,6 +218,7 @@ def source_plan_guidance(vertical: str = "travel") -> dict[str, Any]:
 
 
 __all__ = [
+    "ARTICLE_BASE_SOURCE_CATEGORIES",
     "SOURCE_CATALOG_PATH",
     "load_source_catalog",
     "known_category_ids",

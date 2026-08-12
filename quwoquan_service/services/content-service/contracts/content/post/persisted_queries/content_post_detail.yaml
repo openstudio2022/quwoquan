@@ -1,0 +1,28 @@
+schema: qwq.object-owned-internal-persisted-graphql.v1
+canonicalOperationId: content.post.GetPost
+objectId: content.post
+document: content_post_detail.graphql
+operationName: ContentPostDetailBase
+operationType: query
+sha256Hash: 3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b
+assemblyProjectionId: content.post.ContentPostDetailSlice
+appClientBundle:
+  bundleId: content.post.ContentPostDetail
+  role: base
+  supportedContentTypes: [article, image, micro, video]
+runtimeRequest:
+  method: POST
+  path: /internal/graphql
+  contentType: application/json
+  queryText: forbidden
+  onlineRegistration: forbidden
+  mutation: forbidden
+  contractGraphHeader: X-Contract-Graph-SHA256
+  trustedServicePrincipal:
+    subject: service:api-edge
+    scope: content.post.graphql.read
+variables:
+  required: [postId]
+  additionalProperties: false
+response:
+  rootField: contentPostDetailBase

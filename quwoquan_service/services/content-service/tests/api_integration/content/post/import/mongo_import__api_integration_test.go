@@ -1,9 +1,16 @@
 //go:build mongo_integration
 
+// spec_ref: specs/feature-tree/discovery-content/spec.md#dom-005.t1
+// spec_ref: specs/feature-tree/discovery-content/spec.md#dom-005.t2
+// spec_ref: specs/feature-tree/discovery-content/spec.md#dom-005.t3
+// spec_ref: specs/feature-tree/discovery-content/spec.md#dom-005.t4
+
 package api_integration
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +22,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport"
 )
 
@@ -94,8 +102,8 @@ func samplePosts() []PostDoc {
 				{Dimension: "interest", Source: "tagRef", TagRefs: []string{"Topic/旅行"}, ActionType: "join", ActionTargetID: "Topic/旅行"},
 			},
 			AuthorID: "builtin_travel_blogger", CreatorProfileID: "qwq_creator_travel_blogger_001", CreatorArchetype: "travel_blogger",
-			CreatorProfileVersion: "1.0.0", CreatorDisclosure: map[string]any{"type": "platform_virtual_creator", "displayText": "平台虚拟创作者", "visible": true},
-			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: map[string]any{"qualityScore": 0.85, "fatigueScore": 0.2, "riskTier": "low"},
+			CreatorProfileVersion: "1.0.0", CreatorDisclosure: postmodel.PostCreatorDisclosure{Type: "platform_virtual_creator", DisplayText: "平台虚拟创作者", Visible: true},
+			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: postmodel.PostAuthorQualitySignals{QualityScore: 0.85, FatigueScore: 0.2, RiskTier: "low"},
 			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			ArticleAssetManifest: &ArticleAssetManifestDoc{
 				Schema:                ArticleAssetManifestSchema,
@@ -219,8 +227,8 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.Body != got.ArticleMarkdown || got.Body == "" {
 		t.Fatalf("body must mirror articleMarkdown for online read/search: %+v", got)
 	}
-	if got.Summary != "sha256:1111111111111111111111111111111111111111111111111111111111111111" || got.MarkdownDigest != "sha256:1111111111111111111111111111111111111111111111111111111111111111" {
-		t.Fatalf("summary/digest must mirror articleDigest: %+v", got)
+	if got.Summary != "正文" || got.MarkdownDigest != "sha256:1111111111111111111111111111111111111111111111111111111111111111" {
+		t.Fatalf("summary must be user-visible prose while digest remains canonical: %+v", got)
 	}
 	if got.ArticleTemplate != "journal" {
 		t.Fatalf("articleTemplate must mirror template: %+v", got)
@@ -292,6 +300,488 @@ func TestMongoReleaseStatePersistsImmutableManifestBinding(t *testing.T) {
 		state.Readback.Counts.Posts != 3 || state.Readback.Counts.DiscoveryPosts != 3 {
 		t.Fatalf("immutable release state mismatch: %+v", state)
 	}
+}
+
+func TestMongoContentOwnedReleaseApplyCommitsPostsOutboxAndActivePointerAtomically(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	posts := samplePosts()
+	for index := range posts {
+		if strings.TrimSpace(posts[index].AuthorID) == "" {
+			posts[index].AuthorID = "builtin_travel_blogger"
+		}
+	}
+	first := ImportOptions{
+		ReleaseID:      "rel_atomic_001",
+		ManifestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Mode:           "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+		ProjectionVersion: now.UnixMilli(),
+	}
+	result, err := ApplyImportedPostRelease(ctx, db, "alpha", posts, now, first)
+	if err != nil {
+		t.Fatalf("ApplyImportedPostRelease: %v", err)
+	}
+	if result.PostsUpserted != 2 || result.PostsRemoved != 0 ||
+		result.OutboxEventsReady != 2 || result.OutboxEventsAppended != 2 || result.Replayed {
+		t.Fatalf("unexpected first apply result: %+v", result)
+	}
+	if count, err := db.Collection("content_outbox").CountDocuments(ctx, bson.M{}); err != nil || count != 2 {
+		t.Fatalf("durable Post outbox count=%d err=%v, want 2", count, err)
+	}
+	var state struct {
+		ReleaseID         string    `bson:"releaseId"`
+		ActiveReleaseID   string    `bson:"activeReleaseId"`
+		ManifestDigest    string    `bson:"manifestDigest"`
+		ProjectionVersion int64     `bson:"projectionVersion"`
+		ActivatedAt       time.Time `bson:"activatedAt"`
+	}
+	if err := db.Collection("data_release_state").FindOne(ctx, bson.M{
+		"environment": "alpha", "sourceOwner": "qwq_data",
+	}).Decode(&state); err != nil {
+		t.Fatalf("read active release state: %v", err)
+	}
+	if state.ReleaseID != first.ReleaseID || state.ActiveReleaseID != first.ReleaseID ||
+		state.ManifestDigest != first.ManifestDigest ||
+		state.ProjectionVersion != result.ProjectionVersion || state.ActivatedAt.IsZero() {
+		t.Fatalf("active release binding mismatch: %+v", state)
+	}
+	stageCursor, err := db.Collection("data_release_stage_receipts").Find(
+		ctx,
+		bson.M{
+			"environment": "alpha",
+			"releaseId":   first.ReleaseID,
+			"status":      "passed",
+		},
+	)
+	if err != nil {
+		t.Fatalf("read committed release stage receipts: %v", err)
+	}
+	defer stageCursor.Close(ctx)
+	var stageReceipts []struct {
+		Stage             string `bson:"stage"`
+		AttemptedCount    int    `bson:"attemptedCount"`
+		SuccessCount      int    `bson:"successCount"`
+		FirstTypedBlocker string `bson:"firstTypedBlocker"`
+	}
+	if err := stageCursor.All(ctx, &stageReceipts); err != nil {
+		t.Fatalf("decode committed release stage receipts: %v", err)
+	}
+	stages := map[string]bool{}
+	for _, receipt := range stageReceipts {
+		stages[receipt.Stage] = true
+		if receipt.AttemptedCount != len(posts) ||
+			receipt.SuccessCount != len(posts) || receipt.FirstTypedBlocker != "" {
+			t.Fatalf("stage receipt is not a successful bounded fact: %+v", receipt)
+		}
+	}
+	for _, stage := range []string{"prepared", "imported", "projected", "verified", "active"} {
+		if !stages[stage] {
+			t.Fatalf("missing committed release stage receipt %q: %+v", stage, stageReceipts)
+		}
+	}
+
+	replay, err := ApplyImportedPostRelease(ctx, db, "alpha", posts, now.Add(time.Minute), first)
+	if err != nil {
+		t.Fatalf("replay imported release: %v", err)
+	}
+	if !replay.Replayed || replay.ProjectionVersion != result.ProjectionVersion ||
+		replay.OutboxEventsReady != 2 || replay.OutboxEventsAppended != 0 {
+		t.Fatalf("same release replay is not idempotent: %+v", replay)
+	}
+	if count, err := db.Collection("content_outbox").CountDocuments(ctx, bson.M{}); err != nil || count != 2 {
+		t.Fatalf("replay changed durable Post outbox count=%d err=%v", count, err)
+	}
+
+	second := ImportOptions{
+		ReleaseID:      "rel_atomic_002",
+		ManifestDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		Mode:           "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+		ProjectionVersion: result.ProjectionVersion,
+	}
+	switched, err := ApplyImportedPostRelease(ctx, db, "alpha", posts[:1], now.Add(time.Minute), second)
+	if err != nil {
+		t.Fatalf("switch imported release: %v", err)
+	}
+	if switched.Replayed || switched.ProjectionVersion <= result.ProjectionVersion ||
+		switched.PostsRemoved != 1 || switched.OutboxEventsReady != 2 ||
+		switched.OutboxEventsAppended != 2 {
+		t.Fatalf("release switch did not advance lifecycle: %+v", switched)
+	}
+	if count, err := db.Collection("content_outbox").CountDocuments(ctx, bson.M{}); err != nil || count != 4 {
+		t.Fatalf("release switch durable Post outbox count=%d err=%v, want 4", count, err)
+	}
+}
+
+func TestMongoActiveReleaseRepairCountMismatchRollsBackThenConverges(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	posts := samplePosts()
+	for index := range posts {
+		if strings.TrimSpace(posts[index].AuthorID) == "" {
+			posts[index].AuthorID = "builtin_travel_blogger"
+		}
+	}
+	first := ImportOptions{
+		ReleaseID: "rel_repair_001", ManifestDigest: "sha256:" + strings.Repeat("a", 64),
+		Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+		ProjectionVersion: now.UnixMilli(),
+	}
+	initial, err := ApplyImportedPostRelease(ctx, db, "alpha", posts, now, first)
+	if err != nil {
+		t.Fatalf("initial release: %v", err)
+	}
+	second := ImportOptions{
+		ReleaseID: "rel_repair_002", ManifestDigest: "sha256:" + strings.Repeat("b", 64),
+		Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+		ProjectionVersion: initial.ProjectionVersion + 1,
+	}
+	activated, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", posts[:1], now.Add(time.Minute), second,
+	)
+	if err != nil {
+		t.Fatalf("activate release with deletion: %v", err)
+	}
+	if activated.PostDeletionEventsReady != 1 {
+		t.Fatalf("deletion events=%d want=1", activated.PostDeletionEventsReady)
+	}
+
+	var deleted struct {
+		ID          string          `bson:"_id"`
+		AggregateID string          `bson:"aggregateId"`
+		OccurredAt  time.Time       `bson:"occurredAt"`
+		PayloadJSON json.RawMessage `bson:"payloadJson"`
+	}
+	if err := db.Collection("content_outbox").FindOne(
+		ctx,
+		bson.M{"eventType": "PostDeleted", "aggregateVersion": activated.ProjectionVersion},
+	).Decode(&deleted); err != nil {
+		t.Fatalf("read canonical PostDeleted: %v", err)
+	}
+	legacyPayload, err := json.Marshal(map[string]any{
+		"postId":        deleted.AggregateID,
+		"releaseId":     second.ReleaseID,
+		"releaseDigest": second.ManifestDigest,
+		"sourceOwner":   second.SourceOwner,
+		"deletedAt":     deleted.OccurredAt.UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Collection("content_outbox").UpdateOne(
+		ctx,
+		bson.M{"_id": deleted.ID},
+		bson.M{"$set": bson.M{"payloadJson": json.RawMessage(legacyPayload)}},
+	); err != nil {
+		t.Fatalf("install bounded legacy payload: %v", err)
+	}
+	postBefore, err := db.Collection("posts").FindOne(
+		ctx,
+		bson.M{"postRef": posts[0].PostRef},
+	).Raw()
+	if err != nil {
+		t.Fatalf("read active Post before repair: %v", err)
+	}
+	stateBefore, err := db.Collection("data_release_state").FindOne(
+		ctx,
+		bson.M{"environment": "alpha", "sourceOwner": second.SourceOwner},
+	).Raw()
+	if err != nil {
+		t.Fatalf("read active release state before repair: %v", err)
+	}
+
+	wrongCount := 2
+	second.RequireReplay = true
+	replayPostRef, err := CanonicalImportReportPostRef(posts[0].PostRef)
+	if err != nil {
+		t.Fatalf("derive replay source postRef: %v", err)
+	}
+	second.ReplayPostBindings = []ImportedPostBinding{{
+		PostRef: replayPostRef, PostID: RuntimePostID(posts[0].ContentID, posts[0].PostRef),
+		ContentID: posts[0].ContentID, ContentVersion: posts[0].ContentVersion,
+		UsageScope: posts[0].Admission.UsageScope, ContentType: posts[0].ContentType,
+		AuthorID: posts[0].AuthorID,
+	}}
+	second.ExpectedOutboxRepairCount = &wrongCount
+	if _, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", posts[:1], now.Add(2*time.Minute), second,
+	); err == nil || !strings.Contains(err.Error(), "repair count mismatch") {
+		t.Fatalf("wrong expected count did not abort transaction: %v", err)
+	}
+	var failedReceipt struct {
+		Stage             string `bson:"stage"`
+		Status            string `bson:"status"`
+		FirstTypedBlocker string `bson:"firstTypedBlocker"`
+	}
+	if err := db.Collection("data_release_stage_receipts").FindOne(
+		ctx,
+		bson.M{
+			"environment": "alpha",
+			"releaseId":   second.ReleaseID,
+			"status":      "failed",
+		},
+	).Decode(&failedReceipt); err != nil {
+		t.Fatalf("read failed release stage receipt: %v", err)
+	}
+	if failedReceipt.Stage != "imported" ||
+		failedReceipt.FirstTypedBlocker != "CONTENT.RELEASE.IMPORT_FAILED" {
+		t.Fatalf("failed release receipt is not typed: %+v", failedReceipt)
+	}
+	var afterMismatch struct {
+		PayloadJSON json.RawMessage `bson:"payloadJson"`
+	}
+	if err := db.Collection("content_outbox").FindOne(
+		ctx, bson.M{"_id": deleted.ID},
+	).Decode(&afterMismatch); err != nil {
+		t.Fatal(err)
+	}
+	if string(afterMismatch.PayloadJSON) != string(legacyPayload) {
+		t.Fatal("repair count mismatch committed payload CAS")
+	}
+
+	exactCount := 1
+	second.ExpectedOutboxRepairCount = &exactCount
+	repaired, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", posts[:1], now.Add(3*time.Minute), second,
+	)
+	if err != nil {
+		t.Fatalf("exact active-release repair: %v", err)
+	}
+	if !repaired.Replayed || repaired.OutboxEventsRepaired != 1 ||
+		repaired.OutboxEventsAppended != 0 || repaired.PostsRemoved != 0 {
+		t.Fatalf("unexpected repair result: %+v", repaired)
+	}
+
+	zeroCount := 0
+	second.ExpectedOutboxRepairCount = &zeroCount
+	idempotent, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", posts[:1], now.Add(4*time.Minute), second,
+	)
+	if err != nil {
+		t.Fatalf("idempotent active-release repair: %v", err)
+	}
+	if idempotent.OutboxEventsRepaired != 0 || idempotent.OutboxEventsAppended != 0 {
+		t.Fatalf("idempotent replay wrote outbox: %+v", idempotent)
+	}
+	postAfter, err := db.Collection("posts").FindOne(
+		ctx,
+		bson.M{"postRef": posts[0].PostRef},
+	).Raw()
+	if err != nil {
+		t.Fatalf("read active Post after repair: %v", err)
+	}
+	stateAfter, err := db.Collection("data_release_state").FindOne(
+		ctx,
+		bson.M{"environment": "alpha", "sourceOwner": second.SourceOwner},
+	).Raw()
+	if err != nil {
+		t.Fatalf("read active release state after repair: %v", err)
+	}
+	if !bytes.Equal(postBefore, postAfter) {
+		t.Fatal("repair rail rewrote active Post bytes")
+	}
+	if !bytes.Equal(stateBefore, stateAfter) {
+		t.Fatal("repair rail rewrote active release-state bytes")
+	}
+}
+
+func TestMongoLegacyActiveReleaseRepairOnlyChangesFourPostDeletedPayloads(
+	t *testing.T,
+) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	all := make([]PostDoc, 0, 50)
+	for index := 0; index < 50; index++ {
+		all = append(all, PostDoc{
+			PostRef:        fmt.Sprintf("posts/article/体验/legacy-repair-%02d/1", index),
+			ContentID:      fmt.Sprintf("qwq_data_legacy_repair_%02d", index),
+			ContentVersion: 1, ContentType: "article", ContentIdentity: "work",
+			Title:    fmt.Sprintf("legacy repair %02d", index),
+			AuthorID: "builtin_travel_blogger",
+			Admission: ContentAdmission{
+				ProcessResult: "completed", QualityResult: "passed", UsageScope: "research",
+			},
+			CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now,
+		})
+	}
+	first := ImportOptions{
+		ReleaseID: "legacy_repair_previous", ManifestDigest: "sha256:" + strings.Repeat("a", 64),
+		Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+		ProjectionVersion: now.UnixMilli(),
+	}
+	initial, err := ApplyImportedPostRelease(ctx, db, "alpha", all, now, first)
+	if err != nil || initial.PostsUpserted != 50 {
+		t.Fatalf("seed previous release result=%+v err=%v", initial, err)
+	}
+	desired := append([]PostDoc(nil), all[:46]...)
+	active := ImportOptions{
+		ReleaseID: "legacy_repair_active", ManifestDigest: "sha256:" + strings.Repeat("b", 64),
+		Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+		ProjectionVersion: initial.ProjectionVersion + 1,
+	}
+	activated, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", desired, now.Add(time.Minute), active,
+	)
+	if err != nil || activated.PostsUpserted != 46 || activated.PostsRemoved != 4 {
+		t.Fatalf("activate 46/4 release result=%+v err=%v", activated, err)
+	}
+
+	bindings := make([]ImportedPostBinding, 0, len(desired))
+	posts := db.Collection("posts")
+	for _, post := range desired {
+		currentID := RuntimePostID(post.ContentID, post.PostRef)
+		legacyID := LegacyRuntimePostID(post.PostRef)
+		var document bson.M
+		if err := posts.FindOne(ctx, bson.M{"_id": currentID}).Decode(&document); err != nil {
+			t.Fatalf("read current Post %q: %v", post.PostRef, err)
+		}
+		if _, err := posts.DeleteOne(ctx, bson.M{"_id": currentID}); err != nil {
+			t.Fatalf("remove current Post identity %q: %v", post.PostRef, err)
+		}
+		document["_id"] = legacyID
+		document["postId"] = legacyID
+		if _, err := posts.InsertOne(ctx, document); err != nil {
+			t.Fatalf("install historical Post identity %q: %v", post.PostRef, err)
+		}
+		reportRef, err := CanonicalImportReportPostRef(post.PostRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bindings = append(bindings, ImportedPostBinding{
+			PostRef: reportRef, PostID: legacyID, ContentID: post.ContentID,
+			ContentVersion: post.ContentVersion, UsageScope: post.Admission.UsageScope,
+			ContentType: post.ContentType, AuthorID: post.AuthorID,
+		})
+	}
+
+	outbox := db.Collection("content_outbox")
+	cursor, err := outbox.Find(ctx, bson.M{
+		"eventType": "PostDeleted", "aggregateVersion": activated.ProjectionVersion,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyPayloads := make(map[string][]byte, 4)
+	for cursor.Next(ctx) {
+		var deleted struct {
+			ID          string          `bson:"_id"`
+			AggregateID string          `bson:"aggregateId"`
+			OccurredAt  time.Time       `bson:"occurredAt"`
+			PayloadJSON json.RawMessage `bson:"payloadJson"`
+		}
+		if err := cursor.Decode(&deleted); err != nil {
+			t.Fatal(err)
+		}
+		payload, err := json.Marshal(map[string]any{
+			"postId": deleted.AggregateID, "releaseId": active.ReleaseID,
+			"releaseDigest": active.ManifestDigest, "sourceOwner": active.SourceOwner,
+			"deletedAt": deleted.OccurredAt.UTC().Format(time.RFC3339Nano),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := outbox.UpdateOne(
+			ctx, bson.M{"_id": deleted.ID},
+			bson.M{"$set": bson.M{"payloadJson": json.RawMessage(payload)}},
+		); err != nil {
+			t.Fatal(err)
+		}
+		legacyPayloads[deleted.ID] = append([]byte(nil), payload...)
+	}
+	if err := cursor.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(legacyPayloads) != 4 {
+		t.Fatalf("legacy tombstones=%d want=4", len(legacyPayloads))
+	}
+
+	readRawClosure := func(collection *mongo.Collection, filter bson.M) [][]byte {
+		t.Helper()
+		cursor, err := collection.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cursor.Close(ctx)
+		var result [][]byte
+		for cursor.Next(ctx) {
+			result = append(result, append([]byte(nil), cursor.Current...))
+		}
+		if err := cursor.Err(); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	postBytesBefore := readRawClosure(posts, bson.M{
+		"releaseId": active.ReleaseID, "lifecycleStatus": "active",
+	})
+	publishedBytesBefore := readRawClosure(outbox, bson.M{
+		"eventType": "PostPublished", "aggregateVersion": activated.ProjectionVersion,
+	})
+	stateBefore, err := db.Collection("data_release_state").FindOne(
+		ctx, bson.M{"environment": "alpha", "sourceOwner": active.SourceOwner},
+	).Raw()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := 4
+	active.RequireReplay = true
+	active.ExpectedOutboxRepairCount = &expected
+	active.ReplayPostBindings = bindings
+	repaired, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", desired, now.Add(2*time.Minute), active,
+	)
+	if err != nil {
+		t.Fatalf("repair legacy 46/4 release: %v", err)
+	}
+	if !repaired.Replayed || repaired.PostsUpserted != 46 ||
+		repaired.PostsRemoved != 0 || repaired.PostDeletionEventsReady != 4 ||
+		repaired.OutboxEventsReady != 4 || repaired.OutboxEventsAppended != 0 ||
+		repaired.OutboxEventsRepaired != 4 {
+		t.Fatalf("unexpected legacy repair result: %+v", repaired)
+	}
+	if got := readRawClosure(posts, bson.M{
+		"releaseId": active.ReleaseID, "lifecycleStatus": "active",
+	}); !equalRawDocumentClosure(postBytesBefore, got) {
+		t.Fatal("repair rail rewrote legacy active Post bytes")
+	}
+	if got := readRawClosure(outbox, bson.M{
+		"eventType": "PostPublished", "aggregateVersion": activated.ProjectionVersion,
+	}); !equalRawDocumentClosure(publishedBytesBefore, got) {
+		t.Fatal("repair rail rewrote PostPublished bytes")
+	}
+	stateAfter, err := db.Collection("data_release_state").FindOne(
+		ctx, bson.M{"environment": "alpha", "sourceOwner": active.SourceOwner},
+	).Raw()
+	if err != nil || !bytes.Equal(stateBefore, stateAfter) {
+		t.Fatalf("repair rail rewrote release state err=%v", err)
+	}
+
+	expected = 0
+	idempotent, err := ApplyImportedPostRelease(
+		ctx, db, "alpha", desired, now.Add(3*time.Minute), active,
+	)
+	if err != nil || idempotent.OutboxEventsRepaired != 0 ||
+		idempotent.OutboxEventsAppended != 0 {
+		t.Fatalf("idempotent legacy repair result=%+v err=%v", idempotent, err)
+	}
+}
+
+func equalRawDocumentClosure(left, right [][]byte) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if !bytes.Equal(left[index], right[index]) {
+			return false
+		}
+	}
+	return true
 }
 
 func TestMongoUpsertIsIdempotent(t *testing.T) {

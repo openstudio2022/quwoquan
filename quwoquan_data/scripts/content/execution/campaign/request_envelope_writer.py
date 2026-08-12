@@ -19,6 +19,7 @@ from content.execution.campaign.request_envelope import (
     envelope_path,
 )
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.identity import parse_execution_id
 from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
 
 
@@ -110,7 +111,53 @@ def _assert_one_source_identity(
         )
     if predecessor_reconciliation_receipt is None:
         return
-    if predecessor_reconciliation_receipt.get("reason") not in {
+    reason = predecessor_reconciliation_receipt.get("reason")
+    if reason in {
+        "mixed_finalized_partial_terminal",
+        "terminal_unpublished_source_drift",
+    }:
+        observed_identity = predecessor_reconciliation_receipt.get(
+            "observedSourceIdentity"
+        )
+        if not isinstance(observed_identity, Mapping):
+            raise TypeError(
+                "campaign mixed terminal reconciliation observed identity is invalid"
+            )
+        execution_evidence = predecessor_reconciliation_receipt.get(
+            "executionEvidence"
+        )
+        if not isinstance(execution_evidence, Mapping):
+            raise TypeError(
+                "campaign mixed terminal reconciliation execution evidence is invalid"
+            )
+        if (
+            predecessor_reconciliation_receipt.get("retryPolicy")
+            != "new_four_lane_execution_with_retryOf"
+            or execution_evidence.get("excludedFromRetryRelease") is not True
+            or execution_evidence.get("eligibleForRelease") is not False
+        ):
+            raise ValueError(
+                "campaign mixed terminal reconciliation does not exclude predecessor objects"
+            )
+        current = next(iter(payloads.values()))
+        current_identity = {
+            "sourceRevision": current["sourceRevision"],
+            "sourceDigest": current["sourceDigest"],
+            "entityCatalogDigest": current["entityCatalogDigest"],
+        }
+        if (
+            reason == "terminal_unpublished_source_drift"
+            and current_identity != observed_identity
+        ):
+            raise ValueError(
+                "campaign terminal unpublished retry source identity drifted"
+            )
+        # The receipt binds the old mixed terminal boundary.  A retry is a fresh
+        # four-lane execution and may intentionally use a superseding handoff
+        # after a source fix; the old objects remain provenance only and are
+        # never carried into the retry release.
+        return
+    if reason not in {
         "source_drift",
         "claimed_execution_source_drift",
     }:
@@ -167,6 +214,49 @@ def _assert_one_capacity_plan(
         for payload in payloads.values()
     ):
         raise ValueError("campaign capacity plan contains an invalid lane binding")
+    bindings = [payload.get("workerHostSetBinding") for payload in payloads.values()]
+    if not any(binding is not None for binding in bindings):
+        if any(str(payload.get("scale")) == "M10000" for payload in payloads.values()):
+            raise ValueError("M10000 governed capacity requires every lane host binding")
+        return
+    if (
+        any(str(payload.get("scale")) not in {"M1000", "M10000"} for payload in payloads.values())
+        or not all(isinstance(binding, Mapping) for binding in bindings)
+    ):
+        raise ValueError(
+            "explicit governed campaign capacity requires every lane host binding"
+        )
+    identities = {
+        (
+            str(binding["hostSetId"]),
+            int(binding["generation"]),
+            str(binding["fencingToken"]),
+            str(binding["hostSetDigest"]),
+            json.dumps(binding["transportBinding"], sort_keys=True),
+        )
+        for binding in bindings
+        if isinstance(binding, Mapping)
+    }
+    if len(identities) != 1:
+        raise ValueError("campaign worker host-set identity changed across carriers")
+    for payload, binding in zip(payloads.values(), bindings, strict=True):
+        assert isinstance(binding, Mapping)
+        hosts = binding.get("hosts")
+        if not isinstance(hosts, list) or not hosts:
+            raise ValueError("campaign lane host assignments are missing")
+        partitions = [
+            int(partition)
+            for host in hosts
+            if isinstance(host, Mapping)
+            for partition in host.get("partitionKeys") or []
+        ]
+        if (
+            len(partitions) != len(set(partitions))
+            or sorted(partitions) != list(range(int(payload["partitionCount"])))
+            or sum(int(host["workerCount"]) for host in hosts)
+            != int(payload["requiredWorkers"])
+        ):
+            raise ValueError("campaign lane host/partition assignment drift")
 
 
 def _assert_one_scale_source_pool(
@@ -182,8 +272,21 @@ def _assert_one_scale_source_pool(
         str(payload.get("sourcePoolEvidenceRootRef") or "")
         for payload in payloads.values()
     }
+    if bindings == {"null"}:
+        if evidence_refs != {""} or any(
+            payload.get("sourcePoolSelection") is not None
+            for payload in payloads.values()
+        ):
+            raise ValueError(
+                "DATA.SOURCE.POOL_SHORTFALL: incomplete campaign pool binding"
+            )
+        if scale == "M10000":
+            raise ValueError(
+                "DATA.SOURCE.POOL_SHORTFALL: M10000 campaign requires source pool"
+            )
+        return
     if scale in {"M100", "M1000", "M10000"}:
-        if len(bindings) != 1 or "null" in bindings or len(evidence_refs) != 1:
+        if len(bindings) != 1 or len(evidence_refs) != 1 or "" in evidence_refs:
             raise ValueError("DATA.SOURCE.POOL_SHORTFALL: campaign pool binding drift")
         carriers = {
             str((payload.get("sourcePoolSelection") or {}).get("carrier") or "")
@@ -195,6 +298,28 @@ def _assert_one_scale_source_pool(
         raise ValueError(
             "DATA.SOURCE.POOL_SHORTFALL: below-M100 forbids source pool binding"
         )
+
+
+def _assert_one_m100_alpha_acceptance(
+    payloads: Mapping[str, Mapping[str, Any]], *, scale: str
+) -> None:
+    bindings = {
+        json.dumps(
+            payload.get("m100AlphaAcceptance"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for payload in payloads.values()
+    }
+    if scale == "M1000":
+        if len(bindings) != 1 or bindings == {"null"}:
+            raise ValueError(
+                "DATA.SCALE.ALPHA_M100_ACCEPTANCE_DRIFT: lanes must share one "
+                "verified M100 Alpha acceptance"
+            )
+    elif bindings != {"null"}:
+        raise ValueError("only M1000 lanes may bind M100 Alpha acceptance")
 
 
 def write_scale_envelopes(
@@ -214,12 +339,16 @@ def write_scale_envelopes(
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
+    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
+    alpha_m100_readiness_receipt: Path | None = None,
+    alpha_m100_app_uat_receipt: Path | None = None,
+    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
@@ -257,13 +386,13 @@ def write_scale_envelopes(
     if sequence == 1 and retry_predecessors:
         raise ValueError("campaign envelope sequence=1 forbids retry predecessors")
     required = set(CAMPAIGN_CARRIERS)
-    if sequence > 1 and (
+    if retry_predecessors and (
         len(selected) != len(required)
         or set(selected) != required
         or set(retry_predecessors) != required
     ):
         raise ValueError(
-            "campaign envelope sequence>1 requires complete four-carrier retry predecessors"
+            "campaign retry requires complete four-carrier retry predecessors"
         )
     payloads: dict[str, dict[str, Any]] = {}
     for carrier in selected:
@@ -283,10 +412,18 @@ def write_scale_envelopes(
             predecessor_execution_id=retry_predecessors.get(carrier),
             semantic_selection_id=semantic_selection_id,
             semantic_preflight_receipt=semantic_preflight_receipt,
+            capacity_host_set=capacity_host_set,
             semantic_preflight_output_root=semantic_preflight_output_root,
             predecessor_reconciliation=predecessor_reconciliation,
             promotion_receipt=promotion_receipt,
             promotion_output_root=(promotion_output_root or output_root or paths.OUTPUT_ROOT),
+            alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
+            alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
+            alpha_m100_acceptance_output_root=(
+                alpha_m100_acceptance_output_root
+                or output_root
+                or paths.OUTPUT_ROOT
+            ),
             pre_acquisition_handoff=pre_acquisition_handoff,
             pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
             external_input_refs=(external_input_refs_by_carrier or {}).get(carrier, ()),
@@ -309,20 +446,30 @@ def write_scale_envelopes(
     _assert_one_handoff_identity(payloads)
     _assert_one_capacity_plan(payloads)
     _assert_one_scale_source_pool(payloads, scale=resolved.scale)
+    _assert_one_m100_alpha_acceptance(payloads, scale=resolved.scale)
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     frozen_source = next(iter(payloads.values()))["sourceDigest"]
+    frozen_bundle = next(iter(payloads.values()))["executionBundle"]
     if not isinstance(frozen_source, dict):
         raise TypeError("campaign envelope sourceDigest document is invalid")
-    _require_stable_source_inputs(frozen_source, repo_root=source_repo)
+    if not isinstance(frozen_bundle, dict):
+        raise TypeError("campaign envelope executionBundle document is invalid")
+    _require_stable_source_inputs(
+        frozen_source,
+        execution_bundle=frozen_bundle,
+        repo_root=source_repo,
+    )
 
     written: dict[str, Path] = {}
     for carrier, payload in payloads.items():
+        identity = parse_execution_id(str(payload["executionId"]))
         path = envelope_path(
             resolved.scale,
             carrier,
+            scope=identity.scope,
             vertical=vertical,
             root=output_root,
-            sequence=sequence,
+            sequence=identity.sequence,
         )
         if path.is_file():
             existing = read_json(path)

@@ -399,12 +399,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       } catch (error, stackTrace) {
         // 产品遥测通道不可用不影响发送语义，但必须进入独立 runtime 错误面。
         unawaited(
-          ref.read(exceptionTelemetryPortProvider).recordHandledException(
-            source: 'chat.send_message.operation_result',
-            error: error,
-            stackTrace: stackTrace,
-            operationId: AppCloudOperationIds.chatMessageSendMessage,
-          ),
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'chat.send_message.operation_result',
+                error: error,
+                stackTrace: stackTrace,
+                operationId: AppCloudOperationIds.chatMessageSendMessage,
+              ),
         );
       }
     }());
@@ -436,12 +438,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       }).toList();
       state = state.copyWith(messages: _sorted(failed));
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'chat.message.retry_send',
-          error: error,
-          stackTrace: stackTrace,
-          operationId: AppCloudOperationIds.chatMessageSendMessage,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'chat.message.retry_send',
+              error: error,
+              stackTrace: stackTrace,
+              operationId: AppCloudOperationIds.chatMessageSendMessage,
+            ),
       );
     }
   }
@@ -562,11 +566,13 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
     } catch (error, stackTrace) {
       // best-effort：快照水合失败降级为原始消息，上报保留观测面。
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'chat.message.hydrate_sender_snapshots',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'chat.message.hydrate_sender_snapshots',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       return messages;
     }
@@ -701,12 +707,14 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       return;
     }
     unawaited(
-      ref.read(exceptionTelemetryPortProvider).recordHandledException(
-        source: 'chat.message.local_timeline.$operation',
-        error: error,
-        stackTrace: stackTrace,
-        operationId: AppCloudOperationIds.chatMessageListMessages,
-      ),
+      ref
+          .read(exceptionTelemetryPortProvider)
+          .recordHandledException(
+            source: 'chat.message.local_timeline.$operation',
+            error: error,
+            stackTrace: stackTrace,
+            operationId: AppCloudOperationIds.chatMessageListMessages,
+          ),
     );
   }
 

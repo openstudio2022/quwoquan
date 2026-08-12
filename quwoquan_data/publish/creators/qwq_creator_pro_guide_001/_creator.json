@@ -1,0 +1,17 @@
+{
+  "schema": "quwoquan_data.creator_object",
+  "creatorId": "qwq_creator_pro_guide_001",
+  "profileRef": "profile.json",
+  "assetsRef": "assets.refs.json",
+  "worksRefsRef": "works.refs.ndjson",
+  "tagRefs": [
+    "Format/内容角度/攻略/行前指南",
+    "Format/内容角度/攻略/银发专享",
+    "Topic/旅行/出行方式/跟团巴士",
+    "Topic/旅行/玩法/博物馆展览",
+    "Topic/旅行/玩法/古迹寻访",
+    "Topic/旅行/玩法/观光游览",
+    "Topic/旅行/行程形态/跟团游"
+  ],
+  "entityRefs": []
+}

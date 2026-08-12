@@ -1,6 +1,6 @@
 schema: quwoquan_data.professional_image_discovery_catalog
-catalogRevision: research-professional-image-v1
-providerOrder: [pinterest, tuchong, wikimedia_commons]
+catalogRevision: research-professional-image-v2
+providerOrder: [pinterest, tuchong, wikimedia_commons, openverse]
 supportedAxes: [entity, category, season, style, viewpoint, popularity]
 providers:
   - provider: pinterest
@@ -52,6 +52,24 @@ providers:
       - "{entity} travel landscape"
     acquisitionPaths: [supported_api, manual_file]
     termsUrl: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
+    accessPolicy:
+      anonymousOnly: true
+      respectRobots: true
+      loginBypass: false
+      captchaBypass: false
+      paywallBypass: false
+  - provider: openverse
+    displayName: Openverse
+    priority: 3
+    discoveryMode: public_search_url
+    publicDiscoveryUrls:
+      - https://openverse.org/
+    searchUrlTemplate: "https://openverse.org/search/image?q={query}"
+    queryTemplates:
+      - "{entity} {category} {season} {style} {viewpoint} {popularity}"
+      - "{entity} travel landscape"
+    acquisitionPaths: [supported_api]
+    termsUrl: https://docs.openverse.org/terms_of_use.html
     accessPolicy:
       anonymousOnly: true
       respectRobots: true

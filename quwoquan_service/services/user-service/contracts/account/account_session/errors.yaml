@@ -426,6 +426,7 @@ errors:
   emitted_by:
   - surface: http
     operations:
+    - IssueWhitelistedResearchSession
     - Logout
     - user.contact_discovery_record.DismissContactDiscovery
     - user.contact_discovery_record.GetLatestContactDiscovery

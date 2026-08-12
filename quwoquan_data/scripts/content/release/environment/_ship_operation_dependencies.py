@@ -21,6 +21,7 @@ class ShipOperationDependencies:
     sync_media: Callable[..., None]
     write_applied_ref: Callable[..., None]
     assert_target_action_allowed: Callable[..., None]
+    assert_environment_release_policy: Callable[..., None]
     resolve_environment_release_target: Callable[..., Any]
     require_environment_readiness: Callable[..., None]
     run_tag_importer: Callable[..., Path]
@@ -38,3 +39,4 @@ class ShipOperationDependencies:
     write_research_isolation_verification: Callable[..., Path]
     write_environment_release_readiness: Callable[..., Path]
     now_compact: Callable[[], str]
+    restore_previous_release: Callable[..., None] | None = None

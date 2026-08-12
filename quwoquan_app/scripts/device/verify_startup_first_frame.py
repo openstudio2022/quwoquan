@@ -52,6 +52,7 @@ FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS = (
     "android_native_welcome_completion_received",
     "android_flutter_welcome_ready_timeout",
 )
+ANDROID_ANR_OBSERVATION_WINDOW_MS = 7_000
 
 
 @dataclass(frozen=True)
@@ -175,21 +176,130 @@ def parse_android_task_snapshot(
     }
 
 
-def android_gate_main_order_observed(log: str) -> bool:
+def android_gate_main_order_evidence(log: str) -> dict[str, Any]:
     static_frame_indexes = [
-        index
+        match.start()
         for event in (
             "android_gate_static_frame_drawn",
             "android_gate_static_frame_draw_timeout",
         )
-        if (index := log.find(event)) >= 0
+        for match in re.finditer(re.escape(event), log)
     ]
-    handoff_index = log.find("android_gate_main_handoff")
-    main_index = log.find("android_activity_on_create")
-    return bool(
-        static_frame_indexes
-        and min(static_frame_indexes) < handoff_index < main_index
+    focus_indexes = [
+        match.start()
+        for match in re.finditer("android_gate_window_focus_confirmed", log)
+    ]
+    focus_released_indexes = [
+        match.start()
+        for match in re.finditer("android_gate_window_focus_released", log)
+    ]
+    handoff_indexes = [
+        match.start()
+        for match in re.finditer("android_gate_main_handoff", log)
+    ]
+    main_indexes = [
+        match.start()
+        for match in re.finditer("android_activity_on_create", log)
+    ]
+    event_counts = {
+        "staticFrameReady": len(static_frame_indexes),
+        "windowFocusConfirmed": len(focus_indexes),
+        "windowFocusReleased": len(focus_released_indexes),
+        "mainHandoff": len(handoff_indexes),
+        "mainActivityCreate": len(main_indexes),
+    }
+    unique_attempt = all(count == 1 for count in event_counts.values())
+    ordered = bool(
+        unique_attempt
+        and static_frame_indexes[0] < handoff_indexes[0]
+        and focus_indexes[0]
+        < focus_released_indexes[0]
+        < handoff_indexes[0]
+        < main_indexes[0]
     )
+    return {
+        "eventCounts": event_counts,
+        "uniqueAttemptLog": unique_attempt,
+        "ordered": ordered,
+    }
+
+
+def android_gate_main_order_observed(log: str) -> bool:
+    return bool(android_gate_main_order_evidence(log)["ordered"])
+
+
+def android_log_after_baseline(
+    baseline: str,
+    current: str,
+) -> tuple[str, bool]:
+    baseline_lines = baseline.splitlines()
+    current_lines = current.splitlines()
+    if not baseline_lines:
+        return current, True
+    if current_lines[: len(baseline_lines)] != baseline_lines:
+        return current, False
+    return "\n".join(current_lines[len(baseline_lines) :]), True
+
+
+def android_package_anr_evidence(log: str, package: str) -> dict[str, Any]:
+    package_token = re.compile(
+        rf"(?<![A-Za-z0-9_.]){re.escape(package)}(?![A-Za-z0-9_.])"
+    )
+    signals: list[str] = []
+    matched_line_count = 0
+    for line in log.splitlines():
+        if package_token.search(line) is None:
+            continue
+        line_signals = []
+        if re.search(r"\bam_anr\s*:", line):
+            line_signals.append("am_anr")
+        if re.search(rf"\bANR in\s+{re.escape(package)}(?![A-Za-z0-9_.])", line):
+            line_signals.append("anr_in_package")
+        if "Input dispatching timed out" in line:
+            line_signals.append("input_dispatch_timeout")
+        if not line_signals:
+            continue
+        matched_line_count += 1
+        for signal in line_signals:
+            if signal not in signals:
+                signals.append(signal)
+    return {
+        "detected": bool(signals),
+        "signals": signals,
+        "matchedLineCount": matched_line_count,
+    }
+
+
+def android_fresh_startup_log_evidence(
+    *,
+    baseline: str,
+    current: str,
+    package: str,
+) -> dict[str, Any]:
+    observation_log, baseline_applied = android_log_after_baseline(
+        baseline,
+        current,
+    )
+    order = android_gate_main_order_evidence(observation_log)
+    anr = android_package_anr_evidence(observation_log, package)
+    return {
+        "observationLog": observation_log,
+        "baselineApplied": baseline_applied,
+        "baselineLineCount": len(baseline.splitlines()),
+        "observationLineCount": len(observation_log.splitlines()),
+        "startupAttemptLogUnique": order["uniqueAttemptLog"],
+        "gateEventCounts": order["eventCounts"],
+        "gateMainOrderObserved": order["ordered"],
+        "androidAnrDetected": anr["detected"],
+        "androidAnrSignals": anr["signals"],
+        "androidAnrMatchedLineCount": anr["matchedLineCount"],
+        "passed": bool(
+            baseline_applied
+            and order["uniqueAttemptLog"]
+            and order["ordered"]
+            and not anr["detected"]
+        ),
+    }
 
 
 def resolve_android_launch_resource_profile(device: str) -> str:
@@ -988,6 +1098,15 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         package=args.android_package,
         expected_activity=args.android_activity,
     )
+    log_baseline = run(
+        ["adb", "-s", args.android_device, "logcat", "-d"],
+        check=False,
+        timeout=15,
+    ).stdout
+    (output_dir / "android-logcat-baseline.txt").write_text(
+        log_baseline,
+        encoding="utf-8",
+    )
     start_command = [
         "adb",
         "-s",
@@ -1032,6 +1151,9 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             require_telemetry_ack=(
                 args.require_telemetry_ack or bool(args.matrix_evidence_root)
             ),
+            observation_not_before=(
+                start_clock + ANDROID_ANR_OBSERVATION_WINDOW_MS / 1000
+            ),
         )
     else:
         for offset in args.android_offsets_ms:
@@ -1048,6 +1170,10 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
             analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
 
     if log is None:
+        observation_not_before = (
+            start_clock + ANDROID_ANR_OBSERVATION_WINDOW_MS / 1000
+        )
+        time.sleep(max(observation_not_before - time.monotonic(), 0))
         log = run(
             ["adb", "-s", args.android_device, "logcat", "-d"],
             timeout=15,
@@ -1075,7 +1201,12 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         package=args.android_package,
         main_activity=args.android_main_activity,
     )
-    gate_main_order = android_gate_main_order_observed(log)
+    fresh_log_evidence = android_fresh_startup_log_evidence(
+        baseline=log_baseline,
+        current=log,
+        package=args.android_package,
+    )
+    gate_main_order = bool(fresh_log_evidence["gateMainOrderObserved"])
     launch_resource_profile = resolve_android_launch_resource_profile(
         args.android_device
     )
@@ -1207,6 +1338,7 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         and launcher_started
         and launcher_query.returncode == 0
         and launcher_resolution["matchesExpectedGate"]
+        and fresh_log_evidence["passed"]
         and gate_main_order
         and task_snapshot["singleMainTask"]
         and launch_visual["contractVerified"]
@@ -1251,7 +1383,18 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "launcherIntentUsed": True,
         "launcherStarted": launcher_started,
         "launcherResolution": launcher_resolution,
+        "androidLogBaselineApplied": fresh_log_evidence["baselineApplied"],
+        "androidLogBaselineLineCount": fresh_log_evidence["baselineLineCount"],
+        "androidObservationLineCount": fresh_log_evidence["observationLineCount"],
+        "androidAnrObservationWindowMs": ANDROID_ANR_OBSERVATION_WINDOW_MS,
+        "startupAttemptLogUnique": fresh_log_evidence["startupAttemptLogUnique"],
+        "gateEventCounts": fresh_log_evidence["gateEventCounts"],
         "gateMainOrderObserved": gate_main_order,
+        "androidAnrDetected": fresh_log_evidence["androidAnrDetected"],
+        "androidAnrSignals": fresh_log_evidence["androidAnrSignals"],
+        "androidAnrMatchedLineCount": fresh_log_evidence[
+            "androidAnrMatchedLineCount"
+        ],
         "taskSnapshot": task_snapshot,
         "launchVisual": launch_visual,
         "visibleByMs": args.android_visible_by_ms,
@@ -1295,6 +1438,7 @@ def _wait_for_android_startup_log(
     *,
     hard_deadline_ms: int,
     require_telemetry_ack: bool,
+    observation_not_before: float | None = None,
 ) -> str:
     host_deadline = time.monotonic() + hard_deadline_ms / 1000 + 12
     process_seen_at: float | None = None
@@ -1312,6 +1456,10 @@ def _wait_for_android_startup_log(
             sequence.get("welcomeExitMs") is not None
             and sequence.get("shellFirstPaintMs") is not None
             and sequence.get("overlayRemovedMs") is not None
+            and (
+                observation_not_before is None
+                or time.monotonic() >= observation_not_before
+            )
             and (
                 not require_telemetry_ack
                 or "startup_telemetry_ack attemptId=" in latest

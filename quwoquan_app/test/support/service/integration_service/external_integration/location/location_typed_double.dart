@@ -1,12 +1,12 @@
 import 'package:quwoquan_app/service/integration_service/external_integration/location/application/public/location_query_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 final class LocationQueryTypedDouble
     implements NearbyLocationReader, LocationSearchReader {
-  LocationQueryTypedDouble({ObjectScenarioSeedReader? fixtures})
-    : _items = _readItems(fixtures ?? objectScenarioSeedReader);
+  LocationQueryTypedDouble({ObjectContractExampleReader? fixtures})
+    : _items = _readItems(fixtures ?? objectContractExampleReader);
 
   final List<LocationPoi> _items;
 
@@ -34,13 +34,15 @@ final class LocationQueryTypedDouble
     );
   }
 
-  static List<LocationPoi> _readItems(ObjectScenarioSeedReader fixtures) {
+  static List<LocationPoi> _readItems(ObjectContractExampleReader fixtures) {
     final decoded = fixtures.document('integration');
-    final seedSets = decoded['seedSets'];
-    if (seedSets is! Map) {
-      throw FormatException('Integration location fixture seedSets is missing');
+    final examples = decoded['examples'];
+    if (examples is! Map) {
+      throw FormatException(
+        'Integration location contract examples are missing',
+      );
     }
-    final locationSeed = seedSets['location_poi_core'];
+    final locationSeed = examples['location_poi_core'];
     if (locationSeed is! Map || locationSeed['pois'] is! List) {
       throw FormatException('Integration location_poi_core fixture is missing');
     }

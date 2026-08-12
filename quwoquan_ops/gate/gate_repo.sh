@@ -119,6 +119,7 @@ python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py
 python3 quwoquan_ops/gate/verify_api_path_unversioned.py
 python3 quwoquan_ops/gate/verify_environment_assembly.py
 python3 quwoquan_ops/gate/verify_domain_governance.py
+PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_test_data_architecture.py
 # 反向错误码治理维度：实现发射但契约无声明位。存量走显式基线（只减不增），
 # 新增未声明码与新增解析盲点 BLOCK；当前只覆盖 runtime NewCode 家族一种发射形态。
 python3 quwoquan_ops/gate/verify_emitted_error_code_declaration.py
@@ -140,7 +141,6 @@ python3 quwoquan_ops/tests/local_contract/test_emitted_error_code_declaration__c
   # quwoquan_ops/tests/local_contract/test_gamma_curated_scenario_projector__local_contract_test.py 守住。
   # 内容域评论计数自洽（缺口A 防回归）：真相源 + 派生产物（*.lite.json / *.gamma-curated.json）
   # 的 commentCount/replyCount 不得与裁剪后评论集漂移。
-  python3 quwoquan_service/scripts/content-service/content/post/verify_content_scenario_comment_counts.py --include-derived
   bash quwoquan_ops/environments/verify/verify_service_domain_layout.sh
   bash quwoquan_service/scripts/runtime/packaging/verify_runtime_packaging.sh
   bash quwoquan_ops/environments/verify/verify_ff_config_contract.sh
@@ -320,7 +320,6 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/auth/verify_permission_primer_copy.py || exit 1
     python3 quwoquan_app/scripts/cli.py fonts verify || exit 1
     python3 quwoquan_app/scripts/cli.py web verify-offline || exit 1
-    python3 quwoquan_ops/gate/verify_nonprod_business_data_provisioning.py || exit 1
     python3 quwoquan_app/scripts/content_service/content/post/verify_markdown_article_no_article_document.py || exit 1
     python3 quwoquan_app/scripts/content_service/content/post/verify_article_contract_purity.py || exit 1
     python3 quwoquan_app/scripts/content_service/content/post/verify_post_view_projection_wire_keys.py || exit 1

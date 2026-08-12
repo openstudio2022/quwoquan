@@ -209,7 +209,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 )
             current_branch = _current_git_branch()
             # A detached managed clone has no current branch. The predecessor
-            # receipt supplies its immutable dev1.0 branch while HEAD/source
+            # receipt supplies its immutable main branch while HEAD/source
             # digest still have to match exactly.
             receipt_branch = (
                 str(scale_promotion_receipt.get("gitBranch") or "")

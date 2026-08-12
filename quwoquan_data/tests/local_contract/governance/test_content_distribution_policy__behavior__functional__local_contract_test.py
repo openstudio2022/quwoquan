@@ -43,7 +43,7 @@ def test_research_policy_is_explicit_and_disables_media_generation() -> None:
     assert policy.text_only_rate_target == 0.1
     assert policy.automatic_recovery_rate_target == 0.95
     assert policy.automatic_recovery_statistical is True
-    assert policy.automatic_recovery_non_blocking is False
+    assert policy.automatic_recovery_non_blocking is True
     assert policy.video_popularity_signals == (
         "play",
         "like",
@@ -52,7 +52,7 @@ def test_research_policy_is_explicit_and_disables_media_generation() -> None:
         "favorite",
     )
     assert policy.video_popularity_statistical is True
-    assert policy.video_popularity_non_blocking is False
+    assert policy.video_popularity_non_blocking is True
     assert dict(policy.m100_targets) == {
         "homepage": 100,
         "article": 100,
@@ -71,8 +71,8 @@ def test_research_policy_is_explicit_and_disables_media_generation() -> None:
         "image": 10000,
         "video": 1000,
     }
-    assert policy.require_m100_promotion_before_m1000 is True
-    assert policy.require_m1000_promotion_before_m10000 is True
+    assert policy.require_m100_promotion_before_m1000 is False
+    assert policy.require_m1000_promotion_before_m10000 is False
     assert policy.milestone_attainment_required is True
     assert policy.attainment_counting_mode == "cumulative_unique_finalized_objects"
 

@@ -38,13 +38,13 @@ import (
 	homepageexternal "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/external"
 	entityguard "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/operationguard"
 	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/testsupport"
 	claimhttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/adapters/inbound/http"
 	claimapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/application"
 	claimpersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_claim_request/infrastructure/persistence"
 	statushttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/adapters/inbound/http"
 	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
 	statuspersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/infrastructure/persistence"
+	testsupport "quwoquan_service/services/entity-service/tests/support/homepagefixture"
 )
 
 // trustedPersonaHandler 模拟 generated operation guard 验证通过后的可信上下文注入；

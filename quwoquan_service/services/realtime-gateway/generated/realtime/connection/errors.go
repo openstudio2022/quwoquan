@@ -14,7 +14,6 @@ var (
 	ErrUnauthorized                        = errors.New("REALTIME.USER.unauthorized")
 	ErrTicketInvalid                       = errors.New("REALTIME.USER.ticket_invalid")
 	ErrTicketReplayed                      = errors.New("REALTIME.USER.ticket_replayed")
-	ErrRateLimited                         = errors.New("REALTIME.USER.rate_limited")
 	ErrAccountSecurityAuthorityUnavailable = errors.New("REALTIME.SYSTEM.account_security_authority_unavailable")
 	ErrInternalError                       = errors.New("REALTIME.SYSTEM.internal_error")
 	ErrReadinessUnavailable                = errors.New("REALTIME.SYSTEM.readiness_unavailable")
@@ -23,47 +22,41 @@ var (
 // AppErrorFromInvalidArgument returns *AppError for REALTIME.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
-	return rerrors.NewAppError(code, "实时操作请求格式无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "实时操作请求格式无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromUnauthorized returns *AppError for REALTIME.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromTicketInvalid returns *AppError for REALTIME.USER.ticket_invalid (user_message from errors.yaml).
 func AppErrorFromTicketInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTicketInvalid.Error()))
-	return rerrors.NewAppError(code, "实时连接凭据无效，正在重新连接", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("retry", 1)
+	return rerrors.NewAppError(code, "实时连接凭据无效，正在重新连接", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromTicketReplayed returns *AppError for REALTIME.USER.ticket_replayed (user_message from errors.yaml).
 func AppErrorFromTicketReplayed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTicketReplayed.Error()))
-	return rerrors.NewAppError(code, "实时连接凭据已被使用，正在重新连接", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("retry", 1)
-}
-
-// AppErrorFromRateLimited returns *AppError for REALTIME.USER.rate_limited (user_message from errors.yaml).
-func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "实时连接凭据已被使用，正在重新连接", debugMessage).WithMetadata("unauthorized", 401).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromAccountSecurityAuthorityUnavailable returns *AppError for REALTIME.SYSTEM.account_security_authority_unavailable (user_message from errors.yaml).
 func AppErrorFromAccountSecurityAuthorityUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountSecurityAuthorityUnavailable.Error()))
-	return rerrors.NewAppError(code, "账户安全校验暂不可用，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 1)
+	return rerrors.NewAppError(code, "账户安全校验暂不可用，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromInternalError returns *AppError for REALTIME.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
-	return rerrors.NewAppError(code, "实时服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 3)
+	return rerrors.NewAppError(code, "实时服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromReadinessUnavailable returns *AppError for REALTIME.SYSTEM.readiness_unavailable (user_message from errors.yaml).
 func AppErrorFromReadinessUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrReadinessUnavailable.Error()))
-	return rerrors.NewAppError(code, "实时服务尚未就绪，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 1)
+	return rerrors.NewAppError(code, "实时服务尚未就绪，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 1)
 }

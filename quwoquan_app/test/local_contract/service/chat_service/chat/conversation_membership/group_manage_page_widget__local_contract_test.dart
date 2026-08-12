@@ -154,6 +154,7 @@ void main() {
 
       expect(repo.lastSettings, isNotNull);
       expect(repo.lastSettings!.nameEditableByAdminOnly, isNot(initialValue));
+      expect(repo.lastIdempotencyKey, isNotEmpty);
     });
 
     testWidgets('tap 解散群聊弹出确认弹窗', (tester) async {
@@ -239,13 +240,21 @@ class _CircleGroupManagedSettingsRepo extends MockChatRepository {
 
 class _TrackingSettingsRepo extends MockChatRepository {
   ChatGroupSettingsViewData? lastSettings;
+  String? lastIdempotencyKey;
 
   @override
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsViewData settings,
-  ) async {
+    ChatGroupSettingsViewData settings, {
+    String? idempotencyKey,
+  }) async {
     lastSettings = settings;
+    lastIdempotencyKey = idempotencyKey;
+    await super.updateGroupSettings(
+      conversationId,
+      settings,
+      idempotencyKey: idempotencyKey,
+    );
   }
 }
 
@@ -257,3 +266,5 @@ class _TrackingDissolveRepo extends MockChatRepository {
     dissolvedConversationIds.add(conversationId);
   }
 }
+
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003

@@ -1,0 +1,86 @@
+{
+  "label": "四川省乐山市沙湾区",
+  "domain": "地点",
+  "type": "城市",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "entityRef": "/entity/地点/城市/四川省乐山市沙湾区",
+  "summary": "1985年乐山撤地建市后，这里成为乐山市的市辖区，全区面积约618平方公里，人口约21万，其中非农业人口约7.73万、农业人口约13.27万。",
+  "sourceRefs": [
+    "sources/homepage-source-e9e80b3d93cd2ba5e97c/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA"
+  ],
+  "primarySource": {
+    "entityName": "四川省乐山市沙湾区",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T05:21:35Z",
+    "snapshotHash": "sha256:8ad4efe55b30960b44f630bea7fa1926fcbae17e806f4185a94ca31e9531e2d5",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only"
+  },
+  "sourceAttribution": {
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "audioRightsStatus": "no_audio",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "collectedAt": "2026-08-12T05:21:35Z",
+    "commercialAuthorizationStatus": "verified",
+    "isOriginal": false,
+    "modelReleaseStatus": "not_required",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "propertyReleaseStatus": "not_required",
+    "publicationAdmission": "research_release",
+    "rightsBasis": "CC BY-SA 4.0",
+    "riskAcceptanceId": null,
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "watermarkStatus": "absent"
+  },
+  "textSourceRefs": [
+    "sources/homepage-source-e9e80b3d93cd2ba5e97c/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/homepage-source-e9e80b3d93cd2ba5e97c/source.md"
+  ],
+  "heroAssetId": "四川省乐山市沙湾区_cover_wikimedia_common_269_47dfb13b",
+  "mediaAssetIds": [
+    "四川省乐山市沙湾区_cover_wikimedia_common_269_47dfb13b"
+  ],
+  "tagRefs": [
+    "Entity/地点/城市",
+    "Topic/地理/行政区/中国/四川省/乐山市/沙湾区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/四川省/乐山市/沙湾区",
+  "geoTagRefs": [
+    "Topic/地理/行政区/中国/四川省/乐山市/沙湾区"
+  ],
+  "aliases": [
+    "沙湾区"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

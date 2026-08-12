@@ -4,13 +4,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 ///
 /// 原先与 circle_object_facets 测试同文件私有；按对象拆分后上收到 support，
 /// 避免每个对象测试各自复制一份 wire 期望造成第二真相源。
-Map<String, Object?> circleMembershipCommandResultFixture() => <String, Object?>{
-  'membershipId': 'membership-1',
-  'version': 7,
-  'state': 'active',
-  'role': 'member',
-  'idempotentReplay': false,
-};
+Map<String, Object?> circleMembershipCommandResultFixture() =>
+    <String, Object?>{
+      'membershipId': 'membership-1',
+      'version': 7,
+      'state': 'active',
+      'role': 'member',
+      'idempotentReplay': false,
+    };
 
 Map<String, Object?> circleMembershipSliceFixture() => <String, Object?>{
   'membershipId': 'membership-1',
@@ -51,13 +52,14 @@ Map<String, Object?> circleGroupSliceFixture() => <String, Object?>{
   'updatedAt': '2026-07-14T01:00:00Z',
 };
 
-Map<String, Object?> circleGroupMembershipCommandResultFixture() => <String, Object?>{
-  'membershipId': 'group-membership-1',
-  'version': 5,
-  'role': 'member',
-  'state': 'active',
-  'idempotentReplay': false,
-};
+Map<String, Object?> circleGroupMembershipCommandResultFixture() =>
+    <String, Object?>{
+      'membershipId': 'group-membership-1',
+      'version': 5,
+      'role': 'member',
+      'state': 'active',
+      'idempotentReplay': false,
+    };
 
 Map<String, Object?> circleGroupMembershipSliceFixture() => <String, Object?>{
   'membershipId': 'group-membership-1',

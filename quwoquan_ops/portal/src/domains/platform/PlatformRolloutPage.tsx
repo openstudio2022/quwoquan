@@ -12,16 +12,18 @@ import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 const grayRoutingStages: Array<{ stage: GrayRoutingStage; label: string }> = [
-  { stage: 'gray-initial', label: '初始灰度' },
-  { stage: 'carry-on', label: '持续放量' },
-  { stage: 'full', label: '全量' },
+  { stage: 'canary', label: '单实例验证' },
+  { stage: '5', label: '5%' },
+  { stage: '20', label: '20%' },
+  { stage: '50', label: '50%' },
+  { stage: '100', label: '100%' },
 ];
 
 const grayRoutingDimensions = [
-  { key: 'appVersions', label: '端侧版本', header: 'X-Client-App-Version' },
-  { key: 'userIds', label: '用户白名单', header: 'X-Client-User-Id' },
-  { key: 'provinces', label: '省份（可信边缘接入前禁用）', header: 'X-Client-Region-Code' },
-  { key: 'carriers', label: '运营商（可信边缘接入前禁用）', header: 'X-Client-Carrier' },
+  { key: 'appVersions', label: '端侧版本', source: 'X-Client-App-Version' },
+  { key: 'platforms', label: '平台', source: 'X-Client-Device-Platform' },
+  { key: 'regions', label: '地域', source: 'API Edge GeoIP' },
+  { key: 'carriers', label: '运营商', source: 'API Edge ASN' },
 ] as const;
 
 function reportedValue(value: string | undefined): string {
@@ -115,7 +117,7 @@ export function PlatformRolloutPage() {
 
       <SectionCard
         title="灰度路由策略（IaC 只读）"
-        subtitle="当前仅按端侧版本和 userId 白名单分流。province/carrier 在可信边缘 attestation 与 hosted UAT 到位前保持空值且不参与路由；未知或未命中均走稳定栈。"
+        subtitle="安装实例按 deviceActorId 稳定分桶；Android/iOS/Web 独立按同一阈值抽样。地域和运营商默认全选，仅在发布包显式声明时作为过滤条件。"
       >
         {routingPolicy ? (
           <>
@@ -123,34 +125,37 @@ export function PlatformRolloutPage() {
               <span className={`badge ${routingPolicy.policy.enabled ? 'badge--warning' : 'badge--neutral'}`}>
                 {routingPolicy.policy.enabled ? '灰度路由已启用' : '灰度路由未启用'}
               </span>
-              <span className="badge badge--neutral">upstream={routingPolicy.policy.grayUpstream}</span>
+              <span className="badge badge--neutral">stage={routingPolicy.policy.stage}</span>
+              <span className="badge badge--neutral">campaign={routingPolicy.policy.campaignId}</span>
             </div>
             <table className="table">
               <thead>
                 <tr>
                   <th>发布阶段</th>
+                  <th>安装实例阈值</th>
                   <th>维度</th>
-                  <th>匹配请求头</th>
-                  <th>命中值</th>
+                  <th>可信来源</th>
+                  <th>模式 / 值</th>
                 </tr>
               </thead>
               <tbody>
                 {grayRoutingStages.flatMap(({ stage, label }) => {
-                  const dimensions = routingPolicy.policy.stageDimensions[stage];
-                  return grayRoutingDimensions.map(({ key, label: dimensionLabel, header }) => (
+                  const dimensions = routingPolicy.policy.stages[stage];
+                  return grayRoutingDimensions.map(({ key, label: dimensionLabel, source }) => (
                     <tr key={`${stage}-${key}`}>
                       <td>{label}</td>
+                      <td>{dimensions.basisPoints / 100}%</td>
                       <td>{dimensionLabel}</td>
-                      <td>{header}</td>
-                      <td>{dimensions[key].join(', ') || '（空 = 不匹配）'}</td>
+                      <td>{source}</td>
+                      <td>{dimensions[key].mode} / {dimensions[key].values.join(', ') || '全部受支持值'}</td>
                     </tr>
                   ));
                 })}
               </tbody>
             </table>
             <div className="inline-note">
-              真相源 {routingPolicy.sourcePath} · 随发布 PR 变更并由 render_prod_plane_stack.py 编译进边缘
-              Caddyfile；无在线编辑入口。
+              真相源 {routingPolicy.source.path}（{routingPolicy.source.sha256.slice(0, 20)}…）· 随受审计发布包变更并由
+              API Edge 执行；Caddy 不参与业务分流，Portal 无在线编辑入口。
             </div>
           </>
         ) : (

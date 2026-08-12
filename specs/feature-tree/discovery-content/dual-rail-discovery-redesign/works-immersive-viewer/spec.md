@@ -133,7 +133,7 @@
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/post_read_presentation.yaml#PostReadPresentation`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#work_format_filters`
 - canonical：`quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
-- canonical：`quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json`
+- local_contract 对象构造器：`quwoquan_app/test/support/runtime/fixtures/object_contract_example_builders.dart#buildObjectContractExampleDocument(content)`；环境验收只读当前 activated immutable release，不引用静态 fixture。
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#article_dark_paper_themes`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/fields.yaml#entityRefs`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/projections/content_post_detail_slice.yaml#ContentPostDetailSlice`

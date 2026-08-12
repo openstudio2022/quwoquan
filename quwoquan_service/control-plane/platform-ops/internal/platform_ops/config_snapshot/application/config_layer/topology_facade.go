@@ -30,18 +30,36 @@ type SourceEvidence struct {
 	SHA256 string `json:"sha256"`
 }
 
-type GrayRoutingPolicy struct {
-	Enabled                           bool                                  `yaml:"enabled" json:"enabled"`
-	GrayUpstream                      string                                `yaml:"grayUpstream" json:"grayUpstream"`
-	GrayUpstreamTLSInsecureSkipVerify bool                                  `yaml:"grayUpstreamTlsInsecureSkipVerify" json:"grayUpstreamTlsInsecureSkipVerify"`
-	StageDimensions                   map[string]GrayRoutingStageDimensions `yaml:"stageDimensions" json:"stageDimensions"`
+type RolloutSelector struct {
+	Mode   string   `yaml:"mode" json:"mode"`
+	Values []string `yaml:"values" json:"values"`
 }
 
-type GrayRoutingStageDimensions struct {
-	AppVersions []string `yaml:"appVersions" json:"appVersions"`
-	UserIDs     []string `yaml:"userIds" json:"userIds"`
-	Provinces   []string `yaml:"provinces" json:"provinces"`
-	Carriers    []string `yaml:"carriers" json:"carriers"`
+type RolloutStagePolicy struct {
+	BasisPoints int             `yaml:"basisPoints" json:"basisPoints"`
+	AppVersions RolloutSelector `yaml:"appVersions" json:"appVersions"`
+	Platforms   RolloutSelector `yaml:"platforms" json:"platforms"`
+	Regions     RolloutSelector `yaml:"regions" json:"regions"`
+	Carriers    RolloutSelector `yaml:"carriers" json:"carriers"`
+}
+
+type RolloutInternalCanary struct {
+	AccountIDs     []string `yaml:"accountIds" json:"accountIds"`
+	DeviceActorIDs []string `yaml:"deviceActorIds" json:"deviceActorIds"`
+}
+
+type GrayRoutingPolicy struct {
+	Enabled                        bool                          `yaml:"enabled" json:"enabled"`
+	CampaignID                     string                        `yaml:"campaignId" json:"campaignId"`
+	CandidateDigest                string                        `yaml:"candidateDigest" json:"candidateDigest"`
+	AllocationKeyID                string                        `yaml:"allocationKeyId" json:"allocationKeyId"`
+	SubjectKind                    string                        `yaml:"subjectKind" json:"subjectKind"`
+	Stage                          string                        `yaml:"stage" json:"stage"`
+	Status                         string                        `yaml:"status" json:"status"`
+	CandidateUpstream              string                        `yaml:"candidateUpstream" json:"candidateUpstream"`
+	AssignmentTTLDaysAfterCampaign int                           `yaml:"assignmentTtlDaysAfterCampaign" json:"assignmentTtlDaysAfterCampaign"`
+	InternalCanary                 RolloutInternalCanary         `yaml:"internalCanary" json:"internalCanary"`
+	Stages                         map[string]RolloutStagePolicy `yaml:"stages" json:"stages"`
 }
 
 type GrayRoutingPolicySnapshot struct {

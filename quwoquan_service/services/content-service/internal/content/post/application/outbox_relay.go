@@ -123,11 +123,11 @@ func (r *OutboxRelay) Healthy(maxStaleness time.Duration) error {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if r.lastSuccess.IsZero() {
-		return fmt.Errorf("post outbox relay has not completed a scan")
-	}
 	if r.lastFailure != nil {
 		return fmt.Errorf("post outbox relay last failure: %w", r.lastFailure)
+	}
+	if r.lastSuccess.IsZero() {
+		return fmt.Errorf("post outbox relay has not completed a scan")
 	}
 	if time.Since(r.lastSuccess) > maxStaleness {
 		return fmt.Errorf(

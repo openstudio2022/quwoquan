@@ -15,18 +15,23 @@ import (
 )
 
 type Request struct {
-	ToolUseID       string
-	IdempotencyKey  string
-	IdempotencyMode string
-	ToolName        string
-	Input           map[string]any
-	History         []string
-	RunID           string
-	AccountID       string
-	PersonaID       string
-	SurfaceKind     string
-	SurfaceID       string
-	DelegatedGrant  string
+	ToolUseID              string
+	IdempotencyKey         string
+	IdempotencyMode        string
+	ToolName               string
+	Input                  map[string]any
+	History                []string
+	RunID                  string
+	TurnID                 string
+	AccountID              string
+	PersonaID              string
+	SurfaceKind            string
+	SurfaceID              string
+	DelegatedGrant         string
+	ToolCatalogDigest      string
+	RuntimeCandidateDigest string
+	ContractGraphDigest    string
+	MaximumToolCalls       int
 }
 
 type Result struct {
@@ -36,6 +41,15 @@ type Result struct {
 }
 
 type Handler func(context.Context, Request) (Result, error)
+
+// UnavailableBinding records why one canonical cloud tool is deliberately not
+// executable in the current runtime composition. It is not a handler and it is
+// never exposed to the model. The composition root must provide this fact
+// explicitly; an omitted handler without this evidence remains a startup error.
+type UnavailableBinding struct {
+	BindingKind string
+	Reason      string
+}
 
 // RetryableFailure 由 handler 返回的错误可选实现，用于声明该失败是否值得在同一轮内重试。
 // 未实现该接口的错误按不可重试处理，避免把契约错误当成瞬时抖动反复打上游。
@@ -436,20 +450,80 @@ func BaseRegistry() Registry {
 	return NewRegistry()
 }
 
-// RegisterCanonical installs every catalog entry into the production registry.
-// Device actions are proposal-only metadata and deliberately have no cloud
-// handler; every other tool must have an explicitly wired adapter.
-func RegisterCanonical(registry *Registry, handlers map[string]Handler) error {
+// RegisterCanonical reconciles the canonical catalog with the current runtime
+// composition. Device actions remain proposal-only. Every cloud tool must have
+// exactly one real handler or one explicit unavailable binding; silent handler
+// omissions, handler/unavailable conflicts and undeclared names all fail before
+// the registry is mutated.
+func RegisterCanonical(
+	registry *Registry,
+	handlers map[string]Handler,
+	unavailable map[string]UnavailableBinding,
+) error {
 	if registry == nil {
 		return errors.New("canonical tool registry is required")
 	}
-	for _, meta := range CanonicalMetadata() {
+	catalog := CanonicalMetadata()
+	canonical := make(map[string]Metadata, len(catalog))
+	for _, meta := range catalog {
+		canonical[meta.ToolName] = meta
+	}
+	for rawName, handler := range handlers {
+		name := strings.TrimSpace(rawName)
+		meta, found := canonical[name]
+		if !found || name != rawName {
+			return fmt.Errorf("tool handler %q is absent from the canonical catalog", rawName)
+		}
+		if meta.Placement == PlacementDeviceAction {
+			return fmt.Errorf("device action tool %q cannot register a cloud handler", name)
+		}
+		if handler == nil {
+			return fmt.Errorf("canonical tool %q registered a nil handler", name)
+		}
+	}
+	for rawName, binding := range unavailable {
+		name := strings.TrimSpace(rawName)
+		meta, found := canonical[name]
+		if !found || name != rawName {
+			return fmt.Errorf("unavailable tool %q is absent from the canonical catalog", rawName)
+		}
+		if meta.Placement == PlacementDeviceAction {
+			return fmt.Errorf("device action tool %q cannot be a cloud unavailable binding", name)
+		}
+		if strings.TrimSpace(binding.BindingKind) == "" ||
+			strings.TrimSpace(binding.Reason) == "" {
+			return fmt.Errorf("canonical tool %q unavailable binding is incomplete", name)
+		}
+		if _, conflict := handlers[name]; conflict {
+			return fmt.Errorf("canonical tool %q has both a handler and unavailable binding", name)
+		}
+	}
+	for _, meta := range catalog {
+		if meta.Placement == PlacementDeviceAction {
+			continue
+		}
+		handler, ok := handlers[meta.ToolName]
+		if ok && handler != nil {
+			continue
+		}
+		if _, explicitlyUnavailable := unavailable[meta.ToolName]; explicitlyUnavailable {
+			continue
+		}
+		return fmt.Errorf(
+			"canonical tool %q has no registered handler or unavailable binding",
+			meta.ToolName,
+		)
+	}
+	for _, meta := range catalog {
 		if meta.Placement == PlacementDeviceAction {
 			registry.RegisterDeviceAction(meta)
 			continue
 		}
-		handler, ok := handlers[meta.ToolName]
-		if !ok || handler == nil {
+		if _, explicitlyUnavailable := unavailable[meta.ToolName]; explicitlyUnavailable {
+			continue
+		}
+		handler := handlers[meta.ToolName]
+		if handler == nil {
 			return fmt.Errorf(
 				"canonical tool %q has no registered handler",
 				meta.ToolName,

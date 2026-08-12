@@ -193,7 +193,7 @@ def app_object_test_dirs(roster: opm.ObjectRoster | None = None) -> set[str]:
     目标形态
     ``test/<layer>/service/<service>/<context>/<object>/`` 的首段只能是统一
     ``service`` 容器；不归属任何业务对象的横切测试落到
-    `object_path_map.APP_CROSS_CUTTING_ROOTS` 的两个根。
+    `object_path_map.APP_CROSS_CUTTING_ROOTS` 的三个根。
     """
     roster = roster or app_object_roster()
     # 强制求值 service/context 派生，避免仅因顶层字面量正确而掩盖 owner 冲突。

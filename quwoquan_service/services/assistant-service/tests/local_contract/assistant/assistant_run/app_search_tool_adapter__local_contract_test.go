@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	rtsearch "quwoquan_service/runtime/search"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/searchclient"
 )
@@ -29,45 +28,37 @@ func TestAppSearchAdapterUsesOnlyCanonicalToolInputAndReturnsEvidenceAssessment(
 		}
 		received <- body
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(rtsearch.RetrieveResponse{
-			Hits: []rtsearch.RetrieveHit{{
-				Target:      rtsearch.TargetArticle,
-				ObjectType:  rtsearch.ObjectTypeContentPost,
-				ObjectID:    "post-1",
-				Title:       "西湖行程",
-				MatchedTags: []string{"Topic/旅行"},
-				Payload: map[string]any{
-					"categoryId":  "旅行",
-					"subCategory": "周末游",
-				},
-			}},
-			Citations: []rtsearch.Citation{{
-				CitationID: "citation-1",
-				ObjectType: "content.post",
-				ObjectID:   "post-1",
-				Title:      "西湖行程",
-			}},
-			Provenance: rtsearch.Provenance{
-				Provider:    "search-service",
-				GeneratedAt: time.Unix(1_700_000_000, 0).UTC(),
+		writer.Header().Set("X-Contract-Graph-SHA256", testSHA256)
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"interpretedQuery": map[string]any{
+				"normalized": "西湖行程", "tokens": []string{}, "variants": []string{},
+				"detectedEntities": []string{}, "detectedTags": []string{}, "selectedObjectTypes": []string{"content.post"},
 			},
+			"hits":      []map[string]any{{"objectRef": "opaque-post-1", "objectType": "content.post", "contentType": "article", "title": "西湖行程", "snippet": ""}},
+			"citations": []map[string]any{{"citationId": "citation-1", "objectRef": "opaque-post-1", "objectType": "content.post", "contentType": "article", "title": "西湖行程", "snippet": "", "url": "", "deepLink": ""}},
+			"facets":    []any{}, "degradeSignals": []any{},
+			"provenance": map[string]any{"source": "search_index_view", "generatedAt": time.Unix(1_700_000_000, 0).UTC()},
+			"nextCursor": "",
 		})
 	}))
 	defer server.Close()
 
-	client, err := searchclient.New(server.URL, server.Client())
+	client, err := searchclient.New(server.URL, server.Client(), searchAuthorizationFixture{}, testSHA256)
 	if err != nil {
 		t.Fatalf("new search client: %v", err)
 	}
-	result, err := client.Handler()(t.Context(), toolpkg.Request{Input: map[string]any{
-		"query": "西湖行程",
-	}})
+	result, err := client.Handler()(t.Context(), toolpkg.Request{
+		ToolName: "app_search", RunID: "run-adapter", TurnID: "turn-adapter",
+		ToolCatalogDigest: testSHA256, RuntimeCandidateDigest: testSHA256,
+		ContractGraphDigest: testSHA256, MaximumToolCalls: 1,
+		Input: map[string]any{"query": "西湖行程"},
+	})
 	if err != nil {
 		t.Fatalf("execute app_search adapter: %v", err)
 	}
 	wire := <-received
 	if len(wire) != 4 || wire["query"] != "西湖行程" ||
-		wire["mode"] != "result" || wire["limit"] != float64(10) {
+		wire["mode"] != "retrieval" || wire["limit"] != float64(10) {
 		t.Fatalf("search request used a non-canonical input path: %#v", wire)
 	}
 	// objectTypes is part of the canonical input: app_search may only ask for the
@@ -92,9 +83,7 @@ func TestAppSearchAdapterUsesOnlyCanonicalToolInputAndReturnsEvidenceAssessment(
 		t.Fatalf("sourceIds=%#v", assessment["sourceIds"])
 	}
 	emergedTagRefs, ok := result.Output["emergedTagRefs"].([]string)
-	if !ok || len(emergedTagRefs) != 2 ||
-		emergedTagRefs[0] != "Topic/旅行" ||
-		emergedTagRefs[1] != "Topic/周末游" {
+	if !ok || len(emergedTagRefs) != 0 {
 		t.Fatalf("emergedTagRefs=%#v", result.Output["emergedTagRefs"])
 	}
 }

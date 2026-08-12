@@ -161,7 +161,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		if err != nil {
 			return n, fmt.Errorf("%s: %w", p.PostRef, err)
 		}
-		postID := RuntimePostID(p.PostRef)
+		postID := RuntimePostID(p.ContentID, p.PostRef)
 		if postID == "" {
 			return n, fmt.Errorf("postRef is required to derive discovery feed postId")
 		}
@@ -182,36 +182,40 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		}
 		newHash := sourceHash(p)
 		set := bson.M{
-			"postId":                postID,
-			"postRef":               p.PostRef,
-			"title":                 p.Title,
-			"contentType":           p.ContentType,
-			"contentIdentity":       contentIdentity,
-			"authorId":              p.AuthorID,
-			"creatorProfileId":      p.CreatorProfileID,
-			"creatorArchetype":      p.CreatorArchetype,
-			"creatorProfileVersion": p.CreatorProfileVersion,
-			"creatorDisclosure":     p.CreatorDisclosure,
-			"experienceClaimMode":   p.ExperienceClaimMode,
-			"authorQualitySignals":  p.AuthorQualitySignals,
-			"tagRefs":               p.TagRefs,
-			"entityRefs":            runtimeEntityRefs,
-			"intersectionHints":     p.IntersectionHints,
-			"semanticMentions":      p.SemanticMentions,
-			"sourceCollectionId":    p.SourceCollectionID,
-			"sourcePlatform":        p.SourcePlatform,
-			"creator":               p.Creator,
-			"page":                  p.Page,
-			"licenseProof":          p.LicenseProof,
-			"articleAssetManifest":  p.ArticleAssetManifest,
-			"sourceTaskId":          p.SourceTaskId,
-			"conditionProfile":      cond,
-			"status":                "published",
-			"visibility":            "public",
-			"sourceHash":            newHash,
-			"createdAt":             p.CreatedAt,
-			"updatedAt":             p.UpdatedAt,
-			"publishedAt":           p.PublishedAt,
+			"postId":                    postID,
+			"postRef":                   p.PostRef,
+			"contentId":                 p.ContentID,
+			"contentVersion":            p.ContentVersion,
+			"title":                     p.Title,
+			"contentType":               p.ContentType,
+			"contentIdentity":           contentIdentity,
+			"authorId":                  p.AuthorID,
+			"authorDisplayNameSnapshot": p.AuthorDisplayName,
+			"authorAvatarUrlSnapshot":   p.AuthorAvatarURL,
+			"creatorProfileId":          p.CreatorProfileID,
+			"creatorArchetype":          p.CreatorArchetype,
+			"creatorProfileVersion":     p.CreatorProfileVersion,
+			"creatorDisclosure":         p.CreatorDisclosure,
+			"experienceClaimMode":       p.ExperienceClaimMode,
+			"authorQualitySignals":      p.AuthorQualitySignals,
+			"tagRefs":                   p.TagRefs,
+			"entityRefs":                runtimeEntityRefs,
+			"intersectionHints":         p.IntersectionHints,
+			"semanticMentions":          p.SemanticMentions,
+			"sourceCollectionId":        p.SourceCollectionID,
+			"sourcePlatform":            p.SourcePlatform,
+			"creator":                   p.Creator,
+			"page":                      p.Page,
+			"licenseProof":              p.LicenseProof,
+			"articleAssetManifest":      p.ArticleAssetManifest,
+			"sourceTaskId":              p.SourceTaskId,
+			"conditionProfile":          cond,
+			"status":                    "published",
+			"visibility":                "public",
+			"sourceHash":                newHash,
+			"createdAt":                 p.CreatedAt,
+			"updatedAt":                 p.UpdatedAt,
+			"publishedAt":               p.PublishedAt,
 		}
 		media := ImportedMediaFields(importedPostAssets(p))
 		if len(media.MediaURLs) > 0 {
@@ -226,7 +230,9 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		for k, v := range releaseFields(opts, now, "active") {
 			set[k] = v
 		}
-		if err := removePriorDiscoveryFeedIdentity(ctx, coll, p.PostRef, postID, opts); err != nil {
+		if err := removePriorDiscoveryFeedIdentity(
+			ctx, coll, p.ContentID, p.PostRef, postID, opts,
+		); err != nil {
 			return n, err
 		}
 		if _, err := coll.UpdateOne(ctx,
@@ -259,12 +265,31 @@ func importedPostAssets(post PostDoc) []AssetManifestItem {
 	return nil
 }
 
-func removePriorDiscoveryFeedIdentity(ctx context.Context, coll *mongo.Collection, postRef string, runtimeID string, opts ImportOptions) error {
-	filter := bson.M{"postId": postRef}
+func removePriorDiscoveryFeedIdentity(
+	ctx context.Context,
+	coll *mongo.Collection,
+	contentID string,
+	postRef string,
+	runtimeID string,
+	opts ImportOptions,
+) error {
+	legacyIdentityFilters := bson.A{bson.M{"postId": bson.M{"$in": bson.A{
+		postRef, LegacyRuntimePostID(postRef),
+	}}}}
+	if stableContentID := strings.TrimSpace(contentID); stableContentID != "" {
+		legacyIdentityFilters = append(
+			legacyIdentityFilters,
+			bson.M{"contentId": stableContentID},
+		)
+	}
+	filter := bson.M{
+		"postId": bson.M{"$ne": runtimeID},
+		"$or":    legacyIdentityFilters,
+	}
 	if opts.SourceOwner != "" {
 		filter["sourceOwner"] = opts.SourceOwner
 	}
-	res, err := coll.DeleteOne(ctx, filter)
+	res, err := coll.DeleteMany(ctx, filter)
 	if err != nil {
 		return err
 	}

@@ -98,7 +98,12 @@ String canonicalRuntimeErrorBody({
     // 动态上下文只允许以 string-only attributes 出现，不得进 code 或用户提示。
     'context': <String, Object?>{
       'attributes': contextAttributes.entries
-          .map((entry) => <String, Object?>{'key': entry.key, 'value': entry.value})
+          .map(
+            (entry) => <String, Object?>{
+              'key': entry.key,
+              'value': entry.value,
+            },
+          )
           .toList(growable: false),
     },
     'recovery': <String, Object?>{
@@ -230,7 +235,8 @@ void expectErrorChainIsIntact(
   expect(
     outcome.exception.runtimeFailure,
     isNotNull,
-    reason: '$domainLabel: CloudErrorMapper 未产出 runtimeFailure，'
+    reason:
+        '$domainLabel: CloudErrorMapper 未产出 runtimeFailure，'
         '后续恢复动作与埋点将全部失去依据',
   );
 

@@ -345,8 +345,33 @@ def run(
             start_new_session=timeout_seconds is not None,
         )
         timed_out = False
+        interrupted = False
         try:
             returncode = process.wait(timeout=timeout_seconds)
+        except KeyboardInterrupt:
+            interrupted = True
+            if timeout_seconds is not None:
+                os.killpg(process.pid, signal.SIGINT)
+            else:
+                process.send_signal(signal.SIGINT)
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                if timeout_seconds is not None:
+                    os.killpg(process.pid, signal.SIGTERM)
+                else:
+                    process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    if timeout_seconds is not None:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    else:
+                        process.kill()
+                    process.wait()
+            # The caller must observe the operator interruption even when the
+            # managed child happens to translate SIGINT into exit zero.
+            returncode = 130
         except subprocess.TimeoutExpired:
             timed_out = True
             os.killpg(process.pid, signal.SIGTERM)
@@ -365,6 +390,8 @@ def run(
                 "\ncommand exceeded its deterministic deadline "
                 f"after {timeout_seconds:.3f}s"
             )
+        if interrupted:
+            stderr += "\ncommand interrupted; managed child process was stopped"
     result = subprocess.CompletedProcess(
         argv,
         returncode,

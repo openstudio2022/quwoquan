@@ -103,6 +103,43 @@ void main() {
     expect(find.text('INBOX:fact::'), findsOneWidget);
   });
 
+  testWidgets('主页展示 Remote 总数与最多三个维度新增，并按维度下钻', (tester) async {
+    final repo = _StubIntersectionRepository(
+      items: _items(4),
+      summary: IntersectionInboxSummary(
+        totalCount: 4,
+        totalNewCount: 10,
+        dimensions: <IntersectionDimensionTally>[
+          _dimensionTally('relationship', '关系', 4),
+          _dimensionTally('location', '足迹', 3),
+          _dimensionTally('identity', '身份', 2),
+          _dimensionTally('content', '内容', 1),
+        ],
+        generatedAt: '2026-08-10T00:00:00Z',
+        totalStrengthenedCount: 0,
+        totalReactivatedCount: 0,
+      ),
+    );
+
+    await tester.pumpWidget(host(repo));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('4 个交集'), findsOneWidget);
+    expect(find.text('关系 4条新增'), findsOneWidget);
+    expect(find.text('足迹 3条新增'), findsOneWidget);
+    expect(find.text('身份 2条新增'), findsOneWidget);
+    expect(find.text('内容 1条新增'), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('my-intersections-dimension-relationship'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('DIMENSION:relationship'), findsOneWidget);
+  });
+
   testWidgets('点击事实行进入我的交集详情过滤页', (tester) async {
     final repo = _StubIntersectionRepository(items: _items(1));
 
@@ -258,10 +295,16 @@ GoRouter _router({required Widget Function() builder}) {
       GoRoute(
         path: '/profile/intersections',
         builder: (_, state) {
+          final dimension = state.uri.queryParameters['dimension'] ?? '';
           final filter = state.uri.queryParameters['filter'] ?? '';
           final src = state.uri.queryParameters['sourceRef'] ?? '';
           final id = state.uri.queryParameters['intersectionId'] ?? '';
-          return Text('INBOX:$filter:$src:$id');
+          return Column(
+            children: <Widget>[
+              Text('INBOX:$filter:$src:$id'),
+              Text('DIMENSION:$dimension'),
+            ],
+          );
         },
       ),
       GoRoute(
@@ -388,20 +431,22 @@ List<IntersectionTextSpan> _spans({
 }
 
 class _StubIntersectionRepository implements IntersectionRepository {
-  _StubIntersectionRepository({required this.items});
+  _StubIntersectionRepository({required this.items, this.summary});
 
   final List<IntersectionReason> items;
+  final IntersectionInboxSummary? summary;
 
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
-    return IntersectionInboxSummary(
-      totalCount: items.length,
-      totalNewCount: items.length,
-      dimensions: const [],
-      generatedAt: '2026-08-03T00:00:00Z',
-      totalStrengthenedCount: 0,
-      totalReactivatedCount: 0,
-    );
+    return summary ??
+        IntersectionInboxSummary(
+          totalCount: items.length,
+          totalNewCount: items.length,
+          dimensions: const [],
+          generatedAt: '2026-08-03T00:00:00Z',
+          totalStrengthenedCount: 0,
+          totalReactivatedCount: 0,
+        );
   }
 
   @override
@@ -422,4 +467,26 @@ class _StubIntersectionRepository implements IntersectionRepository {
     required String objectType,
     int limit = 8,
   }) async => const <IntersectionReason>[];
+}
+
+IntersectionDimensionTally _dimensionTally(
+  String dimension,
+  String label,
+  int newCount,
+) {
+  return IntersectionDimensionTally(
+    dimension: dimension,
+    label: label,
+    count: newCount,
+    newCount: newCount,
+    briefText: '',
+    subtitleText: '',
+    briefSpans: const <IntersectionTextSpan>[],
+    sampleVisuals: const <IntersectionVisual>[],
+    sourceRef: dimension,
+    countObjectKind: 'dimension',
+    strengthenedCount: 0,
+    reactivatedCount: 0,
+    iconKey: dimension,
+  );
 }

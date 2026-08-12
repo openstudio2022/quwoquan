@@ -17,11 +17,12 @@ import (
 	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
 	statusmodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/domain/model"
 	statusports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/domain/ports"
+	"quwoquan_service/services/entity-service/tests/support/homepagefixture"
 )
 
 func TestClaimAndStatusOutboxProjectorsConvergeHomepage(t *testing.T) {
 	ctx := context.Background()
-	seeds, err := application.LoadHomepageFixtureSnapshots()
+	seeds, err := homepagefixture.LoadHomepageExampleSnapshots()
 	if err != nil || len(seeds) == 0 {
 		t.Fatalf("load homepage fixtures: count=%d err=%v", len(seeds), err)
 	}

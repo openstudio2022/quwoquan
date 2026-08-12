@@ -3,7 +3,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
-import '../../../../../support/runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
 
 void main() {
   group('Content facets — 常规契约', () {
@@ -27,7 +27,7 @@ void main() {
         'avatarUrl',
         'imageUrls',
       };
-      final rawPosts = objectScenarioSeedReader.contentSeedSet()?['posts'];
+      final rawPosts = objectContractExampleReader.contentExample()?['posts'];
       expect(rawPosts, isA<List>());
       final source = (rawPosts! as List)
           .whereType<Map>()

@@ -1,4 +1,5 @@
 """Canonical CLI surface smoke tests."""
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +32,37 @@ def test_task_help():
     )
     assert result.returncode == 0
     assert "execute" in result.stdout
+
+
+def test_ship_help_does_not_import_content_production_toolchain(tmp_path: Path):
+    sitecustomize = tmp_path / "sitecustomize.py"
+    sitecustomize.write_text(
+        """
+import importlib.abc
+import sys
+
+class _BlockCanonicalRelease(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'content.release.canonical.handler':
+            raise ImportError('canonical release toolchain must stay unloaded')
+        return None
+
+sys.meta_path.insert(0, _BlockCanonicalRelease())
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(tmp_path)
+    result = subprocess.run(
+        [sys.executable, "-B", str(CLI_PATH), "ship", "--help"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "usage: qwq-data ship" in result.stdout
 
 
 def test_plan_images_help_has_side_effect_free_cold_start():

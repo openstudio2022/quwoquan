@@ -131,11 +131,15 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
             duration_ms=duration_ms,
         )
 
-    cursor_auto = active_runtime_policy().explicit_semantic_selection("cursor_auto")
-    if ctx.model_selection != cursor_auto.binding.selection:
+    cursor_selections = {
+        selection.binding.selection
+        for selection in active_runtime_policy().explicit_semantic_selections
+        if selection.binding.provider is AgentProvider.CURSOR_SDK
+    }
+    if ctx.model_selection not in cursor_selections:
         return failure(
             AgentFailureKind.SDK_EXECUTION_FAILED,
-            "cursor_sdk requires the governed explicit cursor_auto selection",
+            "cursor_sdk requires one governed explicit model selection",
             error_code="semantic_provider_selection_not_governed",
         )
 
@@ -431,7 +435,10 @@ def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
     )
 
 
-def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
+def _managed_agent_runner_for_provider_unjournaled(
+    ctx: ExecutionContext,
+    prompt: str,
+):
     from content.execution.agent.capacity_broker import (
         SemanticCapacityBroker,
         SemanticCapacityTimeout,
@@ -452,7 +459,11 @@ def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
         "calibration": policy.semantic_calibration.binding,
     }
     binding = role_bindings.get(role)
-    cursor_auto = policy.explicit_semantic_selection("cursor_auto")
+    cursor_selections = {
+        selection.binding.selection
+        for selection in policy.explicit_semantic_selections
+        if selection.binding.provider is AgentProvider.CURSOR_SDK
+    }
     if provider is AgentProvider.CODEX_SDK:
         role_binding_valid = (
             binding is not None
@@ -463,8 +474,7 @@ def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
         role_binding_valid = (
             provider is AgentProvider.CURSOR_SDK
             and role in {"author", "reviewer"}
-            and cursor_auto.binding.provider is provider
-            and cursor_auto.binding.selection == ctx.model_selection
+            and ctx.model_selection in cursor_selections
         )
     if not role_binding_valid:
         return AgentRunOutcome.failed(
@@ -557,12 +567,8 @@ def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
                 outcome=outcome,
                 runtime_profile_id=policy.profile_id,
             )
-            receipt_ref = (
-                receipt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
-            )
-            receipt_digest = (
-                "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-            )
+            receipt_ref = receipt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
+            receipt_digest = "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
             outcome = outcome.with_capacity_receipt(
                 receipt_ref=receipt_ref,
                 receipt_digest=receipt_digest,
@@ -593,3 +599,8 @@ def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
             retry_after_seconds=outcome.retry_after_seconds,
         )
     return outcome
+
+
+def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
+    from content.execution.agent import semantic_task_journal
+    return semantic_task_journal.run_journaled_semantic_task(ctx, prompt, _managed_agent_runner_for_provider_unjournaled)

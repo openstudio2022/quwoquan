@@ -31,7 +31,9 @@ _DURABLE_OUTPUT_SETTLE_SECONDS = 1.5
 _DURABLE_OUTPUT_SETTLE_SAMPLES = 8
 
 
-def _execution_context(execution_id: str) -> ExecutionContext:
+def _execution_context(
+    execution_id: str, *, semantic_max_attempts: int
+) -> ExecutionContext:
     from core.runtime_policy import active_runtime_policy
 
     spec = store.load_spec(execution_id)
@@ -48,6 +50,7 @@ def _execution_context(execution_id: str) -> ExecutionContext:
         model=model.model_id,
         model_parameters=model.parameters,
         agent_provider=model.provider,
+        semantic_max_attempts=semantic_max_attempts,
     )
 
 
@@ -103,13 +106,32 @@ def _homepage_repair_addendum(job: QueueJob, object_dir: Path) -> str:
         for issue in issues
     ):
         raise ValueError(f"ReliableTask homepage repair report issue contract invalid: {job.ref}")
+    repair_strategies = {
+        dict(issue.attributes).get("repairStrategy", "") for issue in issues
+    }
+    if repair_strategies not in (
+        {"local_edit"},
+        {"rebuild_from_frozen_base"},
+    ):
+        raise ValueError(f"ReliableTask homepage repair report issue contract invalid: {job.ref}")
     rendered_issues = "\n".join(f"- [{issue.code.value}] {issue.message}" for issue in issues)
+    rebuild_from_base = repair_strategies == {"rebuild_from_frozen_base"}
+    repair_strategy = (
+        "本次是底稿留存不足。不得在低保真旧 page.md 上继续扩写；必须以 prompt.md "
+        "中完整的『底稿材料』重新构建 page.md：先按原顺序恢复全部必需标题、正文段落"
+        "与每个图片占位符，再仅对约四分之一句子做局部润色。每个底稿段落至少保留"
+        "三分之二原句骨架，不得摘要、合并或省略后半部分。"
+        if rebuild_from_base
+        else (
+            "请在现有 page.md 基础上逐项修订，保留已通过的底稿和图片占位符，"
+            "不得从零重写或再次覆盖整份文件；若正文已经包含合格章节，必须用局部"
+            "编辑补回缺失标题及其对应底稿段落，避免因整文件输出长度限制再次截断后半部分。"
+        )
+    )
     return (
         "\n\n## 确定性质量门修复反馈\n"
-        "上一次正文未通过确定性质量门。请在现有 page.md 基础上逐项修订，"
-        "保留已通过的底稿和图片占位符，不得从零重写或再次覆盖整份文件；"
-        "若正文已经包含合格章节，必须用局部编辑补回缺失标题及其对应底稿段落，"
-        "避免因整文件输出长度限制再次截断后半部分。若当前 page.md 仍为"
+        "上一次正文未通过确定性质量门。"
+        f"{repair_strategy}若当前 page.md 仍为"
         "等待创作占位，必须先用符合冻结正文合同的完整主页正文替换该占位：\n"
         f"{rendered_issues}\n"
         "逐项修复后必须重新读取每个问题涉及的章节与图片标记：时间锚点错误时"
@@ -502,7 +524,7 @@ def _execute_author(
             "acceptanceClass": "stage_completed",
             "completedAt": datetime.now(timezone.utc).isoformat(),
         }
-    ctx = _execution_context(job.execution_id)
+    ctx = _execution_context(job.execution_id, semantic_max_attempts=job.max_attempts)
     checkpoint, prompt = _author_prompt(ctx, job)
     runner = agent_runner or _default_agent_runner
     outcome = coerce_agent_outcome(

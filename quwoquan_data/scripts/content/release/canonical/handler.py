@@ -9,6 +9,7 @@ from pathlib import Path
 from content.release.canonical.acceptance_lease import (
     handle_acceptance_lease,  # noqa: F401
 )
+from content.release.canonical.application import rollback_object_transaction
 from content.release.canonical.baseline_release import build_empty_baseline_release
 from content.release.canonical.build_lookup_indexes import (
     build_publish_lookup_indexes,
@@ -30,6 +31,14 @@ from content.release.canonical.discard import handle_discard  # noqa: F401
 from content.release.canonical.garbage_collection import (
     apply_canonical_gc,
     plan_canonical_gc,
+)
+from content.release.canonical.handler_pool import (
+    handle_pool_append,  # noqa: F401
+    handle_pool_attribution_repair,  # noqa: F401
+    handle_pool_backfill_plan,  # noqa: F401
+    handle_pool_dispatch,  # noqa: F401
+    handle_pool_inspect,  # noqa: F401
+    handle_pool_release_build,  # noqa: F401
 )
 from content.release.canonical.lifecycle_exit import (
     handle_lifecycle_exit,  # noqa: F401
@@ -81,6 +90,11 @@ def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
             root_execution_id=str(args.root_execution_id),
             release_id=str(args.release_id),
             roots=roots,
+            target_environment=(
+                str(getattr(args, "target_environment", None))
+                if getattr(args, "target_environment", None) is not None
+                else None
+            ),
         )
     except (
         CampaignReleaseError,
@@ -89,6 +103,59 @@ def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
         ValueError,
     ) as exc:
         raise SystemExit(f"[release campaign-aggregate] GATE_BLOCK {exc}") from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_supply_chain_drill(args: argparse.Namespace) -> None:
+    from content.release.canonical.supply_chain_drill import (
+        SupplyChainDrillError,
+        run_supply_chain_drill,
+    )
+
+    output_root = Path(OUTPUT_ROOT).resolve()
+    try:
+        document, path = run_supply_chain_drill(
+            release_id=str(args.release_id),
+            environment=str(args.env),
+            profile=str(args.profile),
+            platform=str(args.platform or ""),
+            device_id=str(args.device_id or ""),
+            output_root=output_root,
+        )
+    except (
+        FileNotFoundError,
+        OSError,
+        SupplyChainDrillError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release supply-chain-drill] GATE_BLOCK {exc}") from exc
+    print(
+        json.dumps(
+            {**document, "receiptRef": path.relative_to(output_root).as_posix()},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    if document["result"] != "ready":
+        raise SystemExit(1)
+
+
+def handle_object_transaction_rollback(args: argparse.Namespace) -> None:
+    """Rollback one exact applied canonical object transaction."""
+
+    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    try:
+        report = rollback_object_transaction(
+            publish_root=publish_root,
+            output_root=output_root,
+            transaction_id=str(args.transaction_id),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
+        raise SystemExit(
+            f"[release object-transaction rollback] GATE_BLOCK {exc}"
+        ) from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

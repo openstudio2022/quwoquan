@@ -143,6 +143,7 @@ func dataQuotaPublishTasks(total int, accepted int, completed time.Time) []Relia
 				CanonicalObjectRef:    job.Ref,
 				CanonicalObjectSHA256: "sha256:" + fmt.Sprintf("%064d", index+1),
 				ObjectTransactionID:   fmt.Sprintf("txn-object-%03d", index),
+				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "result_envelope.json",
 				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
 				CompletedAt:           completed,
@@ -209,12 +210,12 @@ func TestDataContentFleetReportBlocksPublishBatchBelowQuota(t *testing.T) {
 	}
 }
 
-func TestDataContentFleetReportAcceptsIdempotentFinalizedObjectsTowardQuota(t *testing.T) {
+func TestDataContentFleetReportRejectsUnacceptedFinalizedObjectsTowardQuota(t *testing.T) {
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()
 
-	// Resume after objects already sit in canonical publish: jobs may be dead
-	// while finalizedObjectCount still meets the commercial quota.
+	// Reviewed/finalized work-package files are not a canonical transaction
+	// result and cannot absorb dead publish jobs.
 	report := BuildDataContentFleetReport(
 		dataQuotaPublishTasks(5, 0, completed),
 		started,
@@ -226,12 +227,12 @@ func TestDataContentFleetReportAcceptsIdempotentFinalizedObjectsTowardQuota(t *t
 		5,
 	)
 
-	if !report.Passed {
-		t.Fatalf("idempotent finalized objects must meet publish quota: %#v", report)
+	if report.Passed {
+		t.Fatalf("unaccepted finalized objects must not meet publish quota: %#v", report)
 	}
-	if report.AcceptedContentThroughputStatus != "MEASURED" {
+	if report.AcceptedContentThroughputStatus != "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH" {
 		t.Fatalf(
-			"accepted throughput status=%q want=MEASURED",
+			"accepted throughput status=%q want=GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH",
 			report.AcceptedContentThroughputStatus,
 		)
 	}

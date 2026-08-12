@@ -4,7 +4,8 @@ import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/canonical_search_query_facet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
+
 /// canonical Search 对象级替身：仅消费 metadata fixture bundle，不调用 content
 /// repository，也不在端侧合成 related terms。
 final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
@@ -109,12 +110,12 @@ final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
   }
 
   static List<Map<String, Object?>> _contentPosts() {
-    final decoded = objectScenarioSeedReader.document('content');
-    final seedSets = decoded['seedSets'];
-    if (seedSets is! Map) {
+    final decoded = objectContractExampleReader.document('content');
+    final examples = decoded['examples'];
+    if (examples is! Map) {
       return const <Map<String, Object?>>[];
     }
-    final discovery = seedSets['content_discovery_core'];
+    final discovery = examples['content_discovery_core'];
     if (discovery is! Map || discovery['posts'] is! List) {
       return const <Map<String, Object?>>[];
     }

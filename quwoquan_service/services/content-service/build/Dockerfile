@@ -38,6 +38,14 @@ RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
     go build ${GO_BUILD_FLAGS} -o /content-service ./services/content-service/cmd/api/
+RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
+    --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -o /content-import ./services/content-service/cmd/import/
+RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
+    --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -o /migrate-media-processing-dead-letter-indexes ./services/content-service/cmd/migrate-media-processing-dead-letter-indexes/
 
 # ffmpeg/ffprobe 是 media-processing worker（UGC 视频转码/封面/预览轨道）的
 # 硬依赖；缺失时服务启动 fail-fast。
@@ -65,6 +73,8 @@ RUN if command -v apk >/dev/null 2>&1; then \
     && command -v ffmpeg >/dev/null 2>&1 \
     && command -v ffprobe >/dev/null 2>&1
 COPY --from=builder /content-service /usr/local/bin/content-service
+COPY --from=builder /content-import /usr/local/bin/content-import
+COPY --from=builder /migrate-media-processing-dead-letter-indexes /usr/local/bin/migrate-media-processing-dead-letter-indexes
 COPY --from=builder /geoip/ /etc/quwoquan/geoip/
 COPY --from=builder /geoip-license/ /usr/share/licenses/ip2region/
 COPY services/content-service/resources/ /app/resources/

@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart'
     show RenderBox, RenderObject, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart' show VideoViewType;
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/generated/content_media_post_projection_keys.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_media_viewer_policy.dart';
@@ -18,6 +19,8 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
     as runtime_error_display;
+import 'package:quwoquan_app/service/content_service/content/post/application/public/discovery_feed_load_result.dart'
+    show DiscoveryFeedLoadResult, DiscoveryFeedLoadTerminal;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
 import 'package:quwoquan_app/runtime/di/presentation/home_feed_cross_object_composition.dart';
@@ -229,6 +232,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // 旧 operation，迟到结果不得进入 resident LRU。
   final WorksViewerArticleHydrationAdmission _articleHydrationAdmission =
       WorksViewerArticleHydrationAdmission();
+  int _feedRecoveryGeneration = 0;
   final Set<String> _failedArticleHydrationIds = <String>{};
   final Map<String, Object> _failedArticleHydrationErrorsById =
       <String, Object>{};
@@ -338,7 +342,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         for (final tabId in _trackedFeedTabIds) {
           final feedCommands = ref.read(worksViewerFeedCommandsProvider);
           if (!feedCommands.contains(tabId)) {
-            feedCommands.load(tabId);
+            unawaited(feedCommands.load(tabId));
           }
         }
       }

@@ -1,0 +1,5 @@
+backend: service_resource
+role: runtime
+description: >-
+  registry 只从候选发布包中摘要绑定并验签的不可变资源装载；请求执行状态只存在于请求
+  context 并在完成或 deadline 后销毁，不建立数据库、在线注册表或进程内可变副本。

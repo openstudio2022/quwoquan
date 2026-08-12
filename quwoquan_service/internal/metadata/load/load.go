@@ -21,14 +21,14 @@ import (
 )
 
 var objectTopLevelKeys = stringSet(
-	"kind", "description", "identity", "access", "relationships", "members",
+	"kind", "model_version", "description", "identity", "access", "relationships", "members",
 	"search_policy", "assistant_access",
 	"counter_strategy", "relation_signal", "business_rules", "lifecycle",
 	"local_identity_reasons", "external_authority",
 )
 
 var operationsTopLevelKeys = stringSet(
-	"api_routes", "runtime_entrypoints", "commercial_defaults", "consumers", "contract_test",
+	"api_routes", "graphql_queries", "runtime_entrypoints", "commercial_defaults", "consumers", "contract_test",
 	"delivery_slo", "description", "incoming_call_slo", "privacy_contract",
 	"readiness_cases", "response_list_key", "upstreams", "externalDependencies",
 )
@@ -238,6 +238,16 @@ func loadObject(metadataDir, path string) (ast.Object, error) {
 		KindExplicit:   explicit,
 		AggregateOwner: "",
 		SourcePath:     relativePath(metadataDir, path),
+	}
+	if value, present := top["model_version"]; present {
+		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" ||
+			strings.TrimSpace(value.Value) == "" {
+			return ast.Object{}, fmt.Errorf(
+				"%s: model_version must be a quoted major.minor string",
+				path,
+			)
+		}
+		object.ModelVersion = strings.TrimSpace(value.Value)
 	}
 	if lifecycle := top["lifecycle"]; lifecycle != nil {
 		object.Lifecycle, err = decodeLifecycle(lifecycle, object.SourcePath)

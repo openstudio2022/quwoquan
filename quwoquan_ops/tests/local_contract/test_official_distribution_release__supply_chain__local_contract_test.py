@@ -82,6 +82,13 @@ class OfficialDistributionReleaseTest(unittest.TestCase):
                 distribution / "product-ops/app-release/current.env"
             ).read_text(encoding="utf-8")
             self.assertIn("PRODUCT_OPS_ANDROID_LATEST_BUILD=18201", product_ops_environment)
+            self.assertIn(
+                "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_BUILD=17000",
+                product_ops_environment,
+            )
+            self.assertNotIn(
+                "PRODUCT_OPS_APP_RELEASE_RECOVERY_URL", product_ops_environment
+            )
             self.assertEqual(
                 inspect_official_distribution(distribution_root=distribution)["status"],
                 "ready",
@@ -182,7 +189,7 @@ def _web_package(root: Path) -> Path:
     (public / "flutter_service_worker.js").write_text("worker();", encoding="utf-8")
     content_digest = _tree_sha256(public)
     manifest = {
-        "schema": "qwq.public-web.release",
+        "schema": "client-app.web.official-release",
         "sourceGitSha": "b" * 40,
         "sourceTreeDigest": "sha1:" + ("c" * 40),
         "environment": "prod",
@@ -201,7 +208,7 @@ def _android_package(root: Path, *, build: str) -> Path:
     apk = root / f"quwoquan-{build}.apk"
     apk.write_bytes(f"signed-apk-{build}".encode("utf-8"))
     manifest = {
-        "schema": "qwq.android.official-release",
+        "schema": "client-app.android.official-release",
         "sourceGitSha": "b" * 40,
         "sourceTreeDigest": "sha1:" + ("c" * 40),
         "platform": "android",
@@ -219,6 +226,12 @@ def _android_package(root: Path, *, build: str) -> Path:
         "apkHostAllowlist": ["cdn.quwoquan.com"],
         "publicOrigin": "https://quwoquan.com",
         "recoveryUrl": "https://quwoquan.com/download",
+        "updateUrl": (
+            "https://cdn.quwoquan.com/download/android/1.8.2/"
+            f"{build}/quwoquan-{build}.apk"
+        ),
+        "minimumSupportedVersion": "1.7.0",
+        "minimumSupportedBuild": "17000",
         "packagedAPK": apk.name,
     }
     path = root / "manifest.json"

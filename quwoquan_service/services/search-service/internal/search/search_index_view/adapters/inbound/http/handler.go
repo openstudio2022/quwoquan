@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	rterrors "quwoquan_service/runtime/errors"
 	rtsearch "quwoquan_service/runtime/search"
@@ -25,6 +26,8 @@ const queryLogTimeout = 5 * time.Second
 
 const SearchSessionIDHeader = "X-Session-Id"
 
+const contractGraphSHA256Header = "X-Contract-Graph-SHA256"
+
 // maxRequestBodyBytes caps the search/feedback request body. Search payloads are
 // small (query + a handful of filters); a bounded reader rejects oversized
 // bodies cheaply instead of letting them consume memory under load.
@@ -32,16 +35,18 @@ const maxRequestBodyBytes = 64 << 10 // 64 KiB
 
 // Handler serves the canonical search routes.
 type Handler struct {
-	svc           *application.SearchService
-	decorator     *application.RankingDecorator
-	observer      application.SearchRequestObserver
-	intersections *application.IntersectionAttacher
-	requestFacts  *requestapplication.Recorder
+	svc             *application.SearchService
+	decorator       *application.RankingDecorator
+	observer        application.SearchRequestObserver
+	intersections   *application.IntersectionAttacher
+	requestFacts    *requestapplication.Recorder
+	candidateDigest string
 }
 
 type HandlerConfig struct {
-	Intersections *application.IntersectionAttacher
-	RequestFacts  *requestapplication.Recorder
+	Intersections   *application.IntersectionAttacher
+	RequestFacts    *requestapplication.Recorder
+	CandidateDigest string
 }
 
 // NewHandler 构造 HTTP 适配器；observer 可为空。
@@ -60,11 +65,12 @@ func NewHandlerWithConfig(
 	config HandlerConfig,
 ) *Handler {
 	return &Handler{
-		svc:           svc,
-		decorator:     decorator,
-		observer:      observer,
-		intersections: config.Intersections,
-		requestFacts:  config.RequestFacts,
+		svc:             svc,
+		decorator:       decorator,
+		observer:        observer,
+		intersections:   config.Intersections,
+		requestFacts:    config.RequestFacts,
+		candidateDigest: strings.TrimSpace(config.CandidateDigest),
 	}
 }
 
@@ -86,6 +92,7 @@ type searchRequestWire struct {
 	ObjectTypes []string `json:"objectTypes"`
 	IDs         []string `json:"ids"`
 	Limit       int      `json:"limit"`
+	Cursor      string   `json:"cursor"`
 	Filters     struct {
 		Tags      []string `json:"tags"`
 		TimeRange *struct {
@@ -106,14 +113,16 @@ type searchRequestWire struct {
 // declared in metadata. Per-hit rankReasons/rankPosition ride on the embedded
 // RetrieveHit (single-sourced in runtime/search).
 type searchResponseWire struct {
-	Hits             []canonicalSearchHitWire `json:"hits"`
-	Citations        []rtsearch.Citation      `json:"citations"`
-	Facets           []rtsearch.Facet         `json:"facets"`
-	DegradeSignals   []rtsearch.DegradeSignal `json:"degradeSignals"`
-	Provenance       rtsearch.Provenance      `json:"provenance"`
-	RequestID        string                   `json:"requestId"`
-	ExperimentBucket string                   `json:"experimentBucket,omitempty"`
-	RelatedTerms     []string                 `json:"relatedTerms"`
+	Hits             []canonicalSearchHitWire  `json:"hits"`
+	Citations        []rtsearch.Citation       `json:"citations"`
+	Facets           []rtsearch.Facet          `json:"facets"`
+	DegradeSignals   []rtsearch.DegradeSignal  `json:"degradeSignals"`
+	Provenance       rtsearch.Provenance       `json:"provenance"`
+	RequestID        string                    `json:"requestId"`
+	ExperimentBucket string                    `json:"experimentBucket,omitempty"`
+	RelatedTerms     []string                  `json:"relatedTerms"`
+	InterpretedQuery rtsearch.InterpretedQuery `json:"interpretedQuery"`
+	NextCursor       string                    `json:"nextCursor,omitempty"`
 }
 
 func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -155,23 +164,47 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Tags:        body.Filters.Tags,
 		TimeRange:   parseTimeRange(body),
 		Near:        parseNear(body),
+		Cursor:      body.Cursor,
+	}
+	caller := queryCallerFrom(r)
+	identity := application.QueryExecutionIdentity{
+		CandidateDigest: h.candidateDigest,
+		PolicyDigest:    h.decorator.PolicyDigest(),
+	}
+	if caller.ServiceName == "api-edge" || strings.EqualFold(strings.TrimSpace(body.Mode), "retrieval") {
+		contractGraphDigest := "sha256:" + operationsecurity.ContractGraphSHA256
+		if caller.ServiceName != "" && r.Header.Get(contractGraphSHA256Header) != contractGraphDigest {
+			writeErr(w, requestID, rterrors.NewInvalidArgument(
+				moduleSearch,
+				"搜索契约暂不可用，请重试。",
+				"search owner ContractGraph binding does not match embedded runtime identity",
+			))
+			return
+		}
+		ownerResponse, ownerErr := h.svc.ExecuteOwnerQuery(r.Context(), in, viewer, caller, identity)
+		if ownerErr != nil {
+			h.writeSearchExecutionError(w, requestID, ownerErr)
+			return
+		}
+		if caller.ServiceName != "" {
+			w.Header().Set(contractGraphSHA256Header, contractGraphDigest)
+		}
+		writeJSON(w, http.StatusOK, ownerResponse)
+		return
 	}
 
 	// 计时覆盖召回、排序与交集 attach；异步 query log 仍在响应后执行。
 	start := time.Now()
-	resp, err := h.svc.Search(r.Context(), in, viewer)
+	execution, err := h.svc.Execute(r.Context(), in, viewer, caller, identity)
 	if err != nil {
 		h.observeSearch(application.SearchObservation{
 			Mode: body.Mode, Bucket: application.BucketControl,
 			Seconds: time.Since(start).Seconds(), Err: true,
 		})
-		if errors.Is(err, application.ErrSearchInvalid) {
-			writeErr(w, requestID, rterrors.NewInvalidArgument(moduleSearch, "搜索对象类型不受支持。", err.Error()))
-		} else {
-			writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "搜索暂时不可用，请稍后再试。", "retrieve: "+err.Error()))
-		}
+		h.writeSearchExecutionError(w, requestID, err)
 		return
 	}
+	resp := execution.Response
 
 	ranked, err := h.decorator.Decorate(
 		r.Context(),
@@ -220,6 +253,8 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		RequestID:        requestID,
 		ExperimentBucket: ranked.ExperimentBucket,
 		RelatedTerms:     ranked.RelatedTerms,
+		InterpretedQuery: execution.InterpretedQuery,
+		NextCursor:       execution.NextCursor,
 	})
 
 	// Best-effort query log on a detached context so a slow/failed Mongo write
@@ -235,6 +270,21 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		ExperimentBucket: ranked.ExperimentBucket,
 		RelatedTerms:     ranked.RelatedTerms,
 	})
+}
+
+func (h *Handler) writeSearchExecutionError(w http.ResponseWriter, requestID string, err error) {
+	if errors.Is(err, application.ErrSearchForbidden) {
+		writeErr(w, requestID, rterrors.NewAppError(
+			rterrors.NewCode(moduleSearch, rterrors.KindUser, "forbidden"),
+			"当前身份不能执行该检索模式。", err.Error(),
+		).WithMetadata("forbidden", http.StatusForbidden))
+		return
+	}
+	if errors.Is(err, application.ErrSearchInvalid) || errors.Is(err, application.ErrSearchCursor) {
+		writeErr(w, requestID, rterrors.NewInvalidArgument(moduleSearch, "搜索请求格式不正确。", err.Error()))
+		return
+	}
+	writeErr(w, requestID, rterrors.NewUnavailable(moduleSearch, "搜索暂时不可用，请稍后再试。", "retrieve: "+err.Error()))
 }
 
 func (h *Handler) logQueryAsync(r *http.Request, qlog requestapplication.QueryLog) {
@@ -259,13 +309,57 @@ func (h *Handler) observeSearch(observation application.SearchObservation) {
 // the SearchRequestFact contract. Request IDs are intentionally excluded because they
 // would re-roll the experiment arm on every keystroke.
 func SubjectKeyFor(viewer rtsearch.Viewer, r *http.Request) (string, error) {
-	if id := strings.TrimSpace(viewer.UserID); id != "" {
+	if id := strings.TrimSpace(viewer.UserID); id != "" && !strings.HasPrefix(id, "service:") {
 		return id, nil
 	}
 	if sessionID := strings.TrimSpace(r.Header.Get(SearchSessionIDHeader)); sessionID != "" {
 		return sessionID, nil
 	}
+	if principal, ok := rtauth.PrincipalFromContext(r.Context()); ok {
+		serviceName := strings.TrimSpace(principal.ServiceActorID)
+		if serviceName == "" && strings.HasPrefix(strings.TrimSpace(principal.Subject), "service:") {
+			serviceName = strings.TrimPrefix(strings.TrimSpace(principal.Subject), "service:")
+		}
+		if serviceName == "assistant-service" {
+			return "service:assistant-service", nil
+		}
+	}
 	return "", fmt.Errorf("anonymous search requires a non-empty %s header", SearchSessionIDHeader)
+}
+
+func queryCallerFrom(r *http.Request) application.QueryCaller {
+	sessionID := strings.TrimSpace(r.Header.Get(SearchSessionIDHeader))
+	principal, ok := rtauth.PrincipalFromContext(r.Context())
+	if !ok {
+		return application.QueryCaller{PrincipalKey: "session:" + sessionID}
+	}
+	serviceName := strings.TrimSpace(principal.ServiceActorID)
+	if serviceName == "" && strings.HasPrefix(strings.TrimSpace(principal.Subject), "service:") {
+		serviceName = strings.TrimPrefix(strings.TrimSpace(principal.Subject), "service:")
+	}
+	accountID := strings.TrimSpace(principal.Actor.AccountID)
+	personaID := strings.TrimSpace(principal.Actor.PersonaID)
+	principalKey := ""
+	switch {
+	case personaID != "":
+		principalKey = "persona:" + personaID
+	case accountID != "" && !strings.HasPrefix(accountID, "service:"):
+		principalKey = "account:" + accountID
+	case sessionID != "":
+		principalKey = "session:" + sessionID
+	default:
+		principalKey = "service:" + serviceName
+	}
+	if serviceName != "" {
+		principalKey += "|service:" + serviceName
+	}
+	scopes := strings.Fields(principal.Scope)
+	scopes = append(scopes, principal.Permissions...)
+	return application.QueryCaller{
+		PrincipalKey: principalKey,
+		ServiceName:  serviceName,
+		Scopes:       scopes,
+	}
 }
 
 func parseTimeRange(body searchRequestWire) *rtsearch.TimeRange {

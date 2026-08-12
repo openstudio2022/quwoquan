@@ -4,46 +4,21 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = (
-    ROOT
-    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json"
-)
 GENERATED = (
     ROOT
     / "quwoquan_app/test/support/service/content_service/content/post/home_showcase_core_fixture.g.dart"
 )
 
 
-def _render_generated(posts_json: str, sha: str) -> str:
-    return (
-        "// GENERATED CODE - DO NOT MODIFY BY HAND.\n"
-        "// Source: quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json\n"
-        "// Seed set: home_showcase_core.posts\n\n"
-        f"const String kHomeShowcaseCorePostsSha256 = '{sha}';\n\n"
-        f"const String kHomeShowcaseCorePostsJson = r'''{posts_json}''';\n"
-    )
-
-
 def main() -> int:
-    source_doc = json.loads(SOURCE.read_text(encoding="utf-8"))
-    posts = source_doc["seedSets"]["home_showcase_core"]["posts"]
-    expected_json = json.dumps(posts, ensure_ascii=False, separators=(",", ":"))
-    expected_sha = hashlib.sha256(expected_json.encode("utf-8")).hexdigest()
-
-    if "--regenerate" in sys.argv[1:]:
-        GENERATED.parent.mkdir(parents=True, exist_ok=True)
-        GENERATED.write_text(
-            _render_generated(expected_json, expected_sha),
-            encoding="utf-8",
-        )
-        print(f"[verify_app_generated_fixture_assets] regenerated {GENERATED}")
-        return 0
-
+    if not GENERATED.is_file():
+        print("[verify_app_generated_fixture_assets] FAIL")
+        print(f"  - generated UI object examples are missing: {GENERATED}")
+        return 1
     generated_text = GENERATED.read_text(encoding="utf-8")
     sha_match = re.search(
         r"const\s+String\s+kHomeShowcaseCorePostsSha256\s*=\s*"
@@ -59,20 +34,29 @@ def main() -> int:
     issues: list[str] = []
     if not sha_match:
         issues.append("generated SHA constant is missing")
-    elif sha_match.group(1) != expected_sha:
-        issues.append("generated SHA does not match content_scenarios.lite home_showcase_core.posts")
     if not json_match:
         issues.append("generated JSON constant is missing")
-    elif json_match.group(1) != expected_json:
-        issues.append("generated JSON does not match content_scenarios.lite home_showcase_core.posts")
+    if sha_match and json_match:
+        embedded_json = json_match.group(1)
+        embedded_sha = hashlib.sha256(embedded_json.encode("utf-8")).hexdigest()
+        if sha_match.group(1) != embedded_sha:
+            issues.append("generated SHA does not match embedded UI object examples")
+        try:
+            posts = json.loads(embedded_json)
+        except json.JSONDecodeError as exc:
+            issues.append(f"generated JSON is invalid: {exc}")
+        else:
+            if not isinstance(posts, list) or len(posts) != 21:
+                issues.append("home showcase must contain exactly 21 named UI object examples")
+            else:
+                post_ids = [item.get("postId") for item in posts if isinstance(item, dict)]
+                if len(post_ids) != 21 or len(set(post_ids)) != 21 or any(not item for item in post_ids):
+                    issues.append("home showcase postId values must be non-empty and unique")
 
     if issues:
         print("[verify_app_generated_fixture_assets] FAIL")
         for issue in issues:
             print(f"  - {issue}")
-        print(
-            "Regenerate with: python3 quwoquan_ops/gate/verify_app_generated_fixture_assets.py --regenerate"
-        )
         return 1
     print("[verify_app_generated_fixture_assets] OK")
     return 0

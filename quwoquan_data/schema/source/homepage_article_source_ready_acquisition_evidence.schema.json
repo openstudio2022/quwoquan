@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/homepage_article_source_ready_acquisition_evidence.schema.json",
+  "title": "Homepage or article source-ready acquisition evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "carrier", "candidateId", "entityRef", "sourceRevision",
+    "sourceDigest", "entityCatalogDigest", "capturedAt", "sourceAttribution", "publishMediaMode",
+    "seedSelection", "seed", "sourceUnit", "assets", "evidenceDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.homepage_article_source_ready_acquisition_evidence"},
+    "carrier": {"enum": ["homepage", "article"]},
+    "candidateId": {"type": "string", "minLength": 1},
+    "entityRef": {"type": "string", "pattern": "^/entity/[^/]+/[^/]+/[^/]+$"},
+    "sourceRevision": {"$ref": "#/$defs/sha256"},
+    "sourceDigest": {"$ref": "#/$defs/sha256"},
+    "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+    "capturedAt": {"type": "string", "minLength": 1},
+    "sourceSelectionOrigin": {"const": "site_frontier"},
+    "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+    "publishMediaMode": {"enum": ["illustrated", "text_only"]},
+    "seedSelection": {"$ref": "#/$defs/documentBinding"},
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seedOrigin", "seedId", "coverageKey"],
+      "properties": {
+        "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+        "seedId": {"$ref": "#/$defs/sha256"},
+        "coverageKey": {"$ref": "homepage_article_seed_selection.schema.json#/$defs/seed/properties/coverageKey"},
+        "articleCategory": {"const": "photography"},
+        "writingIntent": {"const": "planning_consultation"},
+        "topicTagRefs": {
+          "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true,
+          "items": {"const": "Topic/旅行/玩法/摄影旅拍"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["articleCategory"]},
+          "then": {"required": ["writingIntent", "topicTagRefs"]},
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["writingIntent"]},
+                {"required": ["topicTagRefs"]}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "historicalComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "bodyContentSha256", "bodyComparison"],
+      "properties": {
+        "candidateId": {"type": "string", "minLength": 1},
+        "bodyContentSha256": {"$ref": "#/$defs/sha256"},
+        "bodyComparison": {"enum": ["same", "changed"]}
+      }
+    },
+    "sourceUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceUnitId", "sourceUnitRef", "sourceUnitDigest", "sourceUrl",
+        "sourceKind", "extractor", "resolvedTitle", "bodyEvidenceRef",
+        "bodyContentSha256", "bodyFileSha256", "accessEvidence",
+        "qualityStatus", "qualityScore", "qualityReasons", "rawEvidenceRef",
+        "rawEvidenceFileSha256"
+      ],
+      "properties": {
+        "sourceUnitId": {"type": "string", "minLength": 1, "pattern": "^[^/]+$"},
+        "sourceUnitRef": {"type": "string", "pattern": "^sources/[^/]+$"},
+        "sourceUnitDigest": {"$ref": "#/$defs/sha256"},
+        "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "sourceKind": {"enum": ["wikipedia", "baidu_baike", "toutiao_baike", "encyclopedia", "travelogue"]},
+        "extractor": {"enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html", "qunar_html", "ctrip_sight_html"]},
+        "resolvedTitle": {"type": "string", "minLength": 1},
+        "pageId": {"type": "integer", "minimum": 1},
+        "revisionId": {"type": "integer", "minimum": 1},
+        "bodyEvidenceRef": {"type": "string", "pattern": "^sources/[^/]+/source\\.md$"},
+        "bodyContentSha256": {"$ref": "#/$defs/sha256"},
+        "bodyFileSha256": {"$ref": "#/$defs/sha256"},
+        "accessEvidence": {"$ref": "#/$defs/accessEvidence"},
+        "qualityStatus": {"const": "passed"},
+        "qualityScore": {"type": "integer", "minimum": 0},
+        "qualityReasons": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "articleCategory": {"const": "photography"},
+        "writingIntent": {"const": "planning_consultation"},
+        "topicTagRefs": {
+          "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true,
+          "items": {"const": "Topic/旅行/玩法/摄影旅拍"}
+        },
+        "sourceClassification": {"$ref": "article_source_classification.schema.json"},
+        "rawEvidenceRef": {"$ref": "#/$defs/ref"},
+        "rawEvidenceFileSha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["articleCategory"]},
+          "then": {"required": ["writingIntent", "topicTagRefs", "sourceClassification"]},
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["writingIntent"]},
+                {"required": ["topicTagRefs"]},
+                {"required": ["sourceClassification"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {"properties": {"sourceKind": {"const": "wikipedia"}}},
+          "then": {"required": ["pageId", "revisionId"]},
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["pageId"]},
+                {"required": ["revisionId"]}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assetId", "role", "assetRef", "originalAssetUrl", "sourcePageUrl",
+          "platform", "provider", "creator", "capturedAt", "license",
+          "termsUrl", "authorizationProof", "usageScope", "modelReleaseStatus",
+          "authorizationRequired", "rightsStatus", "rightsIssues",
+          "acquisitionStatus", "distributionDecision", "contentSha256",
+          "fileSha256", "byteCount",
+          "width", "height", "qualityStatus", "safetyStatus", "safetyEvidence",
+          "generated", "accessEvidence"
+        ],
+        "properties": {
+          "assetId": {"type": "string", "minLength": 1},
+          "role": {"enum": ["hero", "cover", "body"]},
+          "assetRef": {"type": "string", "pattern": "^sources/[^/]+/assets/.+$"},
+          "originalAssetUrl": {"type": "string", "pattern": "^https://"},
+          "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+          "platform": {"type": "string", "minLength": 1},
+          "provider": {"type": "string", "minLength": 1},
+          "creator": {"type": "string", "minLength": 1},
+          "capturedAt": {"type": "string", "minLength": 1},
+          "license": {"type": "string", "minLength": 1},
+          "termsUrl": {"type": "string", "pattern": "^https://"},
+          "authorizationProof": {"type": "string"},
+          "usageScope": {"enum": ["internal_reference", "app_publish", "editorial"]},
+          "modelReleaseStatus": {"enum": ["not_required", "obtained", "editorial_only"]},
+          "authorizationRequired": {"type": "boolean"},
+          "rightsStatus": {"enum": ["verified", "unverified", "unknown"]},
+          "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "acquisitionStatus": {"const": "acquired"},
+          "distributionDecision": {"const": "research_allowed"},
+          "contentSha256": {"$ref": "#/$defs/sha256"},
+          "fileSha256": {"$ref": "#/$defs/sha256"},
+          "byteCount": {"type": "integer", "minimum": 1},
+          "width": {"type": "integer", "minimum": 1},
+          "height": {"type": "integer", "minimum": 1},
+          "qualityStatus": {"const": "passed"},
+          "safetyStatus": {"const": "passed"},
+          "safetyEvidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "faces", "hasWatermark", "textAreaRatio", "reasons", "backends"],
+            "properties": {
+              "status": {"const": "safe"},
+              "faces": {"const": 0},
+              "hasWatermark": {"const": false},
+              "textAreaRatio": {"type": "number", "minimum": 0},
+              "reasons": {"type": "array", "items": {"type": "string"}},
+              "backends": {"type": "array", "minItems": 2, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+            }
+          },
+          "generated": {"const": false},
+          "accessEvidence": {"$ref": "#/$defs/accessEvidence"}
+        }
+      }
+    },
+    "evidenceDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"seed": {"properties": {"seedOrigin": {"const": "legacy_hint"}}}}},
+      "then": {"required": ["historicalComparison"]},
+      "else": {"not": {"required": ["historicalComparison"]}}
+    },
+    {
+      "if": {"properties": {"carrier": {"const": "homepage"}}},
+      "then": {
+        "properties": {
+          "publishMediaMode": {"const": "illustrated"},
+          "assets": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "carrier": {"const": "article"},
+          "publishMediaMode": {"const": "illustrated"}
+        }
+      },
+      "then": {"properties": {"assets": {"minItems": 2}}},
+      "else": {
+        "if": {"properties": {"carrier": {"const": "article"}}},
+        "then": {"properties": {"assets": {"maxItems": 0}}}
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "ref": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "documentBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "digest", "fileSha256"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "fileSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "accessEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anonymousPublicAccess", "loginRequired", "captchaRequired",
+        "paywallRequired", "drmProtected", "accessControlBypass"
+      ],
+      "properties": {
+        "anonymousPublicAccess": {"const": true},
+        "loginRequired": {"const": false},
+        "captchaRequired": {"const": false},
+        "paywallRequired": {"const": false},
+        "drmProtected": {"const": false},
+        "accessControlBypass": {"const": false}
+      }
+    }
+  }
+}

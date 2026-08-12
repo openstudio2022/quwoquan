@@ -123,6 +123,43 @@ def copy_tag_snapshot(source: Path, target: Path) -> None:
             shutil.copy2(path, target / path.name)
 
 
+def resolve_tag_snapshot(
+    publish_root: Path,
+    *,
+    tag_ref: str,
+    control_plane_taxonomy_root: Path | None = None,
+) -> Path:
+    """Resolve one exact Tag leaf, preferring canonical publish truth."""
+
+    relative = _safe_rel(tag_ref, label="tagRef")
+    candidates = [publish_root / "tags" / relative]
+    if control_plane_taxonomy_root is not None:
+        candidates.append(control_plane_taxonomy_root / relative)
+    for candidate in candidates:
+        if candidate.is_dir() and (candidate / "_definition.json").is_file():
+            return candidate
+    raise ObjectTransactionError(f"DATA.RELEASE.TAG_SNAPSHOT_MISSING: {tag_ref}")
+
+
+def copy_release_tag_snapshot(
+    publish_root: Path,
+    *,
+    tag_ref: str,
+    target: Path,
+    control_plane_taxonomy_root: Path | None = None,
+) -> None:
+    """Copy one resolved Tag leaf into an immutable release staging root."""
+
+    copy_tag_snapshot(
+        resolve_tag_snapshot(
+            publish_root,
+            tag_ref=tag_ref,
+            control_plane_taxonomy_root=control_plane_taxonomy_root,
+        ),
+        target,
+    )
+
+
 def _object_refs_document(
     publish_root: Path,
     *,
@@ -145,6 +182,7 @@ def reference_closure(
     *,
     entity_refs: set[str],
     post_refs: set[str],
+    control_plane_taxonomy_root: Path | None = None,
 ) -> tuple[list[str], list[str]]:
     creator_refs: set[str] = set()
     tag_refs: set[str] = set()
@@ -171,6 +209,31 @@ def reference_closure(
                     field="tagRefs",
                 )
             )
+    tag_refs.update(
+        creator_tag_refs(
+            publish_root,
+            creator_refs=creator_refs,
+            control_plane_taxonomy_root=control_plane_taxonomy_root,
+        )
+    )
+    for ref in sorted(tag_refs):
+        resolve_tag_snapshot(
+            publish_root,
+            tag_ref=ref,
+            control_plane_taxonomy_root=control_plane_taxonomy_root,
+        )
+    return sorted(creator_refs), sorted(tag_refs)
+
+
+def creator_tag_refs(
+    publish_root: Path,
+    *,
+    creator_refs: set[str] | list[str],
+    control_plane_taxonomy_root: Path | None = None,
+) -> list[str]:
+    """Resolve Tag closure for creators selected independently of Posts."""
+
+    tag_refs: set[str] = set()
     for ref in sorted(creator_refs):
         header = _read_json(object_root(publish_root, "creators", ref) / "_creator.json")
         if str(header.get("creatorId") or "") != ref:
@@ -182,9 +245,12 @@ def reference_closure(
             )
         )
     for ref in sorted(tag_refs):
-        if not (object_root(publish_root, "tags", ref) / "_definition.json").is_file():
-            raise ObjectTransactionError(f"canonical tag snapshot missing: {ref}")
-    return sorted(creator_refs), sorted(tag_refs)
+        resolve_tag_snapshot(
+            publish_root,
+            tag_ref=ref,
+            control_plane_taxonomy_root=control_plane_taxonomy_root,
+        )
+    return sorted(tag_refs)
 
 
 def existing_refs(release_root: Path) -> dict[str, list[str]]:
@@ -200,9 +266,12 @@ def existing_refs(release_root: Path) -> dict[str, list[str]]:
 
 __all__ = [
     "OBJECT_KINDS",
+    "copy_release_tag_snapshot",
     "copy_tag_snapshot",
+    "creator_tag_refs",
     "execution_publish_closure",
     "existing_refs",
     "object_root",
     "reference_closure",
+    "resolve_tag_snapshot",
 ]

@@ -1,9 +1,4 @@
-"""Freeze homepage/article catalogs from immutable physical evidence capsules.
-
-This module is deliberately offline.  It accepts no free-form candidate array:
-every candidate must already be stored in a create-once capsule that binds the
-body, media, provenance and current source identity to physical bytes.
-"""
+"""Freeze homepage/article catalogs from immutable physical evidence capsules."""
 from __future__ import annotations
 
 import hashlib
@@ -11,7 +6,7 @@ import json
 import stat
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from core.io import read_json
 from core.schema import assert_valid
@@ -24,7 +19,10 @@ from content.source.research.homepage_source_unit_catalog import (
     build_homepage_source_unit_catalog,
     write_create_once_homepage_source_unit_catalog,
 )
-
+from content.source.research.homepage_article_seed_selection import (
+    load_homepage_article_seed_selection,
+)
+from content.source.research.homepage_article_source_ready_provenance import verify_source_ready_provenance
 
 SOURCE_POOL_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
 SOURCE_INVALID_EVIDENCE = "DATA.SOURCE.INVALID_EVIDENCE"
@@ -90,6 +88,30 @@ def _safe_file(root: Path, ref: object, *, label: str) -> Path:
                 [f"{label} must resolve to a regular file: {relative.as_posix()}"],
             )
     return current
+
+
+def _safe_directory(root: Path, ref: object, *, label: str) -> Path:
+    base = root.expanduser().absolute()
+    raw = str(ref or "").strip()
+    relative = Path(raw)
+    if raw != "." and (not raw or relative.is_absolute() or ".." in relative.parts):
+        raise HomepageArticleSourceReadyBatchError(
+            SOURCE_INVALID_EVIDENCE, [f"{label} must be a safe relative directory"]
+        )
+    try:
+        roots = (base,) if raw == "." else (
+            base,
+            *(base.joinpath(*relative.parts[:index]) for index in range(1, len(relative.parts) + 1)),
+        )
+        for current in roots:
+            mode = current.lstat().st_mode
+            if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+                raise OSError("symlink or non-directory")
+    except OSError as exc:
+        raise HomepageArticleSourceReadyBatchError(
+            SOURCE_INVALID_EVIDENCE, [f"{label} is missing or not a real directory"]
+        ) from exc
+    return roots[-1]
 
 
 def _load_json_file(
@@ -197,39 +219,45 @@ def _candidate_bindings(
 
 
 def _verify_provenance(root: Path, provenance: Mapping[str, Any], *, label: str) -> None:
-    coverage_binding = {
-        "ref": provenance.get("coverageProjectionRef"),
-        "fileSha256": provenance.get("coverageProjectionFileSha256"),
-        "digest": provenance.get("coverageProjectionDigest"),
-    }
-    coverage, _ = _load_json_file(root, coverage_binding, label=f"{label}.coverage")
-    digest_values = {
-        str(coverage.get(field) or "")
-        for field in ("projectionDigest", "documentDigest", "receiptDigest")
-    }
-    if str(coverage_binding["digest"]) not in digest_values:
-        raise HomepageArticleSourceReadyBatchError(
-            SOURCE_INVALID_EVIDENCE,
-            [f"{label}.coverage digest is not bound by the document"],
-        )
-    evidence_bindings = [{
+    def reject(issue: str) -> NoReturn:
+        raise HomepageArticleSourceReadyBatchError(SOURCE_INVALID_EVIDENCE, [issue])
+
+    verify_source_ready_provenance(
+        root,
+        provenance,
+        label=label,
+        load_json_file=_load_json_file,
+        safe_file=_safe_file,
+        file_sha256=_file_sha256,
+        reject=reject,
+    )
+
+
+def _verify_raw_source_evidence(
+    root: Path, provenance: Mapping[str, Any], *, label: str
+) -> None:
+    binding = {
         "ref": provenance.get("discoveryEvidenceRef"),
         "fileSha256": provenance.get("discoveryEvidenceFileSha256"),
-    }]
-    for field in (
-        "acquisitionEvidenceRefs", "rightsEvidenceRefs", "qualityEvidenceRefs"
+    }
+    evidence, _ = _load_json_file(root, binding, label=f"{label}.acquisition")
+    if evidence.get("schema") != (
+        "quwoquan_data.homepage_article_source_ready_acquisition_evidence"
     ):
-        rows = provenance.get(field)
-        evidence_bindings.extend(
-            dict(row) for row in rows if isinstance(rows, list) and isinstance(row, Mapping)
+        return
+    source_unit = evidence.get("sourceUnit")
+    if not isinstance(source_unit, Mapping):
+        raise HomepageArticleSourceReadyBatchError(
+            SOURCE_INVALID_EVIDENCE, [f"{label}.sourceUnit is missing"]
         )
-    for index, binding in enumerate(evidence_bindings):
-        path = _safe_file(root, binding.get("ref"), label=f"{label}.evidence[{index}]")
-        if _file_sha256(path) != binding.get("fileSha256"):
-            raise HomepageArticleSourceReadyBatchError(
-                SOURCE_INVALID_EVIDENCE,
-                [f"{label}.evidence[{index}] fileSha256 drift"],
-            )
+    _verify_bound_file(
+        root,
+        {
+            "ref": source_unit.get("rawEvidenceRef"),
+            "fileSha256": source_unit.get("rawEvidenceFileSha256"),
+        },
+        label=f"{label}.rawEvidence",
+    )
 
 
 def validate_source_ready_candidate_capsule(
@@ -299,12 +327,12 @@ def validate_source_ready_candidate_capsule(
             SOURCE_INVALID_EVIDENCE, ["candidate body materialization binding drift"]
         )
     expected_media_rows = sorted(
-        (tuple(row.get(field) for field in ("assetId", "role", "ref", "contentSha256"))
-         for row in expected_media)
+        tuple(row.get(field) for field in ("assetId", "role", "ref", "contentSha256"))
+         for row in expected_media
     )
     actual_media_rows = sorted(
-        (tuple(row.get(field) for field in ("assetId", "role", "ref", "contentSha256"))
-         for row in actual_media if isinstance(row, Mapping))
+        tuple(row.get(field) for field in ("assetId", "role", "ref", "contentSha256"))
+         for row in actual_media if isinstance(row, Mapping)
     )
     if actual_media_rows != expected_media_rows:
         raise HomepageArticleSourceReadyBatchError(
@@ -317,6 +345,9 @@ def validate_source_ready_candidate_capsule(
     provenance = capsule["provenance"]
     assert isinstance(provenance, Mapping)
     _verify_provenance(evidence_root, provenance, label="candidate.provenance")
+    _verify_raw_source_evidence(
+        evidence_root, provenance, label="candidate.provenance"
+    )
     return dict(capsule)
 
 
@@ -336,13 +367,19 @@ def _load_batch_capsules(
     bindings: dict[str, dict[str, Any]] = {}
     for index, raw_binding in enumerate(batch["candidateCapsules"]):
         assert isinstance(raw_binding, Mapping)
-        capsule, _ = _load_json_file(
+        evidence_root_ref = str(raw_binding.get("evidenceRootRef") or "")
+        candidate_root = _safe_directory(
             evidence_root,
+            evidence_root_ref,
+            label=f"candidateCapsules[{index}].evidenceRootRef",
+        )
+        capsule, _ = _load_json_file(
+            candidate_root,
             raw_binding,
             label=f"candidateCapsules[{index}]",
             digest_field="capsuleDigest",
         )
-        validate_source_ready_candidate_capsule(capsule, evidence_root=evidence_root)
+        validate_source_ready_candidate_capsule(capsule, evidence_root=candidate_root)
         candidate = dict(capsule["candidate"])
         candidate_id = str(candidate["candidateId"])
         carrier = str(capsule["carrier"])
@@ -361,7 +398,12 @@ def _load_batch_capsules(
                 SOURCE_INVALID_EVIDENCE, [f"duplicate candidateId: {candidate_id}"]
             )
         candidate_ids.add(candidate_id)
-        bindings[candidate_id] = dict(raw_binding)
+        normalized_binding = dict(raw_binding)
+        if evidence_root_ref != ".":
+            normalized_binding["ref"] = (
+                f"{evidence_root_ref.rstrip('/')}/{raw_binding['ref']}"
+            )
+        bindings[candidate_id] = normalized_binding
         materialization = capsule["materialization"]
         assert isinstance(materialization, Mapping)
         content_rows = [materialization["body"], *materialization["media"]]
@@ -432,6 +474,24 @@ def load_homepage_article_source_ready_batch(
         raise HomepageArticleSourceReadyBatchError(
             SOURCE_INVALID_EVIDENCE, ["coverageProjection digest drift"]
         )
+    seed_selection, seed_path = _load_json_file(
+        evidence_root,
+        batch["seedSelection"],
+        label="seedSelection",
+    )
+    try:
+        validated_seed_selection = load_homepage_article_seed_selection(seed_path)
+    except ValueError as exc:
+        raise HomepageArticleSourceReadyBatchError(
+            SOURCE_INVALID_EVIDENCE, [f"seedSelection is invalid: {exc}"]
+        ) from exc
+    if (
+        seed_selection != validated_seed_selection
+        or seed_selection.get("selectionDigest") != batch["seedSelection"]["digest"]
+    ):
+        raise HomepageArticleSourceReadyBatchError(
+            SOURCE_INVALID_EVIDENCE, ["seedSelection digest drift"]
+        )
     homepage, article, bindings = _load_batch_capsules(
         batch, evidence_root=evidence_root
     )
@@ -465,13 +525,25 @@ def freeze_homepage_article_source_ready_batch(
     homepage = loaded["homepageCandidates"]
     article = loaded["articleCandidates"]
     assert isinstance(batch, dict) and isinstance(homepage, list) and isinstance(article, list)
+    if (
+        minimum_homepage_candidate_count < 0
+        or minimum_article_candidate_count < 0
+        or not (minimum_homepage_candidate_count or minimum_article_candidate_count)
+    ):
+        raise HomepageArticleSourceReadyBatchError(
+            SOURCE_INVALID_EVIDENCE,
+            ["catalog minimums must activate at least one carrier"],
+        )
     if len(homepage) < minimum_homepage_candidate_count or len(article) < minimum_article_candidate_count:
         raise HomepageArticleSourceReadyBatchError(
             SOURCE_POOL_SHORTFALL,
             [
-                "homepage/article source-ready pool shortfall: "
-                f"required={minimum_homepage_candidate_count}/{minimum_article_candidate_count} "
-                f"actual={len(homepage)}/{len(article)}"
+                (
+                    "homepage/article source-ready pool shortfall: "
+                    f"required={minimum_homepage_candidate_count}/"
+                    f"{minimum_article_candidate_count} "
+                    f"actual={len(homepage)}/{len(article)}"
+                )
             ],
         )
     identity = _identity(batch)
@@ -482,54 +554,57 @@ def freeze_homepage_article_source_ready_batch(
         "source_digest": identity[1],
         "entity_catalog_digest": identity[2],
     }
-    homepage_catalog = build_homepage_source_unit_catalog(
-        catalog_id=f"{batch['sourceSetId']}-homepage",
-        minimum_candidate_count=minimum_homepage_candidate_count,
-        candidates=homepage,
-        **common,
-    )
-    article_catalog = build_article_source_unit_catalog(
-        catalog_id=f"{batch['sourceSetId']}-article",
-        minimum_candidate_count=minimum_article_candidate_count,
-        candidates=article,
-        **common,
-    )
-    homepage_path = output_root / "source-unit-catalogs" / "homepage" / (
-        str(homepage_catalog["catalogDigest"]).removeprefix("sha256:") + ".json"
-    )
-    article_path = output_root / "source-unit-catalogs" / "article" / (
-        str(article_catalog["catalogDigest"]).removeprefix("sha256:") + ".json"
-    )
-    homepage_frozen = write_create_once_homepage_source_unit_catalog(
-        homepage_path, homepage_catalog
-    )
-    article_frozen = write_create_once_article_source_unit_catalog(
-        article_path, article_catalog
-    )
-    return {
+    result: dict[str, Any] = {
         "schema": "quwoquan_data.homepage_article_source_ready_batch_write_result",
         "sourceSetDigest": batch["sourceSetDigest"],
-        "homepage": {
+    }
+    if minimum_homepage_candidate_count:
+        homepage_catalog = build_homepage_source_unit_catalog(
+            catalog_id=f"{batch['sourceSetId']}-homepage",
+            minimum_candidate_count=minimum_homepage_candidate_count,
+            candidates=homepage,
+            **common,
+        )
+        homepage_path = output_root / "source-unit-catalogs" / "homepage" / (
+            str(homepage_catalog["catalogDigest"]).removeprefix("sha256:") + ".json"
+        )
+        homepage_frozen = write_create_once_homepage_source_unit_catalog(
+            homepage_path, homepage_catalog
+        )
+        result["homepage"] = {
             "catalogRef": homepage_path.relative_to(output_root).as_posix(),
             "catalogDigest": homepage_frozen["catalogDigest"],
             "catalogFileSha256": _file_sha256(homepage_path),
             "candidateCount": len(homepage),
-        },
-        "article": {
+        }
+    if minimum_article_candidate_count:
+        article_catalog = build_article_source_unit_catalog(
+            catalog_id=f"{batch['sourceSetId']}-article",
+            minimum_candidate_count=minimum_article_candidate_count,
+            candidates=article,
+            **common,
+        )
+        article_path = output_root / "source-unit-catalogs" / "article" / (
+            str(article_catalog["catalogDigest"]).removeprefix("sha256:") + ".json"
+        )
+        article_frozen = write_create_once_article_source_unit_catalog(
+            article_path, article_catalog
+        )
+        result["article"] = {
             "catalogRef": article_path.relative_to(output_root).as_posix(),
             "catalogDigest": article_frozen["catalogDigest"],
             "catalogFileSha256": _file_sha256(article_path),
             "candidateCount": len(article),
-        },
-    }
+        }
+    return result
 
 
 __all__ = [
     "BATCH_SCHEMA",
     "CAPSULE_SCHEMA",
-    "HomepageArticleSourceReadyBatchError",
     "SOURCE_INVALID_EVIDENCE",
     "SOURCE_POOL_SHORTFALL",
+    "HomepageArticleSourceReadyBatchError",
     "freeze_homepage_article_source_ready_batch",
     "load_homepage_article_source_ready_batch",
     "validate_source_ready_candidate_capsule",

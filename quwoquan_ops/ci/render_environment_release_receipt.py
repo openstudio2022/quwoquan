@@ -185,13 +185,19 @@ def _validate_immutable_runtime(
             )
     if (
         payload.get("formalRelease") is not True
+        or payload.get("releaseInputClassification") != "commercial_inputs"
         or payload.get("runtimeMode") != "immutable-oci"
         or payload.get("runtimeCandidateDigest") != manifest.get("candidateId")
         or payload.get("destructiveRepairPerformed") is not False
         or payload.get("destructiveActions") != []
     ):
         raise ValueError(
-            f"{environment} up evidence is not an immutable candidate runtime without destructive repair"
+            f"{environment} up evidence is not an immutable candidate runtime with "
+            "commercial release inputs and without destructive repair"
+        )
+    if payload.get("contractGraphDigest") != manifest.get("contractGraphDigest"):
+        raise ValueError(
+            f"{environment} up evidence ContractGraph differs from the manifest"
         )
 
 
@@ -534,6 +540,23 @@ def render(
         declared_artifact = payload.get("artifactDigest")
         if label == "package" and declared_artifact is None:
             raise ValueError("package evidence has no direct artifactDigest binding")
+        if label == "package":
+            if "formalRelease" in payload:
+                raise ValueError("package evidence must not claim formalRelease")
+            if payload.get("releaseInputClassification") is None:
+                raise ValueError(
+                    "package evidence release input classification is missing"
+                )
+            if payload.get("releaseInputClassification") != "commercial_inputs":
+                raise ValueError(
+                    "package evidence requires commercial release inputs"
+                )
+            if payload.get("contractGraphDigest") != manifest.get(
+                "contractGraphDigest"
+            ):
+                raise ValueError(
+                    "package evidence ContractGraph differs from the manifest"
+                )
         if (
             declared_artifact is not None
             and declared_artifact != manifest["artifactDigest"]

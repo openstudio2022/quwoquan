@@ -171,6 +171,7 @@ def build_campaign_release(
     root_execution_id: str,
     release_id: str,
     roots: CampaignReleaseRoots | None = None,
+    target_environment: str | None = None,
 ) -> dict[str, Any]:
     """Build a release from the exact current four-lane campaign selection."""
 
@@ -264,6 +265,7 @@ def build_campaign_release(
                     entity_catalog_digest=str(plan["entityCatalogDigest"]),
                     reviewed_closure_adoption=adoption_document,
                     adoption_output_root=selected_roots.output_root,
+                    target_environment=target_environment,
                 )
                 manifest_digest = release_payload_digest(release_path)
                 stable = {
@@ -293,6 +295,8 @@ def build_campaign_release(
                 }
                 if adoption_document is not None:
                     stable[CAMPAIGN_ADOPTION_FIELD] = adoption_document
+                if target_environment is not None:
+                    stable["targetEnvironment"] = target_environment
                 attestation = _write_attestation(selection_path, stable)
         except CampaignReleaseError:
             raise

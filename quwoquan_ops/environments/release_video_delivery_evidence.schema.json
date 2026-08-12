@@ -26,7 +26,7 @@
     "capturedAt": {"type": "string", "minLength": 1},
     "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
     "target": {"enum": ["alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"]},
-    "rolloutStage": {"enum": ["local", "gray-initial"]},
+    "rolloutStage": {"enum": ["local", "canary"]},
     "release": {
       "type": "object",
       "additionalProperties": false,

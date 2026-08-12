@@ -22,6 +22,7 @@ for path in (DATA_ROOT / "scripts", DATA_ROOT / "tests"):
 
 from content.execution.controller import homepage_authoring  # noqa: E402
 from content.execution.controller import homepage_review_stage  # noqa: E402
+from content.execution.controller import professional_asset_independent_review  # noqa: E402
 from content.execution.controller import stage_download_build  # noqa: E402
 from content.homepage import homepage as homepage_module  # noqa: E402
 from content.homepage import homepage_release_validation  # noqa: E402
@@ -51,6 +52,11 @@ def _arrange(monkeypatch, *, verdicts, precondition=()):
         homepage_review_stage,
         "independent_reviewer_precondition_issues",
         lambda _eid: list(precondition),
+    )
+    monkeypatch.setattr(
+        professional_asset_independent_review,
+        "run_professional_asset_independent_reviews",
+        lambda _ctx, _refs: [],
     )
     pending = list(verdicts)
     monkeypatch.setattr(

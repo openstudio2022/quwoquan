@@ -84,6 +84,7 @@ func observedTask(
 			"carrier":        carrier,
 			"sourceRevision": sourceRevision,
 			"idempotencyKey": idempotencyKey,
+			"maxAttempts":    "3",
 		},
 		Status:        status,
 		Attempts:      1,

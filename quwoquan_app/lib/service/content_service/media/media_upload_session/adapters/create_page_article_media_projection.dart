@@ -105,22 +105,18 @@ ResolvedArticleMediaPayload projectResolvedArticleMediaPayload({
       coverAssetId: coverAssetId,
       coverImageUrl: coverReference,
     ),
-    assetManifest: _manifest(
-      manifestRows,
-      markdownDialect: markdownDialect,
-    ),
+    assetManifest: _manifest(manifestRows, markdownDialect: markdownDialect),
   );
 }
 
 PostArticleAssetManifestInput _manifest(
   List<PostArticleAssetInput> assets, {
   required String markdownDialect,
-}) =>
-    PostArticleAssetManifestInput(
-      schema: 'article-asset-manifest',
-      markdownVersion: markdownDialect,
-      assets: assets,
-    );
+}) => PostArticleAssetManifestInput(
+  schema: 'article-asset-manifest',
+  markdownVersion: markdownDialect,
+  assets: assets,
+);
 
 PostArticleAssetInput _manifestRow(
   String assetId, {

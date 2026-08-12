@@ -45,6 +45,10 @@ type AggregateStore interface {
 		ctx context.Context,
 		lookup LatestChallengeLookup,
 	) (challengemodel.AuthenticationChallenge, bool, error)
+	LoadByDeliveryRequestID(
+		ctx context.Context,
+		requestID string,
+	) (challengemodel.AuthenticationChallenge, bool, error)
 	Commit(
 		ctx context.Context,
 		expectedVersion int64,

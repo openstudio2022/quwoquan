@@ -1,8 +1,11 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from core.control_types import ExecutionStage, QueueJobState, StageStatus
 
+from content.execution.queue.reliabletask.attempt import latest_attempt_report_path
 from content.execution.support import (
     AUTO,
     DataIssueCode,
@@ -18,11 +21,15 @@ from content.execution.support import (
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
-from content.execution.queue.reliabletask.attempt import latest_attempt_report_path
 
 
 @canonical_publish_serialized
-def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str]:
+def publish_homepage_object(
+    execution_id: str,
+    object_ref: str,
+    *,
+    pool_delivery_intent: Mapping[str, object] | None = None,
+) -> dict[str, str]:
     """Apply one reviewed homepage through the canonical object transaction."""
     import hashlib
 
@@ -50,6 +57,20 @@ def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str
         f"{hashlib.sha256(canonical_ref.encode('utf-8')).hexdigest()[:12]}"
     )
     execution_dir = execution_root(execution_id)
+    if pool_delivery_intent is None:
+        from content.execution.closure.pool_delivery import (
+            pool_delivery_intent_path,
+        )
+
+        intent_path = pool_delivery_intent_path(
+            execution_id,
+            carrier="homepage",
+            object_ref=object_ref,
+        )
+        loaded_intent = read_json(intent_path)
+        if not isinstance(loaded_intent, dict):
+            raise ValueError("pool delivery homepage intent must be an object")
+        pool_delivery_intent = loaded_intent
     package_root = execution_dir / "evidence/object-transactions" / transaction_id
     apply_report = (
         OUTPUT_ROOT
@@ -63,6 +84,7 @@ def publish_homepage_object(execution_id: str, object_ref: str) -> dict[str, str
         object_ref=f"/entity/{canonical_ref}",
         transaction_id=transaction_id,
         package_root=package_root,
+        pool_delivery_intent=pool_delivery_intent,
     )
     if apply_report.is_file() and (canonical_object / "manifest.json").is_file():
         if (
@@ -141,6 +163,46 @@ def _publishable_homepage_names(ctx: ExecutionContext) -> set[str]:
             names.add(entity_dir.name)
     return names
 
+
+def _assert_video_canonical_plan(
+    execution_id: str,
+    publish_refs: set[str],
+) -> None:
+    """Fail before publish job creation when reviewed video bytes already exist."""
+    from collections.abc import Mapping
+
+    from core.io import read_json
+    from core.paths import PUBLISH_ROOT
+
+    from content.execution.workspace import execution_root
+    from content.release.canonical.canonical_inventory import (
+        assert_canonical_video_unique,
+    )
+    from content.release.canonical.object_transaction_contract import (
+        ObjectTransactionError,
+    )
+
+    root = execution_root(execution_id)
+    for raw_ref in sorted(publish_refs):
+        relative = str(raw_ref or "").strip().strip("/")
+        if not relative.startswith("posts/"):
+            raise ObjectTransactionError(
+                f"publish plan post ref is not canonical: {raw_ref!r}"
+            )
+        manifest_path = root / relative / "manifest.json"
+        manifest = read_json(manifest_path)
+        if not isinstance(manifest, Mapping):
+            raise ObjectTransactionError(
+                f"publish plan manifest must be an object: {relative}"
+            )
+        if str(manifest.get("contentType") or "").strip() != "video":
+            continue
+        assert_canonical_video_unique(
+            publish_root=PUBLISH_ROOT,
+            manifest=manifest,
+            excluded_manifest_path=f"{relative}/manifest.json",
+        )
+
 def _run_publish(ctx: ExecutionContext) -> StageResult:
     from core.publish_materialization import materialize_task_publish_inputs
 
@@ -148,7 +210,9 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.post_recovery import _purge_stale_author_queue
     from content.post import object_index as content_object
     if _is_homepage_only_execution(ctx):
-        from content.execution.planning.qualification import finalize_execution_qualification
+        from content.execution.planning.qualification import (
+            finalize_execution_qualification,
+        )
 
         try:
             qualification = finalize_execution_qualification(
@@ -216,6 +280,27 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
         ctx.execution_id,
         qualified_post_refs=qualified_post_refs,
     )
+    if qualified_post_refs is not None:
+        try:
+            _assert_video_canonical_plan(ctx.execution_id, qualified_post_refs)
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            issue = (
+                "canonical video identity plan rejected before publish: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return StageResult(
+                ExecutionStage.PUBLISH,
+                AUTO,
+                StageStatus.FAILED,
+                issue,
+                fallback_stage=ExecutionStage.POST_REVIEW,
+                issue_records=stage_issues(
+                    ExecutionStage.PUBLISH,
+                    [issue],
+                    code=DataIssueCode.CONTRACT_INVALID,
+                    recovery=DataRecoveryAction.REWIND_COMPOSE,
+                ),
+            )
     homepage_refs: set[str] = set()
     if homepage_only:
         from content.execution.controller.homepage_authoring import (
@@ -260,9 +345,8 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
             if fleet_report_path is not None and fleet_report_path.is_file()
             else None
         )
-        # Idempotent re-apply can leave local jobs DEAD while canonical objects
-        # already satisfy quota. Fleet.passed already encodes lifecycle-accepted
-        # or finalizedObjectCount ≥ requiredQuota (see data_content_report.go).
+        # Only lifecycle-accepted canonical transaction results satisfy publish
+        # quota. Reviewed/finalized work-package files remain an observation.
         required = approved_quota(ctx.execution_id)
         fleet_canonical_accepted = (
             int((fleet_report or {}).get("researchAcceptedCount") or 0)
@@ -273,10 +357,7 @@ def _run_publish(ctx: ExecutionContext) -> StageResult:
         fleet_quota_met = bool(
             isinstance(fleet_report, dict)
             and fleet_report.get("passed") is True
-            and (
-                int(fleet_report.get("finalizedObjectCount") or 0) >= required
-                or fleet_canonical_accepted >= required
-            )
+            and fleet_canonical_accepted >= required
         )
         terminal_failures = [
             job

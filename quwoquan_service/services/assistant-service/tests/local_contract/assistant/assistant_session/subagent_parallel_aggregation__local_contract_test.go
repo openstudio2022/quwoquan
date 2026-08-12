@@ -106,12 +106,12 @@ func subagentLoop(t *testing.T, model orchestration.ModelProvider) *orchestratio
 		},
 		"app_search": func(_ context.Context, _ toolpkg.Request) (toolpkg.Result, error) {
 			return toolpkg.Result{Output: map[string]any{
-				"provider":           "search-service",
 				"summary":            "杭州东站到市区的地铁与公交班次充足。",
-				"results":            []any{},
+				"resultBuckets":      []any{},
 				"citations":          []any{},
 				"emergedTagRefs":     []string{},
-				"provenance":         map[string]any{"source": "search-service"},
+				"provenance":         map[string]any{"source": "search_index_view"},
+				"retrievalPlan":      map[string]any{"digest": "sha256:test"},
 				"evidenceAssessment": acceptedEvidenceAssessment("subagent_app_search_stub"),
 			}}, nil
 		},

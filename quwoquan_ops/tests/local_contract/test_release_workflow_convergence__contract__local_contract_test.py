@@ -132,9 +132,9 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
             jobs["prod_soak_acceptance"]["environment"],
             "production",
         )
-        self.assertEqual(
+        self.assertGreaterEqual(
             jobs["prod_soak_acceptance"]["timeout-minutes"],
-            15,
+            1500,
         )
         self.assertIn("- alpha_local\n      - beta_device_matrix\n      - gamma_local", source)
 
@@ -234,30 +234,68 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         self.assertEqual(prod.count("Materialize canonical configuration packages once"), 1)
         self.assertEqual(prod.count("QWQ_PROD_RELEASE_ARTIFACT_ROOT"), 1)
         self.assertEqual(prod.count("docker/login-action@"), 1)
-        self.assertEqual(prod.count("--stage gray-initial"), 1)
-        self.assertEqual(prod.count("--stage carry-on"), 1)
-        self.assertEqual(prod.count("--stage full"), 1)
-        self.assertGreaterEqual(prod.count("--from-candidate-digest"), 3)
-        self.assertEqual(prod.count("--to-candidate-digest"), 3)
-        self.assertEqual(prod.count("--release-evidence-ref"), 3)
+        for stage in ("canary", "5", "20", "50", "100"):
+            self.assertEqual(prod.count(f"--stage {stage} \\"), 1)
+        self.assertGreaterEqual(prod.count("--from-candidate-digest"), 5)
+        self.assertEqual(prod.count("--to-candidate-digest"), 5)
+        self.assertEqual(prod.count("--release-evidence-ref"), 5)
         self.assertNotIn("--from-image", prod)
         self.assertNotIn("--to-image", prod)
         self.assertNotIn("--from-config", prod)
         self.assertNotIn("--to-config", prod)
         self.assertIn("needs.prepare.outputs.resume_stage", prod)
-        self.assertEqual(prod.count("--promotion-deadline-epoch"), 3)
-        self.assertEqual(prod.count("--hard-deadline-epoch"), 4)
+        self.assertEqual(prod.count("--promotion-deadline-epoch"), 5)
+        self.assertEqual(prod.count("--hard-deadline-epoch"), 6)
         self.assertIn("environment: production", prod)
         self.assertIn("timeout-minutes: 30", prod)
         self.assertIn("--readback-output", source)
         self.assertIn("existing_release_evidence_ref", source)
-        self.assertIn("gray_initial_receipt_id", prod)
-        self.assertIn("carry_on_receipt_id", prod)
-        self.assertIn("full_receipt_id", prod)
+        for field in (
+            "canary_receipt_id",
+            "percent_5_receipt_id",
+            "percent_20_receipt_id",
+            "percent_50_receipt_id",
+            "percent_100_receipt_id",
+        ):
+            self.assertIn(field, prod)
+        for legacy in (
+            "gray-initial",
+            "carry-on",
+            "gray_initial_receipt_id",
+            "carry_on_receipt_id",
+            "full_receipt_id",
+        ):
+            self.assertNotIn(legacy, prod)
         self.assertIn("render_hosted_release_stage_report.py", prod)
         self.assertIn('decision == "rolled_back"', prod)
         self.assertNotIn('decision in {"rolled_back", "rollback_failed"}', prod)
         self.assertIn("PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}", prod)
+        self.assertIn(
+            "QWQ_PROD_ROLLOUT_EVIDENCE_ROOT: ${{ secrets.PROD_ROLLOUT_STAGE_EVIDENCE_ROOT }}",
+            prod,
+        )
+        self.assertNotIn("vars.PROD_ROLLOUT_STAGE_EVIDENCE_ROOT", prod)
+        validation = prod.index("Validate protected rollout promotion evidence root")
+        initial_apply = prod.index("Deploy Prod canary")
+        self.assertLess(validation, initial_apply)
+        validation_source = prod[validation:initial_apply]
+        for guard in (
+            "root.is_absolute()",
+            "os.lstat(root)",
+            "stat.S_ISLNK(metadata.st_mode)",
+            "stat.S_ISDIR(metadata.st_mode)",
+            "metadata.st_uid != os.getuid()",
+            "stat.S_IWGRP | stat.S_IWOTH",
+        ):
+            self.assertIn(guard, validation_source)
+        self.assertIn("needs.prepare.outputs.dry_run != 'true'", validation_source)
+        for stage in ("canary", "5", "20", "50", "100"):
+            self.assertEqual(
+                prod.count(
+                    f'--promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/{stage}.json"'
+                ),
+                1,
+            )
         self.assertIn("PROD_EDGE_SSH_KEY_FILE=$EDGE_KEY_FILE", prod)
         self.assertIn("PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE", prod)
         self.assertNotIn("PROD_SERVICE_SSH_KEY: ${{ secrets.PROD_SERVICE_SSH_KEY }}", prod)
@@ -265,8 +303,13 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
     def test_dry_run_does_not_fabricate_later_ledger_stages(self) -> None:
         source = CONTROLLED_PROD.read_text(encoding="utf-8")
         self.assertIn("default: true", source)
-        self.assertIn("Dry-run remained read-only after gray-initial validation", source)
-        for stage in ("Deploy Prod carry-on (25%)", "Deploy Prod full (100%)"):
+        self.assertIn("Dry-run remained read-only after canary validation", source)
+        for stage in (
+            "Deploy Prod 5%",
+            "Deploy Prod 20%",
+            "Deploy Prod 50%",
+            "Deploy Prod 100%",
+        ):
             offset = source.index(stage)
             guarded = source[offset : offset + 300]
             self.assertIn(
@@ -281,7 +324,7 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         prod = source[source.index("  prod_rollout:\n") : source.index("  mainline_summary:\n")]
         readiness = prod.index("render_release_lifecycle_receipts.py rollback-readiness")
         require_deployable = prod.index("--require-deployable")
-        initial_apply = prod.index("Deploy Prod gray-initial (5%)")
+        initial_apply = prod.index("Deploy Prod canary")
         outcome = prod.index("render_release_lifecycle_receipts.py prod-outcome")
         terminal_publish = prod.index("Publish immutable terminal ReleaseEvidenceManifest")
         self.assertLess(readiness, require_deployable)

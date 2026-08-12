@@ -21,6 +21,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
+import 'package:uuid/uuid.dart';
 
 /// 群管理员设置页 — 多选最多 3 人
 class GroupAdminsPage extends ConsumerStatefulWidget {
@@ -38,6 +39,9 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   // 本地选中集合，从 Provider state 初始化后独立管理
   final Set<String> _selectedIds = {};
   bool _initialized = false;
+  bool _selectionDirty = false;
+  bool _submitting = false;
+  String? _pendingIdempotencyKey;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
@@ -47,19 +51,28 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
     super.dispose();
   }
 
-  /// 从 Provider state 初始化选中集合（只初始化一次）
-  void _initSelectedIds(List<ConversationMemberListRow> members) {
-    if (_initialized) return;
-    _initialized = true;
-    for (final m in members) {
-      if (m.role == 'admin') {
-        _selectedIds.add(m.userId);
-      }
+  /// 未编辑时始终以最新 Remote roster 同步选择；编辑后保留待提交意图。
+  void _syncSelectedIds(List<ConversationMemberListRow> members) {
+    if (_selectionDirty || _submitting) return;
+    final next = members
+        .where((member) => member.role == 'admin')
+        .map((member) => member.userId)
+        .toSet();
+    if (_initialized &&
+        next.length == _selectedIds.length &&
+        next.containsAll(_selectedIds)) {
+      return;
     }
+    _initialized = true;
+    _selectedIds
+      ..clear()
+      ..addAll(next);
   }
 
   void _toggleMember(String userId) {
     setState(() {
+      _selectionDirty = true;
+      _pendingIdempotencyKey = null;
       if (_selectedIds.contains(userId)) {
         _selectedIds.remove(userId);
       } else {
@@ -84,6 +97,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
   }
 
   Future<void> _onDone() async {
+    if (_submitting) return;
     final previousAdminIds = ref
         .read(conversationMembersProvider(widget.conversationId))
         .members
@@ -92,16 +106,25 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
         .toSet();
     final added = _selectedIds.difference(previousAdminIds);
     final removed = previousAdminIds.difference(_selectedIds);
+    final idempotencyKey = _pendingIdempotencyKey ?? const Uuid().v4();
+    final desiredAdminIds = _selectedIds.toList(growable: false)..sort();
+    setState(() {
+      _submitting = true;
+      _pendingIdempotencyKey = idempotencyKey;
+    });
     try {
       await ref
           .read(conversationMembersProvider(widget.conversationId).notifier)
-          .updateGroupAdmins(_selectedIds.toList());
+          .updateGroupAdmins(desiredAdminIds, idempotencyKey: idempotencyKey);
       _recordAdminGovernanceOutcomes(
         added: added,
         removed: removed,
         outcome: ChatInteractionOutcome.succeeded,
       );
-      if (mounted) context.pop();
+      if (mounted) {
+        setState(() => _submitting = false);
+        context.pop();
+      }
     } catch (error) {
       _recordAdminGovernanceOutcomes(
         added: added,
@@ -112,6 +135,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
       if (!mounted) {
         return;
       }
+      setState(() => _submitting = false);
       final resolved = runtimeErrorSemantic(
         context,
         error: error,
@@ -191,9 +215,8 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
         .where((m) => m.role != 'owner' && !m.isCurrentUser)
         .toList();
 
-    // 首次加载完成后初始化选中集合
-    if (!membersState.isLoading && allMembers.isNotEmpty) {
-      _initSelectedIds(membersState.members);
+    if (!membersState.isLoading && membersState.error == null) {
+      _syncSelectedIds(membersState.members);
     }
 
     final filtered = filterMemberDtosByQuery(allMembers, _searchQuery);
@@ -215,8 +238,18 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
       onBack: () => context.pop(),
       trailing: AppNavigationBarTextAction(
         label: '${CommunityText.done}(${_selectedIds.length})',
-        enabled: _selectedIds.isNotEmpty,
-        onPressed: _selectedIds.isEmpty ? null : _onDone,
+        enabled:
+            _initialized &&
+            membersState.isOwner &&
+            !membersState.isLoading &&
+            !_submitting,
+        onPressed:
+            _initialized &&
+                membersState.isOwner &&
+                !membersState.isLoading &&
+                !_submitting
+            ? _onDone
+            : null,
       ),
       body: Column(
         children: [
@@ -229,8 +262,43 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
             onSelectedMemberTap: _toggleMember,
           ),
           Expanded(
-            child: membersState.isLoading
+            child: membersState.isLoading && membersState.members.isEmpty
                 ? AppRequestFeedback.section()
+                : !membersState.isOwner
+                ? AppPageErrorState(
+                    semantic: runtimeErrorSemantic(
+                      context,
+                      error: StateError(
+                        'group administration requires the current owner',
+                      ),
+                      category: UiErrorCategory.permissionRequired,
+                      scope: UiErrorScope.page,
+                    ),
+                  )
+                : membersState.error != null && membersState.members.isEmpty
+                ? AppPageErrorState(
+                    semantic: runtimeErrorSemantic(
+                      context,
+                      error: membersState.error!,
+                      category: UiErrorCategory.pageLoad,
+                      scope: UiErrorScope.page,
+                    ),
+                    onRecovery: (action) async {
+                      if (action.type != UiErrorActionType.retry &&
+                          action.type != UiErrorActionType.resubmit) {
+                        return UiRecoveryOutcome.cancelled;
+                      }
+                      return await ref
+                              .read(
+                                conversationMembersProvider(
+                                  widget.conversationId,
+                                ).notifier,
+                              )
+                              .load()
+                          ? UiRecoveryOutcome.recovered
+                          : UiRecoveryOutcome.stillBlocked;
+                    },
+                  )
                 : ListView(
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.containerMd,
@@ -239,6 +307,28 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
                       AppSpacing.containerLg,
                     ),
                     children: [
+                      if (membersState.error != null)
+                        AppSectionErrorCard(
+                          semantic: runtimeErrorSemantic(
+                            context,
+                            error: membersState.error!,
+                            category: UiErrorCategory.sectionLoad,
+                            scope: UiErrorScope.section,
+                          ),
+                          onAction: (action) async {
+                            if (action.type != UiErrorActionType.retry &&
+                                action.type != UiErrorActionType.resubmit) {
+                              return;
+                            }
+                            await ref
+                                .read(
+                                  conversationMembersProvider(
+                                    widget.conversationId,
+                                  ).notifier,
+                                )
+                                .load();
+                          },
+                        ),
                       if (filtered.isNotEmpty)
                         InsetGroupedMemberListCard(
                           isDark: isDark,

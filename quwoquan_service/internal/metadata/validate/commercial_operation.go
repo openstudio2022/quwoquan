@@ -489,10 +489,10 @@ func validateCommercialOperation(
 			operation.ID,
 		))
 	}
-	unsafeMethod := operation.Method == "POST" ||
+	unsafeMethod := operation.Transport != "graphql" && (operation.Method == "POST" ||
 		operation.Method == "PUT" ||
 		operation.Method == "PATCH" ||
-		operation.Method == "DELETE"
+		operation.Method == "DELETE")
 	if operation.Reliability.RetryMode == "none" &&
 		operation.Reliability.MaxAttempts > 1 {
 		issues = append(issues, issue(

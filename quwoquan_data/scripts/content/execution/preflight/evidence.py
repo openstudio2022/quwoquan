@@ -21,7 +21,6 @@ def compact_ready_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
     capacity = _mapping(report.get("capacitySoak"))
     workspace_smoke = _mapping(report.get("workspaceSmoke"))
     catalog = _mapping(capacity.get("modelCatalog"))
-    fleet = _mapping(preflight.get("reliableTaskFleet"))
     capacity_runs = [
         {
             "attempt": row.get("attempt"),
@@ -62,15 +61,6 @@ def compact_ready_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
             "ready": bool(network.get("checked")) and bool(network.get("ready")),
             "skipped": bool(network.get("skipped")),
             "issues": list(network.get("issues") or []),
-        },
-        "reliableTaskFleet": {
-            "checked": bool(fleet.get("checked")),
-            "ready": bool(fleet.get("ready")),
-            "target": fleet.get("target"),
-            "mongo": bool(fleet.get("mongo")),
-            "redis": bool(fleet.get("redis")),
-            "owned": bool(fleet.get("owned")),
-            "issues": list(fleet.get("issues") or []),
         },
         "semanticAgentStartup": {
             "provider": startup.get("provider"),

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+import content.source.research.scale_source_pool_image_video as image_video_projection
 from content.source.professional_image_discovery_governed import (
     build_professional_image_governed_candidate_catalog,
 )
@@ -21,6 +22,26 @@ D_CAT = "sha256:" + "c" * 64
 D_PLAN = "sha256:" + "d" * 64
 D_IMAGE = "sha256:" + "1" * 64
 D_VIDEO = "sha256:" + "2" * 64
+ENTITY_CATALOG_REF = "quwoquan_data/reference/travel/entities/china"
+
+
+@pytest.fixture(autouse=True)
+def _frozen_entity_catalog(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        image_video_projection,
+        "load_entity_bindings",
+        lambda _path: (
+            ENTITY_CATALOG_REF,
+            D_CAT,
+            {
+                "entity-1": {
+                    "entityId": "entity-1",
+                    "entityType": "地点/景区",
+                    "entityAliases": ["Entity One", "entity-1"],
+                }
+            },
+        ),
+    )
 
 
 def _digest(value: dict) -> str:
@@ -97,7 +118,36 @@ def _catalog(root: Path) -> dict:
 
 
 def _safety() -> dict:
-    return {"status": "passed", "entityMatch": "matched", "privacyRisk": "none", "minorRisk": "none", "maliciousMediaRisk": "none", "watermarkStatus": "absent", "reviewedAt": "2026-08-08T00:01:00Z", "reviewer": "fixture-reviewer", "evidenceRef": "evidence/safety.json"}
+    return {"status": "passed", "entityMatch": "matched", "privacyRisk": "none", "minorRisk": "none", "maliciousMediaRisk": "none", "watermarkStatus": "absent", "reviewedAt": "2026-08-08T00:01:00Z", "reviewer": "fixture-reviewer", "evidenceRef": "evidence/safety.json", "safetyEvidenceFileSha256": "sha256:" + "f" * 64}
+
+
+def _image_source_attribution(
+    *,
+    platform: str = "Pinterest",
+    creator: str = "Photographer A",
+    source_url: str = "https://www.pinterest.com/pin/1/",
+    original_asset_url: str = "https://www.pinterest.com/pin/1/",
+) -> dict:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": creator,
+        "platform": platform,
+        "sourcePostUrl": source_url,
+        "originalAssetUrl": original_asset_url,
+        "attributionText": f"{creator} / {platform}",
+        "rightsBasis": "unknown",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "authorizationProofUrl": None,
+        "termsUrl": "https://policy.pinterest.com/terms",
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-08T00:00:00Z",
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
 
 
 def _image_acquisition(*, path: str = "manual_file", accepted: bool = True) -> dict:
@@ -105,6 +155,13 @@ def _image_acquisition(*, path: str = "manual_file", accepted: bool = True) -> d
     status = "acquired" if accepted else "failed"
     spec = None
     if accepted:
+        source_attribution = _image_source_attribution(
+            original_asset_url=(
+                "https://i.pinimg.com/originals/aa/bb/image.jpg"
+                if path != "manual_file"
+                else "https://www.pinterest.com/pin/1/"
+            )
+        )
         spec = {
             "url": "file:///fixture/image.jpg", "sourceUrl": "https://www.pinterest.com/pin/1/",
             "collectionPageUrl": "https://www.pinterest.com/pin/1/", "originalAssetUrl": "https://i.pinimg.com/originals/aa/bb/image.jpg",
@@ -116,7 +173,10 @@ def _image_acquisition(*, path: str = "manual_file", accepted: bool = True) -> d
             "licenseSnapshot": "captured", "usageScope": "internal_reference", "modelReleaseStatus": "not_required",
             "termsUrl": "https://policy.pinterest.com/terms", "authorizationProof": "", "caption": "Landscape",
             "relevance": "entity landscape", "width": 1000, "height": 800,
+            "sourceAttribution": source_attribution,
         }
+    else:
+        source_attribution = None
     asset = {
         "assetId": "image-1", "entityId": "entity-1", "observedEntityId": "entity-1", "entityAliases": ["Entity One"],
         "displayName": "Image One", "discoveryCandidateId": "pinterest:1111111111111111",
@@ -132,6 +192,7 @@ def _image_acquisition(*, path: str = "manual_file", accepted: bool = True) -> d
         "termsUrl": "https://policy.pinterest.com/terms", "authorizationProof": "", "rightsIssues": ["authorization pending"],
         "caption": "Landscape", "relevance": "entity landscape", "safetyReview": _safety(), "withdrawalRequired": True,
         "failureCode": "" if accepted else "DATA.SOURCE.ACQUISITION_FAILED", "failure": "" if accepted else "failed", "planImageSpec": spec,
+        "sourceAttribution": source_attribution,
     }
     provider = {"displayName": "Pinterest", "provider": "pinterest", "plannedAssetCount": 1, "discoveredAssetCount": 1,
                 "downloadedAssetCount": int(accepted), "acceptedAssetCount": int(accepted), "rejectedAssetCount": int(not accepted),
@@ -159,10 +220,14 @@ def _popularity(*, percentile: float | None = 0.9) -> dict:
             "comparisonCandidateCount": 2 if percentile is not None else 0}
 
 
-def _video_catalog(*, content_sha: str = D_VIDEO) -> dict:
+def _video_catalog(
+    *,
+    content_sha: str = D_VIDEO,
+    first_percentile: float | None = 0.9,
+) -> dict:
     candidates = []
-    for ordinal, percentile in ((1, 0.9), (2, 0.1)):
-        popularity = _popularity(percentile=percentile)
+    for ordinal, candidate_percentile in ((1, first_percentile), (2, 0.1)):
+        popularity = _popularity(percentile=candidate_percentile)
         if ordinal == 2:
             popularity = {**popularity, "playCount": 100, "popularityScore": 3300}
         candidates.append({
@@ -254,9 +319,14 @@ def _review(kind: str, asset: dict, acquisition: dict, *, acquisition_ref: str, 
         snapshot.update(licenseSnapshot=asset["licenseSnapshot"], usageScope=asset["usageScope"], modelReleaseStatus=asset["modelReleaseStatus"])
     else:
         snapshot.update(modelReleaseStatus=asset["modelReleaseStatus"], mediaProbe=asset["mediaProbe"], popularitySignals=asset["popularitySignals"])
-        snapshot.update({field: asset[field] for field in (
-            "popularCandidateId", "popularCatalogRef", "popularCatalogDigest",
-            "popularCatalogFileSha256")})
+        snapshot.update({
+            field: asset[field]
+            for field in (
+                "popularCandidateId", "popularCatalogRef", "popularCatalogDigest",
+                "popularCatalogFileSha256",
+            )
+            if asset.get(field)
+        })
     evidence = {"executionId": f"{kind}-execution", "objectRef": f"posts/{kind}/entity-1", "provider": "cursor_sdk", "model": "auto", "runId": f"{kind}-run", "evidenceRef": f"evidence/{kind}.json", "evidenceSha256": D_IMAGE}
     reviewer = {**evidence, "modelFamily": "cursor-auto", "resultHash": D_VIDEO}
     judgment = {"rightsStatus": "unverified", "authorizationRequired": True, "distributionDecision": "research_allowed", "safetyStatus": "passed",
@@ -277,7 +347,10 @@ def _fixture(root: Path, *, image_path: str = "manual_file", percentile: float |
             "video_catalog": "catalog/video.json", "video_acq": "acquisition/video.json", "video_review": "reviews/video.json"}
     catalog = _catalog(root)
     image = _image_acquisition(path=image_path)
-    video_catalog = _video_catalog(content_sha=video_sha)
+    video_catalog = _video_catalog(
+        content_sha=video_sha,
+        first_percentile=percentile,
+    )
     _write(root, refs["catalog"], catalog)
     _write(root, refs["video_catalog"], video_catalog)
     video = _video_acquisition(
@@ -295,6 +368,7 @@ def _fixture(root: Path, *, image_path: str = "manual_file", percentile: float |
 def _project(root: Path, refs: dict) -> dict:
     return project_scale_source_pool_image_video(
         evidence_root=root, target_scale="M100", source_revision=D_REV, source_digest=D_SRC, entity_catalog_digest=D_CAT,
+        entity_catalog_ref=ENTITY_CATALOG_REF,
         image_catalog_refs=[refs["catalog"]], image_acquisition_refs=[refs["image_acq"]], image_review_refs=[refs["image_review"]],
         video_catalog_refs=[refs["video_catalog"]], video_acquisition_refs=[refs["video_acq"]], video_review_refs=[refs["video_review"]],
     )
@@ -317,6 +391,23 @@ def _rewrite_image(root: Path, refs: dict, image: dict) -> None:
     )
 
 
+def _rewrite_video(root: Path, refs: dict, video: dict) -> None:
+    stable = {key: value for key, value in video.items() if key != "receiptDigest"}
+    video = {**stable, "receiptDigest": _digest(stable)}
+    _write(root, refs["video_acq"], video)
+    _write(
+        root,
+        refs["video_review"],
+        _review(
+            "video",
+            video["assets"][0],
+            video,
+            acquisition_ref=refs["video_acq"],
+            acquisition_sha=_file_sha(root, refs["video_acq"]),
+        ),
+    )
+
+
 def test_projection_recomputes_documents_and_returns_deterministic_scale_rows(tmp_path: Path) -> None:
     refs = _fixture(tmp_path)
     first = _project(tmp_path, refs)
@@ -325,6 +416,8 @@ def test_projection_recomputes_documents_and_returns_deterministic_scale_rows(tm
     assert [row["carrier"] for row in first["candidates"]] == ["image", "video"]
     image, video = first["candidates"]
     assert image["provider"] == "pinterest" and image["generated"] is False
+    assert image["entityRef"] == "/entity/地点/景区/entity-1"
+    assert image["observedEntityRef"] == image["entityRef"]
     assert image["sourceUnitRef"] == refs["catalog"] and image["acquisitionRef"] == refs["image_acq"]
     assert video["videoReadiness"]["premiumEligible"] is True
     assert video["videoReadiness"]["popularityPercentile"] == 0.9
@@ -332,36 +425,141 @@ def test_projection_recomputes_documents_and_returns_deterministic_scale_rows(tm
     assert all(_file_sha(tmp_path, item["ref"]) == item["fileSha256"] for item in first["inputDocuments"])
 
 
+def test_projection_accepts_image_only_current_wave_without_video_evidence(
+    tmp_path: Path,
+) -> None:
+    refs = _fixture(tmp_path)
+
+    projected = project_scale_source_pool_image_video(
+        evidence_root=tmp_path,
+        target_scale="M100",
+        source_revision=D_REV,
+        source_digest=D_SRC,
+        entity_catalog_digest=D_CAT,
+        entity_catalog_ref=ENTITY_CATALOG_REF,
+        image_catalog_refs=[refs["catalog"]],
+        image_acquisition_refs=[refs["image_acq"]],
+        image_review_refs=[refs["image_review"]],
+        video_catalog_refs=None,
+        video_acquisition_refs=None,
+        video_review_refs=None,
+    )
+
+    assert [row["carrier"] for row in projected["candidates"]] == ["image"]
+    assert {item["kind"] for item in projected["inputDocuments"]} == {
+        "image_catalog",
+        "image_acquisition",
+        "image_review",
+    }
+
+
+def test_frozen_image_pool_materializes_reviewed_cas_without_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from content.source.research import scale_source_pool_runtime as runtime
+
+    body = b"frozen-professional-image" * 160
+    content_sha = "sha256:" + hashlib.sha256(body).hexdigest()
+    receipt = _image_acquisition()
+    asset = receipt["assets"][0]
+    asset.update(
+        assetId="image-1",
+        contentSha256=content_sha,
+        assetRef=f"cas/sha256/{content_sha[7:9]}/{content_sha[7:]}.jpg",
+        bytes=len(body),
+    )
+    asset["planImageSpec"].update(
+        contentSha256=content_sha,
+        url=f"file://{tmp_path / asset['assetRef']}",
+    )
+    stable = {key: value for key, value in receipt.items() if key != "receiptDigest"}
+    receipt = {**stable, "receiptDigest": _digest(stable)}
+    receipt_ref = (
+        "local/workspace/source-acquisition/openverse-smoke/"
+        "preparations/professional-image/receipts/image.json"
+    )
+    _write(tmp_path, receipt_ref, receipt)
+    asset_path = (tmp_path / receipt_ref).parent.parent / asset["assetRef"]
+    asset_path.parent.mkdir(parents=True, exist_ok=True)
+    asset_path.write_bytes(body)
+    candidate = {
+        "candidateId": "image-candidate-1",
+        "carrier": "image",
+        "objectRef": "posts/image/image-1",
+        "entityRef": "/entity/地点/景区/entity-1",
+        "contentSha256": content_sha,
+        "acquisitionRef": receipt_ref,
+        "acquisitionDigest": receipt["receiptDigest"],
+        "acquisitionFileSha256": _file_sha(tmp_path, receipt_ref),
+        "sourceAttribution": asset["sourceAttribution"],
+        "sourcePoolEvidenceRoot": tmp_path,
+    }
+    monkeypatch.setattr(
+        runtime,
+        "frozen_scale_source_pool_candidates",
+        lambda *_args, **_kwargs: (candidate,),
+    )
+    captured: dict = {}
+
+    def write_source_unit(_object_dir: Path, **kwargs: object) -> dict:
+        captured.update(kwargs)
+        return {"sourceUnitId": kwargs["frozen_source_unit_id"], "assetCount": 1,
+                "url": kwargs["url"], "sourceId": kwargs["source_id"]}
+
+    monkeypatch.setattr(runtime, "write_source_unit", write_source_unit)
+    monkeypatch.setattr(runtime, "resolve_entity_object_dir", lambda *_args, **_kwargs: tmp_path)
+    monkeypatch.setattr(runtime, "_execution_uses_scale_source_pool", lambda _execution_id: True)
+
+    result = runtime.frozen_scale_source_pool_fetch_result(
+        "20260812--travel-image-m100--china--scale-001",
+        selected_lanes={"image"},
+        entity_id="entity-1",
+        entity_type="地点/景区",
+        entity_index=1,
+    )
+
+    assert result is not None and result["sourceCount"] == 1
+    assert captured["source"] == {"sourceAttribution": asset["sourceAttribution"]}
+    image = captured["images"][0]
+    assert image["sourcePath"] == asset_path
+    assert image["acquisitionReceiptRef"] == (
+        "openverse-smoke/preparations/professional-image/receipts/image.json"
+    )
+    assert image["professionalAssetId"] == "image-1"
+    assert image["professionalContentSha256"] == content_sha
+
+
 def test_projection_allows_wikimedia_as_a_governed_supplement(
     tmp_path: Path,
 ) -> None:
     refs = _fixture(tmp_path)
-    evidence_ref = "evidence/wikimedia-manual.json"
     source_page = "https://commons.wikimedia.org/wiki/File:West_Lake.jpg"
-    evidence = {
-        "schema": "quwoquan_data.professional_image_manual_file_evidence",
-        "provider": "wikimedia_commons",
-        "acquisitionPath": "manual_file",
-        "discoveryCandidateId": "wikimedia_commons:1111111111111111",
-        "sourcePageUrl": source_page,
-        "assetUrl": "",
-        "manualFile": "manual/west-lake.jpg",
-        "apiEvidence": "",
-        "creator": "Commons Photographer",
-        "title": "Wikimedia Original",
-        "observedAt": "2026-08-08T00:00:00Z",
-        "contentSha256": D_IMAGE,
-        "originalAssetCandidate": True,
-        "generated": False,
-    }
-    _write(tmp_path, evidence_ref, evidence)
-    catalog = build_professional_image_governed_candidate_catalog(
-        discovery_plan_id="professional-image-discovery-1111111111111111",
-        discovery_plan_digest=D_PLAN,
-        created_at="2026-08-08T00:00:00Z",
-        evidence_root=tmp_path,
-        evidence_refs=[evidence_ref],
+    catalog = _catalog(tmp_path)
+    candidate = catalog["candidates"][0]
+    candidate.update(
+        candidateId="wikimedia_commons:1111111111111111",
+        provider="wikimedia_commons",
+        sourcePageUrl=source_page,
+        creator="Commons Photographer",
+        title="Wikimedia Original",
     )
+    candidate["originalAssetIdentity"].update(
+        sourceUrl=source_page,
+        manualFile="manual/west-lake.jpg",
+    )
+    catalog["providerCounts"] = [{
+        "provider": "wikimedia_commons",
+        "displayName": "Wikimedia Commons",
+        "acquisitionPath": "manual_file",
+        "candidateCount": 1,
+    }]
+    core = {key: catalog[key] for key in (
+        "catalogRevision", "discoveryPlanId", "discoveryPlanDigest", "createdAt",
+        "providerCounts", "candidateCount", "candidates",
+    )}
+    catalog["catalogDigest"] = _digest(core)
+    catalog["catalogId"] = f"professional-image-governed-{catalog['catalogDigest'][7:23]}"
     _write(tmp_path, refs["catalog"], catalog)
 
     image = _image_acquisition()
@@ -385,7 +583,14 @@ def test_projection_allows_wikimedia_as_a_governed_supplement(
         discoveryCandidateId="wikimedia_commons:1111111111111111",
         creator="Commons Photographer",
         credit="Commons Photographer",
+        sourceAttribution=_image_source_attribution(
+            platform="Wikimedia Commons",
+            creator="Commons Photographer",
+            source_url=source_page,
+            original_asset_url=source_page,
+        ),
     )
+    asset["sourceAttribution"] = spec["sourceAttribution"]
     image["providerAssetCounts"][0].update(
         displayName="Wikimedia Commons", provider="wikimedia_commons"
     )
@@ -453,12 +658,53 @@ def test_projection_rejects_discovery_without_acquired_image(tmp_path: Path) -> 
     assert caught.value.code == PROJECTION_SHORTFALL
 
 
-def test_projection_rejects_null_video_popularity_percentile(tmp_path: Path) -> None:
+def test_projection_keeps_ranking_ineligible_playable_video_as_research(
+    tmp_path: Path,
+) -> None:
     refs = _fixture(tmp_path, percentile=None)
-    with pytest.raises(ScaleSourcePoolProjectionError) as caught:
-        _project(tmp_path, refs)
-    assert caught.value.code == PROJECTION_INVALID
-    assert "percentile" in str(caught.value)
+    projected = _project(tmp_path, refs)
+    video = next(row for row in projected["candidates"] if row["carrier"] == "video")
+    assert video["videoReadiness"]["playable"] is True
+    assert video["videoReadiness"]["popularityPercentile"] is None
+    assert video["videoReadiness"]["comparisonBucket"] is None
+
+
+def test_projection_accepts_playable_video_without_popular_catalog_binding(
+    tmp_path: Path,
+) -> None:
+    refs = _fixture(tmp_path, percentile=None)
+    video = json.loads((tmp_path / refs["video_acq"]).read_text(encoding="utf-8"))
+    asset = video["assets"][0]
+    for field in (
+        "popularCandidateId",
+        "popularCatalogRef",
+        "popularCatalogDigest",
+        "popularCatalogFileSha256",
+    ):
+        asset[field] = ""
+    _rewrite_video(tmp_path, refs, video)
+
+    projected = project_scale_source_pool_image_video(
+        evidence_root=tmp_path,
+        target_scale="M100",
+        source_revision=D_REV,
+        source_digest=D_SRC,
+        entity_catalog_digest=D_CAT,
+        entity_catalog_ref=ENTITY_CATALOG_REF,
+        image_catalog_refs=[refs["catalog"]],
+        image_acquisition_refs=[refs["image_acq"]],
+        image_review_refs=[refs["image_review"]],
+        video_catalog_refs=[],
+        video_acquisition_refs=[refs["video_acq"]],
+        video_review_refs=[refs["video_review"]],
+    )
+
+    candidate = next(
+        row for row in projected["candidates"] if row["carrier"] == "video"
+    )
+    assert candidate["sourceUnitRef"] == refs["video_acq"]
+    assert candidate["videoReadiness"]["playable"] is True
+    assert candidate["videoReadiness"]["popularityPercentile"] is None
 
 
 def test_projection_rejects_identity_drift_duplicate_content_and_symlink(tmp_path: Path) -> None:
@@ -466,7 +712,8 @@ def test_projection_rejects_identity_drift_duplicate_content_and_symlink(tmp_pat
     with pytest.raises(ScaleSourcePoolProjectionError, match="identity drift"):
         project_scale_source_pool_image_video(
             evidence_root=tmp_path, target_scale="M100", source_revision=D_REV, source_digest="sha256:" + "f" * 64,
-            entity_catalog_digest=D_CAT, image_catalog_refs=[refs["catalog"]], image_acquisition_refs=[refs["image_acq"]],
+            entity_catalog_digest=D_CAT, entity_catalog_ref=ENTITY_CATALOG_REF,
+            image_catalog_refs=[refs["catalog"]], image_acquisition_refs=[refs["image_acq"]],
             image_review_refs=[refs["image_review"]], video_catalog_refs=[refs["video_catalog"]], video_acquisition_refs=[refs["video_acq"]], video_review_refs=[refs["video_review"]],
         )
     duplicate_refs = _fixture(tmp_path / "duplicate", video_sha=D_IMAGE)
@@ -477,6 +724,7 @@ def test_projection_rejects_identity_drift_duplicate_content_and_symlink(tmp_pat
     with pytest.raises(ScaleSourcePoolProjectionError, match="symlink"):
         project_scale_source_pool_image_video(
             evidence_root=tmp_path, target_scale="M100", source_revision=D_REV, source_digest=D_SRC,
-            entity_catalog_digest=D_CAT, image_catalog_refs=[link.name], image_acquisition_refs=[refs["image_acq"]],
+            entity_catalog_digest=D_CAT, entity_catalog_ref=ENTITY_CATALOG_REF,
+            image_catalog_refs=[link.name], image_acquisition_refs=[refs["image_acq"]],
             image_review_refs=[refs["image_review"]], video_catalog_refs=[refs["video_catalog"]], video_acquisition_refs=[refs["video_acq"]], video_review_refs=[refs["video_review"]],
         )

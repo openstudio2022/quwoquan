@@ -232,7 +232,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         capabilities.wideScreenLayout && AppSpacing.isWideLayout(context);
     final showInstallBanner = capabilities.promotesAppInstall;
     final shellBindings = ref.watch(mainAppShellBindingsProvider);
-    final webShellDependencies = ref.watch(webMainAppShellDependenciesProvider);
+    final webShellDependencies = useWebWideShell
+        ? ref.watch(webMainAppShellDependenciesProvider)
+        : null;
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -259,7 +261,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       ? Stack(
                           children: [
                             WebMainAppShell(
-                              dependencies: webShellDependencies,
+                              dependencies: webShellDependencies!,
                               currentDestination: _currentDestination,
                               currentLocation: _currentLocation,
                               backgroundColor: shellBackground,

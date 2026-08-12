@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/supply_chain_drill_receipt.schema.json",
+  "title": "Canonical supply-chain drill receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "drillId",
+    "releaseId",
+    "environment",
+    "profile",
+    "platform",
+    "deviceId",
+    "manifestDigest",
+    "result",
+    "startedAt",
+    "endedAt",
+    "runtimeRestored",
+    "stages",
+    "counts"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.supply_chain_drill_receipt"},
+    "drillId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "profile": {"enum": ["inspect", "delivery", "rehearsal"]},
+    "platform": {"type": "string"},
+    "deviceId": {"type": "string"},
+    "manifestDigest": {"type": "string", "pattern": "^(|sha256:[0-9a-f]{64})$"},
+    "result": {"enum": ["ready", "blocked"]},
+    "startedAt": {"type": "string", "minLength": 1},
+    "endedAt": {"type": "string", "minLength": 1},
+    "runtimeRestored": {"type": "boolean"},
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/stage"}
+    },
+    "counts": {"$ref": "#/$defs/counts"}
+  },
+  "$defs": {
+    "count": {"type": ["integer", "null"], "minimum": 0},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "imported", "active", "searchable", "recommendable"],
+      "properties": {
+        "expected": {"$ref": "#/$defs/count"},
+        "imported": {"$ref": "#/$defs/count"},
+        "active": {"$ref": "#/$defs/count"},
+        "searchable": {"$ref": "#/$defs/count"},
+        "recommendable": {"$ref": "#/$defs/count"}
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "result",
+        "durationMs",
+        "input",
+        "succeeded",
+        "failed",
+        "excluded",
+        "successRate",
+        "firstBlocker",
+        "evidenceRef"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "result": {"enum": ["passed", "failed"]},
+        "durationMs": {"type": "integer", "minimum": 0},
+        "input": {"type": "object"},
+        "succeeded": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "excluded": {"type": "integer", "minimum": 0},
+        "successRate": {"type": "number", "minimum": 0, "maximum": 1},
+        "firstBlocker": {"type": "string"},
+        "evidenceRef": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

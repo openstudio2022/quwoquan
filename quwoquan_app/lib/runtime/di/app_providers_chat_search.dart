@@ -9,7 +9,6 @@ import 'package:quwoquan_app/service/content_service/media/media_upload_session/
 import 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/adapters/search_recent_history_store.dart';
 import 'package:quwoquan_app/service/tag_service/tag/tag_node_view/application/public/tag_catalog_query.dart';
-import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/chat_inbox_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/chat_inbox_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/greeting_inbox_provider.dart';
@@ -86,12 +85,8 @@ final chatRepositoryCompositionProvider = Provider<ChatRepository>((ref) {
     String clientPageId, {
     String? idempotencyKey,
   }) {
-    final persona = ref.read(activePersonaContextProvider).asData?.value;
-    final resolvedOwnerUserId = persona?.ownerUserId.trim() ?? '';
-    final accountId = resolvedOwnerUserId.isNotEmpty
-        ? resolvedOwnerUserId
-        : ownerUserId.trim();
-    final personaId = persona?.personaId.trim() ?? '';
+    final accountId = ownerUserId.trim();
+    final personaId = ref.read(resolvedActivePersonaIdProvider).trim();
     return CloudOperationInvocationContext(
       surfaceId: surface.id,
       routeId: surface.routeId,
@@ -144,8 +139,7 @@ final messageReceiptFactQueryProvider = Provider<MessageReceiptFactQuery>((
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (surface, clientPageId, {idempotencyKey}) {
       final ownerUserId = ref.read(resolvedOwnerUserIdProvider).trim();
-      final persona = ref.read(activePersonaContextProvider).asData?.value;
-      final personaId = persona?.personaId.trim() ?? '';
+      final personaId = ref.read(resolvedActivePersonaIdProvider).trim();
       return CloudOperationInvocationContext(
         surfaceId: surface.id,
         routeId: surface.routeId,
@@ -190,8 +184,7 @@ final chatMessageCommandWriterProvider = Provider<ChatMessageCommandWriter>((
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (surface, clientPageId, {idempotencyKey}) {
       final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
-      final persona = ref.read(activePersonaContextProvider).asData?.value;
-      final personaId = persona?.personaId.trim() ?? '';
+      final personaId = ref.read(resolvedActivePersonaIdProvider).trim();
       return CloudOperationInvocationContext(
         surfaceId: surface.id,
         clientPageId: clientPageId,
@@ -353,12 +346,8 @@ final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
     UserProductionAdapter.userSync,
     client: ref.watch(generatedCloudOperationClientProvider),
     invocationContext: (String clientPageId) {
-      final persona = ref.read(activePersonaContextProvider).asData?.value;
-      final resolvedOwnerUserId = persona?.ownerUserId.trim() ?? '';
-      final accountId = resolvedOwnerUserId.isNotEmpty
-          ? resolvedOwnerUserId
-          : ownerUserId.trim();
-      final personaId = persona?.personaId.trim() ?? '';
+      final accountId = ownerUserId.trim();
+      final personaId = ref.read(resolvedActivePersonaIdProvider).trim();
       return CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.chatList.id,
         routeId: AppUiSurfaces.chatList.routeId,
@@ -520,13 +509,12 @@ final localChatSearchSyncProvider = Provider<LocalChatSearchSyncService>((ref) {
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
   return HybridSearchRepository(
     SearchProductionComposition.searchRepository(
-      client: ref.watch(generatedCloudOperationClientProvider),
+      searchPageClient: ref.watch(generatedSearchPageGraphQLClientProvider),
       invocationContext: (clientPageId) => locationInvocationContext(
         ref,
         surface: AppUiSurfaces.globalSearchNetworkResults,
         clientPageId: clientPageId,
       ),
-      sessionIdProvider: () => ref.read(feedSessionProvider.notifier).sessionId,
     ),
     ref.watch(localChatSearchStoreProvider),
     ref.watch(localChatSearchSyncProvider),

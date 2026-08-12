@@ -56,7 +56,9 @@ void main() {
     return ProviderScope(
       overrides: [
         authSessionControllerProvider.overrideWith(_GuestHomepageSession.new),
-        behaviorRepositoryProvider.overrideWithValue(RecordingContentBehaviorRepository()),
+        behaviorRepositoryProvider.overrideWithValue(
+          RecordingContentBehaviorRepository(),
+        ),
         intersectionRepositoryProvider.overrideWithValue(
           InMemoryIntersectionRepository(),
         ),

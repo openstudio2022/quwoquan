@@ -8,6 +8,9 @@ from core import paths
 from core.io import read_json
 from core.schema import assert_valid
 
+from content.execution.campaign.m100_alpha_acceptance import (
+    validate_m100_alpha_acceptance_binding,
+)
 from content.execution.planning.semantic_preflight_admission import (
     validate_semantic_preflight_binding_at,
 )
@@ -42,6 +45,12 @@ def load_campaign_envelope(
             binding,
             semantic_selection_id=str(payload["semanticSelectionId"]),
             admitted_at=str(payload["frozenAt"]),
+            output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
+        )
+    alpha_acceptance = payload.get("m100AlphaAcceptance")
+    if alpha_acceptance is not None:
+        validate_m100_alpha_acceptance_binding(
+            alpha_acceptance,
             output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
         )
     return payload

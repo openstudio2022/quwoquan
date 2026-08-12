@@ -34,6 +34,16 @@
 - 影响 Story：[`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)、[`geo-content-trinity`](./geo-content-trinity/spec.md)、[`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)、[`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 池记录只保存准入结论，环境只消费不可变 Manifest
+- 决策：Data 作者记录只保存稳定身份、版本、过程/质量结论、证据引用与状态；Data 内容记录再增加 `usageScope` 与 `variantPurpose`。逐素材许可证、来源、署名和证明保留在 evidence receipt，不复制进推荐候选、搜索文档或 App DTO。环境 build 在同一池上选择版本并生成唯一 `releaseId + payload digest` Manifest，Content 正式导入命令原子写 Post 与 durable outbox。
+- 理由：从内容生产者看只需回答“是否结束、质量是否合格、允许在哪里用”；从环境使用者看只需回答“这个 release 精确包含什么且是否验证通过”，不需要 PoolDelta、PoolSnapshot、SampleBundle 或 EnvironmentSelection 等并列业务身份。
+- 被否决方案：按环境维护独立内容副本、把头像授权范围并入作者准入、为头像生成 commercial variant、直接 seed 推荐/搜索、把 Manifest 当首页固定列表、由 Data 修改真实用户 Persona 或 UGC。
+- 约束与影响：Research 原版与 commercial variant 共享 `contentId` 并追加版本；Research 优先最新 original，Prod 只取最新 commercial。Recommendation/Search 通过同一 Post lifecycle 消费 active Data release 与公开 UGC，Data release 切换不修改 UGC。
+- 关联要求：`REQ-001`、`REQ-002`
+- 影响 Story：[`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)、[`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)、[`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

@@ -7,9 +7,19 @@ import json
 from pathlib import Path
 
 from content.execution.execution_terminal import load_terminal_execution_evidence
+from content.execution.identity import validate_execution_id
 from core.paths import DATA_EXECUTIONS_ROOT, RELEASE_ROOT
 from core.release_layout import attestation_root, payload_file
-from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
+from core.source_digest import (
+    ExecutionBundleIdentity,
+    FrozenSourceDigest,
+    SourceDigest,
+    SourceDigestError,
+    SourceDefinitionSnapshot,
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+    parse_source_digest_document,
+)
 
 
 def _read_object(path: Path, *, issues: list[str]) -> dict[str, object] | None:
@@ -26,13 +36,29 @@ def _read_object(path: Path, *, issues: list[str]) -> dict[str, object] | None:
 
 def _document_digests(
     document: dict[str, object], *, path: Path, issues: list[str]
-) -> tuple[SourceDigest, ...] | None:
+) -> tuple[SourceDigest | FrozenSourceDigest, ...] | None:
     raw_value = document.get("sourceDigests")
     if not isinstance(raw_value, list):
         issues.append(f"{path}: sourceDigests must be an array")
         return None
+    raw_identities = document.get("sourceIdentities") or []
+    if not isinstance(raw_identities, list):
+        issues.append(f"{path}: sourceIdentities must be an array")
+        return None
+    legacy_digests = frozenset(
+        str(item.get("sourceDigest") or "")
+        for item in raw_identities
+        if isinstance(item, dict)
+        and item.get("identityKind") == "legacy_canonical_migration"
+    )
     try:
-        source_digests = tuple(SourceDigest.from_document(item) for item in raw_value)
+        source_digests = tuple(
+            parse_source_digest_document(
+                item,
+                frozen_digest_allowlist=legacy_digests,
+            )
+            for item in raw_value
+        )
     except SourceDigestError as exc:
         issues.append(f"{path}: {exc}")
         return None
@@ -47,12 +73,33 @@ def source_digest_issues(
     *,
     executions_root: Path = DATA_EXECUTIONS_ROOT,
     release_root: Path = RELEASE_ROOT,
+    candidate_execution_id: str | None = None,
 ) -> list[str]:
     """Return drift/errors without treating output as a persistent source."""
     issues: list[str] = []
-    current = current_source_digest()
+    manifest_paths: tuple[Path, ...] = ()
+    if candidate_execution_id is not None:
+        try:
+            normalized = validate_execution_id(candidate_execution_id)
+        except ValueError as exc:
+            return [
+                "GATE_BLOCK DATA.EXECUTION.CANDIDATE_ID_INVALID: " + str(exc)
+            ]
+        manifest_path = executions_root / normalized / "execution_manifest.json"
+        if not manifest_path.is_file():
+            return [
+                "GATE_BLOCK DATA.EXECUTION.CANDIDATE_NOT_FOUND: "
+                f"execution manifest does not exist: {manifest_path}"
+            ]
+        manifest_paths = (manifest_path,)
+    elif executions_root.is_dir():
+        manifest_paths = tuple(
+            sorted(executions_root.glob("*/execution_manifest.json"))
+        )
+    current_snapshot = current_source_definition_snapshot()
+    current_bundle = current_execution_bundle_identity()
     if executions_root.is_dir():
-        for manifest_path in sorted(executions_root.glob("*/execution_manifest.json")):
+        for manifest_path in manifest_paths:
             try:
                 terminal = load_terminal_execution_evidence(manifest_path.parent)
             except (OSError, TypeError, ValueError) as exc:
@@ -65,16 +112,29 @@ def source_digest_issues(
             manifest = _read_object(manifest_path, issues=issues)
             if manifest is None:
                 continue
+            if "executionBundle" not in manifest:
+                issues.append(
+                    f"{manifest_path}: GATE_BLOCK "
+                    "DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED: "
+                    "legacy nonterminal execution cannot resume"
+                )
+                continue
             try:
-                digest = SourceDigest.from_document(manifest.get("sourceDigest"))
+                digest = SourceDefinitionSnapshot.from_document(
+                    manifest.get("sourceDigest")
+                )
+                bundle = ExecutionBundleIdentity.from_document(
+                    manifest.get("executionBundle")
+                )
             except SourceDigestError as exc:
                 issues.append(f"{manifest_path}: {exc}")
                 continue
-            if digest is not None and digest != current:
+            if digest != current_snapshot or bundle != current_bundle:
                 issues.append(
-                    f"{manifest_path}: sourceDigest drift; resume requires a new execution sequence"
+                    f"{manifest_path}: candidate source snapshot/execution bundle drift; "
+                    "create a new execution sequence with retryOf"
                 )
-    if release_root.is_dir():
+    if candidate_execution_id is None and release_root.is_dir():
         for release_dir in sorted(path for path in release_root.iterdir() if path.is_dir()):
             header_path = payload_file(release_dir, "release.json")
             aggregate_path = attestation_root(release_dir) / "release.json"
@@ -101,8 +161,9 @@ def source_digest_issues(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="验证 data execution/release source digest")
-    parser.parse_args(argv)
-    issues = source_digest_issues()
+    parser.add_argument("--execution-id")
+    args = parser.parse_args(argv)
+    issues = source_digest_issues(candidate_execution_id=args.execution_id)
     if issues:
         print("[verify_source_digest] FAIL")
         for issue in issues:

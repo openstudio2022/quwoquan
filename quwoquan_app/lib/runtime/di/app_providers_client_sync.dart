@@ -29,7 +29,9 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/app
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_write_target_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_query_reader.dart';
 import 'package:quwoquan_app/service/integration_service/external_integration/connector_connection/application/connector_management_facet.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
@@ -506,9 +508,21 @@ final homepageClaimRequestCommandWriterProvider =
       (ref) => ref.watch(_homepageCommandFacetsProvider).claimRequestWriter,
     );
 
+final homepageClaimRequestQueryReaderProvider =
+    Provider<HomepageClaimRequestQueryReader>(
+      (ref) =>
+          ref.watch(_homepageSubmissionQueryFacetsProvider).claimRequestReader,
+    );
+
 final homepageStatusReportCommandWriterProvider =
     Provider<HomepageStatusReportCommandWriter>(
       (ref) => ref.watch(_homepageCommandFacetsProvider).statusReportWriter,
+    );
+
+final homepageStatusReportQueryReaderProvider =
+    Provider<HomepageStatusReportQueryReader>(
+      (ref) =>
+          ref.watch(_homepageSubmissionQueryFacetsProvider).statusReportReader,
     );
 
 final homepageQueryActorContextProvider = Provider<CloudOperationActorContext>((
@@ -584,15 +598,42 @@ final homepageIntroductionQueryProvider = Provider<HomepageIntroductionQuery>((
 final _homepageCommandFacetsProvider =
     Provider<AppProductionHomepageCommandFacets>((ref) {
       final actorContext = ref.watch(homepageQueryActorContextProvider);
+      CloudOperationInvocationContext commandInvocationContext(
+        String clientPageId,
+        AppUiSurface surface, {
+        String? idempotencyKey,
+      }) => CloudOperationInvocationContext(
+        surfaceId: surface.id,
+        routeId: surface.routeId,
+        clientPageId: clientPageId,
+        idempotencyKey: idempotencyKey ?? const Uuid().v4(),
+        actor: actorContext,
+      );
       return EntityProductionComposition.homepageCommandFacets(
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId, surface) =>
-            CloudOperationInvocationContext(
-              surfaceId: surface.id,
-              routeId: surface.routeId,
-              clientPageId: clientPageId,
-              idempotencyKey: const Uuid().v4(),
-              actor: actorContext,
-            ),
+            commandInvocationContext(clientPageId, surface),
+        claimRequestInvocationContext: commandInvocationContext,
+        statusReportInvocationContext: commandInvocationContext,
+      );
+    });
+
+final _homepageSubmissionQueryFacetsProvider =
+    Provider<AppProductionHomepageSubmissionQueryFacets>((ref) {
+      final actorContext = ref.watch(homepageQueryActorContextProvider);
+      CloudOperationInvocationContext queryInvocationContext(
+        String clientPageId,
+        AppUiSurface surface, {
+        String? idempotencyKey,
+      }) => CloudOperationInvocationContext(
+        surfaceId: surface.id,
+        routeId: surface.routeId,
+        clientPageId: clientPageId,
+        actor: actorContext,
+      );
+      return EntityProductionComposition.homepageSubmissionQueryFacets(
+        client: ref.watch(generatedCloudOperationClientProvider),
+        claimRequestInvocationContext: queryInvocationContext,
+        statusReportInvocationContext: queryInvocationContext,
       );
     });

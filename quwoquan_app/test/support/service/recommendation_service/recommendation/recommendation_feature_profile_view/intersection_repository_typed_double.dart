@@ -8,7 +8,7 @@ import 'package:quwoquan_app/service/content_service/content/intersection_visit_
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_visit_writer.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import 'intersection_fixtures.dart';
 
 /// local_contract 交集读写替身。
@@ -17,10 +17,10 @@ import 'intersection_fixtures.dart';
 /// 不可达本文件。
 class InMemoryIntersectionRepository
     implements IntersectionRepository, IntersectionVisitWriter {
-  InMemoryIntersectionRepository({ObjectScenarioSeedReader? fixtures})
-    : _fixtures = fixtures ?? objectScenarioSeedReader;
+  InMemoryIntersectionRepository({ObjectContractExampleReader? fixtures})
+    : _fixtures = fixtures ?? objectContractExampleReader;
 
-  final ObjectScenarioSeedReader _fixtures;
+  final ObjectContractExampleReader _fixtures;
   final Map<String, DateTime> _watermark = <String, DateTime>{};
 
   @override
@@ -197,7 +197,7 @@ class InMemoryIntersectionRepository
   }
 
   Map<String, Object?> get _intersectionSeed =>
-      _fixtures.requireSeedSet('content', 'intersection_core');
+      _fixtures.requireExample('content', 'intersection_core');
 
   List<IntersectionReason> get _inboxReasons => _decodeReasons(
     _intersectionSeed['inboxReasons'],

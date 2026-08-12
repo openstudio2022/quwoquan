@@ -21,6 +21,16 @@ def _governed_handoff_guard(monkeypatch: pytest.MonkeyPatch) -> None:
         "guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
     )
+    monkeypatch.setattr(
+        acquisition,
+        "load_bound_safety_evidence",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        acquisition,
+        "validate_image_safety_payload",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def _image_bytes(seed: int) -> bytes:
@@ -57,7 +67,7 @@ def _item(
 ) -> dict:
     if anonymous_asset_access is None:
         anonymous_asset_access = acquisition_path != "manual_file"
-    return {
+    item = {
         "assetId": asset_id,
         "entityId": "九寨沟",
         "observedEntityId": observed_entity_id,
@@ -99,8 +109,36 @@ def _item(
             "reviewedAt": "2026-08-05T00:05:00Z",
             "reviewer": "local-contract-reviewer",
             "evidenceRef": f"evidence/{asset_id}.json",
+            "safetyEvidenceFileSha256": "sha256:" + "f" * 64,
         },
     }
+    item["sourceAttribution"] = (
+        {
+            "isOriginal": False,
+            "originalCreatorId": None,
+            "originalCreatorName": "摄影师甲",
+            "originalCreatorProfileUrl": None,
+            "platform": "Pinterest" if source_id == "pinterest" else "图虫",
+            "sourcePostUrl": item["sourceUrl"],
+            "originalAssetUrl": item["sourceUrl"],
+            "attributionText": f"摄影师甲 / unknown / {item['sourceUrl']}",
+            "rightsBasis": "unknown",
+            "commercialAuthorizationStatus": "unverified",
+            "publicationAdmission": "research_release",
+            "authorizationProofUrl": None,
+            "termsUrl": None,
+            "riskAcceptanceId": None,
+            "watermarkStatus": "absent",
+            "audioRightsStatus": "no_audio",
+            "modelReleaseStatus": "not_required",
+            "propertyReleaseStatus": "not_required",
+            "collectedAt": "2026-08-05T00:00:00Z",
+            "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        }
+        if watermark_status == "absent"
+        else None
+    )
+    return item
 
 
 def _manifest(items: list[dict], tmp_path: Path) -> dict:
@@ -121,6 +159,9 @@ def _manifest(items: list[dict], tmp_path: Path) -> dict:
         candidate = candidates[item["sourceId"]]
         item["discoveryCandidateId"] = candidate["candidateId"]
         item["discoveryUrl"] = candidate["discoveryUrl"]
+        attribution = item.get("sourceAttribution")
+        if isinstance(attribution, dict):
+            attribution["originalAssetUrl"] = item.get("assetUrl") or item["sourceUrl"]
     return {
         "schema": "quwoquan_data.professional_image_acquisition_manifest",
         "manifestId": "pinterest-tuchong-m3",
@@ -181,7 +222,12 @@ def test_manual_pinterest_tuchong_files_are_acquired_without_faking_rights(
         == by_id["pin-1"]["planImageSpec"]["sourceUrl"]
     )
     assert by_id["pin-1"]["planImageSpec"]["rightsAuditStatus"] == "unverified"
-    for field in ("licenseSnapshot", "usageScope", "modelReleaseStatus"):
+    for field in (
+        "licenseSnapshot",
+        "usageScope",
+        "modelReleaseStatus",
+        "sourceAttribution",
+    ):
         assert by_id["pin-1"]["planImageSpec"][field] == by_id["pin-1"][field]
     assert by_id["pin-1"]["observedEntityId"] == "九寨沟"
     assert by_id["pin-1"]["entityAliases"] == ["九寨沟风景名胜区", "Jiuzhaigou"]

@@ -34,6 +34,15 @@ typedef CloudUnauthorizedRefresh =
 typedef CloudAuthoritativeSessionFailure =
     Future<void> Function(CloudException failure, String presentedAccessToken);
 
+/// Raised only for the exact minimum-build gate response. The transport still
+/// throws the canonical [CloudException]; this callback lets the App root
+/// replace ordinary business UI with the blocking, independently hosted
+/// recovery surface first.
+typedef CloudClientUpgradeRequired = void Function(CloudException failure);
+
+const String cloudClientUpgradeRequiredCode =
+    'GATEWAY.USER.client_upgrade_required';
+
 final Future<void> _neverAbort = Completer<void>().future;
 
 class CloudHttpClient {
@@ -42,6 +51,7 @@ class CloudHttpClient {
     CloudAuthTokenProvider? authTokenProvider,
     this._onUnauthorizedRefresh,
     this._onAuthoritativeSessionFailure,
+    this._onClientUpgradeRequired,
     Duration? timeout,
     this._latencyObserver,
     this._transportFailureClassifier,
@@ -56,6 +66,7 @@ class CloudHttpClient {
   final CloudAuthTokenProvider _authTokenProvider;
   final CloudUnauthorizedRefresh? _onUnauthorizedRefresh;
   final CloudAuthoritativeSessionFailure? _onAuthoritativeSessionFailure;
+  final CloudClientUpgradeRequired? _onClientUpgradeRequired;
   final Duration _timeout;
   final ApiLatencyObserver? _latencyObserver;
   final CloudTransportFailureClassifier? _transportFailureClassifier;
@@ -424,7 +435,9 @@ class CloudHttpClient {
     http.BaseRequest request,
   ) async {
     final stopwatch = Stopwatch()..start();
-    request.headers.removeWhere((key, _) => key.toLowerCase() == 'authorization');
+    request.headers.removeWhere(
+      (key, _) => key.toLowerCase() == 'authorization',
+    );
     try {
       final response = await _sendSingleAttempt(request).timeout(_timeout);
       stopwatch.stop();
@@ -769,6 +782,7 @@ class CloudHttpClient {
       requestPath: requestPath,
     );
     final first = await run(initialHeaders);
+    _notifyClientUpgradeRequiredFromResponse(first, requestPath);
     if (!_shouldRefreshAfterResponse(
       response: first,
       requestPath: requestPath,
@@ -786,7 +800,9 @@ class CloudHttpClient {
       requireAuth: requireAuth,
       requestPath: requestPath,
     );
-    return run(retryHeaders);
+    final retried = await run(retryHeaders);
+    _notifyClientUpgradeRequiredFromResponse(retried, requestPath);
+    return retried;
   }
 
   bool _shouldRefreshAfterResponse({
@@ -1025,6 +1041,7 @@ class CloudHttpClient {
       requestPath: path,
       retryAfter: response.headers['retry-after'],
     );
+    _notifyClientUpgradeRequired(failure);
     final code = failure.code;
     final isAuthoritativeAccountState =
         code == UserErrorCode.accountSuspended.code ||
@@ -1054,6 +1071,36 @@ class CloudHttpClient {
       );
     }
     throw failure;
+  }
+
+  void _notifyClientUpgradeRequiredFromResponse(
+    http.Response response,
+    String requestPath,
+  ) {
+    if (response.statusCode != 426 || _onClientUpgradeRequired == null) return;
+    _notifyClientUpgradeRequired(
+      CloudErrorMapper.fromStatusCode(
+        response.statusCode,
+        body: response.body,
+        requestPath: requestPath,
+        retryAfter: response.headers['retry-after'],
+      ),
+    );
+  }
+
+  void _notifyClientUpgradeRequired(CloudException failure) {
+    final handler = _onClientUpgradeRequired;
+    if (handler == null ||
+        failure.statusCode != 426 ||
+        failure.code != cloudClientUpgradeRequiredCode) {
+      return;
+    }
+    try {
+      handler(failure);
+    } catch (_) {
+      // Root-surface coordination must not replace the canonical HTTP failure
+      // observed by the business operation.
+    }
   }
 
   Future<void> _waitForAuthoritativeSessionFailureCleanup(

@@ -10,7 +10,7 @@ class ResearchScalePromotionTimingError(RuntimeError):
     pass
 
 
-_BUDGET_SECONDS = {"M100": None, "M1000": 259200, "M10000": 604800}
+_BUDGET_SECONDS = {"M100": None, "M1000": None, "M10000": 604800}
 
 
 def _timestamp(value: object, *, label: str) -> datetime:

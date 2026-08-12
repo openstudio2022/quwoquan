@@ -273,6 +273,7 @@ api_routes:
 - method: GET
   path: /healthz
   operation: HealthCheck
+  transport_role: health
   actor: none
   application:
     kind: query
@@ -317,6 +318,7 @@ api_routes:
 - method: GET
   path: /readyz
   operation: ReadinessCheck
+  transport_role: readiness
   actor: none
   application:
     kind: query
@@ -361,6 +363,7 @@ api_routes:
 - method: GET
   path: /metrics
   operation: Metrics
+  transport_role: metrics
   actor: none
   application:
     kind: query

@@ -25,12 +25,15 @@ thresholds:
 
 readback:
   window: 5m
+  post_100_soak_window: 24h
   minimum_samples: 100
   authority_max_age_seconds: 86400
   settle_seconds:
-    gray-initial: 120
-    carry-on: 120
-    full: 120
+    canary: 120
+    "5": 120
+    "20": 120
+    "50": 120
+    "100": 120
   # N2-5 推荐业务指标（仅对 content-service readback 生效）：
   # 空 feed 率与负反馈率超 critical 直接阻断放量；CTR 为观察指标——
   # impression 样本低于 min_impressions 时诚实跳过（不虚报、不拦截）。

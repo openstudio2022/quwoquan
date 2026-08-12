@@ -398,7 +398,11 @@ def detect_device_kind(
             if probe.returncode == 0:
                 return "android_physical"
         return "android_physical"
-    return "ios_or_macos"
+    if target == "ios":
+        return "ios-simulator" if emulator else "ios-physical"
+    if target in {"darwin", "macos"} or device_norm == "macos":
+        return "macos"
+    return "unknown"
 
 
 def resolve_app_endpoint_overrides(

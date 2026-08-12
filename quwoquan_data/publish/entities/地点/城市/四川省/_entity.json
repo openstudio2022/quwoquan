@@ -1,0 +1,83 @@
+{
+  "label": "四川省",
+  "domain": "地点",
+  "type": "城市",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "entityRef": "/entity/地点/城市/四川省",
+  "summary": "四川省简称川或蜀，地处中国西南、长江上游，省会与最大城市为成都。",
+  "sourceRefs": [
+    "sources/homepage-source-18960eb3a297b0e2b4f7/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81"
+  ],
+  "primarySource": {
+    "entityName": "四川省",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T05:21:35Z",
+    "snapshotHash": "sha256:6abd1bc174f07998c965d260908d6e99205a92986f88ad67810c93a609170ca9",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only"
+  },
+  "sourceAttribution": {
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "audioRightsStatus": "no_audio",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "collectedAt": "2026-08-12T05:21:35Z",
+    "commercialAuthorizationStatus": "verified",
+    "isOriginal": false,
+    "modelReleaseStatus": "not_required",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "propertyReleaseStatus": "not_required",
+    "publicationAdmission": "research_release",
+    "rightsBasis": "CC BY-SA 4.0",
+    "riskAcceptanceId": null,
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "watermarkStatus": "absent"
+  },
+  "textSourceRefs": [
+    "sources/homepage-source-18960eb3a297b0e2b4f7/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/homepage-source-18960eb3a297b0e2b4f7/source.md"
+  ],
+  "heroAssetId": "四川省_cover_九寨沟树正沟_269_73d1af7c",
+  "mediaAssetIds": [
+    "四川省_cover_九寨沟树正沟_269_73d1af7c"
+  ],
+  "tagRefs": [
+    "Entity/地点/城市",
+    "Topic/地理/行政区/中国/四川省",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/四川省",
+  "geoTagRefs": [
+    "Topic/地理/行政区/中国/四川省"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

@@ -1258,6 +1258,24 @@ class SingleTrackContractsContractTest(unittest.TestCase):
         self.assertIsNotNone(module.GO_JSON_ID_TAG.search('Id string `json:"_id"`'))
         self.assertIsNone(module.GO_JSON_ID_TAG.search('Id string `bson:"_id"`'))
 
+    def test_allows_bson_id_map_but_rejects_application_wire_map(self) -> None:
+        module = _load_verifier()
+        bson_inventory = _scan_fixture(
+            module,
+            "quwoquan_service/services/circle-service/tests/local_contract/"
+            "circle_management/gathering/application/query__local_contract_test.go",
+            'package application\nvar query = bson.M{"_id": "aggregate-1"}\n',
+        )
+        wire_inventory = _scan_fixture(
+            module,
+            "quwoquan_service/services/circle-service/internal/"
+            "circle_management/gathering/application/query.go",
+            'package application\nvar payload = map[string]any{"_id": "aggregate-1"}\n',
+        )
+
+        self.assertEqual(bson_inventory.counts.get("wire_id_key", 0), 0)
+        self.assertEqual(wire_inventory.counts.get("wire_id_key", 0), 1)
+
     def test_allows_elasticsearch_bulk_metadata_id_only_in_provider_harness(self) -> None:
         module = _load_verifier()
         lines = [

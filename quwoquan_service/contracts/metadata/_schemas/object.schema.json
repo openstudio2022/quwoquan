@@ -15,6 +15,11 @@
     "lifecycle"
   ],
   "properties": {
+    "model_version": {
+      "description": "对象内部 major.minor 变更声明；仅参与 ContractGraph 发布差异门禁，不进入 wire、路由或 App UI。缺省为初始基线 1.0，门禁只报告 required version，不自动改写本字段。",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
     "kind": {
       "enum": [
         "aggregate_root",

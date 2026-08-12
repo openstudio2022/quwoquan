@@ -56,8 +56,8 @@ def _deploy_args(report_dir: Path) -> argparse.Namespace:
         command="deploy",
         target="prod-hosted",
         mode="rollout",
-        stage="gray-initial",
-        step="5",
+        stage="canary",
+        step="0",
         service="content-service",
         from_candidate_digest=f"sha256:{'1' * 64}",
         to_candidate_digest=f"sha256:{'2' * 64}",
@@ -126,11 +126,23 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
         )
         runner = mock.Mock()
         runner.main.return_value = 0
+        runtime_environments = {
+            environment: {
+                stackctl.PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV: (
+                    f"explicit-{environment}-runtime-identity"
+                )
+            }
+            for environment in provider_conformance.ENVIRONMENTS
+        }
         with mock.patch.object(
             stackctl,
             "_provider_conformance_runner",
             return_value=runner,
-        ):
+        ), mock.patch.object(
+            stackctl,
+            "_provider_conformance_runtime_environment",
+            side_effect=lambda environment: runtime_environments[environment],
+        ) as select_runtime:
             result = stackctl.command_provider_conformance(args)
 
         self.assertEqual(result["exitCode"], 0)
@@ -142,7 +154,12 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 "--execute",
                 "--image-digest",
                 f"sha256:{'1' * 64}",
-            ]
+            ],
+            runtime_environments=runtime_environments,
+        )
+        self.assertEqual(
+            [call.args[0] for call in select_runtime.call_args_list],
+            list(provider_conformance.ENVIRONMENTS),
         )
 
     def test_environment_matrix_executes_only_external_provider_capabilities(self) -> None:
@@ -174,13 +191,23 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 for index in range(expected_count)
             ]
             execution_index = 0
+            runtime_environment = {
+                stackctl.PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV: (
+                    "explicit-gamma-runtime-identity"
+                )
+            }
 
             def execute_cell(
                 _argv: list[str],
                 *,
                 evidence_paths_out: list[Path],
+                runtime_environments: dict[str, dict[str, str]],
             ) -> int:
                 nonlocal execution_index
+                self.assertEqual(
+                    runtime_environments,
+                    {"gamma": runtime_environment},
+                )
                 evidence_paths_out.append(attempt_paths[execution_index])
                 execution_index += 1
                 return 0
@@ -202,6 +229,11 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                     "_provider_conformance",
                     return_value=conformance,
                 ),
+                mock.patch.object(
+                    stackctl,
+                    "_provider_conformance_runtime_environment",
+                    return_value=runtime_environment,
+                ) as select_runtime,
             ):
                 result = stackctl.command_provider_conformance(args)
 
@@ -216,9 +248,15 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
         self.assertEqual(result["expectedCells"], expected_count)
         self.assertEqual(result["executed"], expected_count)
         self.assertEqual(result["attemptEvidenceCount"], expected_count)
+        select_runtime.assert_called_once_with("gamma")
         self.assertEqual(result["readinessScope"], "local_functional")
         self.assertFalse(result["releasePromotionClaimed"])
-        runner.preflight_environment_matrix.assert_called_once()
+        self.assertEqual(
+            runner.preflight_environment_matrix.call_args.kwargs[
+                "runtime_environment"
+            ],
+            runtime_environment,
+        )
         self.assertEqual(runner.main.call_count, expected_count)
         conformance.load_validate_local_functional_readiness.assert_called_once()
         local_validation = (
@@ -347,6 +385,91 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             )
             self.assertNotIn("secret.invalid", json.dumps(report))
             self.assertNotIn("top-secret", json.dumps(report))
+
+    def test_selected_typed_data_graph_runs_under_its_exact_provider_closure(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            report_dir = Path(temporary) / "report"
+            args = _verify_args("gamma", report_dir)
+            args.test_data_request = "selected-request.json"
+            selected_result = {
+                "schema": "qwq.case_result",
+                "status": "passed",
+                "executed": 1,
+                "skipped": 0,
+                "issues": [],
+            }
+            provider_preflight = {
+                "kind": "provider-readiness",
+                "report": {"status": "gate_block"},
+                "argv": ["provider-readiness"],
+                "exitCode": 2,
+                "reportPath": "provider-readiness.json",
+                "details": ["an unselected Provider is unavailable"],
+            }
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "_run_provider_readiness_preflight",
+                    return_value=provider_preflight,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_inspect_distribution_for_target",
+                    return_value=({"issues": []}, Path(temporary), True),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "can_reuse_package",
+                    return_value=(True, "candidate ready"),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_run_static_verify_wave",
+                    return_value=([], {"exitCode": 0, "details": []}, 7),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_selected_profile_commands",
+                    return_value=[],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_run_profile_commands_parallel",
+                    return_value=[],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_current_runtime_workload",
+                    return_value="full",
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_run_test_data_profile",
+                    return_value=selected_result,
+                ) as selected,
+                mock.patch.object(
+                    stackctl,
+                    "_runtime_media_playback_evidence",
+                    return_value={"status": "passed"},
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+            ):
+                result = stackctl.command_verify(args)
+
+            self.assertEqual(result["exitCode"], 2)
+            self.assertTrue(
+                selected.call_args.kwargs["prerequisites_passed"]
+            )
+            report = json.loads(
+                (report_dir / "report.json").read_text(encoding="utf-8")
+            )
+            test_data_step = next(
+                item for item in report["steps"] if item["kind"] == "test-data"
+            )
+            self.assertEqual(test_data_step["caseResult"]["status"], "passed")
+            self.assertEqual(report["status"], "failed")
 
     def test_gray_initial_provider_preflight_precedes_fixed_package_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -51,7 +51,6 @@ class AssistantEvalScenario {
     required this.skillId,
     required this.domainId,
     required this.question,
-    required this.seedRefs,
     required this.expectedAnswerFragments,
     required this.expectedEvents,
     required this.expectedToolNames,
@@ -66,7 +65,6 @@ class AssistantEvalScenario {
   final String skillId;
   final String domainId;
   final String question;
-  final List<String> seedRefs;
   final List<String> expectedAnswerFragments;
   final List<String> expectedEvents;
   final List<String> expectedToolNames;
@@ -82,7 +80,6 @@ class AssistantEvalScenario {
       skillId: (json['skillId'] ?? '').toString(),
       domainId: (json['domainId'] ?? '').toString(),
       question: (json['question'] ?? '').toString(),
-      seedRefs: _stringList(json['seedRefs']),
       expectedAnswerFragments: _stringList(json['expectedAnswerFragments']),
       expectedEvents: _stringList(json['expectedEvents']),
       expectedToolNames: _stringList(json['expectedToolNames']),

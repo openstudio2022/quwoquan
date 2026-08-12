@@ -9,17 +9,27 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.gate.verify_git_branch_policy import (
     branch_policy_issues,
+    load_policy,
     pull_request_branch_from_environment,
 )
 
 
-def test_branch_policy_accepts_dev1_only_locally_and_main_remotely() -> None:
+def test_repository_policy_declares_main_only_and_codex_pr_prefix() -> None:
+    allowed_local, allowed_remote, pull_request_prefixes = load_policy()
+
+    assert allowed_local == {"main"}
+    assert allowed_remote == {"main"}
+    assert pull_request_prefixes == {"codex/"}
+
+
+def test_branch_policy_accepts_main_as_the_only_long_lived_branch() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0"},
-        allowed_remote={"dev1.0", "main"},
-        local_branches=["dev1.0"],
-        remote_branches=["dev1.0", "main"],
-        current_branch="dev1.0",
+        allowed_local={"main"},
+        allowed_remote={"main"},
+        pull_request_prefixes={"codex/"},
+        local_branches=["main"],
+        remote_branches=["main"],
+        current_branch="main",
     )
 
     assert issues == []
@@ -27,56 +37,62 @@ def test_branch_policy_accepts_dev1_only_locally_and_main_remotely() -> None:
 
 def test_branch_policy_rejects_extra_local_branch() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0"},
-        allowed_remote={"dev1.0", "main"},
-        local_branches=["dev1.0", "feature/demo"],
-        remote_branches=["dev1.0", "main"],
+        allowed_local={"main"},
+        allowed_remote={"main"},
+        pull_request_prefixes={"codex/"},
+        local_branches=["main", "feature/demo"],
+        remote_branches=["main"],
         current_branch="feature/demo",
     )
 
     assert any("feature/demo" in issue for issue in issues)
 
 
-def test_branch_policy_rejects_local_main_branch() -> None:
+def test_branch_policy_rejects_retired_dev_branch() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0"},
-        allowed_remote={"dev1.0", "main"},
+        allowed_local={"main"},
+        allowed_remote={"main"},
+        pull_request_prefixes={"codex/"},
         local_branches=["dev1.0", "main"],
         remote_branches=["dev1.0", "main"],
-        current_branch="main",
+        current_branch="dev1.0",
     )
 
-    assert any("current branch 'main'" in issue for issue in issues)
-    assert any("unexpected local branches: main" in issue for issue in issues)
+    assert any("current branch 'dev1.0'" in issue for issue in issues)
+    assert any("unexpected local branches: dev1.0" in issue for issue in issues)
+    assert any("unexpected remote branches: dev1.0" in issue for issue in issues)
 
 
 def test_branch_policy_rejects_extra_remote_branch() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0"},
-        allowed_remote={"dev1.0", "main"},
-        local_branches=["dev1.0"],
-        remote_branches=["cursor/demo", "dev1.0", "main"],
-        current_branch="dev1.0",
+        allowed_local={"main"},
+        allowed_remote={"main"},
+        pull_request_prefixes={"codex/"},
+        local_branches=["main"],
+        remote_branches=["cursor/demo", "main"],
+        current_branch="main",
     )
 
     assert any("cursor/demo" in issue for issue in issues)
 
 
-def test_branch_policy_uses_reviewed_dev_branch_for_github_pr_merge_preview() -> None:
+def test_branch_policy_accepts_only_the_reviewed_codex_pr_branch_as_ephemeral() -> None:
     current_branch = pull_request_branch_from_environment(
         {
             "GITHUB_ACTIONS": "true",
             "GITHUB_EVENT_NAME": "pull_request",
-            "GITHUB_HEAD_REF": "dev1.0",
+            "GITHUB_HEAD_REF": "codex/graphql-read-plane",
         }
     )
 
     issues = branch_policy_issues(
-        allowed_local={"dev1.0"},
-        allowed_remote={"dev1.0", "main"},
-        local_branches=[],
-        remote_branches=[],
+        allowed_local={"main"},
+        allowed_remote={"main"},
+        pull_request_prefixes={"codex/"},
+        local_branches=["codex/graphql-read-plane"],
+        remote_branches=["codex/graphql-read-plane", "main"],
         current_branch=current_branch,
+        ci_head_branch=current_branch,
     )
 
     assert issues == []
@@ -87,13 +103,14 @@ def test_branch_policy_does_not_trust_detached_non_pr_environment() -> None:
         {
             "GITHUB_ACTIONS": "true",
             "GITHUB_EVENT_NAME": "workflow_dispatch",
-            "GITHUB_HEAD_REF": "dev1.0",
+            "GITHUB_HEAD_REF": "codex/graphql-read-plane",
         }
     )
 
     issues = branch_policy_issues(
-        allowed_local={"dev1.0"},
-        allowed_remote={"dev1.0", "main"},
+        allowed_local={"main"},
+        allowed_remote={"main"},
+        pull_request_prefixes={"codex/"},
         local_branches=[],
         remote_branches=[],
         current_branch=current_branch,

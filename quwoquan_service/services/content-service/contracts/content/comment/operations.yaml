@@ -948,3 +948,43 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: comment_delete_comment_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-012
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: DeleteComment}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: comment_pin_comment_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-012
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: PinComment}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: comment_unpin_comment_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-012
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: UnpinComment}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: comment_list_comments_by_author_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListCommentsByAuthor}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: comment_list_comments_for_post_author_app_api
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-009
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: ListCommentsForPostAuthor}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

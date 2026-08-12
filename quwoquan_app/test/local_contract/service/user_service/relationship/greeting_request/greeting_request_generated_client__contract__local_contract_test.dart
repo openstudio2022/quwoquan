@@ -2,6 +2,11 @@
 // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/greeting-intersection-context/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/greeting-intersection-context/spec.md#gwt-002
 // readiness_case: greeting_request_send_greeting_request_app_local
+// readiness_case: greeting_request_list_greeting_inbox_app_local
+// readiness_case: greeting_request_list_greeting_outbox_app_local
+// readiness_case: greeting_request_reply_greeting_request_app_local
+// readiness_case: greeting_request_ignore_greeting_request_app_local
+// readiness_case: greeting_request_cancel_greeting_request_app_local
 
 import 'dart:convert';
 
@@ -192,6 +197,195 @@ void main() {
         },
       );
     });
+
+    test(
+      'inbox/outbox 与 reply/ignore/cancel 逐项绑定 canonical Remote operation',
+      () async {
+        final requests = <CapturedRemoteApiPathRequest>[];
+        final remote = _remote(
+          requests,
+          idempotencyKey: 'greeting-lifecycle-intent',
+          responseFor: (request) {
+            if (request.url.path.endsWith('/inbox') ||
+                request.url.path.endsWith('/outbox')) {
+              return remoteApiPathJsonResponse(<String, Object?>{
+                'items': <Object?>[_greetingRecord()],
+                'nextCursor': 'cursor-next',
+              });
+            }
+            if (request.url.path.endsWith('/reply')) {
+              return remoteApiPathJsonResponse(
+                _greetingRecord(
+                  status: 'replied',
+                  promotedConversationId: 'conversation-1',
+                  decisionAt: '2026-08-09T08:01:00Z',
+                ),
+              );
+            }
+            if (request.url.path.endsWith('/ignore')) {
+              return remoteApiPathJsonResponse(
+                _greetingRecord(
+                  status: 'ignored',
+                  decisionAt: '2026-08-09T08:01:00Z',
+                ),
+              );
+            }
+            return remoteApiPathJsonResponse(
+              _greetingRecord(
+                status: 'cancelled',
+                decisionAt: '2026-08-09T08:01:00Z',
+              ),
+            );
+          },
+        );
+
+        final inbox = await remote.listGreetingInbox(
+          ListGreetingRequestsQuery(
+            status: 'pending',
+            cursor: 'cursor-inbox',
+            limit: 12,
+          ),
+        );
+        final outbox = await remote.listGreetingOutbox(
+          ListGreetingRequestsQuery(status: 'pending', limit: 13),
+        );
+        final replied = await remote.replyGreeting(
+          ReplyGreetingCommand(requestId: 'greeting-1'),
+        );
+        final ignored = await remote.ignoreGreeting(
+          IgnoreGreetingCommand(requestId: 'greeting-1'),
+        );
+        final cancelled = await remote.cancelGreeting(
+          CancelGreetingCommand(requestId: 'greeting-1'),
+        );
+
+        expect(inbox.items.single.id, 'greeting-1');
+        expect(inbox.nextCursor, 'cursor-next');
+        expect(outbox.items.single.id, 'greeting-1');
+        expect(replied.status, GreetingRequestStatus.replied);
+        expect(replied.promotedConversationId, 'conversation-1');
+        expect(ignored.status, GreetingRequestStatus.ignored);
+        expect(cancelled.status, GreetingRequestStatus.cancelled);
+
+        expect(requests, hasLength(5));
+        _expectLifecycleRequest(
+          requests[0],
+          operationId:
+              AppCloudOperationIds.userGreetingRequestListGreetingInbox,
+          clientPageId: UserRequestPageIds.listGreetingInbox,
+          method: 'GET',
+          path: canonicalRemoteApiPath(
+            AppCloudOperationIds.userGreetingRequestListGreetingInbox,
+          ),
+          query: const <String, String>{
+            'status': 'pending',
+            'cursor': 'cursor-inbox',
+            'limit': '12',
+          },
+          expectsIdempotencyKey: false,
+        );
+        _expectLifecycleRequest(
+          requests[1],
+          operationId:
+              AppCloudOperationIds.userGreetingRequestListGreetingOutbox,
+          clientPageId: UserRequestPageIds.listGreetingOutbox,
+          method: 'GET',
+          path: canonicalRemoteApiPath(
+            AppCloudOperationIds.userGreetingRequestListGreetingOutbox,
+          ),
+          query: const <String, String>{'status': 'pending', 'limit': '13'},
+          expectsIdempotencyKey: false,
+        );
+        _expectLifecycleRequest(
+          requests[2],
+          operationId:
+              AppCloudOperationIds.userGreetingRequestReplyGreetingRequest,
+          clientPageId: UserRequestPageIds.replyGreetingRequest,
+          method: 'POST',
+          path: canonicalRemoteApiPath(
+            AppCloudOperationIds.userGreetingRequestReplyGreetingRequest,
+            pathParameters: const <String, String>{'requestId': 'greeting-1'},
+          ),
+        );
+        _expectLifecycleRequest(
+          requests[3],
+          operationId:
+              AppCloudOperationIds.userGreetingRequestIgnoreGreetingRequest,
+          clientPageId: UserRequestPageIds.ignoreGreetingRequest,
+          method: 'POST',
+          path: canonicalRemoteApiPath(
+            AppCloudOperationIds.userGreetingRequestIgnoreGreetingRequest,
+            pathParameters: const <String, String>{'requestId': 'greeting-1'},
+          ),
+        );
+        _expectLifecycleRequest(
+          requests[4],
+          operationId:
+              AppCloudOperationIds.userGreetingRequestCancelGreetingRequest,
+          clientPageId: UserRequestPageIds.cancelGreetingRequest,
+          method: 'DELETE',
+          path: canonicalRemoteApiPath(
+            AppCloudOperationIds.userGreetingRequestCancelGreetingRequest,
+            pathParameters: const <String, String>{'requestId': 'greeting-1'},
+          ),
+        );
+      },
+    );
+
+    test('caller-bound intent key 逐字透传到三个终态 command', () async {
+      final requests = <CapturedRemoteApiPathRequest>[];
+      final remote = _remote(
+        requests,
+        idempotencyKey: 'fallback-intent-must-not-be-used',
+        responseFor: (request) {
+          if (request.url.path.endsWith('/reply')) {
+            return remoteApiPathJsonResponse(
+              _greetingRecord(
+                status: 'replied',
+                promotedConversationId: 'conversation-1',
+                decisionAt: '2026-08-09T08:01:00Z',
+              ),
+            );
+          }
+          if (request.url.path.endsWith('/ignore')) {
+            return remoteApiPathJsonResponse(
+              _greetingRecord(
+                status: 'ignored',
+                decisionAt: '2026-08-09T08:01:00Z',
+              ),
+            );
+          }
+          return remoteApiPathJsonResponse(
+            _greetingRecord(
+              status: 'cancelled',
+              decisionAt: '2026-08-09T08:01:00Z',
+            ),
+          );
+        },
+      );
+
+      await remote.replyGreetingWithIntent(
+        ReplyGreetingCommand(requestId: 'greeting-1'),
+        idempotencyKey: 'reply-stable-intent',
+      );
+      await remote.ignoreGreetingWithIntent(
+        IgnoreGreetingCommand(requestId: 'greeting-1'),
+        idempotencyKey: 'ignore-stable-intent',
+      );
+      await remote.cancelGreetingWithIntent(
+        CancelGreetingCommand(requestId: 'greeting-1'),
+        idempotencyKey: 'cancel-stable-intent',
+      );
+
+      expect(
+        requests.map((request) => request.headers['Idempotency-Key']),
+        const <String>[
+          'reply-stable-intent',
+          'ignore-stable-intent',
+          'cancel-stable-intent',
+        ],
+      );
+    });
   });
 }
 
@@ -200,21 +394,31 @@ RemoteGreetingRequestFacet _remote(
   required String idempotencyKey,
   required RemoteApiPathResponseFactory responseFor,
 }) {
+  final fallbackIdempotencyKey = idempotencyKey;
   return RemoteGreetingRequestFacet(
     client: buildRemoteApiPathOperationClient(
       requests,
       responseFor: responseFor,
     ),
-    invocationContext: (clientPageId) => CloudOperationInvocationContext(
-      surfaceId: AppUiSurfaces.userProfile.id,
-      routeId: AppUiSurfaces.userProfile.routeId,
-      clientPageId: clientPageId,
-      idempotencyKey: idempotencyKey,
-      actor: const CloudOperationActorContext(
-        accountId: 'account-1',
-        personaId: 'persona-viewer',
-      ),
-    ),
+    invocationContext: (clientPageId, {String? idempotencyKey}) {
+      final surface = clientPageId == UserRequestPageIds.sendGreetingRequest
+          ? AppUiSurfaces.userProfile
+          : AppUiSurfaces.greetingInbox;
+      return CloudOperationInvocationContext(
+        surfaceId: surface.id,
+        routeId: surface.routeId,
+        clientPageId: clientPageId,
+        idempotencyKey:
+            clientPageId == UserRequestPageIds.listGreetingInbox ||
+                clientPageId == UserRequestPageIds.listGreetingOutbox
+            ? null
+            : idempotencyKey ?? fallbackIdempotencyKey,
+        actor: const CloudOperationActorContext(
+          accountId: 'account-1',
+          personaId: 'persona-viewer',
+        ),
+      );
+    },
   );
 }
 
@@ -244,17 +448,20 @@ Map<String, Object?> _intersectionSnapshotWire() => <String, Object?>{
 Map<String, Object?> _greetingRecord({
   Map<String, Object?>? intersectionRef,
   Map<String, Object?>? intersectionSnapshot,
+  String status = 'pending',
+  String? promotedConversationId,
+  String? decisionAt,
 }) {
   final record = <String, Object?>{
     'id': 'greeting-1',
     'requesterPersonaId': 'persona-viewer',
     'targetPersonaId': 'persona-target',
     'requestMessage': '你好',
-    'status': 'pending',
+    'status': status,
     'source': intersectionRef == null ? 'profile' : 'recommendation',
-    'promotedConversationId': null,
+    'promotedConversationId': promotedConversationId,
     'expireAt': '2026-08-12T08:00:00Z',
-    'decisionAt': null,
+    'decisionAt': decisionAt,
     'createdAt': '2026-08-09T08:00:00Z',
     'updatedAt': '2026-08-09T08:00:00Z',
   };
@@ -265,6 +472,33 @@ Map<String, Object?> _greetingRecord({
     record['intersectionSnapshot'] = intersectionSnapshot;
   }
   return record;
+}
+
+void _expectLifecycleRequest(
+  CapturedRemoteApiPathRequest request, {
+  required String operationId,
+  required String clientPageId,
+  required String method,
+  required String path,
+  Map<String, String> query = const <String, String>{},
+  bool expectsIdempotencyKey = true,
+}) {
+  expect(request.method, method);
+  expect(request.path, path);
+  expect(request.query, query);
+  expect(request.body, isEmpty);
+  expectRemoteApiPathHeaders(
+    request.headers,
+    clientPageId: clientPageId,
+    surfaceId: AppUiSurfaces.greetingInbox.id,
+    operationId: operationId,
+  );
+  expect(request.headers['Authorization'], 'Bearer integration-contract-token');
+  expect(
+    request.headers['Idempotency-Key'],
+    expectsIdempotencyKey ? 'greeting-lifecycle-intent' : isNull,
+  );
+  expect(request.headers['X-Client-Persona-Id'], 'persona-viewer');
 }
 
 void _expectSendRequest(

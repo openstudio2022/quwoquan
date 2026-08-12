@@ -7,7 +7,9 @@ import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_f
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/adapters/homepage_claim_request_remote.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/adapters/homepage_status_report_remote.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_query_reader.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -27,14 +29,16 @@ final class EntityApiContractHarness {
     required this.telemetry,
     required this.query,
     required this.claimRequests,
+    required this.claimRequestReader,
     required this.statusReports,
+    required this.statusReportReader,
     required this._accountLifecycle,
     required this.session,
   });
 
   static Future<EntityApiContractHarness> create() async {
     if (_apiBase.isEmpty) {
-      throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
+      throw StateError('L3: API_CONTRACT_BASE_URL not set');
     }
     final tokenProvider = _MutableAccessTokenProvider();
     final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);
@@ -105,6 +109,16 @@ final class EntityApiContractHarness {
         searchInvocationContext: (clientPageId, {cancellation, deadlineAt}) =>
             invocationContext(AppUiSurfaces.homepagePicker, clientPageId),
       );
+      final submissionQueries =
+          EntityProductionComposition.homepageSubmissionQueryFacets(
+            client: client,
+            claimRequestInvocationContext:
+                (clientPageId, surface, {String? idempotencyKey}) =>
+                    invocationContext(surface, clientPageId),
+            statusReportInvocationContext:
+                (clientPageId, surface, {String? idempotencyKey}) =>
+                    invocationContext(surface, clientPageId),
+          );
 
       final harness = EntityApiContractHarness._(
         httpClient: httpClient,
@@ -112,27 +126,40 @@ final class EntityApiContractHarness {
         query: facets.query,
         claimRequests: RemoteHomepageClaimRequestWriter(
           client: client,
-          invocationContext: (clientPageId, surface) => invocationContext(
-            surface,
-            clientPageId,
-            idempotencyKey:
-                activeIdempotencyKey ??
-                (throw StateError(
-                  '$clientPageId requires an explicit idempotency scope',
-                )),
-          ),
+          invocationContext:
+              (
+                clientPageId,
+                surface, {
+                String? idempotencyKey,
+              }) => invocationContext(
+                surface,
+                clientPageId,
+                idempotencyKey:
+                    idempotencyKey ??
+                    activeIdempotencyKey ??
+                    (throw StateError(
+                      '$clientPageId requires an explicit idempotency scope',
+                    )),
+              ),
         ),
+        claimRequestReader: submissionQueries.claimRequestReader,
         statusReports: RemoteHomepageStatusReportWriter(
           client: client,
-          invocationContext: (clientPageId, surface) => invocationContext(
-            surface,
-            clientPageId,
-            idempotencyKey:
-                activeIdempotencyKey ??
-                (throw StateError(
-                  '$clientPageId requires an explicit idempotency scope',
-                )),
-          ),
+          invocationContext:
+              (
+                clientPageId,
+                surface, {
+                String? idempotencyKey,
+              }) => invocationContext(
+                surface,
+                clientPageId,
+                idempotencyKey:
+                    idempotencyKey ??
+                    activeIdempotencyKey ??
+                    (throw StateError(
+                      '$clientPageId requires an explicit idempotency scope',
+                    )),
+              ),
         ),
         accountLifecycle: RemoteAccountLifecycleCommandWriter(
           client: client,
@@ -144,6 +171,7 @@ final class EntityApiContractHarness {
                 '${session?.ownerId ?? (throw StateError('missing account session'))}',
           ),
         ),
+        statusReportReader: submissionQueries.statusReportReader,
         session: session,
       );
       harness._setIdempotencyKey = (value) => activeIdempotencyKey = value;
@@ -159,7 +187,9 @@ final class EntityApiContractHarness {
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final HomepageQueryFacet query;
   final RemoteHomepageClaimRequestWriter claimRequests;
+  final HomepageClaimRequestQueryReader claimRequestReader;
   final RemoteHomepageStatusReportWriter statusReports;
+  final HomepageStatusReportQueryReader statusReportReader;
   final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   final AuthSessionGrant session;
   late final void Function(String? value) _setIdempotencyKey;

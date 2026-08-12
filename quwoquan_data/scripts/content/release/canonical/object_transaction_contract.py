@@ -14,6 +14,9 @@ from content.release.canonical.object_transaction_bindings import (
     collect_object_keys,
     verify_entity_manifest_asset_binding,
 )
+from content.release.canonical.object_transaction_environment import (
+    iter_forbidden_release_keys,
+)
 from core.control_types import SourcePolicyRevision
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
@@ -41,32 +44,19 @@ EXPECTED_SOURCE_POLICIES = {
     "posts": SourcePolicyRevision.RIGHTS_CLEARED_CONTENT,
 }
 
-FORBIDDEN_RELEASE_KEYS = {
-    "env",
-    "environment",
-    "sampleRatio",
-    "activatedAt",
-    "importRun",
-}
-
-
 def assert_environment_neutral(root: Path) -> None:
-    """Reject environment state from an immutable, reusable release payload."""
+    """Reject mutable activation state from an immutable release payload.
+
+    ``targetEnvironment`` is an immutable build policy and is intentionally
+    allowed; mutable environment state still belongs only to stackctl runs.
+    """
     for path in _files(root):
         if path.suffix != ".json":
             continue
-        stack: list[Any] = [_read_json(path)]
-        while stack:
-            value = stack.pop()
-            if isinstance(value, dict):
-                for key, child in value.items():
-                    if key in FORBIDDEN_RELEASE_KEYS:
-                        raise ObjectTransactionError(
-                            f"release 含环境字段：{path.relative_to(root)}:{key}"
-                        )
-                    stack.append(child)
-            elif isinstance(value, list):
-                stack.extend(value)
+        for key in iter_forbidden_release_keys(_read_json(path)):
+            raise ObjectTransactionError(
+                f"release 含环境字段：{path.relative_to(root)}:{key}"
+            )
 
 class ObjectTransactionError(RuntimeError):
     """对象发布事务的输入、闭包或原子切换失败。"""
@@ -284,9 +274,14 @@ def _rights_binding(
     object_root: Path,
     rights_ref: Path,
     cas_rows: list[dict[str, Any]],
+    publish_media_mode: str,
 ) -> dict[str, Any]:
     rights_path = object_root / rights_ref
     rights = _read_json(rights_path)
+    if rights.get("publishMediaMode") != publish_media_mode:
+        raise ObjectTransactionError(
+            "asset rights closure publishMediaMode 与 transaction package 漂移"
+        )
     try:
         assert_valid(
             rights,
@@ -409,191 +404,12 @@ def _verify_package(
     canonical_root: Path,
     require_target_absent: bool,
 ) -> dict[str, Any]:
-    package_path = package_root / "object_transaction_package.json"
-    package = _read_json(package_path)
-    if package.get("schema") != PACKAGE_SCHEMA:
-        raise ObjectTransactionError("object transaction package schema 不匹配")
-    try:
-        assert_valid(
-            package,
-            "release",
-            "object_transaction_package",
-            label="object_transaction_package",
-        )
-    except (ValueError, FileNotFoundError) as exc:
-        raise ObjectTransactionError(str(exc)) from exc
-    transaction_id = _safe_id(
-        str(package.get("transactionId") or ""),
-        label="transactionId",
+    from content.release.canonical.object_transaction_package_verification import (
+        verify_package,
     )
-    execution_id = _execution_id(str(package.get("executionId") or ""))
-    source_policy_revision = str(package.get("sourcePolicyRevision") or "")
-    target = package.get("target")
-    if not isinstance(target, dict) or target.get("layoutSchema") != LAYOUT_SCHEMA:
-        raise ObjectTransactionError("target layout schema 不匹配")
-    object_kind = str(target.get("objectKind") or "")
-    if object_kind not in ALLOWED_OBJECT_KINDS:
-        raise ObjectTransactionError(f"objectKind 不支持：{object_kind}")
-    expected_source_policy = EXPECTED_SOURCE_POLICIES[object_kind].value
-    if source_policy_revision != expected_source_policy:
-        raise ObjectTransactionError(
-            "sourcePolicyRevision 不匹配："
-            f"expected={expected_source_policy} actual={source_policy_revision}"
-        )
-    target_schema = str(target.get("objectSchema") or "")
-    if target_schema != EXPECTED_OBJECT_SCHEMAS[object_kind]:
-        raise ObjectTransactionError("target object schema 不匹配")
-    object_ref = _safe_rel(
-        str(target.get("objectRef") or ""),
-        label="objectRef",
-    ).as_posix()
-    target_root = canonical_root / object_kind / object_ref
-    if require_target_absent and target_root.exists():
-        raise ObjectTransactionError(f"对象事务只能 create-once，目标已存在：{target_root}")
-    object_package_ref = _safe_rel(
-        str(target.get("packageObjectRef") or "object"),
-        label="packageObjectRef",
+
+    return verify_package(
+        package_root,
+        canonical_root=canonical_root,
+        require_target_absent=require_target_absent,
     )
-    object_root = package_root / object_package_ref
-    required_anchor = "_creator.json" if object_kind == "creators" else "manifest.json"
-    if not (object_root / required_anchor).is_file():
-        raise ObjectTransactionError(f"对象缺 {required_anchor}")
-    if object_kind == "entities" and not (object_root / "_entity.json").is_file():
-        raise ObjectTransactionError("entity 对象缺 _entity.json")
-    review = _review_binding(object_root, package)
-    closure = package.get("closure")
-    if not isinstance(closure, dict):
-        raise ObjectTransactionError("对象包缺 closure")
-    creator_refs = [str(item) for item in closure.get("creatorRefs") or []]
-    tag_refs = [str(item) for item in closure.get("tagRefs") or []]
-    creator_objects: dict[str, dict[str, Any]] = {}
-    for raw in closure.get("creatorObjects") or []:
-        if not isinstance(raw, Mapping):
-            raise ObjectTransactionError("creatorObjects item 必须为 object")
-        creator_ref = str(raw.get("creatorRef") or "").strip()
-        package_ref = _safe_rel(
-            str(raw.get("packageRef") or ""),
-            label="creatorObjects.packageRef",
-        )
-        creator_root = package_root / package_ref
-        if not creator_ref or creator_ref in creator_objects:
-            raise ObjectTransactionError("creatorObjects creatorRef 为空或重复")
-        if not (creator_root / "_creator.json").is_file():
-            raise ObjectTransactionError(f"creatorObjects 缺 _creator.json：{creator_ref}")
-        tree_digest = _tree_digest(creator_root)
-        if tree_digest != str(raw.get("treeDigest") or ""):
-            raise ObjectTransactionError(f"creatorObjects treeDigest 不匹配：{creator_ref}")
-        creator_objects[creator_ref] = {
-            "creatorRef": creator_ref,
-            "packageRef": package_ref.as_posix(),
-            "treeDigest": tree_digest,
-            "objectRoot": creator_root,
-        }
-    for creator_ref in creator_refs:
-        creator = canonical_root / "creators" / _safe_rel(
-            creator_ref,
-            label="creatorRef",
-        )
-        packaged = creator_objects.get(creator_ref)
-        if (creator / "_creator.json").is_file():
-            if packaged and _tree_digest(creator) != packaged["treeDigest"]:
-                raise ObjectTransactionError(f"creator canonical 与 projection 漂移：{creator_ref}")
-        elif packaged is None:
-            raise ObjectTransactionError(f"creator closure 不可解析：{creator_ref}")
-    if not set(creator_objects).issubset(creator_refs):
-        raise ObjectTransactionError("creatorObjects 不得包含 creatorRefs 之外的对象")
-    for tag_ref in tag_refs:
-        if not _tag_exists(tag_ref):
-            raise ObjectTransactionError(f"tag closure 不可解析：{tag_ref}")
-    local_refs: dict[str, Path] = {}
-    for key in ("sourceCatalogRef", "rightsRef"):
-        local_ref = _safe_rel(str(closure.get(key) or ""), label=key)
-        if not (object_root / local_ref).is_file():
-            raise ObjectTransactionError(f"对象 closure 缺 {key}: {local_ref}")
-        local_refs[key] = local_ref
-    cas_rows: list[dict[str, Any]] = []
-    seen_keys: set[str] = set()
-    for raw in closure.get("casRefs") or []:
-        if not isinstance(raw, dict):
-            raise ObjectTransactionError("casRefs item 必须为 object")
-        source_ref = _safe_rel(str(raw.get("sourceRef") or ""), label="cas.sourceRef")
-        source = package_root / source_ref
-        object_key = _safe_rel(
-            str(raw.get("objectKey") or ""),
-            label="cas.objectKey",
-        ).as_posix()
-        if not source.is_file() or source.is_symlink():
-            raise ObjectTransactionError(f"CAS source 不存在或为 symlink：{source_ref}")
-        if not object_key.startswith("media/objects/sha256/"):
-            raise ObjectTransactionError(f"CAS objectKey 非 canonical：{object_key}")
-        digest = _digest_file(source)
-        if digest != str(raw.get("sha256") or ""):
-            raise ObjectTransactionError(f"CAS digest mismatch：{object_key}")
-        if int(raw.get("bytes") or -1) != source.stat().st_size:
-            raise ObjectTransactionError(f"CAS bytes mismatch：{object_key}")
-        if Path(object_key).stem != digest.removeprefix("sha256:"):
-            raise ObjectTransactionError(f"CAS objectKey 未按内容寻址：{object_key}")
-        if object_key in seen_keys:
-            raise ObjectTransactionError(f"CAS objectKey 重复：{object_key}")
-        seen_keys.add(object_key)
-        cas_rows.append(
-            {
-                "sourceRef": source_ref.as_posix(),
-                "objectKey": object_key,
-                "sha256": digest,
-                "bytes": source.stat().st_size,
-            }
-        )
-    rights = _rights_binding(
-        package_root=package_root,
-        object_root=object_root,
-        rights_ref=local_refs["rightsRef"],
-        cas_rows=cas_rows,
-    )
-    if object_kind == "entities":
-        try:
-            verify_entity_manifest_asset_binding(
-                _read_json(object_root / "manifest.json"),
-                rights,
-            )
-        except (TypeError, ValueError) as exc:
-            raise ObjectTransactionError(str(exc)) from exc
-    referenced_keys = _object_json_keys(object_root)
-    if referenced_keys != seen_keys:
-        raise ObjectTransactionError(
-            "对象 asset closure 与事务包 CAS 不一致："
-            f"object={sorted(referenced_keys)} package={sorted(seen_keys)}"
-        )
-    closure_digest = _closure_digest(
-        object_root=object_root,
-        object_kind=object_kind,
-        object_ref=object_ref,
-        target_schema=target_schema,
-        source_policy_revision=source_policy_revision,
-        closure=closure,
-        cas_rows=cas_rows,
-        review=review,
-    )
-    if closure_digest != str(package.get("objectClosureDigest") or ""):
-        raise ObjectTransactionError(
-            "object closure digest mismatch："
-            f"expected={package.get('objectClosureDigest')} actual={closure_digest}"
-        )
-    return {
-        "package": package,
-        "packageSha256": _digest_file(package_path),
-        "transactionId": transaction_id,
-        "executionId": execution_id,
-        "sourcePolicyRevision": source_policy_revision,
-        "objectKind": object_kind,
-        "objectRef": object_ref,
-        "objectSchema": target_schema,
-        "objectRoot": object_root,
-        "objectClosureDigest": closure_digest,
-        "creatorRefs": creator_refs,
-        "creatorObjects": list(creator_objects.values()),
-        "tagRefs": tag_refs,
-        "casRows": cas_rows,
-        "review": review,
-        "rights": rights,
-    }

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_supported_api_evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "candidateId", "discoveryCandidateId", "provider",
+    "providerAssetId", "upstreamProvider", "status",
+    "requestUrl", "observedAt", "sourcePageUrl", "originalAssetUrl", "creator",
+    "license", "licenseVersion", "attributionText", "termsUrl", "apiResponseRef",
+    "apiResponseSha256", "apiResponseDigest", "apiTransportEvidenceRef",
+    "apiTransportEvidenceSha256", "originalAssetRef", "originalTransportEvidenceRef",
+    "originalTransportEvidenceSha256", "contentSha256", "bytes", "dimensions", "perceptualHash",
+    "machineAssessmentRef", "machineAssessmentSha256", "reviewRequestRef",
+    "reviewRequestSha256", "reviewerEvidenceRef", "reviewerEvidenceSha256",
+    "safetyEvidenceRef", "safetyEvidenceSha256", "sourceAttribution", "failureCode"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_supported_api_evidence"},
+    "candidateId": {"type": "string", "minLength": 1},
+    "discoveryCandidateId": {"type": "string", "minLength": 1},
+    "provider": {"enum": ["wikimedia_commons", "openverse"]},
+    "providerAssetId": {"type": "string", "minLength": 1},
+    "upstreamProvider": {"type": "string", "minLength": 1},
+    "status": {"enum": ["review_pending", "accepted", "blocked"]},
+    "requestUrl": {"type": "string", "pattern": "^https://(commons\\.wikimedia\\.org/w/api\\.php\\?|api\\.openverse\\.org/v1/images/)"},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+    "originalAssetUrl": {"type": "string", "pattern": "^https://"},
+    "creator": {"type": "string", "minLength": 1},
+    "license": {"type": "string", "minLength": 1},
+    "licenseVersion": {"type": "string", "minLength": 1},
+    "attributionText": {"type": "string", "minLength": 1},
+    "termsUrl": {"type": "string", "pattern": "^https://"},
+    "apiResponseRef": {"$ref": "#/$defs/safeRef"},
+    "apiResponseSha256": {"$ref": "#/$defs/sha256"},
+    "apiResponseDigest": {"$ref": "#/$defs/sha256"},
+    "apiTransportEvidenceRef": {"$ref": "#/$defs/safeRef"},
+    "apiTransportEvidenceSha256": {"$ref": "#/$defs/sha256"},
+    "originalAssetRef": {"$ref": "#/$defs/safeRef"},
+    "originalTransportEvidenceRef": {"$ref": "#/$defs/safeRef"},
+    "originalTransportEvidenceSha256": {"$ref": "#/$defs/sha256"},
+    "contentSha256": {"$ref": "#/$defs/sha256"},
+    "bytes": {"type": "integer", "minimum": 3000},
+    "dimensions": {"$ref": "#/$defs/dimensions"},
+    "perceptualHash": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+    "machineAssessmentRef": {"$ref": "#/$defs/safeRef"},
+    "machineAssessmentSha256": {"$ref": "#/$defs/sha256"},
+    "reviewRequestRef": {"$ref": "#/$defs/safeRef"},
+    "reviewRequestSha256": {"$ref": "#/$defs/sha256"},
+    "reviewerEvidenceRef": {"type": "string"},
+    "reviewerEvidenceSha256": {"type": "string"},
+    "safetyEvidenceRef": {"type": "string"},
+    "safetyEvidenceSha256": {"type": "string"},
+    "sourceAttribution": {
+      "anyOf": [
+        {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+        {"type": "null"}
+      ]
+    },
+    "failureCode": {"type": "string"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "accepted"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "reviewerEvidenceRef": {"$ref": "#/$defs/safeRef"},
+          "reviewerEvidenceSha256": {"$ref": "#/$defs/sha256"},
+          "safetyEvidenceRef": {"$ref": "#/$defs/safeRef"},
+          "safetyEvidenceSha256": {"$ref": "#/$defs/sha256"},
+          "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+          "failureCode": {"const": ""}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "dimensions": {
+      "type": "object", "additionalProperties": false, "required": ["width", "height"],
+      "properties": {"width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

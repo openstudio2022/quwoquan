@@ -22,13 +22,15 @@ from quwoquan_ops.cli.prod import hosted_release_ledger
 
 
 SERVICE = "prod-stack"
-RESUME_STAGES = {"gray-initial", "carry-on", "full", "complete"}
+RESUME_STAGES = {"canary", "5", "20", "50", "100", "complete"}
 _NEXT_STAGE = {
-    "gray-initial": "carry-on",
-    "carry-on": "full",
-    "full": "complete",
+    "canary": "5",
+    "5": "20",
+    "20": "50",
+    "50": "100",
+    "100": "complete",
 }
-_STEP_BY_STAGE = {"gray-initial": "5", "carry-on": "25", "full": "100"}
+_STEP_BY_STAGE = {"canary": "0", "5": "5", "20": "20", "50": "50", "100": "100"}
 _RECEIPT_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 _POSITIVE_INTEGER_RE = re.compile(r"^[1-9][0-9]*$")
 
@@ -145,7 +147,7 @@ def _validate_hosted_readback(
     )
     if rollback_outcome != expected_outcome:
         raise GateBlockError("hosted release ledger decision/outcome binding is invalid")
-    if decision == "rolled_back" and stage != "full":
+    if decision == "rolled_back" and stage != "100":
         raise GateBlockError("hosted release ledger rollback is not terminal")
 
     digest_bindings = {
@@ -219,6 +221,18 @@ def _validate_hosted_readback(
         raise GateBlockError("hosted release ledger generation is not receipt-bound")
     if not isinstance(receipt.get("sloReadback"), dict):
         raise GateBlockError("hosted release receipt sloReadback is incomplete")
+    if decision == "continue":
+        try:
+            hosted_release_ledger.validate_promotion_evidence(
+                receipt["sloReadback"].get("promotionEvidence"),
+                candidate_id=receipt.get("toCandidateDigest"),
+                artifact_digest=receipt.get("artifactDigest"),
+                stage=receipt.get("triggerStage"),
+            )
+        except ValueError as error:
+            raise GateBlockError(
+                "hosted release receipt promotion evidence is invalid"
+            ) from error
     _validate_post_checks(receipt.get("postChecks"))
 
     receipt_id = receipt.get("receiptId")
@@ -252,9 +266,9 @@ def _validate_hosted_readback(
             "hosted release ledger current receipt is not bound to trigger stage"
         )
 
-    if decision == "continue" and stage == "full":
+    if decision == "continue" and stage == "100":
         if state["last_good_candidate_digest"] != state["to_candidate_digest"]:
-            raise GateBlockError("hosted full release is not marked stable")
+            raise GateBlockError("hosted 100 release is not marked stable")
     elif decision in {"continue", "pause"}:
         if state["last_good_candidate_digest"] != state["from_candidate_digest"]:
             raise GateBlockError("hosted in-progress release lost its stable base")
@@ -313,7 +327,7 @@ def resolve_release_state(
             # to the failed candidate artifact. Re-run the restored candidate
             # as a fresh no-op transaction so it can produce its own complete
             # candidate-bound rollout evidence.
-            resume_stage = "gray-initial"
+            resume_stage = "canary"
         else:
             raise GateBlockError("hosted release ledger target is not resumable")
         from_candidate_digest = (
@@ -323,16 +337,16 @@ def resolve_release_state(
         )
     else:
         stable_boundary = (
-            state["stage"] == "full"
+            state["stage"] == "100"
             and decision in {"continue", "rolled_back"}
             and state["last_good_candidate_digest"] == current_target
         )
         if not stable_boundary:
             raise GateBlockError(
-                "a different target requires a stable full or rolled_back ledger"
+                "a different target requires a stable 100 or rolled_back ledger"
             )
         from_candidate_digest = current_target
-        resume_stage = "gray-initial"
+        resume_stage = "canary"
 
     if resume_stage not in RESUME_STAGES:
         raise GateBlockError("hosted release ledger produced an invalid resume stage")

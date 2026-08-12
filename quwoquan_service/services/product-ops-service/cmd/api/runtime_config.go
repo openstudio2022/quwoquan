@@ -47,15 +47,21 @@ type config struct {
 	} `yaml:"service"`
 	AppRelease struct {
 		PublicOrigin string `yaml:"public_origin"`
-		RecoveryURL  string `yaml:"recovery_url"`
 		IOS          struct {
-			LatestVersion string `yaml:"latest_version"`
-			LatestBuild   string `yaml:"latest_build"`
-			PWAURL        string `yaml:"pwa_url"`
+			LatestVersion           string `yaml:"latest_version"`
+			LatestBuild             string `yaml:"latest_build"`
+			MinimumSupportedVersion string `yaml:"minimum_supported_version"`
+			MinimumSupportedBuild   string `yaml:"minimum_supported_build"`
+			UpdateURL               string `yaml:"update_url"`
+			RecoveryURL             string `yaml:"recovery_url"`
 		} `yaml:"ios"`
 		Android struct {
 			LatestVersion               string   `yaml:"latest_version"`
 			LatestBuild                 string   `yaml:"latest_build"`
+			MinimumSupportedVersion     string   `yaml:"minimum_supported_version"`
+			MinimumSupportedBuild       string   `yaml:"minimum_supported_build"`
+			UpdateURL                   string   `yaml:"update_url"`
+			RecoveryURL                 string   `yaml:"recovery_url"`
 			APKURL                      string   `yaml:"apk_url"`
 			APKHostAllowlist            []string `yaml:"apk_host_allowlist"`
 			APKPackageName              string   `yaml:"apk_package_name"`
@@ -64,6 +70,14 @@ type config struct {
 			APKSigningCertificateSHA256 string   `yaml:"apk_signing_certificate_sha256"`
 			MinAndroidVersion           string   `yaml:"min_android_version"`
 		} `yaml:"android"`
+		Web struct {
+			LatestVersion           string `yaml:"latest_version"`
+			LatestBuild             string `yaml:"latest_build"`
+			MinimumSupportedVersion string `yaml:"minimum_supported_version"`
+			MinimumSupportedBuild   string `yaml:"minimum_supported_build"`
+			UpdateURL               string `yaml:"update_url"`
+			RecoveryURL             string `yaml:"recovery_url"`
+		} `yaml:"web"`
 	} `yaml:"app_release"`
 	AccountSecurityAuthority struct {
 		BaseURL   string `yaml:"base_url"`
@@ -142,23 +156,41 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_APP_RELEASE_PUBLIC_ORIGIN")); v != "" {
 		cfg.AppRelease.PublicOrigin = v
 	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_APP_RELEASE_RECOVERY_URL")); v != "" {
-		cfg.AppRelease.RecoveryURL = v
-	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_LATEST_VERSION")); v != "" {
 		cfg.AppRelease.IOS.LatestVersion = v
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_LATEST_BUILD")); v != "" {
 		cfg.AppRelease.IOS.LatestBuild = v
 	}
-	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_PWA_URL")); v != "" {
-		cfg.AppRelease.IOS.PWAURL = v
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_MINIMUM_SUPPORTED_VERSION")); v != "" {
+		cfg.AppRelease.IOS.MinimumSupportedVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_MINIMUM_SUPPORTED_BUILD")); v != "" {
+		cfg.AppRelease.IOS.MinimumSupportedBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_UPDATE_URL")); v != "" {
+		cfg.AppRelease.IOS.UpdateURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_IOS_RECOVERY_URL")); v != "" {
+		cfg.AppRelease.IOS.RecoveryURL = v
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_LATEST_VERSION")); v != "" {
 		cfg.AppRelease.Android.LatestVersion = v
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_LATEST_BUILD")); v != "" {
 		cfg.AppRelease.Android.LatestBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_VERSION")); v != "" {
+		cfg.AppRelease.Android.MinimumSupportedVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_BUILD")); v != "" {
+		cfg.AppRelease.Android.MinimumSupportedBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_UPDATE_URL")); v != "" {
+		cfg.AppRelease.Android.UpdateURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_RECOVERY_URL")); v != "" {
+		cfg.AppRelease.Android.RecoveryURL = v
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_APK_URL")); v != "" {
 		cfg.AppRelease.Android.APKURL = v
@@ -182,6 +214,24 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ANDROID_MIN_ANDROID_VERSION")); v != "" {
 		cfg.AppRelease.Android.MinAndroidVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_WEB_LATEST_VERSION")); v != "" {
+		cfg.AppRelease.Web.LatestVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_WEB_LATEST_BUILD")); v != "" {
+		cfg.AppRelease.Web.LatestBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_WEB_MINIMUM_SUPPORTED_VERSION")); v != "" {
+		cfg.AppRelease.Web.MinimumSupportedVersion = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_WEB_MINIMUM_SUPPORTED_BUILD")); v != "" {
+		cfg.AppRelease.Web.MinimumSupportedBuild = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_WEB_UPDATE_URL")); v != "" {
+		cfg.AppRelease.Web.UpdateURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_WEB_RECOVERY_URL")); v != "" {
+		cfg.AppRelease.Web.RecoveryURL = v
 	}
 	if v := strings.TrimSpace(os.Getenv("MONGODB_URI")); v != "" {
 		cfg.MongoDB.URI = v

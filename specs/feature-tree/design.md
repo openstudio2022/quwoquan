@@ -55,7 +55,7 @@
 - 决策：`productLifecycleState` 独立于环境名；当前四环境可承载 `releaseClass=research` 的内部研究 release，但必须关闭匿名内容/媒体、公开 CDN、分享、导出与索引，并使用白名单身份、内部签名、研究态标识、短期签名 URL 和访问审计。切换 `commercial` 时冻结新 source digest 与 release，只投影 `rightsStatus=verified && distributionDecision=commercial_allowed`，不得就地改写或复用 research release/receipt。
 - 理由：环境内 Mock、fixture seed、数据库直写或派生投影预填会绕过 importer、媒体交付、鉴权、聚合不变量与事件恢复链路，产生无法晋级到生产的伪绿。
 - 被否决方案：Alpha runner 注入聚合 Mock、由环境名推断 lifecycle、T3/UAT 直写数据库、服务失败后返回 fixture、把评论或消息混入内容 release、把 research receipt 冒充 commercial readiness、在 Prod 创建测试业务对象。
-- 约束与影响：测试 double 只存在于 local_contract 测试树。Alpha/Beta/Gamma 的 test-live 启动不得把告警升级成内容或环境 Green 证据；真实验收写入仍绑定非生产主体、公开 command receipt 与受控清理。非 Prod 第三方 Provider substitute 只存在于服务防腐层并返回真实成功或结构化 unavailable。Prod 回滚仅允许上一 Remote artifact、service config 或 canonical release。
+- 约束与影响：测试 double 只存在于 local_contract 测试树。Alpha/Beta/Gamma 的 test-live 启动不得把告警升级成内容或环境 Green 证据，真实验收写入仍绑定非生产主体、公开 command receipt 与受控清理。“与生产同源”指相同 canonical publish、immutable release、importer、公开契约和 readback，不指复制 Prod 数据库。Creator 是 release 中的内容归属主体，不是可登录的验收 Actor。验收 Actor 只由 User 领域公开认证与 Persona command 创建。非 Prod 第三方 Provider substitute 只存在于服务防腐层并返回真实成功或结构化 unavailable。Prod 回滚仅允许上一 Remote artifact、service config 或 canonical release。
 - 关联要求：`REQ-009`、`REQ-010`
 
 <a id="dec-003"></a>

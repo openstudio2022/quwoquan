@@ -2,12 +2,14 @@
 # readiness_case: project-candidate-gathering-local
 from dataclasses import asdict
 import json
+import time
 
 import pytest
 
 from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.gathering_lifecycle_consumer import (
     CONSUMER_GROUP,
     GATHERING_LIFECYCLE_STREAM,
+    GATHERING_STREAM_POLL_BLOCK_MS,
     GatheringLifecycleConsumer,
     decode_gathering_lifecycle,
     gathering_candidate_snapshot,
@@ -133,6 +135,19 @@ class _Redis:
         return "2000-0"
 
 
+class _SocketDeadlineRedis(_Redis):
+    def __init__(self) -> None:
+        super().__init__({})
+        self.block_values: list[int] = []
+
+    def xreadgroup(self, *_args, **kwargs):
+        block_ms = int(kwargs.get("block") or 0)
+        self.block_values.append(block_ms)
+        if block_ms >= 200:
+            raise TimeoutError("socket deadline elapsed before empty stream response")
+        return []
+
+
 class _Projection:
     def __init__(self) -> None:
         self.events = []
@@ -159,6 +174,27 @@ class _PublicCards:
     def read_public_card(self, gathering_id: str):
         self.reads.append(gathering_id)
         return self.detail
+
+
+def test_background_empty_stream_poll_stays_inside_runtime_socket_deadline() -> None:
+    redis = _SocketDeadlineRedis()
+    consumer = GatheringLifecycleConsumer(
+        redis_client=redis,
+        projection=_Projection(),
+        public_cards=_PublicCards(None),
+        consumer="gathering-empty-stream-test",
+    )
+
+    consumer.start()
+    deadline = time.monotonic() + 1.0
+    while not consumer.healthy() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    consumer.stop()
+
+    assert consumer.healthy()
+    assert redis.block_values
+    assert set(redis.block_values) == {GATHERING_STREAM_POLL_BLOCK_MS}
+    assert GATHERING_STREAM_POLL_BLOCK_MS < 200
 
 
 def test_publish_projects_circle_signed_public_card_then_acks() -> None:

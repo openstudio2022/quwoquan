@@ -275,6 +275,62 @@ void main() {
       expect(gate, contains('R.drawable.launch_background'));
       expect(gate, contains('ViewTreeObserver.OnDrawListener'));
       expect(gate, contains('android_gate_static_frame_drawn'));
+      expect(gate, contains('android_gate_window_focus_confirmed'));
+      expect(
+        gate,
+        contains('public void onWindowFocusChanged(boolean hasFocus)'),
+      );
+      expect(gate, contains('normalLaunchHandoffArmed'));
+      expect(gate, contains('normalLaunchSurfaceReady'));
+      expect(gate, contains('normalWindowFocusConfirmed'));
+      expect(gate, contains('normalWindowFocusConfirmationDispatched'));
+      expect(gate, contains('normalWindowFocusReleaseRequested'));
+      expect(gate, contains('normalWindowFocusReleased'));
+      expect(gate, contains('normalHandoffDispatchPosted'));
+      expect(
+        gate,
+        contains('requestWindowFocusReleaseWhenReady();'),
+      );
+      expect(
+        gate,
+        contains('scheduleFlutterMainHandoffWhenReady();'),
+      );
+      expect(
+        gate,
+        contains(
+          '!normalLaunchSurfaceReady\n'
+          '        || !normalWindowFocusConfirmationDispatched\n'
+          '        || normalWindowFocusReleaseRequested',
+        ),
+      );
+      expect(
+        gate,
+        contains(
+          'getWindow().addFlags('
+          'WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);',
+        ),
+      );
+      expect(
+        gate,
+        contains('if (!normalWindowFocusReleased'),
+      );
+      expect(
+        gate,
+        contains(
+          'mainHandler.post(\n'
+          '        () -> {\n'
+          '          if (!isFinishing() && !isDestroyed()) {\n'
+          '            Log.i(STARTUP_TAG, "android_gate_window_focus_released");\n'
+          '            startFlutterMainActivity();',
+        ),
+      );
+      expect(
+        gate,
+        contains(
+          'android_gate_warm_task_handoff");\n'
+          '        startFlutterMainActivity();',
+        ),
+      );
       expect(
         gate.indexOf('mainHandler.post(\n                () -> {'),
         greaterThan(gate.indexOf('android_gate_static_frame_drawn')),
@@ -372,6 +428,13 @@ void main() {
       );
       expect(gradle, contains('qwq.nativeStartupInstrumentation'));
       expect(gradle, contains('androidx.test.runner.AndroidJUnitRunner'));
+      expect(
+        gradle,
+        contains(
+          'testInstrumentationRunnerArguments["class"] =\n'
+          '                "com.quwoquan.quwoquan_app.MainActivityTest"',
+        ),
+      );
       expect(gradle, contains('"QWQ_RUNTIME_CONFIG_DIGEST"'));
       expect(gradle, contains('expectedRuntimeConfigDigest'));
       expect(gradle, isNot(contains('nativeRuntimeConfigDigest')));

@@ -136,6 +136,26 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 "environment": environment,
                 "target": target,
                 "baselineId": baseline_id,
+                "releaseInputClassification": "commercial_inputs",
+                "contractGraphDigest": "sha256:" + "8" * 64,
+                "release": {
+                    "candidate": {
+                        "releaseId": "candidate-commercial",
+                        "releaseDigest": "sha256:" + "4" * 64,
+                        "attestationRef": "/candidate-commercial.json",
+                        "attestationDigest": "sha256:" + "5" * 64,
+                        "releaseClass": "commercial",
+                        "productLifecycleState": "commercial",
+                    },
+                    "rollback": {
+                        "releaseId": "rollback-commercial",
+                        "releaseDigest": "sha256:" + "6" * 64,
+                        "attestationRef": "/rollback-commercial.json",
+                        "attestationDigest": "sha256:" + "7" * 64,
+                        "releaseClass": "commercial",
+                        "productLifecycleState": "commercial",
+                    },
+                },
             },
         }
 
@@ -1403,6 +1423,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             target="gamma-local",
             fix="reclaim-build-cache",
             report_dir="",
+            confirm_global_build_cache_reclaim=True,
         )
         with (
             tempfile.TemporaryDirectory() as temporary_dir,
@@ -1412,9 +1433,22 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 return_value=Path(temporary_dir),
             ),
             mock.patch.object(stackctl, "_write_summary_bundle"),
+            mock.patch.object(
+                stackctl,
+                "_global_local_build_cache_lock",
+                return_value=contextlib.nullcontext({"mode": "exclusive"}),
+            ),
+            mock.patch.object(
+                stackctl,
+                "_local_build_cache_runtime_audit",
+                return_value={"targets": [], "evidenceIssues": []},
+            ),
             mock.patch.object(stackctl, "run") as run,
         ):
             run.side_effect = [
+                CompletedProcess(["docker", "context", "show"], 0, "colima", ""),
+                CompletedProcess(["docker", "info"], 0, "daemon", ""),
+                CompletedProcess(["docker", "builder", "ls"], 0, "builder", ""),
                 CompletedProcess(["docker", "system", "df"], 0, "before", ""),
                 CompletedProcess(
                     ["docker", "builder", "prune", "--all", "--force"],
@@ -1430,6 +1464,9 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in run.call_args_list],
             [
+                ["docker", "context", "show"],
+                ["docker", "info", "--format", "{{json .}}"],
+                ["docker", "builder", "ls", "--format", "json"],
                 ["docker", "system", "df"],
                 ["docker", "builder", "prune", "--all", "--force"],
                 ["docker", "system", "df"],
@@ -1487,6 +1524,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             target="gamma-local",
             fix="reclaim-build-cache",
             report_dir="",
+            confirm_global_build_cache_reclaim=True,
         )
         with (
             tempfile.TemporaryDirectory() as temporary_dir,
@@ -1496,9 +1534,22 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 return_value=Path(temporary_dir),
             ),
             mock.patch.object(stackctl, "_write_summary_bundle"),
+            mock.patch.object(
+                stackctl,
+                "_global_local_build_cache_lock",
+                return_value=contextlib.nullcontext({"mode": "exclusive"}),
+            ),
+            mock.patch.object(
+                stackctl,
+                "_local_build_cache_runtime_audit",
+                return_value={"targets": [], "evidenceIssues": []},
+            ),
             mock.patch.object(stackctl, "run") as run,
         ):
             run.side_effect = [
+                CompletedProcess(["docker", "context", "show"], 0, "colima", ""),
+                CompletedProcess(["docker", "info"], 0, "daemon", ""),
+                CompletedProcess(["docker", "builder", "ls"], 0, "builder", ""),
                 CompletedProcess(
                     ["docker", "system", "df"],
                     1,
@@ -1523,7 +1574,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         self.assertEqual(payload["exitCode"], 0)
         self.assertEqual(
             payload["summary"],
-            "gamma-local unused Docker build cache reclaimed",
+            "global unused Docker build cache reclaimed",
         )
 
     def test_reclaim_build_cache_is_available_from_each_local_target(self) -> None:
@@ -1532,6 +1583,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                 target=target,
                 fix="reclaim-build-cache",
                 report_dir="",
+                confirm_global_build_cache_reclaim=True,
             )
             with (
                 self.subTest(target=target),
@@ -1542,9 +1594,22 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                     return_value=Path(temporary_dir),
                 ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(
+                    stackctl,
+                    "_global_local_build_cache_lock",
+                    return_value=contextlib.nullcontext({"mode": "exclusive"}),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_local_build_cache_runtime_audit",
+                    return_value={"targets": [], "evidenceIssues": []},
+                ),
                 mock.patch.object(stackctl, "run") as run,
             ):
                 run.side_effect = [
+                    CompletedProcess(["docker", "context", "show"], 0, "colima", ""),
+                    CompletedProcess(["docker", "info"], 0, "daemon", ""),
+                    CompletedProcess(["docker", "builder", "ls"], 0, "builder", ""),
                     CompletedProcess(
                         ["docker", "system", "df"],
                         0,
@@ -1569,7 +1634,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
             self.assertEqual(payload["exitCode"], 0)
             self.assertEqual(
                 payload["summary"],
-                f"{target} unused Docker build cache reclaimed",
+                "global unused Docker build cache reclaimed",
             )
 
     def test_gamma_lock_rejects_overlapping_stack_operations(self) -> None:
@@ -2140,6 +2205,7 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
                         ]
                     ),
                     candidate_root=root,
+                    candidate_digest="sha256:" + "a" * 64,
                 )
 
         self.assertEqual(run.call_count, 2)
@@ -2147,6 +2213,102 @@ class StackctlGammaOperationLockContractTest(unittest.TestCase):
         self.assertEqual(
             set(manifest["images"]),
             {"api-edge", "user-service", "provider-runtime"},
+        )
+
+    def test_package_reports_successful_build_output_when_oci_digest_is_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir).resolve()
+            shared = root / "runtime-shared"
+            shared.mkdir()
+            provider_digest = "sha256:" + "d" * 64
+            composition = {
+                "imageVersion": "sha256:" + "b" * 64,
+                "configurationDigest": "sha256:" + "c" * 64,
+                "images": {"api-edge": {"ref": "localhost/api-edge:source"}},
+            }
+            provider_runtime = {
+                "composition": {"runtimeCompositionDigest": provider_digest},
+                "images": {},
+            }
+
+            def missing_after_successful_build(
+                argv: list[str],
+                *,
+                env: dict[str, str] | None = None,
+            ) -> CompletedProcess[str]:
+                if argv[:4] == ["docker", "image", "inspect", "--format"]:
+                    return CompletedProcess(argv, 1, "", "No such image")
+                self.assertIsNotNone(env)
+                self.assertEqual(
+                    env["QWQ_RELEASE_CANDIDATE_DIGEST"],  # type: ignore[index]
+                    "sha256:" + "a" * 64,
+                )
+                self.assertEqual(
+                    argv,
+                    [
+                        "bash",
+                        "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+                        "--build-only",
+                    ],
+                )
+                return CompletedProcess(
+                    argv,
+                    0,
+                    "prepared artifacts only\n",
+                    "unexpected early-success branch\n",
+                )
+
+            with (
+                mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_provider_runtime_launch_environment",
+                    return_value={},
+                ),
+                mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
+                mock.patch.object(stackctl, "_sync_object_storage_binding_aliases"),
+                mock.patch.object(stackctl, "_bind_package_provider_reference_environment"),
+                mock.patch.object(
+                    stackctl,
+                    "_bind_gamma_build_service_image_refs",
+                    return_value=composition,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_build_provider_runtime_images",
+                    return_value={},
+                ),
+                mock.patch.object(stackctl, "target_cache_dir", return_value=root / "cache"),
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    side_effect=missing_after_successful_build,
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "build-only stdout tail: prepared artifacts only",
+                ) as raised:
+                    stackctl._build_package_bound_local_images(
+                        "alpha",
+                        "alpha-local",
+                        report_dir=root / "report",
+                        provider_runtime=provider_runtime,
+                        observability_log_sink=(
+                            self._observability_runtime_binding("alpha", root)[
+                                "composition"
+                            ]
+                        ),
+                        candidate_root=root,
+                        candidate_digest="sha256:" + "a" * 64,
+                    )
+
+        self.assertIn(
+            "build-only stderr tail: unexpected early-success branch",
+            str(raised.exception),
         )
 
     def test_provider_image_tag_changes_with_complete_build_context(self) -> None:

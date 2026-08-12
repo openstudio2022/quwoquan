@@ -15,8 +15,9 @@ import (
 )
 
 // UserProfileSearchOutboxStore persists the replay checkpoint for ordinary
-// profile search projection. It contains no profile payload: each attempt reads
-// the authoritative profile and idempotently reconciles its stable ES document.
+// profile search projection. Each row retains the exact public projection
+// payload committed with its Persona/account mutation so transport retries
+// cannot observe a later profile version.
 type UserProfileSearchOutboxStore struct {
 	pool *pgxpool.Pool
 }
@@ -79,6 +80,7 @@ RETURNING
   outbox.profile_version,
   outbox.event_type,
   outbox.occurred_at,
+  outbox.payload_json,
   outbox.retry_count`,
 		owner,
 		now.UTC(),
@@ -89,6 +91,7 @@ RETURNING
 		&event.ProfileVersion,
 		&event.EventType,
 		&event.OccurredAt,
+		&event.PayloadJSON,
 		&event.DeliveryAttempt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -194,7 +197,7 @@ func normalizeUserProfileSearchOutboxFailure(
 	failure.Digest = strings.ToLower(strings.TrimSpace(failure.Digest))
 	switch failure.Code {
 	case userports.UserProfileSearchOutboxFailureClaim,
-		userports.UserProfileSearchOutboxFailureProject,
+		userports.UserProfileSearchOutboxFailurePublish,
 		userports.UserProfileSearchOutboxFailurePublishAck,
 		userports.UserProfileSearchOutboxFailureRetryRecord,
 		userports.UserProfileSearchOutboxFailureHealthStore,

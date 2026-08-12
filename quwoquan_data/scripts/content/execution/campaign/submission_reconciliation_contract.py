@@ -384,7 +384,8 @@ def blocker_evidence(
                 "expired semantic preflight evidence has invalid validUntil",
             ) from exc
         if (
-            payload.get("schema") != "quwoquan_data.semantic_preflight_receipt"
+            payload.get("schema")
+            != "quwoquan_data.semantic_provider_preflight_receipt"
             or payload.get("ready") is not True
             or expiry.tzinfo is None
             or expiry > datetime.now(timezone.utc)

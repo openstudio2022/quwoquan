@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,120 @@ ANDROID_APP_BUILD = ROOT / "quwoquan_app/android/app/build.gradle.kts"
 
 
 class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
+    def _run_launcher_with_preflight_policy(
+        self,
+        *,
+        gate_block: bool,
+    ) -> tuple[subprocess.CompletedProcess[str], str, str]:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            temp_root = Path(temporary_dir)
+            flutter_log = temp_root / "flutter.log"
+            stackctl_log = temp_root / "stackctl.log"
+            fake_flutter = temp_root / "flutter"
+            fake_flutter.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                f"printf '%s\\n' \"$*\" >> {shlex.quote(str(flutter_log))}\n"
+                "if [[ \"$*\" == \"pub get --offline\" ]]; then exit 0; fi\n"
+                "if [[ \"$*\" == \"devices --machine\" ]]; then\n"
+                "  echo '[{\"id\":\"policy-ios\",\"name\":\"Policy iPhone\","
+                "\"targetPlatform\":\"ios\",\"emulator\":true,"
+                "\"ephemeral\":false,\"isSupported\":true}]'\n"
+                "  exit 0\n"
+                "fi\n"
+                "if [[ \"${1:-}\" == \"run\" ]]; then exit 0; fi\n"
+                "exit 97\n",
+                encoding="utf-8",
+            )
+            fake_flutter.chmod(0o755)
+
+            fake_python = temp_root / "python3"
+            fake_python.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "if [[ \"${1:-}\" == */quwoquan_ops/cli/stackctl.py ]]; then\n"
+                f"  printf '%s\\n' \"$*\" >> {shlex.quote(str(stackctl_log))}\n"
+                "  if [[ \" $* \" == *\" app-debug-preflight \"* ]]; then\n"
+                "    if [[ \"${TEST_PREFLIGHT_GATE_BLOCK:-0}\" == \"1\" ]]; then\n"
+                "      echo '{\"exitCode\":2,\"status\":\"gate_block\","
+                "\"details\":[\"alpha api endpoint escapes the selected namespace\"],"
+                "\"warnings\":[]}'\n"
+                "      exit 2\n"
+                "    fi\n"
+                "    echo '{\"exitCode\":0,\"status\":\"warning\","
+                "\"details\":[],\"warnings\":[\"target startup status is not running: stopped\"],"
+                "\"runtimeChecks\":[],\"contentBindingState\":\"unbound\","
+                "\"contentAvailability\":{\"state\":\"unbound\","
+                "\"emptyReason\":\"no_active_release\"}}'\n"
+                "    exit 0\n"
+                "  fi\n"
+                "  if [[ \" $* \" == *\" device-trust \"* ]]"
+                " || [[ \" $* \" == *\" consumer-lease acquire \"* ]]; then\n"
+                "    exit 2\n"
+                "  fi\n"
+                "  if [[ \" $* \" == *\" consumer-lease release \"* ]]; then exit 0; fi\n"
+                "fi\n"
+                f"exec {shlex.quote(sys.executable)} \"$@\"\n",
+                encoding="utf-8",
+            )
+            fake_python.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = (
+                f"{temporary_dir}{os.pathsep}{environment['PATH']}"
+            )
+            environment["QWQ_OUTPUT_ROOT"] = str(temp_root / "output")
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
+            environment["PYTHONPYCACHEPREFIX"] = str(temp_root / "pycache")
+            environment["TEST_PREFLIGHT_GATE_BLOCK"] = "1" if gate_block else "0"
+            result = subprocess.run(
+                ["bash", str(APP_RUN), "--env", "alpha", "-d", "policy-ios"],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return (
+                result,
+                flutter_log.read_text(encoding="utf-8") if flutter_log.exists() else "",
+                stackctl_log.read_text(encoding="utf-8") if stackctl_log.exists() else "",
+            )
+
+    def test_launcher_warning_policy_reaches_flutter_run_without_runtime_lease(
+        self,
+    ) -> None:
+        result, flutter_log, stackctl_log = self._run_launcher_with_preflight_policy(
+            gate_block=False
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "WARN: target startup status is not running: stopped",
+            result.stderr,
+        )
+        self.assertIn(
+            "WARN: runtime consumer lease is unavailable",
+            result.stderr,
+        )
+        self.assertIn("run --no-pub", flutter_log)
+        self.assertIn(
+            "app-debug-preflight --target alpha-local --runtime-mode test_live",
+            stackctl_log,
+        )
+
+    def test_launcher_hard_safety_blocker_stops_before_flutter_run(self) -> None:
+        result, flutter_log, stackctl_log = self._run_launcher_with_preflight_policy(
+            gate_block=True
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("GATE_BLOCK: test_live launch safety validation failed", result.stderr)
+        self.assertNotIn("run --no-pub", flutter_log)
+        self.assertIn(
+            "app-debug-preflight --target alpha-local --runtime-mode test_live",
+            stackctl_log,
+        )
+
     def test_android_launcher_owns_and_releases_lease(self) -> None:
         script = APP_RUN.read_text(encoding="utf-8")
         self.assertIn("trap release_consumer_lease EXIT", script)
@@ -37,7 +152,10 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"', script)
         self.assertIn('export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"', script)
         self.assertIn('QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"', script)
-        self.assertIn("app-debug-preflight", script)
+        self.assertIn(
+            'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
+            script,
+        )
         self.assertIn("--platform ios-simulator", script)
         self.assertIn("--bundle-id com.example.quwoquanApp", script)
         self.assertIn("QWQ_CONSUMER_LEASE_ID", script)
@@ -67,7 +185,9 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn(device_guard, script)
         self.assertLess(
             script.index(device_guard),
-            script.index('app-debug-preflight --target "$QWQ_LAUNCH_TARGET"'),
+            script.index(
+                'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live'
+            ),
         )
 
     def test_launcher_blocks_unknown_device_before_runtime_preflight_or_flutter_run(
@@ -115,6 +235,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn('"direct-flutter-run"', launcher_gate)
         self.assertIn("handoffLocalPorts(directDebugHandoff)", launcher_gate)
         self.assertIn('if (appLaunchPolicy == "prod_release")', launcher_gate)
+        self.assertIn('if (leaseAcquired != "1")', launcher_gate)
+        self.assertIn("test_live transport lease is unavailable", launcher_gate)
         self.assertIn("contentReadinessReceiptDigest.matches", launcher_gate)
 
     def test_build_grace_blocks_without_adb_probe(self) -> None:

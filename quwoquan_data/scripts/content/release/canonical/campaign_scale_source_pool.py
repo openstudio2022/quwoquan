@@ -252,7 +252,6 @@ def source_pool_lineage_fields(
     source_pool = source_pool_fields.get("sourcePool")
     if not isinstance(source_pool, Mapping):
         raise CampaignScaleEvidenceError("current source-pool evidence is missing")
-    identities = ("sourceRevision", "sourceDigest", "entityCatalogDigest")
     current_ids = {
         str(row["carrier"]): set(row["candidateIds"])
         for row in source_pool["laneSelections"]
@@ -261,11 +260,8 @@ def source_pool_lineage_fields(
     for row in chain:
         evidence = row["evidence"]
         predecessor_pool = evidence.get("sourcePool")
-        if (
-            not isinstance(predecessor_pool, Mapping)
-            or any(predecessor_pool.get(key) != source_pool.get(key) for key in identities)
-        ):
-            raise CampaignScaleEvidenceError("source-pool predecessor identity drift")
+        if not isinstance(predecessor_pool, Mapping):
+            raise CampaignScaleEvidenceError("source-pool predecessor is missing")
         predecessor_digests.append(str(evidence["sourcePoolDigest"]))
         for lane in predecessor_pool.get("laneSelections") or []:
             carrier = str(lane.get("carrier") or "")

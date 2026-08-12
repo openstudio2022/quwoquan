@@ -30,6 +30,7 @@ import (
 	intersectionapp "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
 	outboundsharehttp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/adapters/inbound/http"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
+	postgraphql "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
@@ -47,8 +48,8 @@ import (
 	mediainfra "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/media"
 	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocesshttp "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/adapters/inbound/http"
-	originalaccessquotahttp "quwoquan_service/services/content-service/internal/media/original_access_quota/adapters/inbound/http"
 	uploadsessionhttp "quwoquan_service/services/content-service/internal/media/media_upload_session/adapters/inbound/http"
+	originalaccessquotahttp "quwoquan_service/services/content-service/internal/media/original_access_quota/adapters/inbound/http"
 	moderationhttp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/adapters/inbound/http"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
@@ -69,6 +70,7 @@ type contentHTTPHandlerInput struct {
 	postStore                    *persistence.MongoPostStore
 	postQueryReader              *persistence.MongoPostQueryReader
 	activeSupplyReader           feedapp.ActiveSupplyReader
+	researchReleaseReadback      *postapp.ResearchReleaseReadbackQueryFacet
 	feedCursorCodec              *feedapp.FeedCursorCodec
 	feedRuntimeConfig            feedRuntimeConfig
 	rankedRecommendation         deliveryapp.RankedRecommendationGateway
@@ -93,9 +95,15 @@ type contentHTTPHandlerInput struct {
 	outboundShareFacades         *outboundshareapp.Facades
 	profileInteractionFacades    *profileinteractionapp.Facades
 	filterCatalogFacades         *filtercatalogapp.Facades
+	contractGraphSHA256          string
 }
 
-func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
+type contentHTTPHandlers struct {
+	business        http.Handler
+	internalGraphQL http.Handler
+}
+
+func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers {
 	ctx := input.ctx
 	logger := input.logger
 	healthChecker := input.healthChecker
@@ -265,6 +273,12 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 
 	var handlerOpts []httpadapter.ContentHandlerOption
 	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
+	if input.researchReleaseReadback != nil {
+		handlerOpts = append(
+			handlerOpts,
+			httpadapter.WithResearchReleaseReadback(input.researchReleaseReadback),
+		)
+	}
 	if intersectionService == nil {
 		log.Fatal("content-service IntersectionVisitState object composition is not configured")
 	}
@@ -362,7 +376,17 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 		handlerOpts...,
 	).Routes()
 
-	return contentHandler
+	internalGraphQLHandler, err := postgraphql.NewInternalPersistedHandler(
+		postQueryService,
+		input.contractGraphSHA256,
+	)
+	if err != nil {
+		log.Fatalf("content-service internal GraphQL handler invalid: %v", err)
+	}
+	return contentHTTPHandlers{
+		business:        contentHandler,
+		internalGraphQL: internalGraphQLHandler,
+	}
 }
 
 func buildOnboardingInterestTaxonomyValidator(

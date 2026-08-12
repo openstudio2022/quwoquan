@@ -40,6 +40,8 @@ class RemoteIntersectionRepository implements IntersectionRepository {
   final IntersectionInvocationContextFactory
   objectIntersectionsInvocationContext;
 
+  static const int _maxInboxPages = 20;
+
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
     return client.contentIntersectionVisitStateGetMyIntersectionSummary(
@@ -59,22 +61,61 @@ class RemoteIntersectionRepository implements IntersectionRepository {
     String? cursor,
     int limit = CloudApiQueryDefaults.intersectionListLimit,
   }) async {
-    final page = await client.contentIntersectionVisitStateListMyIntersections(
-      ListMyIntersectionsQuery(
-        dimension: dimension?.trim().isEmpty == true ? null : dimension?.trim(),
-        filter: filter?.trim().isEmpty == true ? null : filter?.trim(),
-        sourceRef: sourceRef?.trim().isEmpty == true ? null : sourceRef?.trim(),
-        timeBucket: timeBucket?.trim().isEmpty == true
-            ? null
-            : timeBucket?.trim(),
-        cursor: cursor?.trim().isEmpty == true ? null : cursor?.trim(),
-        limit: limit,
-      ),
-      context: myIntersectionsInvocationContext(
-        ContentRequestPageIds.listMyIntersections,
-      ),
+    final normalizedDimension = dimension?.trim();
+    final normalizedFilter = filter?.trim();
+    final normalizedSourceRef = sourceRef?.trim();
+    final normalizedTimeBucket = timeBucket?.trim();
+    var nextCursor = cursor?.trim() ?? '';
+    final seenCursors = <String>{if (nextCursor.isNotEmpty) nextCursor};
+    final seenIntersectionIds = <String>{};
+    final items = <IntersectionReason>[];
+
+    for (var pageIndex = 0; pageIndex < _maxInboxPages; pageIndex += 1) {
+      final page = await client
+          .contentIntersectionVisitStateListMyIntersections(
+            ListMyIntersectionsQuery(
+              dimension: normalizedDimension?.isEmpty == true
+                  ? null
+                  : normalizedDimension,
+              filter: normalizedFilter?.isEmpty == true
+                  ? null
+                  : normalizedFilter,
+              sourceRef: normalizedSourceRef?.isEmpty == true
+                  ? null
+                  : normalizedSourceRef,
+              timeBucket: normalizedTimeBucket?.isEmpty == true
+                  ? null
+                  : normalizedTimeBucket,
+              cursor: nextCursor.isEmpty ? null : nextCursor,
+              limit: limit,
+            ),
+            context: myIntersectionsInvocationContext(
+              ContentRequestPageIds.listMyIntersections,
+            ),
+          );
+      for (final item in filterDefaultInboxLifecycle(page.items)) {
+        final identity = item.intersectionId.trim();
+        if (identity.isEmpty || !seenIntersectionIds.add(identity)) {
+          throw StateError(
+            'ListMyIntersections returned an empty or duplicate identity',
+          );
+        }
+        items.add(item);
+      }
+      if (!page.hasMore) {
+        return List<IntersectionReason>.unmodifiable(items);
+      }
+      final candidate = page.nextCursor?.trim() ?? '';
+      if (candidate.isEmpty || !seenCursors.add(candidate)) {
+        throw StateError(
+          'ListMyIntersections returned an invalid cursor progression',
+        );
+      }
+      nextCursor = candidate;
+    }
+    throw StateError(
+      'ListMyIntersections exceeded the bounded pagination window',
     );
-    return filterDefaultInboxLifecycle(page.items);
   }
 
   @override

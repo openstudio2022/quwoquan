@@ -4,17 +4,30 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping
 
-from core.control_types import QueueBackend
+from core.control_types import QueueBackend, QueueJobStage
 from core.io import read_json
+from governance.creators.assignment import creator_from_payload
+
 from content.execution.context import ExecutionContext
 from content.execution.production_contracts import sha256_file
 from content.execution.queue.jobs import enqueue_ref_job
 from content.execution.queue.model import QueueJob
 from content.execution.runtime_contract import canonical_sha256
-from governance.creators.assignment import creator_from_payload
 
 
-def uses_reliabletask(ctx: ExecutionContext) -> bool:
+def uses_reliabletask(
+    ctx: ExecutionContext,
+    *,
+    stage: QueueJobStage | str | None = None,
+) -> bool:
+    if stage is not None and QueueJobStage(str(stage)) is QueueJobStage.PUBLISH:
+        from content.execution.queue.backend import load_execution_queue_backend
+
+        envelope = load_execution_queue_backend(ctx.execution_id)
+        return (
+            str(envelope.get("poolDeliveryBackend") or "")
+            == QueueBackend.RELIABLE_TASK.value
+        )
     return str(ctx.spec.queue_policy.backend) == QueueBackend.RELIABLE_TASK.value
 
 
@@ -138,9 +151,10 @@ def _prepare_homepage_author_jobs(
     ctx: ExecutionContext,
     prompts: list[str],
 ) -> int:
+    from governance.coverage.entity_extract import entity_ref, require_domain_etype
+
     from content.execution.agent.agent_checkpoint import _managed_prompt_entity
     from content.homepage.homepage_review import _entity_draft_dir
-    from governance.coverage.entity_extract import entity_ref, require_domain_etype
 
     created = 0
     for prompt in prompts:
@@ -269,16 +283,24 @@ def prepare_reliable_publish_jobs(
     homepage_refs: set[str] | None = None,
 ) -> tuple[QueueJob, ...]:
     """Declare one publish transaction task per reviewed canonical object."""
-    if not uses_reliabletask(ctx):
+    if not uses_reliabletask(ctx, stage=QueueJobStage.PUBLISH):
         return ()
     from core.paths import execution_root
-    from core.tree_integrity import tree_integrity_stats
+
+    from content.execution.closure.pool_delivery import write_pool_delivery_intent
 
     root = execution_root(ctx.execution_id)
     jobs: list[QueueJob] = []
     for object_ref in sorted(homepage_refs or set()):
         canonical_ref = object_ref.removeprefix("/entity/")
         object_dir = root / "entities" / canonical_ref
+        relative = object_dir.relative_to(root).as_posix()
+        intent, intent_path = write_pool_delivery_intent(
+            ctx.execution_id,
+            carrier="homepage",
+            object_ref=object_ref,
+            content_object_dir=relative,
+        )
         jobs.append(
             enqueue_ref_job(
                 ctx.execution_id,
@@ -289,10 +311,10 @@ def prepare_reliable_publish_jobs(
                     "contentType": "homepage",
                     "carrier": "homepage",
                     "entityRef": object_ref,
-                    "sourceRevision": str(
-                        tree_integrity_stats(object_dir)["merkleRoot"]
-                    ),
-                    "contentObjectDir": object_dir.relative_to(root).as_posix(),
+                    "sourceRevision": intent["transactionInputDigest"],
+                    "contentObjectDir": relative,
+                    "poolDeliveryIntentRef": intent_path.relative_to(root).as_posix(),
+                    "poolDeliveryIntentDigest": intent["intentId"],
                 },
                 queue_backend=QueueBackend.RELIABLE_TASK,
             )
@@ -322,6 +344,12 @@ def prepare_reliable_publish_jobs(
         carrier = relative.split("/", 2)[1] if relative.startswith("posts/") else ""
         if not carrier:
             raise ValueError(f"ReliableTask publish object path 无载体：{relative}")
+        intent, intent_path = write_pool_delivery_intent(
+            ctx.execution_id,
+            carrier=carrier,
+            object_ref=ref,
+            content_object_dir=relative,
+        )
         jobs.append(
             enqueue_ref_job(
                 ctx.execution_id,
@@ -332,10 +360,10 @@ def prepare_reliable_publish_jobs(
                     "contentType": carrier,
                     "carrier": carrier,
                     "entityRef": _post_entity_ref(ctx.execution_id, ref),
-                    "sourceRevision": str(
-                        tree_integrity_stats(object_dir)["merkleRoot"]
-                    ),
+                    "sourceRevision": intent["transactionInputDigest"],
                     "contentObjectDir": relative,
+                    "poolDeliveryIntentRef": intent_path.relative_to(root).as_posix(),
+                    "poolDeliveryIntentDigest": intent["intentId"],
                 },
                 queue_backend=QueueBackend.RELIABLE_TASK,
             )

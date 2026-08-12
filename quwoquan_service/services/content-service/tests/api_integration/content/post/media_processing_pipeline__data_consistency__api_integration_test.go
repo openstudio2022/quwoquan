@@ -187,7 +187,7 @@ type mediaProcessingHarness struct {
 	service          *mediaapp.MediaService
 	uploads          *uploadsessionapp.UseCases
 	uploadHTTPClient *http.Client
-	worker           *mediaprocessing.Worker
+	mediaHandler     *mediaprocessing.MediaProcessingHandler
 	processor        mediaprocessing.Processor
 	sequence         int
 }
@@ -283,7 +283,7 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 	if err != nil {
 		t.Fatalf("build ffmpeg processor: %v", err)
 	}
-	worker := mediaprocessing.NewWorker(
+	mediaHandler := mediaprocessing.NewMediaProcessingHandler(
 		mediaStore, mediaStore, mediaStore, processor, service, mediaStore,
 	)
 	return &mediaProcessingHarness{
@@ -296,7 +296,7 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 		service:          service,
 		uploads:          uploads,
 		uploadHTTPClient: uploadAuthority.Client(),
-		worker:           worker,
+		mediaHandler:     mediaHandler,
 		processor:        processor,
 	}
 }
@@ -446,7 +446,7 @@ func (h *mediaProcessingHarness) uploadVisualMedia(
 func (h *mediaProcessingHarness) drainWorker(t *testing.T, ctx context.Context) {
 	t.Helper()
 	// 一次 Drain 消费 completed/created 两类事实；转码为分钟级预算内的真活。
-	if _, err := h.worker.Drain(ctx, 50); err != nil {
+	if _, err := h.mediaHandler.Process(ctx, 50); err != nil {
 		t.Fatalf("drain media processing worker: %v", err)
 	}
 }

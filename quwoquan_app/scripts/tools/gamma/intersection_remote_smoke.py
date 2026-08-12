@@ -58,9 +58,6 @@ def main() -> int:
 
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
-    from quwoquan_ops.cli.lib.local_environment_auth import (
-        open_reference_acceptance_session,
-    )
     from quwoquan_ops.cli.lib.output_paths import env_run_dir
     from quwoquan_ops.cli.lib.release_video_delivery import (
         ReleaseVideoDeliveryError,
@@ -114,15 +111,19 @@ def main() -> int:
     )
     report_root.mkdir(parents=True, exist_ok=True)
 
-    session = open_reference_acceptance_session(
-        args.base_url,
-        environment="gamma",
-        target_name="gamma-local",
-    )
+    access_token = os.environ.get("QWQ_TEST_DATA_ACCESS_TOKEN", "").strip()
+    owner_id = os.environ.get("QWQ_TEST_DATA_OWNER_ID", "").strip()
+    persona_id = os.environ.get("QWQ_TEST_DATA_PERSONA_ID", "").strip()
+    if not access_token or not owner_id or not persona_id:
+        print(
+            "[intersection-smoke] GATE_BLOCK: typed test-data actor binding is missing",
+            file=sys.stderr,
+        )
+        return 2
     print(
         f"[intersection-smoke] acceptance session ready: "
         f"release={identity['releaseId']} import={identity['importRunId']} "
-        f"owner={session.owner_id} persona={session.persona_id}"
+        f"owner={owner_id} persona={persona_id}"
     )
 
     command = [
@@ -132,10 +133,10 @@ def main() -> int:
         "--no-pub",
         "--dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true",
         f"--dart-define=LOCAL_GAMMA_CONTENT_BASE_URL={args.base_url}",
-        f"--dart-define=APP_CURRENT_USER_ID={session.persona_id}",
+        f"--dart-define=APP_CURRENT_USER_ID={persona_id}",
     ]
     child_environment = os.environ.copy()
-    child_environment["LOCAL_GAMMA_ACCEPTANCE_TOKEN"] = session.access_token
+    child_environment["LOCAL_GAMMA_ACCEPTANCE_TOKEN"] = access_token
     completed = subprocess.run(
         command,
         cwd=APP_ROOT,

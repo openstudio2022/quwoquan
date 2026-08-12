@@ -78,6 +78,62 @@ def _managed_command_execution_id(command: str) -> str:
     return str(execution_id or "")
 
 
+def _path_owns_resource(path: Path, resource_root: Path) -> bool:
+    try:
+        resolved = path.expanduser().resolve()
+        expected = resource_root.expanduser().resolve()
+    except OSError:
+        return False
+    return resolved == expected or expected in resolved.parents
+
+
+def _managed_execution_resource_conflicts(
+    conflicts: Sequence[Mapping[str, Any]],
+    *,
+    execution_id: str,
+    execution_root: Path,
+) -> list[dict[str, Any]]:
+    """Keep only processes contending for this execution's mutable resources.
+
+    Immutable source capsules and repository source bytes are read-only inputs.
+    Different ``data/tasks/<executionId>`` roots may therefore run in parallel.
+    Unknown ownership, checkout-wide cleanup, destructive commands and bridges
+    scoped above one execution root remain shared-resource conflicts.
+    """
+
+    current_execution_id = str(execution_id or "").strip()
+    selected: list[dict[str, Any]] = []
+    for raw in conflicts:
+        item = dict(raw)
+        kind = str(item.get("kind") or "")
+        command = str(item.get("command") or "")
+        if kind in {"execution_output_cleanup", "destructive_data_cli"}:
+            selected.append(item)
+            continue
+        if kind in {"data_cli", "managed_agent_worker"}:
+            observed_execution_id = _managed_command_execution_id(command)
+            if not observed_execution_id or observed_execution_id == current_execution_id:
+                selected.append(item)
+            continue
+        if kind == "cursor_sdk_bridge":
+            bridge_workspace = _cursor_bridge_workspace_from_command(command)
+            if bridge_workspace and _path_owns_resource(
+                Path(bridge_workspace), execution_root
+            ):
+                selected.append(item)
+                continue
+            # A bridge scoped to another exact execution root is independent.
+            # Missing/checkout-level workspace ownership is shared and blocks.
+            if not bridge_workspace:
+                selected.append(item)
+                continue
+            if not _path_owns_resource(
+                Path(bridge_workspace), execution_root.resolve().parent
+            ):
+                selected.append(item)
+    return selected
+
+
 def _is_data_cli_process(command: str) -> bool:
     """Recognize the Python CLI process itself, never a parent shell's text."""
     try:
@@ -191,25 +247,25 @@ def assert_managed_workspace_available(
 ) -> None:
     """Fail before execution setup when another task owns the local workspace."""
     from content.execution.agent.agent_runner import _redact_managed_secret
+    from content.execution.workspace import execution_root
 
     conflicts = _managed_workspace_conflicts_for_provider(
         _managed_local_workspace_conflicts(workspace),
         provider,
     )
-    foreign = [
-        item
-        for item in conflicts
-        if _managed_command_execution_id(str(item.get("command") or ""))
-        != execution_id
-    ]
-    if not foreign:
+    resource_conflicts = _managed_execution_resource_conflicts(
+        conflicts,
+        execution_id=execution_id,
+        execution_root=execution_root(execution_id),
+    )
+    if not resource_conflicts:
         return
     rendered = "; ".join(
         f"{item.get('kind')} pid={item.get('pid')}"
-        for item in foreign[:8]
+        for item in resource_conflicts[:8]
     )
     raise ManagedWorkspaceConflictError(
-        "managed local workspace is occupied by another execution: "
+        "DATA.EXECUTION.RESOURCE_CONFLICT: managed execution resource is occupied: "
         + _redact_managed_secret(rendered)
     )
 

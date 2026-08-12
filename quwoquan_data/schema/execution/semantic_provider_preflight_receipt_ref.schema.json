@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/semantic_provider_preflight_receipt_ref.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receiptRef", "receiptFileSha256", "receiptId", "selectionDigest"],
+  "properties": {
+    "receiptRef": {"type": "string", "minLength": 1},
+    "receiptFileSha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "receiptId": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "selectionDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

@@ -196,6 +196,8 @@ def _run_post_compose(ctx: ExecutionContext) -> StageResult:
                 brief = {}
             for field in (
                 "writingIntent",
+                "articleCategory",
+                "tagRefs",
                 "baseSourceRef",
                 "carrier",
                 "sourceCollectionId",

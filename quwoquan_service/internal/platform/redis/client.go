@@ -44,6 +44,160 @@ func newSceneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 
 type client struct {
 	raw goredis.UniversalClient
+
+	consumerGroupMu sync.Mutex
+	consumerGroups  map[string]struct{}
+	streamPolls     *streamPollGovernor
+}
+
+const (
+	streamPollInitialDelay = 50 * time.Millisecond
+	streamPollMaximumDelay = 500 * time.Millisecond
+)
+
+type streamPollState struct {
+	emptyReads int
+	nextPoll   time.Time
+}
+
+type streamPollGovernor struct {
+	mu      sync.Mutex
+	initial time.Duration
+	maximum time.Duration
+	states  map[string]streamPollState
+}
+
+func newStreamPollGovernor(initial, maximum time.Duration) *streamPollGovernor {
+	if initial <= 0 || maximum < initial {
+		panic("redis stream poll backoff bounds are invalid")
+	}
+	return &streamPollGovernor{
+		initial: initial,
+		maximum: maximum,
+		states:  make(map[string]streamPollState),
+	}
+}
+
+func (g *streamPollGovernor) delay(key string) time.Duration {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	remaining := time.Until(g.states[key].nextPoll)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+func (g *streamPollGovernor) wait(ctx context.Context, key string) error {
+	if g == nil {
+		return nil
+	}
+	for {
+		g.mu.Lock()
+		state := g.states[key]
+		remaining := time.Until(state.nextPoll)
+		if remaining <= 0 {
+			g.mu.Unlock()
+			return nil
+		}
+		g.mu.Unlock()
+
+		timer := time.NewTimer(remaining)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (g *streamPollGovernor) record(key string, messages int, err error) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if messages > 0 {
+		delete(g.states, key)
+		return
+	}
+	state := g.states[key]
+	state.emptyReads++
+	delay := g.initial
+	for step := 1; step < state.emptyReads && delay < g.maximum; step++ {
+		delay *= 2
+		if delay > g.maximum {
+			delay = g.maximum
+		}
+	}
+	// Transient errors use the same bounded retry governance as a successful
+	// empty read. They must not form a failure-command hot loop.
+	_ = err
+	state.nextPoll = time.Now().Add(delay)
+	g.states[key] = state
+}
+
+func streamPollKey(stream, group string) string {
+	return strings.TrimSpace(stream) + "\x00" + strings.TrimSpace(group)
+}
+
+func streamConsumerPollKey(stream, group, consumer string) string {
+	return streamPollKey(stream, group) + "\x00" + strings.TrimSpace(consumer)
+}
+
+func streamPollKeyForRead(
+	group, consumer string,
+	streams map[string]string,
+) string {
+	streamNames := make([]string, 0, len(streams))
+	for stream := range streams {
+		streamNames = append(streamNames, strings.TrimSpace(stream))
+	}
+	sort.Strings(streamNames)
+	return strings.Join(streamNames, "\x00") + "\x00" +
+		strings.TrimSpace(group) + "\x00" + strings.TrimSpace(consumer)
+}
+
+type redisProtocolError interface {
+	RedisError()
+}
+
+func isBusyGroupError(err error) bool {
+	var protocolError redisProtocolError
+	return errors.As(err, &protocolError) &&
+		strings.HasPrefix(err.Error(), "BUSYGROUP ")
+}
+
+func isNoGroupError(err error) bool {
+	var protocolError redisProtocolError
+	return errors.As(err, &protocolError) &&
+		strings.HasPrefix(err.Error(), "NOGROUP ")
+}
+
+func (c *client) invalidateConsumerGroups(
+	group string,
+	streams map[string]string,
+) {
+	c.consumerGroupMu.Lock()
+	defer c.consumerGroupMu.Unlock()
+	for stream := range streams {
+		delete(c.consumerGroups, streamPollKey(stream, group))
+	}
+}
+
+func (c *client) pollGovernor() *streamPollGovernor {
+	c.consumerGroupMu.Lock()
+	defer c.consumerGroupMu.Unlock()
+	if c.streamPolls == nil {
+		c.streamPolls = newStreamPollGovernor(
+			streamPollInitialDelay,
+			streamPollMaximumDelay,
+		)
+	}
+	return c.streamPolls
 }
 
 var compareAndSwapHashFieldScript = goredis.NewScript(`
@@ -626,11 +780,21 @@ func (c *client) XGroupCreateMkStream(
 	ctx context.Context,
 	stream, group, start string,
 ) error {
-	err := c.raw.XGroupCreateMkStream(ctx, stream, group, start).Err()
-	if err != nil && strings.Contains(err.Error(), "BUSYGROUP") {
+	key := streamPollKey(stream, group)
+	c.consumerGroupMu.Lock()
+	defer c.consumerGroupMu.Unlock()
+	if _, initialized := c.consumerGroups[key]; initialized {
 		return nil
 	}
-	return err
+	err := c.raw.XGroupCreateMkStream(ctx, stream, group, start).Err()
+	if err != nil && !isBusyGroupError(err) {
+		return err
+	}
+	if c.consumerGroups == nil {
+		c.consumerGroups = make(map[string]struct{})
+	}
+	c.consumerGroups[key] = struct{}{}
+	return nil
 }
 
 func (c *client) XAdd(
@@ -687,15 +851,25 @@ func (c *client) XReadGroup(
 	count int64,
 	block time.Duration,
 ) ([]rtredis.StreamMessage, error) {
+	pollKey := streamPollKeyForRead(group, consumer, streams)
+	governor := c.pollGovernor()
+	if err := governor.wait(ctx, pollKey); err != nil {
+		return nil, err
+	}
 	streamArguments := orderedStreamArguments(streams)
 	block = normalizeXReadGroupBlock(block)
 	result, err := c.raw.XReadGroup(ctx, &goredis.XReadGroupArgs{
 		Group: group, Consumer: consumer, Streams: streamArguments, Count: count, Block: block,
 	}).Result()
 	if errors.Is(err, goredis.Nil) {
+		governor.record(pollKey, 0, nil)
 		return nil, nil
 	}
 	if err != nil {
+		if isNoGroupError(err) {
+			c.invalidateConsumerGroups(group, streams)
+		}
+		governor.record(pollKey, 0, err)
 		return nil, err
 	}
 	output := make([]rtredis.StreamMessage, 0)
@@ -708,6 +882,7 @@ func (c *client) XReadGroup(
 			})
 		}
 	}
+	governor.record(pollKey, len(output), nil)
 	return output, nil
 }
 
@@ -729,6 +904,11 @@ func (c *client) XAutoClaim(
 	start string,
 	count int64,
 ) ([]rtredis.StreamMessage, string, error) {
+	pollKey := streamConsumerPollKey(stream, group, consumer)
+	governor := c.pollGovernor()
+	if err := governor.wait(ctx, pollKey); err != nil {
+		return nil, start, err
+	}
 	messages, next, err := c.raw.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
 		Stream: stream, Group: group, Consumer: consumer, MinIdle: minIdle, Start: start, Count: count,
 	}).Result()
@@ -736,6 +916,13 @@ func (c *client) XAutoClaim(
 		return nil, next, nil
 	}
 	if err != nil {
+		if isNoGroupError(err) {
+			c.invalidateConsumerGroups(
+				group,
+				map[string]string{stream: ">"},
+			)
+		}
+		governor.record(pollKey, 0, err)
 		return nil, next, err
 	}
 	output := make([]rtredis.StreamMessage, 0, len(messages))
@@ -746,6 +933,7 @@ func (c *client) XAutoClaim(
 			Values: stringValueMap(message.Values),
 		})
 	}
+	governor.record(pollKey, len(output), nil)
 	return output, next, nil
 }
 

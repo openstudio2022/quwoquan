@@ -18,7 +18,7 @@
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
     },
     "semanticSelectionId": {
-      "enum": ["default", "cursor_auto"]
+      "enum": ["default", "cursor_grok", "cursor_auto"]
     },
     "ready": {
       "const": true

@@ -28,6 +28,35 @@ type DataContentCampaignBinding struct {
 	EntityCatalogDigest string `json:"campaignEntityCatalogDigest"`
 }
 
+// DataContentWorkerFence is the central Mongo claim authority for one host generation.
+type DataContentWorkerFence struct {
+	HostSetDigest string
+	Generation    int
+	FencingToken  string
+	HostScopeID   string
+}
+
+func (f DataContentWorkerFence) Validate() error {
+	if !validSHA256Digest(f.HostSetDigest) || f.Generation < 1 ||
+		!validSHA256Digest(f.FencingToken) || strings.TrimSpace(f.HostScopeID) == "" {
+		return fmt.Errorf("reliabletask data worker fence is invalid")
+	}
+	return nil
+}
+
+func (f DataContentWorkerFence) payload() map[string]string {
+	return map[string]string{
+		"workerHostSetDigest":  strings.TrimSpace(f.HostSetDigest),
+		"workerHostGeneration": strconv.Itoa(f.Generation),
+		"workerFencingToken":   strings.TrimSpace(f.FencingToken),
+		"workerHostScopeId":    strings.TrimSpace(f.HostScopeID),
+	}
+}
+
+func (f DataContentWorkerFence) PayloadForStore() map[string]string {
+	return f.payload()
+}
+
 func (b DataContentCampaignBinding) empty() bool {
 	return strings.TrimSpace(b.RootExecutionID) == "" &&
 		strings.TrimSpace(b.RunID) == "" &&
@@ -93,11 +122,13 @@ type DataContentJob struct {
 	Stage                   string                     `json:"stage"`
 	PartitionKey            string                     `json:"partitionKey"`
 	IdempotencyKey          string                     `json:"idempotencyKey"`
+	MaxAttempts             int                        `json:"maxAttempts"`
 	ExecutionEnvelopeDigest string                     `json:"executionEnvelopeDigest,omitempty"`
 	JobSetEnvelopeDigest    string                     `json:"jobSetEnvelopeDigest,omitempty"`
 	JobSetDigest            string                     `json:"jobSetDigest,omitempty"`
 	ActualTaskDigest        string                     `json:"actualTaskDigest,omitempty"`
 	Campaign                DataContentCampaignBinding `json:"campaignBinding,omitempty"`
+	WorkerFence             *DataContentWorkerFence    `json:"-"`
 }
 
 func (j DataContentJob) ExpectedIdempotencyKey() (string, error) {
@@ -147,6 +178,9 @@ func (j DataContentJob) ValidateIdentity() (string, error) {
 	if strings.TrimSpace(j.IdempotencyKey) != expected {
 		return "", fmt.Errorf("reliabletask data job idempotencyKey does not match immutable job identity")
 	}
+	if j.MaxAttempts < 1 {
+		return "", fmt.Errorf("reliabletask data job maxAttempts must be >= 1")
+	}
 	if !j.Campaign.empty() {
 		if err := j.Campaign.Validate(); err != nil {
 			return "", err
@@ -159,6 +193,11 @@ func (j DataContentJob) ValidateIdentity() (string, error) {
 		!validSHA256Digest(j.JobSetDigest) ||
 		!validSHA256Digest(j.ActualTaskDigest) {
 		return "", fmt.Errorf("reliabletask data job requires frozen job-set digests")
+	}
+	if j.WorkerFence != nil {
+		if err := j.WorkerFence.Validate(); err != nil {
+			return "", err
+		}
 	}
 	return expected, nil
 }
@@ -175,6 +214,7 @@ func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 		"carrier":              strings.TrimSpace(j.Carrier),
 		"sourceRevision":       strings.TrimSpace(j.SourceRevision),
 		"idempotencyKey":       idempotencyKey,
+		"maxAttempts":          strconv.Itoa(j.MaxAttempts),
 		"jobSetEnvelopeDigest": strings.TrimSpace(j.JobSetEnvelopeDigest),
 		"jobSetDigest":         strings.TrimSpace(j.JobSetDigest),
 		"actualTaskDigest":     strings.TrimSpace(j.ActualTaskDigest),
@@ -185,21 +225,36 @@ func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 			payload[key] = value
 		}
 	}
+	if j.WorkerFence != nil {
+		for key, value := range j.WorkerFence.payload() {
+			payload[key] = value
+		}
+	}
 	return payload
 }
 
 // DataContentFleet 复用 runtime/reliabletask 的 Store/ReadyIndex/Worker，
 // 不在 data 仓再实现 Mongo/Redis 状态机。
 type DataContentFleet struct {
-	Store          DataContentExecutionStore
-	ExecutionID    string
-	Ready          ReadyIndex
-	WorkerID       string
-	LeaseTTL       time.Duration
-	PendingMinIdle time.Duration
-	Retry          RetryPolicy
-	ResultVerifier DataContentResultVerifier
-	Now            func() time.Time
+	Store             DataContentExecutionStore
+	ExecutionID       string
+	Ready             ReadyIndex
+	WorkerID          string
+	LeaseTTL          time.Duration
+	PendingMinIdle    time.Duration
+	Retry             RetryPolicy
+	AllowedPartitions map[string]struct{}
+	WorkerFence       *DataContentWorkerFence
+	ResultVerifier    DataContentResultVerifier
+	Now               func() time.Time
+}
+
+func (f DataContentFleet) ownsPartition(task ReliableAsyncTask) bool {
+	if len(f.AllowedPartitions) == 0 {
+		return true
+	}
+	_, ok := f.AllowedPartitions[strings.TrimSpace(task.PartitionKey)]
+	return ok
 }
 
 // DataContentExecutionStore is the execution-scoped ReliableTask boundary for
@@ -263,6 +318,45 @@ type DataContentCheckpointStore interface {
 	) error
 }
 
+type DataContentFenceStore interface {
+	AdvanceDataContentTaskFence(
+		ctx context.Context,
+		taskID string,
+		fence DataContentWorkerFence,
+		now time.Time,
+	) (bool, error)
+}
+
+func (f DataContentFleet) BindWorkerFence(
+	ctx context.Context,
+	tasks []ReliableAsyncTask,
+) error {
+	if f.WorkerFence == nil {
+		return nil
+	}
+	if err := f.WorkerFence.Validate(); err != nil {
+		return err
+	}
+	store, ok := f.Store.(DataContentFenceStore)
+	if !ok {
+		return fmt.Errorf("data content fleet requires durable worker fence store")
+	}
+	now := time.Now().UTC()
+	if f.Now != nil {
+		now = f.Now().UTC()
+	}
+	for _, task := range tasks {
+		bound, err := store.AdvanceDataContentTaskFence(ctx, task.TaskID, *f.WorkerFence, now)
+		if err != nil {
+			return err
+		}
+		if !bound {
+			return fmt.Errorf("stale data content worker generation rejected for task %s", task.TaskID)
+		}
+	}
+	return nil
+}
+
 func (f DataContentFleet) executionID() (string, error) {
 	executionID := strings.TrimSpace(f.ExecutionID)
 	if executionID == "" {
@@ -294,7 +388,11 @@ func (f DataContentFleet) Declare(ctx context.Context, job DataContentJob) (Task
 	payloadAllow := []string{
 		"schema", "jobId", "executionId", "ref", "stage", "partitionKey",
 		"entityRef", "carrier", "sourceRevision", "idempotencyKey",
+		"maxAttempts",
 		"jobSetEnvelopeDigest", "jobSetDigest", "actualTaskDigest",
+	}
+	if job.WorkerFence != nil {
+		payloadAllow = append(payloadAllow, "workerHostSetDigest", "workerHostGeneration", "workerFencingToken", "workerHostScopeId")
 	}
 	if !job.Campaign.empty() {
 		payloadAllow = append(
@@ -340,14 +438,20 @@ func (f DataContentFleet) Dispatch(ctx context.Context, limit int) ([]ReliableAs
 	if err != nil {
 		return nil, err
 	}
+	owned := make([]ReliableAsyncTask, 0, len(tasks))
+	for _, task := range tasks {
+		if f.ownsPartition(task) {
+			owned = append(owned, task)
+		}
+	}
 	if f.Ready != nil {
-		for _, task := range tasks {
+		for _, task := range owned {
 			if err := f.Ready.EnqueueReadyOrMerge(ctx, task); err != nil {
 				return nil, err
 			}
 		}
 	}
-	return tasks, nil
+	return owned, nil
 }
 
 // RecoverAuditedDeadJobs revives only request-selected dead tasks. The
@@ -420,6 +524,9 @@ func (f DataContentFleet) ReconcileReadyIndex(ctx context.Context, limit int) (i
 	}
 	enqueued := 0
 	for _, task := range tasks {
+		if !f.ownsPartition(task) {
+			continue
+		}
 		if err := f.Ready.EnqueueReadyOrMerge(ctx, task); err != nil {
 			return enqueued, err
 		}
@@ -441,7 +548,25 @@ func (f DataContentFleet) ProcessOne(ctx context.Context, handler TaskHandler) (
 		LeaseTTL:       f.LeaseTTL,
 		PendingMinIdle: f.PendingMinIdle,
 		Retry:          f.Retry,
-		Now:            f.Now,
+		RetryPolicyForTask: func(task ReliableAsyncTask) (RetryPolicy, error) {
+			maxAttempts, err := strconv.Atoi(strings.TrimSpace(task.Payload["maxAttempts"]))
+			if err != nil || maxAttempts < 1 {
+				return RetryPolicy{}, fmt.Errorf(
+					"reliabletask data task %s maxAttempts is invalid",
+					task.TaskID,
+				)
+			}
+			policy := f.Retry
+			policy.MaxAttempts = maxAttempts
+			return policy, nil
+		},
+		Now: f.Now,
+		ClaimFence: func() map[string]string {
+			if f.WorkerFence == nil {
+				return nil
+			}
+			return f.WorkerFence.payload()
+		}(),
 	}
 	return worker.ProcessOne(ctx, handler)
 }

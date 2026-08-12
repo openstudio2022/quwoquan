@@ -17,6 +17,8 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 		PublicOrigin: "https://download.quwoquan.example",
 		Android: apprelease.Release{
 			LatestVersion: "1.8.2", LatestBuild: "18201",
+			MinimumSupportedVersion:     "1.8.0",
+			MinimumSupportedBuild:       "18000",
 			UpdateURL:                   "https://download.quwoquan.example/download/android",
 			RecoveryURL:                 "https://download.quwoquan.example/download",
 			APKURL:                      "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
@@ -26,6 +28,22 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
 			MinAndroidVersion:           "26",
+		},
+		IOS: apprelease.Release{
+			LatestVersion:           "1.8.2",
+			LatestBuild:             "18201",
+			MinimumSupportedVersion: "1.8.0",
+			MinimumSupportedBuild:   "18000",
+			UpdateURL:               "https://apps.apple.com/app/id1234567890",
+			RecoveryURL:             "https://download.quwoquan.example/download/ios",
+		},
+		Web: apprelease.Release{
+			LatestVersion:           "1.8.2",
+			LatestBuild:             "18201",
+			MinimumSupportedVersion: "1.8.0",
+			MinimumSupportedBuild:   "18000",
+			UpdateURL:               "https://download.quwoquan.example/",
+			RecoveryURL:             "https://download.quwoquan.example/download",
 		},
 	})
 	if err != nil {
@@ -47,8 +65,28 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 	if err := json.Unmarshal(version.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload["latestBuild"] != "18201" || payload["updateUrl"] != "https://download.quwoquan.example/download/android" {
+	if payload["latestBuild"] != "18201" || payload["minimumSupportedBuild"] != "18000" ||
+		payload["updateState"] != "available" || payload["platform"] != "android" ||
+		payload["updateUrl"] != "https://download.quwoquan.example/download/android" {
 		t.Fatalf("version payload=%v", payload)
+	}
+
+	webVersion := httptest.NewRecorder()
+	mux.ServeHTTP(webVersion, httptest.NewRequest(
+		http.MethodGet,
+		"/ops/app-recovery/version?platform=web&appVersion=1.0.0&buildNumber=1",
+		nil,
+	))
+	if webVersion.Code != http.StatusOK {
+		t.Fatalf("web version status=%d body=%s", webVersion.Code, webVersion.Body.String())
+	}
+	payload = nil
+	if err := json.Unmarshal(webVersion.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["platform"] != "web" || payload["updateState"] != "required" ||
+		payload["updateUrl"] != "https://download.quwoquan.example/" {
+		t.Fatalf("web version payload=%v", payload)
 	}
 
 	download := httptest.NewRecorder()
@@ -56,7 +94,13 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 	if download.Code != http.StatusTemporaryRedirect || download.Header().Get("Location") != "https://cdn.quwoquan.example/releases/quwoquan-18201.apk" {
 		t.Fatalf("download status=%d headers=%v", download.Code, download.Header())
 	}
-	if download.Header().Get("X-Quwoquan-APK-SHA256") != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
-		t.Fatalf("download digest=%q", download.Header().Get("X-Quwoquan-APK-SHA256"))
+	if download.Header().Get("X-App-Package-SHA256") != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Fatalf("download digest=%q", download.Header().Get("X-App-Package-SHA256"))
+	}
+	if download.Header().Get("X-App-Build-Number") != "18201" {
+		t.Fatalf("download build=%q", download.Header().Get("X-App-Build-Number"))
+	}
+	if download.Header().Get("X-Quwoquan-APK-SHA256") != "" || download.Header().Get("X-Quwoquan-APK-Build") != "" {
+		t.Fatalf("legacy branded headers must be absent: %v", download.Header())
 	}
 }

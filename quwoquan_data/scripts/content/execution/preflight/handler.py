@@ -184,51 +184,6 @@ def _startup_timeout_seconds(args: argparse.Namespace) -> float:
     return float(active_runtime_policy().startup_timeout_seconds)
 
 
-def _reliabletask_fleet_report() -> dict:
-    from content.execution.queue.reliabletask.fleet import reliabletask_fleet_preflight
-
-    try:
-        report = reliabletask_fleet_preflight()
-    except (OSError, RuntimeError, ValueError) as exc:
-        return {
-            "checked": True,
-            "ready": False,
-            "issues": [f"ReliableTask fleet preflight failed: {type(exc).__name__}"],
-        }
-    return {
-        "checked": True,
-        "ready": bool(report.get("ready")),
-        "target": report.get("target"),
-        "mongo": bool(report.get("mongo")),
-        "redis": bool(report.get("redis")),
-        "owned": bool(report.get("owned")),
-        "issues": list(report.get("issues") or []),
-    }
-
-
-def _apply_reliabletask_fleet_gate(
-    report: dict,
-    _args: argparse.Namespace | None = None,
-) -> dict:
-    existing = report.get("reliableTaskFleet")
-    fleet = (
-        dict(existing)
-        if isinstance(existing, dict) and existing.get("checked") is True
-        else _reliabletask_fleet_report()
-    )
-    report["reliableTaskFleet"] = fleet
-    fleet_ready = all(
-        fleet.get(field) is True
-        for field in ("checked", "ready", "mongo", "redis", "owned")
-    )
-    if not fleet_ready:
-        report["ready"] = False
-        issues = report.setdefault("issues", [])
-        if isinstance(issues, list):
-            issues.extend(str(item) for item in fleet.get("issues") or [])
-    return report
-
-
 def handle_preflight(args: argparse.Namespace) -> None:
     selection = _resolved_selection(args)
     report = semantic_agent_environment_preflight(
@@ -243,7 +198,6 @@ def handle_preflight(args: argparse.Namespace) -> None:
         startup_timeout_seconds=_startup_timeout_seconds(args),
     )
     bind_semantic_preflight_selection(report, selection)
-    _apply_reliabletask_fleet_gate(report, args)
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
     if not report.get("ready"):
         raise SystemExit(1)
@@ -285,7 +239,7 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
     """
     selection = _resolved_selection(args)
     if Path(sys.executable).absolute() == python.absolute():
-        report = _apply_reliabletask_fleet_gate(semantic_agent_environment_preflight(
+        report = semantic_agent_environment_preflight(
             provider=selection.provider,
             require_credential=not bool(getattr(args, "no_semantic_agent_credential", False)),
             check_network=not bool(getattr(args, "no_network", False)),
@@ -295,13 +249,15 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
             startup_model=selection.model_selection,
             startup_runtime=selection.runtime.value,
             startup_timeout_seconds=_startup_timeout_seconds(args),
-        ), args)
+        )
         return bind_semantic_preflight_selection(report, selection)
     cmd = [
         str(python),
         str(Path(__file__).resolve().parents[3] / "cli.py"),
         "task",
         "preflight",
+        "--profile",
+        "semantic",
         "--json",
         "--semantic-selection-id",
         selection.selection_id,
@@ -396,6 +352,35 @@ def _redact_runtime_child_diagnostic(
 
 
 def handle_ready(args: argparse.Namespace) -> None:
+    profile = str(getattr(args, "profile", "semantic") or "semantic").strip()
+    if profile == "pool-delivery":
+        from content.execution.preflight.pool_delivery import (
+            run_pool_delivery_preflight,
+        )
+
+        report = run_pool_delivery_preflight(args)
+        report_out = getattr(args, "report_out", None)
+        if report_out:
+            out = _report_output_path(report_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        if bool(getattr(args, "json", False)):
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(
+                "[task preflight] pool-delivery="
+                + ("ready" if report.get("poolDeliveryReady") else "failed")
+            )
+            for issue in report.get("issues") or []:
+                print(f"  - {issue}", file=sys.stderr)
+        if not report.get("poolDeliveryReady"):
+            raise SystemExit(1)
+        return
+    if profile != "semantic":
+        raise ValueError(f"unsupported task preflight profile: {profile}")
     if os.environ.get(_RUNTIME_CHILD_ENV) == "1":
         handle_preflight(args)
         return
@@ -424,11 +409,6 @@ def handle_ready(args: argparse.Namespace) -> None:
         )
     )
     bind_semantic_preflight_selection(preflight, selection)
-    # The verified runtime child already returned the canonical read-only fleet
-    # status. Reusing it here avoids a duplicate probe while preserving the
-    # fail-closed receipt binding.
-    if not delegated_to_runtime_child:
-        _apply_reliabletask_fleet_gate(preflight, args)
     startup_timeout_seconds = _startup_timeout_seconds(args)
     semantic_agent_startup = (
         dict(preflight.get("semanticAgentStartup") or {})
@@ -454,6 +434,7 @@ def handle_ready(args: argparse.Namespace) -> None:
     )
     report = {
         "schema": "quwoquan_data.task_preflight",
+        "preflightProfile": "semantic",
         **selection.document(),
         "selectionDigest": selection.selection_digest,
         "fallbackPolicy": "forbidden",
@@ -518,10 +499,21 @@ def register_task_preflight_parser(subparsers: argparse._SubParsersAction) -> No
     )
     pr.add_argument("--json", action="store_true")
     pr.add_argument(
+        "--profile",
+        choices=("semantic", "pool-delivery"),
+        default="semantic",
+        help="选择独立失败域；semantic 不探测队列或环境",
+    )
+    pr.add_argument(
+        "--execution-id",
+        help="pool-delivery profile 必需的 immutable execution 身份",
+    )
+    pr.add_argument(
         "--semantic-selection-id",
         choices=(
             DEFAULT_SEMANTIC_SELECTION_ID,
             CALIBRATION_SEMANTIC_SELECTION_ID,
+            "cursor_grok",
             "cursor_auto",
         ),
         default=DEFAULT_SEMANTIC_SELECTION_ID,

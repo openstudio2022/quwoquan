@@ -10,6 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from content.release.canonical.release_header import validate_release_header
+from content.release.environment.activation_envelope import (
+    EnvironmentActivationEnvelopeError,
+    build_release_activation_envelope,
+    document_digest,
+    file_digest,
+)
+from content.release.environment.activation_predecessor import (
+    previous_environment_activation_for_release,
+)
 from content.release.environment.app_uat_envelope import (
     AppUatEnvelopeError,
     build_app_uat_envelope,
@@ -31,6 +40,12 @@ from core.schema import assert_valid
 
 class EnvironmentReleaseReadinessError(ValueError):
     """Release/environment evidence cannot support a commercial readiness claim."""
+
+
+def _release_source_identity_fields(header: Mapping[str, Any]) -> tuple[str, ...]:
+    if "sourceIdentities" in header or "sourceIdentitySetDigest" in header:
+        return ("sourceIdentities", "sourceIdentitySetDigest")
+    return ("sourceRevision", "sourceDigest", "entityCatalogDigest")
 
 
 def _object(path: Path, *, label: str) -> dict[str, Any]:
@@ -86,6 +101,7 @@ def write_environment_release_readiness(
     output_root: Path,
     output_path: Path,
     research_isolation_verification_path: Path | None = None,
+    previous_environment_readiness_path: Path | None = None,
     readiness_phase: str = "commercial",
 ) -> Path:
     """Write append-only, release-bound proof for Ops readiness composition."""
@@ -169,13 +185,14 @@ def write_environment_release_readiness(
         "researchAcceptedCount",
         "commercialAcceptedCount",
     )
+    source_identity_fields = _release_source_identity_fields(header)
     if any(
         document.get(field) != header.get(field)
         for document in (attestation, asset_admission)
         for field in lifecycle_fields
     ) or any(
         attestation.get(field) != header.get(field)
-        for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
+        for field in source_identity_fields
     ):
         raise EnvironmentReleaseReadinessError(
             "release lifecycle/admission projection drift"
@@ -255,6 +272,28 @@ def write_environment_release_readiness(
     )
     if post_report.get("passed") is not True or verified_post_ids != post_ids:
         raise EnvironmentReleaseReadinessError("post verification drifts from imported postIds")
+    search_queries = post_report.get("searchQueries")
+    if not isinstance(search_queries, list):
+        raise EnvironmentReleaseReadinessError("post verification lacks searchQueries")
+    searchable_post_ids = sorted(
+        str(row.get("targetId") or "")
+        for row in search_queries
+        if isinstance(row, Mapping) and row.get("targetType") == "post"
+    )
+    searchable_author_ids = sorted(
+        str(row.get("targetId") or "")
+        for row in search_queries
+        if isinstance(row, Mapping) and row.get("targetType") == "author"
+    )
+    expected_author_ids = sorted(
+        str(row.get("personaId") or "")
+        for row in post_report.get("creators") or []
+        if isinstance(row, Mapping)
+    )
+    if searchable_post_ids != post_ids or searchable_author_ids != expected_author_ids:
+        raise EnvironmentReleaseReadinessError(
+            "Search projection does not exactly match imported Posts and Personas"
+        )
     if post_report.get("readinessPhase") != readiness_phase:
         raise EnvironmentReleaseReadinessError(
             "post verification readinessPhase drift"
@@ -357,27 +396,29 @@ def write_environment_release_readiness(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )
 
-    app_uat_envelope = None
-    if readiness_phase in {"research", "commercial"}:
-        try:
-            app_uat_envelope = build_app_uat_envelope(
-                release_root=release_root,
-                release_id=release_id,
-                entity_refs=entity_refs,
-                post_refs=post_refs,
-                creator_ids=creator_ids,
-                tag_refs=tag_refs,
-                bindings=bindings,
-                homepage_report=homepage_report,
-                queries_by_name=queries_by_name,
-                verified_playable_video_ids=verified_playable_video_ids,
-                illustrated_article_ids=set(closure["illustratedArticleIds"]),
-                verified_image_work_ids=set(closure["verifiedImageWorkIds"]),
-                release_class=release_class,
-                product_lifecycle_state=product_lifecycle_state,
-            )
-        except AppUatEnvelopeError as exc:
-            raise EnvironmentReleaseReadinessError(str(exc)) from exc
+    video_query_name = (
+        "typed_video" if readiness_phase == "consumer" else "premium_stream"
+    )
+    try:
+        app_uat_envelope = build_app_uat_envelope(
+            release_root=release_root,
+            release_id=release_id,
+            entity_refs=entity_refs,
+            post_refs=post_refs,
+            creator_ids=creator_ids,
+            tag_refs=tag_refs,
+            bindings=bindings,
+            homepage_report=homepage_report,
+            queries_by_name=queries_by_name,
+            video_query_name=video_query_name,
+            verified_playable_video_ids=verified_playable_video_ids,
+            illustrated_article_ids=set(closure["illustratedArticleIds"]),
+            verified_image_work_ids=set(closure["verifiedImageWorkIds"]),
+            release_class=release_class,
+            product_lifecycle_state=product_lifecycle_state,
+        )
+    except AppUatEnvelopeError as exc:
+        raise EnvironmentReleaseReadinessError(str(exc)) from exc
 
     if attestation.get("payloadSha256") != actual_payload_digest:
         raise EnvironmentReleaseReadinessError("attestation payloadSha256 drift")
@@ -400,6 +441,59 @@ def write_environment_release_readiness(
                 "research isolation exact release readback drifts from release closure"
             )
 
+    content_import_report_ref = _relative(
+        import_report_path,
+        output_root=output_root,
+        label="content import report",
+    )
+    research_isolation_verification_ref = ""
+    research_isolation_verification_digest = ""
+    if research_isolation is not None:
+        assert research_isolation_verification_path is not None
+        research_isolation_verification_ref = _relative(
+            research_isolation_verification_path,
+            output_root=output_root,
+            label="research isolation verification",
+        )
+        research_isolation_verification_digest = research_isolation_file_digest(
+            research_isolation_verification_path
+        )
+    try:
+        previous_environment_activation = (
+            previous_environment_activation_for_release(
+                header=header,
+                environment=environment,
+                readiness_path=previous_environment_readiness_path,
+                release_id=release_id,
+                manifest_digest=actual_payload_digest,
+                output_root=output_root,
+            )
+        )
+        activation_envelope = build_release_activation_envelope(
+            header=header,
+            environment=environment,
+            release_id=release_id,
+            manifest_digest=actual_payload_digest,
+            release_class=release_class,
+            product_lifecycle_state=product_lifecycle_state,
+            readiness_phase=readiness_phase,
+            import_run_id=import_run_id,
+            verify_run_id=verify_run_id,
+            import_report_ref=content_import_report_ref,
+            import_report_digest=file_digest(import_report_path),
+            app_uat_envelope=app_uat_envelope,
+            research_isolation=research_isolation,
+            research_isolation_verification_ref=(
+                research_isolation_verification_ref
+            ),
+            research_isolation_verification_digest=(
+                research_isolation_verification_digest
+            ),
+            previous_environment_activation=previous_environment_activation,
+        )
+    except EnvironmentActivationEnvelopeError as exc:
+        raise EnvironmentReleaseReadinessError(str(exc)) from exc
+
     document: dict[str, Any] = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": environment,
@@ -419,9 +513,6 @@ def write_environment_release_readiness(
         "commercialAcceptedCount": int(
             header.get("commercialAcceptedCount") or 0
         ),
-        "sourceRevision": str(header["sourceRevision"]),
-        "sourceDigest": str(header["sourceDigest"]),
-        "entityCatalogDigest": str(header["entityCatalogDigest"]),
         "readinessPhase": readiness_phase,
         "manifestDigest": actual_payload_digest,
         "mediaManifestDigest": media_manifest_digest,
@@ -444,30 +535,32 @@ def write_environment_release_readiness(
         "tagRefs": tag_refs,
         "mediaAssetIds": media_asset_ids,
         "feedQueries": feed_queries,
-        "contentImportReportRef": _relative(import_report_path, output_root=output_root, label="content import report"),
+        "contentImportReportRef": content_import_report_ref,
         "creatorAttributionRef": _relative(creator_import_report_path, output_root=output_root, label="creator attribution"),
         "tagAttributionRef": _relative(tag_consumer_verification_path, output_root=output_root, label="tag attribution"),
         "homepageApiVerificationRef": _relative(homepage_api_verification_path, output_root=output_root, label="homepage API verification"),
         "postApiVerificationRef": _relative(post_api_verification_path, output_root=output_root, label="post API verification"),
         "mediaManifestRef": _relative(media_manifest_path, output_root=output_root, label="media manifest"),
+        "appUatEnvelope": app_uat_envelope,
+        "appUatEnvelopeDigest": document_digest(app_uat_envelope),
+        "activationEnvelope": activation_envelope,
+        "activationEnvelopeDigest": document_digest(activation_envelope),
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
     }
+    for field in source_identity_fields:
+        document[field] = header[field]
     if research_isolation is not None:
         document["internalSubjectHash"] = research_isolation["subjectHash"]
-        document["researchIsolationVerificationRef"] = _relative(
-            research_isolation_verification_path,
-            output_root=output_root,
-            label="research isolation verification",
+        document["researchIsolationVerificationRef"] = (
+            research_isolation_verification_ref
         )
         document["researchIsolationVerificationDigest"] = (
-            research_isolation_file_digest(research_isolation_verification_path)
+            research_isolation_verification_digest
         )
     else:
         document["guestActorHash"] = guest_actor_hash
         document["guestLogin"] = dict(guest_login)
-    if app_uat_envelope is not None:
-        document["appUatEnvelope"] = app_uat_envelope
     document["verificationChecksum"] = _checksum(document)
     try:
         assert_valid(

@@ -18,6 +18,10 @@ final class AppCloudClientContextProvider
         'APP_VERSION',
         defaultValue: 'dev',
       ),
+      appBuild: const String.fromEnvironment(
+        'APP_BUILD_NUMBER',
+        defaultValue: '0',
+      ),
       locale: PlatformDispatcher.instance.locale.toLanguageTag(),
       regionCode: AppTraceContextStore.instance.grayRegionCode,
       carrier: AppTraceContextStore.instance.grayCarrier,

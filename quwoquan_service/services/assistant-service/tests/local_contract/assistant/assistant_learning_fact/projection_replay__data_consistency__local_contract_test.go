@@ -1,6 +1,7 @@
 package local_contract
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -37,6 +38,15 @@ func TestLearningProjectionDefinitionDigestMatchesCanonicalContract(t *testing.T
 	contract, err := os.ReadFile(contractPath)
 	if err != nil {
 		t.Fatalf("read canonical learning projection contract: %v", err)
+	}
+	if !bytes.Contains(contract, []byte("- name: watermarkSequence\n  type: int64\n")) {
+		t.Fatal("canonical projection lost its replay watermark field")
+	}
+	if bytes.Contains(
+		contract,
+		[]byte("- name: idx_assistant_learning_projection_watermark\n"),
+	) {
+		t.Fatal("retired standalone watermark index returned to canonical projection")
 	}
 	want := fmt.Sprintf("%x", sha256.Sum256(contract))
 	if digest != want {

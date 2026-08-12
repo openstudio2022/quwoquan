@@ -22,6 +22,8 @@ class _HomepageStatusReportPageState
   UiErrorSemantic? _submitErrorSemantic;
   String? _reasonValidationMessage;
   String _reason = '';
+  String? _pendingSubmitIntentId;
+  int? _pendingSubmitFingerprint;
 
   bool get _hasUnsavedChanges =>
       _reason.isNotEmpty || _descriptionController.text.trim().isNotEmpty;
@@ -369,19 +371,43 @@ class _HomepageStatusReportPageState
       });
       return;
     }
+    final draft = HomepageStatusReportDraft(
+      reason: _reason,
+      description: _descriptionController.text.trim(),
+    );
+    final fingerprint = Object.hashAll(<Object?>[
+      widget.homepageId,
+      draft.reason,
+      draft.description,
+      ...draft.evidenceUrls,
+    ]);
+    if (_pendingSubmitFingerprint != fingerprint ||
+        (_pendingSubmitIntentId ?? '').isEmpty) {
+      _pendingSubmitFingerprint = fingerprint;
+      _pendingSubmitIntentId = const Uuid().v4();
+    }
+    final submitIntentId = _pendingSubmitIntentId!;
     setState(() {
       _isSubmitting = true;
       _submitErrorSemantic = null;
     });
     final startedAt = DateTime.now();
     try {
-      await widget.commandWriter.createStatusReport(
+      final receipt = await widget.commandWriter.createStatusReport(
         homepageId: widget.homepageId,
-        draft: HomepageStatusReportDraft(
-          reason: _reason,
-          description: _descriptionController.text.trim(),
-        ),
+        draft: draft,
+        clientRequestId: submitIntentId,
       );
+      if (!_isCanonicalPendingStatusReceipt(receipt)) {
+        throw _invalidStatusReceiptFailure(receipt);
+      }
+      final readback = await widget.queryReader.getMyPendingStatusReport(
+        homepageId: widget.homepageId,
+        reason: draft.reason,
+      );
+      if (!_isSamePendingStatusReport(receipt, readback)) {
+        throw _invalidStatusReadbackFailure(receipt, readback);
+      }
       if (!mounted) {
         return;
       }
@@ -393,6 +419,8 @@ class _HomepageStatusReportPageState
       if (!mounted) {
         return;
       }
+      _pendingSubmitIntentId = null;
+      _pendingSubmitFingerprint = null;
       AppToast.show(context, ObjectHomepageText.homepageStatusReportSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -400,11 +428,13 @@ class _HomepageStatusReportPageState
         return;
       }
       setState(() {
-        _submitErrorSemantic = runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.form,
+        _submitErrorSemantic = ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.form,
+          ),
         );
       });
       await widget.actionTracker.trackSubmit(
@@ -418,6 +448,98 @@ class _HomepageStatusReportPageState
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  bool _isCanonicalPendingStatusReceipt(HomepageStatusReportView receipt) {
+    return receipt.reportId.trim().isNotEmpty &&
+        receipt.homepageId == widget.homepageId &&
+        receipt.reason.wireName == _reason &&
+        receipt.status == HomepageStatusReportStatus.pendingReview &&
+        receipt.reviewedAt == null;
+  }
+
+  bool _isSamePendingStatusReport(
+    HomepageStatusReportView receipt,
+    HomepageStatusReportView readback,
+  ) {
+    return _isCanonicalPendingStatusReceipt(readback) &&
+        readback.reportId == receipt.reportId &&
+        readback.reporterPersonaId == receipt.reporterPersonaId &&
+        readback.createdAt.isAtSameMomentAs(receipt.createdAt);
+  }
+
+  RuntimeFailure _invalidStatusReceiptFailure(
+    HomepageStatusReportView receipt,
+  ) {
+    return RuntimeFailure(
+      code: RuntimeFailureCodes.appContractInvalidResponse,
+      semanticReason: 'homepage_status_report_receipt_not_pending',
+      origin: RuntimeFailureOrigin.remoteDependency,
+      kind: RuntimeFailureKind.contract,
+      nature: RuntimeFailureNature.bug,
+      location: const RuntimeFailureLocation(
+        businessObject: 'entity.homepage_status_report',
+        functionModule: 'homepage_status_report_page',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'homepageMatches',
+            value: (receipt.homepageId == widget.homepageId).toString(),
+          ),
+          RuntimeContextAttribute(
+            key: 'status',
+            value: receipt.status.wireName,
+          ),
+          RuntimeContextAttribute(
+            key: 'reasonMatches',
+            value: (receipt.reason.wireName == _reason).toString(),
+          ),
+        ],
+      ),
+      recovery: const RuntimeRecoveryDirective(
+        action: 'retry',
+        disruptionLevel: 'inlineCard',
+      ),
+    );
+  }
+
+  RuntimeFailure _invalidStatusReadbackFailure(
+    HomepageStatusReportView receipt,
+    HomepageStatusReportView readback,
+  ) {
+    return RuntimeFailure(
+      code: RuntimeFailureCodes.appContractInvalidResponse,
+      semanticReason: 'homepage_status_report_readback_not_converged',
+      origin: RuntimeFailureOrigin.remoteDependency,
+      kind: RuntimeFailureKind.contract,
+      nature: RuntimeFailureNature.bug,
+      location: const RuntimeFailureLocation(
+        businessObject: 'entity.homepage_status_report',
+        functionModule: 'homepage_status_report_page',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'reportIdMatches',
+            value: (readback.reportId == receipt.reportId).toString(),
+          ),
+          RuntimeContextAttribute(
+            key: 'reporterMatches',
+            value: (readback.reporterPersonaId == receipt.reporterPersonaId)
+                .toString(),
+          ),
+          RuntimeContextAttribute(
+            key: 'status',
+            value: readback.status.wireName,
+          ),
+        ],
+      ),
+      recovery: const RuntimeRecoveryDirective(
+        action: 'retry',
+        disruptionLevel: 'inlineCard',
+      ),
+    );
   }
 
   Future<void> _handleSubmitErrorAction(UiErrorAction action) async {

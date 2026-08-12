@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/homepage-source-18960eb3a297b0e2b4f7/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "homepage-source-18960eb3a297b0e2b4f7",
+    "entityName": "四川省",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T05:21:35Z",
+    "snapshotHash": "sha256:6abd1bc174f07998c965d260908d6e99205a92986f88ad67810c93a609170ca9",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/homepage-source-18960eb3a297b0e2b4f7/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "homepage-source-18960eb3a297b0e2b4f7",
+      "entityName": "四川省",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%9B%9B%E5%B7%9D%E7%9C%81",
+      "title": "维基百科",
+      "fetchedAt": "2026-08-12T05:21:35Z",
+      "snapshotHash": "sha256:6abd1bc174f07998c965d260908d6e99205a92986f88ad67810c93a609170ca9",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/homepage-source-18960eb3a297b0e2b4f7/meta.json"
+    }
+  ]
+}

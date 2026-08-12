@@ -8,6 +8,10 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 )
 
+func (h *UserHandler) handleOtpDeliveryReadiness(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.auth.GetOtpDeliveryReadiness(r.Context()))
+}
+
 func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
 	if err != nil {
@@ -20,8 +24,13 @@ func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
 	sourceOperation := strings.TrimSpace(anyString(body["sourceOperation"]))
 	bindingTicket := strings.TrimSpace(anyString(body["bindingTicket"]))
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if phone == "" {
 		writeInvalidArg(w, r, "phone required")
+		return
+	}
+	if idempotencyKey == "" {
+		writeInvalidArg(w, r, "Idempotency-Key required")
 		return
 	}
 	result, err := h.auth.SendOtp(
@@ -32,47 +41,13 @@ func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 		appVersion,
 		sourceOperation,
 		bindingTicket,
+		idempotencyKey,
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
-}
-
-func (h *UserHandler) handleOtpDeliveryCallback(w http.ResponseWriter, r *http.Request) {
-	body, err := readBody(r)
-	if err != nil {
-		writeInvalidArg(w, r, "invalid body")
-		return
-	}
-	requestID := strings.TrimSpace(anyString(body["requestId"]))
-	challengeID := strings.TrimSpace(anyString(body["challengeId"]))
-	status := strings.TrimSpace(anyString(body["status"]))
-	if requestID == "" {
-		writeInvalidArg(w, r, "requestId required")
-		return
-	}
-	if status == "" {
-		writeInvalidArg(w, r, "status required")
-		return
-	}
-	if challengeID == "" {
-		writeInvalidArg(w, r, "challengeId required")
-		return
-	}
-	if err := h.auth.HandleOtpDeliveryCallback(
-		r.Context(),
-		challengeID,
-		status,
-	); err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"requestId": requestID,
-		"accepted":  true,
-	})
 }
 
 func (h *UserHandler) handleLoginWithPhone(w http.ResponseWriter, r *http.Request) {

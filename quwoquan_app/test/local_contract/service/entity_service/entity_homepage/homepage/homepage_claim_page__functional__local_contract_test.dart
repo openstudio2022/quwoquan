@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_write_target_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show
         homepageClaimRequestCommandWriterProvider,
+        homepageClaimRequestQueryReaderProvider,
         homepageWriteTargetReaderProvider;
 import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
     show appTelemetryReporterProvider;
@@ -33,7 +35,12 @@ void main() {
     final repository = _ClaimRepository();
     final telemetry = RecordingAppTelemetryRecorder();
     await tester.pumpWidget(
-      _claimHost(reader: repository, writer: repository, telemetry: telemetry),
+      _claimHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: telemetry,
+      ),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-claim')));
     await _pumpUi(tester);
@@ -71,7 +78,12 @@ void main() {
     final repository = _ClaimRepository(failSubmit: true);
     final telemetry = RecordingAppTelemetryRecorder();
     await tester.pumpWidget(
-      _claimHost(reader: repository, writer: repository, telemetry: telemetry),
+      _claimHost(
+        reader: repository,
+        writer: repository,
+        queryReader: repository,
+        telemetry: telemetry,
+      ),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-claim')));
     await _pumpUi(tester);
@@ -96,6 +108,7 @@ void main() {
   });
 
   testWidgets('游客关闭认领登录页回公开详情且不会再次弹登录', (tester) async {
+    final repository = _ClaimRepository();
     final router = _guestRouter(
       restrictedPath: AppRoutePaths.homepageClaim(id: _homepageId),
       page: HomepageClaimPage(homepageId: _homepageId),
@@ -106,12 +119,11 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionControllerProvider.overrideWith(_GuestSession.new),
-          homepageWriteTargetReaderProvider.overrideWithValue(
-            _ClaimRepository(),
-          ),
+          homepageWriteTargetReaderProvider.overrideWithValue(repository),
           homepageClaimRequestCommandWriterProvider.overrideWithValue(
-            _ClaimRepository(),
+            repository,
           ),
+          homepageClaimRequestQueryReaderProvider.overrideWithValue(repository),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -144,6 +156,7 @@ void main() {
 Widget _claimHost({
   required HomepageWriteTargetReader reader,
   required HomepageClaimRequestCommandWriter writer,
+  required HomepageClaimRequestQueryReader queryReader,
   required RecordingAppTelemetryRecorder telemetry,
 }) {
   final router = GoRouter(
@@ -166,6 +179,7 @@ Widget _claimHost({
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       homepageWriteTargetReaderProvider.overrideWithValue(reader),
       homepageClaimRequestCommandWriterProvider.overrideWithValue(writer),
+      homepageClaimRequestQueryReaderProvider.overrideWithValue(queryReader),
       appTelemetryReporterProvider.overrideWithValue(telemetry),
     ],
     child: MaterialApp.router(routerConfig: router),
@@ -255,13 +269,18 @@ class _ClaimRepository extends MockHomepageRepository {
   Future<HomepageClaimRequestView> createClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
+    String? clientRequestId,
   }) async {
     createCalls += 1;
     lastDraft = draft;
     if (failSubmit) {
       throw StateError('redacted submit failure');
     }
-    return super.createClaimRequest(homepageId: homepageId, draft: draft);
+    return super.createClaimRequest(
+      homepageId: homepageId,
+      draft: draft,
+      clientRequestId: clientRequestId,
+    );
   }
 }
 

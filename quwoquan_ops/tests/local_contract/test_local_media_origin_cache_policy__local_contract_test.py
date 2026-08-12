@@ -189,6 +189,23 @@ class LocalMediaOriginCachePolicyContractTest(unittest.TestCase):
         self.assertIn(f'Cache-Control "{IMMUTABLE_POLICY}"', prod_caddy)
         self.assertIn('X-QWQ-Media-Cache-Key "{http.request.uri.path}"', prod_caddy)
 
+    def test_gamma_cdn_health_is_exclusive_from_object_storage_fallback(self) -> None:
+        gamma_caddy = (
+            ROOT / "quwoquan_ops/environments/gamma/local/Caddyfile"
+        ).read_text(encoding="utf-8")
+        cdn_site = gamma_caddy.split(
+            "https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {",
+            1,
+        )[1].split("\n\n:80 {", 1)[0]
+
+        health_route = 'handle /healthz {\n\t\trespond "ok" 200\n\t}'
+        self.assertIn(health_route, cdn_site)
+        fallback = cdn_site.split(health_route, 1)[1]
+        self.assertIn("\n\thandle {\n\t\timport media_cors", fallback)
+        self.assertIn("rewrite @object_store_public_slice", fallback)
+        self.assertIn("reverse_proxy @object_store_public_slice", fallback)
+        self.assertNotIn("rewrite @object_store_public_slice", cdn_site.split(health_route, 1)[0])
+
     def test_alpha_beta_and_prod_sim_publish_the_same_cache_contract(self) -> None:
         sources = (
             ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py",

@@ -224,7 +224,7 @@ def load_release_content_identity(
     if any(
         (
             import_report.get("schema") != "quwoquan.content_import_report",
-            import_report.get("status") != "active",
+            import_report.get("status") != "imported",
             import_report.get("environment") != expected_environment,
             import_report.get("releaseId") != release_id,
             import_report.get("sourceOwner") != "qwq_data",

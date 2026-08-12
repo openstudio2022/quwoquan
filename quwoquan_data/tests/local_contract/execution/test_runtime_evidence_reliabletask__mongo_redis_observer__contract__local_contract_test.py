@@ -14,6 +14,7 @@ from content.execution.runtime_evidence import (
 )
 from content.execution.runtime_evidence import reliabletask_process as process_port
 from content.execution.runtime_evidence.contract import CARRIERS, canonical_digest
+from content.execution.runtime_evidence.reliabletask_contract import ExpectedTask
 
 
 def _binary_binding(
@@ -67,12 +68,13 @@ def _envelopes(
     ]
 
 
-def _task(carrier: str) -> observer._ExpectedTask:
-    return observer._ExpectedTask(
+def _task(carrier: str) -> ExpectedTask:
+    return ExpectedTask(
         job_id=f"job-{carrier}",
         entity_ref=f"/entity/{carrier}",
         stage="author",
         source_revision="sha256:" + "b" * 64,
+        max_attempts=3,
     )
 
 

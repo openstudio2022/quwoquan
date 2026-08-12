@@ -66,6 +66,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private AliyunOneTapPlugin aliyunOneTapPlugin;
   private CellularNetworkProbePlugin cellularNetworkProbePlugin;
   private AssistantDeviceActionPlugin assistantDeviceActionPlugin;
+  private SmsRetrieverOtpPlugin smsRetrieverOtpPlugin;
   private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore;
   private ScheduledFuture<?> flutterFirstFrameWatchdog;
   private FlutterEngine startupFlutterEngine;
@@ -132,6 +133,8 @@ public class MainActivity extends FlutterFragmentActivity {
     // 由应用自有注册器明确装配启动必需插件；GeneratedPluginRegistrant 保持 Flutter
     // 原样生成且不参与此引擎装配，重插件继续由 StartupDeferredPluginRegistry 按需注册。
     StartupEagerPluginRegistry.registerWith(flutterEngine);
+    smsRetrieverOtpPlugin =
+        new SmsRetrieverOtpPlugin(getApplicationContext(), flutterEngine);
     IncomingCallNativeBridgePlugin.register(
         flutterEngine, getApplicationContext());
     new MethodChannel(
@@ -623,6 +626,10 @@ public class MainActivity extends FlutterFragmentActivity {
     flutterUiDisplayListener = null;
     if (cellularNetworkProbePlugin != null) {
       cellularNetworkProbePlugin.dispose();
+    }
+    if (smsRetrieverOtpPlugin != null) {
+      smsRetrieverOtpPlugin.stop();
+      smsRetrieverOtpPlugin = null;
     }
     startupWatchdogExecutor.shutdownNow();
     super.onDestroy();

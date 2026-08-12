@@ -16,6 +16,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/p
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/group_home_provider.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
@@ -449,6 +450,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(tracking.transferCount, equals(1));
+      expect(tracking.lastTransferIdempotencyKey, isNotEmpty);
     });
 
     testWidgets('J-C7: 转让后 Provider state 中当前用户变为 member', (tester) async {
@@ -469,7 +471,10 @@ void main() {
         isTrue,
       );
 
-      await notifier.transferOwnership('fixture_user_weekend_1');
+      await notifier.transferOwnership(
+        'fixture_user_weekend_1',
+        idempotencyKey: 'fixture_transfer_owner_1',
+      );
 
       final state = container.read(conversationMembersProvider(_testConvId));
       expect(state.currentUserRole, equals('member'));
@@ -586,6 +591,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(tracking.updateAdminsCount, greaterThanOrEqualTo(1));
+      expect(tracking.lastAdminsIdempotencyKey, isNotEmpty);
     });
 
     testWidgets('J-D9: updateGroupAdmins 后 Provider state 已更新', (tester) async {
@@ -600,7 +606,9 @@ void main() {
       );
       await notifier.load();
 
-      await notifier.updateGroupAdmins(['fixture_user_weekend_2']);
+      await notifier.updateGroupAdmins([
+        'fixture_user_weekend_2',
+      ], idempotencyKey: 'fixture_update_admins_1');
 
       final state = container.read(conversationMembersProvider(_testConvId));
       expect(
@@ -674,7 +682,10 @@ void main() {
       );
 
       try {
-        await failNotifier.transferOwnership('fixture_user_weekend_1');
+        await failNotifier.transferOwnership(
+          'fixture_user_weekend_1',
+          idempotencyKey: 'fixture_transfer_owner_failure',
+        );
       } catch (_) {}
 
       final stateAfter = failContainer.read(
@@ -704,7 +715,9 @@ void main() {
           .toList();
 
       try {
-        await notifier.updateGroupAdmins(['user_999']);
+        await notifier.updateGroupAdmins([
+          'user_999',
+        ], idempotencyKey: 'fixture_update_admins_failure');
       } catch (_) {}
 
       final stateAfter = container.read(
@@ -732,7 +745,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(GroupAdminsPage), findsOneWidget);
-      expect(find.byType(ListView), findsWidgets);
+      expect(find.byType(AppPageErrorState), findsOneWidget);
     });
   });
 }
@@ -743,25 +756,41 @@ void main() {
 class _TrackingChatRepository extends MockChatRepository {
   int transferCount = 0;
   String? lastNewOwnerId;
+  String? lastTransferIdempotencyKey;
   int updateAdminsCount = 0;
   List<String>? lastAdminIds;
+  String? lastAdminsIdempotencyKey;
 
   @override
   Future<void> transferOwnership(
     String conversationId,
-    String newOwnerId,
-  ) async {
+    String newOwnerId, {
+    String? idempotencyKey,
+  }) async {
     transferCount++;
     lastNewOwnerId = newOwnerId;
+    lastTransferIdempotencyKey = idempotencyKey;
+    await super.transferOwnership(
+      conversationId,
+      newOwnerId,
+      idempotencyKey: idempotencyKey,
+    );
   }
 
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
-    List<String> adminIds,
-  ) async {
+    List<String> adminIds, {
+    String? idempotencyKey,
+  }) async {
     updateAdminsCount++;
     lastAdminIds = adminIds;
+    lastAdminsIdempotencyKey = idempotencyKey;
+    await super.updateGroupAdmins(
+      conversationId,
+      adminIds,
+      idempotencyKey: idempotencyKey,
+    );
   }
 }
 
@@ -890,8 +919,9 @@ class _FailTransferRepo extends MockChatRepository {
   @override
   Future<void> transferOwnership(
     String conversationId,
-    String newOwnerId,
-  ) async {
+    String newOwnerId, {
+    String? idempotencyKey,
+  }) async {
     throw Exception('transfer failed');
   }
 }
@@ -901,8 +931,9 @@ class _FailAdminsRepo extends MockChatRepository {
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
-    List<String> adminIds,
-  ) async {
+    List<String> adminIds, {
+    String? idempotencyKey,
+  }) async {
     throw Exception('update admins failed');
   }
 }
@@ -920,3 +951,7 @@ class _EmptyMembersRepo extends MockChatRepository {
     return [];
   }
 }
+
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-002
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-004

@@ -18,18 +18,22 @@ from content.execution.campaign.submission_reconciliation import (
     load_reconciliation_reference,
     predecessor_campaign_root_execution_id,
 )
-from content.execution.identity import parse_execution_id
 from content.execution.closure.adoption_campaign_contract import (
     ADOPTION_OPERATIONS,
     CAMPAIGN_ADOPTION_FIELD,
     validate_adoption_task_binding,
     validate_campaign_adoption_binding,
 )
+from content.execution.identity import parse_execution_id
 from content.release.canonical.campaign_release_contract import (
     CampaignReleaseRoots,
     canonical_digest,
     read_regular,
     typed_error,
+)
+from content.release.canonical.campaign_release_selection_mixed import (
+    consume_mixed_finalized_boundary,
+    validate_reconciliation_retry_set,
 )
 from core.schema import assert_valid
 
@@ -203,6 +207,7 @@ def validate_submissions(
                 "ADOPTION_BINDING_INVALID",
                 f"{carrier} submission adds an adoption outside the plan",
             )
+    validate_reconciliation_retry_set(submissions, plan, roots=roots)
     return submissions
 
 
@@ -211,6 +216,92 @@ def _target_digest(payload: Mapping[str, Any]) -> str:
         dict(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _target_scope(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the retry-stable target selection without epoch-local identity."""
+
+    return {
+        key: value
+        for key, value in payload.items()
+        if key not in {"executionId", "entityCatalogDigest"}
+    }
+
+
+def _consume_post_publish_boundary(
+    carrier: str,
+    execution_id: str,
+    submission: Mapping[str, Any],
+    plan: Mapping[str, Any],
+    reference: Mapping[str, Any],
+    *,
+    roots: CampaignReleaseRoots,
+) -> bool:
+    try:
+        receipt, receipt_path = load_reconciliation_reference(
+            reference,
+            output_root=roots.output_root,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise typed_error(
+            "RETRY_EVIDENCE_INVALID",
+            str(exc),
+            evidence=roots.tasks_root / execution_id,
+        ) from exc
+    if receipt.get("reason") != "post_publish_partial_terminal":
+        return False
+    row = (receipt.get("submissions") or {}).get(carrier)
+    execution_evidence = receipt.get("executionEvidence")
+    partial = (
+        execution_evidence.get("partialPublish")
+        if isinstance(execution_evidence, Mapping)
+        else None
+    )
+    expected_observed = {
+        "sourceRevision": plan["sourceRevision"],
+        "sourceDigest": submission["sourceDigest"],
+        "entityCatalogDigest": plan["entityCatalogDigest"],
+    }
+    scope_fields = (
+        "familyRef",
+        "regionRef",
+        "selector",
+        "quota",
+        "count",
+        "topic",
+        "targetNames",
+        "sourceProviders",
+    )
+    article_row = (receipt.get("submissions") or {}).get("article")
+    if (
+        not isinstance(row, Mapping)
+        or not isinstance(article_row, Mapping)
+        or not isinstance(execution_evidence, Mapping)
+        or not isinstance(partial, Mapping)
+        or row.get("executionId") != execution_id
+        or receipt.get("rootExecutionId")
+        != predecessor_campaign_root_execution_id(execution_id)
+        or receipt.get("observedSourceIdentity") != expected_observed
+        or any(row.get(key) != submission.get(key) for key in scope_fields)
+        or execution_evidence.get("evidenceDisposition")
+        != "preserved_unadopted"
+        or execution_evidence.get("allLanesFinalizedCount") != 0
+        or execution_evidence.get("immutableReleaseEvidencePresent") is not False
+        or execution_evidence.get("reviewedClosureAdoptionPresent") is not False
+        or execution_evidence.get("excludedFromFinalized") is not True
+        or execution_evidence.get("eligibleForRelease") is not False
+        or partial.get("carrier") != "article"
+        or partial.get("executionId") != article_row.get("executionId")
+        or partial.get("finalizedObjectCount") != 0
+        or partial.get("researchAcceptedCount") != 1
+        or not str(partial.get("objectRef") or "").strip()
+    ):
+        raise typed_error(
+            "RETRY_IDENTITY_DRIFT",
+            f"{carrier} post-publish predecessor binding drift",
+            evidence=receipt_path,
+        )
+    return True
 
 
 def retry_lineage(
@@ -262,6 +353,7 @@ def retry_lineage(
     expected_vertical = parse_execution_id(current_id).vertical
     reconciliation_reference = submission.get("predecessorReconciliation")
     reconciliation_consumed = False
+    expected_target_scope: dict[str, Any] | None = None
     while execution_id:
         if execution_id in lineage:
             raise typed_error(
@@ -278,6 +370,38 @@ def retry_lineage(
                 "RETRY_IDENTITY_DRIFT",
                 f"{carrier} retry carrier drift at {execution_id}",
             )
+        if (
+            len(lineage) == 1
+            and isinstance(reconciliation_reference, Mapping)
+            and not reconciliation_consumed
+            and _consume_post_publish_boundary(
+                carrier,
+                execution_id,
+                submission,
+                plan,
+                reconciliation_reference,
+                roots=roots,
+            )
+        ):
+            lineage.append(execution_id)
+            reconciliation_consumed = True
+            break
+        if (
+            len(lineage) == 1
+            and isinstance(reconciliation_reference, Mapping)
+            and not reconciliation_consumed
+            and consume_mixed_finalized_boundary(
+                carrier,
+                execution_id,
+                submission,
+                plan,
+                reconciliation_reference,
+                roots=roots,
+            )
+        ):
+            lineage.append(execution_id)
+            reconciliation_consumed = True
+            break
         execution_root = roots.tasks_root / execution_id
         manifest_path = execution_root / "execution_manifest.json"
         target_path = execution_root / "0.plan/target_set.json"
@@ -358,16 +482,30 @@ def retry_lineage(
             raise typed_error(
                 "RETRY_EVIDENCE_INVALID", str(exc), evidence=manifest_path
             ) from exc
+        target_scope = _target_scope(target)
+        if expected_target_scope is None:
+            expected_target_scope = target_scope
+        elif target_scope != expected_target_scope:
+            raise typed_error(
+                "RETRY_IDENTITY_DRIFT",
+                f"{carrier} frozen retry target scope drift at {execution_id}",
+            )
         if (
             manifest.get("executionId") != execution_id
-            or manifest.get("sourceDigest") != source_document
             or target.get("executionId") != execution_id
-            or target.get("entityCatalogDigest") != plan["entityCatalogDigest"]
             or manifest.get("targetSetDigest") != _target_digest(target)
         ):
             raise typed_error(
                 "RETRY_IDENTITY_DRIFT",
                 f"{carrier} frozen retry inputs drift at {execution_id}",
+            )
+        if not lineage and (
+            manifest.get("sourceDigest") != source_document
+            or target.get("entityCatalogDigest") != plan["entityCatalogDigest"]
+        ):
+            raise typed_error(
+                "RETRY_IDENTITY_DRIFT",
+                f"{carrier} active frozen inputs drift at {execution_id}",
             )
         lineage.append(execution_id)
         execution_id = str(manifest.get("retryOf") or "").strip()

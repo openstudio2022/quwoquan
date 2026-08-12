@@ -100,8 +100,8 @@ func (h *Handler) redirectAndroid(w http.ResponseWriter, r *http.Request) {
 		h.unavailable(w)
 		return
 	}
-	w.Header().Set("X-Quwoquan-APK-SHA256", strings.ToLower(release.APKSHA256))
-	w.Header().Set("X-Quwoquan-APK-Build", release.LatestBuild)
+	w.Header().Set("X-App-Package-SHA256", strings.ToLower(release.APKSHA256))
+	w.Header().Set("X-App-Build-Number", release.LatestBuild)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	http.Redirect(w, r, release.APKURL, http.StatusTemporaryRedirect)

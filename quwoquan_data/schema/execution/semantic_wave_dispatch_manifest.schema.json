@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/semantic_wave_dispatch_manifest.schema.json",
+  "title": "Create-once carrier-selective semantic wave dispatch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "dispatchId", "milestone", "poolInspectionRef",
+    "poolInspectionFileSha256", "waveInputDigest", "sourcePoolBinding",
+    "sourcePoolEvidenceRootRef", "semanticSelectionId",
+    "semanticPreflightReceipt", "queueBackend", "poolDeliveryBackend",
+    "activeCarriers", "slots", "manifestDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.semantic_wave_dispatch_manifest"},
+    "dispatchId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,95}$"},
+    "milestone": {"enum": ["M100", "M1000"]},
+    "poolInspectionRef": {"$ref": "#/$defs/safeRef"},
+    "poolInspectionFileSha256": {"$ref": "#/$defs/sha256"},
+    "waveInputDigest": {"$ref": "#/$defs/sha256"},
+    "sourcePoolBinding": {"$ref": "scale_source_pool_binding.schema.json"},
+    "sourcePoolEvidenceRootRef": {"$ref": "#/$defs/safeRef"},
+    "semanticSelectionId": {"const": "cursor_grok"},
+    "semanticPreflightReceipt": {
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
+    },
+    "queueBackend": {"const": "local_file"},
+    "poolDeliveryBackend": {"const": "reliabletask"},
+    "predecessorDispatch": {"$ref": "#/$defs/predecessorDispatch"},
+    "predecessorMappings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/predecessorMapping"}
+    },
+    "activeCarriers": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {"enum": ["homepage", "article", "image", "video"]}
+    },
+    "slots": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/slot"}
+    },
+    "manifestDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--travel-(homepage|article|image|video)-m(100|1000)--[a-z0-9][a-z0-9-]*--scale-[0-9]{3,}$"
+    },
+    "predecessorDispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestRef", "manifestFileSha256", "manifestDigest"],
+      "properties": {
+        "manifestRef": {"$ref": "#/$defs/safeRef"},
+        "manifestFileSha256": {"$ref": "#/$defs/sha256"},
+        "manifestDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "predecessorMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slotId", "executionId", "retryOf", "predecessorSlotDigest",
+        "selectionDigest"
+      ],
+      "properties": {
+        "slotId": {"type": "string", "pattern": "^(homepage|article|image|video)-[0-9]{2}$"},
+        "executionId": {"$ref": "#/$defs/executionId"},
+        "retryOf": {"$ref": "#/$defs/executionId"},
+        "predecessorSlotDigest": {"$ref": "#/$defs/sha256"},
+        "selectionDigest": {"$ref": "#/$defs/sha256"},
+        "unfinishedRefs": {
+          "type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "taskRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "familyRef", "regionRef", "selector", "count", "quota",
+        "requiredWorkers", "partitionCount", "capacityPlanDigest",
+        "workerHostSetBinding", "topic", "sourceProviders", "targetNames",
+        "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
+      ],
+      "properties": {
+        "familyRef": {"type": "string", "pattern": "^content/travel/(homepage|article|image|video)/[a-z0-9-]+$"},
+        "regionRef": {"$ref": "#/$defs/safeRef"},
+        "selector": {"enum": ["all", "source-ready-priority"]},
+        "count": {"type": "integer", "minimum": 1, "maximum": 12},
+        "quota": {"type": "integer", "minimum": 1, "maximum": 12},
+        "requiredWorkers": {"type": "integer", "minimum": 1},
+        "partitionCount": {"enum": [16, 32, 64, 128, 256]},
+        "capacityPlanDigest": {"$ref": "#/$defs/sha256"},
+        "workerHostSetBinding": {"type": "null"},
+        "topic": {"type": "string", "minLength": 1},
+        "sourceProviders": {"type": "array", "maxItems": 0},
+        "targetNames": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
+        "sourcePoolEvidenceRootRef": {"$ref": "#/$defs/safeRef"},
+        "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"}
+      }
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slotIndex", "slotId", "carrier", "executionId", "candidateIds",
+        "candidateObjectRefs", "taskRequest", "argv", "queueBackend",
+        "poolDeliveryBackend", "slotDigest"
+      ],
+      "properties": {
+        "slotIndex": {"type": "integer", "minimum": 1, "maximum": 4},
+        "slotId": {"type": "string", "pattern": "^(homepage|article|image|video)-[0-9]{2}$"},
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "executionId": {"$ref": "#/$defs/executionId"},
+        "retryOf": {"$ref": "#/$defs/executionId"},
+        "retryUnfinishedRefs": {
+          "type": "array", "minItems": 1, "maxItems": 12, "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "candidateIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "candidateObjectRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/safeRef"}
+        },
+        "taskRequest": {"$ref": "#/$defs/taskRequest"},
+        "argv": {
+          "type": "array",
+          "minItems": 20,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "queueBackend": {"const": "local_file"},
+        "poolDeliveryBackend": {"const": "reliabletask"},
+        "slotDigest": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

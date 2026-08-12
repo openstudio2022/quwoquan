@@ -191,6 +191,7 @@ class ExecutionContext:
     )
     agent_provider: AgentProvider = _RUNTIME_POLICY.semantic_agent_provider
     semantic_role: str = "author"
+    semantic_max_attempts: int | None = None
     release_only: bool = False
     agent_runner: Callable[[str], AgentRunOutcome] | None = None
     force_clean_workspace_agent_state: bool = False
@@ -230,6 +231,12 @@ class ExecutionContext:
             "semantic_role",
             _normalize_semantic_agent_role(self.semantic_role),
         )
+        if self.semantic_max_attempts is not None and (
+            isinstance(self.semantic_max_attempts, bool)
+            or not isinstance(self.semantic_max_attempts, int)
+            or self.semantic_max_attempts < 1
+        ):
+            raise ValueError("ExecutionContext semantic_max_attempts must be >= 1")
         if self.until is not None and not isinstance(self.until, ExecutionStage):
             object.__setattr__(self, "until", ExecutionStage(str(self.until)))
     @property

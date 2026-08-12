@@ -57,7 +57,7 @@ void main() {
   tearDownAll(() => _httpClient?.close());
 
   test(
-    'candidate-bound public recovery facts round-trip for Android and iOS',
+    'candidate-bound public recovery facts round-trip for Android, iOS and Web',
     () async {
       final reader = RemoteAppReleaseRecoveryReader(
         client: _generatedClient(),
@@ -83,15 +83,37 @@ void main() {
           buildNumber: 1,
         ),
       );
+      final web = await reader.read(
+        AppReleaseRecoveryQuery(
+          platform: 'web',
+          appVersion: '0.0.0-api-integration',
+          buildNumber: 1,
+        ),
+      );
 
+      expect(android.platform, 'android');
       expect(android.latestBuild, greaterThan(0));
+      expect(android.minimumSupportedBuild, greaterThan(0));
+      expect(
+        android.minimumSupportedBuild,
+        lessThanOrEqualTo(android.latestBuild),
+      );
+      expect(android.updateState, AppReleaseUpdateState.required);
       expect(android.latestVersion, isNotEmpty);
       expect(Uri.parse(android.recoveryUrl).scheme, 'https');
       expect(Uri.parse(android.updateUrl!).scheme, 'https');
+      expect(ios.platform, 'ios');
       expect(ios.latestBuild, greaterThan(0));
+      expect(ios.minimumSupportedBuild, greaterThan(0));
+      expect(ios.minimumSupportedBuild, lessThanOrEqualTo(ios.latestBuild));
       expect(ios.latestVersion, isNotEmpty);
       expect(Uri.parse(ios.recoveryUrl).scheme, 'https');
-      expect(ios.updateUrl, isNull);
+      expect(Uri.parse(ios.updateUrl!).scheme, 'https');
+      expect(web.platform, 'web');
+      expect(web.latestBuild, greaterThan(0));
+      expect(web.minimumSupportedBuild, greaterThan(0));
+      expect(Uri.parse(web.updateUrl!).scheme, 'https');
+      expect(Uri.parse(web.recoveryUrl).scheme, 'https');
     },
   );
 }

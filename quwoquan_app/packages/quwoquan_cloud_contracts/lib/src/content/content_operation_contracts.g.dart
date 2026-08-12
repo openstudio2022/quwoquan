@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 library;
 
@@ -3792,6 +3792,45 @@ final class ReportCommandResult {
   };
 }
 
+final class ResearchReleaseReadbackView {
+  const ResearchReleaseReadbackView({
+    required this.releaseId,
+    required this.manifestDigest,
+    required this.subjectHash,
+    required this.attestationIdHash,
+    required this.signatureVerified,
+    required this.researchBadgeVisible,
+  });
+
+  final String releaseId;
+  final String manifestDigest;
+  final String subjectHash;
+  final String attestationIdHash;
+  final bool signatureVerified;
+  final bool researchBadgeVisible;
+
+  factory ResearchReleaseReadbackView.fromWire(Map<String, Object?> map, [String path = "ResearchReleaseReadbackView"]) {
+    _rejectUnknownFields(map, const <String>{"releaseId", "manifestDigest", "subjectHash", "attestationIdHash", "signatureVerified", "researchBadgeVisible"}, path);
+    return ResearchReleaseReadbackView(
+      releaseId: _requiredNonBlankString(map["releaseId"], '$path.releaseId'),
+      manifestDigest: _requiredNonBlankString(map["manifestDigest"], '$path.manifestDigest'),
+      subjectHash: _requiredNonBlankString(map["subjectHash"], '$path.subjectHash'),
+      attestationIdHash: _requiredNonBlankString(map["attestationIdHash"], '$path.attestationIdHash'),
+      signatureVerified: _requiredBool(map["signatureVerified"], '$path.signatureVerified'),
+      researchBadgeVisible: _requiredBool(map["researchBadgeVisible"], '$path.researchBadgeVisible'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "releaseId": releaseId,
+    "manifestDigest": manifestDigest,
+    "subjectHash": subjectHash,
+    "attestationIdHash": attestationIdHash,
+    "signatureVerified": signatureVerified,
+    "researchBadgeVisible": researchBadgeVisible,
+  };
+}
+
 final class SourceAttribution {
   const SourceAttribution({
     required this.isOriginal,
@@ -3991,6 +4030,9 @@ ReplyPageSlice decodeReplyPageSlice(Object? response) =>
 
 ReportCommandResult decodeReportCommandResult(Object? response) =>
     ReportCommandResult.fromWire(_requiredObject(response, "ReportCommandResult"), "ReportCommandResult");
+
+ResearchReleaseReadbackView decodeResearchReleaseReadbackView(Object? response) =>
+    ResearchReleaseReadbackView.fromWire(_requiredObject(response, "ResearchReleaseReadbackView"), "ResearchReleaseReadbackView");
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {

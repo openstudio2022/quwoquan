@@ -3,6 +3,7 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_api_latency_dispatcher.dart';
 import 'package:quwoquan_app/runtime/platform/cloud_transport_failure_classifier.dart';
+import 'package:quwoquan_app/runtime/shell/recovery/runtime_recovery_host.dart';
 
 /// 统一的鉴权、401 刷新与 API 延迟观测客户端。
 ///
@@ -24,6 +25,13 @@ final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
         .handleAuthoritativeSessionFailure(
           failure,
           presentedAccessToken: presentedAccessToken,
+        ),
+    onClientUpgradeRequired: (failure) =>
+        RuntimeRecoveryCoordinator.instance.enterClientUpgradeRequired(
+          error: failure,
+          stack: StackTrace.current,
+          source: 'gateway_minimum_build',
+          failureCode: failure.code ?? cloudClientUpgradeRequiredCode,
         ),
     latencyObserver: latencyDispatcher.record,
     transportFailureClassifier: classifyCloudTransportFailure,

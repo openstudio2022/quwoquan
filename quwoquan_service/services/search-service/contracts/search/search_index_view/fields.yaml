@@ -196,6 +196,41 @@ types:
     fields:
       - {name: provider, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  OwnerSearchInterpretedQuery:
+    description: Search owner 对 query 的唯一解释结果，不包含 backend DSL。
+    fields:
+      - {name: normalized, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: tokens, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: variants, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: detectedEntities, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: detectedTags, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+      - {name: selectedObjectTypes, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  OwnerSearchHit:
+    description: Search owner bounded flat-card projection；objectRef 为 opaque token，action 只来自 canonical Document.DeepLink，thumbnailUrl 只来自 bounded thumbnailUrl/coverUrl，禁止外泄 raw objectId/score/index/features/payload。
+    fields:
+      - {name: objectRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: action, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+  OwnerSearchCitation:
+    description: 与 opaque objectRef 绑定的公开引用；不包含 raw score 或 backend identity。
+    fields:
+      - {name: citationId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: objectRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: url, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: deepLink, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+  OwnerSearchProvenance:
+    description: Search owner 归因；source 固定为 search_index_view，不暴露 ES index/backend/model/features。
+    fields:
+      - {name: source, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   CanonicalSearchQuery:
     fields:
       - name: sessionId
@@ -230,6 +265,10 @@ types:
         type: int
         client_dart_type: int
         client_default: "20"
+      - name: cursor
+        type: string
+        constraints: [NULLABLE]
+        description: Search owner AEAD opaque continuation；绑定 normalized query、筛选 scope、可信 principal、candidate 与 active policy，禁止 raw offset/ES search_after
 enums:
   CanonicalSearchMode:
-    values: [suggest, result]
+    values: [suggest, result, retrieval]

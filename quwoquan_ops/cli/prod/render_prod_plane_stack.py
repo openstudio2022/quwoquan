@@ -103,8 +103,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--rollout-stage",
-        default="full",
-        choices=["gray-initial", "carry-on", "full"],
+        default="100",
+        choices=["canary", "5", "20", "50", "100"],
     )
     parser.add_argument("--candidate-digest", required=True)
     parser.add_argument(
@@ -587,6 +587,26 @@ def _rewrite_service(
             environment["MONGO_URI"] = mongo_uri
             environment["CONTENT_REDIS_REC_ADDR"] = f"{redis_host}:{redis_port}"
             environment["CONTENT_REDIS_GENERAL_ADDR"] = f"{redis_host}:{redis_port}"
+            environment["SEARCH_ES_ENABLED"] = "true"
+            if data_mode == "isolated":
+                if (
+                    "elasticsearch" not in selected
+                    or startup_services is None
+                    or "elasticsearch" not in startup_services
+                ):
+                    raise SystemExit(
+                        "FAIL: isolated content-service Elasticsearch startup dependency "
+                        "must be selected"
+                    )
+                environment["SEARCH_ES_ENDPOINTS"] = "http://elasticsearch:9200"
+                updated.setdefault("depends_on", {})["elasticsearch"] = {
+                    "condition": "service_healthy"
+                }
+            else:
+                environment["SEARCH_ES_ENDPOINTS"] = (
+                    "${PROD_CONTENT_SEARCH_ES_ENDPOINTS:?managed content search "
+                    "endpoint is required}"
+                )
         if name == "chat-service":
             environment["MONGO_URI"] = mongo_uri
         if name == "chat-service":
@@ -962,14 +982,17 @@ def _write_config_tree(
             shutil.copy2(entry, data_target / entry.name)
     sources["data"] = {"package": str(data_catalog_src)}
 
-    # 灰度路由策略（IaC）：编译进 Caddyfile 的同时落进 config-root，
-    # 供 platform-ops 生产容器只读展示（Portal 灰度页）。
+    # 灰度路由策略（IaC）同时供 API Edge 运行时和 Platform Ops 只读投影消费。
+    # API Edge 的 policy_file 相对 CONFIG_ROOT 解析；两份投影必须复制自同一源字节。
     routing_policy_src = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
     if not routing_policy_src.is_file():
         raise SystemExit(f"FAIL: missing gray routing policy: {routing_policy_src}")
-    routing_target = config_root / "gray-routing" / "policy.yaml"
-    routing_target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(routing_policy_src, routing_target)
+    for routing_target in (
+        config_root / "rollout" / "routing_policy.yaml",
+        config_root / "gray-routing" / "policy.yaml",
+    ):
+        routing_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(routing_policy_src, routing_target)
     sources["gray-routing"] = {
         "package": str(routing_policy_src),
         "policyDigest": _sha256(routing_policy_src),
@@ -1028,78 +1051,30 @@ def _prod_public_hosts() -> dict[str, str]:
 
 
 def _render_gray_routing_block(rollout_stage: str) -> str:
-    """把灰度路由策略（IaC 真相源）编译为 Caddy named matcher + handle 块。
+    """Caddy is transport-only; API Edge owns stable/candidate allocation.
 
-    仅 prod 实例栈注入：命中任一启用维度的请求被转发到 gray 栈 edge，
-    未命中继续走本栈稳定服务。gray 栈自身不注入（防转发环）。
+    Keep the function as a compatibility-free renderer seam while callers are
+    migrated to the five-stage release transaction.  Returning an empty block
+    is deliberate: client headers must never become a Caddy business router.
     """
-    policy_path = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
-    policy = (_load_yaml(policy_path).get("policy") or {}) if policy_path.is_file() else {}
-    if not policy.get("enabled"):
-        return ""
-    if rollout_stage not in {"gray-initial", "carry-on", "full"}:
+    if rollout_stage not in {"canary", "5", "20", "50", "100"}:
         raise SystemExit(
-            "FAIL: gray routing policy received an unsupported rollout stage "
+            "FAIL: rollout policy received an unsupported stage "
             f"{rollout_stage!r}"
         )
-    stage_dimensions = policy.get("stageDimensions") or {}
-    dimensions = stage_dimensions.get(rollout_stage) or {}
-    upstream = str(policy.get("grayUpstream") or "").strip()
-    if not upstream:
-        raise SystemExit("FAIL: gray routing enabled but grayUpstream is empty")
-    skip_verify = bool(policy.get("grayUpstreamTlsInsecureSkipVerify"))
-    header_by_dimension = {
-        "appVersions": "X-Client-App-Version",
-        "userIds": "X-Client-User-Id",
-    }
-    for dimension in ("provinces", "carriers"):
-        if any(str(item).strip() for item in (dimensions.get(dimension) or [])):
-            raise SystemExit(
-                "FAIL: province/carrier gray routing requires a trusted edge "
-                "attestation pipeline; client-supplied headers are forbidden"
-            )
-    transport_lines = ""
-    if upstream.startswith("https://") and skip_verify:
-        transport_lines = (
-            "\t\ttransport http {\n"
-            "\t\t\ttls_insecure_skip_verify\n"
-            "\t\t}\n"
-        )
-    blocks: list[str] = []
-    for dimension, header_name in header_by_dimension.items():
-        values = [str(item).strip() for item in (dimensions.get(dimension) or []) if str(item).strip()]
-        if not values:
-            continue
-        matcher = f"@gray_{dimension.lower()}"
-        header_lines = "".join(
-            f"\t\theader {header_name} {value}\n" for value in values
-        )
-        blocks.append(
-            f"\t{matcher} {{\n"
-            f"{header_lines}"
-            f"\t}}\n"
-            f"\thandle {matcher} {{\n"
-            f"\t\treverse_proxy {upstream} {{\n"
-            f"\t\t\theader_up Host {{host}}\n"
-            f"{transport_lines}"
-            f"\t\t}}\n"
-            f"\t}}\n"
-        )
-    return "".join(blocks)
+    return ""
 
 
 def _write_caddyfile(
     output_root: Path,
     instance: str,
-    rollout_stage: str = "full",
+    rollout_stage: str = "100",
 ) -> None:
     target = output_root / "runtime" / "Caddyfile"
     target.parent.mkdir(parents=True, exist_ok=True)
     public_hosts = _prod_public_hosts()
     gray_routing_block = (
-        _render_gray_routing_block(rollout_stage)
-        if instance == "prod" and rollout_stage != "full"
-        else ""
+        _render_gray_routing_block(rollout_stage) if instance == "prod" else ""
     )
     caddy_text = """{
 \tadmin 0.0.0.0:2019

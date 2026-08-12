@@ -16,6 +16,7 @@ from quwoquan_ops.cli.lib.dev_up import (
     observability_runtime_logs_root,
     resolve_app_endpoint_overrides,
     run_root,
+    summarize_output,
     target_process_root,
 )
 from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
@@ -315,26 +316,63 @@ def main() -> int:
                 "iOS Xcode phase must not synthesize a bare flutter run fallback; "
                 f"retired token: {retired}"
             )
-    if 'DIRECT_TARGET="${DIRECT_ENVIRONMENT}-local"' not in ios_prepare_defines:
+    launch_policy_contract = run(
+        [
+            sys.executable,
+            "-B",
+            "-m",
+            "unittest",
+            (
+                "quwoquan_ops.tests.local_contract."
+                "test_local_runtime_consumer_lease__local_contract_test."
+                "LocalRuntimeConsumerLeaseTest."
+                "test_launcher_warning_policy_reaches_flutter_run_without_runtime_lease"
+            ),
+            (
+                "quwoquan_ops.tests.local_contract."
+                "test_local_runtime_consumer_lease__local_contract_test."
+                "LocalRuntimeConsumerLeaseTest."
+                "test_launcher_hard_safety_blocker_stops_before_flutter_run"
+            ),
+        ]
+    )
+    if launch_policy_contract.returncode != 0:
         issues.append(
-            "iOS direct Debug must derive the canonical target from its selected environment"
-        )
-    for command_target in (
-        'app-debug-preflight --target "$DIRECT_TARGET"',
-        'device-trust --target "$DIRECT_TARGET"',
-        'consumer-lease acquire --target "$DIRECT_TARGET"',
-    ):
-        if command_target not in ios_prepare_defines:
-            issues.append(
-                "iOS direct Debug must propagate one canonical target through "
-                f"preflight, trust and lease: missing {command_target}"
+            "canonical launcher must continue on test_live readiness warnings and "
+            "stop on hard safety blockers: "
+            + summarize_output(
+                launch_policy_contract.stdout + launch_policy_contract.stderr,
+                max_lines=12,
             )
-    if (
-        'print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))'
-        not in ios_prepare_defines
-    ):
+        )
+    ios_policy_contract = run(
+        [
+            sys.executable,
+            "-B",
+            "-m",
+            "unittest",
+            (
+                "quwoquan_app.test.local_contract.runtime."
+                "ios_runtime_dart_defines__local_contract_test."
+                "IosRuntimeDartDefinesContractTest."
+                "test_direct_ios_debug_selects_canonical_nonprod_handoff"
+            ),
+            (
+                "quwoquan_app.test.local_contract.runtime."
+                "ios_runtime_dart_defines__local_contract_test."
+                "IosRuntimeDartDefinesContractTest."
+                "test_direct_ios_debug_reports_the_first_hard_safety_blocker"
+            ),
+        ]
+    )
+    if ios_policy_contract.returncode != 0:
         issues.append(
-            "iOS Debug handoff must bind the canonical lib/main_prod.dart entrypoint"
+            "iOS direct Debug must continue on test_live readiness warnings and "
+            "stop on hard safety blockers: "
+            + summarize_output(
+                ios_policy_contract.stdout + ios_policy_contract.stderr,
+                max_lines=12,
+            )
         )
     if "use ./run.sh -d <device>" not in ios_prepare_defines:
         issues.append(

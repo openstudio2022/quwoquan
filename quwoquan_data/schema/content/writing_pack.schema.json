@@ -103,6 +103,7 @@
       ],
       "description": "写作主线：单篇唯一；prompt.md 据此给会话模型主线导向"
     },
+    "articleCategory": {"const": "photography"},
     "baseSourceRef": {
       "type": [
         "string",

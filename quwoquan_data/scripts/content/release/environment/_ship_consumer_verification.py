@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 from content.release.environment._ship_operation_dependencies import (
     ShipOperationDependencies,
+)
+from content.release.environment.activation_recovery import (
+    ContentDeliveryRecoveryError,
+    restore_after_delivery_failure,
 )
 from content.release.environment.baseline_api_verification import (
     BaselineApiVerificationError,
@@ -27,8 +32,27 @@ from core.control_types import ReleaseRunKind, ReleaseRunStatus
 from core.io import read_json
 from core.release_layout import payload_digest, payload_file
 
+_SENSITIVE_RECEIPT_ASSIGNMENT = re.compile(
+    r"(?i)\b(authorization|access[_-]?token|refresh[_-]?token|token|password|"
+    r"secret|body|query)\b\s*[:=]\s*(?:Bearer\s+)?(?:\{[^}]*\}|\[[^]]*\]|"
+    r'"[^"]*"|\'[^\']*\'|[^\s,;]+)'
+)
+_SENSITIVE_RECEIPT_BEARER = re.compile(r"(?i)\bBearer\s+[^\s,;]+")
 
-def verify_release_consumers(
+
+def _failure_receipt_error(error: Exception) -> str:
+    """Keep one bounded diagnostic line without persisting request secrets."""
+
+    message = " ".join(str(error).splitlines()).strip()
+    message = _SENSITIVE_RECEIPT_BEARER.sub("Bearer [REDACTED]", message)
+    message = _SENSITIVE_RECEIPT_ASSIGNMENT.sub(
+        lambda match: f"{match.group(1)}=[REDACTED]",
+        message,
+    )
+    return (message or "verification failed")[:1024]
+
+
+def _verify_release_consumers(
     args: argparse.Namespace,
     *,
     dependencies: ShipOperationDependencies,
@@ -95,7 +119,7 @@ def verify_release_consumers(
                 "importRunId": str(args.import_run_id).strip(),
                 "status": ReleaseRunStatus.FAILED,
                 "failedStage": stage,
-                "error": str(error),
+                "error": _failure_receipt_error(error),
                 **dict(evidence or {}),
             },
         )
@@ -186,6 +210,9 @@ def verify_release_consumers(
                     output_path=(
                         run / "research-isolation-verification.json"
                     ),
+                    runtime_proof_path=(
+                        run / "research-isolation-runtime-proof.json"
+                    ),
                 )
             )
             isolation = read_json(research_isolation_report)
@@ -270,6 +297,22 @@ def verify_release_consumers(
         ) from exc
     readiness_report: Path | None = None
     if post_report is not None:
+        previous_readiness_ref = str(
+            getattr(args, "previous_environment_readiness", "") or ""
+        ).strip()
+        previous_readiness_relative = Path(previous_readiness_ref)
+        if previous_readiness_ref and (
+            previous_readiness_relative.is_absolute()
+            or ".." in previous_readiness_relative.parts
+        ):
+            raise SystemExit(
+                "[ship] previous environment readiness must be a safe output-relative ref"
+            )
+        previous_readiness_path = (
+            dependencies.output_root / previous_readiness_relative
+            if previous_readiness_ref
+            else None
+        )
         try:
             readiness_report = dependencies.write_environment_release_readiness(
                 environment=env,
@@ -285,6 +328,7 @@ def verify_release_consumers(
                 research_isolation_verification_path=(
                     research_isolation_report
                 ),
+                previous_environment_readiness_path=previous_readiness_path,
                 output_root=dependencies.output_root,
                 output_path=run / "release-readiness.json",
                 readiness_phase=readiness_phase,
@@ -346,3 +390,51 @@ def verify_release_consumers(
         f"[ship] {env} consumer API release={release_id} "
         f"run={run_id} evidence={run}"
     )
+
+
+def verify_release_consumers(
+    args: argparse.Namespace,
+    *,
+    dependencies: ShipOperationDependencies,
+) -> None:
+    """Verify candidate delivery and restore a verified previous release on failure."""
+
+    try:
+        _verify_release_consumers(args, dependencies=dependencies)
+    except SystemExit as original:
+        environment = str(getattr(args, "env", "") or "").strip()
+        failed_release_id = str(
+            getattr(args, "release_id", "") or ""
+        ).strip()
+        import_run_id = str(
+            getattr(args, "import_run_id", "") or ""
+        ).strip()
+        restore = dependencies.restore_previous_release
+        if restore is None:
+            recovery_error = ContentDeliveryRecoveryError(
+                "DATA.DELIVERY_RESTORE_UNAVAILABLE: formal restore callback is unavailable"
+            )
+            raise SystemExit(f"{original}; {recovery_error}") from original
+        try:
+            import_report = dependencies.run_root(
+                environment,
+                failed_release_id,
+                import_run_id,
+            ) / "import.json"
+            previous = restore_after_delivery_failure(
+                output_root=dependencies.output_root,
+                environment=environment,
+                failed_release_id=failed_release_id,
+                import_report_path=import_report,
+                replay_previous=lambda release: restore(
+                    environment=environment,
+                    failed_release_id=failed_release_id,
+                    previous_release_id=release.release_id,
+                ),
+            )
+        except (OSError, TypeError, ValueError, ContentDeliveryRecoveryError) as exc:
+            raise SystemExit(f"{original}; {exc}") from original
+        raise SystemExit(
+            f"{original}; DATA.DELIVERY.PREVIOUS_RELEASE_RESTORED: "
+            f"releaseId={previous.release_id}"
+        ) from original

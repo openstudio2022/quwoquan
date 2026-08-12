@@ -8,7 +8,14 @@ import 'package:quwoquan_app/runtime/transport/generated/assistant/assistant_req
 import 'package:quwoquan_app/runtime/transport/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_preference/application/assistant_preference_facet.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_entry_view/application/assistant_personalization_facade.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_session_run_facade.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_capability_catalog.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_task_view/application/assistant_task_query.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_catalog/application/skill_catalog_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_consent/application/skill_consent_facet.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_activity_view/application/public/skill_activity_query.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_control_request/application/skill_data_control_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_subscription/application/skill_subscription_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_user_setting/application/skill_user_setting_facet.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
@@ -35,9 +42,16 @@ final class AssistantApiContractHarness {
     required this.telemetry,
     required this.session,
     required this.preferences,
+    required this.personalization,
+    required this.sessionRun,
+    required this.tasks,
+    required this.skillCatalog,
     required this.skillSubscriptions,
     required this.skillUserSettings,
     required this.skillConsents,
+    required this.skillActivities,
+    required this.skillDataControlCommands,
+    required this.skillDataControlQueries,
     required this._accountLifecycle,
   });
 
@@ -140,6 +154,16 @@ final class AssistantApiContractHarness {
       if (personaId.isEmpty) {
         throw StateError('disposable anonymous account has no active persona');
       }
+      final personalization =
+          AssistantProductionComposition.personalizationFacade(
+            client: client,
+            invocationContext: assistantInvocationContext,
+          );
+      final sessionRun = AssistantProductionComposition.sessionRunFacade(
+        client: client,
+        invocationContext: assistantInvocationContext,
+        presentationCapabilities: _apiPresentationCapabilities,
+      );
 
       return AssistantApiContractHarness._(
         httpClient: httpClient,
@@ -149,6 +173,20 @@ final class AssistantApiContractHarness {
           client: client,
           invocationContext: assistantInvocationContext,
         ),
+        personalization: personalization,
+        sessionRun: sessionRun,
+        tasks: AssistantProductionComposition.taskQuery(
+          client: client,
+          invocationContext: assistantInvocationContext,
+        ),
+        skillCatalog:
+            AssistantProductionComposition.generatedAdapter<
+              AssistantSkillCatalogFacet
+            >(
+              AssistantProductionAdapter.skillCatalog,
+              client: client,
+              invocationContext: assistantInvocationContext,
+            ),
         skillSubscriptions:
             AssistantProductionComposition.generatedAdapter<
               AssistantSkillSubscriptionFacet
@@ -170,6 +208,30 @@ final class AssistantApiContractHarness {
               AssistantSkillConsentFacet
             >(
               AssistantProductionAdapter.skillConsent,
+              client: client,
+              invocationContext: assistantInvocationContext,
+            ),
+        skillActivities:
+            AssistantProductionComposition.generatedAdapter<
+              AssistantSkillActivityQuery
+            >(
+              AssistantProductionAdapter.skillActivity,
+              client: client,
+              invocationContext: assistantInvocationContext,
+            ),
+        skillDataControlCommands:
+            AssistantProductionComposition.generatedAdapter<
+              SkillDataControlProcessCommandWriter
+            >(
+              AssistantProductionAdapter.skillDataControl,
+              client: client,
+              invocationContext: assistantInvocationContext,
+            ),
+        skillDataControlQueries:
+            AssistantProductionComposition.generatedAdapter<
+              SkillDataControlProcessQuery
+            >(
+              AssistantProductionAdapter.skillDataControl,
               client: client,
               invocationContext: assistantInvocationContext,
             ),
@@ -197,9 +259,16 @@ final class AssistantApiContractHarness {
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final AuthSessionGrant session;
   final AssistantPreferenceFacet preferences;
+  final AssistantPersonalizationFacade personalization;
+  final AssistantSessionRunComposition sessionRun;
+  final AssistantTaskQuery tasks;
+  final AssistantSkillCatalogFacet skillCatalog;
   final AssistantSkillSubscriptionFacet skillSubscriptions;
   final AssistantSkillUserSettingFacet skillUserSettings;
   final AssistantSkillConsentFacet skillConsents;
+  final AssistantSkillActivityQuery skillActivities;
+  final SkillDataControlProcessCommandWriter skillDataControlCommands;
+  final SkillDataControlProcessQuery skillDataControlQueries;
   final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   bool _closed = false;
 
@@ -230,7 +299,20 @@ AppUiSurface _assistantSurfaceForClientPage(String clientPageId) {
   if (clientPageId == AssistantRequestPageIds.getSkillSubscription) {
     return AppUiSurfaces.personalAssistantDialog;
   }
-  if (clientPageId == AssistantRequestPageIds.listSkillSubscriptions ||
+  if (clientPageId == AssistantRequestPageIds.getAssistantEntry ||
+      clientPageId == AssistantRequestPageIds.reportPageContext ||
+      clientPageId == AssistantRequestPageIds.createAssistantSession ||
+      clientPageId == AssistantRequestPageIds.listAssistantSessions ||
+      clientPageId == AssistantRequestPageIds.getAssistantSession ||
+      clientPageId == AssistantRequestPageIds.startAssistantRun ||
+      clientPageId == AssistantRequestPageIds.getAssistantRun ||
+      clientPageId == AssistantRequestPageIds.listSessionTurns ||
+      clientPageId == AssistantRequestPageIds.listAssistantTasks) {
+    return AppUiSurfaces.personalAssistantDialog;
+  }
+  if (clientPageId == AssistantRequestPageIds.listSkills ||
+      clientPageId == AssistantRequestPageIds.getSkillCatalogItem ||
+      clientPageId == AssistantRequestPageIds.listSkillSubscriptions ||
       clientPageId == AssistantRequestPageIds.createSkillSubscription ||
       clientPageId == AssistantRequestPageIds.updateSkillSubscriptionStatus ||
       clientPageId == AssistantRequestPageIds.listSkillUserSettings ||
@@ -238,11 +320,31 @@ AppUiSurface _assistantSurfaceForClientPage(String clientPageId) {
       clientPageId == AssistantRequestPageIds.putSkillUserSetting ||
       clientPageId == AssistantRequestPageIds.listConsents ||
       clientPageId == AssistantRequestPageIds.grantSkillConsent ||
-      clientPageId == AssistantRequestPageIds.revokeSkillConsent) {
+      clientPageId == AssistantRequestPageIds.revokeSkillConsent ||
+      clientPageId == AssistantRequestPageIds.listSkillActivities ||
+      clientPageId == AssistantRequestPageIds.createSkillDataControlRequest ||
+      clientPageId == AssistantRequestPageIds.confirmSkillDataControlRequest ||
+      clientPageId == AssistantRequestPageIds.getSkillDataControlRequest) {
     return AppUiSurfaces.assistantSkills;
   }
   throw StateError(
     'Unsupported Assistant API contract clientPageId: $clientPageId',
+  );
+}
+
+AssistantPresentationCapabilitySnapshot _apiPresentationCapabilities(
+  AssistantPresentationSurfacePolicy surfacePolicy,
+) {
+  return AssistantPresentationCapabilitySnapshot(
+    surfacePolicy: surfacePolicy,
+    viewportClass: AssistantPresentationViewportClass.standard,
+    platform: 'api-integration',
+    darkTheme: false,
+    textScale: 1,
+    reducedMotion: false,
+    offline: false,
+    mediaEnabled: true,
+    actionsEnabled: true,
   );
 }
 

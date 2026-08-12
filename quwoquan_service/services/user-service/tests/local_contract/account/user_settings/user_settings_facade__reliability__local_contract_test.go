@@ -272,6 +272,36 @@ func TestUserSettingsQueryFacadeReturnsTypedSnapshotAndSectionSlices(
 	}
 }
 
+func TestUserSettingsQueryFacadeKeepsDefaultBlockedKeywordsAsWireArray(
+	t *testing.T,
+) {
+	t.Parallel()
+
+	current, err := settingsmodel.NewDefault(
+		"account-empty-blocked-keywords",
+		time.Date(2026, 8, 10, 10, 0, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("创建默认设置: %v", err)
+	}
+	facade := settingsapp.NewUserSettingsQueryFacade(
+		&fakeUserSettingsStore{current: current, found: true},
+	)
+
+	privacy, err := facade.GetPrivacySettings(
+		trustedAccountContext("account-empty-blocked-keywords"),
+	)
+	if err != nil {
+		t.Fatalf("读取默认 privacy slice: %v", err)
+	}
+	if privacy.BlockedKeywords == nil || len(privacy.BlockedKeywords) != 0 {
+		t.Fatalf(
+			"默认 blockedKeywords 必须保持非 nil 空数组，得到: %#v",
+			privacy.BlockedKeywords,
+		)
+	}
+}
+
 func TestAssistantDeliveryPolicyReadsSubscriptionOwnerSettings(t *testing.T) {
 	t.Parallel()
 

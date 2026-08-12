@@ -1,0 +1,71 @@
+{
+  "schema": "graphql-read-query-metadata",
+  "entries": [
+    {
+      "document": "persisted_queries/search_page.graphql",
+      "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
+      "queryClass": "page_composite",
+      "variablesMaxBytes": 4096,
+      "maxOwnerCalls": 1,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 262144,
+      "sloRef": "slo:search.search_index_view.Search",
+      "executorKey": "search.searchIndexView.searchPage"
+    },
+    {
+      "document": "persisted_queries/content_post_detail.graphql",
+      "canonicalOperationId": "content.post.GetPost",
+      "queryClass": "detail",
+      "variablesMaxBytes": 1024,
+      "maxOwnerCalls": 1,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 65536,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.post.getPost"
+    },
+    {
+      "document": "persisted_queries/content_post_detail_semantic.graphql",
+      "canonicalOperationId": "content.post.GetPostSemantic",
+      "queryClass": "page_composite",
+      "variablesMaxBytes": 1024,
+      "maxOwnerCalls": 1,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 65536,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.post.getPost"
+    },
+    {
+      "document": "persisted_queries/content_post_detail_media.graphql",
+      "canonicalOperationId": "content.post.GetPostMedia",
+      "queryClass": "page_composite",
+      "variablesMaxBytes": 1024,
+      "maxOwnerCalls": 1,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 262144,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.post.getPost"
+    },
+    {
+      "document": "persisted_queries/content_post_detail_article_render_assets.graphql",
+      "canonicalOperationId": "content.post.GetPostArticleRenderAssets",
+      "queryClass": "page_composite",
+      "variablesMaxBytes": 1024,
+      "maxOwnerCalls": 1,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 262144,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.post.getPost"
+    },
+    {
+      "document": "persisted_queries/content_post_detail_article_entities.graphql",
+      "canonicalOperationId": "content.post.GetPostArticleEntities",
+      "queryClass": "collection",
+      "variablesMaxBytes": 1024,
+      "maxOwnerCalls": 1,
+      "maxBatchKeys": 1,
+      "maxResponseBytes": 131072,
+      "sloRef": "slo:gateway.graphql_read.detail",
+      "executorKey": "content.post.getPost"
+    }
+  ]
+}

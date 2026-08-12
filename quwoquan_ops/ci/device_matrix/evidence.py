@@ -99,13 +99,22 @@ def capture_device_screenshot(device: dict[str, Any], output_path: Path) -> dict
                 ),
             }
         command = [adb, "-s", device_id, "exec-out", "screencap", "-p"]
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-            timeout=30,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "failed",
+                "path": repo_relative(output_path),
+                "command": command,
+                "failureKind": "screenshot_timeout",
+                "stderrSummary": "Android screenshot capture timed out",
+            }
         if result.returncode == 0 and result.stdout:
             output_path.write_bytes(result.stdout)
             return {
@@ -123,14 +132,23 @@ def capture_device_screenshot(device: dict[str, Any], output_path: Path) -> dict
 
     if target_platform == "ios" and bool(device.get("emulator", False)):
         command = ["xcrun", "simctl", "io", device_id, "screenshot", str(output_path)]
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-            timeout=30,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "failed",
+                "path": repo_relative(output_path),
+                "command": command,
+                "failureKind": "screenshot_timeout",
+                "outputSummary": "iOS screenshot capture timed out",
+            }
         if result.returncode == 0 and output_path.exists():
             return {
                 "status": "captured",

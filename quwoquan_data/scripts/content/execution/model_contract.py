@@ -17,9 +17,11 @@ from core.runtime_policy import load_runtime_policy, runtime_profile_digest
 
 
 DEFAULT_SEMANTIC_SELECTION_ID = "default"
+CURSOR_GROK_SEMANTIC_SELECTION_ID = "cursor_grok"
 CURSOR_AUTO_SEMANTIC_SELECTION_ID = "cursor_auto"
 SEMANTIC_SELECTION_IDS = (
     DEFAULT_SEMANTIC_SELECTION_ID,
+    CURSOR_GROK_SEMANTIC_SELECTION_ID,
     CURSOR_AUTO_SEMANTIC_SELECTION_ID,
 )
 
@@ -106,6 +108,7 @@ class SemanticExecutionBinding:
     selection_id: str
     pair: ExecutionModelPair
     runtime: RuntimeEnvironment
+    requires_new_retry_of: bool
 
 
 def normalize_semantic_selection_id(value: object) -> str:
@@ -150,26 +153,33 @@ def semantic_execution_binding(
                 "recipe reviewer model must match runtime policy semanticAgent.reviewer"
             )
         runtime = policy.semantic_agent_runtime
+        requires_new_retry_of = False
     else:
         explicit = policy.explicit_semantic_selection(selection_id)
-        if explicit.selection_id != CURSOR_AUTO_SEMANTIC_SELECTION_ID:
+        family_by_selection = {
+            CURSOR_GROK_SEMANTIC_SELECTION_ID: ModelFamily.GROK,
+            CURSOR_AUTO_SEMANTIC_SELECTION_ID: ModelFamily.AUTO,
+        }
+        if explicit.selection_id not in family_by_selection:
             raise ValueError(
                 f"unsupported explicit semantic selection: {explicit.selection_id}"
             )
         model = ExecutionModel(
             provider=explicit.binding.provider,
             model_id=explicit.binding.model,
-            family=ModelFamily.AUTO,
+            family=family_by_selection[explicit.selection_id],
             parameters=explicit.binding.model_parameters,
         )
         pair = ExecutionModelPair(author=model, reviewer=model)
         runtime = explicit.runtime
+        requires_new_retry_of = explicit.requires_new_retry_of
     if policy.semantic_fallback_policy != "forbidden":
         raise ValueError("runtime policy semantic fallback must be forbidden")
     return SemanticExecutionBinding(
         selection_id=selection_id,
         pair=pair,
         runtime=runtime,
+        requires_new_retry_of=requires_new_retry_of,
     )
 
 
@@ -243,6 +253,7 @@ __all__ = [
     "ExecutionModelPair",
     "SemanticExecutionBinding",
     "DEFAULT_SEMANTIC_SELECTION_ID",
+    "CURSOR_GROK_SEMANTIC_SELECTION_ID",
     "CURSOR_AUTO_SEMANTIC_SELECTION_ID",
     "SEMANTIC_SELECTION_IDS",
     "ModelFamily",

@@ -108,7 +108,7 @@ class ProdHostedTopologyContractTest(unittest.TestCase):
             ):
                 checks = stackctl._prod_hosted_placement_coverage_checks(
                     Path(temporary_directory),
-                    stage="full",
+                    stage="100",
                 )
 
         receipts = [

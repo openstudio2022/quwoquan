@@ -25,6 +25,16 @@ DISCOVERY_STRATEGY_MODES = {
     "photo_collection_scan",
     "licensed_asset_manifest",
 }
+DISCOVERY_PRIORITIES = {
+    "site_direct_first",
+    "search_supplement_after_site_direct_shortfall",
+}
+CREATOR_EXPANSION_POLICIES = {
+    "unavailable",
+    "stable_id_public_pagination",
+    "stable_id_official_api",
+    "reference_search_fallback",
+}
 VALID_ARTICLE_COMMERCIAL_ADMISSIONS = {
     "commercial_release",
     "controlled_trial",
@@ -56,6 +66,11 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
     license_policies = {str(x) for x in (data.get("licensePolicies") or []) if str(x)}
     registry_extractors = {str(x) for x in (data.get("extractors") or []) if str(x)}
     article_admissions = {str(x) for x in (data.get("articleCommercialAdmissions") or []) if str(x)}
+    creator_expansion_policies = {
+        str(x)
+        for x in (data.get("creatorExpansionPolicies") or [])
+        if str(x)
+    }
     if allowed_extractors is not None:
         unknown = sorted(registry_extractors - allowed_extractors)
         if unknown:
@@ -69,6 +84,11 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
         missing_admissions = sorted(VALID_ARTICLE_COMMERCIAL_ADMISSIONS - article_admissions)
         if missing_admissions:
             issues.append(f"travel: articleCommercialAdmissions missing values {missing_admissions}")
+    if creator_expansion_policies != CREATOR_EXPANSION_POLICIES:
+        issues.append(
+            "travel: creatorExpansionPolicies must declare the exact governed set "
+            f"{sorted(CREATOR_EXPANSION_POLICIES)}"
+        )
 
     sites = data.get("sites") or []
     if not sites:
@@ -235,6 +255,7 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                         issues.append(f"{prefix}: siteCrawlProfile.discoveryStrategy must be an object")
                     else:
                         mode = str(discovery_strategy.get("mode") or "").strip()
+                        priority = str(discovery_strategy.get("priority") or "").strip()
                         seed_axes = [
                             str(x).strip() for x in (discovery_strategy.get("seedAxes") or [])
                             if str(x).strip()
@@ -245,6 +266,11 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                         ]
                         if mode not in DISCOVERY_STRATEGY_MODES:
                             issues.append(f"{prefix}: siteCrawlProfile.discoveryStrategy.mode {mode!r} is invalid")
+                        if priority and priority not in DISCOVERY_PRIORITIES:
+                            issues.append(
+                                f"{prefix}: siteCrawlProfile.discoveryStrategy.priority "
+                                f"{priority!r} is invalid"
+                            )
                         if not seed_axes:
                             issues.append(f"{prefix}: siteCrawlProfile.discoveryStrategy.seedAxes must not be empty")
                         blocked_axes = {
@@ -324,6 +350,33 @@ def verify_travel_source_registry(*, allowed_extractors: set[str] | None = None)
                                 issues.append(f"{prefix}: controlledTrial.rawFetchAllowed cannot be true")
                             if controlled_trial.get("publishableAssetsAllowed") is True:
                                 issues.append(f"{prefix}: controlledTrial.publishableAssetsAllowed cannot be true")
+                creator_expansion = site_crawl_profile.get("creatorExpansion")
+                if creator_expansion is not None:
+                    if not isinstance(creator_expansion, dict):
+                        issues.append(f"{prefix}: creatorExpansion must be an object")
+                    else:
+                        policy = str(creator_expansion.get("policy") or "").strip()
+                        if policy not in creator_expansion_policies:
+                            issues.append(
+                                f"{prefix}: creatorExpansion.policy {policy!r} is invalid"
+                            )
+                        if creator_expansion.get("stableCreatorIdRequired") is not True:
+                            issues.append(
+                                f"{prefix}: creatorExpansion requires a stable creator identity"
+                            )
+                        if creator_expansion.get("perWorkEntityRevalidationRequired") is not True:
+                            issues.append(
+                                f"{prefix}: creatorExpansion must revalidate every work"
+                            )
+                        if (
+                            policy != "unavailable"
+                            and not str(
+                                creator_expansion.get("catalogCompletenessClaim") or ""
+                            ).strip()
+                        ):
+                            issues.append(
+                                f"{prefix}: enabled creatorExpansion requires a catalog completeness claim"
+                            )
     return issues
 
 

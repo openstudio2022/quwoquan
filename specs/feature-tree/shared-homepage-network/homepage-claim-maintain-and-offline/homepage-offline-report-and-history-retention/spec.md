@@ -64,6 +64,15 @@
 - THEN 同 actor/idempotency-key/digest 重放返回同一结果，审核终态不可互改。
 - THEN 审核事实经 durable outbox 与 checkpoint 幂等投影到 Homepage。
 
+<a id="gwt-002"></a>
+### GWT-002 状态上报页 production Remote 旅程与失败恢复
+
+- GIVEN 用户从已发布共享主页进入状态上报页，App 使用 production Remote composition，且当前身份可能尚未登录。
+- WHEN 用户完成登录续接，选择原因并提交状态上报。
+- THEN 页面读取的主页状态、创建上报的 typed receipt 与 `GetMyPendingHomepageStatusReport` authoritative readback 属于同一主页、同一 persona、同一原因和同一上报意图；只有 receipt 与 readback 一致且均为 `pending_review` 时才表达提交成功。
+- THEN 输入无效、身份拒绝、主页不存在、Remote 失败或 readback 未收敛时保留安全范围内的未提交表单与显式恢复动作；同一表单意图重试复用同一幂等键且不产生第二条上报或伪成功提示。
+- THEN 页面只负责状态上报的读取与创建，`confirmed_offline` 或 `dismissed` 的治理裁决、下线投影与历史保留仍由治理 owner 的公开行为决定。
+
 ## 6. 依赖
 
 - 前置要求：[`homepage-claim-maintain-and-offline`](../spec.md) 的范围、要求与 SIT。
@@ -79,5 +88,5 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：当前缺少从真实页面提交、待审回读到治理终态投影的同 candidate 端云 Journey 证据，不能由本地 receipt、Widget 或 Ops 单侧审核结果代替。
-- 完成判定：`GWT-001` 的页面提交、失败恢复、幂等重放与 confirmed_offline/dismissed 分支均有可信 CaseResult，且物理 Android 与物理 iPhone 的 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
+- 完成判定：`GWT-001` 的治理终态与 `GWT-002` 的页面提交、失败恢复、幂等重放均有可信 CaseResult，且物理 Android 与物理 iPhone 的 ReadinessResultBundle 绑定同一 commit、ContractGraph、candidate、environment 与非内存 Provider。
 - 依赖：对象级 `user_acceptance` runner、真实 persona/operator、可回读待审与审核结果的 production Remote 环境；skipped 或仅本地证据均不计通过。

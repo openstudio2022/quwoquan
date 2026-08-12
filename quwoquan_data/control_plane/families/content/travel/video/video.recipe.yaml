@@ -4,7 +4,9 @@ title: 旅行视频作品执行（通用模板）
 presetRef: content/travel/video/base
 runtimeProfile: semantic_agent_local_calibrated
 selection:
-  category: 景区
+  # 媒体作品面向所有旅游地点；主清单已用精确 entityType
+  # 区分景区、博物馆、主题乐园等，recipe 不得二次缩窄。
+  category: 地点
   entityHomepagesPerTarget: 0
   entityArticlesPerTarget: 0
   imageWorksPerTarget: 0

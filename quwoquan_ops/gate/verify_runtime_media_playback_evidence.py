@@ -28,9 +28,11 @@ REQUIRED_MATRIX_KEYS = frozenset(
         ("alpha-local", "local"),
         ("beta-local", "local"),
         ("gamma-local", "local"),
-        ("prod-hosted", "gray-initial"),
-        ("prod-hosted", "carry-on"),
-        ("prod-hosted", "full"),
+        ("prod-hosted", "canary"),
+        ("prod-hosted", "5"),
+        ("prod-hosted", "20"),
+        ("prod-hosted", "50"),
+        ("prod-hosted", "100"),
     },
 )
 
@@ -80,12 +82,14 @@ def _validate_target(
             f"{prefix}.env 与 target 不一致: target={target} expected={expected_env} got={env}",
         )
     if target == "prod-hosted" and stage not in {
-        "gray-initial",
-        "carry-on",
-        "full",
+        "canary",
+        "5",
+        "20",
+        "50",
+        "100",
     }:
         issues.append(
-            f"{prefix}.rolloutStage 必须为 gray-initial|carry-on|full，当前为 {stage or '<empty>'}",
+            f"{prefix}.rolloutStage 必须为 canary|5|20|50|100，当前为 {stage or '<empty>'}",
         )
     elif target and target != "prod-hosted" and stage not in {"local", "not-applicable"}:
         issues.append(
@@ -368,9 +372,9 @@ def validate_evidence_document(
                 "mediaManifestDigest/sourceOwner"
             )
         if len(prod_config_hashes) > 1:
-            issues.append("prod-hosted 三阶段必须绑定同一 production configHash")
+            issues.append("prod-hosted 五阶段必须绑定同一 production configHash")
         if len(prod_post_ids) > 1:
-            issues.append("prod-hosted 三阶段必须绑定同一 postId")
+            issues.append("prod-hosted 五阶段必须绑定同一 postId")
         return issues
 
     return _validate_single_report(
@@ -387,7 +391,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-matrix",
         action="store_true",
-        help="发布级门禁要求 alpha/beta/gamma/prod 三阶段完整矩阵",
+        help="发布级门禁要求 alpha/beta/gamma 与 prod 五阶段完整矩阵",
     )
     return parser.parse_args()
 

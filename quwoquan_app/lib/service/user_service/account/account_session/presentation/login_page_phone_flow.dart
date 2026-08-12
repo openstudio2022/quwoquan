@@ -205,6 +205,9 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       _rootMaskedPhone = '';
     }
     _otpCountdownTicker?.cancel();
+    _cancelDeliveryConfirmationTimers();
+    unawaited(_otpAutofillGateway.stop());
+    unawaited(_clearPendingOtpAttempt());
     _lastAutoVerifiedCode = '';
     _otpController.clear();
     if (!preservePhone) {
@@ -229,18 +232,26 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
         flowId: _flow.flowId,
         consentState: _flow.consentState,
         entryMode: LoginEntryMode.phone,
+        otpReadinessState: OtpReadinessState.checking,
         phone: phone,
         maskedPhone: phone.isEmpty ? '' : _maskPhone(phone),
         feedback: feedback,
       ),
       action: 'login_state_changed',
     );
+    unawaited(_checkOtpDeliveryReadiness());
   }
 
   void _handlePhoneChanged(String value) {
     if (!_flow.canEditPhone) return;
     final digits = _digitsOnly(value);
     final phone = digits.length > 11 ? digits.substring(0, 11) : digits;
+    final changedTarget = phone != _flow.phone;
+    final readinessFeedback =
+        _flow.otpReadinessState == OtpReadinessState.unavailable &&
+            _flow.feedback?.copyKey == 'loginOtpServiceUnavailable'
+        ? _flow.feedback
+        : null;
     if (_phoneController.text != phone) {
       _phoneController.value = TextEditingValue(
         text: phone,
@@ -251,9 +262,23 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       _flow.copyWith(
         phone: phone,
         maskedPhone: phone.length == 11 ? _maskPhone(phone) : '',
-        feedback: null,
+        otpChallengeState: changedTarget
+            ? OtpChallengeState.none
+            : _flow.otpChallengeState,
+        otpDeliveryState: changedTarget
+            ? OtpDeliveryState.none
+            : _flow.otpDeliveryState,
+        challengeId: changedTarget ? '' : _flow.challengeId,
+        deliveryRequestId: changedTarget ? '' : _flow.deliveryRequestId,
+        idempotencyKey: changedTarget ? '' : _flow.idempotencyKey,
+        resendDeadline: changedTarget ? null : _flow.resendDeadline,
+        feedback: readinessFeedback,
       ),
     );
+    if (changedTarget) {
+      _otpCountdownTicker?.cancel();
+      unawaited(_clearPendingOtpAttempt());
+    }
   }
 
   void _handlePhoneEditingComplete() {
@@ -274,7 +299,9 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
     bool resend = false,
     bool consentChecked = false,
   }) async {
-    if (_flow.isBusy || !_flow.hasValidPhone) {
+    if (_flow.isBusy ||
+        _flow.otpReadinessState != OtpReadinessState.ready ||
+        !_flow.hasValidPhone) {
       _handlePhoneEditingComplete();
       return;
     }
@@ -295,7 +322,32 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       return;
     }
 
+    final requestedAt = DateTime.now();
+    final idempotencyKey = newOtpIdempotencyKey();
+    final defaultResendDeadline = requestedAt.add(const Duration(seconds: 60));
+    final pendingExpiresAt = requestedAt.add(
+      _LoginFrameHostState._pendingOtpTtl,
+    );
+    _flowController.replace(
+      _flow.copyWith(
+        idempotencyKey: idempotencyKey,
+        deliveryRequestId: '',
+        challengeId: '',
+        otpDeliveryState: OtpDeliveryState.confirming,
+        deliveryConfirmationExhausted: false,
+        resendDeadline: defaultResendDeadline,
+        pendingOtpExpiresAt: pendingExpiresAt,
+        feedback: null,
+      ),
+    );
+    await _persistPendingOtpAttempt(_flow);
+
     final attempt = _beginLoginAttempt(LoginOperation.sendingOtp);
+    await _otpAutofillGateway.start((code) {
+      if (mounted && _flow.isOtpStep && !_flow.isBusy) {
+        _handleOtpChanged(code);
+      }
+    });
     final stopwatch = Stopwatch()..start();
     final purpose = binding ? LoginOtpPurpose.bindPhone : LoginOtpPurpose.login;
     final wirePhone = mainlandPhoneE164OrEmpty(_flow.phone);
@@ -312,42 +364,54 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
               deviceId: session.installId.isNotEmpty
                   ? session.installId
                   : stored.installId,
-              platform: CloudRequestHeaders.platform(),
+              platform: otpClientPlatformForRuntime(
+                CloudRequestHeaders.platform(),
+              ),
               appVersion: CloudRequestHeaders.appVersion,
               sourceOperation: binding ? 'bind_phone' : 'login',
               bindingTicket: binding ? _flow.bindingTicket : null,
             ),
+            idempotencyKey: idempotencyKey,
           )
-          .timeout(_LoginFrameHostState._requestTimeout);
+          .timeout(_LoginFrameHostState._sendOtpTimeout);
       if (!_isCurrentLoginAttempt(attempt)) return;
-      final retryAfter = result.retryAfterSeconds > 0
-          ? result.retryAfterSeconds
-          : 60;
+      final retryAfter = result.retryAfterSeconds;
       final deadline = DateTime.now().add(Duration(seconds: retryAfter));
       _otpController.clear();
       _lastAutoVerifiedCode = '';
       final nextStep = binding ? LoginStep.socialPhoneOtp : LoginStep.otp;
+      final deliveryState = _otpDeliveryStateFromWire(result.deliveryStatus);
       _transitionFlow(
         _flow.copyWith(
           step: nextStep,
           operation: LoginOperation.idle,
           otpPurpose: purpose,
           otpChallengeState: OtpChallengeState.active,
+          otpDeliveryState: deliveryState,
           code: '',
-          challengeId: result.challengeId ?? '',
+          challengeId: result.challengeId,
+          deliveryRequestId: result.requestId,
+          idempotencyKey: idempotencyKey,
           maskedPhone: result.maskedPhone.isNotEmpty
               ? result.maskedPhone
               : _maskPhone(_flow.phone),
           resendDeadline: deadline,
+          pendingOtpExpiresAt: pendingExpiresAt,
           feedback: null,
+          deliveryConfirmationExhausted: false,
           otpFocusSerial: _flow.otpFocusSerial + 1,
         ),
         action: 'login_state_changed',
       );
+      _otpAutofillGateway.bindRequestRef(result.requestId);
       _startCountdownTicker();
+      await _persistPendingOtpAttempt(_flow);
+      if (deliveryState == OtpDeliveryState.queued) {
+        _scheduleDeliveryConfirmations(requestedAt);
+      }
       _trackLoginOperation(
         operationId: 'send_otp',
-        result: 'success',
+        result: _otpDeliveryTelemetryResult(deliveryState),
         otpPurpose: purpose,
         durationMs: stopwatch.elapsedMilliseconds,
       );
@@ -357,12 +421,69 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
         error,
         origin: LoginFailureOrigin.otpSend,
       );
-      _flowController.replace(
-        _flow.copyWith(operation: LoginOperation.idle, feedback: feedback),
-      );
+      final runtimeKind = feedback.cloudError?.runtimeFailure.kind;
+      final resultUncertain =
+          runtimeKind == RuntimeFailureKind.network ||
+          runtimeKind == RuntimeFailureKind.timeout ||
+          error is TimeoutException ||
+          feedback.copyKey == 'loginOtpSendFailed';
+      if (resultUncertain) {
+        _enterOtpWithUnknownDelivery(
+          binding: binding,
+          purpose: purpose,
+          idempotencyKey: idempotencyKey,
+          resendDeadline: defaultResendDeadline,
+          pendingExpiresAt: pendingExpiresAt,
+          requestedAt: requestedAt,
+        );
+      } else if (feedback.copyKey == 'loginOtpRateLimited') {
+        final seconds = feedback.retryAfterSeconds > 0
+            ? feedback.retryAfterSeconds
+            : 60;
+        _flowController.replace(
+          _flow.copyWith(
+            operation: LoginOperation.idle,
+            otpChallengeState: OtpChallengeState.rateLimited,
+            otpDeliveryState: OtpDeliveryState.none,
+            resendDeadline: DateTime.now().add(Duration(seconds: seconds)),
+            feedback: LoginFeedback(
+              message: FoundationText.loginOtpRateLimitedCountdown.replaceFirst(
+                '%d',
+                seconds.toString(),
+              ),
+              copyKey: 'loginOtpRateLimited',
+              surface: LoginFeedbackSurface.phone,
+              recoveryAction: 'waitThenResendOtp',
+              cloudError: feedback.cloudError,
+              sourceCode: feedback.sourceCode,
+              failureKind: feedback.failureKind,
+              requestId: feedback.requestId,
+              traceId: feedback.traceId,
+              retryAfterSeconds: seconds,
+            ),
+          ),
+        );
+        unawaited(_clearPendingOtpAttempt());
+        _startCountdownTicker();
+      } else {
+        _flowController.replace(
+          _flow.copyWith(
+            operation: LoginOperation.idle,
+            otpDeliveryState: OtpDeliveryState.none,
+            feedback: feedback,
+          ),
+        );
+        unawaited(_clearPendingOtpAttempt());
+      }
+      final telemetryResult = switch (runtimeKind) {
+        RuntimeFailureKind.contract => 'decode_contract_violation',
+        _ when feedback.copyKey == 'loginOtpRateLimited' => 'rate_limited',
+        _ when resultUncertain => 'delivery_confirming',
+        _ => 'failure',
+      };
       _trackLoginOperation(
         operationId: 'send_otp',
-        result: 'failure',
+        result: telemetryResult,
         otpPurpose: purpose,
         durationMs: stopwatch.elapsedMilliseconds,
         error: error,
@@ -370,6 +491,189 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       );
     } finally {
       _finishLoginAttempt(attempt);
+    }
+  }
+
+  void _enterOtpWithUnknownDelivery({
+    required bool binding,
+    required LoginOtpPurpose purpose,
+    required String idempotencyKey,
+    required DateTime resendDeadline,
+    required DateTime pendingExpiresAt,
+    required DateTime requestedAt,
+  }) {
+    _transitionFlow(
+      _flow.copyWith(
+        step: binding ? LoginStep.socialPhoneOtp : LoginStep.otp,
+        operation: LoginOperation.idle,
+        otpPurpose: purpose,
+        otpChallengeState: OtpChallengeState.active,
+        otpDeliveryState: OtpDeliveryState.confirming,
+        code: '',
+        idempotencyKey: idempotencyKey,
+        maskedPhone: _maskPhone(_flow.phone),
+        resendDeadline: resendDeadline,
+        pendingOtpExpiresAt: pendingExpiresAt,
+        feedback: null,
+        deliveryConfirmationExhausted: false,
+        otpFocusSerial: _flow.otpFocusSerial + 1,
+      ),
+      action: 'login_state_changed',
+      result: 'delivery_confirming',
+    );
+    _startCountdownTicker();
+    unawaited(_persistPendingOtpAttempt(_flow));
+    _scheduleDeliveryConfirmations(requestedAt);
+  }
+
+  void _scheduleDeliveryConfirmations(DateTime requestedAt) {
+    _cancelDeliveryConfirmationTimers();
+    _deliveryConfirmationAttempts = 0;
+    for (final elapsed in const <Duration>[
+      Duration(seconds: 5),
+      Duration(seconds: 15),
+    ]) {
+      final delay = requestedAt.add(elapsed).difference(DateTime.now());
+      _deliveryConfirmationTimers.add(
+        Timer(delay.isNegative ? Duration.zero : delay, () {
+          final finalDeadline = elapsed == const Duration(seconds: 15);
+          unawaited(
+            _confirmPendingOtpDelivery(
+              operationId: finalDeadline
+                  ? 'confirm_otp_delivery_15s'
+                  : 'confirm_otp_delivery_5s',
+              finalDeadline: finalDeadline,
+            ),
+          );
+        }),
+      );
+    }
+  }
+
+  void _cancelDeliveryConfirmationTimers() {
+    for (final timer in _deliveryConfirmationTimers) {
+      timer.cancel();
+    }
+    _deliveryConfirmationTimers.clear();
+  }
+
+  int? _otpDeliveryElapsedMs(LoginFlowState state, {int minimumMs = 0}) {
+    final expiresAt = state.pendingOtpExpiresAt;
+    if (expiresAt == null) return null;
+    final requestedAt = expiresAt.subtract(_LoginFrameHostState._pendingOtpTtl);
+    return DateTime.now()
+        .difference(requestedAt)
+        .inMilliseconds
+        .clamp(minimumMs, 600000);
+  }
+
+  Future<void> _confirmPendingOtpDelivery({
+    String operationId = 'confirm_otp_delivery',
+    bool finalDeadline = false,
+  }) async {
+    final state = _flow;
+    if (!mounted ||
+        !state.isOtpStep ||
+        (state.otpDeliveryState != OtpDeliveryState.confirming &&
+            state.otpDeliveryState != OtpDeliveryState.queued) ||
+        state.deliveryConfirmationExhausted ||
+        state.idempotencyKey.isEmpty) {
+      return;
+    }
+    if (_deliveryConfirmationAttempts >= 2) {
+      if (!finalDeadline) return;
+      _flowController.replace(
+        _flow.copyWith(
+          otpDeliveryState: OtpDeliveryState.confirming,
+          deliveryConfirmationExhausted: true,
+        ),
+      );
+      _cancelDeliveryConfirmationTimers();
+      _trackLoginOperation(
+        operationId: operationId,
+        result: 'delivery_confirming',
+        durationMs: _otpDeliveryElapsedMs(_flow, minimumMs: 15000),
+      );
+      await _persistPendingOtpAttempt(_flow);
+      return;
+    }
+    _deliveryConfirmationAttempts += 1;
+    final key = state.idempotencyKey;
+    try {
+      final session = ref.read(authSessionControllerProvider);
+      final stored = await ref.read(authSessionStoreProvider).read();
+      final result = await ref
+          .read(authenticationChallengeCommandWriterProvider)
+          .sendOtp(
+            SendOtpCommand(
+              phone: mainlandPhoneE164OrEmpty(state.phone),
+              deviceId: session.installId.isNotEmpty
+                  ? session.installId
+                  : stored.installId,
+              platform: otpClientPlatformForRuntime(
+                CloudRequestHeaders.platform(),
+              ),
+              appVersion: CloudRequestHeaders.appVersion,
+              sourceOperation: state.isSocialBindingStep
+                  ? 'bind_phone'
+                  : 'login',
+              bindingTicket: state.isSocialBindingStep
+                  ? state.bindingTicket
+                  : null,
+            ),
+            idempotencyKey: key,
+          )
+          .timeout(_LoginFrameHostState._sendOtpTimeout);
+      if (!mounted || _flow.idempotencyKey != key) return;
+      final deliveryState = _otpDeliveryStateFromWire(result.deliveryStatus);
+      _otpAutofillGateway.bindRequestRef(result.requestId);
+      final stillPending = deliveryState == OtpDeliveryState.queued;
+      final confirmationExhausted = stillPending && finalDeadline;
+      _flowController.replace(
+        _flow.copyWith(
+          otpDeliveryState: confirmationExhausted
+              ? OtpDeliveryState.confirming
+              : deliveryState,
+          challengeId: result.challengeId,
+          deliveryRequestId: result.requestId,
+          deliveryConfirmationExhausted: confirmationExhausted,
+        ),
+      );
+      if (!stillPending || confirmationExhausted) {
+        _cancelDeliveryConfirmationTimers();
+      }
+      _trackLoginOperation(
+        operationId: operationId,
+        result: confirmationExhausted
+            ? 'delivery_confirming'
+            : _otpDeliveryTelemetryResult(deliveryState),
+        durationMs: _otpDeliveryElapsedMs(
+          _flow,
+          minimumMs: finalDeadline ? 15000 : 0,
+        ),
+      );
+      await _persistPendingOtpAttempt(_flow);
+    } catch (error) {
+      if (!mounted || _flow.idempotencyKey != key) return;
+      if (finalDeadline) {
+        _flowController.replace(
+          _flow.copyWith(
+            otpDeliveryState: OtpDeliveryState.confirming,
+            deliveryConfirmationExhausted: true,
+          ),
+        );
+        _cancelDeliveryConfirmationTimers();
+      }
+      _trackLoginOperation(
+        operationId: operationId,
+        result: 'delivery_confirming',
+        durationMs: _otpDeliveryElapsedMs(
+          _flow,
+          minimumMs: finalDeadline ? 15000 : 0,
+        ),
+        error: error,
+      );
+      await _persistPendingOtpAttempt(_flow);
     }
   }
 
@@ -383,9 +687,26 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
   }
 
   void _refreshCountdownFromDeadline({bool trackResume = false}) {
-    if (!mounted || !_flow.isOtpStep) return;
+    final phoneRateLimited =
+        (_flow.step == LoginStep.phoneEntry ||
+            _flow.step == LoginStep.socialPhoneEntry) &&
+        _flow.otpChallengeState == OtpChallengeState.rateLimited;
+    if (!mounted || (!_flow.isOtpStep && !phoneRateLimited)) return;
     final remaining = _flow.remainingResendSeconds(DateTime.now());
-    if (remaining <= 0 && _flow.otpChallengeState == OtpChallengeState.active) {
+    if (remaining <= 0 && phoneRateLimited) {
+      _otpCountdownTicker?.cancel();
+      _flowController.replace(
+        _flow.copyWith(
+          otpChallengeState: OtpChallengeState.none,
+          resendDeadline: null,
+          feedback: null,
+        ),
+      );
+      return;
+    }
+    if (remaining <= 0 &&
+        (_flow.otpChallengeState == OtpChallengeState.active ||
+            _flow.otpChallengeState == OtpChallengeState.rateLimited)) {
       _otpCountdownTicker?.cancel();
       _flowController.replace(
         _flow.copyWith(otpChallengeState: OtpChallengeState.resendAvailable),
@@ -500,6 +821,9 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
             rememberedLoginMaskedIdentifier: _maskPhone(state.phone),
             rememberedLoginIdentifier: binding ? '' : state.phone,
           );
+      await _clearPendingOtpAttempt();
+      _cancelDeliveryConfirmationTimers();
+      await _otpAutofillGateway.stop();
       if (!_isCurrentLoginAttempt(attempt)) return;
       TextInput.finishAutofillContext();
       _trackLoginOperation(
@@ -569,11 +893,15 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
       );
     }
     var restartCountdown = false;
-    if (feedback.copyKey == 'loginOtpExpired') {
+    if (feedback.copyKey == 'loginOtpExpired' ||
+        feedback.copyKey == 'loginOtpConsumed' ||
+        feedback.copyKey == 'loginOtpAttemptsExceeded') {
       next = next.copyWith(
         otpChallengeState: OtpChallengeState.expired,
         resendDeadline: DateTime.now(),
       );
+      _cancelDeliveryConfirmationTimers();
+      unawaited(_clearPendingOtpAttempt());
     } else if (feedback.copyKey == 'loginOtpRateLimited') {
       final seconds = feedback.retryAfterSeconds > 0
           ? feedback.retryAfterSeconds
@@ -599,6 +927,9 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
   void _changePhone() {
     _cancelActiveAttempt();
     _otpCountdownTicker?.cancel();
+    _cancelDeliveryConfirmationTimers();
+    unawaited(_otpAutofillGateway.stop());
+    unawaited(_clearPendingOtpAttempt());
     _phoneController.clear();
     _otpController.clear();
     _lastAutoVerifiedCode = '';
@@ -611,9 +942,14 @@ extension _LoginFrameHostPhoneFlow on _LoginFrameHostState {
           maskedPhone: '',
           code: '',
           challengeId: '',
+          deliveryRequestId: '',
+          idempotencyKey: '',
           otpChallengeState: OtpChallengeState.none,
+          otpDeliveryState: OtpDeliveryState.none,
           resendDeadline: null,
+          pendingOtpExpiresAt: null,
           feedback: null,
+          deliveryConfirmationExhausted: false,
         ),
         action: 'login_state_changed',
       );

@@ -2,7 +2,9 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/ada
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/adapters/homepage_introduction_projection_adapter.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,
@@ -19,7 +21,9 @@ import 'homepage_facets_typed_double.dart';
 class InMemoryHomepageTestRepository extends HomepageFacetProjectionAdapter
     implements
         HomepageClaimRequestCommandWriter,
-        HomepageStatusReportCommandWriter {
+        HomepageClaimRequestQueryReader,
+        HomepageStatusReportCommandWriter,
+        HomepageStatusReportQueryReader {
   InMemoryHomepageTestRepository({InMemoryHomepageFacet? facet})
     : this._(facet ?? InMemoryHomepageFacet());
 
@@ -32,13 +36,34 @@ class InMemoryHomepageTestRepository extends HomepageFacetProjectionAdapter
   Future<HomepageClaimRequestView> createClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
-  }) => _facet.createClaimRequest(homepageId: homepageId, draft: draft);
+    String? clientRequestId,
+  }) => _facet.createClaimRequest(
+    homepageId: homepageId,
+    draft: draft,
+    clientRequestId: clientRequestId,
+  );
+
+  @override
+  Future<HomepageClaimRequestView> getMyPendingClaimRequest({
+    required String homepageId,
+  }) => _facet.getMyPendingClaimRequest(homepageId: homepageId);
 
   @override
   Future<HomepageStatusReportView> createStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
-  }) => _facet.createStatusReport(homepageId: homepageId, draft: draft);
+    String? clientRequestId,
+  }) => _facet.createStatusReport(
+    homepageId: homepageId,
+    draft: draft,
+    clientRequestId: clientRequestId,
+  );
+
+  @override
+  Future<HomepageStatusReportView> getMyPendingStatusReport({
+    required String homepageId,
+    required String reason,
+  }) => _facet.getMyPendingStatusReport(homepageId: homepageId, reason: reason);
 }
 
 /// 介绍页测试的无状态投影入口，避免测试重新持有任何 fixture 数据。

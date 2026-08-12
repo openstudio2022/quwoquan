@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from pymongo.errors import DuplicateKeyError, PyMongoError
+
+from ..application.experiment_policy_stream import ExperimentPolicyStoreUnavailable
 from ..domain.experiment_policy import (
     ExperimentPolicy,
     PolicyVariant,
@@ -19,8 +22,22 @@ class MongoExperimentPolicyStore:
             raise ValueError("recommendation Experiment policy store requires Mongo")
         self._collection = database[COLLECTION]
 
+    def ensure_indexes(self) -> None:
+        """Honor the runtime store lifecycle without inventing a second index.
+
+        The object contract keys each projected policy by ``_id`` and declares
+        no additional Mongo index. Mongo creates the unique ``_id`` index with
+        the collection, so startup has nothing else to materialize here.
+        """
+        return None
+
     def load(self, experiment_id: str) -> ExperimentPolicy | None:
-        document = self._collection.find_one({"_id": experiment_id.strip()})
+        try:
+            document = self._collection.find_one({"_id": experiment_id.strip()})
+        except PyMongoError as error:
+            raise ExperimentPolicyStoreUnavailable(
+                "recommendation Experiment policy store read unavailable"
+            ) from error
         return None if document is None else _from_document(document)
 
     def apply(self, policy: ExperimentPolicy) -> ExperimentPolicy:
@@ -38,7 +55,7 @@ class MongoExperimentPolicyStore:
                 {"$set": document},
                 upsert=True,
             )
-        except Exception as error:
+        except DuplicateKeyError as error:
             current = self.load(canonical.experiment_id)
             if current is None:
                 raise
@@ -49,6 +66,10 @@ class MongoExperimentPolicyStore:
                 return current
             raise ValueError(
                 "recommendation Experiment policy revision has conflicting content"
+            ) from error
+        except PyMongoError as error:
+            raise ExperimentPolicyStoreUnavailable(
+                "recommendation Experiment policy store write unavailable"
             ) from error
         current = self.load(canonical.experiment_id)
         if current is None:

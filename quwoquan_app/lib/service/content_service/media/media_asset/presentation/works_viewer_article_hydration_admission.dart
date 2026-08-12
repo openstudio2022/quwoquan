@@ -2,22 +2,42 @@ import 'dart:async';
 
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-enum WorksViewerArticleHydrationOutcome { completed, superseded, disposed }
+enum WorksViewerArticleHydrationTerminal { recovered, stillBlocked, superseded }
+
+/// The terminal owned by one scheduled hydration generation.
+///
+/// Callers must consume this result directly instead of awaiting a void task
+/// and rereading shared widget state to infer whether recovery succeeded.
+final class WorksViewerArticleHydrationResult {
+  const WorksViewerArticleHydrationResult({
+    required this.terminal,
+    required this.generation,
+    this.failure,
+  });
+
+  final WorksViewerArticleHydrationTerminal terminal;
+  final int generation;
+  final Object? failure;
+}
 
 final class WorksViewerArticleHydrationLease {
   const WorksViewerArticleHydrationLease({
     required this.postId,
+    required this.generation,
     required this.cancellation,
   });
 
   final String postId;
+  final int generation;
   final CloudOperationCancellationSignal cancellation;
 
   bool get isCancelled => cancellation.isCancelled;
 }
 
 typedef WorksViewerArticleHydrationTask =
-    Future<void> Function(WorksViewerArticleHydrationLease lease);
+    Future<WorksViewerArticleHydrationTerminal> Function(
+      WorksViewerArticleHydrationLease lease,
+    );
 
 /// Serial, latest-only admission for Work Browser article detail hydration.
 ///
@@ -29,9 +49,11 @@ final class WorksViewerArticleHydrationAdmission {
   _QueuedArticleHydration? _pending;
   bool _draining = false;
   bool _disposed = false;
+  int _latestGeneration = 0;
 
   int get activeCount => _active == null ? 0 : 1;
   int get pendingCount => _pending == null ? 0 : 1;
+  int get latestGeneration => _latestGeneration;
 
   bool contains(String postId) {
     final normalized = postId.trim();
@@ -41,7 +63,7 @@ final class WorksViewerArticleHydrationAdmission {
             _pending?.lease.postId == normalized);
   }
 
-  Future<WorksViewerArticleHydrationOutcome> schedule({
+  Future<WorksViewerArticleHydrationResult> schedule({
     required String postId,
     required WorksViewerArticleHydrationTask task,
   }) {
@@ -50,8 +72,11 @@ final class WorksViewerArticleHydrationAdmission {
       throw ArgumentError.value(postId, 'postId', 'must not be empty');
     }
     if (_disposed) {
-      return Future<WorksViewerArticleHydrationOutcome>.value(
-        WorksViewerArticleHydrationOutcome.disposed,
+      return Future<WorksViewerArticleHydrationResult>.value(
+        WorksViewerArticleHydrationResult(
+          terminal: WorksViewerArticleHydrationTerminal.superseded,
+          generation: ++_latestGeneration,
+        ),
       );
     }
 
@@ -67,10 +92,11 @@ final class WorksViewerArticleHydrationAdmission {
     }
 
     active?.lease.cancellation.cancel();
-    _completePending(WorksViewerArticleHydrationOutcome.superseded);
+    _completePending(WorksViewerArticleHydrationTerminal.superseded);
     final queued = _QueuedArticleHydration(
       lease: WorksViewerArticleHydrationLease(
         postId: normalized,
+        generation: ++_latestGeneration,
         cancellation: CloudOperationCancellationSignal(),
       ),
       task: task,
@@ -93,7 +119,7 @@ final class WorksViewerArticleHydrationAdmission {
       active.lease.cancellation.cancel();
     }
     if (_pending?.lease.postId != retained) {
-      _completePending(WorksViewerArticleHydrationOutcome.superseded);
+      _completePending(WorksViewerArticleHydrationTerminal.superseded);
     }
   }
 
@@ -103,7 +129,7 @@ final class WorksViewerArticleHydrationAdmission {
       _active?.lease.cancellation.cancel();
     }
     if (_pending?.lease.postId == normalized) {
-      _completePending(WorksViewerArticleHydrationOutcome.superseded);
+      _completePending(WorksViewerArticleHydrationTerminal.superseded);
     }
   }
 
@@ -113,7 +139,7 @@ final class WorksViewerArticleHydrationAdmission {
     }
     _disposed = true;
     _active?.lease.cancellation.cancel();
-    _completePending(WorksViewerArticleHydrationOutcome.disposed);
+    _completePending(WorksViewerArticleHydrationTerminal.superseded);
   }
 
   void _ensureDrain() {
@@ -133,28 +159,36 @@ final class WorksViewerArticleHydrationAdmission {
         final queued = _pending!;
         _pending = null;
         _active = queued;
-        var outcome = WorksViewerArticleHydrationOutcome.completed;
+        var terminal = WorksViewerArticleHydrationTerminal.recovered;
+        Object? failure;
         try {
           if (queued.lease.isCancelled) {
-            outcome = WorksViewerArticleHydrationOutcome.superseded;
+            terminal = WorksViewerArticleHydrationTerminal.superseded;
           } else {
-            await queued.task(queued.lease);
+            terminal = await queued.task(queued.lease);
             if (queued.lease.isCancelled) {
-              outcome = WorksViewerArticleHydrationOutcome.superseded;
+              terminal = WorksViewerArticleHydrationTerminal.superseded;
             }
           }
-        } catch (error, stackTrace) {
+        } catch (error) {
           if (queued.lease.isCancelled) {
-            outcome = WorksViewerArticleHydrationOutcome.superseded;
-          } else if (!queued.completer.isCompleted) {
-            queued.completer.completeError(error, stackTrace);
+            terminal = WorksViewerArticleHydrationTerminal.superseded;
+          } else {
+            terminal = WorksViewerArticleHydrationTerminal.stillBlocked;
+            failure = error;
           }
         } finally {
           if (identical(_active, queued)) {
             _active = null;
           }
           if (!queued.completer.isCompleted) {
-            queued.completer.complete(outcome);
+            queued.completer.complete(
+              WorksViewerArticleHydrationResult(
+                terminal: terminal,
+                generation: queued.lease.generation,
+                failure: failure,
+              ),
+            );
           }
         }
       }
@@ -166,12 +200,17 @@ final class WorksViewerArticleHydrationAdmission {
     }
   }
 
-  void _completePending(WorksViewerArticleHydrationOutcome outcome) {
+  void _completePending(WorksViewerArticleHydrationTerminal terminal) {
     final pending = _pending;
     _pending = null;
     if (pending != null && !pending.completer.isCompleted) {
       pending.lease.cancellation.cancel();
-      pending.completer.complete(outcome);
+      pending.completer.complete(
+        WorksViewerArticleHydrationResult(
+          terminal: terminal,
+          generation: pending.lease.generation,
+        ),
+      );
     }
   }
 }
@@ -181,6 +220,6 @@ final class _QueuedArticleHydration {
 
   final WorksViewerArticleHydrationLease lease;
   final WorksViewerArticleHydrationTask task;
-  final Completer<WorksViewerArticleHydrationOutcome> completer =
-      Completer<WorksViewerArticleHydrationOutcome>();
+  final Completer<WorksViewerArticleHydrationResult> completer =
+      Completer<WorksViewerArticleHydrationResult>();
 }

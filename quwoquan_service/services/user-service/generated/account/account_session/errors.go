@@ -10,7 +10,6 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrLoginLocked                = errors.New("USER.AUTH.login_locked")
 	ErrTokenExpired               = errors.New("USER.AUTH.token_expired")
 	ErrWechatAuthFailed           = errors.New("USER.AUTH.wechat_auth_failed")
 	ErrAlipayAuthFailed           = errors.New("USER.AUTH.alipay_auth_failed")
@@ -20,7 +19,6 @@ var (
 	ErrCarrierUnavailable         = errors.New("USER.AUTH.carrier_unavailable")
 	ErrCarrierTokenInvalid        = errors.New("USER.AUTH.carrier_token_invalid")
 	ErrCarrierProviderTimeout     = errors.New("USER.AUTH.carrier_provider_timeout")
-	ErrCarrierPhoneMismatch       = errors.New("USER.AUTH.carrier_phone_mismatch")
 	ErrConsentRequired            = errors.New("USER.AUTH.consent_required")
 	ErrAccountSuspended           = errors.New("USER.AUTH.account_suspended")
 	ErrAccountDeleted             = errors.New("USER.AUTH.account_deleted")
@@ -28,12 +26,6 @@ var (
 	ErrAccountSecurityUnavailable = errors.New("USER.AUTH.account_security_unavailable")
 	ErrMfaRequired                = errors.New("USER.AUTH.mfa_required")
 )
-
-// AppErrorFromLoginLocked returns *AppError for USER.AUTH.login_locked (user_message from errors.yaml).
-func AppErrorFromLoginLocked(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrLoginLocked.Error()))
-	return rerrors.NewAppError(code, "账号因多次失败已暂时锁定，请30分钟后重试", debugMessage).WithMetadata("locked", 423).WithRecoveryDirective("retry", "inlineCard", 1800)
-}
 
 // AppErrorFromTokenExpired returns *AppError for USER.AUTH.token_expired (user_message from errors.yaml).
 func AppErrorFromTokenExpired(debugMessage string) *rerrors.AppError {
@@ -87,12 +79,6 @@ func AppErrorFromCarrierTokenInvalid(debugMessage string) *rerrors.AppError {
 func AppErrorFromCarrierProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCarrierProviderTimeout.Error()))
 	return rerrors.NewAppError(code, "本机号码校验超时，请使用其他方式登录", debugMessage).WithMetadata("upstream_timeout", 504).WithRecoveryDirective("retry", "inlineCard", 0)
-}
-
-// AppErrorFromCarrierPhoneMismatch returns *AppError for USER.AUTH.carrier_phone_mismatch (user_message from errors.yaml).
-func AppErrorFromCarrierPhoneMismatch(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrCarrierPhoneMismatch.Error()))
-	return rerrors.NewAppError(code, "本机号码与上次账号不一致，请使用其他手机号或其他方式登录", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromConsentRequired returns *AppError for USER.AUTH.consent_required (user_message from errors.yaml).

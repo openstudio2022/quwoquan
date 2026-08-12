@@ -87,6 +87,31 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 		t.Fatalf("rollout replay status=%d body=%s", replayed.Code, replayed.Body.String())
 	}
 
+	liveReallocation := performExperimentRequest(
+		guarded,
+		http.MethodPost,
+		rolloutPath,
+		experimentRequestOptions{
+			Body:       `{"status":"running","variants":[{"key":"control","allocationBasisPoints":0},{"key":"treatment","allocationBasisPoints":10000}]}`,
+			Credential: writeToken,
+			Headers: experimentRolloutHeadersFor(
+				"experiment-http-live-reallocation",
+				2,
+			),
+		},
+	)
+	if liveReallocation.Code != http.StatusOK {
+		t.Fatalf(
+			"live reallocation status=%d body=%s",
+			liveReallocation.Code,
+			liveReallocation.Body.String(),
+		)
+	}
+	decodeExperimentResponse(t, liveReallocation, &result)
+	if result.ID != experimentID || result.Status != "running" || result.ExperimentRevision != 3 {
+		t.Fatalf("unexpected live reallocation result: %+v", result)
+	}
+
 	conflict := performExperimentRequest(
 		guarded,
 		http.MethodPost,
@@ -116,7 +141,7 @@ FROM product_ops_outbox WHERE aggregate_id=$1`, experimentID).Scan(&outboxCount,
 	if err != nil {
 		t.Fatalf("inspect experiment outbox: %v", err)
 	}
-	if outboxCount != 2 || unexpectedEventType {
+	if outboxCount != 3 || unexpectedEventType {
 		t.Fatalf("policy activation outbox count=%d unexpectedEventType=%v", outboxCount, unexpectedEventType)
 	}
 }
@@ -227,9 +252,13 @@ type experimentRequestOptions struct {
 }
 
 func experimentRolloutHeaders() http.Header {
+	return experimentRolloutHeadersFor("experiment-http-idempotency", 1)
+}
+
+func experimentRolloutHeadersFor(idempotencyKey string, expectedVersion int64) http.Header {
 	return http.Header{
-		"Idempotency-Key": []string{"experiment-http-idempotency"},
-		"If-Match":        []string{`"1"`},
+		"Idempotency-Key": []string{idempotencyKey},
+		"If-Match":        []string{fmt.Sprintf(`"%d"`, expectedVersion)},
 	}
 }
 

@@ -18,7 +18,7 @@ from content.source.research.image_search_providers import (
 from content.source.research.reject_memory import _filter_rejected_images
 from content.source.research.source_registry import _known_image_search_hints
 from content.source.research.text_match import _expanded_entity_aliases
-from content.source.research.wiki_common import _strip_html
+from content.source.research.wiki_common import _canonical_terms_url, _strip_html
 from content.source.research.wiki_core import _wiki_url
 from content.source.research.wiki_media_subjects import (
     wikimedia_subject_evidence_by_file,
@@ -120,7 +120,9 @@ def _mediawiki_page_images(
             continue
         meta = info.get("extmetadata") or {}
         license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value") or "")
-        license_url = _strip_html((meta.get("LicenseUrl") or {}).get("value") or "")
+        raw_license_url = _strip_html(
+            (meta.get("LicenseUrl") or {}).get("value") or ""
+        )
         width = int(info.get("width") or 0)
         height = int(info.get("height") or 0)
         seen_urls.add(url)
@@ -130,14 +132,31 @@ def _mediawiki_page_images(
             or "Wikimedia contributor"
         )
         source_url = str(info.get("descriptionurl") or info.get("descriptionshorturl") or url)
+        license_url = _canonical_terms_url(
+            raw_license_url,
+            license_name=license_name,
+            source_url=source_url,
+        )
         # caption 真相源优先取 wikitext 图位原图注；termsUrl 对无 LicenseUrl 的 PD 图
         # 回退到 Commons 文件描述页（记录 PD/许可与作者，可审计），避免合规真实图
         # 被 termsUrl 必填门误丢。
         placement_caption = _strip_html(str(placement.get("caption") or ""))
-        description = placement_caption or _strip_html(
-            ((meta.get("ImageDescription") or {}).get("value") or "")
+        commons_description = _strip_html(
+            (meta.get("ImageDescription") or {}).get("value") or ""
+        )
+        commons_categories = _strip_html(
+            (meta.get("Categories") or {}).get("value") or ""
+        )
+        description = (
+            placement_caption
+            or commons_description
             or str(row.get("title") or "")
         )
+        visual_subject = " ".join(
+            value
+            for value in (commons_description, commons_categories)
+            if value
+        ) or description
         source_order = int(placement.get("sourceOrder") or 0)
         images.append(
             {
@@ -155,6 +174,10 @@ def _mediawiki_page_images(
                 "height": height,
                 "caption": description[:120] or f"{entity_id} page image",
                 "relevance": description[:120] or page_url,
+                # 图位 caption 说明文章中的摆放语义；Commons 原图描述与
+                # 分类说明画面主体。两者不得互相覆盖，后者作为 provider
+                # 元数据冻结后供 article asset semantic admission 使用。
+                "visualSubject": visual_subject[:500],
                 "creator": credit,
                 "collectionPageUrl": page_url,
                 "pageResolvedTitle": bundle.resolved_title,

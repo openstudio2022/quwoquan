@@ -56,7 +56,7 @@
 <a id="req-005"></a>
 ### REQ-005 图片四环境设备矩阵以真实 Remote 主线闭环
 
-- alpha 只作为同构工程证据；beta Android 与 iOS、gamma 与 prod gray-initial/carry-on/full 任一缺失均保持 GATE_BLOCK。
+- alpha 只作为同构工程证据；beta Android 与 iOS、gamma 与 prod `canary/5/20/50/100` 任一阶段证据缺失均保持 GATE_BLOCK。
 - 报告符合 image-end-to-end-commercial-matrix 的统一 schema，禁止用 mock、fixture、路径存在性或 dry-run 代替。
 
 <a id="req-006"></a>
@@ -134,5 +134,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：alpha 只作为同构工程证据；beta Android 与 iOS、gamma 与 prod gray-initial/carry-on/full 任一缺失均保持 GATE_BLOCK。
+- 目标：alpha 只作为同构工程证据；beta Android 与 iOS、gamma 与 prod `canary/5/20/50/100` 任一阶段证据缺失均保持 GATE_BLOCK。
 - 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效

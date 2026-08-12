@@ -126,12 +126,12 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
             status = canary.main(argv)
         return status, output.getvalue()
 
-    def test_gray_initial_canary_binds_release_and_full_delivery_evidence(self) -> None:
+    def test_canary_binds_release_and_full_delivery_evidence(self) -> None:
         with mock.patch.dict(
             os.environ,
             {
                 "PROD_TEST_AUTH_TOKEN": "secret-token",
-                "PROD_ROLLOUT_STAGE": "gray-initial",
+                "PROD_ROLLOUT_STAGE": "canary",
             },
             clear=True,
         ):
@@ -167,7 +167,7 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
         with (
             mock.patch.dict(
                 os.environ,
-                {"PROD_ROLLOUT_STAGE": "gray-initial"},
+                {"PROD_ROLLOUT_STAGE": "canary"},
                 clear=True,
             ),
             redirect_stdout(output),
@@ -233,7 +233,7 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
                 os.environ,
                 {
                     "PROD_TEST_AUTH_TOKEN": "secret-token",
-                    "PROD_ROLLOUT_STAGE": "gray-initial",
+                    "PROD_ROLLOUT_STAGE": "canary",
                 },
                 clear=True,
             ),
@@ -274,7 +274,7 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
                 os.environ,
                 {
                     "PROD_TEST_AUTH_TOKEN": "secret-token",
-                    "PROD_ROLLOUT_STAGE": "gray-initial",
+                    "PROD_ROLLOUT_STAGE": "canary",
                 },
                 clear=True,
             ),
@@ -335,7 +335,7 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
             post_tag_path.parent.mkdir(parents=True)
             import_report = {
                 "schema": "quwoquan.content_import_report",
-                "status": "active",
+                "status": "imported",
                 "environment": "gamma",
                 "releaseId": release_id,
                 "sourceOwner": "qwq_data",
@@ -429,6 +429,24 @@ class VideoPlaybackCanaryContractTest(unittest.TestCase):
 
             with mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(root)}, clear=False):
                 binding = delivery_contract.load_release_video_binding(
+                    receipt_path,
+                    expected_environment="gamma",
+                )
+
+            import_report["status"] = "active"
+            import_path.write_text(json.dumps(import_report), encoding="utf-8")
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"QWQ_OUTPUT_ROOT": str(root)},
+                    clear=False,
+                ),
+                self.assertRaisesRegex(
+                    delivery_contract.ReleaseVideoDeliveryError,
+                    "content import report identity drift",
+                ),
+            ):
+                delivery_contract.load_release_video_binding(
                     receipt_path,
                     expected_environment="gamma",
                 )

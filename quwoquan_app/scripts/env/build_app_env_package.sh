@@ -142,6 +142,7 @@ PY
 python3 - "$env_name" "$out_dir/app_runtime.yaml" "$environment_runtime" "$out_dir/report.json" <<'PY'
 import json
 import hashlib
+import os
 import subprocess
 import re
 import sys
@@ -162,12 +163,14 @@ target_name = str(env_topology.get("target") or "").strip()
 def digest(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
-revision = subprocess.run(
-    ["git", "rev-parse", "HEAD"],
-    text=True,
-    capture_output=True,
-    check=False,
-).stdout.strip()
+revision = os.environ.get("QWQ_PACKAGE_SOURCE_REVISION", "").strip()
+if not revision:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+    ).stdout.strip()
 if not re.fullmatch(r"[0-9a-f]{40}", revision):
     raise SystemExit("unable to resolve package git revision")
 

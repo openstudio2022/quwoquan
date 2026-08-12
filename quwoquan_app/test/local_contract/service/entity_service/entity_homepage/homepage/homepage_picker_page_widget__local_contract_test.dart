@@ -33,9 +33,7 @@ void main() {
   });
 
   testWidgets('主页 picker 以统一单选列表展示主页结果', (tester) async {
-    await tester.pumpWidget(
-      _buildApp(HomepagePickerPage(initialQuery: '西湖')),
-    );
+    await tester.pumpWidget(_buildApp(HomepagePickerPage(initialQuery: '西湖')));
     await tester.pumpAndSettle();
 
     expect(find.text('西湖景区'), findsWidgets);

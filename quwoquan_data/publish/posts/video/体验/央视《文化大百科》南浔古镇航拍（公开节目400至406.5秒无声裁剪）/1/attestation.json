@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260808--travel-video-m1--china-nanxun-bootstrap-not-m100--scale-002",
+  "executionBinding": "frozen",
+  "objectRef": "南浔古镇_video",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-1e790b4f-dfad-4ec3-8dba-4ec3c7fbb000",
+    "resultHash": "sha256:5fe18fb04c58eec3dd64aad8310c350509345194426fdcf00081e20f8717fe36"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

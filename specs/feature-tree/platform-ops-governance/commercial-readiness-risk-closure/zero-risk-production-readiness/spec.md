@@ -73,8 +73,8 @@
 ### GWT-002 全部风险关闭后完成不可变灰度与恢复验证
 
 - GIVEN RP1-RP7 全部完成，外部前置条件真实可用。
-- WHEN 运行 gray-initial、carry-on、full、告警闭环和隔离恢复演练。
-- THEN 三阶段使用同一 ReleaseManifest digest。
+- WHEN 运行 canary、5、20、50、100、告警闭环和隔离恢复演练。
+- THEN 五个发布阶段使用同一 ReleaseManifest digest。
 - THEN 真实 Prometheus SLO、锁/CAS、双签、config ACK、告警与恢复证据完整。
 - THEN 本 Story 范围内所有阻断级 `OPEN` 均达到完成判定，且不存在未归属风险。
 

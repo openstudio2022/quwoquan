@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/pool_delivery_drain_result.schema.json",
+  "title": "Pool delivery-only recovery result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "executionId", "recoveryMode", "executionStatePreserved",
+    "status", "attemptedCount", "completedCount", "qualifiedCount",
+    "discardedCount", "intentIds", "canonicalObjects", "issueCodes"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_delivery_drain_result"},
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "recoveryMode": {"enum": ["frozen_publish_jobs", "reviewed_delivery_only"]},
+    "executionStatePreserved": {"const": true},
+    "status": {"enum": ["waiting", "blocked", "completed"]},
+    "attemptedCount": {"type": "integer", "minimum": 0},
+    "completedCount": {"type": "integer", "minimum": 0},
+    "qualifiedCount": {"type": "integer", "minimum": 0},
+    "discardedCount": {"type": "integer", "minimum": 0},
+    "intentIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "canonicalObjects": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/canonicalObject"}
+    },
+    "issueCodes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "canonicalObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transactionId", "applyReportRef", "canonicalObjectRef",
+        "canonicalObjectSha256", "objectClosureDigest"
+      ],
+      "properties": {
+        "transactionId": {"type": "string", "minLength": 1},
+        "applyReportRef": {"type": "string", "minLength": 1},
+        "canonicalObjectRef": {"type": "string", "pattern": "^(entities|posts)/"},
+        "canonicalObjectSha256": {"$ref": "#/$defs/digest"},
+        "objectClosureDigest": {"type": "string"}
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/m100_alpha_acceptance_binding.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "promotionId", "promotionReceiptRef", "promotionReceiptDigest",
+    "releaseId", "manifestDigest",
+    "appUatEnvelopeDigest", "activationEnvelopeDigest", "exactCounts",
+    "readinessReceiptRef", "readinessReceiptFileSha256", "readinessReceiptDigest",
+    "appUatReceiptRef", "appUatReceiptFileSha256", "appUatReceiptDigest",
+    "appUatPlanDigest", "executedSampleCount", "sampleExecutionDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.m100_alpha_acceptance_binding"},
+    "promotionId": {"type": "string", "minLength": 1},
+    "promotionReceiptRef": {"type": "string", "minLength": 1},
+    "promotionReceiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "manifestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "appUatEnvelopeDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "activationEnvelopeDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "exactCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homepage", "article", "image", "video", "posts"],
+      "properties": {
+        "homepage": {"const": 100},
+        "article": {"const": 100},
+        "image": {"const": 100},
+        "video": {"const": 10},
+        "posts": {"const": 210}
+      }
+    },
+    "readinessReceiptRef": {"type": "string", "minLength": 1},
+    "readinessReceiptFileSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "readinessReceiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "appUatReceiptRef": {"type": "string", "minLength": 1},
+    "appUatReceiptFileSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "appUatReceiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "appUatPlanDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "executedSampleCount": {"const": 100},
+    "sampleExecutionDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}

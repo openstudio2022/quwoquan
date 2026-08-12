@@ -13,6 +13,9 @@ from unittest import mock
 
 from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.cli.prod import resolve_prod_release_state as resolver
+from quwoquan_ops.tests.local_contract.rollout_stage_promotion_evidence_test_support import (
+    promotion_evidence,
+)
 
 
 def digest(character: str) -> str:
@@ -27,7 +30,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
     def _readback(
         self,
         *,
-        stage: str = "gray-initial",
+        stage: str = "canary",
         decision: str = "continue",
         from_candidate: str | None = None,
         to_candidate: str | None = None,
@@ -38,7 +41,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
         if last_good is None:
             last_good = (
                 target
-                if stage == "full" and decision in {"continue", "rolled_back"}
+                if stage == "100" and decision in {"continue", "rolled_back"}
                 else source
             )
         request = {
@@ -46,7 +49,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
             "service": resolver.SERVICE,
             "fromCandidateDigest": source,
             "toCandidateDigest": target,
-            "step": {"gray-initial": "5", "carry-on": "25", "full": "100"}[stage],
+            "step": {"canary": "0", "5": "5", "20": "20", "50": "50", "100": "100"}[stage],
             "stage": stage,
             "triggerStage": stage,
             "fromReleaseEvidenceRef": f"ghcr.io/example/quwoquan/release-evidence@{source}",
@@ -84,7 +87,20 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
             "contractGraphDigest": digest("1"),
             "adapterDigest": digest("2"),
             "expectedGeneration": 0,
-            "sloReadback": {"sampleCount": 100},
+            "sloReadback": {
+                "sampleCount": 100,
+                **(
+                    {
+                        "promotionEvidence": promotion_evidence(
+                            candidate_id=target,
+                            artifact_digest=digest("d"),
+                            stage=stage,
+                        )
+                    }
+                    if decision == "continue"
+                    else {}
+                ),
+            },
             "postChecks": [
                 {
                     "name": "hosted-health",
@@ -148,9 +164,11 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
 
     def test_same_target_preserves_original_source_and_advances_stage(self) -> None:
         expectations = {
-            "gray-initial": "carry-on",
-            "carry-on": "full",
-            "full": "complete",
+            "canary": "5",
+            "5": "20",
+            "20": "50",
+            "50": "100",
+            "100": "complete",
         }
         for stage, expected_resume in expectations.items():
             with self.subTest(stage=stage):
@@ -168,7 +186,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
                 )
 
     def test_pause_resumes_the_current_stage(self) -> None:
-        for stage in ("gray-initial", "carry-on", "full"):
+        for stage in ("canary", "5", "20", "50", "100"):
             with self.subTest(stage=stage):
                 resolved = resolver.resolve_release_state(
                     self._readback(stage=stage, decision="pause"),
@@ -179,21 +197,21 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
 
     def test_different_target_starts_from_a_full_stable_candidate(self) -> None:
         resolved = resolver.resolve_release_state(
-            self._readback(stage="full"),
+            self._readback(stage="100"),
             to_candidate_digest=self.next_target,
         )
         self.assertEqual(
             resolved,
             {
                 "fromCandidateDigest": self.target,
-                "resumeStage": "gray-initial",
+                "resumeStage": "canary",
                 "authority": hosted_release_ledger.AUTHORITY,
             },
         )
 
     def test_different_target_starts_from_a_successful_rollback(self) -> None:
         readback = self._readback(
-            stage="full",
+            stage="100",
             decision="rolled_back",
             from_candidate=self.target,
             to_candidate=self.stable,
@@ -204,11 +222,11 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
             to_candidate_digest=self.next_target,
         )
         self.assertEqual(resolved["fromCandidateDigest"], self.stable)
-        self.assertEqual(resolved["resumeStage"], "gray-initial")
+        self.assertEqual(resolved["resumeStage"], "canary")
 
     def test_same_rolled_back_target_restarts_as_candidate_bound_noop(self) -> None:
         readback = self._readback(
-            stage="full",
+            stage="100",
             decision="rolled_back",
             from_candidate=self.target,
             to_candidate=self.stable,
@@ -222,14 +240,14 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
             resolved,
             {
                 "fromCandidateDigest": self.stable,
-                "resumeStage": "gray-initial",
+                "resumeStage": "canary",
                 "authority": hosted_release_ledger.AUTHORITY,
             },
         )
 
     def test_failed_candidate_after_rollback_is_sealed_without_redeployment(self) -> None:
         readback = self._readback(
-            stage="full",
+            stage="100",
             decision="rolled_back",
             from_candidate=self.target,
             to_candidate=self.stable,
@@ -277,8 +295,8 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
 
     def test_partial_or_paused_ledger_blocks_a_different_target(self) -> None:
         for readback in (
-            self._readback(stage="carry-on"),
-            self._readback(stage="full", decision="pause"),
+            self._readback(stage="50"),
+            self._readback(stage="100", decision="pause"),
         ):
             with self.assertRaisesRegex(
                 resolver.GateBlockError,
@@ -291,7 +309,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
 
     def test_rollback_failed_candidate_can_only_seal_terminal_evidence(self) -> None:
         readback = self._readback(
-            stage="full",
+            stage="100",
             decision="rollback_failed",
             last_good=self.stable,
         )
@@ -354,7 +372,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
                 )
 
         malformed = copy.deepcopy(self._readback())
-        malformed["state"]["carry_on_receipt_id"] = "not-a-receipt"
+        malformed["state"]["percent_50_receipt_id"] = "not-a-receipt"
         with self.assertRaisesRegex(
             resolver.GateBlockError,
             "not a canonical receipt id",
@@ -365,8 +383,8 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
             )
 
         wrong_stage = copy.deepcopy(self._readback())
-        wrong_stage["state"]["gray_initial_receipt_id"] = ""
-        wrong_stage["state"]["carry_on_receipt_id"] = wrong_stage["state"][
+        wrong_stage["state"]["canary_receipt_id"] = ""
+        wrong_stage["state"]["percent_50_receipt_id"] = wrong_stage["state"][
             "receipt_id"
         ]
         with self.assertRaisesRegex(
@@ -464,7 +482,7 @@ class ResolveProdReleaseStateContractTest(unittest.TestCase):
             stdout.getvalue().splitlines(),
             [
                 f"RESOLVED_FROM_CANDIDATE_DIGEST={self.stable}",
-                "RESOLVED_RESUME_STAGE=carry-on",
+                "RESOLVED_RESUME_STAGE=5",
                 (
                     "RESOLVED_HOSTED_AUTHORITY="
                     + hosted_release_ledger.AUTHORITY

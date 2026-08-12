@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/城市/四川省南充市",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "grok-4.5",
+    "modelFamily": "grok",
+    "runId": "run-9de4715d-dad4-46e8-bf08-11cceb638c19",
+    "resultHash": "sha256:70b0e2ae38d369df43f79d4b3190d7d3261f0f481bd02248fb1ff295bb0bbfc2"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
-// Source: quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json
-// Seed set: home_showcase_core.posts
+// Source: canonical immutable content UI object examples.
+// Scope: home_showcase_core.posts (read-only local-contract examples).
 
 const String kHomeShowcaseCorePostsSha256 =
     '42bb419c7319f905e93b2a86d9ffe0dfa657033013cb1ef4445ede7e2ad01ebb';

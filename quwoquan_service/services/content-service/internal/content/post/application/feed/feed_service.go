@@ -155,13 +155,9 @@ type FeedItemView struct {
 	HLSCMAFDescriptorVersion int64    `json:"hlsCmafDescriptorVersion,omitempty"`
 	CoverURL                 string   `json:"coverUrl,omitempty"`
 	ThumbnailURL             string   `json:"thumbnailUrl,omitempty"`
-	CoverStrategy            string   `json:"coverStrategy,omitempty"`
-	CoverFrameTimeMs         int64    `json:"coverFrameTimeMs,omitempty"`
 	DurationMs               int64    `json:"durationMs,omitempty"`
 	Width                    int64    `json:"width,omitempty"`
 	Height                   int64    `json:"height,omitempty"`
-	TagRefs                  []string `json:"tagRefs,omitempty"`
-	Visibility               string   `json:"visibility,omitempty"`
 	LikeCount                int64    `json:"likeCount"`
 	CommentCount             int64    `json:"commentCount"`
 	ShareCount               int64    `json:"shareCount"`
@@ -172,11 +168,11 @@ type FeedItemView struct {
 	PublishedAt string `json:"publishedAt,omitempty"`
 	// IntersectionReasons 内容卡交集行（70/20/10 频率契约；空即无交集，端不渲染）。
 	IntersectionReasons []intersection.IntersectionReasonView `json:"intersectionReasons,omitempty"`
-	QualityScore        float64                               `json:"qualityScore,omitempty"`
-	RecallPath          string                                `json:"recallPath,omitempty"`
-	ContentVertical     string                                `json:"contentVertical,omitempty"`
-	SupplySource        string                                `json:"supplySource,omitempty"`
-	SourceTaskID        string                                `json:"sourceTaskId,omitempty"`
+	// QualityScore 只供不可变 FeedDeliveryPage 续页归因，不属于公开 Post 投影。
+	QualityScore    float64 `json:"-"`
+	RecallPath      string  `json:"recallPath,omitempty"`
+	ContentVertical string  `json:"contentVertical,omitempty"`
+	SupplySource    string  `json:"supplySource,omitempty"`
 }
 
 type ListFeedResponse struct {
@@ -187,7 +183,7 @@ type ListFeedResponse struct {
 	EmptyReason FeedEmptyReason     `json:"emptyReason,omitempty"`
 	// ObjectCards 混合对象卡（B4 插卡模式）：anchorIndex 指示插入在
 	// items[anchorIndex] 之前；空即本页无对象卡（策略关闭 / 候选不足 / 匿名）。
-	ObjectCards         []ObjectCardView `json:"objectCards,omitempty"`
+	ObjectCards         []ObjectCardView `json:"objectCards"`
 	NextCursor          string           `json:"nextCursor,omitempty"`
 	PreviousCursor      string           `json:"previousCursor,omitempty"`
 	PaginationExpiresAt string           `json:"paginationExpiresAt,omitempty"`
@@ -465,13 +461,9 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			HLSCMAFDescriptorVersion: adaptiveDelivery.HLSCMAFDescriptorVersion,
 			CoverURL:                 post.CoverURL,
 			ThumbnailURL:             thumbnailURL,
-			CoverStrategy:            post.CoverStrategy,
-			CoverFrameTimeMs:         post.CoverFrameTimeMS,
 			DurationMs:               post.DurationMS,
 			Width:                    post.Width,
 			Height:                   post.Height,
-			TagRefs:                  append([]string(nil), post.TagRefs...),
-			Visibility:               string(post.Visibility),
 			LikeCount:                post.LikeCount,
 			CommentCount:             post.CommentCount,
 			ShareCount:               post.ShareCount,
@@ -482,7 +474,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			RecallPath:               recallPath,
 			ContentVertical:          contentVertical,
 			SupplySource:             supplySource,
-			SourceTaskID:             post.SourceTaskID,
 		})
 		if canonicalReleasePostDelivered(
 			post,
@@ -523,10 +514,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			terminalOutcome = rtrec.FeedTerminalEmpty
 		}
 		return &ListFeedResponse{
-			Items:               replay.items,
+			Items:               append([]FeedItemView{}, replay.items...),
 			Outcome:             feedOutcomeForItemCount(len(replay.items)),
 			EmptyReason:         feedEmptyReasonForContinuation(len(replay.items)),
-			ObjectCards:         replay.objectCards,
+			ObjectCards:         append([]ObjectCardView{}, replay.objectCards...),
 			NextCursor:          replay.nextCursor,
 			PreviousCursor:      replay.previousCursor,
 			PaginationExpiresAt: paginationExpiryWire(replay.paginationExpiresAt),
@@ -679,7 +670,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	}
 	// 对象卡候选与理由只取自同一个 Recommendation 不可变窗口；Content
 	// 仅在 Post hydration 后计算本页 anchor 并与 FeedDeliveryPage 同时落盘。
-	var objectCards []ObjectCardView
+	objectCards := make([]ObjectCardView, 0)
 	if !usePostReaderQuery && route.Surface == "home" && rankedDelivery != nil {
 		objectCards, err = s.resolveObjectCards(
 			rankedDelivery.page.ObjectCards,
@@ -822,10 +813,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		route.FeedType == rtrec.FeedFollow,
 	)
 	return &ListFeedResponse{
-		Items:               views,
+		Items:               append([]FeedItemView{}, views...),
 		Outcome:             responseOutcome,
 		EmptyReason:         responseEmptyReason,
-		ObjectCards:         objectCards,
+		ObjectCards:         append([]ObjectCardView{}, objectCards...),
 		NextCursor:          nextCursor,
 		PreviousCursor:      previousCursor,
 		PaginationExpiresAt: paginationExpiryWire(paginationExpiresAt),

@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_career_mentor_001
 personaId: builtin_career_mentor
 authorId: builtin_career_mentor
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 校招辅导员一禾
 userHandle: career_yihe

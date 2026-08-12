@@ -30,6 +30,7 @@ import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/platform/web_install_context.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/web_main_app_shell_dependencies.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
@@ -581,6 +582,32 @@ void main() {
   });
 
   group('MainAppShell', () {
+    testWidgets('移动端壳不初始化未使用的 Web 依赖图', (tester) async {
+      await tester.pumpWidget(
+        ScreenUtilInit(
+          designSize: const Size(393, 852),
+          child: ProviderScope(
+            overrides: [
+              ..._shellTestOverrides(authenticated: true),
+              webMainAppShellDependenciesProvider.overrideWith(
+                (ref) => throw StateError('Web dependencies must stay lazy'),
+              ),
+            ],
+            child: const MaterialApp(
+              home: MainAppShell(
+                currentLocation: AppRoutePaths.home,
+                child: SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(MainAppShell), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('壳卸载后认证状态更新不读取已卸载的 ref', (tester) async {
       final store = _MutableAuthSessionStore();
       final container = ProviderContainer(
@@ -1623,9 +1650,18 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // 添加入口是动作工作台：顶部不再挂上下文 tab，首层固定三个动作卡片。
-      expect(find.byKey(TestKeys.webCreateActionPublishContent), findsOneWidget);
-      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsOneWidget);
-      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsOneWidget);
+      expect(
+        find.byKey(TestKeys.webCreateActionPublishContent),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TestKeys.webCreateActionStartGathering),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TestKeys.webCreateActionStartGroupChat),
+        findsOneWidget,
+      );
       expect(find.text(DiscoveryText.webPcCreateTabGallery), findsNothing);
       expect(find.text(DiscoveryText.webPcSearchHintCreate), findsOneWidget);
     });
@@ -1692,9 +1728,18 @@ void main() {
       expect(find.byType(WebInlineLoginSurface), findsNothing);
       expect(find.byType(LoginPage), findsNothing);
       // 游客先看到创建工作台的动作面板，登录拦截下沉到具体账号态动作。
-      expect(find.byKey(TestKeys.webCreateActionPublishContent), findsOneWidget);
-      expect(find.byKey(TestKeys.webCreateActionStartGathering), findsOneWidget);
-      expect(find.byKey(TestKeys.webCreateActionStartGroupChat), findsOneWidget);
+      expect(
+        find.byKey(TestKeys.webCreateActionPublishContent),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TestKeys.webCreateActionStartGathering),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TestKeys.webCreateActionStartGroupChat),
+        findsOneWidget,
+      );
       await tester.pump(const Duration(milliseconds: 1200));
     });
   });

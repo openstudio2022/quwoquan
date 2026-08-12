@@ -1,0 +1,22 @@
+read_model: OwnerSearchResponseView
+description: >-
+  SearchIndexView.Search 的 canonical owner-query projection。App/API Edge/Assistant
+  只能消费该 bounded flat-card shape；hit.action 只来自 canonical DeepLink，缺失时
+  保持缺失；thumbnailUrl 只消费 typed thumbnailUrl/coverUrl，不回传 payload。
+  迁移期旧 REST transport 的 SearchResponseView 仅服务旧 minimum build，
+  不构成 fallback 或第二 operation。
+source_entities:
+- SearchIndexView
+consumers:
+- api-edge
+- assistant-service
+fields:
+- {name: interpretedQuery, type: OwnerSearchInterpretedQuery}
+- {name: hits, type: '[]OwnerSearchHit'}
+- {name: citations, type: '[]OwnerSearchCitation'}
+- {name: facets, type: '[]CanonicalSearchFacet'}
+- {name: degradeSignals, type: '[]CanonicalSearchDegradeSignal'}
+- {name: provenance, type: OwnerSearchProvenance}
+- {name: nextCursor, type: string, nullable: true}
+privacy:
+  forbidden_fields: [objectId, score, index, features, searchAfter]

@@ -16,6 +16,9 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
+from quwoquan_ops.tests.local_contract.rollout_stage_promotion_evidence_test_support import (
+    promotion_evidence,
+)
 from quwoquan_ops.cli.lib import external_provider_governance, provider_conformance
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     GITHUB_ATTESTED_WORKFLOW_BY_KIND,
@@ -335,14 +338,14 @@ class FinalAcceptanceFixture:
             for surface in APPLICATION_PACKAGES[environment]:
                 if environment == "prod" and surface == "web":
                     payload = {
-                        "schema": "qwq.public-web.release",
+                        "schema": "client-app.web.official-release",
                         "sourceGitSha": COMMIT,
                         "sourceTreeDigest": TREE,
                         "contentSHA256": TEST_DIGEST.removeprefix("sha256:"),
                     }
                 elif environment == "prod" and surface == "android":
                     payload = {
-                        "schema": "qwq.android.official-release",
+                        "schema": "client-app.android.official-release",
                         "sourceGitSha": COMMIT,
                         "sourceTreeDigest": TREE,
                         "packagedAPK": "quwoquan.apk",
@@ -435,8 +438,8 @@ class FinalAcceptanceFixture:
             "fromCandidateDigest": "sha256:" + "f" * 64,
             "toCandidateDigest": candidate_id,
             "step": "100",
-            "stage": "full",
-            "triggerStage": "full",
+            "stage": "100",
+            "triggerStage": "100",
             "fromReleaseEvidenceRef": (
                 "ghcr.io/owner/quwoquan/release-artifact@sha256:" + "f" * 64
             ),
@@ -455,7 +458,14 @@ class FinalAcceptanceFixture:
             "adapterDigest": TEST_DIGEST,
             "expectedGeneration": 2,
             "committedGeneration": 3,
-            "sloReadback": {"sampleCount": 100},
+            "sloReadback": {
+                "sampleCount": 100,
+                "promotionEvidence": promotion_evidence(
+                    candidate_id=candidate_id,
+                    artifact_digest=TEST_DIGEST,
+                    stage="100",
+                ),
+            },
             "postChecks": [
                 {
                     "name": "health",
@@ -481,8 +491,8 @@ class FinalAcceptanceFixture:
             "from_candidate_digest": receipt["fromCandidateDigest"],
             "to_candidate_digest": candidate_id,
             "step": "100",
-            "stage": "full",
-            "trigger_stage": "full",
+            "stage": "100",
+            "trigger_stage": "100",
             "from_release_evidence_ref": receipt["fromReleaseEvidenceRef"],
             "to_release_evidence_ref": receipt["toReleaseEvidenceRef"],
             "from_image_transport_tag": "sha-before",
@@ -495,9 +505,11 @@ class FinalAcceptanceFixture:
             "contract_graph_digest": self.contract_digest,
             "adapter_digest": TEST_DIGEST,
             "last_good_candidate_digest": candidate_id,
-            "gray_initial_receipt_id": "a" * 64,
-            "carry_on_receipt_id": "b" * 64,
-            "full_receipt_id": receipt_id,
+            "canary_receipt_id": "",
+            "percent_5_receipt_id": "",
+            "percent_20_receipt_id": "",
+            "percent_50_receipt_id": "",
+            "percent_100_receipt_id": receipt_id,
             "generation": "3",
             "receipt_id": receipt_id,
             "updated_at": OBSERVED_AT,
@@ -663,9 +675,9 @@ class FinalAcceptanceFixture:
         receipt_readback, ledger_readback, receipt_id = self._hosted_readbacks(
             manifest["candidateId"]
         )
-        full_readback_path = self._store(
+        percent_100_readback_path = self._store(
             "prod_rollout_readback",
-            self.artifact / "evidence/raw/prod/full-readback.json",
+            self.artifact / "evidence/raw/prod/100-readback.json",
             receipt_readback,
         )
         self._store(
@@ -674,7 +686,7 @@ class FinalAcceptanceFixture:
             ledger_readback,
         )
         report_path = _write(
-            self.artifact / "evidence/raw/prod/full-report.json",
+            self.artifact / "evidence/raw/prod/100-report.json",
             {"status": "passed", "receiptId": receipt_id},
         )
         stage = {
@@ -683,8 +695,8 @@ class FinalAcceptanceFixture:
                 "digest": sha256_file(report_path),
             },
             "readback": {
-                "path": full_readback_path.relative_to(self.artifact).as_posix(),
-                "digest": sha256_file(full_readback_path),
+                "path": percent_100_readback_path.relative_to(self.artifact).as_posix(),
+                "digest": sha256_file(percent_100_readback_path),
             },
             "receiptId": receipt_id,
         }
@@ -725,7 +737,7 @@ class FinalAcceptanceFixture:
         outcome = {
             "candidateId": manifest["candidateId"],
             "outcome": "not_triggered",
-            "stages": {"full": stage},
+            "stages": {"100": stage},
         }
         manifest["rolloutReceipt"] = self._receipt(
             manifest,

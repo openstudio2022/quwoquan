@@ -108,9 +108,6 @@ func (e Experiment) UpdateRollout(status string, variants []Variant, now time.Ti
 	if err := validateRolloutTransition(e.Status, status); err != nil {
 		return Experiment{}, err
 	}
-	if e.Status != "draft" && !variantsEqual(e.Variants, variants) {
-		return Experiment{}, errors.New("experiment variants can only change while draft")
-	}
 	next := e
 	next.Status = status
 	next.Variants = append([]Variant(nil), variants...)
@@ -185,17 +182,22 @@ func validateVariants(variants []Variant) error {
 		return errors.New("experiment variants are required")
 	}
 	total := 0
+	hasPositiveAllocation := false
 	seen := make(map[string]struct{}, len(variants))
 	for _, variant := range variants {
 		key := strings.TrimSpace(variant.Key)
-		if key == "" || variant.AllocationBasisPoints <= 0 {
-			return errors.New("experiment variant key and positive allocation are required")
+		if key == "" || variant.AllocationBasisPoints < 0 {
+			return errors.New("experiment variant key and non-negative allocation are required")
 		}
 		if _, exists := seen[key]; exists {
 			return fmt.Errorf("duplicate experiment variant %q", key)
 		}
 		seen[key] = struct{}{}
 		total += variant.AllocationBasisPoints
+		hasPositiveAllocation = hasPositiveAllocation || variant.AllocationBasisPoints > 0
+	}
+	if !hasPositiveAllocation {
+		return errors.New("experiment requires at least one positive variant allocation")
 	}
 	if total != 10_000 {
 		return errors.New("variant allocation must total 10000 basis points")
@@ -207,7 +209,7 @@ func validateRolloutTransition(current, next string) error {
 	allowed := map[string]map[string]bool{
 		"draft":     {"draft": true, "scheduled": true, "running": true},
 		"scheduled": {"running": true, "paused": true, "ended": true},
-		"running":   {"paused": true, "ended": true},
+		"running":   {"running": true, "paused": true, "ended": true},
 		"paused":    {"running": true, "ended": true},
 		"ended":     {},
 	}
@@ -223,18 +225,6 @@ func validateRolloutTransition(current, next string) error {
 
 var experimentStatuses = map[string]struct{}{
 	"draft": {}, "scheduled": {}, "running": {}, "paused": {}, "ended": {},
-}
-
-func variantsEqual(left, right []Variant) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
 }
 
 func assignmentID(experimentID string, experimentRevision int64, subjectKey string) string {

@@ -130,8 +130,8 @@ OCI_DIGEST_REF_PATTERN = re.compile(
     r"oci://ghcr\.io/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}"
 )
 PROD_APPLICATION_SOURCE_SCHEMAS = {
-    "web": "qwq.public-web.release",
-    "android": "qwq.android.official-release",
+    "web": "client-app.web.official-release",
+    "android": "client-app.android.official-release",
     "opsPortal": "qwq.ops_portal_package",
 }
 

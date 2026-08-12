@@ -192,6 +192,7 @@ def python_has_modules(python: Path, modules: Iterable[str]) -> tuple[bool, list
     )
     proc = subprocess.run(
         [str(python), "-c", code, *module_list],
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         check=False,

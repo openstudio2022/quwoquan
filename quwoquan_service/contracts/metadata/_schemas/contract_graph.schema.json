@@ -30,6 +30,10 @@
             "enum": ["aggregate_root", "append_only_fact", "process_manager", "projection", "external_reference", "runtime_session"]
           },
           "kindExplicit": { "type": "boolean" },
+          "modelVersion": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+          },
           "aggregateOwner": { "type": "string", "minLength": 1 },
           "storageBackend": { "type": "string", "minLength": 1 },
           "sourcePath": { "type": "string", "minLength": 1 },
@@ -102,7 +106,26 @@
           "objectId": { "type": "string", "minLength": 1 },
           "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
           "pathTemplate": { "type": "string", "minLength": 1 },
-          "transport": { "enum": ["json", "sse"] },
+          "transport": { "enum": ["json", "sse", "graphql"] },
+          "transportRole": {
+            "enum": [
+              "binary_download",
+              "binary_upload",
+              "cdn",
+              "health",
+              "liveness",
+              "metrics",
+              "minimum_build",
+              "oauth_callback",
+              "provider_callback",
+              "readiness",
+              "recovery",
+              "sse",
+              "static_resource",
+              "upgrade",
+              "websocket"
+            ]
+          },
           "streaming": {
             "type": "object",
             "additionalProperties": false,

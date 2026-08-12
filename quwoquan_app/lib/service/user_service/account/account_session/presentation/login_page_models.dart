@@ -79,6 +79,14 @@ enum LoginConsentState { unchecked, accepted, confirming }
 
 enum OtpChallengeState { none, active, resendAvailable, expired, rateLimited }
 
+enum OtpDeliveryState { none, confirming, queued, sent, failed }
+
+enum OtpReadinessState { checking, ready, unavailable }
+
+enum OtpPresentationTone { neutral, error }
+
+enum OtpRecoveryAction { retryVerify, resend, contactSupport, changePhone }
+
 enum LoginOtpPurpose { login, bindPhone }
 
 enum LoginEntryMode { resolving, rememberedSession, carrier, phone, social }
@@ -174,8 +182,7 @@ class LoginFeedback {
 
   bool get blocksAccountLogin =>
       sourceCode == UserErrorCode.accountSuspended.code ||
-      sourceCode == UserErrorCode.accountDeleted.code ||
-      sourceCode == UserErrorCode.loginLocked.code;
+      sourceCode == UserErrorCode.accountDeleted.code;
 
   Map<String, dynamic> get telemetry => <String, dynamic>{
     if ((sourceCode ?? '').isNotEmpty) 'sourceCode': sourceCode,
@@ -188,6 +195,139 @@ class LoginFeedback {
   };
 }
 
+/// The only user-facing projection for OTP delivery, verification and
+/// cooldown state. Widgets must not render those internal rails separately.
+class OtpPagePresentation {
+  const OtpPagePresentation({
+    required this.message,
+    required this.tone,
+    required this.primaryAction,
+    required this.secondaryAction,
+    required this.resendRemainingSeconds,
+    required this.showDeliveryProgress,
+    required this.announceKey,
+  });
+
+  factory OtpPagePresentation.fromState(LoginFlowState state, DateTime now) {
+    final remaining = state.remainingResendSeconds(now);
+    final verifying =
+        state.operation == LoginOperation.verifyingOtp ||
+        state.operation == LoginOperation.completingBinding;
+    if (verifying) {
+      return OtpPagePresentation(
+        message: FoundationText.loginOtpVerifying,
+        tone: OtpPresentationTone.neutral,
+        primaryAction: null,
+        secondaryAction: null,
+        resendRemainingSeconds: remaining,
+        showDeliveryProgress: true,
+        announceKey: 'otp-verifying',
+      );
+    }
+
+    final feedback = state.feedback;
+    if (feedback != null && !feedback.isSilent) {
+      OtpRecoveryAction? primary;
+      OtpRecoveryAction? secondary;
+      switch (feedback.recoveryAction) {
+        case 'retryVerifyOtp':
+          primary = OtpRecoveryAction.retryVerify;
+          if (remaining <= 0) secondary = OtpRecoveryAction.resend;
+          break;
+        case 'resendOtp':
+          if (remaining <= 0) primary = OtpRecoveryAction.resend;
+          break;
+        case 'waitThenResendOtp':
+          if (remaining <= 0) primary = OtpRecoveryAction.resend;
+          break;
+        case 'openSupport':
+          primary = OtpRecoveryAction.contactSupport;
+          break;
+        case 'changePhone':
+        case 'changeMethod':
+          primary = OtpRecoveryAction.changePhone;
+          break;
+        default:
+          break;
+      }
+      return OtpPagePresentation(
+        message: feedback.message,
+        tone: OtpPresentationTone.error,
+        primaryAction: primary,
+        secondaryAction: secondary,
+        resendRemainingSeconds: remaining,
+        showDeliveryProgress: false,
+        announceKey: 'otp-error-${feedback.copyKey}',
+      );
+    }
+
+    if (state.otpDeliveryState == OtpDeliveryState.failed) {
+      final message = remaining > 0
+          ? FoundationText.loginOtpDeliveryFailedCountdown.replaceFirst(
+              '%d',
+              remaining.toString(),
+            )
+          : FoundationText.loginOtpSendFailed;
+      return OtpPagePresentation(
+        message: message,
+        tone: OtpPresentationTone.error,
+        primaryAction: remaining <= 0 ? OtpRecoveryAction.resend : null,
+        secondaryAction: null,
+        resendRemainingSeconds: remaining,
+        showDeliveryProgress: false,
+        announceKey: 'otp-delivery-failed',
+      );
+    }
+
+    // Once the user starts typing, delivery detail is no longer the primary
+    // task and must not compete with the code input.
+    if (state.code.isNotEmpty) {
+      return OtpPagePresentation(
+        message: '',
+        tone: OtpPresentationTone.neutral,
+        primaryAction: null,
+        secondaryAction: null,
+        resendRemainingSeconds: remaining,
+        showDeliveryProgress: false,
+        announceKey: 'otp-input',
+      );
+    }
+
+    final message = switch (state.otpDeliveryState) {
+      OtpDeliveryState.queued => FoundationText.loginOtpDeliveryQueued,
+      OtpDeliveryState.sent => FoundationText.loginOtpDeliverySent,
+      OtpDeliveryState.confirming when state.deliveryConfirmationExhausted =>
+        FoundationText.loginOtpDeliveryUnknown,
+      OtpDeliveryState.confirming => FoundationText.loginOtpDeliveryConfirming,
+      OtpDeliveryState.none => FoundationText.loginOtpDeliveryUnknown,
+      OtpDeliveryState.failed => '',
+    };
+    return OtpPagePresentation(
+      message: message,
+      tone: OtpPresentationTone.neutral,
+      primaryAction: null,
+      secondaryAction: null,
+      resendRemainingSeconds: remaining,
+      showDeliveryProgress:
+          state.otpDeliveryState == OtpDeliveryState.queued ||
+          (state.otpDeliveryState == OtpDeliveryState.confirming &&
+              !state.deliveryConfirmationExhausted),
+      announceKey: 'otp-delivery-${state.otpDeliveryState.name}',
+    );
+  }
+
+  final String message;
+  final OtpPresentationTone tone;
+  final OtpRecoveryAction? primaryAction;
+  final OtpRecoveryAction? secondaryAction;
+  final int resendRemainingSeconds;
+  final bool showDeliveryProgress;
+  final String announceKey;
+
+  bool get hasRecoveryActions =>
+      primaryAction != null || secondaryAction != null;
+}
+
 class LoginFlowState {
   const LoginFlowState({
     required this.step,
@@ -195,17 +335,23 @@ class LoginFlowState {
     this.operation = LoginOperation.idle,
     this.consentState = LoginConsentState.unchecked,
     this.otpChallengeState = OtpChallengeState.none,
+    this.otpDeliveryState = OtpDeliveryState.none,
+    this.otpReadinessState = OtpReadinessState.checking,
     this.otpPurpose = LoginOtpPurpose.login,
     this.entryMode = LoginEntryMode.resolving,
     this.phone = '',
     this.maskedPhone = '',
     this.code = '',
     this.challengeId = '',
+    this.deliveryRequestId = '',
+    this.idempotencyKey = '',
     this.provider = '',
     this.bindingTicket = '',
     this.resendDeadline,
     this.bindingDeadline,
+    this.pendingOtpExpiresAt,
     this.feedback,
+    this.deliveryConfirmationExhausted = false,
     this.otpShakeSerial = 0,
     this.otpFocusSerial = 0,
     this.attemptIndex = 0,
@@ -219,17 +365,23 @@ class LoginFlowState {
   final LoginOperation operation;
   final LoginConsentState consentState;
   final OtpChallengeState otpChallengeState;
+  final OtpDeliveryState otpDeliveryState;
+  final OtpReadinessState otpReadinessState;
   final LoginOtpPurpose otpPurpose;
   final LoginEntryMode entryMode;
   final String phone;
   final String maskedPhone;
   final String code;
   final String challengeId;
+  final String deliveryRequestId;
+  final String idempotencyKey;
   final String provider;
   final String bindingTicket;
   final DateTime? resendDeadline;
   final DateTime? bindingDeadline;
+  final DateTime? pendingOtpExpiresAt;
   final LoginFeedback? feedback;
+  final bool deliveryConfirmationExhausted;
   final int otpShakeSerial;
   final int otpFocusSerial;
   final int attemptIndex;
@@ -269,17 +421,23 @@ class LoginFlowState {
     LoginOperation? operation,
     LoginConsentState? consentState,
     OtpChallengeState? otpChallengeState,
+    OtpDeliveryState? otpDeliveryState,
+    OtpReadinessState? otpReadinessState,
     LoginOtpPurpose? otpPurpose,
     LoginEntryMode? entryMode,
     String? phone,
     String? maskedPhone,
     String? code,
     String? challengeId,
+    String? deliveryRequestId,
+    String? idempotencyKey,
     String? provider,
     String? bindingTicket,
     Object? resendDeadline = _loginUnset,
     Object? bindingDeadline = _loginUnset,
+    Object? pendingOtpExpiresAt = _loginUnset,
     Object? feedback = _loginUnset,
+    bool? deliveryConfirmationExhausted,
     int? otpShakeSerial,
     int? otpFocusSerial,
     int? attemptIndex,
@@ -290,12 +448,16 @@ class LoginFlowState {
       operation: operation ?? this.operation,
       consentState: consentState ?? this.consentState,
       otpChallengeState: otpChallengeState ?? this.otpChallengeState,
+      otpDeliveryState: otpDeliveryState ?? this.otpDeliveryState,
+      otpReadinessState: otpReadinessState ?? this.otpReadinessState,
       otpPurpose: otpPurpose ?? this.otpPurpose,
       entryMode: entryMode ?? this.entryMode,
       phone: phone ?? this.phone,
       maskedPhone: maskedPhone ?? this.maskedPhone,
       code: code ?? this.code,
       challengeId: challengeId ?? this.challengeId,
+      deliveryRequestId: deliveryRequestId ?? this.deliveryRequestId,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
       provider: provider ?? this.provider,
       bindingTicket: bindingTicket ?? this.bindingTicket,
       resendDeadline: identical(resendDeadline, _loginUnset)
@@ -304,9 +466,14 @@ class LoginFlowState {
       bindingDeadline: identical(bindingDeadline, _loginUnset)
           ? this.bindingDeadline
           : bindingDeadline as DateTime?,
+      pendingOtpExpiresAt: identical(pendingOtpExpiresAt, _loginUnset)
+          ? this.pendingOtpExpiresAt
+          : pendingOtpExpiresAt as DateTime?,
       feedback: identical(feedback, _loginUnset)
           ? this.feedback
           : feedback as LoginFeedback?,
+      deliveryConfirmationExhausted:
+          deliveryConfirmationExhausted ?? this.deliveryConfirmationExhausted,
       otpShakeSerial: otpShakeSerial ?? this.otpShakeSerial,
       otpFocusSerial: otpFocusSerial ?? this.otpFocusSerial,
       attemptIndex: attemptIndex ?? this.attemptIndex,
@@ -425,7 +592,7 @@ LoginFeedback loginFeedbackForError(
       clearOtp: true,
       shakeOtp: true,
     ),
-    UserErrorCode.otpExpired || UserErrorCode.challengeConsumed => feedback(
+    UserErrorCode.otpExpired => feedback(
       message: FoundationText.loginOtpExpired,
       copyKey: 'loginOtpExpired',
       surface: LoginFeedbackSurface.otp,
@@ -433,7 +600,22 @@ LoginFeedback loginFeedbackForError(
       clearOtp: true,
       afterSeconds: 0,
     ),
-    UserErrorCode.otpAttemptsExceeded ||
+    UserErrorCode.challengeConsumed => feedback(
+      message: FoundationText.loginOtpConsumed,
+      copyKey: 'loginOtpConsumed',
+      surface: LoginFeedbackSurface.otp,
+      recoveryAction: 'resendOtp',
+      clearOtp: true,
+      afterSeconds: 0,
+    ),
+    UserErrorCode.otpAttemptsExceeded => feedback(
+      message: FoundationText.loginOtpAttemptsExceeded,
+      copyKey: 'loginOtpAttemptsExceeded',
+      surface: LoginFeedbackSurface.otp,
+      recoveryAction: 'resendOtp',
+      clearOtp: true,
+      afterSeconds: 0,
+    ),
     UserErrorCode.otpRateLimited => feedback(
       message: FoundationText.loginOtpRateLimited,
       copyKey: 'loginOtpRateLimited',
@@ -490,17 +672,6 @@ LoginFeedback loginFeedbackForError(
       surface: LoginFeedbackSurface.page,
       recoveryAction: 'changeMethod',
     ),
-    UserErrorCode.loginLocked => feedback(
-      message: resolveLoginErrorMessage(
-        cloudError,
-        code,
-        sending: false,
-        locale: locale,
-      ),
-      copyKey: 'loginAccountTemporarilyLocked',
-      surface: LoginFeedbackSurface.page,
-      recoveryAction: 'waitThenChangeMethod',
-    ),
     _
         when origin == LoginFailureOrigin.otpSend &&
             cloudError.runtimeFailure.kind == RuntimeFailureKind.network =>
@@ -530,6 +701,17 @@ LoginFeedback loginFeedbackForError(
         surface: LoginFeedbackSurface.phone,
         recoveryAction: 'resendOtp',
         afterSeconds: 0,
+      ),
+    _
+        when (origin == LoginFailureOrigin.otpVerify ||
+                origin == LoginFailureOrigin.phoneBinding) &&
+            cloudError.runtimeFailure.kind == RuntimeFailureKind.timeout =>
+      feedback(
+        message: FoundationText.loginOtpVerifyTimeout,
+        copyKey: 'loginOtpVerifyTimeout',
+        surface: LoginFeedbackSurface.otp,
+        recoveryAction: 'retryVerifyOtp',
+        preserveOtp: true,
       ),
     _
         when origin == LoginFailureOrigin.otpVerify ||

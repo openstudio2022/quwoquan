@@ -51,6 +51,11 @@ func (e DataContentProcessExecutor) ExecuteDataContentObject(
 			JobSetEnvelopeDigest: item.JobSetEnvelopeDigest,
 			JobSetDigest:         item.JobSetDigest,
 			ActualTaskDigest:     item.ActualTaskDigest,
+			MaxAttempts:          item.MaxAttempts,
+			WorkerHostSetDigest:  item.WorkerHostSetDigest,
+			WorkerHostGeneration: item.WorkerHostGeneration,
+			WorkerFencingToken:   item.WorkerFencingToken,
+			WorkerHostScopeID:    item.WorkerHostScopeID,
 		},
 	})
 	if err != nil {
@@ -139,6 +144,11 @@ type dataContentProcessWorkItem struct {
 	JobSetEnvelopeDigest string `json:"jobSetEnvelopeDigest"`
 	JobSetDigest         string `json:"jobSetDigest"`
 	ActualTaskDigest     string `json:"actualTaskDigest"`
+	MaxAttempts          int    `json:"maxAttempts"`
+	WorkerHostSetDigest  string `json:"workerHostSetDigest,omitempty"`
+	WorkerHostGeneration int    `json:"workerHostGeneration,omitempty"`
+	WorkerFencingToken   string `json:"workerFencingToken,omitempty"`
+	WorkerHostScopeID    string `json:"workerHostScopeId,omitempty"`
 }
 
 type dataContentProcessResponse struct {

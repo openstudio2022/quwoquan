@@ -5,9 +5,17 @@ commercial_defaults:
   target_story: app-cloud-business-object-commercial-closure
 description: >-
   SearchIndexView 拥有 canonical search(request) 的无版本 POST /search。
-  mode=suggest|result 共用同一 query facade；生产召回只使用
+  mode=suggest|result|retrieval 共用同一 query facade；suggest/result 面向
+  App/public principal，retrieval 只允许持有对象 read scope 的已验签
+  assistant-service principal（scope=assistant.search.search_index_view.read）；API Edge
+  owner read 只允许已验签 api-edge principal
+  （scope=search.search_index_view.graphql.read）。公开 operation 不声明这两条 owner scope，避免已登录 App/guest
+  被 generated edge guard 当成 owner principal 拒绝；两条 owner transport
+  仍只认 verified service principal，并在
+  before executor 阶段 fail-closed。生产召回只使用
   Elasticsearch/OpenSearch 派生读库，依赖不可用时返回结构化错误，
-  不切换第二召回后端。
+  不切换第二召回后端。迁移期 POST /search 仅为旧 minimum build 与 typed
+  owner client 保留；它不是 GraphQL fallback，也不产生第二 canonical operation。
 api_routes:
   - method: POST
     path: /search
@@ -26,6 +34,7 @@ api_routes:
       idempotency: optional
     error_codes:
       - SEARCH.USER.invalid_argument
+      - SEARCH.USER.forbidden
       - SEARCH.MIDDLEWARE.unavailable
     privacy:
       request_classification: SENSITIVE
@@ -49,7 +58,7 @@ api_routes:
       facet: SearchIndexFacade
       method: search
       reader: SearchIndexReader
-      slice: SearchResponseView
+      slice: OwnerSearchResponseView
     description: 统一对象检索；query 为主输入，objectTypes/filters 为受控收窄条件。
     request_entity: CanonicalSearchQuery
     response_entity: SearchResponseView

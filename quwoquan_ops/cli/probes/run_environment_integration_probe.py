@@ -3,14 +3,19 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -32,10 +37,58 @@ DEFAULT_REPORT = (
     / "integration-probe"
     / "report.json"
 )
+CONTENT_POST_PROJECTION_PATH = (
+    REPO_ROOT
+    / "quwoquan_service"
+    / "services"
+    / "content-service"
+    / "contracts"
+    / "content"
+    / "post"
+    / "projections"
+    / "content_post_projection.yaml"
+)
 
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+@lru_cache(maxsize=1)
+def _content_post_projection_fields() -> frozenset[str]:
+    """Load public feed-item keys from the canonical projection contract."""
+    try:
+        document = yaml.safe_load(
+            CONTENT_POST_PROJECTION_PATH.read_text(encoding="utf-8")
+        )
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError(
+            "canonical ContentPostProjection contract is unreadable: "
+            f"{CONTENT_POST_PROJECTION_PATH}"
+        ) from exc
+    if (
+        not isinstance(document, dict)
+        or document.get("read_model") != "ContentPostProjection"
+    ):
+        raise ValueError("canonical ContentPostProjection contract has invalid read_model")
+    raw_fields = document.get("fields")
+    if not isinstance(raw_fields, list) or not raw_fields:
+        raise ValueError(
+            "canonical ContentPostProjection contract fields must be a non-empty array"
+        )
+    fields: set[str] = set()
+    for index, raw_field in enumerate(raw_fields):
+        if not isinstance(raw_field, dict):
+            raise ValueError(
+                f"canonical ContentPostProjection field {index} must be an object"
+            )
+        name = str(raw_field.get("name") or "").strip()
+        if not name or name in fields:
+            raise ValueError(
+                f"canonical ContentPostProjection field {index} has invalid name"
+            )
+        fields.add(name)
+    return frozenset(fields)
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,6 +153,30 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Release-bound playable video postId accepted by the premium_stream "
             "readback; repeatable."
+        ),
+    )
+    parser.add_argument(
+        "--video-page-size",
+        type=int,
+        default=1,
+        help="Exact video-book page size used by release-bound App UAT.",
+    )
+    parser.add_argument(
+        "--release-search-canary",
+        action="append",
+        default=[],
+        help=(
+            "Canonical JSON object containing kind/query/expectedObjectType/"
+            "expectedObjectId; repeat for Post, Homepage, and Persona."
+        ),
+    )
+    parser.add_argument(
+        "--release-sample",
+        action="append",
+        default=[],
+        help=(
+            "Canonical JSON object for one exact release-bound homepage/Post read; "
+            "repeat exactly once for every stratified sample."
         ),
     )
     parser.add_argument(
@@ -271,6 +348,87 @@ def _release_probe_identity(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
+    raw_canaries = getattr(args, "release_search_canary", []) or []
+    if not raw_canaries:
+        return []
+    expected_types = {
+        "post": "content.post",
+        "homepage": "entity.homepage",
+        "persona": "user.profile",
+    }
+    canaries: list[dict[str, str]] = []
+    observed_kinds: set[str] = set()
+    for index, raw in enumerate(raw_canaries):
+        try:
+            value = json.loads(str(raw))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"release search canary {index} is not canonical JSON"
+            ) from exc
+        if not isinstance(value, dict) or set(value) != {
+            "kind",
+            "query",
+            "expectedObjectType",
+            "expectedObjectId",
+        }:
+            raise ValueError(f"release search canary {index} fields are invalid")
+        canary = {key: str(value.get(key) or "").strip() for key in value}
+        kind = canary["kind"]
+        if (
+            kind not in expected_types
+            or kind in observed_kinds
+            or canary["expectedObjectType"] != expected_types[kind]
+            or not canary["query"]
+            or not canary["expectedObjectId"]
+        ):
+            raise ValueError(f"release search canary {index} identity is invalid")
+        observed_kinds.add(kind)
+        canaries.append(canary)
+    if observed_kinds != set(expected_types):
+        raise ValueError("release search canaries must cover Post, Homepage, and Persona")
+    return canaries
+
+
+def _release_samples(args: argparse.Namespace) -> list[dict[str, Any]]:
+    raw_samples = getattr(args, "release_sample", []) or []
+    samples: list[dict[str, Any]] = []
+    observed_ids: set[str] = set()
+    expected_fields = {
+        "sampleId",
+        "carrier",
+        "sourceReadback",
+        "sourceObjectId",
+        "ordinal",
+        "readObjectId",
+        "expectedContentType",
+    }
+    for index, raw in enumerate(raw_samples):
+        try:
+            value = json.loads(str(raw))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"release sample {index} is not canonical JSON") from exc
+        if not isinstance(value, dict) or set(value) != expected_fields:
+            raise ValueError(f"release sample {index} fields are invalid")
+        sample_id = str(value.get("sampleId") or "").strip()
+        carrier = str(value.get("carrier") or "").strip()
+        source_object_id = str(value.get("sourceObjectId") or "").strip()
+        read_object_id = str(value.get("readObjectId") or "").strip()
+        content_type = str(value.get("expectedContentType") or "").strip()
+        if (
+            not sample_id
+            or sample_id in observed_ids
+            or carrier not in {"homepage", "article", "image", "video"}
+            or not source_object_id
+            or not read_object_id
+            or content_type != ("" if carrier == "homepage" else carrier)
+        ):
+            raise ValueError(f"release sample {index} identity is invalid")
+        observed_ids.add(sample_id)
+        samples.append(dict(value))
+    return samples
+
+
 def build_checks(
     args: argparse.Namespace,
     *,
@@ -292,6 +450,16 @@ def build_checks(
         _public_headers()
         if args.env == "prod"
         else _common_headers(args.test_auth_token)
+    )
+    search_canaries = _release_search_canaries(args)
+    release_samples = _release_samples(args)
+    homepage_query = next(
+        (
+            item["query"]
+            for item in search_canaries
+            if item["kind"] == "homepage"
+        ),
+        "quwoquan",
     )
     checks: list[dict[str, Any]] = [
         {
@@ -318,26 +486,63 @@ def build_checks(
         {
             "name": "entity_homepage_search",
             "method": "GET",
-            "url": f"{base}/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
+            "url": (
+                f"{base}/homepages/search?query="
+                f"{urllib.parse.quote(homepage_query)}&limit=1"
+            ),
             "headers": _common_headers(args.test_auth_token),
             "expected_statuses": [200],
         },
-        {
-            "name": "global_search",
-            "method": "POST",
-            "url": f"{base}/search",
-            "headers": {
-                **_json_headers(args.test_auth_token),
-                "X-Session-Id": "stackctl-environment-probe",
-            },
-            "body": json.dumps(
-                {"query": "西湖", "mode": "result", "limit": 1},
-                ensure_ascii=False,
-            ).encode("utf-8"),
-            "expected_statuses": [200],
-        },
     ]
+    for canary in search_canaries or [
+        {
+            "kind": "generic",
+            "query": "quwoquan",
+            "expectedObjectType": "",
+            "expectedObjectId": "",
+        }
+    ]:
+        checks.append(
+            {
+                "name": "global_search",
+                "method": "POST",
+                "url": f"{base}/search",
+                "headers": {
+                    **_json_headers(args.test_auth_token),
+                    "X-Session-Id": "stackctl-environment-probe",
+                },
+                "body": json.dumps(
+                    {"query": canary["query"], "mode": "result", "limit": 20},
+                    ensure_ascii=False,
+                ).encode("utf-8"),
+                "expected_statuses": [200],
+                "searchCanaryKind": canary["kind"],
+                "expectedSearchObjectType": canary["expectedObjectType"],
+                "expectedSearchObjectId": canary["expectedObjectId"],
+            }
+        )
+    for sample in release_samples:
+        carrier = str(sample["carrier"])
+        read_object_id = urllib.parse.quote(str(sample["readObjectId"]), safe="")
+        path = (
+            f"homepages/{read_object_id}"
+            if carrier == "homepage"
+            else f"content/posts/{read_object_id}"
+        )
+        checks.append(
+            {
+                "name": "release_sample",
+                "method": "GET",
+                "url": f"{base}/{path}",
+                "headers": _common_headers(args.test_auth_token),
+                "expected_statuses": [200],
+                **sample,
+            }
+        )
     if require_non_empty_content_feed:
+        video_page_size = int(getattr(args, "video_page_size", 1) or 1)
+        if not 1 <= video_page_size <= 100:
+            raise ValueError("video page size must be between 1 and 100")
         feed_headers = _feed_headers()
         checks.extend(
             [
@@ -346,7 +551,8 @@ def build_checks(
                     "method": "GET",
                     "url": _feed_url(
                         base,
-                        "?identity=work&type=video&sort=recommend&limit=1",
+                        "?identity=work&type=video&sort=recommend&limit="
+                        f"{video_page_size}",
                     ),
                     "headers": feed_headers,
                     "expected_statuses": [200],
@@ -430,19 +636,34 @@ def _content_feed_semantic_result(
         decoded = json.loads(body)
     except json.JSONDecodeError as exc:
         return f"response body is not valid JSON: {exc.msg}", None, set()
-    if decoded in ([], {}):
-        return "response payload is empty", 0, set()
+    if not isinstance(decoded, dict):
+        return "response payload must be a JSON object", None, set()
+    object_cards = decoded.get("objectCards")
+    if not isinstance(object_cards, list):
+        return 'response payload is missing array "objectCards"', None, set()
     items: list[Any] | None = None
-    if isinstance(decoded, dict):
-        candidate_items = decoded.get("items")
-        if isinstance(candidate_items, list):
-            items = candidate_items
-    elif isinstance(decoded, list):
-        items = decoded
+    candidate_items = decoded.get("items")
+    if isinstance(candidate_items, list):
+        items = candidate_items
     if items is None:
         return None, None, set()
     if not items:
         return 'response payload has empty "items"', 0, set()
+    try:
+        allowed_item_fields = _content_post_projection_fields()
+    except ValueError as exc:
+        return str(exc), None, set()
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            return f"response items[{index}] must be a JSON object", None, set()
+        unknown = sorted(set(item) - allowed_item_fields)
+        if unknown:
+            return (
+                f"response items[{index}] has unknown ContentPostProjection fields: "
+                + ", ".join(unknown),
+                None,
+                set(),
+            )
     returned_post_ids = {
         str(item.get("postId") or "").strip()
         for item in items
@@ -476,7 +697,12 @@ def _expected_release_post_ids(args: argparse.Namespace, check_name: str) -> set
     }
 
 
-def _search_semantic_issue(payload: str) -> tuple[str | None, int | None]:
+def _search_semantic_issue(
+    payload: str,
+    *,
+    expected_object_type: str = "",
+    expected_object_id: str = "",
+) -> tuple[str | None, int | None]:
     body = payload.strip()
     if not body:
         return "response body is empty", None
@@ -492,7 +718,45 @@ def _search_semantic_issue(payload: str) -> tuple[str | None, int | None]:
     hits = decoded.get("hits")
     if not isinstance(hits, list):
         return 'response payload is missing array "hits"', None
+    expected_type = expected_object_type.strip()
+    expected_id = expected_object_id.strip()
+    if expected_type and expected_id and not any(
+        isinstance(hit, dict)
+        and str(hit.get("objectType") or "").strip() == expected_type
+        and str(hit.get("objectId") or "").strip() == expected_id
+        for hit in hits
+    ):
+        return (
+            "response has no exact release-bound "
+            f"{expected_type}/{expected_id} hit",
+            len(hits),
+        )
     return None, len(hits)
+
+
+def _release_sample_semantic_result(
+    payload: str,
+    *,
+    carrier: str,
+    read_object_id: str,
+    expected_content_type: str,
+) -> tuple[str | None, str, str]:
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        return f"response body is not valid JSON: {exc.msg}", "", ""
+    if not isinstance(decoded, dict):
+        return "response payload must be a JSON object", "", ""
+    id_field = "homepageId" if carrier == "homepage" else "postId"
+    returned_id = str(decoded.get(id_field) or "").strip()
+    returned_type = (
+        "" if carrier == "homepage" else str(decoded.get("contentType") or "").strip()
+    )
+    if returned_id != read_object_id:
+        return f"response {id_field} is not the exact release sample", returned_id, returned_type
+    if carrier != "homepage" and returned_type != expected_content_type:
+        return "response contentType is not the exact release sample type", returned_id, returned_type
+    return None, returned_id, returned_type
 
 
 def run_checks(args: argparse.Namespace) -> dict[str, Any]:
@@ -585,9 +849,53 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 entry["ok"] = False
                 entry["semanticError"] = semantic_issue
         if matched and check["name"] == "global_search":
-            semantic_issue, hit_count = _search_semantic_issue(payload)
+            semantic_issue, hit_count = _search_semantic_issue(
+                payload,
+                expected_object_type=str(
+                    check.get("expectedSearchObjectType") or ""
+                ),
+                expected_object_id=str(
+                    check.get("expectedSearchObjectId") or ""
+                ),
+            )
             if hit_count is not None:
                 entry["searchHitCount"] = hit_count
+            entry["searchCanaryKind"] = str(
+                check.get("searchCanaryKind") or "generic"
+            )
+            entry["expectedSearchObjectType"] = str(
+                check.get("expectedSearchObjectType") or ""
+            )
+            entry["expectedSearchObjectId"] = str(
+                check.get("expectedSearchObjectId") or ""
+            )
+            if semantic_issue:
+                matched = False
+                entry["ok"] = False
+                entry["semanticError"] = semantic_issue
+        if matched and check["name"] == "release_sample":
+            semantic_issue, returned_id, returned_type = _release_sample_semantic_result(
+                payload,
+                carrier=str(check.get("carrier") or ""),
+                read_object_id=str(check.get("readObjectId") or ""),
+                expected_content_type=str(check.get("expectedContentType") or ""),
+            )
+            for field in (
+                "sampleId",
+                "carrier",
+                "sourceReadback",
+                "sourceObjectId",
+                "ordinal",
+                "readObjectId",
+                "expectedContentType",
+            ):
+                entry[field] = check.get(field)
+            entry["returnedObjectId"] = returned_id
+            entry["returnedContentType"] = returned_type
+            entry["responseDigest"] = "sha256:" + hashlib.sha256(
+                payload.encode("utf-8")
+            ).hexdigest()
+            entry["responseBytes"] = len(payload.encode("utf-8"))
             if semantic_issue:
                 matched = False
                 entry["ok"] = False

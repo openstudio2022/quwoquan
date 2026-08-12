@@ -10,6 +10,10 @@ from core.control_types import ContentType, QueueBackend, QueueJobStage
 from governance.creators.assignment import creator_assignment_issues
 
 from content.execution import store
+from content.execution.queue.backend import (
+    resolve_execution_queue_backend,
+    resolve_pool_delivery_backend,
+)
 from content.execution.queue.core import (
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_MAX_STARTUP_FAILURES,
@@ -24,7 +28,6 @@ from content.execution.queue.core import (
     stable_job_id,
 )
 from content.execution.queue.model import QueueJob
-from content.execution.queue.backend import resolve_execution_queue_backend
 
 
 def _queue_stage(value: QueueJobStage | str) -> QueueJobStage:
@@ -61,8 +64,15 @@ def _backend_from_metadata(
     execution_id: str,
     metadata: Mapping[str, object],
     queue_backend: str | QueueBackend | None,
+    *,
+    stage: QueueJobStage = QueueJobStage.AUTHOR,
 ) -> QueueBackend:
-    return resolve_execution_queue_backend(
+    resolver = (
+        resolve_pool_delivery_backend
+        if stage is QueueJobStage.PUBLISH
+        else resolve_execution_queue_backend
+    )
+    return resolver(
         execution_id,
         requested=queue_backend,
         metadata_backend=metadata.get("queueBackend"),
@@ -105,7 +115,12 @@ def _definition(
         )
         if creator_issues:
             raise ValueError("; ".join(creator_issues))
-    backend = _backend_from_metadata(execution_id, metadata, queue_backend)
+    backend = _backend_from_metadata(
+        execution_id,
+        metadata,
+        queue_backend,
+        stage=stage,
+    )
     partition_key = str(metadata.get("partitionKey") or mutex_key or ref).strip()
     if not partition_key:
         raise ValueError("object job partitionKey is required")

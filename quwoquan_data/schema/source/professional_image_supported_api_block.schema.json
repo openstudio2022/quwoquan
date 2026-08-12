@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_supported_api_block.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "candidateId", "status", "failureCode", "reason"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_supported_api_block"},
+    "candidateId": {"type": "string", "minLength": 1},
+    "status": {"const": "blocked"},
+    "failureCode": {"type": "string", "pattern": "^DATA\\.SOURCE\\.[A-Z0-9_]+$"},
+    "reason": {"type": "string", "minLength": 1}
+  }
+}

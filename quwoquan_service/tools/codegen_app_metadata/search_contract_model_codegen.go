@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -109,6 +110,10 @@ func generateCanonicalSearchClientModels(metadataDir, appDir string) error {
 		sourcePath: "search/search/search_index_view/projections/search_response_view.yaml",
 		fields:     responseFields,
 	})
+	models, err = canonicalSearchModelClosure(models, searchFields)
+	if err != nil {
+		return fmt.Errorf("derive canonical Search nested client model closure: %w", err)
+	}
 
 	fileByClass := make(map[string]string, len(models))
 	for _, model := range models {
@@ -296,13 +301,139 @@ func canonicalSearchClientField(
 			field.ListElementDartClass = element
 			return field, nil
 		}
-		if !strings.HasPrefix(field.WireType, "CanonicalSearch") {
+		if !strings.HasPrefix(field.WireType, "CanonicalSearch") &&
+			!strings.HasPrefix(field.WireType, "OwnerSearch") {
 			return field, fmt.Errorf("unsupported canonical Search type %q", field.WireType)
 		}
 		field.DartType = field.WireType
 		field.MapFromStringKeyClass = field.WireType
 	}
 	return field, nil
+}
+
+func canonicalSearchModelClosure(
+	models []canonicalSearchClientModel,
+	fields *fieldsFile,
+) ([]canonicalSearchClientModel, error) {
+	if fields == nil {
+		return nil, fmt.Errorf("schema-owned Search fields are required")
+	}
+	result := append([]canonicalSearchClientModel(nil), models...)
+	known := make(map[string]bool, len(result))
+	for _, model := range result {
+		if model.className == "" || known[model.className] {
+			return nil, fmt.Errorf("duplicate or blank Search client model %q", model.className)
+		}
+		known[model.className] = true
+	}
+	visiting := map[string]bool{}
+	var visit func(canonicalSearchClientModel) error
+	visit = func(model canonicalSearchClientModel) error {
+		if visiting[model.className] {
+			return fmt.Errorf("recursive canonical Search type %s is forbidden", model.className)
+		}
+		visiting[model.className] = true
+		defer delete(visiting, model.className)
+		for _, field := range model.fields {
+			for _, dependency := range []string{field.MapFromStringKeyClass, field.ListElementDartClass} {
+				dependency = strings.TrimSpace(dependency)
+				if dependency == "" {
+					continue
+				}
+				if visiting[dependency] {
+					return fmt.Errorf("recursive canonical Search type %s -> %s is forbidden", model.className, dependency)
+				}
+				if known[dependency] {
+					continue
+				}
+				entity, sourceSection, err := canonicalSearchSchemaEntity(fields, dependency)
+				if err != nil {
+					return err
+				}
+				converted, err := canonicalSearchEntityFields(entity.Fields)
+				if err != nil {
+					return fmt.Errorf("derive schema-owned Search type %s: %w", dependency, err)
+				}
+				nested := canonicalSearchClientModel{
+					className: dependency,
+					fileName:  searchDartFileName(dependency),
+					sourcePath: "search/search/search_index_view/fields.yaml#" +
+						sourceSection + "." + dependency,
+					fields: converted,
+				}
+				known[dependency] = true
+				result = append(result, nested)
+				if err := visit(nested); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	for index := 0; index < len(result); index++ {
+		if err := visit(result[index]); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+func canonicalSearchSchemaEntity(fields *fieldsFile, name string) (entityDef, string, error) {
+	// readFields deliberately projects types/members into Entities so aggregate
+	// callers can use one lookup. Treat only byte-equivalent projected entries as
+	// aliases; a genuinely conflicting same-name definition remains fail-closed.
+	sections := []struct {
+		name    string
+		entries map[string]entityDef
+	}{
+		{name: "types", entries: fields.Types},
+		{name: "value_objects", entries: fields.ValueObjects},
+		{name: "members", entries: fields.Members},
+		{name: "entities", entries: fields.Entities},
+	}
+	var selected entityDef
+	selectedSection := ""
+	for _, section := range sections {
+		entries := section.entries
+		if entity, exists := entries[name]; exists {
+			if selectedSection == "" {
+				selected = entity
+				selectedSection = section.name
+				continue
+			}
+			if !reflect.DeepEqual(selected, entity) {
+				return entityDef{}, "", fmt.Errorf(
+					"nested Search type %s has conflicting schema-owned definitions in %s and %s",
+					name,
+					selectedSection,
+					section.name,
+				)
+			}
+		}
+	}
+	if selectedSection == "" || len(selected.Fields) == 0 {
+		return entityDef{}, "", fmt.Errorf(
+			"nested Search type %s must have one non-empty schema-owned definition",
+			name,
+		)
+	}
+	return selected, selectedSection, nil
+}
+
+func searchDartFileName(className string) string {
+	var result strings.Builder
+	for index, character := range className {
+		if character >= 'A' && character <= 'Z' {
+			if index > 0 {
+				result.WriteByte('_')
+			}
+			result.WriteRune(character + ('a' - 'A'))
+			continue
+		}
+		result.WriteRune(character)
+	}
+	result.WriteString(".g.dart")
+	return result.String()
 }
 
 func canonicalSearchModelImports(
@@ -340,7 +471,11 @@ func canonicalSearchModelImports(
 			if className == "" || className == model.className {
 				continue
 			}
-			add(fileByClass[className])
+			fileName := fileByClass[className]
+			if fileName == "" {
+				return nil, fmt.Errorf("nested Search type %s has no generated model", className)
+			}
+			add(fileName)
 		}
 	}
 	return imports, nil

@@ -145,7 +145,7 @@ runtime 作为跨端云机制领域服务，治理共享 runtime 包和 integrat
 - [`runtime-skill`](./runtime-skill/spec.md)：SkillRouter：根据 PageContext 场景 + 标签 → 匹配适用的 Skill。
 - [`runtime-streaming`](./runtime-streaming/spec.md)：**SSEServer**：管理 SSE 连接（Connect/Push/Disconnect/Broadcast），按 userId 路由推送；支持 Last-Event-ID 续传。
 - [`runtime-test-pyramid`](./runtime-test-pyramid/spec.md)：以 local_contract、api_integration、user_acceptance 形成唯一测试分层和环境证据模型。
-- [`runtime-testinfra`](./runtime-testinfra/spec.md)：以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
+- [`runtime-testinfra`](./runtime-testinfra/spec.md)：以 canonical 目录发现三层测试，以强类型请求按需准备隔离数据，并从真实执行、回读与清理生成证据。
 - [`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理。
 
 ## 5. 领域要求

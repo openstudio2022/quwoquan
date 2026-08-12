@@ -33,7 +33,7 @@ researchDiscovery:
       - favorite
     normalization: same_platform_topic_time_bucket_percentile
     statistical: true
-    nonBlocking: false
+    nonBlocking: true
 researchDistribution:
   allowedRightsStatuses:
     - verified
@@ -47,7 +47,7 @@ commercialDistribution:
 articleMedia:
   illustratedRateTarget: 0.9
   textOnlyRateTarget: 0.1
-  requireCoverAndBodyImage: true
+  requireCoverAndBodyImage: false
 scaleMilestones:
   m100Targets:
     homepage: 100
@@ -64,11 +64,11 @@ scaleMilestones:
     article: 10000
     image: 10000
     video: 1000
-  requireM100PromotionBeforeM1000: true
-  requireM1000PromotionBeforeM10000: true
+  requireM100PromotionBeforeM1000: false
+  requireM1000PromotionBeforeM10000: false
   milestoneAttainmentRequired: true
   attainmentCountingMode: cumulative_unique_finalized_objects
   automaticRecovery:
     targetRate: 0.95
     statistical: true
-    nonBlocking: false
+    nonBlocking: true

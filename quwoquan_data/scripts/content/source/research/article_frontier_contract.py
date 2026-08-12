@@ -84,6 +84,7 @@ class ArticleSourceCandidate:
     discovery_method: str
     relevance_score: float
     profile_digest: str
+    discovery_query: str = ""
 
     def as_source(self) -> dict[str, object]:
         source = _source(
@@ -118,6 +119,8 @@ class ArticleSourceCandidate:
             "sourceUseMode": "factual_reference_only",
             "discoveryMethod": self.discovery_method,
             "relevanceScore": round(self.relevance_score, 3),
+            "title": self.title,
+            "query": self.discovery_query,
         }
 
 

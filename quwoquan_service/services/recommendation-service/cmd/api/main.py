@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from contextlib import asynccontextmanager
+import logging
 import os
 import time
 from urllib.parse import urlparse
@@ -15,9 +16,13 @@ from redis.cluster import RedisCluster
 from api.capacity import refresh_capacity_metrics
 from api.metrics import refresh_rec_model_loaded_gauges
 from runtime_contract import bootstrap_runtime_contract_or_die
+from stream_redis import StreamConsumerRedis
 
 
 runtime_config = bootstrap_runtime_contract_or_die()
+
+EXPERIMENT_POLICY_STARTUP_TIMEOUT_SECONDS = 45.0
+_LOGGER = logging.getLogger(__name__)
 
 from api.metrics import observe_score_duration, record_rec_request  # noqa: E402
 from api.score import get_scoring_facade, reload_scorers  # noqa: E402
@@ -155,6 +160,9 @@ from internal.recommendation.ranked_recommendation_window.infrastructure.mongo_r
 from internal.recommendation.ranked_recommendation_window.infrastructure.redis_store import (  # noqa: E402
     RedisWindowStore,
 )
+from internal.recommendation.ranked_recommendation_window.infrastructure.redis_experiment_policy_stream import (  # noqa: E402
+    RedisExperimentPolicyStream,
+)
 from security.service_authorization import ServiceTokenVerifier  # noqa: E402
 
 
@@ -242,24 +250,28 @@ def _build_redis_client(scene: str):
     if mode == "cluster":
         if int(config.get("db", 0)) != 0:
             raise RuntimeError(f"redis.{scene} cluster mode requires db=0")
-        return RedisCluster(
+        return StreamConsumerRedis(
+            RedisCluster(
+                host=host,
+                port=port,
+                password=password,
+                ssl=tls,
+                socket_connect_timeout=connect_timeout,
+                socket_timeout=read_timeout,
+            )
+        )
+    if mode != "standalone":
+        raise RuntimeError(f"unsupported redis.{scene} mode: {mode}")
+    return StreamConsumerRedis(
+        Redis(
             host=host,
             port=port,
+            db=int(config.get("db", 0)),
             password=password,
             ssl=tls,
             socket_connect_timeout=connect_timeout,
             socket_timeout=read_timeout,
         )
-    if mode != "standalone":
-        raise RuntimeError(f"unsupported redis.{scene} mode: {mode}")
-    return Redis(
-        host=host,
-        port=port,
-        db=int(config.get("db", 0)),
-        password=password,
-        ssl=tls,
-        socket_connect_timeout=connect_timeout,
-        socket_timeout=read_timeout,
     )
 
 
@@ -376,16 +388,21 @@ async def lifespan(app: FastAPI):
         if restored_policy is not None:
             experiment_assignments.apply_policy(restored_policy)
         experiment_policy_consumer = ExperimentPolicyConsumer(
-            redis_client=general_redis_client,
+            stream=RedisExperimentPolicyStream(general_redis_client),
             store=experiment_policy_store,
             assignments=experiment_assignments,
             consumer=os.getenv(
                 "SERVICE_INSTANCE_ID", "recommendation-experiment-policy"
             ),
         )
-        experiment_policy_consumer.process_once()
-        experiment_ready = experiment_assignments.healthy()
         app.state.runtime_workload = runtime_workload if content_slice_workload else "full"
+        if content_slice_workload:
+            experiment_policy_consumer.process_once()
+            experiment_ready = experiment_assignments.healthy()
+        else:
+            experiment_ready = experiment_policy_consumer.wait_for_active_policy(
+                timeout_seconds=EXPERIMENT_POLICY_STARTUP_TIMEOUT_SECONDS,
+            )
         if not experiment_ready and not content_slice_workload:
             raise RuntimeError(
                 "recommendation-service requires active rec_model_vs_rule ExperimentPolicyActivated"
@@ -557,6 +574,8 @@ async def lifespan(app: FastAPI):
         app.state.tag_feedback_consumer = tag_feedback_consumer
         yield
     finally:
+        general_redis_client.interrupt_stream_waits()
+        recommendation_redis_client.interrupt_stream_waits()
         if model_release_runtime_consumer is not None:
             model_release_runtime_consumer.stop()
         if model_release_outbox_relay is not None:
@@ -692,34 +711,63 @@ def health(request: Request) -> dict[str, str]:
     model_release_facade = getattr(request.app.state, "model_release_command_facade", None)
     model_release_outbox_relay = getattr(request.app.state, "model_release_outbox_relay", None)
     model_release_runtime_consumer = getattr(request.app.state, "model_release_runtime_consumer", None)
-    common_runtime_unready = (
-        model_release_facade is None
-        or model_release_outbox_relay is None
-        or model_release_runtime_consumer is None
-        or candidate_consumer is None
-        or gathering_consumer is None
-        or premium_consumer is None
-        or closure_consumer is None
-        or feedback_consumer is None
-        or exposure_consumer is None
-        or not candidate_consumer.healthy()
-        or not gathering_consumer.healthy()
-        or not premium_consumer.healthy()
-        or not closure_consumer.healthy()
-        or not feedback_consumer.healthy()
-        or not exposure_consumer.healthy()
-        or not model_release_outbox_relay.healthy()
-        or not model_release_runtime_consumer.healthy()
-    )
+    common_runtime_checks = {
+        "model_release_facade": model_release_facade is not None,
+        "model_release_outbox_relay": (
+            model_release_outbox_relay is not None
+            and model_release_outbox_relay.healthy()
+        ),
+        "model_release_runtime_consumer": (
+            model_release_runtime_consumer is not None
+            and model_release_runtime_consumer.healthy()
+        ),
+        "candidate_post_lifecycle_consumer": (
+            candidate_consumer is not None and candidate_consumer.healthy()
+        ),
+        "candidate_gathering_lifecycle_consumer": (
+            gathering_consumer is not None and gathering_consumer.healthy()
+        ),
+        "candidate_premium_pool_consumer": (
+            premium_consumer is not None and premium_consumer.healthy()
+        ),
+        "user_account_closed_consumer": (
+            closure_consumer is not None and closure_consumer.healthy()
+        ),
+        "content_behavior_consumer": (
+            feedback_consumer is not None and feedback_consumer.healthy()
+        ),
+        "feed_page_delivered_consumer": (
+            exposure_consumer is not None and exposure_consumer.healthy()
+        ),
+    }
+    common_runtime_unready = not all(common_runtime_checks.values())
     content_slice_only = getattr(request.app.state, "runtime_workload", "full") in {
         "content-release",
         "content-commercial",
     }
-    scoring_runtime_unready = (
-        ranked_window_facade is None
-        or experiment_policy_consumer is None
-        or not experiment_policy_consumer.healthy()
+    scoring_runtime_checks = {
+        "ranked_window_facade": ranked_window_facade is not None,
+        "experiment_policy_consumer": (
+            experiment_policy_consumer is not None
+            and experiment_policy_consumer.healthy()
+        ),
+    }
+    scoring_runtime_unready = not all(scoring_runtime_checks.values())
+    failed_checks = tuple(
+        name
+        for name, ready in (*common_runtime_checks.items(), *scoring_runtime_checks.items())
+        if not ready
     )
+    previous_failed_checks = getattr(request.app.state, "health_failed_checks", None)
+    if failed_checks != previous_failed_checks:
+        request.app.state.health_failed_checks = failed_checks
+        if failed_checks:
+            _LOGGER.warning(
+                "recommendation runtime health checks are not ready: %s",
+                ",".join(failed_checks),
+            )
+        elif previous_failed_checks:
+            _LOGGER.info("recommendation runtime health checks recovered")
     if common_runtime_unready:
         raise HTTPException(status_code=503, detail={"status": "not_ready"})
     if scoring_runtime_unready and content_slice_only:

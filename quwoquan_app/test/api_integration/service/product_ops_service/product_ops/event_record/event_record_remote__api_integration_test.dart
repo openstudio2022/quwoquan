@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-002
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
 // readiness_case: event_record_report_event_batch_app_api
+// readiness_case: event_record_report_runtime_log_batch_app_api
 // readiness_case: event_record_report_startup_event_batch_app_api
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -110,6 +112,56 @@ void main() {
       expect(receipt.acceptedCount, 1);
       expect(receipt.duplicateBatch, isFalse);
     });
+
+    test(
+      'generated RuntimeLog Remote 提交 canonical slim record 并返回写入回执',
+      () async {
+        final suffix = DateTime.now().microsecondsSinceEpoch;
+        final writer = RemoteOpsEventRecordBatchWriter(
+          client: _generatedClient(),
+          invocationContext: (clientPageId, {required idempotencyKey}) =>
+              CloudOperationInvocationContext(
+                surfaceId: AppUiSurfaces.appShell.id,
+                routeId: AppUiSurfaces.appShell.routeId,
+                clientPageId: clientPageId,
+                idempotencyKey: idempotencyKey,
+                actor: CloudOperationActorContext(
+                  accountId: _session.ownerId,
+                  personaId: _session.personaId,
+                  deviceActorId: 'runtime-log-api-integration',
+                ),
+              ),
+        );
+        final record = ops.RuntimeLogRecordWire.fromWire(<String, Object?>{
+          'schema': 'observability.slim',
+          'recordId': 'runtime-log-$suffix',
+          'occurredAt': DateTime.now().toUtc().toIso8601String(),
+          'observedAt': DateTime.now().toUtc().toIso8601String(),
+          'logKind': 'event',
+          'severity': 'WARN',
+          'signal': 'app.performance.frame',
+          'message': 'bounded frame observation',
+          'event': 'frame_jank_observed',
+          'result': 'observed',
+          'resource': <String, Object?>{
+            'sourceType': 'app',
+            'service': 'quwoquan_app',
+            'environment': _apiContractEnv,
+            'appVersion': 'api-integration',
+          },
+        });
+
+        final receipt = await writer.reportRuntimeLogBatch(
+          ops.RuntimeLogBatchRequest(
+            records: <ops.RuntimeLogRecordWire>[record],
+          ),
+          idempotencyKey: 'runtime-log-api-integration-$suffix',
+        );
+
+        expect(receipt.acceptedCount, 1);
+        expect(receipt.duplicateBatch, isFalse);
+      },
+    );
   });
 
   group('startup_telemetry_end_to_end', () {

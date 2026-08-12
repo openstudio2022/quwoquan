@@ -23,16 +23,22 @@ policy:
       sampleRate: 0.1
       minimumSampleCount: 10
       smallBatchPolicy: all
-    # Cursor Auto 不是 fallback；新 execution 可在独立 preflight/soak 通过后
-    # 显式首选。已有 execution 的 frozen manifest 已禁止原地换 Provider/model，
-    # 发生变更时仍必须由通用 execution lineage 创建 retryOf。
+    # Cursor Grok 是四路内容生产的显式首选；Cursor Auto 只允许在 Grok
+    # execution 留下 typed provider/model failure journal 后，由操作者显式
+    # 创建新的 retryOf execution。任何 execution 都不得原地换 Provider/model。
     explicitSelections:
+      - selectionId: cursor_grok
+        provider: cursor_sdk
+        model: grok-4.5
+        modelParameters: []
+        runtime: local
+        requiresNewRetryOf: false
       - selectionId: cursor_auto
         provider: cursor_sdk
         model: auto
         modelParameters: []
         runtime: local
-        requiresNewRetryOf: false
+        requiresNewRetryOf: true
     # Opaque scope IDs never contain credentials. The provider/account/host
     # tuple owns one shared token bucket and per-lane concurrency ceiling.
     capacity:

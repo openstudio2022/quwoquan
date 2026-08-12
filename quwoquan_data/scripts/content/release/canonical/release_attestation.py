@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from content.release.canonical.object_source_identity import source_identity_set
+from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.codec import JsonObject, JsonObjectDecodeError
 from core.source_digest import (
+    FrozenSourceDigest,
     SourceDigest,
     SourceDigestError,
     content_source_revision,
@@ -17,6 +20,48 @@ _SCHEMA = "quwoquan_data.release_attestation"
 
 class ReleaseAttestationError(ValueError):
     """A release receipt does not satisfy its closed contract."""
+
+
+def _expand_source_identities(
+    rows: tuple[dict[str, object], ...],
+) -> list[dict[str, str]]:
+    expanded: list[dict[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ReleaseAttestationError("source identity entry is invalid")
+        execution_ids = row.get("executionIds")
+        if not isinstance(execution_ids, list) or not execution_ids:
+            raise ReleaseAttestationError(
+                "source identity executionIds are invalid"
+            )
+        for execution_id in execution_ids:
+            normalized_id = str(execution_id or "").strip()
+            if row.get("identityKind") == "legacy_canonical_migration":
+                expanded.append(
+                    {
+                        "identityKind": "legacy_canonical_migration",
+                        "executionId": normalized_id,
+                        "sourceDigest": str(row.get("sourceDigest") or ""),
+                        "canonicalObjectDigest": str(
+                            row.get("canonicalObjectDigest") or ""
+                        ),
+                        "migrationEvidenceDigest": str(
+                            row.get("migrationEvidenceDigest") or ""
+                        ),
+                    }
+                )
+            else:
+                expanded.append(
+                    {
+                        "executionId": normalized_id,
+                        "sourceRevision": str(row.get("sourceRevision") or ""),
+                        "sourceDigest": str(row.get("sourceDigest") or ""),
+                        "entityCatalogDigest": str(
+                            row.get("entityCatalogDigest") or ""
+                        ),
+                    }
+                )
+    return expanded
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,9 +91,11 @@ class ReleaseAttestation:
     source_revision: str | None
     source_digest: str | None
     entity_catalog_digest: str | None
-    source_digests: tuple[SourceDigest, ...]
+    source_digests: tuple[SourceDigest | FrozenSourceDigest, ...]
     payload_sha256: str
     recorded_at: str
+    source_identities: tuple[dict[str, object], ...] = ()
+    source_identity_set_digest: str | None = None
 
     def __post_init__(self) -> None:
         if not self.release_id.strip():
@@ -102,6 +149,8 @@ class ReleaseAttestation:
             raise ReleaseAttestationError("recordedAt is required")
         if any(count < 0 for count in self.counts):
             raise ReleaseAttestationError("release counts must be non-negative")
+        if len(self.execution_ids) != len(set(self.execution_ids)):
+            raise ReleaseAttestationError("executionIds must be unique")
         if not self.source_digests:
             raise ReleaseAttestationError("sourceDigests must not be empty")
         digest_values = tuple(item.digest for item in self.source_digests)
@@ -113,6 +162,45 @@ class ReleaseAttestation:
             if not self.execution_ids or not (self.entity_count or self.post_count):
                 raise ReleaseAttestationError(
                     "content release requires executions and canonical entities or posts"
+                )
+            if self.source_identities:
+                if self.release_class is not ReleaseClass.RESEARCH:
+                    raise ReleaseAttestationError(
+                        "source identity set is reserved for Research pool releases"
+                    )
+                if any(
+                    value is not None
+                    for value in (
+                        self.source_revision,
+                        self.source_digest,
+                        self.entity_catalog_digest,
+                    )
+                ):
+                    raise ReleaseAttestationError(
+                        "source identity set forbids scalar source identity"
+                    )
+                expanded = _expand_source_identities(self.source_identities)
+                try:
+                    expected_rows, expected_digest = source_identity_set(expanded)
+                except (ObjectTransactionError, TypeError, ValueError) as exc:
+                    raise ReleaseAttestationError(
+                        "source identity set is invalid"
+                    ) from exc
+                if (
+                    list(self.source_identities) != expected_rows
+                    or self.source_identity_set_digest != expected_digest
+                    or sorted(self.execution_ids)
+                    != sorted({row["executionId"] for row in expanded})
+                    or {item.digest for item in self.source_digests}
+                    != {str(row["sourceDigest"]) for row in self.source_identities}
+                ):
+                    raise ReleaseAttestationError(
+                        "source identity set closure drifted"
+                    )
+                return
+            if self.source_identity_set_digest is not None:
+                raise ReleaseAttestationError(
+                    "scalar source identity forbids sourceIdentitySetDigest"
                 )
             if len(self.source_digests) != 1:
                 raise ReleaseAttestationError(
@@ -159,6 +247,8 @@ class ReleaseAttestation:
                         self.entity_catalog_digest,
                     )
                 )
+                or self.source_identities
+                or self.source_identity_set_digest is not None
             ):
                 raise ReleaseAttestationError(
                     "empty baseline must not contain executions or canonical objects"
@@ -196,13 +286,21 @@ class ReleaseAttestation:
             "recordedAt": self.recorded_at,
         }
         if self.release_kind is ReleaseKind.CONTENT:
-            document.update(
-                {
-                    "sourceRevision": self.source_revision,
-                    "sourceDigest": self.source_digest,
-                    "entityCatalogDigest": self.entity_catalog_digest,
-                }
-            )
+            if self.source_identities:
+                document.update(
+                    {
+                        "sourceIdentities": list(self.source_identities),
+                        "sourceIdentitySetDigest": self.source_identity_set_digest,
+                    }
+                )
+            else:
+                document.update(
+                    {
+                        "sourceRevision": self.source_revision,
+                        "sourceDigest": self.source_digest,
+                        "entityCatalogDigest": self.entity_catalog_digest,
+                    }
+                )
         return document
 
     @classmethod
@@ -211,11 +309,21 @@ class ReleaseAttestation:
             document = JsonObject.from_value(value, label="release attestation")
             if document.string("schema") != _SCHEMA:
                 raise ReleaseAttestationError("release attestation schema is invalid")
-            source_documents = document.object_sequence("sourceDigests")
-            source_digests = tuple(
-                SourceDigest.from_document(item.to_document())
-                for item in source_documents
+            plain = document.to_document()
+            raw_source_identities = plain.get("sourceIdentities") or []
+            if not isinstance(raw_source_identities, list) or any(
+                not isinstance(item, dict) for item in raw_source_identities
+            ):
+                raise ReleaseAttestationError("sourceIdentities must be an array")
+            source_digest_parser = (
+                FrozenSourceDigest.from_document
+                if raw_source_identities
+                else SourceDigest.from_document
             )
+            source_digests = [
+                source_digest_parser(item.to_document())
+                for item in document.object_sequence("sourceDigests")
+            ]
             return cls(
                 release_id=document.string("releaseId"),
                 source_owner=DataSourceOwner(document.string("sourceOwner")),
@@ -251,9 +359,13 @@ class ReleaseAttestation:
                 entity_catalog_digest=document.optional_string(
                     "entityCatalogDigest"
                 ),
-                source_digests=source_digests,
+                source_digests=tuple(source_digests),
                 payload_sha256=document.string("payloadSha256"),
                 recorded_at=document.string("recordedAt"),
+                source_identities=tuple(dict(item) for item in raw_source_identities),
+                source_identity_set_digest=document.optional_string(
+                    "sourceIdentitySetDigest"
+                ),
             )
         except (JsonObjectDecodeError, SourceDigestError, ValueError) as exc:
             raise ReleaseAttestationError(str(exc)) from exc

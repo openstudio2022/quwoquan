@@ -48,6 +48,8 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                 download_origin="https://cdn.quwoquan.com",
                 expected_package="com.quwoquan.quwoquan_app",
                 expected_signing_certificate_sha256="a" * 64,
+                minimum_supported_version="1.7.0",
+                minimum_supported_build="17000",
                 apkanalyzer=str(analyzer),
                 apksigner=str(signer),
             )
@@ -63,6 +65,12 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             self.assertEqual(len(manifest["apkSHA256"]), 64)
             environment = Path(str(release["environmentPath"])).read_text()
             self.assertIn("PRODUCT_OPS_ANDROID_LATEST_BUILD=18201", environment)
+            self.assertIn(
+                "PRODUCT_OPS_ANDROID_MINIMUM_SUPPORTED_BUILD=17000", environment
+            )
+            self.assertIn("PRODUCT_OPS_ANDROID_UPDATE_URL=https://", environment)
+            self.assertIn("PRODUCT_OPS_ANDROID_RECOVERY_URL=https://", environment)
+            self.assertNotIn("PRODUCT_OPS_APP_RELEASE_RECOVERY_URL", environment)
             self.assertIn(
                 "PRODUCT_OPS_ANDROID_APK_SIGNING_CERTIFICATE_SHA256=",
                 environment,
@@ -105,6 +113,8 @@ echo 'Signer #1 certificate SHA-256 digest: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
                     download_origin="http://cdn.quwoquan.com",
                     expected_package="com.quwoquan.quwoquan_app",
                     expected_signing_certificate_sha256="b" * 64,
+                    minimum_supported_version="1.7.0",
+                    minimum_supported_build="17000",
                     apkanalyzer=str(analyzer),
                     apksigner=str(signer),
                 )
@@ -142,6 +152,8 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                     download_origin="https://cdn.quwoquan.com",
                     expected_package="com.quwoquan.quwoquan_app",
                     expected_signing_certificate_sha256="b" * 64,
+                    minimum_supported_version="1.7.0",
+                    minimum_supported_build="17000",
                     apkanalyzer=str(analyzer),
                     apksigner=str(signer),
                 )

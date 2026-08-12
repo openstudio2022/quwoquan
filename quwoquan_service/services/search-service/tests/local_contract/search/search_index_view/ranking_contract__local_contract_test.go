@@ -1,8 +1,10 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-001.t5
 package local_contract
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,6 +118,38 @@ func TestSearchRankingExperimentAssignmentDegradesToControl(t *testing.T) {
 	}
 	if result.ExperimentBucket != application.BucketControl {
 		t.Fatalf("bucket = %q, want control", result.ExperimentBucket)
+	}
+	if decorator.PolicyDigest() != application.ControlFallbackPolicyDigest {
+		t.Fatalf("control policy digest = %q", decorator.PolicyDigest())
+	}
+	codec, err := application.NewSearchCursorCodec(
+		[]byte("search-control-pagination-contract-secret"),
+	)
+	if err != nil {
+		t.Fatalf("NewSearchCursorCodec() error = %v", err)
+	}
+	service := application.NewSearchService(
+		rtsearch.NewSliceBackend([]rtsearch.Document{
+			{ObjectType: rtsearch.ObjectTypeContentPost, ObjectID: "post-a", Title: "西湖春景", Visibility: "public"},
+			{ObjectType: rtsearch.ObjectTypeContentPost, ObjectID: "post-b", Title: "西湖夏景", Visibility: "public"},
+		}),
+		application.WithSearchCursorCodec(codec),
+	)
+	execution, err := service.Execute(
+		context.Background(),
+		application.QueryInput{Query: "西湖", Mode: "result", Limit: 1},
+		rtsearch.Viewer{},
+		application.QueryCaller{PrincipalKey: "session:control-pagination"},
+		application.QueryExecutionIdentity{
+			CandidateDigest: "sha256:" + strings.Repeat("a", 64),
+			PolicyDigest:    decorator.PolicyDigest(),
+		},
+	)
+	if err != nil {
+		t.Fatalf("control pagination Execute() error = %v", err)
+	}
+	if execution.NextCursor == "" {
+		t.Fatal("control pagination must emit an opaque continuation cursor")
 	}
 }
 

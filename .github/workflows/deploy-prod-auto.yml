@@ -132,9 +132,11 @@ jobs:
     env:
       PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
     outputs:
-      initial_step: ${{ steps.stages.outputs.initial_step }}
-      carry_step: ${{ steps.stages.outputs.carry_step }}
-      full_step: ${{ steps.stages.outputs.full_step }}
+      canary_step: ${{ steps.stages.outputs.canary_step }}
+      percent_5_step: ${{ steps.stages.outputs.percent_5_step }}
+      percent_20_step: ${{ steps.stages.outputs.percent_20_step }}
+      percent_50_step: ${{ steps.stages.outputs.percent_50_step }}
+      percent_100_step: ${{ steps.stages.outputs.percent_100_step }}
       from_candidate_digest: ${{ steps.inputs.outputs.from_candidate_digest }}
       resume_stage: ${{ steps.inputs.outputs.resume_stage }}
       existing_release_evidence_ref: ${{ steps.inputs.outputs.existing_release_evidence_ref }}
@@ -511,7 +513,7 @@ jobs:
           FROM_CANDIDATE_DIGEST="$RESOLVED_FROM_CANDIDATE_DIGEST"
           if [[ -z "$FROM_CANDIDATE_DIGEST" ]] || \
              [[ "$RESOLVED_HOSTED_AUTHORITY" != "prod-hosted-service-plane" ]] || \
-             [[ ! "$RESOLVED_RESUME_STAGE" =~ ^(gray-initial|carry-on|full|complete)$ ]]; then
+             [[ ! "$RESOLVED_RESUME_STAGE" =~ ^(canary|5|20|50|100|complete)$ ]]; then
             echo "::error::GATE_BLOCK: hosted ledger did not resolve canonical candidate recovery state"
             exit 2
           fi
@@ -543,7 +545,7 @@ jobs:
           echo "existing_release_evidence_ref=$EXISTING_RELEASE_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
           echo "cloud_provider=$CLOUD_PROVIDER" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
-      - name: Parse gray_rollout_stages
+      - name: Parse canonical rollout stages
         id: stages
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -555,11 +557,13 @@ jobs:
               )
           )
           stages = {item["name"]: int(item["step"]) for item in payload["stages"]}
-          if stages != {"gray-initial": 5, "carry-on": 25, "full": 100}:
+          if stages != {"canary": 0, "5": 5, "20": 20, "50": 50, "100": 100}:
               raise SystemExit(f"invalid canonical rollout stages: {stages}")
-          print(f"initial_step={stages['gray-initial']}")
-          print(f"carry_step={stages['carry-on']}")
-          print(f"full_step={stages['full']}")
+          print(f"canary_step={stages['canary']}")
+          print(f"percent_5_step={stages['5']}")
+          print(f"percent_20_step={stages['20']}")
+          print(f"percent_50_step={stages['50']}")
+          print(f"percent_100_step={stages['100']}")
           PY
       - id: finish
         if: always()
@@ -1113,6 +1117,7 @@ jobs:
     env:
       PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
       PROMETHEUS_URL: ${{ vars.PROD_PROMETHEUS_URL }}
+      QWQ_PROD_ROLLOUT_EVIDENCE_ROOT: ${{ secrets.PROD_ROLLOUT_STAGE_EVIDENCE_ROOT }}
       QWQ_PROD_RELEASE_STATE_DIR: ${{ vars.PROD_RELEASE_STATE_DIR }}
       QWQ_PROD_BACKUP_RECOVERY_RECEIPT: ${{ vars.PROD_BACKUP_RECOVERY_RECEIPT }}
       QWQ_PROD_ROLLBACK_DRILL_RECEIPT_ID: ${{ vars.PROD_ROLLBACK_DRILL_RECEIPT_ID }}
@@ -1123,6 +1128,29 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Validate protected rollout promotion evidence root
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import stat
+          from pathlib import Path
+
+          raw = os.environ.get("QWQ_PROD_ROLLOUT_EVIDENCE_ROOT", "").strip()
+          root = Path(raw)
+          if not raw or not root.is_absolute():
+              raise SystemExit("GATE_BLOCK: protected rollout evidence root must be an absolute directory")
+          try:
+              metadata = os.lstat(root)
+          except OSError as error:
+              raise SystemExit(f"GATE_BLOCK: protected rollout evidence root is unavailable: {error}") from error
+          if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+              raise SystemExit("GATE_BLOCK: protected rollout evidence root must be a non-symlink directory")
+          if metadata.st_uid != os.getuid():
+              raise SystemExit("GATE_BLOCK: protected rollout evidence root must be owned by the current uid")
+          if metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+              raise SystemExit("GATE_BLOCK: protected rollout evidence root must not be group/world writable")
+          PY
       - name: Materialize hosted rollout SSH credentials
         env:
           EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
@@ -1147,7 +1175,7 @@ jobs:
           echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
       - name: Validate every prod plane SSH credential once
         run: |
-          for stage in gray-initial carry-on full; do
+          for stage in canary 5 20 50 100; do
             python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py \
               --stage "$stage"
           done
@@ -1355,8 +1383,8 @@ jobs:
           if not isinstance(descriptor, dict) or not str(descriptor.get("digest") or "").startswith("sha256:"):
               raise SystemExit("GATE_BLOCK: prebuilt Prod Ops Portal package evidence is missing")
           PY
-      - name: Deploy Prod gray-initial (5%)
-        if: ${{ needs.prepare.outputs.resume_stage == 'gray-initial' }}
+      - name: Deploy Prod canary
+        if: ${{ needs.prepare.outputs.resume_stage == 'canary' }}
         env:
           PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
           WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
@@ -1371,21 +1399,22 @@ jobs:
             --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
             --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
             --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage gray-initial \
-            --step "${{ needs.prepare.outputs.initial_step }}" \
+            --stage canary \
+            --step "${{ needs.prepare.outputs.canary_step }}" \
+            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/canary.json" \
             --dry-run "${{ needs.prepare.outputs.dry_run }}" \
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
             --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
             --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
             --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
             --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-initial"
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-canary"
       - name: Explain dry-run boundary
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
         run: |
-          echo "::notice::Dry-run remained read-only after gray-initial validation. Carry-on/full require a committed hosted ledger transition and are intentionally not fabricated."
-      - name: Deploy Prod carry-on (25%)
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'gray-initial' || needs.prepare.outputs.resume_stage == 'carry-on') }}
+          echo "::notice::Dry-run remained read-only after canary validation. The 5/20/50/100 stages require committed hosted ledger transitions and are intentionally not fabricated."
+      - name: Deploy Prod 5%
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'canary' || needs.prepare.outputs.resume_stage == '5') }}
         env:
           PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
           WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
@@ -1400,16 +1429,69 @@ jobs:
             --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
             --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
             --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage carry-on \
-            --step "${{ needs.prepare.outputs.carry_step }}" \
+            --stage 5 \
+            --step "${{ needs.prepare.outputs.percent_5_step }}" \
+            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/5.json" \
             --dry-run false \
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
             --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
             --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
             --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
             --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-carry-on"
-      - name: Deploy Prod full (100%)
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-5"
+      - name: Deploy Prod 20%
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'canary' || needs.prepare.outputs.resume_stage == '5' || needs.prepare.outputs.resume_stage == '20') }}
+        env:
+          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
+          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
+          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
+          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
+          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py deploy \
+            --target prod-hosted \
+            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
+            --service prod-stack \
+            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
+            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
+            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
+            --stage 20 \
+            --step "${{ needs.prepare.outputs.percent_20_step }}" \
+            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/20.json" \
+            --dry-run false \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
+            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
+            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
+            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
+            --reuse-package \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-20"
+      - name: Deploy Prod 50%
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.resume_stage == 'canary' || needs.prepare.outputs.resume_stage == '5' || needs.prepare.outputs.resume_stage == '20' || needs.prepare.outputs.resume_stage == '50') }}
+        env:
+          PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
+          WORKFLOW_STARTED_EPOCH: ${{ needs.prepare.outputs.workflow_started_epoch }}
+          PROMOTION_CUTOFF_SECONDS: ${{ needs.prepare.outputs.promotion_cutoff_seconds }}
+          HARD_FAIL_SECONDS: ${{ needs.prepare.outputs.hard_fail_seconds }}
+          ROLLBACK_BUDGET_SECONDS: ${{ needs.prepare.outputs.rollback_budget_seconds }}
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py deploy \
+            --target prod-hosted \
+            --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
+            --service prod-stack \
+            --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
+            --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
+            --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
+            --stage 50 \
+            --step "${{ needs.prepare.outputs.percent_50_step }}" \
+            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/50.json" \
+            --dry-run false \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
+            --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
+            --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
+            --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
+            --reuse-package \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-50"
+      - name: Deploy Prod 100%
         if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.resume_stage != 'complete' }}
         env:
           PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
@@ -1425,15 +1507,16 @@ jobs:
             --from-candidate-digest "${{ needs.prepare.outputs.from_candidate_digest }}" \
             --to-candidate-digest "${{ needs.prepare.outputs.candidate_digest }}" \
             --release-evidence-ref "${{ steps.deployable_ref.outputs.ref }}" \
-            --stage full \
-            --step "${{ needs.prepare.outputs.full_step }}" \
+            --stage 100 \
+            --step "${{ needs.prepare.outputs.percent_100_step }}" \
+            --promotion-evidence "$QWQ_PROD_ROLLOUT_EVIDENCE_ROOT/100.json" \
             --dry-run false \
             --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest/manifest.json" \
             --promotion-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + PROMOTION_CUTOFF_SECONDS ))" \
             --hard-deadline-epoch "$(( WORKFLOW_STARTED_EPOCH + HARD_FAIL_SECONDS ))" \
             --rollback-budget-seconds "$ROLLBACK_BUDGET_SECONDS" \
             --reuse-package \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-full"
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-100"
       - id: terminal_receipts
         name: Seal terminal Prod outcome from hosted receipt readbacks
         if: ${{ always() && needs.prepare.outputs.dry_run != 'true' }}
@@ -1458,9 +1541,11 @@ jobs:
           while IFS='=' read -r stage receipt_id; do
             [[ -n "$stage" && -n "$receipt_id" ]] || continue
             case "$stage" in
-              gray-initial) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-initial/report.json" ;;
-              carry-on) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-carry-on/report.json" ;;
-              full) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-full/report.json" ;;
+              canary) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-canary/report.json" ;;
+              5) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-5/report.json" ;;
+              20) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-20/report.json" ;;
+              50) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-50/report.json" ;;
+              100) report="$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-100/report.json" ;;
               *) echo "::error::GATE_BLOCK: hosted ledger contains an unknown stage"; exit 2 ;;
             esac
             readback="$INPUTS/${stage}-readback.json"
@@ -1517,9 +1602,11 @@ jobs:
           if not (normal or rollback) or state.get("artifact_digest") != artifact:
               raise SystemExit("GATE_BLOCK: hosted stage history is not bound to this candidate transaction")
           fields = (
-              ("gray-initial", "gray_initial_receipt_id"),
-              ("carry-on", "carry_on_receipt_id"),
-              ("full", "full_receipt_id"),
+              ("canary", "canary_receipt_id"),
+              ("5", "percent_5_receipt_id"),
+              ("20", "percent_20_receipt_id"),
+              ("50", "percent_50_receipt_id"),
+              ("100", "percent_100_receipt_id"),
           )
           for stage, field in fields:
               receipt_id = str(state.get(field) or "")
@@ -1648,7 +1735,7 @@ jobs:
     if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
     runs-on: [self-hosted, macOS, prod-release]
     environment: production
-    timeout-minutes: 15
+    timeout-minutes: 1500
     permissions:
       contents: read
       packages: read
@@ -1704,7 +1791,7 @@ jobs:
           python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
             --ref "${{ needs.prod_rollout.outputs.release_evidence_ref }}" \
             --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
-      - name: Fetch exact full-stage hosted receipt
+      - name: Fetch exact 100% stage hosted receipt
         run: |
           ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/release-evidence"
           RECEIPT_ID="$(python3 - "$ROOT/manifest.json" <<'PY'
@@ -1715,10 +1802,10 @@ jobs:
           manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
           if manifest.get("status") != "released":
               raise SystemExit("GATE_BLOCK: prod soak requires released terminal evidence")
-          stage = (((manifest.get("rolloutReceipt") or {}).get("evidence") or {}).get("stages") or {}).get("full") or {}
+          stage = (((manifest.get("rolloutReceipt") or {}).get("evidence") or {}).get("stages") or {}).get("100") or {}
           receipt_id = str(stage.get("receiptId") or "")
           if len(receipt_id) != 64:
-              raise SystemExit("GATE_BLOCK: released manifest lacks full hosted receipt")
+              raise SystemExit("GATE_BLOCK: released manifest lacks 100% hosted receipt")
           print(receipt_id)
           PY
           )"
@@ -1727,11 +1814,11 @@ jobs:
             --operation release-ledger-receipt \
             --service prod-stack \
             --receipt-id "$RECEIPT_ID" \
-            --output-path "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/full-readback.json"
+            --output-path "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/100-readback.json"
       - name: Observe authoritative soak window
         run: |
           python3 quwoquan_ops/ci/collect_prod_soak_observations.py \
-            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/full-readback.json" \
+            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/100-readback.json" \
             --service prod-stack \
             --prometheus-url "$PROMETHEUS_URL" \
             --alertmanager-url "$ALERTMANAGER_URL" \
@@ -1742,7 +1829,7 @@ jobs:
       - name: Verify expiring credential references without secret material
         run: |
           python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py \
-            --stage full \
+            --stage 100 \
             --evidence-output "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/credentials.json"
       - name: Bind reviewed mainline approval to released artifact
         env:
@@ -1760,7 +1847,7 @@ jobs:
           python3 quwoquan_ops/ci/render_release_lifecycle_receipts.py prod-soak-request \
             --manifest "$ROOT/manifest.json" \
             --service prod-stack \
-            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/full-readback.json" \
+            --full-readback "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/100-readback.json" \
             --slo-observation "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/slo.json" \
             --alerts-observation "$QWQ_OUTPUT_ROOT/env/repo/local/prod-soak/alerts.json" \
             --health-report "$QWQ_OUTPUT_ROOT/env/prod/runs/hosted-soak-health/report.json" \
@@ -2008,7 +2095,7 @@ jobs:
             --phase "gamma_local=${GAMMA_SECONDS}" \
             --phase "preprod_evidence=${PREPROD_SECONDS}" \
             --phase "prod_rollout_transaction=${PROD_SECONDS}" \
-            --note "Alpha/Beta/Gamma run in isolated fanout; Prod is one approved 5/25/100 transaction. Dry-run does not fabricate carry-on/full ledger state." \
+            --note "Alpha/Beta/Gamma run in isolated fanout; Prod is one approved canary/5/20/50/100 transaction. Dry-run validates canary only and does not fabricate later ledger state." \
             --note "${APPROVAL_EVIDENCE_REASON}" \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/ci-timing-summary.json" \
             --write-step-summary

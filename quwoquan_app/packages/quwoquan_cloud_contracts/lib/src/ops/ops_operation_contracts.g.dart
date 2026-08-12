@@ -1,11 +1,30 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 library;
 
 import '../operation_request_payload.dart';
 
 part '../generated/requests/ops/ops_operation_contracts.g.requests.g.dart';
+
+enum AppReleaseUpdateState {
+  none("none"),
+  available("available"),
+  required("required");
+
+  const AppReleaseUpdateState(this.wireName);
+
+  final String wireName;
+
+  static AppReleaseUpdateState fromWire(Object? value, String path) {
+    return switch (value) {
+      "none" => AppReleaseUpdateState.none,
+      "available" => AppReleaseUpdateState.available,
+      "required" => AppReleaseUpdateState.required,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
 
 enum StartupRecoveryAction {
   none("none"),
@@ -147,31 +166,47 @@ enum VisitTargetType {
 
 final class AppReleaseRecoveryView {
   const AppReleaseRecoveryView({
+    required this.platform,
     required this.latestVersion,
     required this.latestBuild,
-    this.updateUrl,
+    required this.minimumSupportedVersion,
+    required this.minimumSupportedBuild,
+    required this.updateState,
+    required this.updateUrl,
     required this.recoveryUrl,
   });
 
+  final String platform;
   final String latestVersion;
   final String latestBuild;
-  final String? updateUrl;
+  final String minimumSupportedVersion;
+  final String minimumSupportedBuild;
+  final AppReleaseUpdateState updateState;
+  final String updateUrl;
   final String recoveryUrl;
 
   factory AppReleaseRecoveryView.fromWire(Map<String, Object?> map, [String path = "AppReleaseRecoveryView"]) {
-    _rejectUnknownFields(map, const <String>{"latestVersion", "latestBuild", "updateUrl", "recoveryUrl"}, path);
+    _rejectUnknownFields(map, const <String>{"platform", "latestVersion", "latestBuild", "minimumSupportedVersion", "minimumSupportedBuild", "updateState", "updateUrl", "recoveryUrl"}, path);
     return AppReleaseRecoveryView(
+      platform: _requiredString(map["platform"], '$path.platform'),
       latestVersion: _requiredString(map["latestVersion"], '$path.latestVersion'),
       latestBuild: _requiredString(map["latestBuild"], '$path.latestBuild'),
-      updateUrl: map["updateUrl"] == null ? null : _requiredString(map["updateUrl"], '$path.updateUrl'),
+      minimumSupportedVersion: _requiredString(map["minimumSupportedVersion"], '$path.minimumSupportedVersion'),
+      minimumSupportedBuild: _requiredString(map["minimumSupportedBuild"], '$path.minimumSupportedBuild'),
+      updateState: AppReleaseUpdateState.fromWire(map["updateState"], '$path.updateState'),
+      updateUrl: _requiredString(map["updateUrl"], '$path.updateUrl'),
       recoveryUrl: _requiredString(map["recoveryUrl"], '$path.recoveryUrl'),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
+    "platform": platform,
     "latestVersion": latestVersion,
     "latestBuild": latestBuild,
-    if (updateUrl != null) "updateUrl": updateUrl!,
+    "minimumSupportedVersion": minimumSupportedVersion,
+    "minimumSupportedBuild": minimumSupportedBuild,
+    "updateState": updateState.wireName,
+    "updateUrl": updateUrl,
     "recoveryUrl": recoveryUrl,
   };
 }

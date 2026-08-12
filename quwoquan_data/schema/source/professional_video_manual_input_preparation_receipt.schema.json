@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_video_manual_input_preparation_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "preparationId",
+    "planDigest",
+    "preparedAt",
+    "operatorId",
+    "sourceRef",
+    "sourceSha256",
+    "sourceBytes",
+    "entityId",
+    "observedEntityId",
+    "sourcePageUrl",
+    "startMs",
+    "durationMs",
+    "transformation",
+    "syntheticFrames",
+    "bundleRef",
+    "videoRef",
+    "videoSha256",
+    "videoBytes",
+    "contactSheetRef",
+    "contactSheetSha256",
+    "safetyEvidenceSkeletonRef",
+    "safetyEvidenceSkeletonSha256",
+    "mediaProbe",
+    "executor",
+    "receiptDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.professional_video_manual_input_preparation_receipt"
+    },
+    "preparationId": {
+      "type": "string",
+      "pattern": "^video-manual-input-[0-9a-f]{16}$"
+    },
+    "planDigest": {"$ref": "#/$defs/sha256"},
+    "preparedAt": {"type": "string", "minLength": 1},
+    "operatorId": {"type": "string", "minLength": 1},
+    "sourceRef": {"$ref": "#/$defs/relativeRef"},
+    "sourceSha256": {"$ref": "#/$defs/sha256"},
+    "sourceBytes": {"type": "integer", "minimum": 1},
+    "entityId": {"type": "string", "minLength": 1},
+    "observedEntityId": {"type": "string", "minLength": 1},
+    "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+    "startMs": {"type": "integer", "minimum": 0},
+    "durationMs": {"type": "integer", "minimum": 3000, "maximum": 180000},
+    "transformation": {"type": "string", "minLength": 1},
+    "syntheticFrames": {"const": false},
+    "bundleRef": {"$ref": "#/$defs/relativeRef"},
+    "videoRef": {"$ref": "#/$defs/relativeRef"},
+    "videoSha256": {"$ref": "#/$defs/sha256"},
+    "videoBytes": {"type": "integer", "minimum": 1},
+    "contactSheetRef": {"$ref": "#/$defs/relativeRef"},
+    "contactSheetSha256": {"$ref": "#/$defs/sha256"},
+    "safetyEvidenceSkeletonRef": {"$ref": "#/$defs/relativeRef"},
+    "safetyEvidenceSkeletonSha256": {"$ref": "#/$defs/sha256"},
+    "mediaProbe": {
+      "$ref": "professional_video_safety_evidence.schema.json#/properties/mediaProbe"
+    },
+    "executor": {
+      "type": "object",
+      "required": ["tool", "version", "commandDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {"const": "ffmpeg"},
+        "version": {"type": "string", "minLength": 1},
+        "commandDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "receiptDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relativeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    }
+  }
+}

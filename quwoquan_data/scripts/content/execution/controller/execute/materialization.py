@@ -181,7 +181,9 @@ def ensure_execution_spec(
         )
 
         source_pool_targets = frozen_scale_source_pool_targets(
-            execution_id, content_type
+            execution_id,
+            content_type,
+            direct_selection=selection,
         )
     source_qualifier = None
     qualification_source_key = "qualifiedHomepageSource"
@@ -214,6 +216,11 @@ def ensure_execution_spec(
             required_workers=int(selection["requiredWorkers"]),
             partition_count=int(selection["partitionCount"]),
             capacity_plan_digest=str(selection["capacityPlanDigest"]),
+            worker_host_set_binding=(
+                dict(selection["workerHostSetBinding"])
+                if isinstance(selection.get("workerHostSetBinding"), dict)
+                else None
+            ),
             scale_source_pool=(
                 dict(selection["scaleSourcePool"])
                 if isinstance(selection.get("scaleSourcePool"), dict)

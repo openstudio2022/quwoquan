@@ -16,8 +16,6 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
         return "agent_compose"
     if not checks.get("baseDraftFidelity", {"passed": True})["passed"]:
         return "agent_compose"
-    if not checks.get("commercialNearCopy", {"passed": True})["passed"]:
-        return "agent_compose"
     if not checks.get("provenanceRewrite", {"passed": True})["passed"]:
         return "agent_compose"
     if not checks.get("routeCoverage", {"passed": True})["passed"]:

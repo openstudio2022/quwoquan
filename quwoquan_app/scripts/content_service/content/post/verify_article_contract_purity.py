@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 
+import re
 import sys
 from pathlib import Path
 
@@ -24,12 +25,7 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
-import re
-import sys
-import json
-from pathlib import Path
+from _common.paths import REPO_ROOT
 
 ROOT = REPO_ROOT
 POST_DTO_FILES = [
@@ -83,14 +79,10 @@ ARTICLE_SURFACE_VIEW_MAPPER = (
     / "quwoquan_app/lib/service/content_service/content/post/domain/"
     "content_surface_view_mapper.dart"
 )
-CONTENT_SCENARIO_FIXTURES = [
+CONTENT_OBJECT_BUILDER = (
     ROOT
-    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.json",
-    ROOT
-    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.lite.json",
-    ROOT
-    / "quwoquan_service/services/content-service/tests/support/contract_fixtures/scenarios/content_scenarios.gamma-curated.json",
-]
+    / "quwoquan_app/test/support/runtime/fixtures/object_scenario_builders.dart"
+)
 
 DEAD_ARTIFACTS = [
     ROOT / "quwoquan_app/lib/cloud/runtime/generated/content/article_block_wire_keys.g.dart",
@@ -117,20 +109,6 @@ def _field_block(text: str, field_name: str) -> str:
     )
     match = pattern.search(text)
     return match.group(0) if match else ""
-
-
-def _article_fixture_posts(path: Path) -> list[dict[str, object]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    seed_sets = payload.get("seedSets") or {}
-    discovery = seed_sets.get("content_discovery_core") or {}
-    posts = discovery.get("posts") or []
-    return [
-        item
-        for item in posts
-        if isinstance(item, dict)
-        and item.get("postType") == "articlePost"
-        and item.get("postId") == "fixture_article_001"
-    ]
 
 
 def main() -> int:
@@ -222,25 +200,18 @@ def main() -> int:
                 f"{ARTICLE_SURFACE_VIEW_MAPPER.relative_to(ROOT)}: publishedAt must not be flattened to createdAt"
             )
 
-    for path in CONTENT_SCENARIO_FIXTURES:
-        if not path.exists():
-            failures.append(f"missing article scenario fixture: {path.relative_to(ROOT)}")
-            continue
-        fixture_posts = _article_fixture_posts(path)
-        if not fixture_posts:
-            failures.append(
-                f"{path.relative_to(ROOT)}: fixture_article_001 article fixture missing"
-            )
-            continue
-        article = fixture_posts[0]
-        if not str(article.get("updatedAt") or "").strip():
-            failures.append(
-                f"{path.relative_to(ROOT)}: fixture_article_001 must keep explicit updatedAt"
-            )
-        if not str(article.get("publishedAt") or "").strip():
-            failures.append(
-                f"{path.relative_to(ROOT)}: fixture_article_001 must keep explicit publishedAt"
-            )
+    if not CONTENT_OBJECT_BUILDER.exists():
+        failures.append(
+            f"{CONTENT_OBJECT_BUILDER.relative_to(ROOT)}: content object builder missing"
+        )
+    else:
+        builder = CONTENT_OBJECT_BUILDER.read_text(encoding="utf-8")
+        for token in ("fixture_article_001", "'updatedAt'", "'publishedAt'"):
+            if token not in builder:
+                failures.append(
+                    f"{CONTENT_OBJECT_BUILDER.relative_to(ROOT)}: "
+                    f"article builder must retain {token}"
+                )
 
     for path in DEAD_ARTIFACTS:
         if path.exists():

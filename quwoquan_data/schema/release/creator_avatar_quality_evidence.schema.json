@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/schema/release/creator_avatar_quality_evidence.schema.json",
+  "title": "Creator avatar quality evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assetId",
+    "manifestAsset",
+    "processResult",
+    "qualityResult",
+    "checks",
+    "sourceEvidence",
+    "asset"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.creator_avatar_quality_evidence"},
+    "assetId": {"type": "string", "minLength": 1},
+    "manifestAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "sha256"],
+      "properties": {
+        "assetId": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "processResult": {"const": "completed"},
+    "qualityResult": {"const": "passed"},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "readable", "clarity", "safety"],
+      "properties": {
+        "format": {"const": "passed"},
+        "readable": {"const": "passed"},
+        "clarity": {"const": "passed"},
+        "safety": {"const": "passed"}
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "sha256"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "sha256", "bytes", "mimeType", "width", "height"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "mimeType": {"type": "string", "pattern": "^image/"},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

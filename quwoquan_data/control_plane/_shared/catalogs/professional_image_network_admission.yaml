@@ -1,0 +1,14 @@
+schema: quwoquan_data.professional_image_network_admission
+revision: professional-image-network-admission-v1
+syntheticDnsCidrs:
+  - 198.18.0.0/15
+allowedExactHosts:
+  - api.openverse.org
+  - commons.wikimedia.org
+  - upload.wikimedia.org
+  - live.staticflickr.com
+allowedHostSuffixes: []
+tls:
+  minimumVersion: TLSv1.2
+  systemTrustRequired: true
+  hostnameVerificationRequired: true

@@ -241,7 +241,21 @@ seam 的**识别**同样按结构事实，且不绑定命名：`transactional_ou
 
 **未标注不等于不发布。** 未标注是可见缺口，由 `quwoquan_ops/gate/verify_object_evidence_closure.py` 报 `contract.storage_publication_role_unannotated`，不得默认落到 `not_published`——默认到豁免侧会让「忘了标」和「确实不发布」变成同一个结果，而这正是子串判据的老毛病换了个形式。同理，声明本身也只表达**意图**：标了 `transactional_outbox` 不代表 relay 存在，实现侧仍按上节的事务句柄判据独立取证，声明与实现的缺失是两个独立缺口维度。
 
-## 10. 治理门面
+## 10. 对象模型版本与发布差异门禁
+
+每个独立对象只有一个内部 `major.minor`，由对象自己的 `object.yaml.model_version` 声明；缺省初始值为 `1.0`。`owned_entity` 与 `value_object` 继承聚合根版本，不另建版本。该版本只随 `object.yaml` 原始文档进入 ContractGraph，并由发布差异报告复述；禁止进入 HTTP/GraphQL 请求响应、App UI、路由、兼容握手或在线协商。
+
+发布门禁的基线只接受 hosted authority 返回的最后一个成功 `Prod full/100` immutable receipt readback，并逐字节校验 `contractGraphDigest`；工作区快照、手写 receipt、旧报告或任意 Git revision 都不能替代。比较规则为：
+
+- 新 query、新 optional command 字段、新 nullable/storage default 字段与新非唯一索引属于 compatible，required version 为上一基线 minor 加一；
+- GraphQL/query 删除或改名、类型变化、nullable 收紧、枚举收紧及授权语义变化属于 incompatible；
+- REST command request 删除或改名、类型/required 收紧、幂等语义或错误恢复变化属于 incompatible；
+- storage 主键/分区键、字段类型、无默认 required 字段、唯一性变化属于 incompatible；
+- 任一不兼容影响使整个对象 required version 为上一基线 major 加一且 minor 归零；无语义变化必须保持原版本。工具只计算、比对和阻断，不自动写回作者源。
+
+query/command 不兼容只有在受支持 App minimum window 已关闭、usage 为零且受影响 build 集合为空时才能准出。破坏性 storage 迁移固定为 `quiesced_atomic`：暂停对象 command、验证备份、执行迁移、原子切换唯一 reader/writer、回读后恢复；`dualRead` 与 `dualWrite` 必须为 false。差异报告与两类证据 schema 位于 `_schemas/domain_model_compatibility_report.schema.json`、`_schemas/client_contract_compatibility_window.schema.json` 与 `_schemas/quiesced_storage_migration_plan.schema.json`，执行入口为 `scripts/verify/contract_graph/verify_domain_model_compatibility.py`。
+
+## 11. 治理门面
 
 `make verify-service-architecture` 是统一门面，内部组合 metadata、路径反向映射、DDD/CQRS、配置四环境、拓扑、外部能力和测试目录门禁。专项脚本是门面的内部实现，不形成第二套人工流程。
 

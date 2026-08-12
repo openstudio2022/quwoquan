@@ -6,12 +6,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +30,17 @@ import (
 	httpadapter "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/adapters/inbound/http"
 	admissionapp "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
 	admissionmetrics "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/observability"
-	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/redisstore"
+	admissionredis "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/redisstore"
+	rollouthttp "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/adapters/inbound/http"
+	rolloutapp "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application"
+	rolloutnetworkcatalog "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/infrastructure/networkcatalog"
+	rolloutmetrics "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/infrastructure/observability"
+	rolloutredis "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/infrastructure/redisstore"
+	graphread "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/adapters/inbound/http"
+	ownerquery "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner"
+	registryinfra "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/registry"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -43,6 +56,13 @@ func run() error {
 	config, err := loadRuntimeConfig(serviceName, environment, configRoot)
 	if err != nil {
 		return fmt.Errorf("runtime config invalid: %w", err)
+	}
+	rolloutNetworkResolver, err := rolloutnetworkcatalog.Load(
+		config.Rollout.NetworkAttributeCatalog,
+		config.Rollout.Policy,
+	)
+	if err != nil {
+		return fmt.Errorf("rollout network attribute catalog invalid: %w", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName,
@@ -101,11 +121,15 @@ func run() error {
 		return fmt.Errorf("account security authority invalid: %w", err)
 	}
 
-	store, err := redisstore.New(config.redisConfig())
+	redisClient, err := admissionredis.NewClient(config.redisConfig())
+	if err != nil {
+		return fmt.Errorf("shared Redis client invalid: %w", err)
+	}
+	defer redisClient.Close()
+	store, err := admissionredis.NewWithClient(redisClient)
 	if err != nil {
 		return fmt.Errorf("shared admission store invalid: %w", err)
 	}
-	defer store.Close()
 	admission, err := admissionapp.NewService(
 		environment,
 		store,
@@ -114,6 +138,35 @@ func run() error {
 	)
 	if err != nil {
 		return fmt.Errorf("admission service invalid: %w", err)
+	}
+	assignmentStore, err := rolloutredis.New(redisClient)
+	if err != nil {
+		return fmt.Errorf("rollout assignment store invalid: %w", err)
+	}
+	allocationKey, err := rolloutapp.AllocationKey(config.Rollout.Enabled, os.LookupEnv)
+	if err != nil {
+		return fmt.Errorf("rollout allocation key invalid: %w", err)
+	}
+	rolloutEvaluator, err := rolloutapp.NewEvaluator(
+		config.Rollout.Policy,
+		allocationKey,
+		assignmentStore,
+		30*24*time.Hour,
+	)
+	if err != nil {
+		return fmt.Errorf("rollout evaluator invalid: %w", err)
+	}
+	minimumBuildExemptPaths, err := config.minimumBuildExemptPaths()
+	if err != nil {
+		return fmt.Errorf("minimum build exemptions invalid: %w", err)
+	}
+	minimumBuildMiddleware, err := rollouthttp.MinimumBuildMiddleware(
+		config.minimumBuildPolicy(),
+		minimumBuildExemptPaths,
+		newMinimumBuildMetrics(nil),
+	)
+	if err != nil {
+		return fmt.Errorf("minimum build middleware invalid: %w", err)
 	}
 
 	descriptors := admissionapp.AllOperationDescriptors()
@@ -124,33 +177,191 @@ func run() error {
 	if err := admissionapp.ValidateDescriptorOwners(descriptors); err != nil {
 		return err
 	}
+	var candidateOwnerRoutes []httpadapter.OwnerRoute
+	if config.Rollout.Enabled {
+		candidateOwnerRoutes, err = buildOwnerRoutes(config.CandidateUpstreams)
+		if err != nil {
+			return fmt.Errorf("candidate owner routes invalid: %w", err)
+		}
+	}
 	ownerProxy, err := httpadapter.NewOwnerProxy(httpadapter.OwnerProxyConfig{
 		Routes:               ownerRoutes,
+		CandidateRoutes:      candidateOwnerRoutes,
 		TrustedNetworkHeader: config.Edge.TrustedNetworkHeader,
 		ContractGraphSHA256:  operationsecurity.ContractGraphSHA256,
 	})
 	if err != nil {
 		return fmt.Errorf("owner proxy invalid: %w", err)
 	}
+	rolloutObserver := rolloutmetrics.NewMetrics(nil)
 
-	businessHandler := httpadapter.AdmissionMiddleware(
+	// Wrappers are applied inner-to-outer. The effective business sequence is:
+	// credential verification -> minimum build -> generated operation
+	// authorization -> shared admission -> rollout decision -> owner proxy.
+	var businessHandler http.Handler = ownerProxy
+	businessHandler = rollouthttp.Middleware(
+		rolloutEvaluator,
+		rolloutNetworkResolver,
+		config.Edge.TrustedNetworkHeader,
+		rolloutObserver,
+	)(businessHandler)
+	businessHandler = httpadapter.AdmissionMiddleware(
 		admission,
 		httpadapter.SubjectResolver{TrustedNetworkHeader: config.Edge.TrustedNetworkHeader},
-	)(ownerProxy)
-	businessHandler = rtauth.RequireGeneratedOperationAuthorization(descriptors)(businessHandler)
-	businessHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
+	)(businessHandler)
+	operationAuthorization, err := rtauth.OperationAuthorizationForRuntime(
+		descriptors,
+		environment,
+		os.LookupEnv,
+	)
+	if err != nil {
+		return fmt.Errorf("operation authorization boundary invalid: %w", err)
+	}
+	businessHandler = operationAuthorization(businessHandler)
+	businessHandler = rollouthttp.MinimumBuildForAuthenticatedClients(
+		minimumBuildMiddleware,
+		businessHandler,
+	)
+	credentialMiddleware := rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier:      accessVerifier,
 		DeviceTicketVerifier:     deviceVerifier,
 		OperatorOIDCVerifier:     operatorVerifier,
 		AccountSecurityAuthority: authority,
-	})(businessHandler)
+	})
+	businessHandler = credentialMiddleware(businessHandler)
 	businessHandler = httpadapter.PreserveCredentialTransport(businessHandler)
+
+	var graphRuntime *graphread.Runtime
+	var graphHandler http.Handler
+	if config.GraphQLRead.Enabled {
+		trustedPublicKeys := map[string]string{}
+		if err := json.Unmarshal(
+			[]byte(config.GraphQLRead.TrustedPublicKeysJSON),
+			&trustedPublicKeys,
+		); err != nil {
+			return fmt.Errorf("GraphQL trusted public keys invalid: %w", err)
+		}
+		signatureVerifier, err := registryinfra.NewEd25519SignatureVerifier(
+			trustedPublicKeys,
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL registry signature verifier invalid: %w", err)
+		}
+		registryLoader, err := registryinfra.NewSignedFileLoader(signatureVerifier)
+		if err != nil {
+			return fmt.Errorf("GraphQL signed registry loader invalid: %w", err)
+		}
+		stableContentOrigin, err := parseOrigin(config.Upstreams["content"])
+		if err != nil {
+			return fmt.Errorf("GraphQL stable content owner origin invalid: %w", err)
+		}
+		var candidateContentOrigin *url.URL
+		if config.Rollout.Enabled {
+			candidateContentOrigin, err = parseOrigin(config.CandidateUpstreams["content"])
+			if err != nil {
+				return fmt.Errorf("GraphQL candidate content owner origin invalid: %w", err)
+			}
+		}
+		stableSearchOrigin, err := parseOrigin(config.Upstreams["search"])
+		if err != nil {
+			return fmt.Errorf("GraphQL stable search owner origin invalid: %w", err)
+		}
+		var candidateSearchOrigin *url.URL
+		if config.Rollout.Enabled {
+			candidateSearchOrigin, err = parseOrigin(config.CandidateUpstreams["search"])
+			if err != nil {
+				return fmt.Errorf("GraphQL candidate search owner origin invalid: %w", err)
+			}
+		}
+		contentOwnerCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+			accessConfig,
+			serviceName,
+			[]string{ownerquery.ContentPostOwnerReadScope()},
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL content owner credentials invalid: %w", err)
+		}
+		contentOwnerExecutor, err := ownerquery.NewContentPostQueryExecutor(
+			stableContentOrigin,
+			candidateContentOrigin,
+			&http.Client{
+				Timeout: time.Duration(config.GraphQLRead.OwnerTimeoutMS) * time.Millisecond,
+			},
+			operationsecurity.ContractGraphSHA256,
+			contentOwnerCredentials,
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL content owner executor invalid: %w", err)
+		}
+		searchOwnerCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+			accessConfig,
+			serviceName,
+			[]string{ownerquery.SearchOwnerReadScope()},
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL search owner credentials invalid: %w", err)
+		}
+		searchOwnerAccountCredentials, err := rtauth.NewHS256ServiceAccountAuthorizationProvider(
+			accessConfig,
+			serviceName,
+			[]string{ownerquery.SearchOwnerReadScope()},
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL search owner account credentials invalid: %w", err)
+		}
+		searchOwnerExecutor, err := ownerquery.NewSearchPageQueryExecutor(
+			stableSearchOrigin,
+			candidateSearchOrigin,
+			&http.Client{
+				Timeout: time.Duration(config.GraphQLRead.OwnerTimeoutMS) * time.Millisecond,
+			},
+			operationsecurity.ContractGraphSHA256,
+			searchOwnerCredentials,
+			searchOwnerAccountCredentials,
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL search owner executor invalid: %w", err)
+		}
+		ownerExecutor, err := ownerquery.NewQueryExecutorRouter(
+			contentOwnerExecutor,
+			searchOwnerExecutor,
+		)
+		if err != nil {
+			return fmt.Errorf("GraphQL owner executor router invalid: %w", err)
+		}
+		graphRuntime, err = graphread.NewRuntime(context.Background(), graphread.Options{
+			Environment:     environment,
+			Config:          config.GraphQLRead,
+			RegistryLoader:  registryLoader,
+			OwnerExecutor:   ownerExecutor,
+			Admission:       admission,
+			Rollout:         rolloutEvaluator,
+			RolloutObserver: rolloutObserver,
+		})
+		if err != nil {
+			return fmt.Errorf("GraphQL read runtime invalid: %w", err)
+		}
+		graphHandler = graphread.RequestMetadataMiddleware(
+			config.Edge.TrustedNetworkHeader,
+			rolloutNetworkResolver,
+			graphRuntime.Handler(),
+		)
+		graphHandler = rollouthttp.MinimumBuildForAuthenticatedClients(
+			minimumBuildMiddleware,
+			graphHandler,
+		)
+		graphHandler = credentialMiddleware(graphHandler)
+	}
 
 	root := http.NewServeMux()
 	root.HandleFunc("GET /healthz", writeHealthy)
 	readiness := rthealth.NewChecker()
 	readiness.Register("admission_redis", admission.Ready)
+	readiness.Register("rollout_assignment_redis", rolloutEvaluator.Ready)
 	readiness.Register("account_security_authority", authority.CheckAccountSecurityAuthority)
+	if graphRuntime != nil {
+		readiness.Register("graphql_signed_registry", graphRuntime.Ready)
+	}
 	root.HandleFunc("GET /readyz", func(response http.ResponseWriter, request *http.Request) {
 		if result := readiness.Check(request.Context()); result.Status != "ok" {
 			writeUnavailable(response)
@@ -168,6 +379,9 @@ func run() error {
 		config.Edge.TrustedNetworkHeader,
 		realtimeProxy,
 	))
+	if graphHandler != nil {
+		root.Handle("/graphql", graphHandler)
+	}
 	root.Handle("/", businessHandler)
 
 	nodeID := envOrDefault("SERVICE_INSTANCE_ID", hostName())
@@ -241,6 +455,43 @@ func run() error {
 	}
 	log.Printf("api-edge listening on %s contractGraph=%s", server.Addr, operationsecurity.ContractGraphSHA256)
 	return rthttp.ListenAndServeGraceful(server, 15*time.Second)
+}
+
+type minimumBuildMetrics struct {
+	decisions *prometheus.CounterVec
+}
+
+func newMinimumBuildMetrics(registerer prometheus.Registerer) *minimumBuildMetrics {
+	if registerer == nil {
+		registerer = prometheus.DefaultRegisterer
+	}
+	metrics := &minimumBuildMetrics{
+		decisions: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "api_edge_minimum_build_decisions_total",
+				Help: "Minimum supported client build decisions at API Edge.",
+			},
+			[]string{"platform", "app_build", "mode", "reason", "would_block"},
+		),
+	}
+	registerer.MustRegister(metrics.decisions)
+	return metrics
+}
+
+func (metrics *minimumBuildMetrics) ObserveMinimumBuild(
+	platform, build, mode, reason string,
+	wouldBlock bool,
+) {
+	if metrics == nil {
+		return
+	}
+	metrics.decisions.WithLabelValues(
+		rolloutapp.NormalizeMetricValue(platform, "unknown"),
+		rolloutapp.NormalizeBuildMetricValue(build),
+		rolloutapp.NormalizeMetricValue(mode, "unknown"),
+		rolloutapp.NormalizeMetricValue(reason, "unknown"),
+		strconv.FormatBool(wouldBlock),
+	).Inc()
 }
 
 func buildOwnerRoutes(upstreams map[string]string) ([]httpadapter.OwnerRoute, error) {

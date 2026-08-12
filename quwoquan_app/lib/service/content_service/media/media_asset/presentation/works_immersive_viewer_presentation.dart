@@ -1,5 +1,26 @@
 part of 'works_immersive_viewer.dart';
 
+enum _WorksInternalFeedTerminal {
+  loading,
+  content,
+  canonicalEmpty,
+  blockingError,
+}
+
+final class _WorksInternalFeedAggregate {
+  const _WorksInternalFeedAggregate({
+    required this.terminal,
+    required this.posts,
+    this.blockingError,
+    this.emptyReason,
+  });
+
+  final _WorksInternalFeedTerminal terminal;
+  final List<ContentPostViewData> posts;
+  final Object? blockingError;
+  final ContentFeedEmptyReason? emptyReason;
+}
+
 extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   List<ContentPostViewData> _buildFeed() {
     if (_usesExternalFeed) {
@@ -37,12 +58,79 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       }
       return external;
     }
+    return _buildInternalFeedAggregate().posts;
+  }
+
+  _WorksInternalFeedAggregate _buildInternalFeedAggregate() {
+    final channelIds = _trackedFeedTabIds;
+    final feedStates = <String, AsyncValue<WorksViewerFeedSnapshot>>{
+      for (final channelId in channelIds)
+        channelId: ref.watch(worksViewerFeedProvider(channelId)),
+    };
+    final snapshots = <String, WorksViewerFeedSnapshot>{
+      for (final entry in feedStates.entries) entry.key: ?entry.value.value,
+    };
+    final posts = _buildInternalFeedPosts(snapshots);
+    if (posts.isNotEmpty) {
+      return _WorksInternalFeedAggregate(
+        terminal: _WorksInternalFeedTerminal.content,
+        posts: posts,
+      );
+    }
+
+    for (final entry in feedStates.entries) {
+      final state = entry.value;
+      final error = state.hasError ? state.error : state.value?.blockingError;
+      if (error != null) {
+        return _WorksInternalFeedAggregate(
+          terminal: _WorksInternalFeedTerminal.blockingError,
+          posts: posts,
+          blockingError: error,
+        );
+      }
+    }
+
+    if (feedStates.values.any(
+      (state) => state.isLoading || (state.value?.isLoading ?? false),
+    )) {
+      return _WorksInternalFeedAggregate(
+        terminal: _WorksInternalFeedTerminal.loading,
+        posts: posts,
+      );
+    }
+
+    final emptyReasons = <ContentFeedEmptyReason>[
+      for (final channelId in channelIds) ?snapshots[channelId]?.emptyReason,
+    ];
+    if (channelIds.isNotEmpty && emptyReasons.length == channelIds.length) {
+      final reason =
+          emptyReasons.contains(ContentFeedEmptyReason.noActiveRelease)
+          ? ContentFeedEmptyReason.noActiveRelease
+          : emptyReasons.first;
+      return _WorksInternalFeedAggregate(
+        terminal: _WorksInternalFeedTerminal.canonicalEmpty,
+        posts: posts,
+        emptyReason: reason,
+      );
+    }
+
+    return _WorksInternalFeedAggregate(
+      terminal: _WorksInternalFeedTerminal.blockingError,
+      posts: posts,
+      blockingError: StateError(
+        'Works feed completed without content or a canonical empty reason.',
+      ),
+    );
+  }
+
+  List<ContentPostViewData> _buildInternalFeedPosts(
+    Map<String, WorksViewerFeedSnapshot> snapshots,
+  ) {
     if (_isPremiumStreamSource) {
       // 精品流单路数据源（B3）：premium 频道经服务端 premium_stream fail-closed
       // 池召回（recallPath=premium_pool）；池空返回空列表即空态，不混入浏览流。
       final premium =
-          ref.watch(worksViewerFeedProvider('premium')).value?.items ??
-          const <ContentPostViewData>[];
+          snapshots['premium']?.items ?? const <ContentPostViewData>[];
       final filterTypes = _effectiveFilterContentTypes;
       if (filterTypes.isEmpty) {
         return premium;
@@ -63,12 +151,10 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
           })
           .toList(growable: false);
     }
-    final photos =
-        ref.watch(worksViewerFeedProvider('photo')).value?.items ?? [];
-    final videos =
-        ref.watch(worksViewerFeedProvider('video')).value?.items ?? [];
+    final photos = snapshots['photo']?.items ?? const <ContentPostViewData>[];
+    final videos = snapshots['video']?.items ?? const <ContentPostViewData>[];
     final articles =
-        ref.watch(worksViewerFeedProvider('article')).value?.items ?? [];
+        snapshots['article']?.items ?? const <ContentPostViewData>[];
 
     final filterTypes = _effectiveFilterContentTypes;
     if (filterTypes.contains('image') && filterTypes.length == 1) return photos;

@@ -11,6 +11,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from content.release.canonical.object_source_identity import (
+    source_identity_digest,
+    source_identity_set,
+)
+from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.model import ReleaseKind
 from core.schema import assert_valid
 from core.source_digest import (
@@ -30,6 +35,30 @@ _SOURCE_IDENTITY_FIELDS = (
     "sourceDigest",
     "entityCatalogDigest",
 )
+_SOURCE_IDENTITY_SET_FIELDS = ("sourceIdentities", "sourceIdentitySetDigest")
+
+
+def _frozen_milestone_source_digest(value: object) -> str:
+    """Validate historical frozen bytes without rewriting their input list."""
+
+    if not isinstance(value, Mapping) or set(value) != {
+        "algorithm",
+        "digest",
+        "inputs",
+    }:
+        raise ReleaseHeaderError("milestone sourceDigest document is invalid")
+    digest = str(value.get("digest") or "")
+    inputs = value.get("inputs")
+    if (
+        value.get("algorithm") != "sha256"
+        or not digest.startswith("sha256:")
+        or len(digest) != 71
+        or not isinstance(inputs, list)
+        or not inputs
+        or any(not str(item or "").strip() for item in inputs)
+    ):
+        raise ReleaseHeaderError("milestone sourceDigest document is invalid")
+    return digest
 
 
 def validate_release_header(
@@ -38,10 +67,34 @@ def validate_release_header(
     label: str = "release header",
 ) -> dict[str, Any]:
     """Validate schema shape plus lifecycle and source-identity relations."""
+    if isinstance(value, Mapping) and any(
+        field in value for field in _SOURCE_IDENTITY_FIELDS
+    ) and any(field in value for field in _SOURCE_IDENTITY_SET_FIELDS):
+        raise ReleaseHeaderError(
+            f"{label} scalar and set source identity modes are mutually exclusive"
+        )
+    if (
+        isinstance(value, Mapping)
+        and any(field in value for field in _SOURCE_IDENTITY_SET_FIELDS)
+        and value.get("milestone") is None
+        and (
+            value.get("targetEnvironment") is None
+            or value.get("releaseClass") != ReleaseClass.RESEARCH.value
+            or value.get("productLifecycleState")
+            != ProductLifecycleState.RESEARCH.value
+            or value.get("releaseMode") != ReleaseClass.RESEARCH.value
+        )
+    ):
+        raise ReleaseHeaderError(
+            f"{label} source identity set requires a research pool release"
+        )
     if (
         isinstance(value, Mapping)
         and value.get("releaseKind") == ReleaseKind.EMPTY_BASELINE.value
-        and any(field in value for field in _SOURCE_IDENTITY_FIELDS)
+        and any(
+            field in value
+            for field in (*_SOURCE_IDENTITY_FIELDS, *_SOURCE_IDENTITY_SET_FIELDS)
+        )
     ):
         raise ReleaseHeaderError(
             f"{label} empty baseline must not carry content source identity"
@@ -64,6 +117,88 @@ def validate_release_header(
     if release_class.value != lifecycle.value:
         raise ReleaseHeaderError(
             f"{label} releaseClass must equal productLifecycleState"
+        )
+    target_environment = document.get("targetEnvironment")
+    milestone = document.get("milestone")
+    release_mode = document.get("releaseMode")
+    if target_environment is not None or milestone is not None:
+        if release_mode != release_class.value:
+            raise ReleaseHeaderError(
+                f"{label} releaseMode/releaseClass are inconsistent"
+            )
+        counts = document.get("counts")
+        if not isinstance(counts, Mapping) or int(counts.get("total") or 0) != sum(
+            int(counts.get(content_type) or 0)
+            for content_type in ("article", "image", "video")
+        ):
+            raise ReleaseHeaderError(f"{label} carrier counts are inconsistent")
+        contents = document.get("contents")
+        authors = document.get("authors")
+        if not isinstance(contents, list) or len(contents) != int(
+            counts.get("total") or 0
+        ):
+            raise ReleaseHeaderError(f"{label} contents do not match counts.total")
+        content_ids: set[str] = set()
+        post_refs: set[str] = set()
+        content_source_bindings: list[tuple[str, str]] = []
+        for item in contents:
+            if not isinstance(item, Mapping):
+                raise ReleaseHeaderError(f"{label} content entry is invalid")
+            content_id = str(item.get("contentId") or "").strip()
+            post_ref = str(item.get("postRef") or "").strip()
+            execution_id = str(item.get("executionId") or "").strip()
+            identity_digest = str(
+                item.get("sourceIdentityDigest") or ""
+            ).strip()
+            version = item.get("version")
+            if (
+                not content_id
+                or not post_ref
+                or not execution_id
+                or not identity_digest.startswith("sha256:")
+                or not isinstance(version, int)
+                or isinstance(version, bool)
+                or version < 1
+                or content_id in content_ids
+                or post_ref in post_refs
+            ):
+                raise ReleaseHeaderError(f"{label} content entry is invalid")
+            content_ids.add(content_id)
+            post_refs.add(post_ref)
+            content_source_bindings.append((execution_id, identity_digest))
+        if not isinstance(authors, list):
+            raise ReleaseHeaderError(f"{label} authors must be an array")
+        author_ids: set[str] = set()
+        for item in authors:
+            if not isinstance(item, Mapping):
+                raise ReleaseHeaderError(f"{label} author entry is invalid")
+            author_id = str(item.get("authorId") or "").strip()
+            creator_ref = str(item.get("creatorRef") or "").strip()
+            version = item.get("version")
+            if (
+                not author_id
+                or not creator_ref
+                or not isinstance(version, int)
+                or isinstance(version, bool)
+                or version < 1
+                or author_id in author_ids
+            ):
+                raise ReleaseHeaderError(f"{label} author entry is invalid")
+            author_ids.add(author_id)
+    elif any(
+        key in document
+        for key in (
+            "releaseMode",
+            "poolDigest",
+            "counts",
+            "contents",
+            "authors",
+            "buildResult",
+            "milestoneTargets",
+        )
+    ):
+        raise ReleaseHeaderError(
+            f"{label} pool selection fields require targetEnvironment or milestone"
         )
 
     authorization_ids = document.get("authorizationRequiredAssetIds")
@@ -95,12 +230,19 @@ def validate_release_header(
     if not isinstance(execution_ids, list):
         raise ReleaseHeaderError(f"{label} executionIds must be an array")
     present_identity = {field for field in _SOURCE_IDENTITY_FIELDS if field in document}
+    present_identity_set = {
+        field for field in _SOURCE_IDENTITY_SET_FIELDS if field in document
+    }
     if release_kind is ReleaseKind.EMPTY_BASELINE:
         if "reviewedClosureAdoption" in document:
             raise ReleaseHeaderError(
                 f"{label} empty baseline cannot carry adoption provenance"
             )
-        if present_identity:
+        if target_environment is not None:
+            raise ReleaseHeaderError(
+                f"{label} empty baseline cannot carry an environment selection"
+            )
+        if present_identity or present_identity_set:
             raise ReleaseHeaderError(
                 f"{label} empty baseline must not carry content source identity"
             )
@@ -117,24 +259,125 @@ def validate_release_header(
             )
         return document
 
-    if present_identity != set(_SOURCE_IDENTITY_FIELDS):
-        raise ReleaseHeaderError(f"{label} content source identity is incomplete")
     if not execution_ids:
         raise ReleaseHeaderError(f"{label} content release requires executionIds")
     source_documents = document.get("sourceDigests")
-    if not isinstance(source_documents, list) or len(source_documents) != 1:
+    if not isinstance(source_documents, list) or not source_documents:
         raise ReleaseHeaderError(
-            f"{label} content release requires exactly one sourceDigest"
+            f"{label} content release requires sourceDigests"
         )
     try:
-        frozen_digest = SourceDigest.from_document(source_documents[0]).digest
+        identity_set_mode = bool(present_identity_set)
+        frozen_digests = tuple(
+            (
+                _frozen_milestone_source_digest(item)
+                if identity_set_mode
+                else SourceDigest.from_document(item).digest
+            )
+            for item in source_documents
+        )
+        if frozen_digests != tuple(sorted(set(frozen_digests))):
+            raise ReleaseHeaderError(
+                f"{label} sourceDigests must be sorted and unique"
+            )
+        if identity_set_mode:
+            if present_identity_set != set(_SOURCE_IDENTITY_SET_FIELDS):
+                raise ReleaseHeaderError(
+                    f"{label} source identity set is incomplete"
+                )
+            if not (
+                milestone is not None
+                or (
+                    target_environment is not None
+                    and release_class is ReleaseClass.RESEARCH
+                    and release_mode == ReleaseClass.RESEARCH.value
+                )
+            ):
+                raise ReleaseHeaderError(
+                    f"{label} source identity set requires a research pool release"
+                )
+            raw_identities = document.get("sourceIdentities")
+            if not isinstance(raw_identities, list) or not raw_identities:
+                raise ReleaseHeaderError(
+                    f"{label} sourceIdentities must be an array"
+                )
+            expanded: list[dict[str, str]] = []
+            identity_bindings: set[tuple[str, str]] = set()
+            for raw in raw_identities:
+                if not isinstance(raw, Mapping):
+                    raise ReleaseHeaderError(
+                        f"{label} source identity entry is invalid"
+                    )
+                raw_execution_ids = raw.get("executionIds")
+                if not isinstance(raw_execution_ids, list):
+                    raise ReleaseHeaderError(
+                        f"{label} source identity executionIds are invalid"
+                    )
+                digest = source_identity_digest(raw)
+                for execution_id in raw_execution_ids:
+                    normalized_id = str(execution_id or "").strip()
+                    if raw.get("identityKind") == "legacy_canonical_migration":
+                        expanded.append(
+                            {
+                                "identityKind": "legacy_canonical_migration",
+                                "executionId": normalized_id,
+                                "sourceDigest": str(raw.get("sourceDigest") or ""),
+                                "canonicalObjectDigest": str(
+                                    raw.get("canonicalObjectDigest") or ""
+                                ),
+                                "migrationEvidenceDigest": str(
+                                    raw.get("migrationEvidenceDigest") or ""
+                                ),
+                            }
+                        )
+                    else:
+                        expanded.append({
+                            "executionId": normalized_id,
+                            "sourceRevision": str(raw.get("sourceRevision") or ""),
+                            "sourceDigest": str(raw.get("sourceDigest") or ""),
+                            "entityCatalogDigest": str(
+                                raw.get("entityCatalogDigest") or ""
+                            ),
+                        })
+                    identity_bindings.add((normalized_id, digest))
+            expected_identities, expected_set_digest = source_identity_set(expanded)
+            if (
+                raw_identities != expected_identities
+                or document.get("sourceIdentitySetDigest") != expected_set_digest
+                or sorted(execution_ids)
+                != sorted({row["executionId"] for row in expanded})
+                or set(content_source_bindings) - identity_bindings
+                or set(frozen_digests)
+                != {str(row["sourceDigest"]) for row in expected_identities}
+            ):
+                raise ReleaseHeaderError(
+                    f"{label} source identity set closure drifted"
+                )
+            return _validate_reviewed_adoption(document, label=label)
+        if present_identity != set(_SOURCE_IDENTITY_FIELDS):
+            raise ReleaseHeaderError(
+                f"{label} content source identity is incomplete"
+            )
+        if len(frozen_digests) != 1:
+            raise ReleaseHeaderError(
+                f"{label} content release requires exactly one sourceDigest"
+            )
+        frozen_digest = frozen_digests[0]
         source_digest = str(document["sourceDigest"])
         entity_catalog_digest = str(document["entityCatalogDigest"])
         expected_revision = content_source_revision(
             source_digest=source_digest,
             entity_catalog_digest=entity_catalog_digest,
         )
-    except (KeyError, SourceDigestError, TypeError, ValueError) as exc:
+    except ReleaseHeaderError:
+        raise
+    except (
+        KeyError,
+        ObjectTransactionError,
+        SourceDigestError,
+        TypeError,
+        ValueError,
+    ) as exc:
         raise ReleaseHeaderError(f"{label} content source identity is invalid") from exc
     if source_digest != frozen_digest:
         raise ReleaseHeaderError(
@@ -144,6 +387,14 @@ def validate_release_header(
         raise ReleaseHeaderError(
             f"{label} sourceRevision does not match sourceDigest/entityCatalogDigest"
         )
+    return _validate_reviewed_adoption(document, label=label)
+
+
+def _validate_reviewed_adoption(
+    document: dict[str, Any],
+    *,
+    label: str,
+) -> dict[str, Any]:
     adoption = document.get("reviewedClosureAdoption")
     if adoption is not None:
         if not isinstance(adoption, Mapping):

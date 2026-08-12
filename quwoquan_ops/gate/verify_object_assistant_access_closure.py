@@ -316,8 +316,8 @@ def validate_privacy_coupling(
 
 SEARCH_REGISTRY_RELATIVE = "quwoquan_service/contracts/metadata/_shared/search_objects.yaml"
 SEARCH_ACCESS_RELATIVE = (
-    "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/"
-    "infrastructure/searchclient/assistant_object_access.go"
+    "quwoquan_service/services/assistant-service/generated/assistant/assistant_session/"
+    "assistant_search_access.g.go"
 )
 
 
@@ -368,14 +368,14 @@ def go_literal_sets(repo_root: Path) -> dict[str, set[str]]:
         raise ScanError(f"missing app_search allowlist: {path}")
     body = path.read_text(encoding="utf-8")
     found: dict[str, set[str]] = {}
-    for name in ("assistantReadableObjectTypes", "assistantCitableObjectTypes"):
+    for name in ("AssistantSearchReadableObjectTypes", "AssistantSearchCitableObjectTypes"):
         block = re.search(
-            rf"{name}\s*=\s*map\[string\]bool\{{(.*?)\n\t\}}", body, re.DOTALL
+            rf"{name}\s*=\s*\[\]string\{{(.*?)\}}", body, re.DOTALL
         )
         if not block:
             raise ScanError(f"{path}: {name} literal not found")
         found[name] = set(
-            re.findall(r'"([a-z][a-z0-9_.]*)":\s*true', block.group(1))
+            re.findall(r'"([a-z][a-z0-9_.]*)"', block.group(1))
         )
         if not found[name]:
             raise ScanError(f"{path}: {name} parsed as empty")
@@ -389,8 +389,8 @@ def validate_search_exposure(
     literals = go_literal_sets(repo_root)
     failures: list[str] = []
     for name, expected in (
-        ("assistantReadableObjectTypes", readable),
-        ("assistantCitableObjectTypes", citable),
+        ("AssistantSearchReadableObjectTypes", readable),
+        ("AssistantSearchCitableObjectTypes", citable),
     ):
         actual = literals[name]
         for extra in sorted(actual - expected):

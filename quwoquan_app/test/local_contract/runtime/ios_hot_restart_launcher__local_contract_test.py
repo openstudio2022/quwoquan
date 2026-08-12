@@ -4,6 +4,7 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 
 APP_DIR = Path(__file__).resolve().parents[3]
@@ -12,7 +13,9 @@ sys.path.insert(0, str(APP_DIR / "scripts/device"))
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_ios_hot_restart import (
     _count_native_launches_since,
+    _terminate_stale_device_runtime,
     cold_startup_terminal_observed,
+    flutter_resident_ready_for_hot_restart,
 )
 
 
@@ -74,7 +77,14 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self.assertIn("--dart-define", source)
         self.assertIn('export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"', source)
         self.assertNotIn('stackctl.py" up', source)
-        self.assertIn('app-debug-preflight --target "$QWQ_LAUNCH_TARGET"', source)
+        self.assertIn(
+            'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"',
+            source,
+        )
+        self.assertIn(
+            '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
+            source,
+        )
 
     def test_hot_restart_smoke_covers_both_surfaces_and_three_restarts(self) -> None:
         source = HOT_RESTART.read_text(encoding="utf-8")
@@ -86,10 +96,54 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self.assertIn('default=3', source)
         self.assertIn('range(args.hot_restart_count)', source)
         self.assertIn('_terminate_stale_device_runtime(', source)
-        self.assertIn('device_id in command', source)
-        self.assertIn('frontend_server.dart.snapshot', source)
+        self.assertNotIn('["ps", "-axo", "pid=,command="]', source)
+        self.assertNotIn('is_workspace_frontend_server', source)
         self.assertIn("extract_dart_startup_attempts", source)
         self.assertIn("nativeDidFinishLaunchingCount", source)
+
+    def test_stale_cleanup_is_scoped_to_the_target_simulator_bundle(self) -> None:
+        with patch(
+            "verify_ios_hot_restart.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, "", ""),
+        ) as run:
+            result = _terminate_stale_device_runtime(
+                "SIMULATOR-UDID",
+                "com.example.quwoquanApp",
+            )
+
+        run.assert_called_once_with(
+            [
+                "xcrun",
+                "simctl",
+                "terminate",
+                "SIMULATOR-UDID",
+                "com.example.quwoquanApp",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result["cleanupScope"], "simulator_bundle_only")
+        self.assertTrue(result["terminatedNativeApp"])
+        self.assertEqual(result["terminatedFlutterResidentPids"], [])
+        self.assertEqual(result["terminatedFrontendServerPids"], [])
+
+    def test_hot_restart_waits_for_flutter_resident_command_reader(self) -> None:
+        self.assertFalse(
+            flutter_resident_ready_for_hot_restart(
+                b"QWQ_APP_STARTUP_SEQUENCE phase=router_shell_mounted\n"
+            )
+        )
+        self.assertFalse(
+            flutter_resident_ready_for_hot_restart(
+                b"Flutter run key commands.\n"
+            )
+        )
+        self.assertTrue(
+            flutter_resident_ready_for_hot_restart(
+                b"Flutter run key commands.\nR Hot restart.\n"
+            )
+        )
 
     def test_preflight_json_is_typed_and_contains_no_endpoint_values(self) -> None:
         result = subprocess.run(

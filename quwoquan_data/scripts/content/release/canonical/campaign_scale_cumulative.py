@@ -26,7 +26,32 @@ from content.release.canonical.research_scale_predecessor import (
 from core.release_layout import payload_digest, payload_file
 
 SCALE_INTENTS = {"M100": "m100", "M1000": "m1000", "M10000": "m10000"}
-WALL_CLOCK_BUDGET_SECONDS = {"M100": None, "M1000": 259200, "M10000": 604800}
+WALL_CLOCK_BUDGET_SECONDS = {"M100": None, "M1000": None, "M10000": 604800}
+
+
+def _source_identity_by_execution(
+    header: Mapping[str, Any],
+) -> dict[str, tuple[str, str, str]]:
+    rows = header.get("sourceIdentities")
+    if isinstance(rows, list):
+        result: dict[str, tuple[str, str, str]] = {}
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            identity = (
+                str(row.get("sourceRevision") or ""),
+                str(row.get("sourceDigest") or ""),
+                str(row.get("entityCatalogDigest") or ""),
+            )
+            for execution_id in row.get("executionIds") or []:
+                result[str(execution_id)] = identity
+        return result
+    identity = (
+        str(header.get("sourceRevision") or ""),
+        str(header.get("sourceDigest") or ""),
+        str(header.get("entityCatalogDigest") or ""),
+    )
+    return {str(execution_id): identity for execution_id in header["executionIds"]}
 
 
 def release_refs_by_carrier(release: Path) -> dict[str, set[str]]:
@@ -64,13 +89,8 @@ def scale_context(
     scale = str(target_scale or "").strip().upper()
     if scale not in SCALE_INTENTS:
         raise CampaignScaleEvidenceError(f"unsupported campaign scale: {scale}")
+    current_ids = {str(plan["executionIds"][carrier]) for carrier in CARRIERS}
     source_revision = campaign_source_revision(plan)
-    if (
-        header.get("sourceRevision") != source_revision
-        or header.get("sourceDigest") != plan.get("sourceDigest")
-        or header.get("entityCatalogDigest") != plan.get("entityCatalogDigest")
-    ):
-        raise CampaignScaleEvidenceError("release source identity differs from campaign plan")
     try:
         predecessor, carried_counts = load_predecessor_promotion(
             predecessor_promotion_path,
@@ -82,7 +102,6 @@ def scale_context(
         )
     except ResearchScalePredecessorError as exc:
         raise CampaignScaleEvidenceError(str(exc)) from exc
-    current_ids = {str(plan["executionIds"][carrier]) for carrier in CARRIERS}
     predecessor_ids: set[str] = set()
     predecessor_refs = {carrier: set() for carrier in CARRIERS}
     if predecessor is not None:
@@ -96,17 +115,24 @@ def scale_context(
             label=f"predecessor research release:{predecessor['releaseId']}",
         )
         validate_release_header(predecessor_header, label="predecessor research release")
-        predecessor_source_digests = predecessor_header.get("sourceDigests")
+        predecessor_identity_matches = (
+            predecessor_header.get("sourceIdentities")
+            == predecessor.get("sourceIdentities")
+            and predecessor_header.get("sourceIdentitySetDigest")
+            == predecessor.get("sourceIdentitySetDigest")
+            if isinstance(predecessor.get("sourceIdentities"), list)
+            else (
+                (
+                    str(predecessor["sourceRevision"]),
+                    str(predecessor["sourceDigest"]),
+                    str(predecessor["entityCatalogDigest"]),
+                )
+                in set(_source_identity_by_execution(predecessor_header).values())
+            )
+        )
         if (
             payload_digest(predecessor_release) != predecessor["manifestDigest"]
-            or predecessor_header.get("sourceRevision") != source_revision
-            or predecessor_header.get("sourceDigest") != plan.get("sourceDigest")
-            or predecessor_header.get("entityCatalogDigest")
-            != plan.get("entityCatalogDigest")
-            or not isinstance(predecessor_source_digests, list)
-            or len(predecessor_source_digests) != 1
-            or predecessor_source_digests[0].get("digest")
-            != plan.get("sourceDigest")
+            or not predecessor_identity_matches
         ):
             raise CampaignScaleEvidenceError("predecessor release identity drift")
         predecessor_ids = {str(value) for value in predecessor_header["executionIds"]}
@@ -117,9 +143,12 @@ def scale_context(
         ):
             raise CampaignScaleEvidenceError("predecessor unique object count drift")
     release_ids = {str(value) for value in header.get("executionIds") or []}
-    if current_ids & predecessor_ids or release_ids != current_ids | predecessor_ids:
+    if (
+        current_ids & predecessor_ids
+        or not predecessor_ids.issubset(release_ids)
+    ):
         raise CampaignScaleEvidenceError(
-            "release executionIds must equal predecessor carried plus current four lanes"
+            "release executionIds must preserve the predecessor milestone cohort"
         )
     return (
         scale,
@@ -139,6 +168,7 @@ def validate_cumulative_lanes(
     target_scale: str,
     predecessor_counts: Mapping[str, int],
     predecessor_refs: Mapping[str, set[str]],
+    release_refs: Mapping[str, set[str]],
     output_root: Path,
 ) -> dict[str, list[str]]:
     carrier_admission = {
@@ -182,10 +212,9 @@ def validate_cumulative_lanes(
             or int(lane["predecessorCarriedCount"]) != carried_count
             or int(lane["newFinalizedCount"]) != len(refs)
             or int(lane["totalUniqueFinalizedCount"])
-            != carried_count + len(refs)
-            or int(row.get("objectCount") or 0) != carried_count + len(refs)
+            != int(row.get("objectCount") or 0)
             or int(row.get("researchAcceptedCount") or 0)
-            != carried_count + len(refs)
+            != int(row.get("objectCount") or 0)
         ):
             raise CampaignScaleEvidenceError(
                 f"{carrier} campaign cumulative count/identity drift"

@@ -1,9 +1,8 @@
 description: 账号助手任务投影视图。
 fields:
 - {name: accountId, source: accountId, type: string, constraints: [PK, NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
-- {name: lastLearningFactId, source: lastLearningFactId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
-- {name: lastSubscriptionId, source: lastSubscriptionId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
-- {name: checkpoint, source: checkpoint, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: subscriptionIds, source: subscriptionIds, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
+- {name: sourceSkillIds, source: sourceSkillIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 types:
   ListAssistantTasksQuery:
     description: 读取当前账号任务投影的有界可选状态查询。
@@ -11,7 +10,7 @@ types:
     - {name: limit, source: limit, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: status, source: status, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
   AssistantTaskItemView:
-    description: 一项由事实投影出的助手任务。
+    description: 一项由 owner SkillSubscription 与 active SkillCatalog 联邦派生的日程任务。
     fields:
     - {name: taskId, source: taskId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: title, source: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}

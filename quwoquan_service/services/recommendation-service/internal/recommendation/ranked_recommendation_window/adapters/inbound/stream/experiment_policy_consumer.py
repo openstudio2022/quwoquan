@@ -2,9 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import math
 import threading
+import time
 from typing import Any
 
+from ....application.experiment_policy_stream import (
+    ExperimentPolicyDependencyUnavailable,
+    ExperimentPolicyStore,
+    ExperimentPolicyStream,
+    ExperimentPolicyStreamRecord,
+)
 from ....domain.experiment_policy import (
     EXPERIMENT_ID,
     ExperimentAssignments,
@@ -14,26 +22,20 @@ from ....domain.experiment_policy import (
 )
 
 
-STREAM = "events.ops.experiment_policy_activated"
-CONSUMER_GROUP = "recommendation-service"
-DLQ = "events.ops.experiment_policy_activated.recommendation.dlq"
-RETENTION_SECONDS = 7 * 24 * 60 * 60
-
-
 class ExperimentPolicyConsumer:
     def __init__(
         self,
         *,
-        redis_client: Any,
-        store: Any,
+        stream: ExperimentPolicyStream,
+        store: ExperimentPolicyStore,
         assignments: ExperimentAssignments,
         consumer: str,
     ) -> None:
-        if redis_client is None or store is None or assignments is None:
+        if stream is None or store is None or assignments is None:
             raise ValueError(
-                "recommendation Experiment policy consumer requires Redis, store and assignments"
+                "recommendation Experiment policy consumer requires stream, store and assignments"
             )
-        self._redis = redis_client
+        self._stream = stream
         self._store = store
         self._assignments = assignments
         self._consumer = consumer.strip() or "recommendation-experiment-policy"
@@ -43,50 +45,69 @@ class ExperimentPolicyConsumer:
         self._last_failure: Exception | None = None
 
     def ensure_group(self) -> None:
-        try:
-            self._redis.xgroup_create(STREAM, CONSUMER_GROUP, id="0-0", mkstream=True)
-        except Exception as error:
-            if "BUSYGROUP" not in str(error):
-                raise
+        self._stream.ensure_consumer_group()
 
     def process_once(self) -> int:
         self.ensure_group()
-        claimed = self._redis.xautoclaim(
-            STREAM,
-            CONSUMER_GROUP,
-            self._consumer,
-            min_idle_time=30_000,
-            start_id="0-0",
-            count=50,
-        )
-        claimed_entries = (
-            claimed[1]
-            if isinstance(claimed, (list, tuple)) and len(claimed) > 1
-            else []
-        )
-        fresh = self._redis.xreadgroup(
-            CONSUMER_GROUP,
-            self._consumer,
-            {STREAM: ">"},
-            count=50,
-        )
-        messages: list[tuple[str, dict[str, str]]] = []
-        for stream_id, fields in claimed_entries:
-            messages.append((_text(stream_id), _values(fields)))
-        for _stream, entries in fresh or []:
-            for stream_id, fields in entries:
-                messages.append((_text(stream_id), _values(fields)))
+        messages = self._stream.read(consumer=self._consumer)
         processed = 0
         seen: set[str] = set()
-        for stream_id, values in messages:
-            if stream_id in seen:
+        for record in messages:
+            if record.stream_id in seen:
                 continue
-            seen.add(stream_id)
-            self._process(stream_id, values)
+            seen.add(record.stream_id)
+            self._process(record)
             processed += 1
         self._last_success = datetime.now(timezone.utc)
         self._last_failure = None
         return processed
+
+    def wait_for_active_policy(
+        self,
+        *,
+        timeout_seconds: float,
+        poll_interval_seconds: float = 0.25,
+    ) -> bool:
+        """Consume the authored policy stream until one active policy exists.
+
+        A fresh runtime can start immediately after Product Ops commits the
+        policy while its transactional outbox is still being dispatched.  The
+        startup boundary therefore waits for the same typed consumer and store
+        projection used at runtime; it never manufactures a policy or reads a
+        private configuration fallback.
+        """
+
+        if (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
+            or timeout_seconds <= 0
+        ):
+            raise ValueError(
+                "recommendation Experiment policy startup timeout must be positive"
+            )
+        if (
+            isinstance(poll_interval_seconds, bool)
+            or not isinstance(poll_interval_seconds, (int, float))
+            or not math.isfinite(poll_interval_seconds)
+            or poll_interval_seconds <= 0
+        ):
+            raise ValueError(
+                "recommendation Experiment policy startup poll interval must be positive"
+            )
+
+        deadline = time.monotonic() + float(timeout_seconds)
+        while True:
+            try:
+                self.process_once()
+            except ExperimentPolicyDependencyUnavailable as error:
+                self._last_failure = error
+            if self._assignments.healthy():
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            self._stop.wait(min(float(poll_interval_seconds), remaining))
 
     def healthy(self, *, max_staleness_seconds: float = 10.0) -> bool:
         if self._last_success is None or self._last_failure is not None:
@@ -95,38 +116,28 @@ class ExperimentPolicyConsumer:
             datetime.now(timezone.utc) - self._last_success
         ).total_seconds() <= max_staleness_seconds
 
-    def _process(self, stream_id: str, values: dict[str, str]) -> None:
+    def _process(self, record: ExperimentPolicyStreamRecord) -> None:
         try:
-            policy = decode_policy(values)
+            policy = decode_policy(dict(record.values))
             if policy is not None:
                 effective = self._store.apply(policy)
                 self._assignments.apply_policy(effective)
         except ValueError as error:
-            self._redis.xadd(
-                DLQ,
-                {
-                    "sourceStreamId": stream_id,
-                    "eventId": values.get("eventId", ""),
-                    "reason": str(error)[:1024],
-                    "deadLetteredAt": datetime.now(timezone.utc).isoformat(),
-                },
+            self._stream.dead_letter(
+                stream_id=record.stream_id,
+                event_id=record.values.get("eventId", ""),
+                reason=str(error),
+                dead_lettered_at=datetime.now(timezone.utc),
             )
-            self._refresh_retention(DLQ)
-            self._redis.xack(STREAM, CONSUMER_GROUP, stream_id)
+            self._stream.acknowledge(record.stream_id)
             return
-        self._redis.xack(STREAM, CONSUMER_GROUP, stream_id)
-
-    def _refresh_retention(self, stream: str) -> None:
-        server_time = self._redis.time()
-        cutoff_ms = (int(server_time[0]) - RETENTION_SECONDS) * 1000
-        self._redis.xtrim(stream, minid=f"{max(cutoff_ms, 0)}-0", approximate=False)
-        self._redis.expire(stream, RETENTION_SECONDS)
+        self._stream.acknowledge(record.stream_id)
 
     def _run(self) -> None:
         while not self._stop.is_set():
             try:
                 self.process_once()
-            except Exception as error:
+            except ExperimentPolicyDependencyUnavailable as error:
                 self._last_failure = error
             self._stop.wait(0.25)
 
@@ -192,11 +203,3 @@ def _timestamp(value: Any) -> datetime | None:
     if value in (None, ""):
         return None
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-
-
-def _text(value: Any) -> str:
-    return value.decode("utf-8") if isinstance(value, bytes) else str(value)
-
-
-def _values(fields: dict[Any, Any]) -> dict[str, str]:
-    return {_text(key): _text(value) for key, value in fields.items()}

@@ -186,6 +186,7 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
                         recovery=DataRecoveryAction.RETRY_AGENT,
                         ref=job.ref,
                         message="标题层级不符合页面合同",
+                        attributes={"repairStrategy": "local_edit"},
                     ),
                 ),
                 fallback_stage=DataIssueStage.BUILD_HOMEPAGE.value,
@@ -206,6 +207,72 @@ def test_homepage_repair_feedback_is_appended_only_after_typed_contract_validati
     assert "日期戳、水印、页码、扫描编号" in prompt
     assert "必须从 page.md 删除该图片标记" in prompt
     assert "[DATA.QUALITY.FAILED] 标题层级不符合页面合同" in prompt
+
+
+def test_homepage_low_fidelity_repair_rebuilds_from_frozen_base_not_old_draft(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution.stage_reports import build_repair_report
+    from core.data_issue import (
+        DataIssueCode,
+        DataIssueLane,
+        DataIssueStage,
+        DataRecoveryAction,
+        data_issue,
+    )
+
+    job = _homepage_job()
+    execution_root_path = tmp_path / "execution"
+    object_dir = execution_root_path / job.content_object_dir
+    draft_dir = object_dir / "4.draft"
+    draft_dir.mkdir(parents=True)
+    (draft_dir / "prompt.md").write_text("完整冻结底稿。", encoding="utf-8")
+    (draft_dir / "author_job_packet.json").write_text(
+        '{"executionId":"20260722--travel-homepage-generate--test-region-a--pilot-901",'
+        '"objectRef":"/entity/地点/景区/测试实体甲",'
+        '"promptRef":"4.draft/prompt.md"}',
+        encoding="utf-8",
+    )
+    repair_path = object_dir / "5.review" / "repair_report.json"
+    repair_path.parent.mkdir(parents=True)
+    repair_path.write_text(
+        json.dumps(
+            build_repair_report(
+                execution_id=job.execution_id,
+                command="homepage",
+                ref=job.ref,
+                failed_stage=DataIssueStage.BUILD_HOMEPAGE.value,
+                failed_gate="homepage_materialization",
+                issues=(
+                    data_issue(
+                        DataIssueCode.QUALITY_FAILED,
+                        stage=DataIssueStage.BUILD_HOMEPAGE,
+                        lane=DataIssueLane.HOMEPAGE,
+                        recovery=DataRecoveryAction.RETRY_AGENT,
+                        ref=job.ref,
+                        message="base draft fidelity 35.2% < 55%",
+                        attributes={"repairStrategy": "rebuild_from_frozen_base"},
+                    ),
+                ),
+                fallback_stage=DataIssueStage.BUILD_HOMEPAGE.value,
+                rerun_chain=["author", "materialize"],
+            ),
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        reliabletask_author,
+        "execution_root",
+        lambda _execution_id: execution_root_path,
+    )
+
+    _, prompt = reliabletask_author._author_prompt(SimpleNamespace(), job)
+
+    assert "不得在低保真旧 page.md 上继续扩写" in prompt
+    assert "以 prompt.md 中完整的『底稿材料』重新构建 page.md" in prompt
+    assert "每个底稿段落至少保留三分之二原句骨架" in prompt
 
 
 def test_homepage_repair_feedback_rejects_untyped_recovery_contract(
@@ -485,7 +552,7 @@ def test_homepage_finalization_writes_typed_repair_report_for_placeholder_draft(
             "lane": "homepage",
             "recovery": "retry_agent",
             "message": "homepage author finished with placeholder 4.draft/page.md",
-            "attrs": {},
+            "attrs": {"repairStrategy": "rebuild_from_frozen_base"},
         }
     ]
 

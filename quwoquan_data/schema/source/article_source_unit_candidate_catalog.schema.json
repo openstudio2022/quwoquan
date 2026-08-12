@@ -116,6 +116,8 @@
         "sourceRevision",
         "sourceDigest",
         "entityCatalogDigest",
+        "sourceAttribution",
+        "publishMediaMode",
         "sourceUnitId",
         "sourceUnitRef",
         "sourceUnitDigest",
@@ -139,6 +141,8 @@
         "sourceRevision": {"$ref": "#/$defs/sha256"},
         "sourceDigest": {"$ref": "#/$defs/sha256"},
         "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+        "publishMediaMode": {"enum": ["illustrated", "text_only"]},
         "sourceUnitId": {"type": "string", "minLength": 1, "pattern": "^[^/]+$"},
         "sourceUnitRef": {"type": "string", "pattern": "^sources/[^/]+$"},
         "sourceUnitDigest": {"$ref": "#/$defs/sha256"},
@@ -153,8 +157,35 @@
         "bodyEvidenceRef": {"type": "string", "pattern": "^sources/[^/]+/source\\.md$"},
         "bodyContentSha256": {"$ref": "#/$defs/sha256"},
         "accessEvidence": {"$ref": "#/$defs/accessEvidence"},
-        "assets": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/asset"}}
-      }
+        "articleCategory": {"const": "photography"},
+        "writingIntent": {"const": "planning_consultation"},
+        "topicTagRefs": {
+          "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true,
+          "items": {"const": "Topic/旅行/玩法/摄影旅拍"}
+        },
+        "sourceClassification": {"$ref": "article_source_classification.schema.json"},
+        "assets": {"type": "array", "items": {"$ref": "#/$defs/asset"}}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"publishMediaMode": {"const": "illustrated"}}},
+          "then": {"properties": {"assets": {"minItems": 2}}},
+          "else": {"properties": {"assets": {"maxItems": 0}}}
+        },
+        {
+          "if": {"required": ["articleCategory"]},
+          "then": {"required": ["writingIntent", "topicTagRefs", "sourceClassification"]},
+          "else": {
+            "not": {
+              "anyOf": [
+                {"required": ["writingIntent"]},
+                {"required": ["topicTagRefs"]},
+                {"required": ["sourceClassification"]}
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }

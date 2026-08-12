@@ -42,24 +42,46 @@ def _digest(value: object) -> str:
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
-def _campaign_binding(envelope: Mapping[str, Any]) -> dict[str, object] | None:
-    fields = (
-        "rootExecutionId", "campaignRunId", "campaignGeneration",
-        "campaignFencingToken", "campaignPlanDigest", "campaignSourceRevision",
-        "campaignEntityCatalogDigest",
-    )
-    present = tuple(field for field in fields if field in envelope)
-    if not present:
+def _pool_delivery_binding(
+    execution_id: str,
+    stage: str,
+) -> dict[str, object] | None:
+    if stage != "publish":
         return None
-    if len(present) != len(fields):
-        raise ValueError("ReliableTask campaign queue binding is incomplete")
-    source_digest = envelope.get("sourceDigest")
-    if not isinstance(source_digest, Mapping):
-        raise TypeError("ReliableTask campaign sourceDigest is invalid")
+    from content.execution.preflight.pool_delivery import (
+        load_current_pool_delivery_preflight_receipt,
+    )
+
+    receipt, path = load_current_pool_delivery_preflight_receipt(execution_id)
     return {
-        **{field: envelope[field] for field in fields},
-        "campaignSourceDigest": source_digest.get("digest"),
+        "receiptId": receipt["receiptId"],
+        "receiptRef": path.relative_to(execution_root(execution_id)).as_posix(),
+        "evidenceDigest": receipt["evidenceDigest"],
+        "transportDigest": receipt["transportDigest"],
+        "deliveryGeneration": receipt["deliveryGeneration"],
+        "deliveryFencingToken": receipt["deliveryFencingToken"],
+        "workerRef": receipt["workerRef"],
+        "workerSha256": receipt["workerSha256"],
+        "campaignBinding": receipt["campaignBinding"],
     }
+
+
+def _worker_host_binding(execution_id: str) -> dict[str, Any] | None:
+    from content.execution import store
+
+    policy = store.load_spec(execution_id).get("executionPolicy") or {}
+    binding = policy.get("workerHostSetBinding")
+    if binding is None:
+        return None
+    if not isinstance(binding, Mapping):
+        raise TypeError("ReliableTask worker host-set binding is invalid")
+    assert_valid(
+        dict(binding),
+        "execution",
+        "governed_worker_host_binding",
+        label=f"ReliableTask worker host-set:{execution_id}",
+    )
+    return dict(binding)
 
 
 def job_set_envelope_path(
@@ -87,17 +109,29 @@ def _normalize_tasks(
     tasks: Sequence[Mapping[str, Any]],
     *,
     governed_partition_count: int,
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     carrier = parse_execution_id(execution_id).content_type.value
-    normalized: list[dict[str, str]] = []
+    normalized: list[dict[str, object]] = []
     for raw in tasks:
-        row = {field: str(raw.get(field) or "").strip() for field in _TASK_FIELDS}
+        row: dict[str, object] = {
+            field: str(raw.get(field) or "").strip() for field in _TASK_FIELDS
+        }
         missing = [field for field, value in row.items() if not value]
         if missing:
             raise ValueError(
                 "ReliableTask expected task fields are incomplete: "
                 + ", ".join(missing)
             )
+        max_attempts = raw.get("maxAttempts")
+        if (
+            isinstance(max_attempts, bool)
+            or not isinstance(max_attempts, int)
+            or max_attempts < 1
+        ):
+            raise ValueError(
+                "ReliableTask expected task maxAttempts must be an integer >= 1"
+            )
+        row["maxAttempts"] = max_attempts
         if (
             row["executionId"] != execution_id
             or row["carrier"] != carrier
@@ -106,7 +140,7 @@ def _normalize_tasks(
             raise ValueError(
                 "ReliableTask expected task execution/carrier/stage identity drift"
             )
-        revision = row["sourceRevision"]
+        revision = str(row["sourceRevision"])
         if not re.fullmatch(r"sha256:[0-9a-f]{64}", revision):
             raise ValueError("ReliableTask expected task sourceRevision is invalid")
         expected_key = (
@@ -115,10 +149,10 @@ def _normalize_tasks(
         if row["idempotencyKey"] != expected_key:
             raise ValueError("ReliableTask expected task idempotencyKey identity drift")
         row["partitionKey"] = partition_key(
-            carrier, row["ref"], governed_partition_count
+            carrier, str(row["ref"]), governed_partition_count
         )
         normalized.append(row)
-    normalized.sort(key=lambda row: row["jobId"])
+    normalized.sort(key=lambda row: str(row["jobId"]))
     job_ids = {row["jobId"] for row in normalized}
     keys = {row["idempotencyKey"] for row in normalized}
     if not normalized or len(job_ids) != len(normalized) or len(keys) != len(normalized):
@@ -151,6 +185,7 @@ def _load(
             stage_rows.append(payload)
         stage_rows.sort(key=lambda row: int(row.get("attemptOrdinal") or 0))
         previous_digest: str | None = None
+        previous_host_binding: Mapping[str, Any] | None = None
         for ordinal, payload in enumerate(stage_rows, start=1):
             stable = {
                 key: value for key, value in payload.items()
@@ -163,9 +198,30 @@ def _load(
                 label=f"ReliableTask job-set:{execution_id}/{stage}/{ordinal}",
             )
             expected_tasks = payload.get("expectedTasks")
+            host_binding = payload.get("workerHostSetBinding")
+            pool_delivery_binding = payload.get("poolDeliveryBinding")
+            if host_binding is not None and not isinstance(host_binding, Mapping):
+                raise TypeError("ReliableTask worker host-set binding is invalid")
+            if previous_host_binding is not None and host_binding is None:
+                raise ValueError("ReliableTask worker host-set generation cannot regress")
+            if (
+                previous_host_binding is not None
+                and host_binding is not None
+                and host_binding != previous_host_binding
+                and int(host_binding.get("generation") or 0)
+                <= int(previous_host_binding.get("generation") or 0)
+            ):
+                raise ValueError("ReliableTask worker host-set generation cannot regress")
             if (
                 not isinstance(expected_tasks, list)
-                or payload.get("jobSetDigest") != _digest(expected_tasks)
+                or payload.get("jobSetDigest")
+                != _digest(
+                    {
+                        "expectedTasks": expected_tasks,
+                        "workerHostSetBinding": host_binding,
+                        "poolDeliveryBinding": pool_delivery_binding,
+                    }
+                )
             ):
                 raise ValueError("ReliableTask expectedTasks/jobSetDigest mismatch")
             workers = payload.get("requiredWorkers")
@@ -178,7 +234,7 @@ def _load(
             ) != expected_tasks:
                 raise ValueError("ReliableTask expectedTasks partition identity drift")
             expected = {
-                "version": 3,
+                "version": 4,
                 "executionId": execution_id,
                 "carrier": parse_execution_id(execution_id).content_type.value,
                 "stage": stage,
@@ -191,7 +247,12 @@ def _load(
                 "partitionCount": partitions,
                 "partitionAlgorithm": PARTITION_ALGORITHM,
                 "checkpointPolicy": checkpoint_policy_document(),
-                "campaignBinding": _campaign_binding(backend),
+                "campaignBinding": (
+                    pool_delivery_binding.get("campaignBinding")
+                    if isinstance(pool_delivery_binding, Mapping)
+                    else None
+                ),
+                "poolDeliveryBinding": pool_delivery_binding,
             }
             drift = [
                 field for field, value in expected.items()
@@ -204,6 +265,7 @@ def _load(
                     + ", ".join(drift)
                 )
             previous_digest = str(payload["envelopeDigest"])
+            previous_host_binding = host_binding
             rows.append(payload)
     return rows
 
@@ -221,14 +283,27 @@ def freeze_job_set(
     normalized = validate_execution_id(execution_id)
     with _queue_lock(normalized):
         backend = load_execution_queue_backend(normalized)
-        if backend.get("queueBackend") != QueueBackend.RELIABLE_TASK.value:
-            raise ValueError("ReliableTask job-set requires a reliabletask backend")
+        backend_field = (
+            "poolDeliveryBackend" if stage == "publish" else "queueBackend"
+        )
+        if backend.get(backend_field) != QueueBackend.RELIABLE_TASK.value:
+            raise ValueError(
+                f"ReliableTask {stage} job-set requires a reliabletask backend"
+            )
         partitions = partition_count(required_workers)
         tasks = _normalize_tasks(
             normalized, stage, expected_tasks,
             governed_partition_count=partitions,
         )
-        job_set_digest = _digest(tasks)
+        host_binding = _worker_host_binding(normalized)
+        pool_delivery_binding = _pool_delivery_binding(normalized, stage)
+        job_set_digest = _digest(
+            {
+                "expectedTasks": tasks,
+                "workerHostSetBinding": host_binding,
+                "poolDeliveryBinding": pool_delivery_binding,
+            }
+        )
         path = job_set_envelope_path(normalized, stage, job_set_digest)
         attempts = [row for row in _load(normalized, backend) if row["stage"] == stage]
         existing = read_json(path) if path.is_file() else None
@@ -251,7 +326,7 @@ def freeze_job_set(
         )
         stable: dict[str, object] = {
             "schema": _SCHEMA,
-            "version": 3,
+            "version": 4,
             "executionId": normalized,
             "carrier": parse_execution_id(normalized).content_type.value,
             "stage": stage,
@@ -268,9 +343,17 @@ def freeze_job_set(
             "expectedTasks": tasks,
             "jobSetDigest": job_set_digest,
         }
-        campaign = _campaign_binding(backend)
+        campaign = (
+            pool_delivery_binding.get("campaignBinding")
+            if pool_delivery_binding is not None
+            else None
+        )
         if campaign is not None:
             stable["campaignBinding"] = campaign
+        if pool_delivery_binding is not None:
+            stable["poolDeliveryBinding"] = pool_delivery_binding
+        if host_binding is not None:
+            stable["workerHostSetBinding"] = host_binding
         envelope = {**stable, "envelopeDigest": _digest(stable)}
         assert_valid(
             envelope, "execution", "reliabletask_job_set_envelope",

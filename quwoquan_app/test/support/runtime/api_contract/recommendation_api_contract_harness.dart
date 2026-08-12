@@ -6,6 +6,7 @@ import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_f
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
+import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'production_cloud_operation_telemetry_evidence.dart';
@@ -20,6 +21,7 @@ const recommendationApiContractDeviceId = 'recommendation-api-contract-device';
 final class RecommendationApiContractHarness {
   RecommendationApiContractHarness._({
     required this._httpClient,
+    required this._accountLifecycle,
     required this.telemetry,
     required this.intersections,
     required this.session,
@@ -52,17 +54,18 @@ final class RecommendationApiContractHarness {
 
     try {
       AuthSessionGrant? session;
-      CloudOperationInvocationContext intersectionContext(String clientPageId) =>
-          CloudOperationInvocationContext(
-            surfaceId: AppUiSurfaces.myIntersections.id,
-            routeId: AppUiSurfaces.myIntersections.routeId,
-            clientPageId: clientPageId,
-            actor: CloudOperationActorContext(
-              accountId: session!.ownerId,
-              personaId: session.activePersona?.personaId,
-              deviceActorId: recommendationApiContractDeviceId,
-            ),
-          );
+      CloudOperationInvocationContext intersectionContext(
+        String clientPageId,
+      ) => CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.myIntersections.id,
+        routeId: AppUiSurfaces.myIntersections.routeId,
+        clientPageId: clientPageId,
+        actor: CloudOperationActorContext(
+          accountId: session!.ownerId,
+          personaId: session.activePersona?.personaId,
+          deviceActorId: recommendationApiContractDeviceId,
+        ),
+      );
 
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
@@ -95,6 +98,19 @@ final class RecommendationApiContractHarness {
 
       return RecommendationApiContractHarness._(
         httpClient: httpClient,
+        accountLifecycle: RemoteAccountLifecycleCommandWriter(
+          client: client,
+          invocationContext: (clientPageId) => CloudOperationInvocationContext(
+            surfaceId: AppUiSurfaces.settingsAccountSecurity.id,
+            routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
+            clientPageId: clientPageId,
+            actor: CloudOperationActorContext(
+              accountId: session!.ownerId,
+              personaId: session.activePersona?.personaId,
+              deviceActorId: recommendationApiContractDeviceId,
+            ),
+          ),
+        ),
         telemetry: telemetry,
         intersections: intersections,
         session: session,
@@ -107,12 +123,21 @@ final class RecommendationApiContractHarness {
   }
 
   final CloudHttpClient _httpClient;
+  final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   final ProductionCloudOperationTelemetryEvidence telemetry;
   final RemoteIntersectionRepository intersections;
   final AuthSessionGrant session;
+  var _closed = false;
 
   Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
     try {
+      await _accountLifecycle.closeAccount(
+        CloseAccountCommand(
+          clientRequestId: 'recommendation-api-cleanup-${session.ownerId}',
+        ),
+      );
       await telemetry.waitForEvents(minimumCount: 1);
     } finally {
       _httpClient.close();
@@ -128,7 +153,8 @@ final class _MutableAccessTokenProvider implements CloudAuthTokenProvider {
   Future<String?> getAccessToken() async => accessToken;
 }
 
-final class _RecommendationApiClientContext implements CloudClientContextProvider {
+final class _RecommendationApiClientContext
+    implements CloudClientContextProvider {
   const _RecommendationApiClientContext();
 
   @override

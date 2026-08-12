@@ -23,6 +23,7 @@ import (
 	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/adapters/inbound/http"
 	taskhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/adapters/inbound/http"
 	taskapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/application"
+	tasksource "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/infrastructure/source"
 	turnviewhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/adapters/inbound/http"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	pagehttp "quwoquan_service/services/assistant-service/internal/assistant/page_context/adapters/inbound/http"
@@ -70,7 +71,10 @@ func buildAssistantHTTPServer(
 		assistant.pageContextFacade,
 	)).RegisterRoutes(serviceMux)
 	taskhttp.NewHandler(
-		taskapplication.NewQueryFacade(deps.taskViewReader),
+		taskapplication.NewQueryFacade(tasksource.NewSubscriptionTaskReader(
+			deps.subscriptionReader,
+			skillCatalogQueries,
+		)),
 	).RegisterRoutes(serviceMux)
 	pagehttp.NewHandler(assistant.pageContextFacade).RegisterRoutes(serviceMux)
 	subscriptionhttp.NewHandler(

@@ -2,10 +2,12 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-005
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-conversation-binding/spec.md#gwt-002
 // readiness_case: conversation_list_conversation_timestamps_app_local
 // readiness_case: conversation_batch_get_conversations_app_local
 // readiness_case: conversation_update_group_governance_settings_app_local
+// readiness_case: conversation_update_announcement_app_local
 // readiness_case: conversation_dissolve_conversation_app_local
 // readiness_case: conversation_get_gathering_chat_board_app_local
 
@@ -165,6 +167,61 @@ void main() {
               .length,
           2,
         );
+      },
+    );
+
+    test(
+      'announcement replay preserves intent and authoritative readback',
+      () async {
+        final harness = _Harness((request) {
+          return switch (request.headers['X-Client-Operation-Id']) {
+            AppCloudOperationIds.chatConversationUpdateAnnouncement =>
+              remoteApiPathJsonResponse(
+                _conversationWire(announcement: '集合时间改为九点'),
+              ),
+            AppCloudOperationIds.chatConversationGetConversation =>
+              remoteApiPathJsonResponse(
+                _conversationWire(announcement: '集合时间改为九点'),
+              ),
+            final operationId => throw StateError(
+              'unexpected operation: $operationId',
+            ),
+          };
+        });
+        final writer = _writer(harness);
+        final reader = _query(harness);
+        final command = ChatUpdateAnnouncementCommand(
+          conversationId: _conversationId,
+          announcement: '集合时间改为九点',
+        );
+
+        final first = await writer.updateAnnouncement(
+          command,
+          idempotencyKey: _announcementIntent,
+        );
+        final replay = await writer.updateAnnouncement(
+          command,
+          idempotencyKey: _announcementIntent,
+        );
+        final detail = await reader.getConversation(
+          ChatGetConversationQuery(conversationId: _conversationId),
+        );
+
+        expect(first.announcement, '集合时间改为九点');
+        expect(replay.announcement, first.announcement);
+        expect(replay.announcementUpdatedAt, first.announcementUpdatedAt);
+        expect(detail.announcement, first.announcement);
+        for (final request in harness.log.take(2)) {
+          _expectRequest(
+            request,
+            method: 'PATCH',
+            path: '/chat/conversations/$_conversationId/announcement',
+            operationId:
+                AppCloudOperationIds.chatConversationUpdateAnnouncement,
+            idempotencyKey: _announcementIntent,
+            body: const <String, Object?>{'announcement': '集合时间改为九点'},
+          );
+        }
       },
     );
 
@@ -404,9 +461,12 @@ CloudOperationInvocationContext _commandContext(
   String clientPageId,
   String idempotencyKey,
 ) {
+  final surface = clientPageId == ChatRequestPageIds.updateAnnouncement
+      ? AppUiSurfaces.chatAnnouncement
+      : AppUiSurfaces.chatManage;
   return CloudOperationInvocationContext(
-    surfaceId: AppUiSurfaces.chatManage.id,
-    routeId: AppUiSurfaces.chatManage.routeId,
+    surfaceId: surface.id,
+    routeId: surface.routeId,
     clientPageId: clientPageId,
     actor: const CloudOperationActorContext(personaId: 'persona-owner'),
     idempotencyKey: idempotencyKey,
@@ -451,6 +511,7 @@ void _expectTelemetry(
 
 Map<String, Object?> _conversationWire({
   bool nameEditableByAdminOnly = false,
+  String announcement = '',
 }) => <String, Object?>{
   'id': _conversationId,
   'conversationId': _conversationId,
@@ -472,8 +533,8 @@ Map<String, Object?> _conversationWire({
   'membersRosterRevision': 3,
   'maxGroupSize': 500,
   'receiptEnabled': true,
-  'announcement': '',
-  'announcementUpdatedBy': '',
+  'announcement': announcement,
+  'announcementUpdatedBy': announcement.isEmpty ? '' : 'persona-owner',
   'announcementUpdatedAt': '2026-08-09T06:00:00Z',
   'nameEditableByAdminOnly': nameEditableByAdminOnly,
   'lastMessageId': 'message-8',
@@ -545,4 +606,5 @@ const Map<String, Object?> _boardWire = <String, Object?>{
 
 const String _conversationId = 'conversation-1';
 const String _governanceIntent = 'governance-intent-1';
+const String _announcementIntent = 'announcement-intent-1';
 const String _dissolveIntent = 'dissolve-intent-1';

@@ -448,16 +448,18 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
   }) {
     const surface = AppUiSurfaces.rtcIncoming;
     unawaited(
-      ref.read(exceptionTelemetryPortProvider).recordHandledException(
-        source: 'rtc.incoming_call_coordinator',
-        error: error,
-        stackTrace: stackTrace,
-        pageId: surface.id,
-        pageName: PageNames.rtcIncoming,
-        surfaceId: surface.id,
-        routeId: surface.routeId,
-        operationId: operationId,
-      ),
+      ref
+          .read(exceptionTelemetryPortProvider)
+          .recordHandledException(
+            source: 'rtc.incoming_call_coordinator',
+            error: error,
+            stackTrace: stackTrace,
+            pageId: surface.id,
+            pageName: PageNames.rtcIncoming,
+            surfaceId: surface.id,
+            routeId: surface.routeId,
+            operationId: operationId,
+          ),
     );
   }
 

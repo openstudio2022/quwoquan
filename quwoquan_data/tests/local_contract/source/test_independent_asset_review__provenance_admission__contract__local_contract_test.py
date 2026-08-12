@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -41,6 +42,14 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
         "content.source.professional_image_acquisition.guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
     )
+    monkeypatch.setattr(
+        "content.source.professional_image_acquisition.load_bound_safety_evidence",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        "content.source.professional_image_acquisition.validate_image_safety_payload",
+        lambda *_args, **_kwargs: None,
+    )
 
 
 def _digest(seed: str) -> str:
@@ -56,7 +65,7 @@ def _image_bytes() -> bytes:
 
 
 def _acquisition_item(*, rights_status: str) -> dict[str, object]:
-    return {
+    item: dict[str, object] = {
         "assetId": "pin-independent-1",
         "entityId": "九寨沟",
         "observedEntityId": "九寨沟",
@@ -98,8 +107,32 @@ def _acquisition_item(*, rights_status: str) -> dict[str, object]:
             "reviewedAt": "2026-08-05T00:05:00Z",
             "reviewer": "acquisition-writer-self-report",
             "evidenceRef": "evidence/pin-independent-1.json",
+            "safetyEvidenceFileSha256": "sha256:" + "f" * 64,
         },
     }
+    item["sourceAttribution"] = {
+        "isOriginal": False,
+        "originalCreatorId": None,
+        "originalCreatorName": "摄影师甲",
+        "originalCreatorProfileUrl": None,
+        "platform": "Pinterest",
+        "sourcePostUrl": item["sourceUrl"],
+        "originalAssetUrl": item["sourceUrl"],
+        "attributionText": "摄影师甲 / unknown / Pinterest",
+        "rightsBasis": "unknown",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "authorizationProofUrl": None,
+        "termsUrl": "https://policy.pinterest.com/terms-of-service",
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-05T00:00:00Z",
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
+    return item
 
 
 def _acquisition(
@@ -465,6 +498,76 @@ def test_reviewer_cannot_reuse_author_run_or_self_report_result_hash(tmp_path: P
             judgment=judgment,
             output_root=output_root,
         )
+
+
+def test_supported_api_reviewer_keeps_distinct_frozen_execution_identity(
+    tmp_path: Path,
+) -> None:
+    """A prior exact-byte reviewer journal may not be relabelled as the author run."""
+    source = Path(__file__).resolve().parents[4] / ".qwq_output"
+    author_execution = "20260812--travel-image-author--china--pilot-002"
+    author_root = source / "data/tasks" / author_execution
+    acquisition_root = source / (
+        "data/local/workspace/source-acquisition/openverse-smoke3-20260812/"
+        "preparations/professional-image-supported-api-dc7af7dd5436c975"
+    )
+    required = (
+        author_root / "execution_manifest.json",
+        acquisition_root
+        / "receipts/903bcfd8dc2ed0d38aa23f1d07e57107bec1365920d817f42f2038a7a5b0d393.json",
+    )
+    if not all(path.is_file() for path in required):
+        pytest.skip("live frozen Image evidence is not present")
+
+    # This test exercises only the contract helper against copied, immutable
+    # fixture bytes; it must never mutate or trust the real output tree.
+    output_root = tmp_path / "output"
+    for relative in (
+        "data/tasks/20260812--travel-image-author--china--pilot-002",
+        "data/tasks/20260812--travel-image-review--china--pilot-001",
+        "data/local/workspace/source-acquisition/openverse-smoke3-20260812/"
+        "preparations/professional-image-supported-api-dc7af7dd5436c975",
+    ):
+        shutil.copytree(source / relative, output_root / relative)
+    author_token = "97f35fc1a0d7db726bd5"
+    reviewer_ref = (
+        "data/tasks/20260812--travel-image-review--china--pilot-001/"
+        "evidence/source_reviews/results/97f35fc1a0d7db726bd5.json"
+    )
+    reviewer = read_json(output_root / reviewer_ref)
+    judgment = {
+        "rightsStatus": "unverified",
+        "authorizationRequired": True,
+        "distributionDecision": "research_allowed",
+        "safetyStatus": "passed",
+        "entityMatch": reviewer["judgment"]["entityMatch"],
+        "qualityStatus": reviewer["judgment"]["qualityStatus"],
+        "privacyRisk": reviewer["judgment"]["privacyRisk"],
+        "minorRisk": reviewer["judgment"]["minorRisk"],
+        "maliciousMediaRisk": reviewer["judgment"]["maliciousMediaRisk"],
+        "watermarkStatus": reviewer["judgment"]["watermarkStatus"],
+        "findings": reviewer["judgment"]["findings"],
+    }
+    receipt, _path = write_independent_asset_review_receipt(
+        acquisition_receipt_path=output_root / required[1].relative_to(source),
+        asset_kind="image",
+        asset_id="openverse:asset:0e8185daea1b63a9",
+        execution_manifest_path=output_root / required[0].relative_to(source),
+        author_evidence_path=output_root / (
+            f"data/tasks/{author_execution}/evidence/source_authors/objects/"
+            f"{author_token}/4.draft/agent_result_envelope.json"
+        ),
+        reviewer_evidence_path=output_root / reviewer_ref,
+        object_ref="/professional-image/openverse:asset:0e8185daea1b63a9",
+        judgment=judgment,
+        output_root=output_root,
+    )
+    assert receipt["reviewDecision"] == "accepted"
+    assert receipt["authorExecution"]["executionId"] == author_execution
+    assert receipt["reviewerExecution"]["executionId"] == (
+        "20260812--travel-image-review--china--pilot-001"
+    )
+    assert receipt["authorExecution"]["runId"] != receipt["reviewerExecution"]["runId"]
 
 
 def test_create_once_is_stable_under_concurrent_identical_writers(tmp_path: Path) -> None:

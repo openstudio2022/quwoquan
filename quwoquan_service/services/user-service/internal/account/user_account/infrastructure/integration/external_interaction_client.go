@@ -58,6 +58,10 @@ func NewExternalInteractionClient(baseURL string, env string, client *http.Clien
 }
 
 func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req application.SMSOTPDispatchRequest) (application.ExternalInteractionAccepted, error) {
+	templateID, err := smsOTPTemplateID(req.Platform)
+	if err != nil {
+		return application.ExternalInteractionAccepted{}, err
+	}
 	payload := map[string]any{
 		"requestId":      req.RequestID,
 		"operation":      "sms_otp.send",
@@ -73,7 +77,9 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 			"codeRef":         req.CodeRef,
 			"phoneHash":       req.PhoneHash,
 			"maskedRecipient": req.MaskedPhone,
-			"templateId":      "sms_otp_login",
+			"templateId":      templateID,
+			"platform":        strings.TrimSpace(req.Platform),
+			"requestRef":      strings.TrimSpace(req.RequestRef),
 		},
 	}
 	body, err := json.Marshal(payload)
@@ -112,4 +118,35 @@ func (c *ExternalInteractionClient) SubmitSMSOTP(ctx context.Context, req applic
 		return application.ExternalInteractionAccepted{}, err
 	}
 	return accepted, nil
+}
+
+func smsOTPTemplateID(platform string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "ios":
+		return "sms_otp_login_ios_domain_bound", nil
+	case "android":
+		return "sms_otp_login_android_retriever", nil
+	case "web":
+		return "sms_otp_login_web", nil
+	case "acceptance":
+		return "sms_otp_login_acceptance", nil
+	default:
+		return "", fmt.Errorf("unsupported otp client platform")
+	}
+}
+
+func (c *ExternalInteractionClient) CheckSMSOTPReadiness(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/healthz", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("integration readiness unavailable")
+	}
+	return nil
 }

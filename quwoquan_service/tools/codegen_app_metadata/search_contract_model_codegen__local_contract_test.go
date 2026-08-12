@@ -131,3 +131,89 @@ func TestCanonicalSearchContentEnumsUseContentOperationOwner(t *testing.T) {
 		}
 	}
 }
+
+func TestCanonicalSearchNestedOwnerTypesUseSchemaOwnedGeneratedClosure(t *testing.T) {
+	t.Parallel()
+	models := []canonicalSearchClientModel{{
+		className: "SearchResponseView",
+		fileName:  "search_response_view.g.dart",
+		fields: []projectionFieldDef{{
+			Name: "interpretedQuery", WireName: "interpretedQuery",
+			WireType: "OwnerSearchInterpretedQuery", DartType: "OwnerSearchInterpretedQuery",
+			MapFromStringKeyClass: "OwnerSearchInterpretedQuery",
+		}},
+	}}
+	fields := &fieldsFile{Types: map[string]entityDef{
+		"OwnerSearchInterpretedQuery": {Fields: []fieldDef{
+			{Name: "normalized", Type: "string", Constraints: []string{"NOT_NULL"}},
+			{Name: "tokens", Type: "[]string", Constraints: []string{"NOT_NULL"}},
+		}},
+	}}
+	closed, err := canonicalSearchModelClosure(models, fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(closed) != 2 || closed[1].className != "OwnerSearchInterpretedQuery" ||
+		closed[1].fileName != "owner_search_interpreted_query.g.dart" {
+		t.Fatalf("closed models=%+v", closed)
+	}
+	files := map[string]string{}
+	for _, model := range closed {
+		files[model.className] = model.fileName
+	}
+	imports, err := canonicalSearchModelImports(closed[0], files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(imports) != 1 || imports[0] != "owner_search_interpreted_query.g.dart" {
+		t.Fatalf("nested owner imports=%v", imports)
+	}
+}
+
+func TestCanonicalSearchNestedTypeClosureRejectsUnknownAndRecursiveTypes(t *testing.T) {
+	t.Parallel()
+	base := func(typeName string) []canonicalSearchClientModel {
+		return []canonicalSearchClientModel{{
+			className: "SearchResponseView",
+			fields: []projectionFieldDef{{
+				Name: "nested", WireName: "nested", WireType: typeName,
+				DartType: typeName, MapFromStringKeyClass: typeName,
+			}},
+		}}
+	}
+	if _, err := canonicalSearchModelClosure(base("ForeignModel"), &fieldsFile{}); err == nil ||
+		!strings.Contains(err.Error(), "schema-owned") {
+		t.Fatalf("unknown nested type error=%v", err)
+	}
+	recursive := &fieldsFile{Types: map[string]entityDef{
+		"OwnerSearchRecursive": {Fields: []fieldDef{{Name: "child", Type: "OwnerSearchRecursive"}}},
+	}}
+	if _, err := canonicalSearchModelClosure(base("OwnerSearchRecursive"), recursive); err == nil ||
+		!strings.Contains(err.Error(), "recursive") {
+		t.Fatalf("recursive nested type error=%v", err)
+	}
+}
+
+func TestCanonicalSearchSchemaEntityAcceptsLoaderAliasButRejectsConflict(t *testing.T) {
+	t.Parallel()
+	definition := entityDef{Fields: []fieldDef{{Name: "normalized", Type: "string"}}}
+	fields := &fieldsFile{
+		Types:    map[string]entityDef{"OwnerSearchInterpretedQuery": definition},
+		Entities: map[string]entityDef{"OwnerSearchInterpretedQuery": definition},
+	}
+	entity, section, err := canonicalSearchSchemaEntity(fields, "OwnerSearchInterpretedQuery")
+	if err != nil {
+		t.Fatalf("projected loader alias must remain one schema definition: %v", err)
+	}
+	if section != "types" || len(entity.Fields) != 1 {
+		t.Fatalf("unexpected canonical entity section=%q fields=%#v", section, entity.Fields)
+	}
+
+	fields.Entities["OwnerSearchInterpretedQuery"] = entityDef{
+		Fields: []fieldDef{{Name: "raw", Type: "string"}},
+	}
+	if _, _, err := canonicalSearchSchemaEntity(fields, "OwnerSearchInterpretedQuery"); err == nil ||
+		!strings.Contains(err.Error(), "conflicting schema-owned definitions") {
+		t.Fatalf("conflicting loader definitions must fail closed, got %v", err)
+	}
+}

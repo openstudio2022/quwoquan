@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -23,6 +24,12 @@ func TestCheckerPublishesNamedHealthMetrics(t *testing.T) {
 
 	if result.Status != "degraded" {
 		t.Fatalf("status=%q want degraded", result.Status)
+	}
+	if !slices.Equal(
+		result.FailedChecks,
+		[]string{"content_projection_contract_test_failed"},
+	) {
+		t.Fatalf("failedChecks=%v", result.FailedChecks)
 	}
 	if got := testutil.ToFloat64(
 		healthCheckStatus.WithLabelValues("content_projection_contract_test_ok"),

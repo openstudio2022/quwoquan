@@ -1,10 +1,9 @@
 package local_contract
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
+
+	"quwoquan_service/services/user-service/tests/support/testobject"
 )
 
 type sharedUserPoolContract struct {
@@ -21,21 +20,13 @@ type sharedUserPoolContract struct {
 }
 
 func TestSharedUserPoolContractMatchesUserServiceIdentityRequirements(t *testing.T) {
-	fixturePath := filepath.Clean("../../../support/contract_fixtures/user_pool.json")
-	raw, err := os.ReadFile(fixturePath)
-	if err != nil {
-		t.Fatalf("read shared user pool: %v", err)
+	users := testobject.BuildUserPool(32)
+	if len(users) != 32 {
+		t.Fatalf("user builder count mismatch: users=%d", len(users))
 	}
-	var payload sharedUserPoolContract
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		t.Fatalf("decode shared user pool: %v", err)
-	}
-	if len(payload.Users) == 0 || len(payload.Users) != payload.Statistics.UserCount {
-		t.Fatalf("user count mismatch: users=%d statistics=%d", len(payload.Users), payload.Statistics.UserCount)
-	}
-	seenUsers := make(map[string]struct{}, len(payload.Users))
+	seenUsers := make(map[string]struct{}, len(users))
 	seenPersonas := map[string]struct{}{}
-	for index, user := range payload.Users {
+	for index, user := range users {
 		if user.UserID == "" || user.DisplayName == "" {
 			t.Fatalf("users[%d] requires userId and displayName", index)
 		}

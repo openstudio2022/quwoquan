@@ -70,7 +70,7 @@
     "campaignPlanRef": {"$ref": "#/$defs/safeRef"},
     "campaignPlanDigest": {"$ref": "#/$defs/digest"},
     "calibrationPreflightReceipt": {
-      "$ref": "../execution/semantic_preflight_receipt_ref.schema.json"
+      "$ref": "../execution/semantic_provider_preflight_receipt_ref.schema.json"
     },
     "releaseAssetAdmissionRef": {"$ref": "#/$defs/safeRef"},
     "releaseAssetAdmissionSha256": {"$ref": "#/$defs/digest"},
@@ -136,9 +136,8 @@
         "properties": {
           "duplicateAssetCount": {"const": 0},
           "crossLaneWriteCount": {"const": 0},
-          "fourLaneOverlapDurationSeconds": {"minimum": 3600},
-          "fourLaneLongestContinuousOverlapSeconds": {"minimum": 3600},
-          "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"}
+          "fourLaneOverlapDurationSeconds": {"minimum": 0},
+          "fourLaneLongestContinuousOverlapSeconds": {"minimum": 0}
         }
       }
     },
@@ -160,9 +159,8 @@
         "properties": {
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M100"}}},
           "predecessorCarriedExecutionIds": {"minItems": 4},
-          "predecessorSourcePoolDigests": {"minItems": 1, "maxItems": 1},
-          "wallClockBudgetSeconds": {"const": 259200},
-          "wallClockSeconds": {"maximum": 259200}
+          "predecessorSourcePoolDigests": {"minItems": 1},
+          "wallClockBudgetSeconds": {"type": "null"}
         }
       }
     },
@@ -173,7 +171,7 @@
         "properties": {
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M1000"}}},
           "predecessorCarriedExecutionIds": {"minItems": 4},
-          "predecessorSourcePoolDigests": {"minItems": 2, "maxItems": 2},
+          "predecessorSourcePoolDigests": {"minItems": 2},
           "wallClockBudgetSeconds": {"const": 604800},
           "wallClockSeconds": {"maximum": 604800}
         }
@@ -187,8 +185,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "promotionId", "releaseId", "manifestDigest", "sourceRevision",
-        "sourceDigest", "entityCatalogDigest", "targetScale", "receiptRef",
+        "promotionId", "releaseId", "manifestDigest", "targetScale", "receiptRef",
         "receiptDigest"
       ],
       "properties": {
@@ -198,10 +195,50 @@
         "sourceRevision": {"$ref": "#/$defs/digest"},
         "sourceDigest": {"$ref": "#/$defs/digest"},
         "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+        "sourceIdentities": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sourceIdentity"}
+        },
+        "sourceIdentitySetDigest": {"$ref": "#/$defs/digest"},
         "targetScale": {"enum": ["M100", "M1000"]},
         "receiptRef": {"$ref": "#/$defs/safeRef"},
         "receiptDigest": {"$ref": "#/$defs/digest"}
-      }
+      },
+      "oneOf": [
+        {
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"],
+          "not": {"anyOf": [{"required": ["sourceIdentities"]}, {"required": ["sourceIdentitySetDigest"]}]}
+        },
+        {
+          "required": ["sourceIdentities", "sourceIdentitySetDigest"],
+          "not": {"anyOf": [{"required": ["sourceRevision"]}, {"required": ["sourceDigest"]}, {"required": ["entityCatalogDigest"]}]}
+        }
+      ]
+    },
+    "sourceIdentity": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
+          "properties": {
+            "sourceRevision": {"$ref": "#/$defs/digest"},
+            "sourceDigest": {"$ref": "#/$defs/digest"},
+            "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["identityKind", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "executionIds"],
+          "properties": {
+            "identityKind": {"const": "legacy_canonical_migration"},
+            "sourceDigest": {"$ref": "#/$defs/digest"},
+            "canonicalObjectDigest": {"$ref": "#/$defs/digest"},
+            "migrationEvidenceDigest": {"$ref": "#/$defs/digest"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        }
+      ]
     },
     "lane": {
       "type": "object",

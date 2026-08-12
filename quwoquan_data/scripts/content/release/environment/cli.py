@@ -1,8 +1,11 @@
 """CLI registration for release environment operations."""
 from __future__ import annotations
+
 import argparse
+
 from content.release.environment.handler import VALID_ENVS, handle_ship
 from core.control_types import ReleaseRunKind
+
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
@@ -42,6 +45,14 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     verify.add_argument("--env", required=True, choices=sorted(VALID_ENVS))
     verify.add_argument("--import-run-id", required=True)
     verify.add_argument("--run-id")
+    verify.add_argument(
+        "--previous-environment-readiness",
+        default="",
+        help=(
+            "Beta/Gamma/Prod milestone Research activation 必需的前一环境 "
+            "release-readiness.json（相对 QWQ_OUTPUT_ROOT）"
+        ),
+    )
     verify.add_argument(
         "--readiness-phase",
         choices=("research", "consumer", "commercial"),

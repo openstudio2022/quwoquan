@@ -7,6 +7,7 @@ enum ContentErrorCode {
   forbiddenEdit('CONTENT.USER.forbidden_edit', 'surface', 0, 403),
   forbiddenDelete('CONTENT.USER.forbidden_delete', 'surface', 0, 403),
   unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
+  researchIdentityInvalid('CONTENT.USER.research_identity_invalid', 'surface', 0, 403),
   invalidArgument('CONTENT.USER.invalid_argument', 'surface', 0, 400),
   invalidContentType('CONTENT.USER.invalid_content_type', 'surface', 0, 400),
   rateLimited('CONTENT.USER.rate_limited', 'retry', 60, 429),
@@ -88,6 +89,8 @@ enum ContentErrorCode {
         return ContentErrorCode.forbiddenDelete;
       case 'CONTENT.USER.unauthorized':
         return ContentErrorCode.unauthorized;
+      case 'CONTENT.USER.research_identity_invalid':
+        return ContentErrorCode.researchIdentityInvalid;
       case 'CONTENT.USER.invalid_argument':
         return ContentErrorCode.invalidArgument;
       case 'CONTENT.USER.invalid_content_type':
@@ -224,6 +227,7 @@ class ContentErrorMessages {
     ContentErrorCode.forbiddenEdit: '无权编辑此内容',
     ContentErrorCode.forbiddenDelete: '无权删除此内容',
     ContentErrorCode.unauthorized: '请先登录',
+    ContentErrorCode.researchIdentityInvalid: '当前研究态身份无效或已过期',
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
@@ -292,6 +296,7 @@ class ContentErrorMessages {
     ContentErrorCode.forbiddenEdit: 'Not allowed to edit this post',
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
+    ContentErrorCode.researchIdentityInvalid: 'The research identity is invalid or expired',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',

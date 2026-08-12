@@ -58,11 +58,24 @@ class SMSProviderSubstituteSecurityTest(unittest.TestCase):
         self.assertNotIn("INTEGRATION_SMS_DEBUG_SUBSTITUTE_ENABLED", debug_compose)
         self.assertNotIn("ext.sms.", debug_compose)
         self.assertNotIn("debug-sms-disabled", debug_compose)
-        self.assertIn(
-            "--ca-certificate=/run/secrets/sms-provider-substitute/ca.crt",
-            debug_compose,
-        )
+        self.assertIn("/usr/local/bin/sms-provider-substitute", debug_compose)
+        self.assertIn('"healthcheck"', debug_compose)
         self.assertNotIn("--no-check-certificate", debug_compose)
+        healthcheck_source = (
+            WORKLOAD
+            / "cmd/sms-provider-substitute/main.go"
+        ).read_text(encoding="utf-8")
+        self.assertIn("https://127.0.0.1:9443/healthz", healthcheck_source)
+        self.assertIn(
+            "/run/secrets/sms-provider-substitute/ca.crt",
+            healthcheck_source,
+        )
+        healthcheck_impl = (
+            WORKLOAD
+            / "cmd/sms-provider-substitute/healthcheck.go"
+        ).read_text(encoding="utf-8")
+        self.assertIn("tls.VersionTLS13", healthcheck_impl)
+        self.assertNotIn("InsecureSkipVerify", healthcheck_impl)
 
     def test_target_credentials_are_isolated_and_capture_key_is_not_otp_key(
         self,

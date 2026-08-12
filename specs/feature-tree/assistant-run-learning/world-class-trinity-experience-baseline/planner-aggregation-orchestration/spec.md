@@ -47,6 +47,13 @@
 - 拒答与有边界回答必须说明缺失的信息范围，不得以完整回答的形式呈现未验证内容。
 - 过程叙述必须表达当前编排阶段与原因，且不得携带内部推理、提示原文或凭据。
 
+<a id="req-004"></a>
+### REQ-004 用户意图先形成冻结的检索计划再调用研究工具
+
+- 需要站内或公开网事实时，编排必须先把目标、分维度检索词、对象范围、证据充分条件和最大查询数收敛为 `RetrievalPlan`，再显式选择 canonical Tool。
+- 计划必须绑定 Run、Turn、冻结 Tool metadata、对象访问策略、工具调用预算、候选与 ContractGraph，并以 digest 防止执行后静默改写。
+- 证据不足时只能在剩余预算内形成新计划；预算耗尽时必须基于已有证据给出有边界终态或反问，不得隐式增加查询。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/assistant-service/contracts/_shared/aggregation_state/schema.yaml`
@@ -81,6 +88,13 @@
 - WHEN 聚合状态裁决最终答案模式
 - THEN 回答以有边界回答或拒答呈现并说明缺失的信息范围
 - THEN 未验证内容不以完整回答的形式呈现
+
+<a id="gwt-004"></a>
+### GWT-004 检索调用可追溯到冻结计划
+
+- GIVEN 用户问题需要一个或多个站内或公开网检索维度
+- WHEN 编排选择研究工具并执行检索
+- THEN 每个实际检索均绑定同一份含 Run、Turn、Tool metadata、访问策略、预算、候选与 ContractGraph 身份的 `RetrievalPlan` digest，执行后不得静默改写或隐藏额外查询
 
 ## 6. 依赖
 

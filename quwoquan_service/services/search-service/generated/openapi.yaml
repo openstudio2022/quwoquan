@@ -54,7 +54,7 @@ paths:
                 facet: SearchIndexFacade
                 method: search
                 reader: SearchIndexReader
-                slice: SearchResponseView
+                slice: OwnerSearchResponseView
             parameters:
                 - name: X-Session-Id
                   in: header

@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 library;
 
@@ -316,6 +316,65 @@ enum IsolationLevel {
       "open" => IsolationLevel.open,
       "semi" => IsolationLevel.semi,
       "strict" => IsolationLevel.strict,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum OtpClientPlatform {
+  ios("ios"),
+  android("android"),
+  web("web"),
+  acceptance("acceptance");
+
+  const OtpClientPlatform(this.wireName);
+
+  final String wireName;
+
+  static OtpClientPlatform fromWire(Object? value, String path) {
+    return switch (value) {
+      "ios" => OtpClientPlatform.ios,
+      "android" => OtpClientPlatform.android,
+      "web" => OtpClientPlatform.web,
+      "acceptance" => OtpClientPlatform.acceptance,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum OtpDeliveryAvailability {
+  ready("ready"),
+  temporarilyUnavailable("temporarily_unavailable");
+
+  const OtpDeliveryAvailability(this.wireName);
+
+  final String wireName;
+
+  static OtpDeliveryAvailability fromWire(Object? value, String path) {
+    return switch (value) {
+      "ready" => OtpDeliveryAvailability.ready,
+      "temporarily_unavailable" => OtpDeliveryAvailability.temporarilyUnavailable,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum OtpDeliveryStatus {
+  queued("queued"),
+  sentUnconfirmed("sent_unconfirmed"),
+  delivered("delivered"),
+  failed("failed");
+
+  const OtpDeliveryStatus(this.wireName);
+
+  final String wireName;
+
+  static OtpDeliveryStatus fromWire(Object? value, String path) {
+    return switch (value) {
+      "queued" => OtpDeliveryStatus.queued,
+      "sent_unconfirmed" => OtpDeliveryStatus.sentUnconfirmed,
+      "delivered" => OtpDeliveryStatus.delivered,
+      "failed" => OtpDeliveryStatus.failed,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -1852,36 +1911,59 @@ final class OtpChallengeIssueResult {
     required this.expiresInSeconds,
     required this.deliveryStatus,
     required this.retryAfterSeconds,
-    this.requestId,
-    this.challengeId,
+    required this.requestId,
+    required this.challengeId,
   });
 
   final String maskedPhone;
   final int expiresInSeconds;
-  final String deliveryStatus;
+  final OtpDeliveryStatus deliveryStatus;
   final int retryAfterSeconds;
-  final String? requestId;
-  final String? challengeId;
+  final String requestId;
+  final String challengeId;
 
   factory OtpChallengeIssueResult.fromWire(Map<String, Object?> map, [String path = "OtpChallengeIssueResult"]) {
     _rejectUnknownFields(map, const <String>{"maskedPhone", "expiresInSeconds", "deliveryStatus", "retryAfterSeconds", "requestId", "challengeId"}, path);
     return OtpChallengeIssueResult(
       maskedPhone: _requiredString(map["maskedPhone"], '$path.maskedPhone'),
       expiresInSeconds: _requiredInt(map["expiresInSeconds"], '$path.expiresInSeconds'),
-      deliveryStatus: _requiredString(map["deliveryStatus"], '$path.deliveryStatus'),
+      deliveryStatus: OtpDeliveryStatus.fromWire(map["deliveryStatus"], '$path.deliveryStatus'),
       retryAfterSeconds: _requiredInt(map["retryAfterSeconds"], '$path.retryAfterSeconds'),
-      requestId: map["requestId"] == null ? null : _requiredString(map["requestId"], '$path.requestId'),
-      challengeId: map["challengeId"] == null ? null : _requiredString(map["challengeId"], '$path.challengeId'),
+      requestId: _requiredNonBlankString(map["requestId"], '$path.requestId'),
+      challengeId: _requiredNonBlankString(map["challengeId"], '$path.challengeId'),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "maskedPhone": maskedPhone,
     "expiresInSeconds": expiresInSeconds,
-    "deliveryStatus": deliveryStatus,
+    "deliveryStatus": deliveryStatus.wireName,
     "retryAfterSeconds": retryAfterSeconds,
-    if (requestId != null) "requestId": requestId!,
-    if (challengeId != null) "challengeId": challengeId!,
+    "requestId": requestId,
+    "challengeId": challengeId,
+  };
+}
+
+final class OtpDeliveryReadiness {
+  const OtpDeliveryReadiness({
+    required this.availability,
+    required this.retryAfterSeconds,
+  });
+
+  final OtpDeliveryAvailability availability;
+  final int retryAfterSeconds;
+
+  factory OtpDeliveryReadiness.fromWire(Map<String, Object?> map, [String path = "OtpDeliveryReadiness"]) {
+    _rejectUnknownFields(map, const <String>{"availability", "retryAfterSeconds"}, path);
+    return OtpDeliveryReadiness(
+      availability: OtpDeliveryAvailability.fromWire(map["availability"], '$path.availability'),
+      retryAfterSeconds: _requiredInt(map["retryAfterSeconds"], '$path.retryAfterSeconds'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "availability": availability.wireName,
+    "retryAfterSeconds": retryAfterSeconds,
   };
 }
 
@@ -3181,6 +3263,33 @@ final class UserSyncPatch {
   };
 }
 
+final class WhitelistedResearchSession {
+  const WhitelistedResearchSession({
+    required this.subjectHash,
+    required this.attestationId,
+    required this.expiresAt,
+  });
+
+  final String subjectHash;
+  final String attestationId;
+  final DateTime expiresAt;
+
+  factory WhitelistedResearchSession.fromWire(Map<String, Object?> map, [String path = "WhitelistedResearchSession"]) {
+    _rejectUnknownFields(map, const <String>{"subjectHash", "attestationId", "expiresAt"}, path);
+    return WhitelistedResearchSession(
+      subjectHash: _requiredNonBlankString(map["subjectHash"], '$path.subjectHash'),
+      attestationId: _requiredNonBlankString(map["attestationId"], '$path.attestationId'),
+      expiresAt: _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "subjectHash": subjectHash,
+    "attestationId": attestationId,
+    "expiresAt": expiresAt.toUtc().toIso8601String(),
+  };
+}
+
 ActivePersonaContextView decodeActivePersonaContextView(Object? response) =>
     ActivePersonaContextView.fromWire(_requiredObject(response, "ActivePersonaContextView"), "ActivePersonaContextView");
 
@@ -3259,6 +3368,9 @@ OneTapLoginHint decodeOneTapLoginHint(Object? response) =>
 OtpChallengeIssueResult decodeOtpChallengeIssueResult(Object? response) =>
     OtpChallengeIssueResult.fromWire(_requiredObject(response, "OtpChallengeIssueResult"), "OtpChallengeIssueResult");
 
+OtpDeliveryReadiness decodeOtpDeliveryReadiness(Object? response) =>
+    OtpDeliveryReadiness.fromWire(_requiredObject(response, "OtpDeliveryReadiness"), "OtpDeliveryReadiness");
+
 PersonaLifecycleGuardView decodePersonaLifecycleGuardView(Object? response) =>
     PersonaLifecycleGuardView.fromWire(_requiredObject(response, "PersonaLifecycleGuardView"), "PersonaLifecycleGuardView");
 
@@ -3318,6 +3430,9 @@ UserHomepageBundleWire decodeUserHomepageBundleWire(Object? response) =>
 
 UserSettingsCommandResult decodeUserSettingsCommandResult(Object? response) =>
     UserSettingsCommandResult.fromWire(_requiredObject(response, "UserSettingsCommandResult"), "UserSettingsCommandResult");
+
+WhitelistedResearchSession decodeWhitelistedResearchSession(Object? response) =>
+    WhitelistedResearchSession.fromWire(_requiredObject(response, "WhitelistedResearchSession"), "WhitelistedResearchSession");
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {

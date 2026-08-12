@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Alpha-only PersonaRelationship 拉黑 Facet。
 /// production 依赖图不可达本文件；命令与列表共享一份有状态集合。
@@ -11,9 +11,9 @@ final class InMemoryPersonaRelationshipFacet
         RelationshipCapabilityQuery {
   InMemoryPersonaRelationshipFacet({
     this.viewerPersonaId = 'fixture_user_current',
-    ObjectScenarioSeedReader? fixtures,
+    ObjectContractExampleReader? fixtures,
   }) : _relationshipRows = _loadRelationships(
-         fixtures ?? objectScenarioSeedReader,
+         fixtures ?? objectContractExampleReader,
        );
 
   final String viewerPersonaId;
@@ -22,9 +22,9 @@ final class InMemoryPersonaRelationshipFacet
       <String, BlockedListItemView>{};
 
   static Map<String, Map<String, Object?>> _loadRelationships(
-    ObjectScenarioSeedReader fixtures,
+    ObjectContractExampleReader fixtures,
   ) {
-    final seed = fixtures.requireSeedSet('user', 'relationship_core');
+    final seed = fixtures.requireExample('user', 'relationship_core');
     final rows = seed['relationships'];
     if (rows is! List<Object?>) {
       throw const FormatException(

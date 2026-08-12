@@ -94,6 +94,39 @@
             "legendFormat": "{{ provider }} / {{ result }}"
           }
         ]
+      },
+      {
+        "title": "验证码投递与确认结果",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_login_operation_events_total{operation=~\"send_otp|confirm_otp_delivery(_5s|_15s)?\"}[5m])) by (operation, result)",
+            "legendFormat": "{{ operation }} / {{ result }}"
+          }
+        ]
+      },
+      {
+        "title": "登录完成率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_login_funnel_events_total{action=\"login_terminal\",result=\"login_success\"}[15m])) / clamp_min(sum(rate(ops_login_funnel_events_total{action=\"login_flow_exposed\",result=\"exposed\"}[15m])), 0.001)",
+            "legendFormat": "login completion"
+          }
+        ]
+      },
+      {
+        "title": "验证码发送结果确认 P95 延迟",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_login_operation_duration_seconds_bucket{operation=~\"confirm_otp_delivery(_5s|_15s)?\"}[10m])) by (le, operation))",
+            "legendFormat": "P95 {{ operation }}"
+          }
+        ]
       }
     ]
   }

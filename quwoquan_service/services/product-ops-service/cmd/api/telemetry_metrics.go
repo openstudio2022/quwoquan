@@ -388,7 +388,9 @@ func boundedLoginResult(value string) string {
 	case "exposed", "success", "failure", "started", "shown", "cancelled",
 		"accepted", "required", "available", "resumed", "dismissed",
 		"binding_required", "stalled", "duplicate_suppressed",
-		"opened", "unavailable":
+		"opened", "unavailable", "idempotent_replay", "delivery_confirming",
+		"sent_unconfirmed", "delivery_failed", "rate_limited",
+		"decode_contract_violation", "login_success":
 		return value
 	default:
 		return "other"
@@ -420,7 +422,8 @@ func boundedLoginOperation(value string) string {
 	case "resolve_login_entry", "refresh_remembered_session", "login_one_tap",
 		"send_otp", "verify_login_otp", "complete_federated_phone_binding",
 		"login_social_wechat", "login_social_qq", "login_social_alipay",
-		"open_account_restriction_support":
+		"open_account_restriction_support", "confirm_otp_delivery",
+		"confirm_otp_delivery_5s", "confirm_otp_delivery_15s":
 		return value
 	default:
 		return "other"

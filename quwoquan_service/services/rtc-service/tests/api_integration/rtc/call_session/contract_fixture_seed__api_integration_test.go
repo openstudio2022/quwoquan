@@ -9,7 +9,7 @@ import (
 )
 
 type rtcFixturePack struct {
-	SeedSets map[string]rtcFixtureSeedSet `json:"seedSets"`
+	Examples map[string]rtcFixtureSeedSet `json:"examples"`
 }
 
 type rtcFixtureSeedSet struct {
@@ -31,7 +31,7 @@ func TestContractFixtureSeed_RtcReadsViaHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load rtc fixture: %v", err)
 	}
-	seed := pack.SeedSets["rtc_core"]
+	seed := pack.Examples["rtc_core"]
 	if len(seed.Sessions) == 0 {
 		t.Fatalf("rtc_core has no sessions")
 	}

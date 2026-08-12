@@ -184,8 +184,60 @@ def _candidate_issues(
     if candidate.get("entityRef") != candidate.get("observedEntityRef"):
         issues.append(f"{candidate_id}: entity mismatch")
 
+    article_category = str(candidate.get("articleCategory") or "").strip()
+    classification = candidate.get("sourceClassification")
+    if article_category:
+        try:
+            from core.schema import assert_valid
+
+            assert_valid(
+                classification,
+                "source",
+                "article_source_classification",
+                label=f"{candidate_id}.sourceClassification",
+            )
+        except (FileNotFoundError, TypeError, ValueError) as exc:
+            issues.append(f"{candidate_id}: photography classification invalid: {exc}")
+        if isinstance(classification, Mapping):
+            stable_classification = {
+                key: value
+                for key, value in classification.items()
+                if key != "classificationDigest"
+            }
+            if classification.get("classificationDigest") != _canonical_digest(
+                stable_classification
+            ):
+                issues.append(
+                    f"{candidate_id}: photography classification digest drift"
+                )
+        if not isinstance(classification, Mapping) or any(
+            (
+                article_category != "photography",
+                candidate.get("writingIntent") != "planning_consultation",
+                candidate.get("topicTagRefs")
+                != ["Topic/旅行/玩法/摄影旅拍"],
+                classification.get("articleCategory") != article_category
+                if isinstance(classification, Mapping)
+                else True,
+                classification.get("bodyContentSha256")
+                != candidate.get("bodyContentSha256")
+                if isinstance(classification, Mapping)
+                else True,
+                classification.get("entityRef") != candidate.get("entityRef")
+                if isinstance(classification, Mapping)
+                else True,
+            )
+        ):
+            issues.append(f"{candidate_id}: photography classification binding drift")
+    elif any(
+        field in candidate
+        for field in ("writingIntent", "topicTagRefs", "sourceClassification")
+    ):
+        issues.append(f"{candidate_id}: partial Article category binding is forbidden")
+
     assets = candidate.get("assets")
     rows = assets if isinstance(assets, list) else []
+    publish_media_mode = str(candidate.get("publishMediaMode") or "")
     cover_count = 0
     body_count = 0
     asset_ids: set[str] = set()
@@ -259,10 +311,13 @@ def _candidate_issues(
                 f"{label}: commercial_allowed requires verified rights and proof"
             )
 
-    if cover_count != 1:
-        issues.append(f"{candidate_id}: exactly one cover image is required")
-    if body_count < 1:
-        issues.append(f"{candidate_id}: at least one body image is required")
+    if publish_media_mode == "illustrated":
+        if cover_count != 1:
+            issues.append(f"{candidate_id}: exactly one cover image is required")
+        if body_count < 1:
+            issues.append(f"{candidate_id}: at least one body image is required")
+    elif publish_media_mode == "text_only" and rows:
+        issues.append(f"{candidate_id}: text_only article must not bind media assets")
     return issues
 
 

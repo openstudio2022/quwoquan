@@ -62,23 +62,25 @@ def build_semantic_preflight_receipt(
         raise ValueError("semantic preflight evidence fallbackPolicy must be forbidden")
     soak_requested = bool(report.get("soakRequested"))
     workspace_requested = bool(report.get("workspaceSmokeRequested"))
+    startup_requested = bool(report.get("startupRequested"))
     preflight_ready = bool((report.get("preflight") or {}).get("ready"))
+    startup_evidence = evidence.get("semanticAgentStartup")
+    startup_ready = bool(
+        isinstance(startup_evidence, Mapping)
+        and startup_evidence.get("checked") is True
+        and startup_evidence.get("ready") is True
+    )
     capacity_ready = bool((report.get("capacitySoak") or {}).get("ready"))
-    workspace_ready = bool((report.get("workspaceSmoke") or {}).get("ready"))
-    fleet = evidence.get("reliableTaskFleet")
-    fleet_ready = bool(
-        isinstance(fleet, Mapping)
-        and fleet.get("checked") is True
-        and fleet.get("ready") is True
-        and fleet.get("mongo") is True
-        and fleet.get("redis") is True
-        and fleet.get("owned") is True
+    workspace_probe = report.get("workspaceSmoke") or {}
+    workspace_ready = bool(
+        isinstance(workspace_probe, Mapping)
+        and workspace_probe.get("ready") is True
+        and workspace_probe.get("workspaceCount") == 4
+        and workspace_probe.get("successCount") == 4
+        and workspace_probe.get("configuredConcurrency") == 4
+        and workspace_probe.get("effectiveConcurrency") == 4
     )
     overall_ready = bool(report.get("ready"))
-    if overall_ready and not fleet_ready:
-        raise ValueError(
-            "semantic preflight overall ready requires writable ReliableTask fleet"
-        )
     if overall_ready and not preflight_ready:
         raise ValueError(
             "semantic preflight overall ready requires preflightReady"
@@ -96,25 +98,29 @@ def build_semantic_preflight_receipt(
         seconds=active_runtime_policy().semantic_capacity.receipt_ttl_seconds
     )
     stable = {
-        "schema": "quwoquan_data.semantic_preflight_receipt",
+        "schema": "quwoquan_data.semantic_provider_preflight_receipt",
+        "preflightProfile": "semantic",
         "recordedAt": recorded_at.isoformat().replace("+00:00", "Z"),
         "validUntil": valid_until.isoformat().replace("+00:00", "Z"),
         **selection.document(),
         "selectionDigest": selection.selection_digest,
         "fallbackPolicy": "forbidden",
-        "startupRequested": bool(report.get("startupRequested")),
+        "startupRequested": startup_requested,
         "soakRequested": soak_requested,
         "workspaceSmokeRequested": workspace_requested,
         "preflightReady": preflight_ready,
         "capacitySoakReady": capacity_ready,
         "workspaceSmokeReady": workspace_ready,
         "ready": overall_ready,
-        "executionAdmissionReady": (
+        "semanticExecutionReady": (
             overall_ready
             and preflight_ready
-            and fleet_ready
+            and startup_requested
+            and startup_ready
             and soak_requested
             and capacity_ready
+            and workspace_requested
+            and workspace_ready
         ),
         "evidenceDigest": _digest(evidence),
         "evidence": evidence,
@@ -123,8 +129,8 @@ def build_semantic_preflight_receipt(
     assert_valid(
         receipt,
         "execution",
-        "semantic_preflight_receipt",
-        label=f"semantic preflight receipt:{selection.selection_id}",
+        "semantic_provider_preflight_receipt",
+        label=f"semantic provider preflight receipt:{selection.selection_id}",
     )
     return receipt
 
@@ -133,15 +139,15 @@ def validate_semantic_preflight_receipt(
     receipt: Mapping[str, Any],
     *,
     expected_selection: SemanticPreflightSelection | None = None,
-    require_execution_admission: bool = False,
+    require_semantic_execution_ready: bool = False,
     now: datetime | None = None,
 ) -> None:
     payload = dict(receipt)
     assert_valid(
         payload,
         "execution",
-        "semantic_preflight_receipt",
-        label="semantic preflight receipt",
+        "semantic_provider_preflight_receipt",
+        label="semantic provider preflight receipt",
     )
     evidence = payload["evidence"]
     if _digest(evidence) != payload["evidenceDigest"]:
@@ -168,7 +174,7 @@ def validate_semantic_preflight_receipt(
     valid_until = _timestamp(payload["validUntil"], label="validUntil")
     if valid_until <= recorded_at:
         raise ValueError("semantic preflight receipt validity window is invalid")
-    if require_execution_admission:
+    if require_semantic_execution_ready:
         observed_now = now or datetime.now(timezone.utc)
         if observed_now < recorded_at or observed_now > valid_until:
             raise ValueError("semantic preflight receipt is outside its validity window")
@@ -204,18 +210,8 @@ def validate_semantic_preflight_receipt(
         )
     ):
         raise ValueError("semantic preflight receipt capacity binding mismatch")
-    fleet = evidence.get("reliableTaskFleet")
-    fleet_ready = bool(
-        isinstance(fleet, Mapping)
-        and fleet.get("checked") is True
-        and fleet.get("ready") is True
-        and fleet.get("mongo") is True
-        and fleet.get("redis") is True
-        and fleet.get("owned") is True
-    )
     if payload["ready"] and (
         not payload["preflightReady"]
-        or not fleet_ready
         or (payload["soakRequested"] and not payload["capacitySoakReady"])
         or (
             payload["workspaceSmokeRequested"]
@@ -226,19 +222,24 @@ def validate_semantic_preflight_receipt(
     expected_admission = bool(
         payload["ready"]
         and payload["preflightReady"]
-        and fleet_ready
+        and payload["startupRequested"]
+        and isinstance(startup, Mapping)
+        and startup.get("checked") is True
+        and startup.get("ready") is True
         and payload["soakRequested"]
         and payload["capacitySoakReady"]
+        and payload["workspaceSmokeRequested"]
+        and payload["workspaceSmokeReady"]
     )
-    if payload["executionAdmissionReady"] is not expected_admission:
-        raise ValueError("semantic preflight receipt execution admission is inconsistent")
+    if payload["semanticExecutionReady"] is not expected_admission:
+        raise ValueError("semantic provider preflight execution readiness is inconsistent")
     if expected_selection is not None:
         if selection_document != expected_selection.document():
             raise ValueError("semantic preflight receipt does not match expected selection")
         if payload["selectionDigest"] != expected_selection.selection_digest:
             raise ValueError("semantic preflight receipt selection is stale")
-    if require_execution_admission and not payload["executionAdmissionReady"]:
-        raise ValueError("semantic preflight receipt is not execution-admission ready")
+    if require_semantic_execution_ready and not payload["semanticExecutionReady"]:
+        raise ValueError("semantic provider preflight is not execution-ready")
 
 
 def _timestamp(value: object, *, label: str) -> datetime:

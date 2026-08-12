@@ -7,8 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/chat_contacts_rows_dependencies.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/message_home_rows.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/message_home_rows_provider.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contacts_row.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final class PatrolCoreChatProvision {
@@ -21,6 +23,16 @@ final class PatrolCoreChatProvision {
   final String conversationId;
   final String messageText;
   final String messageId;
+}
+
+final class PatrolCoreBusinessReadback {
+  const PatrolCoreBusinessReadback({
+    required this.messageRows,
+    required this.contactRows,
+  });
+
+  final Map<String, List<MessageHomeRow>> messageRows;
+  final Map<ChatContactHomeFilter, List<ChatContactsRow>> contactRows;
 }
 
 ProviderContainer patrolMountedContainer() {
@@ -84,5 +96,43 @@ Future<PatrolCoreChatProvision> provisionPatrolCoreChatConversation(
     conversationId: conversationId,
     messageText: messageText,
     messageId: messageId,
+  );
+}
+
+Future<PatrolCoreBusinessReadback> readPatrolCoreBusinessReadback(
+  PatrolIntegrationTester $,
+) async {
+  final container = patrolMountedContainer();
+  patrolAuthenticatedSession(container);
+  const messageFilters = <String>['all', 'direct', 'group'];
+  const contactFilters = <ChatContactHomeFilter>[
+    ChatContactHomeFilter.all,
+    ChatContactHomeFilter.mutual,
+    ChatContactHomeFilter.circle,
+    ChatContactHomeFilter.group,
+  ];
+  for (final filter in messageFilters) {
+    container.invalidate(messageHomeRowsStateProvider(filter));
+  }
+  for (final filter in contactFilters) {
+    container.invalidate(chatContactsRowsForSubTabProvider(filter));
+  }
+  await $.pump();
+  final messageRows = <String, List<MessageHomeRow>>{};
+  for (final filter in messageFilters) {
+    final snapshot = await container.read(
+      messageHomeRowsStateProvider(filter).future,
+    );
+    messageRows[filter] = snapshot.rows;
+  }
+  final contactRows = <ChatContactHomeFilter, List<ChatContactsRow>>{};
+  for (final filter in contactFilters) {
+    contactRows[filter] = await container.read(
+      chatContactsRowsForSubTabProvider(filter).future,
+    );
+  }
+  return PatrolCoreBusinessReadback(
+    messageRows: messageRows,
+    contactRows: contactRows,
   );
 }

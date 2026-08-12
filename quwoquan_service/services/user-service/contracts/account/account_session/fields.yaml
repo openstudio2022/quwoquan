@@ -302,6 +302,26 @@ types:
           - NOT_BLANK
         client_dart_type: String
         client_normalization: trim
+  WhitelistedResearchSession:
+    fields:
+      - name: subjectHash
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: attestationId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: expiresAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+  IssueWhitelistedResearchSessionCommand:
+    fields:
+      - name: accountId
+        type: string
+        constraints:
+          - NOT_BLANK
   ActivePersonaEnvelope:
     fields:
       - {name: personaId, type: string, constraints: [NOT_BLANK]}

@@ -1,5 +1,7 @@
-# Campaign scale catalog: named presets plus arbitrary M{n}/quota (hard cap).
-# count is never stored here; runtime derives it via oversampleFactor.
+# Campaign scale catalog: named throughput floors plus arbitrary M{n}/quota.
+# A quota is a minimum workload/milestone floor, never a maximum admission count.
+# Full-frontier runs may finalize every qualified object beyond the named floor;
+# count is never stored here and runtime derives initial work via oversampleFactor.
 maxQuota: 100000
 minQuota: 1
 namedScales:

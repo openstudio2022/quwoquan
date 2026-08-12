@@ -93,6 +93,14 @@
             ],
             "description": "底稿派生的可选内容角度标签（不再单篇唯一/硬阻断）：攻略=planning_consultation，体验=decision_experience，游记=post_trip_journal"
           },
+          "articleCategory": {
+            "const": "photography"
+          },
+          "tagRefs": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
           "baseSourceRef": {
             "type": "string",
             "description": "主底稿来源 ref（batch 相对 sources/{sourceUnitId}/source.md）；作为风格与事实锚点，其它来源只能补事实"

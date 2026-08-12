@@ -2,7 +2,7 @@ fields:
 - name: platform
   source: platform
   type: string
-  constraints: [NOT_NULL, ENUM_ios_android]
+  constraints: [NOT_NULL, ENUM_android_ios_web]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read
@@ -26,10 +26,38 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
+- name: minimumSupportedVersion
+  source: minimumSupportedVersion
+  type: string
+  constraints: [NOT_NULL]
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: minimumSupportedBuild
+  source: minimumSupportedBuild
+  type: string
+  constraints: [NOT_NULL, DECIMAL_POSITIVE]
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: updateState
+  source: updateState
+  type: enum
+  enum_ref: AppReleaseUpdateState
+  constraints: [NOT_NULL]
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
 - name: updateUrl
   source: updateUrl
   type: string
-  constraints: [NULLABLE, HTTPS_URL]
+  constraints: [NOT_NULL, HTTPS_URL]
   classification: PUBLIC
   log_policy: metadata_only
   api_exposure: read
@@ -96,7 +124,7 @@ types:
     - name: platform
       source: platform
       type: string
-      constraints: [NOT_NULL, ENUM_ios_android]
+      constraints: [NOT_NULL, ENUM_android_ios_web]
       classification: PUBLIC
       log_policy: allow
       api_exposure: write
@@ -117,3 +145,6 @@ types:
       log_policy: allow
       api_exposure: write
       ops_exposure: none
+enums:
+  AppReleaseUpdateState:
+    values: [none, available, required]

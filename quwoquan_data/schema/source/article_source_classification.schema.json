@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/article_source_classification.schema.json",
+  "title": "Governed Article source topic classification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "classifierVersion", "articleCategory", "writingIntent",
+    "topicTagRefs", "requestedTopic", "entityRef", "entityName",
+    "entityMatched", "photographyIntentMatched", "discoveryQuery",
+    "sourceTitle", "matchedTitleSignals", "matchedBodySignals",
+    "bodyContentSha256", "classificationDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.article_source_classification"},
+    "classifierVersion": {"const": "article-source-topic-v1"},
+    "articleCategory": {"const": "photography"},
+    "writingIntent": {"const": "planning_consultation"},
+    "topicTagRefs": {
+      "type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true,
+      "items": {"const": "Topic/旅行/玩法/摄影旅拍"}
+    },
+    "requestedTopic": {"const": "摄影"},
+    "entityRef": {"type": "string", "pattern": "^/entity/[^/]+/[^/]+/[^/]+$"},
+    "entityName": {"type": "string", "minLength": 1},
+    "entityMatched": {"const": true},
+    "photographyIntentMatched": {"const": true},
+    "discoveryQuery": {"type": "string", "minLength": 1},
+    "sourceTitle": {"type": "string", "minLength": 1},
+    "matchedTitleSignals": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "matchedBodySignals": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "bodyContentSha256": {"$ref": "#/$defs/sha256"},
+    "classificationDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "anyOf": [
+    {"properties": {"matchedTitleSignals": {"minItems": 1}}},
+    {"properties": {"matchedBodySignals": {"minItems": 3}}}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

@@ -147,7 +147,7 @@
 - 测试：
   - `local_contract`：`quwoquan_service/services/user-service/tests`
   - `api_integration`：`quwoquan_service/services/user-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/account_closure`、`quwoquan_app/test/user_acceptance/journeys/profile`
+  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/service/user_service/account/user_account`、`quwoquan_app/test/user_acceptance/journeys/profile`
 
 ## 8. 开放事项
 

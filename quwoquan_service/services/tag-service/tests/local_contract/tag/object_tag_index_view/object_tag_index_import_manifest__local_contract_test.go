@@ -40,7 +40,7 @@ func TestEnvironmentSeedManifestIsRejected(t *testing.T) {
 	t.Parallel()
 
 	raw := []byte(`{
-		"seedSets": {
+		"examples": {
 			"declared": {
 				"object_tag_index": [{
 					"objectId": "user-1",

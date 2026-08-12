@@ -301,43 +301,36 @@ test('active alerts listing and ack hit platform alert loop endpoints', async ()
   restoreEnvAndFetch();
 });
 
-test('requests stage-scoped gray routing policy from platform control plane', async () => {
+test('requests stable five-stage rollout policy from platform control plane', async () => {
   process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
   const calls = stubFetch({
     policy: {
       enabled: true,
-      grayUpstream: 'http://gray.internal:29000',
-      grayUpstreamTlsInsecureSkipVerify: false,
-      stageDimensions: {
-        'gray-initial': {
-          appVersions: [],
-          userIds: ['ops-release-canary'],
-          provinces: [],
-          carriers: [],
-        },
-        'carry-on': {
-          appVersions: ['1.1.0'],
-          userIds: ['ops-release-canary'],
-          provinces: [],
-          carriers: [],
-        },
-        full: {
-          appVersions: [],
-          userIds: [],
-          provinces: [],
-          carriers: [],
-        },
+      campaignId: 'release-test-001',
+      candidateDigest: `sha256:${'c'.repeat(64)}`,
+      allocationKeyId: 'rollout-test-001',
+      subjectKind: 'device_actor',
+      stage: '5',
+      status: 'active',
+      candidateUpstream: 'http://candidate.internal:29000',
+      assignmentTtlDaysAfterCampaign: 30,
+      internalCanary: { accountIds: ['ops-release-canary'], deviceActorIds: [] },
+      stages: {
+        canary: { basisPoints: 0 },
+        '5': { basisPoints: 500 },
+        '20': { basisPoints: 2000 },
+        '50': { basisPoints: 5000 },
+        '100': { basisPoints: 10000 },
       },
     },
-    sourcePath: '/runtime/config-root/gray-routing/policy.yaml',
-    rawYaml: 'policy: {}',
+    source: { path: '/runtime/config-root/rollout/policy.yaml', sha256: `sha256:${'d'.repeat(64)}` },
   });
 
   const response = await fetchGrayRoutingPolicy();
 
   assert.equal(calls[0], 'http://platform.test/control-plane/platform/rollout/routing-policy');
-  assert.deepEqual(response.policy.stageDimensions['gray-initial'].userIds, ['ops-release-canary']);
-  assert.deepEqual(response.policy.stageDimensions.full.appVersions, []);
+  assert.deepEqual(response.policy.internalCanary.accountIds, ['ops-release-canary']);
+  assert.equal(response.policy.stages['100'].basisPoints, 10000);
   restoreEnvAndFetch();
 });
 

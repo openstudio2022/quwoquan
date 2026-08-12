@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	rerrors "quwoquan_service/runtime/errors"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
 	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
 	credentialports "quwoquan_service/services/user-service/internal/account/credential_binding/domain/ports"
@@ -62,6 +63,12 @@ func TestUserAccountPersonaQueryOperationsCallTheOwningFacade(t *testing.T) {
 	active, err := service.GetActivePersonaContextView(t.Context(), "owner-readiness")
 	if err != nil || active["personaId"] != "persona-readiness" {
 		t.Fatalf("GetActivePersonaContextView()=%+v err=%v", active, err)
+	}
+	if avatarVersion, ok := active["avatarVersion"].(int); !ok || avatarVersion != 0 {
+		t.Fatalf(
+			"GetActivePersonaContextView() avatarVersion=%#v, want canonical int(0)",
+			active["avatarVersion"],
+		)
 	}
 	guard, err := service.GetPersonaLifecycleGuard(
 		t.Context(), "owner-readiness", "persona-readiness",
@@ -104,6 +111,46 @@ func TestUserAccountPersonaQueryOperationsCallTheOwningFacade(t *testing.T) {
 		!strings.Contains(recorder.Body.String(), `"personaId":"persona-readiness"`) ||
 		!strings.Contains(recorder.Body.String(), `"isGuest":true`) {
 		t.Fatalf("GetUserHomepageBundle status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestGetActivePersonaContextFailsClosedWhenCanonicalSubjectIsUnavailable(t *testing.T) {
+	tests := []struct {
+		name         string
+		profileStore *readinessProfileStore
+		personaStore *readinessPersonaStore
+	}{
+		{
+			name:         "owner profile missing",
+			profileStore: &readinessProfileStore{},
+			personaStore: &readinessPersonaStore{personas: []usermodel.Persona{readinessPersona()}},
+		},
+		{
+			name:         "active persona missing",
+			profileStore: &readinessProfileStore{profile: readinessProfile()},
+			personaStore: &readinessPersonaStore{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := application.NewPersonaService(
+				test.personaStore,
+				&readinessPersonaCommands{},
+				&readinessPersonaProjector{},
+				test.profileStore,
+				readinessProfileCache{},
+			)
+
+			view, err := service.GetActivePersonaContextView(t.Context(), "owner-readiness")
+			if view != nil {
+				t.Fatalf("GetActivePersonaContextView() view=%+v, want nil", view)
+			}
+			appErr := rerrors.NormalizeError(err)
+			if appErr.Code.String() != "USER.SYSTEM.internal_error" || appErr.HTTPStatus != http.StatusInternalServerError {
+				t.Fatalf("GetActivePersonaContextView() err=%+v", appErr)
+			}
+		})
 	}
 }
 

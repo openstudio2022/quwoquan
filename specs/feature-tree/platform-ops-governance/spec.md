@@ -55,6 +55,23 @@
 - 三类面必须保持契约与部署拓扑解耦；第一方服务拥有独立 workload 定义，跨服务装配不得引入组合业务 `seed-box`。
 - 契约设计不得依赖当前部署拓扑，避免后续拆 Pod 返工。
 - 可观测统一且可检索
+- Alpha、Beta、Gamma 的 mutable `test_live` runtime 必须由 `stackctl` 同轨完成启动与退出。
+- Alpha、Beta、Gamma 的 Research identity 必须在 runtime materialization 时从 `target + canonical acceptance subject` 生成 target-scoped、仓外、`0600`、create-once binding；User 启动只消费其精确 `accountId` allowlist，后续 OTP/login 必须使用同一 subject 并回读同一 account。缺 producer、空 allowlist、旧 session/数据库反查、硬编码 ID 或 binding 漂移一律在启动前 fail closed。
+- `dev-session` 只拥有 mutable runtime 生命周期，不创建或保留 UAT 业务数据。Alpha、Beta、Gamma 的受保护 UAT 必须由 `stackctl verify` 从选中 CaseResult 的强类型请求图创建独立 Actor 与交易事实，经目标 canonical HTTPS 和所属领域公开 operation 完成 provision、业务正文、readback 与 cleanup；候选、Provider、target 或请求依赖漂移必须在首个 mutation 前阻断。
+- mutable runtime 的内容证据绑定必须使用 receipt-bound `dev-session bind-content` 单轨，显式输入 current running `startupAttemptId`、release/verify/manifest/readiness digest；该动作只验证 exact runtime identity、create-once binding 与 launcher handoff，禁止 materialize、build、refresh 或启动 Compose。同值 replay 幂等，attempt、runtime、readiness 或已绑定值漂移必须 typed `GATE_BLOCK`。
+- mutable runtime 退出只能消费当前 target 的 canonical running receipt，并验证零 consumer lease、receipt 与 runRoot runtime plan 一致、Compose project/config/container labels 未漂移。
+- mutable runtime 退出不得删除 named volume，也不得从当前源码重渲染旧 runtime；只有 Compose 资源释放、volume 保留和 canonical port 收敛均被回读后，receipt 才能进入 `stopped`。
+- 任一 mutable runtime 身份或收敛检查失败必须返回 typed `GATE_BLOCK`，不得写入成功事实。
+- immutable runtime 退出必须绑定 canonical running startup receipt 与其 `candidateDigest` 对应的只读 candidate root；candidate 自身 package/Graph/provider/observability/Compose 字节仍须完整校验，但不得因当前工作区已生成下一版 Graph 而拒绝停止旧 candidate。
+
+<a id="req-003"></a>
+### REQ-003 候选绑定的保留数据修复必须在业务 API 启动前完成
+
+- 已激活 immutable release 的历史事件负载阻断服务健康时，只允许经 `stackctl repair` 的显式确认动作恢复；不得直接写业务数据库、复活旧候选、绕过健康门或重新激活 Data release。
+- 修复必须绑定当前 immutable candidate、stopped runtime、零 consumer lease、既有 active release import/creator receipt 与 canonical attestation；任一身份或字节漂移必须在写入前 `GATE_BLOCK`。
+- 修复拓扑只允许启动候选内的 owning store 与 candidate-packaged importer；业务 API、relay 与 consumer 必须保持停止，release/creator 输入只读挂载，named volume 不得 purge。
+- 每次动作必须记录 candidate/release/receipt、受管命令、修复事件摘要与 teardown readback；首次修复与期望零修复的幂等复核分别生成稳定 receipt。
+- runtime health 与 `stackctl health` 必须保留确定排序的失败 check、完整失败详情摘要与 body digest，不得只保存 middleware 泛化后的错误。
 
 ## 6. 领域验收
 
@@ -63,7 +80,19 @@
 
 - 条件：本领域收到有效输入且前置领域事实成立。
 - 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
+- 可观察结果：mutable `test_live` teardown 绑定同一 running receipt、runRoot 与 Compose project，零 lease 时仅删除该 project 的容器/网络并保留 named volume，成功后回读端口释放与 `stopped` receipt。
+- 可观察结果：`stackctl verify` 只加载选中 CaseResult 的 Provider 依赖闭包，在同一 TestDataSession 内执行 provision、Patrol/业务正文、readback 与 cleanup，并生成 run-bound、non-promotable 的追加式 receipt；Patrol 只消费控制面注入的 typed Actor handoff，不接收 fixture、裸 token 或调用方注入 ID。
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
+- 禁止结果：不得用当前工作树重新推断旧 runtime、手工删除容器、purge volume，或在资源未收敛时伪造 `stopped` receipt。
+- 可观察结果：immutable teardown 在当前 workspace 前进后仍从 receipt candidate 自身恢复精确 Provider/observability/image composition，受控释放旧 Compose 容器与网络并保留 named volumes。
+
+<a id="dom-002"></a>
+### DOM-002 active release 保留数据修复与启动前证据
+
+- 条件：当前 immutable candidate 尚未运行、consumer lease 为零，且其 release binding 与既有 active import receipt 精确一致。
+- 可观察结果：显式确认的修复只启动 owning store 与 candidate-packaged importer；首次修复精确收敛已知 legacy 负载，随后期望零修复的重放零写且字节幂等，两次均输出可读回的稳定 receipt。
+- 可观察结果：修复后业务 API 才可启动；若启动或健康仍失败，受管报告包含精确失败 check、完整详情摘要和 body digest。
+- 禁止结果：candidate/release/receipt/期望数量/CAS/cleanup 任一漂移不得写成功事实；不得启动 API/relay/consumer、删除 named volume、推进 release 或绕过 owning importer 直写数据库。
 
 ## 7. 工程归属
 

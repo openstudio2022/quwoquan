@@ -1419,8 +1419,8 @@ def _validate_hosted_readbacks(
     receipt_id = str(rollout_receipt["receiptId"])
     if (
         ledger_receipt["receiptId"] != receipt_id
-        or rollout_receipt.get("stage") != "full"
-        or rollout_receipt.get("triggerStage") != "full"
+        or rollout_receipt.get("stage") != "100"
+        or rollout_receipt.get("triggerStage") != "100"
         or rollout_receipt.get("decision") != "continue"
         or rollout_receipt.get("rollbackOutcome") != "not_triggered"
         or rollout_receipt.get("toCandidateDigest") != manifest["candidateId"]
@@ -1447,7 +1447,7 @@ def _validate_hosted_readbacks(
         evaluation.block(
             "HOSTED_READBACK_INVALID",
             rollout.label,
-            "rollout readback bytes are not the manifest-bound full-stage readback",
+            "rollout readback bytes are not the manifest-bound 100-stage readback",
         )
         return None
     for receipt, hosted in (
@@ -1573,7 +1573,9 @@ def verify_canonical_hosted_prod_soak(
     if not isinstance(policy, dict) or not isinstance(policy.get("readback"), dict):
         raise TypeError("canonical prod soak policy is invalid")
     readback_policy = policy["readback"]
-    required_seconds = lifecycle._window_seconds(readback_policy.get("window"))
+    required_seconds = lifecycle._window_seconds(
+        readback_policy.get("post_100_soak_window")
+    )
     maximum_age = int(readback_policy.get("authority_max_age_seconds") or 0)
     minimum_samples = int(readback_policy.get("minimum_samples") or 0)
     if (
@@ -1632,7 +1634,7 @@ def verify_canonical_hosted_prod_soak(
         if (
             not isinstance(plane, dict)
             or plane.get("access") != "read-write"
-            or "full" not in (plane.get("appliesToStages") or [])
+            or "100" not in (plane.get("appliesToStages") or [])
         ):
             continue
         governed = plane.get("rootlessGovernedComposeServices") or []

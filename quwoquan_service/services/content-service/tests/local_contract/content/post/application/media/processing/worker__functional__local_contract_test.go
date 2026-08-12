@@ -321,7 +321,7 @@ func TestWorkerRecordsReadyResultAndAdvancesCheckpoint(t *testing.T) {
 	recorder := &fakeRecorder{}
 	checkpoints := &fakeCheckpoints{}
 	observer := &recordingObserver{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("asset-ready", "cp-1"),
 		}},
@@ -333,7 +333,7 @@ func TestWorkerRecordsReadyResultAndAdvancesCheckpoint(t *testing.T) {
 		WithObserver(observer),
 	)
 
-	handled, err := worker.Drain(context.Background(), 10)
+	handled, err := worker.Process(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("drain: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestWorkerStandbyDoesNotDuplicateActiveReplicaProcessing(t *testing.T) {
 	source := &fakeOutboxSource{events: []mediaports.OutboxEvent{
 		assetCreatedEvent("asset-single-active-worker", "cp-1"),
 	}}
-	active := NewWorker(
+	active := NewMediaProcessingHandler(
 		source,
 		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{asset.ID(): asset}},
 		checkpoints,
@@ -404,7 +404,7 @@ func TestWorkerStandbyDoesNotDuplicateActiveReplicaProcessing(t *testing.T) {
 		WithLeaseOwner("active-replica"),
 		WithLeaseTTL(30*time.Millisecond),
 	)
-	standby := NewWorker(
+	standby := NewMediaProcessingHandler(
 		source,
 		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{asset.ID(): asset}},
 		checkpoints,
@@ -417,13 +417,13 @@ func TestWorkerStandbyDoesNotDuplicateActiveReplicaProcessing(t *testing.T) {
 
 	activeResult := make(chan error, 1)
 	go func() {
-		_, err := active.Drain(context.Background(), 1)
+		_, err := active.Process(context.Background(), 1)
 		activeResult <- err
 	}()
 	<-processor.started
 	time.Sleep(75 * time.Millisecond)
 
-	handled, err := standby.Drain(context.Background(), 1)
+	handled, err := standby.Process(context.Background(), 1)
 	if err != nil || handled != 0 {
 		t.Fatalf("standby must not process an active owner batch: handled=%d err=%v", handled, err)
 	}
@@ -451,7 +451,7 @@ func TestWorkerRunStopsWithinBoundWhenTerminationCancelsActiveProcessing(t *test
 		release: make(chan struct{}),
 	}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent(asset.ID(), "cp-1"),
 		}},
@@ -490,7 +490,7 @@ func TestWorkerRecordsRejectionForContentFailure(t *testing.T) {
 	}
 	recorder := &fakeRecorder{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("asset-broken", "cp-1"),
 		}},
@@ -501,7 +501,7 @@ func TestWorkerRecordsRejectionForContentFailure(t *testing.T) {
 		&fakePoisonEvents{},
 	)
 
-	if _, err := worker.Drain(context.Background(), 10); err != nil {
+	if _, err := worker.Process(context.Background(), 10); err != nil {
 		t.Fatalf("drain: %v", err)
 	}
 	if len(recorder.recorded) != 1 {
@@ -523,7 +523,7 @@ func TestWorkerRetriesInfrastructureFailureWithoutCheckpoint(t *testing.T) {
 	processor := &fakeProcessor{err: errors.New("object storage unavailable")}
 	recorder := &fakeRecorder{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("asset-infra", "cp-1"),
 		}},
@@ -534,7 +534,7 @@ func TestWorkerRetriesInfrastructureFailureWithoutCheckpoint(t *testing.T) {
 		&fakePoisonEvents{},
 	)
 
-	if _, err := worker.Drain(context.Background(), 10); err == nil {
+	if _, err := worker.Process(context.Background(), 10); err == nil {
 		t.Fatal("infrastructure failure must surface as a drain error")
 	}
 	if len(recorder.recorded) != 0 {
@@ -547,7 +547,7 @@ func TestWorkerRetriesInfrastructureFailureWithoutCheckpoint(t *testing.T) {
 	// 故障恢复后重放同一事件必须成功并推进 checkpoint。
 	processor.err = nil
 	processor.outcome = ProcessOutcome{Descriptor: validDescriptor("asset-infra")}
-	if _, err := worker.Drain(context.Background(), 10); err != nil {
+	if _, err := worker.Process(context.Background(), 10); err != nil {
 		t.Fatalf("drain after recovery: %v", err)
 	}
 	if len(recorder.recorded) != 1 || len(checkpoints.saved) != 1 {
@@ -563,7 +563,7 @@ func TestWorkerQuarantinesCorruptAssetEventBeforeCheckpointAdvance(t *testing.T)
 	poisons := &fakePoisonEvents{}
 	checkpoints := &fakeCheckpoints{}
 	observer := &recordingObserver{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("", "cp-corrupt"),
 		}},
@@ -575,7 +575,7 @@ func TestWorkerQuarantinesCorruptAssetEventBeforeCheckpointAdvance(t *testing.T)
 		WithObserver(observer),
 	)
 
-	handled, err := worker.Drain(context.Background(), 10)
+	handled, err := worker.Process(context.Background(), 10)
 	if err != nil || handled != 1 {
 		t.Fatalf("corrupt event must be isolated and consumed: handled=%d err=%v", handled, err)
 	}
@@ -600,7 +600,7 @@ func TestWorkerQuarantinesCorruptAssetEventBeforeCheckpointAdvance(t *testing.T)
 func TestWorkerRetainsCheckpointWhenPoisonPersistenceFails(t *testing.T) {
 	checkpoints := &fakeCheckpoints{}
 	observer := &recordingObserver{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("", "cp-corrupt"),
 		}},
@@ -612,7 +612,7 @@ func TestWorkerRetainsCheckpointWhenPoisonPersistenceFails(t *testing.T) {
 		WithObserver(observer),
 	)
 
-	if handled, err := worker.Drain(context.Background(), 10); err == nil || handled != 0 {
+	if handled, err := worker.Process(context.Background(), 10); err == nil || handled != 0 {
 		t.Fatalf("dead-letter write failure must leave event replayable: handled=%d err=%v", handled, err)
 	}
 	if len(checkpoints.saved) != 0 {
@@ -671,7 +671,7 @@ func TestWorkerFailsClosedWhenSourceCursorCannotBeQuarantined(t *testing.T) {
 			checkpoints := &fakeCheckpoints{}
 			poisons := &fakePoisonEvents{}
 			observer := &recordingObserver{}
-			worker := NewWorker(
+			worker := NewMediaProcessingHandler(
 				&fakeOutboxSource{events: []mediaports.OutboxEvent{testCase.event}},
 				&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 				checkpoints,
@@ -681,7 +681,7 @@ func TestWorkerFailsClosedWhenSourceCursorCannotBeQuarantined(t *testing.T) {
 				WithObserver(observer),
 			)
 
-			handled, err := worker.Drain(context.Background(), 10)
+			handled, err := worker.Process(context.Background(), 10)
 			if err == nil || handled != 0 {
 				t.Fatalf(
 					"unquarantinable source cursor must stop the worker: handled=%d err=%v",
@@ -712,7 +712,7 @@ func TestWorkerFailsClosedWhenSourceCursorCannotBeQuarantined(t *testing.T) {
 func TestWorkerQuarantinesCorruptPersistedAssetSnapshot(t *testing.T) {
 	poisons := &fakePoisonEvents{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("asset-corrupt-snapshot", "cp-corrupt-snapshot"),
 		}},
@@ -729,7 +729,7 @@ func TestWorkerQuarantinesCorruptPersistedAssetSnapshot(t *testing.T) {
 		poisons,
 	)
 
-	if handled, err := worker.Drain(context.Background(), 10); err != nil || handled != 1 {
+	if handled, err := worker.Process(context.Background(), 10); err != nil || handled != 1 {
 		t.Fatalf("corrupt snapshot must be isolated: handled=%d err=%v", handled, err)
 	}
 	if len(poisons.recorded) != 1 ||
@@ -745,7 +745,7 @@ func TestWorkerQuarantinesCorruptPersistedAssetSnapshot(t *testing.T) {
 func TestWorkerQuarantinesMissingMediaAssetBeforeCheckpointAdvance(t *testing.T) {
 	poisons := &fakePoisonEvents{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("asset-deleted-before-processing", "cp-missing-asset"),
 		}},
@@ -756,7 +756,7 @@ func TestWorkerQuarantinesMissingMediaAssetBeforeCheckpointAdvance(t *testing.T)
 		poisons,
 	)
 
-	if handled, err := worker.Drain(context.Background(), 10); err != nil || handled != 1 {
+	if handled, err := worker.Process(context.Background(), 10); err != nil || handled != 1 {
 		t.Fatalf("missing aggregate must be quarantined and consumed: handled=%d err=%v", handled, err)
 	}
 	if len(poisons.recorded) != 1 ||
@@ -816,7 +816,7 @@ func TestWorkerSkipsEveryDeclaredNonProcessingFactWithoutQuarantine(t *testing.T
 	poisons := &fakePoisonEvents{}
 	checkpoints := &fakeCheckpoints{}
 	source := &fakeOutboxSource{events: declaredNoops}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		source,
 		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 		checkpoints,
@@ -827,7 +827,7 @@ func TestWorkerSkipsEveryDeclaredNonProcessingFactWithoutQuarantine(t *testing.T
 		WithClock(func() time.Time { return now }),
 	)
 
-	if handled, err := worker.Drain(context.Background(), 10); err != nil || handled != len(declaredNoops) {
+	if handled, err := worker.Process(context.Background(), 10); err != nil || handled != len(declaredNoops) {
 		t.Fatalf("declared no-op facts must advance only the processing cursor: handled=%d err=%v", handled, err)
 	}
 	if len(poisons.recorded) != 0 {
@@ -840,7 +840,7 @@ func TestWorkerSkipsEveryDeclaredNonProcessingFactWithoutQuarantine(t *testing.T
 
 	// A fresh worker process must resume from the same durable processing
 	// checkpoint and must not re-quarantine or re-handle the declared facts.
-	restarted := NewWorker(
+	restarted := NewMediaProcessingHandler(
 		source,
 		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 		checkpoints,
@@ -850,7 +850,7 @@ func TestWorkerSkipsEveryDeclaredNonProcessingFactWithoutQuarantine(t *testing.T
 		WithLeaseOwner("media-processing-restarted-process"),
 		WithClock(func() time.Time { return now.Add(time.Minute) }),
 	)
-	if handled, err := restarted.Drain(context.Background(), 10); err != nil || handled != 0 {
+	if handled, err := restarted.Process(context.Background(), 10); err != nil || handled != 0 {
 		t.Fatalf("restarted worker must resume after declared no-op facts: handled=%d err=%v", handled, err)
 	}
 	if len(poisons.recorded) != 0 || len(checkpoints.saved) != len(declaredNoops) {
@@ -865,7 +865,7 @@ func TestWorkerSkipsEveryDeclaredNonProcessingFactWithoutQuarantine(t *testing.T
 func TestWorkerQuarantinesUndeclaredOutboxTargetBeforeCheckpointAdvance(t *testing.T) {
 	poisons := &fakePoisonEvents{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{{
 			EventID:       "event-undeclared-target",
 			EventType:     "content.media_upload.reopened",
@@ -881,7 +881,7 @@ func TestWorkerQuarantinesUndeclaredOutboxTargetBeforeCheckpointAdvance(t *testi
 		poisons,
 	)
 
-	if handled, err := worker.Drain(context.Background(), 10); err != nil || handled != 1 {
+	if handled, err := worker.Process(context.Background(), 10); err != nil || handled != 1 {
 		t.Fatalf("undeclared target must be quarantined and consumed: handled=%d err=%v", handled, err)
 	}
 	if len(poisons.recorded) != 1 ||
@@ -909,7 +909,7 @@ func TestWorkerCapsEachOutboxScanAtCommercialBatchLimit(t *testing.T) {
 	}
 	source := &fakeOutboxSource{events: events}
 	observer := &recordingObserver{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		source,
 		&fakeAssetLoader{assets: map[string]*mediamodel.MediaAsset{}},
 		&fakeCheckpoints{},
@@ -919,7 +919,7 @@ func TestWorkerCapsEachOutboxScanAtCommercialBatchLimit(t *testing.T) {
 		WithObserver(observer),
 	)
 
-	handled, err := worker.Drain(context.Background(), commercialBatchLimit+1)
+	handled, err := worker.Process(context.Background(), commercialBatchLimit+1)
 	if err != nil || handled != commercialBatchLimit {
 		t.Fatalf("scan must be capped at %d: handled=%d err=%v", commercialBatchLimit, handled, err)
 	}
@@ -950,7 +950,7 @@ func TestWorkerSkipsNonProcessingAndForeignEvents(t *testing.T) {
 	processor := &fakeProcessor{}
 	recorder := &fakeRecorder{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			// 重放：资产已 ready，必须幂等跳过。
 			assetCreatedEvent("asset-done", "cp-1"),
@@ -980,7 +980,7 @@ func TestWorkerSkipsNonProcessingAndForeignEvents(t *testing.T) {
 		&fakePoisonEvents{},
 	)
 
-	handled, err := worker.Drain(context.Background(), 10)
+	handled, err := worker.Process(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("drain: %v", err)
 	}
@@ -1033,7 +1033,7 @@ func TestWorkerProcessesImageAssetsThroughTheSharedPipeline(t *testing.T) {
 	processor := &fakeProcessor{outcome: ProcessOutcome{Descriptor: descriptor}}
 	recorder := &fakeRecorder{}
 	checkpoints := &fakeCheckpoints{}
-	worker := NewWorker(
+	worker := NewMediaProcessingHandler(
 		&fakeOutboxSource{events: []mediaports.OutboxEvent{
 			assetCreatedEvent("asset-image", "cp-1"),
 		}},
@@ -1044,7 +1044,7 @@ func TestWorkerProcessesImageAssetsThroughTheSharedPipeline(t *testing.T) {
 		&fakePoisonEvents{},
 	)
 
-	if _, err := worker.Drain(context.Background(), 10); err != nil {
+	if _, err := worker.Process(context.Background(), 10); err != nil {
 		t.Fatalf("drain: %v", err)
 	}
 	if len(processor.requests) != 1 || processor.requests[0].MediaType != "image" {

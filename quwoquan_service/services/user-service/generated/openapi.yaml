@@ -380,6 +380,31 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /auth/otp/readiness:
+        get:
+            operationId: GetOtpDeliveryReadiness
+            x-contract-operation-id: user.authentication_challenge.GetOtpDeliveryReadiness
+            x-object-id: user.authentication_challenge
+            x-actor: none
+            x-application:
+                kind: query
+                facet: AuthenticationChallengeQueryFacade
+                method: getOtpDeliveryReadiness
+                reader: OtpDeliveryReadinessReader
+                slice: OtpDeliveryReadiness
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OtpDeliveryReadiness'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
     /auth/otp/send:
         post:
             operationId: SendOtp
@@ -391,6 +416,13 @@ paths:
                 facet: AuthenticationChallengeCommandFacade
                 method: sendOtp
                 aggregateOwner: AuthenticationChallenge
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
             requestBody:
                 required: true
                 content:
@@ -410,6 +442,32 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+    /auth/research/session:
+        post:
+            operationId: IssueWhitelistedResearchSession
+            x-contract-operation-id: user.account_session.IssueWhitelistedResearchSession
+            x-object-id: user.account_session
+            x-actor: account
+            x-application:
+                kind: command
+                facet: ResearchSessionCommandFacade
+                method: issueWhitelistedResearchSession
+                aggregateOwner: AccountSession
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WhitelistedResearchSession'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /auth/token/refresh:
         post:
             operationId: RefreshToken
@@ -3633,6 +3691,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: OtpChallengeIssueResult
             x-contract-placeholder: true
+        OtpDeliveryReadiness:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OtpDeliveryReadiness
+            x-contract-placeholder: true
         PersonaGatheringHostAuthorityEvaluationQuery:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3822,4 +3885,9 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: UserSyncPullRequestWire
+            x-contract-placeholder: true
+        WhitelistedResearchSession:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: WhitelistedResearchSession
             x-contract-placeholder: true

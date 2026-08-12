@@ -1,0 +1,84 @@
+{
+  "label": "杭州宋城",
+  "domain": "地点",
+  "type": "主题乐园",
+  "executionId": "20260812--travel-homepage-m100--china--scale-010",
+  "entityRef": "/entity/地点/主题乐园/杭州宋城",
+  "summary": "杭州宋城位于西湖区之江路148号，是一座以两宋市井风貌为主轴的主题乐园。",
+  "sourceRefs": [
+    "sources/homepage-source-5fed98bb721384c2f817/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E"
+  ],
+  "primarySource": {
+    "entityName": "杭州宋城",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T07:26:24Z",
+    "snapshotHash": "sha256:bc22d5fa73271ee5da808b5487fa7ea8756aab8fbad6e7333c5b7eb72980abcf",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only"
+  },
+  "sourceAttribution": {
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "audioRightsStatus": "no_audio",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "collectedAt": "2026-08-12T07:26:24Z",
+    "commercialAuthorizationStatus": "verified",
+    "isOriginal": false,
+    "modelReleaseStatus": "not_required",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "propertyReleaseStatus": "not_required",
+    "publicationAdmission": "research_release",
+    "rightsBasis": "CC BY-SA 4.0",
+    "riskAcceptanceId": null,
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E5%AE%8B%E5%9F%8E",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "watermarkStatus": "absent"
+  },
+  "textSourceRefs": [
+    "sources/homepage-source-5fed98bb721384c2f817/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/homepage-source-5fed98bb721384c2f817/source.md"
+  ],
+  "heroAssetId": "杭州宋城_cover_wikimedia_common_273_6de866c8",
+  "mediaAssetIds": [
+    "杭州宋城_cover_wikimedia_common_273_6de866c8"
+  ],
+  "tagRefs": [
+    "Entity/地点/主题乐园",
+    "Topic/地理/行政区/中国/浙江省/杭州市/西湖区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/浙江省/杭州市/西湖区",
+  "aliases": [
+    "宋城",
+    "杭州宋城景区"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

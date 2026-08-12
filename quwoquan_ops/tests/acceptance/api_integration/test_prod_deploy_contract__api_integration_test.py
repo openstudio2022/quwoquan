@@ -48,7 +48,7 @@ class ProdDeployContractTest(unittest.TestCase):
         env.update(
             {
                 "DRY_RUN": "false",
-                "ROLLOUT_STAGE": "gray-initial",
+                "ROLLOUT_STAGE": "canary",
                 "IMAGE_TRANSPORT_TAG": "transport-test",
                 "PREVIOUS_IMAGE_TRANSPORT_TAG": "transport-previous",
                 "CANDIDATE_DIGEST": "sha256:" + ("b" * 64),

@@ -17,7 +17,7 @@ import (
 )
 
 type entityFixturePack struct {
-	SeedSets map[string]entityFixtureSeedSet `json:"seedSets"`
+	Examples map[string]entityFixtureSeedSet `json:"examples"`
 }
 
 type entityFixtureSeedSet struct {
@@ -33,12 +33,12 @@ type entityFixtureHomepage struct {
 
 func TestContractFixtureSeed_EntityReadsViaHandler(t *testing.T) {
 	pack, err := contractfixture.LoadRepositoryJSON[entityFixturePack](
-		"quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.json",
+		"quwoquan_service/services/entity-service/tests/support/contract_examples/entity_homepage_examples.json",
 	)
 	if err != nil {
 		t.Fatalf("load entity fixture: %v", err)
 	}
-	seed := pack.SeedSets["entity_homepage_core"]
+	seed := pack.Examples["entity_homepage_core"]
 	if len(seed.Homepages) == 0 {
 		t.Fatalf("entity_homepage_core has no homepages")
 	}

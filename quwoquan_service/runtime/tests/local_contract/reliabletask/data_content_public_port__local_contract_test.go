@@ -19,8 +19,10 @@ func TestDataContentPublicPortIsReachableFromCanonicalLocalContract(t *testing.T
 		Ref:                  "entity/地点/景区/001",
 		Stage:                "author",
 		PartitionKey:         "entity/地点/景区/001",
+		MaxAttempts:          3,
 		JobSetEnvelopeDigest: "sha256:" + strings.Repeat("e", 64),
 		JobSetDigest:         "sha256:" + strings.Repeat("f", 64),
+		ActualTaskDigest:     "sha256:" + strings.Repeat("f", 64),
 	}
 	key, err := job.ExpectedIdempotencyKey()
 	if err != nil {

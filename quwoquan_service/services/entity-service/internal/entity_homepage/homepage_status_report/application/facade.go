@@ -143,6 +143,47 @@ func (f *Facade) ListQueue(
 	return result, nil
 }
 
+// GetMyPending 返回当前 persona 在指定主页和原因下唯一待审状态上报。
+func (f *Facade) GetMyPending(
+	ctx context.Context,
+	homepageID string,
+	actorPersonaID string,
+	reason reportmodel.Reason,
+) (StatusReportView, error) {
+	homepageID = strings.TrimSpace(homepageID)
+	reason = reportmodel.Reason(strings.TrimSpace(string(reason)))
+	actorID, err := requiredPersona(actorPersonaID)
+	if err != nil {
+		return StatusReportView{}, err
+	}
+	if homepageID == "" {
+		return StatusReportView{}, generated.AppErrorFromInvalidArgument("homepageId is required")
+	}
+	switch reason {
+	case reportmodel.ReasonOffline,
+		reportmodel.ReasonIncorrectInfo,
+		reportmodel.ReasonDuplicateEntry,
+		reportmodel.ReasonInactive:
+	default:
+		return StatusReportView{}, generated.AppErrorFromInvalidArgument("status report reason is invalid")
+	}
+	aggregate, found, loadErr := f.data.Aggregates.FindPending(
+		ctx,
+		homepageID,
+		actorID,
+		reason,
+	)
+	if loadErr != nil {
+		return StatusReportView{}, unavailable(loadErr)
+	}
+	if !found {
+		return StatusReportView{}, reportgenerated.AppErrorFromStatusReportNotFound(
+			fmt.Sprintf("pending status report for homepage %s was not found", homepageID),
+		)
+	}
+	return viewFromAggregate(aggregate), nil
+}
+
 func (f *Facade) Create(ctx context.Context, command CreateCommand) (StatusReportView, error) {
 	command = normalizeCreate(command)
 	actorID, err := requiredPersona(command.ActorPersonaID)

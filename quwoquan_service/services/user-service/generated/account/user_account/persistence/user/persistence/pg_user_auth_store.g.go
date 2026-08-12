@@ -78,3 +78,23 @@ func (s *PGUserAuthStoreBase) Delete(ctx context.Context, id string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM user_auth WHERE user_id = $1`, id)
 	return err
 }
+
+// ListByUserID returns all UserAuth records for the given foreign key.
+func (s *PGUserAuthStoreBase) ListByUserID(ctx context.Context, fkID string) ([]model.UserAuth, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+UserAuthCols+` FROM user_auth WHERE user_id = $1 ORDER BY created_at DESC`, fkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.UserAuth
+	for rows.Next() {
+		var e model.UserAuth
+		if err := rows.Scan(&e.UserID, &e.PasswordHash, &e.OTPSecret, &e.LastLoginAt, &e.LastLoginIP, &e.LoginFailCount, &e.LockedUntil, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
+}

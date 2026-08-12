@@ -11,15 +11,33 @@
   "properties": {
     "assets": {
       "type": "array",
-      "minItems": 1,
       "items": {
         "$ref": "#/$defs/assetRights"
       }
+    },
+    "publishMediaMode": {
+      "enum": ["not_applicable", "text_only", "embedded_media"]
     },
     "schema": {
       "const": "quwoquan_data.asset_rights_closure"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"publishMediaMode": {"const": "text_only"}},
+        "required": ["publishMediaMode"]
+      },
+      "then": {
+        "properties": {"assets": {"maxItems": 0}},
+        "required": ["assets"]
+      },
+      "else": {
+        "properties": {"assets": {"minItems": 1}},
+        "required": ["assets"]
+      }
+    }
+  ],
   "$defs": {
     "blob": {
       "type": "object",

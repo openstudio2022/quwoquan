@@ -175,6 +175,10 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     return ref.read(worksViewerFeedProvider(tabId)).value;
   }
 
+  AsyncValue<WorksViewerFeedSnapshot> _readFeedAsync(String tabId) {
+    return ref.read(worksViewerFeedProvider(tabId));
+  }
+
   bool _trackedFeedsHaveMore() {
     return _trackedFeedTabIds.any(
       (tabId) => _readFeedState(tabId)?.hasMore ?? false,
@@ -182,19 +186,58 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   bool _trackedFeedsLoading() {
-    return _trackedFeedTabIds.any(
-      (tabId) => _readFeedState(tabId)?.isLoading ?? false,
-    );
+    return _trackedFeedTabIds.any((tabId) {
+      final state = _readFeedAsync(tabId);
+      return state.isLoading || (state.value?.isLoading ?? false);
+    });
   }
 
   Object? _trackedFeedsError() {
     for (final tabId in _trackedFeedTabIds) {
-      final error = _readFeedState(tabId)?.appendError;
+      final state = _readFeedAsync(tabId);
+      final snapshot = state.value;
+      final error = state.hasError
+          ? state.error
+          : snapshot?.blockingError ?? snapshot?.appendError;
       if (error != null) {
         return error;
       }
     }
     return null;
+  }
+
+  Future<UiRecoveryOutcome> _retryTrackedFeeds() async {
+    final commands = ref.read(worksViewerFeedCommandsProvider);
+    final recoveryGeneration = ++_feedRecoveryGeneration;
+    final trackedTabIds = List<String>.unmodifiable(_trackedFeedTabIds);
+    final results = await Future.wait<DiscoveryFeedLoadResult>([
+      for (final tabId in trackedTabIds) commands.load(tabId, force: true),
+    ]);
+    if (!mounted ||
+        recoveryGeneration != _feedRecoveryGeneration ||
+        trackedTabIds.join('\u001f') != _trackedFeedTabIds.join('\u001f')) {
+      return UiRecoveryOutcome.superseded;
+    }
+    if (results.any(
+      (result) =>
+          result.terminal == DiscoveryFeedLoadTerminal.content ||
+          result.terminal == DiscoveryFeedLoadTerminal.retainedContent,
+    )) {
+      return UiRecoveryOutcome.recovered;
+    }
+    if (results.any(
+      (result) => result.terminal == DiscoveryFeedLoadTerminal.stillBlocked,
+    )) {
+      return UiRecoveryOutcome.stillBlocked;
+    }
+    if (results.isNotEmpty &&
+        results.every(
+          (result) =>
+              result.terminal == DiscoveryFeedLoadTerminal.canonicalEmpty,
+        )) {
+      return UiRecoveryOutcome.recovered;
+    }
+    return UiRecoveryOutcome.superseded;
   }
 
   void _requestPrefetchNow({
@@ -554,31 +597,42 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     );
   }
 
-  Future<void> _maybeHydrateArticleDetail(
+  Future<WorksViewerArticleHydrationResult> _maybeHydrateArticleDetail(
     ContentPostViewData post, {
     bool force = false,
   }) async {
     final raw = _effectiveRawPostById(post.id);
-    if (_hasStructuredArticlePayload(raw) ||
-        _articleHydrationAdmission.contains(post.id) ||
-        (!force && _failedArticleHydrationIds.contains(post.id))) {
-      return;
+    if (_hasStructuredArticlePayload(raw)) {
+      return WorksViewerArticleHydrationResult(
+        terminal: WorksViewerArticleHydrationTerminal.recovered,
+        generation: _articleHydrationAdmission.latestGeneration,
+      );
     }
-    await _articleHydrationAdmission.schedule(
+    if (!force && _failedArticleHydrationIds.contains(post.id)) {
+      return WorksViewerArticleHydrationResult(
+        terminal: WorksViewerArticleHydrationTerminal.stillBlocked,
+        generation: _articleHydrationAdmission.latestGeneration,
+        failure: _failedArticleHydrationErrorsById[post.id],
+      );
+    }
+    return _articleHydrationAdmission.schedule(
       postId: post.id,
       task: (lease) =>
           _performArticleDetailHydration(post, force: force, lease: lease),
     );
   }
 
-  Future<void> _performArticleDetailHydration(
+  Future<WorksViewerArticleHydrationTerminal> _performArticleDetailHydration(
     ContentPostViewData post, {
     required bool force,
     required WorksViewerArticleHydrationLease lease,
   }) async {
     final raw = _effectiveRawPostById(post.id);
-    if (lease.isCancelled || _hasStructuredArticlePayload(raw)) {
-      return;
+    if (lease.isCancelled) {
+      return WorksViewerArticleHydrationTerminal.superseded;
+    }
+    if (_hasStructuredArticlePayload(raw)) {
+      return WorksViewerArticleHydrationTerminal.recovered;
     }
     if (force) {
       _failedArticleHydrationIds.remove(post.id);
@@ -608,7 +662,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           trigger: 'get_post',
           hadStructuredPayload: false,
         );
-        return;
+        return WorksViewerArticleHydrationTerminal.superseded;
       }
       applyConfirmedInteractionPost(ref, detail.post);
       _setMountedState(() {
@@ -642,8 +696,11 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           durationMs: DateTime.now().difference(startedAt).inMilliseconds,
         );
       }
+      return WorksViewerArticleHydrationTerminal.recovered;
     } catch (error) {
-      if (lease.isCancelled) {
+      if (lease.isCancelled ||
+          !mounted ||
+          !_postStateWindow.contains(post.id)) {
         _articleReaderObservability.trackHydration(
           postId: post.id,
           durationMs: DateTime.now().difference(startedAt).inMilliseconds,
@@ -651,7 +708,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           trigger: 'get_post',
           hadStructuredPayload: false,
         );
-        return;
+        return WorksViewerArticleHydrationTerminal.superseded;
       }
       if (mounted && _postStateWindow.contains(post.id)) {
         _setMountedState(() {
@@ -667,9 +724,6 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         trigger: 'get_post',
         hadStructuredPayload: false,
       );
-      if (!mounted) {
-        return;
-      }
       final semantic = runtime_error_display.runtimeErrorSemantic(
         context,
         error: error,
@@ -695,6 +749,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           errorCode: errorCode,
         );
       }
+      return WorksViewerArticleHydrationTerminal.stillBlocked;
     }
   }
 

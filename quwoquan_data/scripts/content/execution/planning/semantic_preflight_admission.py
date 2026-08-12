@@ -49,7 +49,7 @@ def bind_semantic_preflight_receipt(
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=selection,
-        require_execution_admission=require_fresh,
+        require_semantic_execution_ready=require_fresh,
     )
     binding = {
         "receiptRef": path.relative_to(root).as_posix(),
@@ -60,7 +60,7 @@ def bind_semantic_preflight_receipt(
     assert_valid(
         binding,
         "execution",
-        "semantic_preflight_receipt_ref",
+        "semantic_provider_preflight_receipt_ref",
         label=f"semantic preflight binding:{semantic_selection_id}",
     )
     return binding
@@ -77,7 +77,7 @@ def validate_semantic_preflight_binding(
     assert_valid(
         binding,
         "execution",
-        "semantic_preflight_receipt_ref",
+        "semantic_provider_preflight_receipt_ref",
         label=f"semantic preflight binding:{semantic_selection_id}",
     )
     path = _receipt_path(str(binding["receiptRef"]), output_root=output_root)
@@ -90,10 +90,10 @@ def validate_semantic_preflight_binding(
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=selection,
-        require_execution_admission=require_fresh,
+        require_semantic_execution_ready=require_fresh,
     )
-    if not bool(receipt.get("executionAdmissionReady")):
-        raise ValueError("semantic preflight receipt is not execution-admission ready")
+    if not bool(receipt.get("semanticExecutionReady")):
+        raise ValueError("semantic provider preflight is not execution-ready")
     if (
         receipt.get("receiptId") != binding["receiptId"]
         or receipt.get("selectionDigest") != binding["selectionDigest"]
@@ -178,9 +178,10 @@ def resolve_manifest_preflight_binding(
             "resume may not change the frozen semantic preflight receipt; create retryOf"
         )
     selected = requested or frozen
-    if semantic_selection_id == "cursor_auto" and selected is None:
+    selection = resolve_semantic_preflight_selection(semantic_selection_id)
+    if selection.provider.value == "cursor_sdk" and selected is None:
         raise ValueError(
-            "cursor_auto requires a fresh semantic preflight/soak receipt"
+            f"{semantic_selection_id} requires a fresh semantic preflight/soak receipt"
         )
     return selected
 

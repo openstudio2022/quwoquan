@@ -46,7 +46,7 @@ func validateErrorGovernance(contractGraph *graph.ContractGraph) []Issue {
 	allowedSurfaces := map[string]struct{}{
 		"http": {}, "rpc": {}, "worker": {}, "consumer": {},
 		"provider_callback": {}, "terminal_snapshot": {}, "app": {},
-		"player": {}, "control_plane": {}, "gateway": {},
+		"player": {}, "control_plane": {}, "gateway": {}, "graphql": {},
 	}
 	var issues []Issue
 	for code, definitions := range definitionsByCode {
@@ -94,7 +94,8 @@ func validateErrorGovernance(contractGraph *graph.ContractGraph) []Issue {
 					))
 					continue
 				}
-				if emission.Surface != "http" && emission.Surface != "gateway" {
+				if emission.Surface != "http" && emission.Surface != "graphql" &&
+					emission.Surface != "gateway" {
 					continue
 				}
 				hasHTTP = true
@@ -121,7 +122,7 @@ func validateErrorGovernance(contractGraph *graph.ContractGraph) []Issue {
 					issues = append(issues, issue(
 						"CONTRACT.ERROR.HTTP_MISSING_OPERATION",
 						definition.SourcePath,
-						"HTTP error %q must bind at least one canonical operation",
+						"HTTP/GraphQL error %q must bind at least one canonical operation",
 						definition.Code,
 					))
 				}
@@ -160,6 +161,26 @@ func validateErrorGovernance(contractGraph *graph.ContractGraph) []Issue {
 							ownerDomain,
 							operation.ID,
 							operation.Domain,
+						))
+						continue
+					}
+					if emission.Surface == "graphql" && operation.Transport != "graphql" {
+						issues = append(issues, issue(
+							"CONTRACT.ERROR.OPERATION_BINDING_DRIFT",
+							definition.SourcePath,
+							"GraphQL error %q names non-GraphQL operation %q",
+							definition.Code,
+							operation.ID,
+						))
+						continue
+					}
+					if emission.Surface == "http" && operation.Transport == "graphql" {
+						issues = append(issues, issue(
+							"CONTRACT.ERROR.OPERATION_BINDING_DRIFT",
+							definition.SourcePath,
+							"HTTP error %q must use the graphql surface for operation %q",
+							definition.Code,
+							operation.ID,
 						))
 						continue
 					}
@@ -227,13 +248,18 @@ func validateErrorGovernance(contractGraph *graph.ContractGraph) []Issue {
 			if owner.objectID == operation.ObjectID {
 				expectedOperation = operation.LocalID
 			}
-			if !hasHTTPErrorEmission(owner.definition, expectedOperation) {
+			expectedSurface := "http"
+			if operation.Transport == "graphql" {
+				expectedSurface = "graphql"
+			}
+			if !hasOperationErrorEmission(owner.definition, expectedSurface, expectedOperation) {
 				issues = append(issues, issue(
 					"CONTRACT.ERROR.MISSING_OPERATION_EMISSION",
 					operation.SourcePath,
-					"operation %q references error %q but its canonical definition does not bind HTTP producer %q",
+					"operation %q references error %q but its canonical definition does not bind %s producer %q",
 					operation.ID,
 					code,
+					expectedSurface,
 					expectedOperation,
 				))
 			}
@@ -242,9 +268,13 @@ func validateErrorGovernance(contractGraph *graph.ContractGraph) []Issue {
 	return issues
 }
 
-func hasHTTPErrorEmission(definition ast.ErrorDefinition, operation string) bool {
+func hasOperationErrorEmission(
+	definition ast.ErrorDefinition,
+	surface string,
+	operation string,
+) bool {
 	for _, emission := range definition.EmittedBy {
-		if emission.Surface == "http" && containsString(emission.Operations, operation) {
+		if emission.Surface == surface && containsString(emission.Operations, operation) {
 			return true
 		}
 	}

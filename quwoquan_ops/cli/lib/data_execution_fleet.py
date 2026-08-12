@@ -8,13 +8,10 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 from .common import ROOT, load_json_yaml
-from .environment_topology import get_target, load_environment_topology
 from .port_manifest import load_port_manifest, profile_ports
-
 
 CONFIG_PATH = ROOT / "quwoquan_ops" / "environments" / "data_execution_fleet.json"
 LOCAL_LOOPBACK_HOST = "127.0.0.1"
@@ -33,7 +30,8 @@ _RUNTIME_SERVICES = frozenset({"mongodb", "redis"})
 
 @dataclass(frozen=True, slots=True)
 class DataExecutionFleetConfig:
-    local_target: str
+    target: str
+    port_profile: str
     mongo_port_role: str
     redis_port_role: str
 
@@ -41,7 +39,12 @@ class DataExecutionFleetConfig:
     def from_document(cls, document: object) -> "DataExecutionFleetConfig":
         if not isinstance(document, dict):
             raise ValueError("data execution fleet configuration must be an object")
-        expected_keys = {"localTarget", "mongoPortRole", "redisPortRole"}
+        expected_keys = {
+            "target",
+            "portProfile",
+            "mongoPortRole",
+            "redisPortRole",
+        }
         if set(document) != expected_keys:
             raise ValueError("data execution fleet configuration has unexpected fields")
         values = {
@@ -50,8 +53,11 @@ class DataExecutionFleetConfig:
         }
         if not all(values.values()):
             raise ValueError("data execution fleet configuration has empty fields")
+        if values["target"] != "data-local":
+            raise ValueError("data execution fleet target must be data-local")
         return cls(
-            local_target=values["localTarget"],
+            target=values["target"],
+            port_profile=values["portProfile"],
             mongo_port_role=values["mongoPortRole"],
             redis_port_role=values["redisPortRole"],
         )
@@ -80,6 +86,7 @@ class DataExecutionFleetRuntime:
     redis: bool
     owned: bool
     changed: bool
+    issue_code: str | None
     details: tuple[str, ...]
 
     def document(self) -> dict[str, object]:
@@ -91,6 +98,7 @@ class DataExecutionFleetRuntime:
             "redis": self.redis,
             "owned": self.owned,
             "changed": self.changed,
+            "issueCode": self.issue_code,
             "composeProject": COMPOSE_PROJECT,
             "details": list(self.details),
         }
@@ -106,10 +114,7 @@ def resolve_data_execution_fleet_endpoint(
     config: DataExecutionFleetConfig | None = None,
 ) -> DataExecutionFleetEndpoint:
     resolved = config or load_data_execution_fleet_config()
-    target = get_target(load_environment_topology(), resolved.local_target)
-    if str(target.get("backend") or "").strip() != "local":
-        raise ValueError("data execution fleet target must use the local backend")
-    ports = profile_ports(load_port_manifest(), resolved.local_target)
+    ports = profile_ports(load_port_manifest(), resolved.port_profile)
     try:
         mongo_port = ports[resolved.mongo_port_role]
         redis_port = ports[resolved.redis_port_role]
@@ -118,7 +123,7 @@ def resolve_data_execution_fleet_endpoint(
     if not isinstance(mongo_port, int) or not isinstance(redis_port, int):
         raise ValueError("data execution fleet ports must be integers")
     return DataExecutionFleetEndpoint(
-        target=resolved.local_target,
+        target=resolved.target,
         mongo_uri=(
             f"mongodb://{LOCAL_LOOPBACK_HOST}:{mongo_port}/"
             f"{MONGO_DIRECT_CONNECTION_QUERY}"
@@ -266,14 +271,16 @@ def data_execution_fleet_status(
         and _socket_ready(LOCAL_LOOPBACK_HOST, redis_port)
         and _redis_writable(resolved)
     )
+    ready = mongo_ready and redis_ready and owned
     return DataExecutionFleetRuntime(
         action=action,
         target=resolved.target,
-        ready=mongo_ready and redis_ready and owned,
+        ready=ready,
         mongo=mongo_ready,
         redis=redis_ready,
         owned=owned,
         changed=changed,
+        issue_code=None if ready else "DATA.POOL.DELIVERY_UNAVAILABLE",
         details=details,
     )
 
@@ -363,10 +370,10 @@ def manage_data_execution_fleet(
 
 
 __all__ = [
+    "FLEET_ACTIONS",
     "DataExecutionFleetConfig",
     "DataExecutionFleetEndpoint",
     "DataExecutionFleetRuntime",
-    "FLEET_ACTIONS",
     "data_execution_fleet_status",
     "load_data_execution_fleet_config",
     "manage_data_execution_fleet",

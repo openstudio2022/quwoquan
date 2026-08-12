@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260808--travel-video-m1--china-nanxun-bootstrap-not-m100--scale-002",
+  "executionBinding": "frozen",
+  "objectRef": "南浔古镇_video",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:e08b3c6c246e7f9f3596d086d5717202ff648e670b37bb024c1cc95a3dfb579f"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:c12004b7db2b7793cbc5a8a0363c0837a64633290920e3cc8cd7051135c92a68"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:d0400af0daba8eca65da0fbdf89b685eb9d47b2cd11f21ec1bc2f4dd51030c28"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:b13c01bf63334d9c4020a9af2179a187fdccfc577b5c4378a1b537da7c260df9"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:6b4becb79894802fb59bf92c10018a1818101822a9086317dfed79e358a477cb"
+    }
+  ]
+}

@@ -131,6 +131,8 @@ api_routes:
       status: ready
     authorization:
       principal: service
+      scopes:
+        - tag.graph.read
       ownership_policy: internal_tag_graph_read
     reliability:
       timeout_ms: 1500
@@ -187,6 +189,8 @@ api_routes:
       status: ready
     authorization:
       principal: service
+      scopes:
+        - tag.graph.read
       ownership_policy: internal_tag_graph_read
     reliability:
       timeout_ms: 1500
@@ -449,6 +453,8 @@ api_routes:
       status: ready
     authorization:
       principal: service
+      scopes:
+        - tag.graph.read
       ownership_policy: internal_tag_graph_read
     reliability:
       timeout_ms: 1500
@@ -501,6 +507,8 @@ api_routes:
       status: ready
     authorization:
       principal: service
+      scopes:
+        - tag.graph.read
       ownership_policy: internal_tag_graph_read
     reliability:
       timeout_ms: 1500
@@ -552,6 +560,8 @@ api_routes:
       status: ready
     authorization:
       principal: service
+      scopes:
+        - tag.graph.read
       ownership_policy: internal_tag_graph_read
     reliability:
       timeout_ms: 1500
@@ -605,6 +615,8 @@ api_routes:
       status: ready
     authorization:
       principal: service
+      scopes:
+        - tag.graph.read
       ownership_policy: internal_tag_graph_read
     reliability:
       timeout_ms: 1500

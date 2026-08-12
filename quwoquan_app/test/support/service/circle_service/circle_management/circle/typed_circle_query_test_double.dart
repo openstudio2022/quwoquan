@@ -58,8 +58,7 @@ class CircleQueryReaderTestDouble implements CircleQueryReader {
 
   @override
   Future<CirclePageSlice> list(CircleListQuery query) async =>
-      _handlers.list?.call(query) ??
-      CirclePageSlice(items: <Circle>[]);
+      _handlers.list?.call(query) ?? CirclePageSlice(items: <Circle>[]);
 
   @override
   Future<CircleSearchResultView> search(CircleSearchQuery query) async =>
@@ -71,7 +70,8 @@ class CircleQueryReaderTestDouble implements CircleQueryReader {
 
   @override
   Future<Circle> get(CircleDetailQuery query) async =>
-      _handlers.get?.call(query) ?? buildCircleTestDoubleFixture(query.circleId);
+      _handlers.get?.call(query) ??
+      buildCircleTestDoubleFixture(query.circleId);
 
   @override
   Future<CircleFeedPageSlice> feed(CircleFeedQuery query) async =>
@@ -114,8 +114,7 @@ Circle buildCircleTestDoubleFixture(
   String? subCategory,
   String? domainId,
   CircleKind kind = CircleKind.interest,
-  CircleDisplaySubjectType displaySubjectType =
-      CircleDisplaySubjectType.circle,
+  CircleDisplaySubjectType displaySubjectType = CircleDisplaySubjectType.circle,
   CircleStatus status = CircleStatus.active,
   CircleVisibility visibility = CircleVisibility.public,
   CircleJoinPolicy joinPolicy = CircleJoinPolicy.open,

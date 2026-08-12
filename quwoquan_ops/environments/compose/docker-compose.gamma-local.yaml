@@ -143,6 +143,12 @@ services:
           if mc alias set qwq "https://${LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT}" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
             mc mb --ignore-existing "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}"
             mc ilm rule import "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}" < /etc/qwq-object-storage/lifecycle.json
+            # Only canonical immutable public slices are anonymously readable.
+            # Uploads, CAS objects and processed candidates remain private; Caddy
+            # uses this prefix policy solely as a test-live CDN miss origin.
+            for media_kind in avatar image video background attachment; do
+              mc anonymous set download "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}/media/$${media_kind}/s"
+            done
             exit 0
           fi
           sleep 2
@@ -211,6 +217,9 @@ services:
       QWQ_PUBLIC_RTC_HOST: "${QWQ_PUBLIC_RTC_HOST:?QWQ_PUBLIC_RTC_HOST is required}"
       QWQ_PUBLIC_OPS_HOST: "${QWQ_PUBLIC_OPS_HOST:?QWQ_PUBLIC_OPS_HOST is required}"
       QWQ_PUBLIC_CDN_HOST: "${QWQ_PUBLIC_CDN_HOST:?QWQ_PUBLIC_CDN_HOST is required}"
+      QWQ_PUBLIC_UPLOAD_HOST: "${QWQ_PUBLIC_UPLOAD_HOST:?QWQ_PUBLIC_UPLOAD_HOST is required}"
+      LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT: "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"
+      LOCAL_GAMMA_OBJECT_STORAGE_BUCKET: "${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET:?LOCAL_GAMMA_OBJECT_STORAGE_BUCKET is required}"
     ports:
       - "${LOCAL_GAMMA_HTTP_PORT:-19000}:${LOCAL_GAMMA_HTTP_PORT:-19000}"
       - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
@@ -220,6 +229,7 @@ services:
       - ${LOCAL_GAMMA_CADDYFILE:?packaged Caddyfile is required}:/etc/caddy/Caddyfile:ro
       - ${QWQ_PUBLIC_TLS_CERT_FILE:?QWQ_PUBLIC_TLS_CERT_FILE is required}:/etc/caddy/tls/fullchain.pem:ro
       - ${QWQ_PUBLIC_TLS_KEY_FILE:?QWQ_PUBLIC_TLS_KEY_FILE is required}:/etc/caddy/tls/privkey.pem:ro
+      - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/caddy/tls/object-storage-ca.pem:ro
       - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
       - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:?LOCAL_GAMMA_LEGAL_STATIC_ROOT is required}:/srv/legal:ro
       # 运维运营 Portal 静态站点（vite build 产物；prod 渲染时替换为 runtime/portal）。

@@ -111,3 +111,32 @@ func TestMediaUploadRelayDoesNotAdvanceBeforeDurablePublish(t *testing.T) {
 		t.Fatalf("Healthy() after recovery error = %v", err)
 	}
 }
+
+func TestMediaUploadRelayClearsTransientFailureAfterSuccessfulEmptyScan(t *testing.T) {
+	outbox := &uploadOutboxFixture{
+		event: uploadports.OutboxEvent{
+			EventID: "invalid-upload-event",
+		},
+		available: true,
+	}
+	publisher, err := uploadmessaging.NewEventPublisher(&uploadTransportFixture{})
+	if err != nil {
+		t.Fatalf("NewEventPublisher() error = %v", err)
+	}
+	relay, err := uploadapp.NewOutboxRelay(outbox, publisher)
+	if err != nil {
+		t.Fatalf("NewOutboxRelay() error = %v", err)
+	}
+	if _, err := relay.Drain(context.Background(), 1); err == nil {
+		t.Fatal("invalid event Drain() succeeded")
+	}
+	if err := relay.Healthy(context.Background(), time.Minute); err == nil {
+		t.Fatal("relay remained healthy after delivery failure")
+	}
+	if count, err := relay.Drain(context.Background(), 1); err != nil || count != 0 {
+		t.Fatalf("empty recovery Drain() = (%d, %v), want (0, nil)", count, err)
+	}
+	if err := relay.Healthy(context.Background(), time.Minute); err != nil {
+		t.Fatalf("Healthy() after empty recovery scan error = %v", err)
+	}
+}

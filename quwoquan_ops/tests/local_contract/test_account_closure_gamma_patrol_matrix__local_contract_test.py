@@ -13,8 +13,8 @@ PLATFORM_WORKFLOW_PATH = ROOT / ".github/workflows/beta-device-platform.yml"
 MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 GAMMA_RUNNER_PATH = ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh"
 UAT_PATH = ROOT / (
-    "quwoquan_app/test/user_acceptance/journeys/account_closure/"
-    "account_closure_journey__user_acceptance_test.dart"
+    "quwoquan_app/test/user_acceptance/service/user_service/account/user_account/"
+    "account_closure_remote__user_acceptance_test.dart"
 )
 
 

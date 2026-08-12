@@ -2,6 +2,7 @@ package feed_test
 
 import (
 	"context"
+	"encoding/json"
 	. "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"testing"
 	"time"
@@ -157,6 +158,21 @@ func TestListFeed_ObjectCardsDisabledPolicyDoesNotDeliverCards(t *testing.T) {
 	}
 	if len(resp.ObjectCards) != 0 {
 		t.Fatalf("disabled policy must not deliver cards, got %+v", resp.ObjectCards)
+	}
+	wire, marshalErr := json.Marshal(resp)
+	if marshalErr != nil {
+		t.Fatalf("marshal disabled object-card response: %v", marshalErr)
+	}
+	var envelope map[string]any
+	if unmarshalErr := json.Unmarshal(wire, &envelope); unmarshalErr != nil {
+		t.Fatalf("unmarshal disabled object-card response: %v", unmarshalErr)
+	}
+	objectCards, present := envelope["objectCards"].([]any)
+	if !present || len(objectCards) != 0 {
+		t.Fatalf(
+			"disabled object-card wire = %#v, want required empty list",
+			envelope["objectCards"],
+		)
 	}
 }
 

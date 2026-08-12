@@ -259,16 +259,18 @@ class _LoginHeading extends StatelessWidget {
             fontWeight: AppTypography.bold,
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          subtitle,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.iosSecondaryLabel(context),
-            fontSize: AppTypography.base,
-            height: AppTypography.lineHeightCompact,
+        if (subtitle.isNotEmpty) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.iosSecondaryLabel(context),
+              fontSize: AppTypography.base,
+              height: AppTypography.lineHeightCompact,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -384,6 +386,26 @@ class _PhoneEntryLoginStep extends StatelessWidget {
     final sendFailed =
         state.feedback?.recoveryAction == 'resendOtp' ||
         state.feedback?.copyKey == 'loginOtpSendFailed';
+    final cooldownSeconds = state.remainingResendSeconds(DateTime.now());
+    final rateLimited =
+        state.otpChallengeState == OtpChallengeState.rateLimited &&
+        cooldownSeconds > 0;
+    final readinessChecking =
+        state.otpReadinessState == OtpReadinessState.checking;
+    final readinessUnavailable =
+        state.otpReadinessState == OtpReadinessState.unavailable;
+    final visibleFeedback = rateLimited
+        ? LoginFeedback(
+            message: FoundationText.loginOtpRateLimitedCountdown.replaceFirst(
+              '%d',
+              cooldownSeconds.toString(),
+            ),
+            copyKey: 'loginOtpRateLimited',
+            surface: LoginFeedbackSurface.phone,
+            recoveryAction: 'waitThenResendOtp',
+            retryAfterSeconds: cooldownSeconds,
+          )
+        : state.feedback;
     return Column(
       children: <Widget>[
         const SizedBox(height: AppSpacing.twenty),
@@ -403,18 +425,30 @@ class _PhoneEntryLoginStep extends StatelessWidget {
           onChanged: onChanged,
           onEditingComplete: onEditingComplete,
         ),
-        if (state.feedback case final feedback?) ...<Widget>[
+        if (visibleFeedback case final feedback?) ...<Widget>[
           const SizedBox(height: AppSpacing.md),
           _LoginFeedbackText(feedback: feedback),
         ],
         const SizedBox(height: AppSpacing.twenty),
         LoginActionButton(
           key: const ValueKey<String>('loginPhonePrimary'),
-          label: sendFailed
+          label: state.operation == LoginOperation.sendingOtp
+              ? FoundationText.loginSendOtpSubmitting
+              : readinessChecking
+              ? FoundationText.loginOtpReadinessChecking
+              : readinessUnavailable
+              ? FoundationText.loginOtpReadinessRetry
+              : sendFailed
               ? FoundationText.loginOtpRequestRetry
               : FoundationText.loginSendOtp,
-          enabled: state.hasValidPhone,
-          busy: state.operation == LoginOperation.sendingOtp,
+          enabled:
+              !rateLimited &&
+              (readinessUnavailable ||
+                  (state.hasValidPhone &&
+                      state.otpReadinessState == OtpReadinessState.ready)),
+          busy:
+              state.operation == LoginOperation.sendingOtp || readinessChecking,
+          outlined: readinessUnavailable,
           onPressed: onPrimary,
         ),
         if (showAgreement) ...<Widget>[
@@ -452,21 +486,31 @@ class _OtpLoginStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final verifying =
-        state.operation == LoginOperation.verifyingOtp ||
-        state.operation == LoginOperation.completingBinding;
+    final presentation = OtpPagePresentation.fromState(state, DateTime.now());
     return Column(
       children: <Widget>[
         const SizedBox(height: AppSpacing.twenty),
         _LoginHeading(
           title: FoundationText.loginOtpTitle,
-          subtitle: FoundationText.loginOtpSentTo.replaceFirst(
-            '%s',
-            state.maskedPhone,
-          ),
+          subtitle: '',
           provider: showProvider ? state.provider : '',
         ),
-        const SizedBox(height: AppSpacing.forty),
+        const SizedBox(height: AppSpacing.md),
+        _OtpPhoneRow(
+          maskedPhone: state.maskedPhone,
+          enabled: !state.isBusy,
+          onChangePhone: onChangePhone,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (presentation.tone == OtpPresentationTone.neutral &&
+            presentation.message.isNotEmpty) ...<Widget>[
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: _OtpStatusRegion(presentation: presentation),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         OtpCodeBoxes(
           controller: controller,
           enabled: state.canEditOtp,
@@ -474,85 +518,262 @@ class _OtpLoginStep extends StatelessWidget {
           focusRequestSerial: state.otpFocusSerial,
           shakeSerial: state.otpShakeSerial,
         ),
-        SizedBox(
-          height: AppSpacing.forty,
-          child: Center(
-            child: verifying
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      AppRequestFeedback.inline(
-                        indicatorColor: AppColors.iosAccent(context),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        FoundationText.loginOtpVerifying,
-                        style: TextStyle(
-                          color: AppColors.iosAccent(context),
-                          fontSize: AppTypography.base,
-                        ),
-                      ),
-                    ],
-                  )
-                : state.feedback == null
-                ? const SizedBox.shrink()
-                : _LoginFeedbackText(feedback: state.feedback!),
-          ),
-        ),
-        _OtpResendAction(state: state, onPressed: onResend),
-        if (state.feedback?.preserveOtp == true) ...<Widget>[
+        if (presentation.tone == OtpPresentationTone.error) ...<Widget>[
           const SizedBox(height: AppSpacing.sm),
-          CupertinoButton(
-            key: const ValueKey<String>('loginOtpRetryVerify'),
-            onPressed: onRetryVerify,
-            child: Text(FoundationText.loginOtpVerifyRetry),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: _OtpStatusRegion(presentation: presentation),
           ),
         ],
-        const SizedBox(height: AppSpacing.xs),
-        CupertinoButton(
-          key: const ValueKey<String>('loginChangePhone'),
-          onPressed: state.isBusy ? null : onChangePhone,
-          child: Text(FoundationText.loginPhoneChange),
+        const SizedBox(height: AppSpacing.md),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          child: presentation.hasRecoveryActions
+              ? _OtpRecoveryActionGroup(
+                  presentation: presentation,
+                  busy: state.isBusy,
+                  onResend: onResend,
+                  onRetryVerify: onRetryVerify,
+                  onChangePhone: onChangePhone,
+                )
+              : _OtpResendPrompt(
+                  remainingSeconds: presentation.resendRemainingSeconds,
+                  busy: state.isBusy,
+                  onResend: onResend,
+                ),
         ),
       ],
     );
   }
 }
 
-class _OtpResendAction extends StatelessWidget {
-  const _OtpResendAction({required this.state, required this.onPressed});
+class _OtpPhoneRow extends StatelessWidget {
+  const _OtpPhoneRow({
+    required this.maskedPhone,
+    required this.enabled,
+    required this.onChangePhone,
+  });
 
-  final LoginFlowState state;
-  final VoidCallback onPressed;
+  final String maskedPhone;
+  final bool enabled;
+  final VoidCallback onChangePhone;
 
   @override
   Widget build(BuildContext context) {
-    final seconds = state.remainingResendSeconds(DateTime.now());
-    final ready = seconds <= 0 && !state.isBusy;
-    final label = ready
-        ? FoundationText.loginOtpResend
-        : FoundationText.loginOtpResendCountdown.replaceFirst(
-            '%d',
-            seconds.toString(),
-          );
-    return SizedBox(
-      key: const ValueKey<String>('loginOtpResendSlot'),
-      height: AppSpacing.minInteractiveSize,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: ready ? onPressed : null,
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            maskedPhone,
+            style: TextStyle(
+              color: AppColors.iosSecondaryLabel(context),
+              fontSize: AppTypography.base,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: AppSpacing.minInteractiveSize,
+          child: CupertinoButton(
+            key: const ValueKey<String>('loginChangePhone'),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            onPressed: enabled ? onChangePhone : null,
+            child: Text(FoundationText.loginPhoneChange),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OtpStatusRegion extends StatelessWidget {
+  const _OtpStatusRegion({required this.presentation});
+
+  final OtpPagePresentation presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    if (presentation.message.isEmpty) return const SizedBox.shrink();
+    final color = presentation.tone == OtpPresentationTone.error
+        ? AppColors.errorForeground(context)
+        : AppColors.iosSecondaryLabel(context);
+    return Semantics(
+      key: ValueKey<String>(presentation.announceKey),
+      liveRegion: true,
+      label: presentation.message,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          if (presentation.showDeliveryProgress) ...<Widget>[
+            CupertinoActivityIndicator(color: AppColors.iosAccent(context)),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          Flexible(
+            child: Text(
+              presentation.message,
+              key: const ValueKey<String>('loginOtpStatusMessage'),
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: color,
+                fontSize: AppTypography.inlineError,
+                fontWeight: presentation.tone == OtpPresentationTone.error
+                    ? AppTypography.inlineErrorWeight
+                    : AppTypography.regular,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OtpRecoveryActionGroup extends StatelessWidget {
+  const _OtpRecoveryActionGroup({
+    required this.presentation,
+    required this.busy,
+    required this.onResend,
+    required this.onRetryVerify,
+    required this.onChangePhone,
+  });
+
+  final OtpPagePresentation presentation;
+  final bool busy;
+  final VoidCallback onResend;
+  final VoidCallback onRetryVerify;
+  final VoidCallback onChangePhone;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = <OtpRecoveryAction>[
+      ?presentation.primaryAction,
+      ?presentation.secondaryAction,
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            for (var index = 0; index < actions.length; index++) ...<Widget>[
+              if (index > 0) const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: LoginActionButton(
+                  key: ValueKey<String>(
+                    'loginOtpRecovery-${actions[index].name}',
+                  ),
+                  label: _otpRecoveryActionLabel(actions[index]),
+                  outlined: true,
+                  enabled: !busy,
+                  onPressed: () => _runOtpRecoveryAction(
+                    actions[index],
+                    onResend: onResend,
+                    onRetryVerify: onRetryVerify,
+                    onChangePhone: onChangePhone,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (presentation.primaryAction == OtpRecoveryAction.retryVerify &&
+            presentation.resendRemainingSeconds > 0) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            FoundationText.loginOtpResendCountdown.replaceFirst(
+              '%d',
+              presentation.resendRemainingSeconds.toString(),
+            ),
+            style: TextStyle(
+              color: AppColors.iosSecondaryLabel(context),
+              fontSize: AppTypography.base,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _OtpResendPrompt extends StatelessWidget {
+  const _OtpResendPrompt({
+    required this.remainingSeconds,
+    required this.busy,
+    required this.onResend,
+  });
+
+  final int remainingSeconds;
+  final bool busy;
+  final VoidCallback onResend;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = remainingSeconds <= 0 && !busy;
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: <Widget>[
+        Text(
+          FoundationText.loginOtpNotReceived,
           style: TextStyle(
-            color: ready
-                ? AppColors.iosAccent(context)
-                : AppColors.iosSecondaryLabel(context),
+            color: AppColors.iosSecondaryLabel(context),
             fontSize: AppTypography.base,
           ),
         ),
-      ),
+        if (ready)
+          SizedBox(
+            height: AppSpacing.minInteractiveSize,
+            child: CupertinoButton(
+              key: const ValueKey<String>('loginOtpResend'),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              onPressed: onResend,
+              child: Text(FoundationText.loginOtpResend),
+            ),
+          )
+        else
+          Text(
+            FoundationText.loginOtpResendCountdown.replaceFirst(
+              '%d',
+              remainingSeconds.toString(),
+            ),
+            style: TextStyle(
+              color: AppColors.iosSecondaryLabel(context),
+              fontSize: AppTypography.base,
+            ),
+          ),
+      ],
     );
+  }
+}
+
+String _otpRecoveryActionLabel(OtpRecoveryAction action) => switch (action) {
+  OtpRecoveryAction.retryVerify => FoundationText.loginOtpVerifyRetry,
+  OtpRecoveryAction.resend => FoundationText.loginOtpResend,
+  OtpRecoveryAction.contactSupport =>
+    FoundationText.loginAccountSuspensionSupport,
+  OtpRecoveryAction.changePhone => FoundationText.loginPhoneChange,
+};
+
+void _runOtpRecoveryAction(
+  OtpRecoveryAction action, {
+  required VoidCallback onResend,
+  required VoidCallback onRetryVerify,
+  required VoidCallback onChangePhone,
+}) {
+  switch (action) {
+    case OtpRecoveryAction.retryVerify:
+      onRetryVerify();
+      return;
+    case OtpRecoveryAction.resend:
+      onResend();
+      return;
+    case OtpRecoveryAction.contactSupport:
+    case OtpRecoveryAction.changePhone:
+      onChangePhone();
+      return;
   }
 }
 

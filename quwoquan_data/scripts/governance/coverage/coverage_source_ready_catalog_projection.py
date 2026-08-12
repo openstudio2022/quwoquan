@@ -20,6 +20,10 @@ from core.baike_source_contract import (
     source_identity_matches_contract,
 )
 from core.schema import assert_valid
+from governance.coverage.source_readiness_candidates import (
+    canonical_source_ready_entity_ref,
+    canonical_source_ready_name,
+)
 
 
 SOURCE_POOL_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
@@ -107,7 +111,7 @@ def _read_json(path: Path, *, label: str) -> dict[str, Any]:
     return value
 
 
-def _read_ndjson(path: Path) -> list[dict[str, Any]]:
+def _read_ndjson(path: Path, *, label: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     line_number = 0
     try:
@@ -122,7 +126,7 @@ def _read_ndjson(path: Path) -> list[dict[str, Any]]:
     except (OSError, json.JSONDecodeError, TypeError) as exc:
         raise CoverageSourceReadyProjectionError(
             SOURCE_INVALID_EVIDENCE,
-            [f"frozen_targets.ndjson is invalid at row {line_number}"],
+            [f"{label} is invalid at row {line_number}"],
         ) from exc
     return rows
 
@@ -242,6 +246,23 @@ def _planned_candidate(row: Mapping[str, Any]) -> dict[str, Any]:
     source_kind = str(evidence["sourceKind"])
     extractor = str(evidence["extractor"])
     source_url = str(evidence["canonicalUrl"])
+    resolved_title = str(evidence["resolvedTitle"]).strip()
+    if not resolved_title:
+        raise CoverageSourceReadyProjectionError(
+            SOURCE_INVALID_EVIDENCE,
+            [f"{identity_key}: resolved source title is empty"],
+        )
+    entity_type = str(row["selection"]["coverageCell"]["entityType"])
+    try:
+        canonical_name = canonical_source_ready_name(dict(candidate))
+        canonical_entity_ref = canonical_source_ready_entity_ref(
+            dict(candidate), entity_type=entity_type
+        )
+    except ValueError as exc:
+        raise CoverageSourceReadyProjectionError(
+            SOURCE_INVALID_EVIDENCE,
+            [f"{identity_key}: canonical entity ref cannot be derived: {exc}"],
+        ) from exc
     if not source_identity_matches_contract(
         source_kind=source_kind,
         url=source_url,
@@ -264,15 +285,17 @@ def _planned_candidate(row: Mapping[str, Any]) -> dict[str, Any]:
     )
     return {
         "coverageEntityIdentity": identity_key,
-        "candidateName": str(candidate["name"]),
+        "canonicalEntityRef": canonical_entity_ref,
+        "candidateName": canonical_name,
         "province": str(candidate["province"]),
         "city": str(candidate["city"]),
         "district": str(candidate["district"]),
-        "entityType": str(row["selection"]["coverageCell"]["entityType"]),
+        "entityType": entity_type,
         "source": {
             "sourceKind": source_kind,
             "extractor": extractor,
             "sourceUrl": source_url,
+            "resolvedTitle": resolved_title,
             "observedAt": str(row["qualifiedAt"]),
         },
         "coverageRecordDigest": _canonical_digest(row),
@@ -317,9 +340,64 @@ def project_coverage_source_ready_catalog_inputs(
         report=report,
         source_digest=source_digest,
     )
-    rows = _read_ndjson(frozen_path)
+    ready_rows = _read_ndjson(ready_path, label="source_ready.ndjson")
+    rows = _read_ndjson(frozen_path, label="frozen_targets.ndjson")
+    ready_by_identity: dict[str, dict[str, Any]] = {}
+    for ready_row in ready_rows:
+        try:
+            assert_valid(
+                ready_row,
+                "governance",
+                "source_ready_candidate",
+                label="coverage source-ready row",
+            )
+        except ValueError as exc:
+            raise CoverageSourceReadyProjectionError(
+                SOURCE_INVALID_EVIDENCE,
+                [f"coverage source-ready row schema is invalid: {exc}"],
+            ) from exc
+        identity_key = str(ready_row.get("identityKey") or "")
+        if not identity_key or identity_key in ready_by_identity:
+            raise CoverageSourceReadyProjectionError(
+                SOURCE_INVALID_EVIDENCE,
+                ["coverage source-ready rows contain duplicate entity identity"],
+            )
+        ready_by_identity[identity_key] = ready_row
+    for frozen_row in rows:
+        identity_key = str(frozen_row.get("identityKey") or "")
+        ready_form = {key: value for key, value in frozen_row.items() if key != "selection"}
+        if ready_by_identity.get(identity_key) != ready_form:
+            raise CoverageSourceReadyProjectionError(
+                SOURCE_INVALID_EVIDENCE,
+                [f"{identity_key}: frozen target is not an exact source-ready member"],
+            )
     planned = [_planned_candidate(row) for row in rows]
-    planned.sort(key=lambda item: item["coverageEntityIdentity"])
+    manifest_required = manifest.get("requiredEntityRefs")
+    report_required = report.get("requiredEntityRefs")
+    if (manifest_required is None) != (report_required is None):
+        raise CoverageSourceReadyProjectionError(
+            SOURCE_INVALID_EVIDENCE,
+            ["coverage manifest/report requiredEntityRefs mode drift"],
+        )
+    if manifest_required is not None:
+        required_refs = list(manifest_required)
+        actual_refs = [row["canonicalEntityRef"] for row in planned]
+        if list(report_required) != required_refs:
+            raise CoverageSourceReadyProjectionError(
+                SOURCE_INVALID_EVIDENCE,
+                ["coverage manifest/report requiredEntityRefs drift"],
+            )
+        if (
+            list(report.get("frozenEntityRefs") or []) != required_refs
+            or list(report.get("missingRequiredEntityRefs") or [])
+            or actual_refs != required_refs
+        ):
+            raise CoverageSourceReadyProjectionError(
+                SOURCE_INVALID_EVIDENCE,
+                ["coverage exact frozen canonical refs are incomplete or reordered"],
+            )
+    else:
+        planned.sort(key=lambda item: item["coverageEntityIdentity"])
     identities = [item["coverageEntityIdentity"] for item in planned]
     if len(identities) != len(set(identities)):
         raise CoverageSourceReadyProjectionError(

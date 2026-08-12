@@ -1,8 +1,28 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
-from content.execution.support import Any, ExecutionContext, Iterable, Mapping, Path, _active_spec, article_commercial_closure_enabled, defaultdict, execution_root, image_count_is_hard_quota, minimum_publishable_images_per_target, read_json, relative_execution_ref, shutil
+
 from core.entity_focus import classify_entity_focus as _classify_entity_focus
+
+from content.execution.coverage import (
+    coverage_entity_type,
+    coverage_entity_type_for_entity,
+)
+from content.execution.support import (
+    Any,
+    ExecutionContext,
+    Mapping,
+    Path,
+    _active_spec,
+    article_commercial_closure_enabled,
+    defaultdict,
+    execution_root,
+    image_count_is_hard_quota,
+    minimum_publishable_images_per_target,
+    read_json,
+    relative_execution_ref,
+    shutil,
+)
+
 
 def _clean_content_plan_outputs(ctx: ExecutionContext) -> None:
     root = execution_root(ctx.execution_id)
@@ -35,8 +55,9 @@ def _entity_name_from_source_dir(source_dir: Path) -> str:
 
 def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int, str]:
     """实体聚焦优先、再质量、再长度的 article 候选排序（无平台/来源类别偏置）。"""
-    from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
     from core.qunar_template import qunar_source_freshness_rank
+
+    from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
     focus = float(row.get("entityFocusScore") or 0.0)
     focus_bucket = int(max(0.0, min(focus, 1.0)) * 20)  # 5% 一档，避免微小噪声扰动排序
     freshness_rank = qunar_source_freshness_rank(row)
@@ -71,11 +92,23 @@ def _content_capacity_gate_for_entity(
     writing briefs or content packets, so replacement candidates that would
     deterministically fail content_plan never become active.
     """
-    from content.post.article.base_draft import base_draft_readiness, load_base_draft_text
-    from content.post.article.base_draft_source import extract_source_title
     from content.execution.controller.content_plan_asset_semantics import (
         article_asset_semantic_issue,
     )
+    from content.execution.controller.content_plan_assets import (
+        _canonical_image_asset_issue,
+        article_asset_claims,
+        claims_conflict,
+        normalize_article_media_claims,
+    )
+    from content.execution.controller.content_plan_assets import (
+        claim as claim_assets,
+    )
+    from content.post.article.base_draft import (
+        base_draft_readiness,
+        load_base_draft_text,
+    )
+    from content.post.article.base_draft_source import extract_source_title
     from content.source.source_unit import iter_source_units, resolve_entity_object_dir
     spec = active_spec or _active_spec(ctx)
     quotas = (spec.get("content") or {}).get("quotas") or {}
@@ -124,27 +157,7 @@ def _content_capacity_gate_for_entity(
         return str(row.get("sha256") or "").removeprefix("sha256:").strip().lower()
     def _source_ref(source_dir: Path) -> str:
         return relative_execution_ref(source_dir / "source.md", ctx.execution_id)
-    def _first_publishable_asset(
-        source_dir: Path,
-        rows: Iterable[Mapping[str, Any]],
-    ) -> tuple[str, str, str] | None:
-        for row in rows:
-            ref = _asset_ref(source_dir, row)
-            if not ref:
-                continue
-            asset_path = root / ref
-            if not asset_path.is_file():
-                continue
-            verdict = _assess_content_plan_publish_image(asset_path, ctx)
-            if verdict.blocks_image_publish:
-                continue
-            return (
-                ref,
-                _asset_sha(row),
-                str(row.get("sourceCollectionId") or "").strip(),
-            )
-        return None
-    def _claims_conflict(ref: str, sha: str, collection_id: str) -> bool:
+    def _single_claim_conflicts(ref: str, sha: str, collection_id: str) -> bool:
         return (
             bool(ref and ref in used_refs)
             or bool(sha and sha in used_shas)
@@ -259,40 +272,63 @@ def _content_capacity_gate_for_entity(
                     continue
                 admitted_rows.append(row)
             if len(admitted_rows) < 2:
-                article_rejects["same_source_cover_body_missing"] += 1
+                # Research Article 的正文 readiness 与配图 readiness 是两个独立
+                # 维度。少于 cover+body 两张图时不得把单图冒充 illustrated，
+                # 但已通过正文/来源质量门的 base source 可作为 text_only 对象。
+                admitted_rows = []
+            candidate = {
+                "sourceDir": source_dir,
+                "sourceRef": source_ref,
+                "sourceId": source_id,
+                "sourceQualityScore": float(
+                    meta.get("sourceQualityScore")
+                    or meta.get("qualityScore")
+                    or meta.get("score")
+                    or 0
+                ),
+                "textLen": text_len,
+                "entityFocusScore": focus_score,
+                "entityFocusVerdict": focus_verdict,
+                "sourceFreshnessTier": str(
+                    meta.get("sourceFreshnessTier")
+                    or (
+                        (meta.get("siteTemplate") or {}).get("freshnessTier")
+                        if isinstance(meta.get("siteTemplate"), Mapping)
+                        else ""
+                    )
+                    or ""
+                ),
+                "rows": admitted_rows,
+                "targetEntity": entity_id,
+                "targetAliases": list(entity_aliases),
+                "articleAnchorText": base_body,
+            }
+            refs, shas, collections, asset_refs, media_mode = (
+                normalize_article_media_claims(
+                    article_asset_claims(
+                        ctx,
+                        root,
+                        candidate,
+                    )
+                )
+            )
+            if media_mode == "text_only":
                 article_image_soft_warnings["no_publishable_source_asset"] += 1
-                continue
+                candidate["rows"] = []
+            candidate["publishMediaMode"] = media_mode
+            candidate["assetClaimRefs"] = refs
+            candidate["assetClaimShas"] = shas
+            candidate["assetClaimCollections"] = collections
+            article_candidates.append(candidate)
             article_source_closure.append(
                 {
                     "sourceId": source_id,
                     "provider": str(meta.get("platform") or "").strip(),
-                "siteId": str(meta.get("articleSiteId") or "").strip(),
-                "profileDigest": str(
-                    meta.get("sourceDiscoveryProfileDigest") or ""
-                ).strip(),
+                    "siteId": str(meta.get("articleSiteId") or "").strip(),
+                    "profileDigest": str(
+                        meta.get("sourceDiscoveryProfileDigest") or ""
+                    ).strip(),
                     "sourceRef": source_ref,
-                }
-            )
-            article_candidates.append(
-                {
-                    "sourceDir": source_dir,
-                    "sourceRef": source_ref,
-                    "sourceId": source_id,
-                    "sourceQualityScore": float(
-                        meta.get("sourceQualityScore")
-                        or meta.get("qualityScore")
-                        or meta.get("score")
-                        or 0
-                    ),
-                    "textLen": text_len,
-                    "entityFocusScore": focus_score,
-                    "entityFocusVerdict": focus_verdict,
-                    "sourceFreshnessTier": str(
-                        meta.get("sourceFreshnessTier")
-                        or ((meta.get("siteTemplate") or {}).get("freshnessTier") if isinstance(meta.get("siteTemplate"), Mapping) else "")
-                        or ""
-                    ),
-                    "rows": admitted_rows,
                 }
             )
         elif lane == "image":
@@ -309,6 +345,9 @@ def _content_capacity_gate_for_entity(
                 asset_path = root / ref
                 if not asset_path.is_file():
                     image_rejects["asset_file_missing"] += 1
+                    continue
+                if _canonical_image_asset_issue(source_dir, row):
+                    image_rejects["canonical_duplicate"] += 1
                     continue
                 verdict = _assess_content_plan_publish_image(asset_path, ctx)
                 if verdict.blocks_image_publish:
@@ -328,28 +367,47 @@ def _content_capacity_gate_for_entity(
     used_shas: set[str] = set()
     used_collections: set[str] = set()
     used_article_sources: set[str] = set()
+    protected_article_refs: set[str] = set()
+    protected_article_shas: set[str] = set()
+    protected_article_collections: set[str] = set()
+    for candidate in article_candidates:
+        claim_assets(
+            list(candidate.get("assetClaimRefs") or []),
+            list(candidate.get("assetClaimShas") or []),
+            list(candidate.get("assetClaimCollections") or []),
+            claimed_refs=protected_article_refs,
+            claimed_shas=protected_article_shas,
+            claimed_collections=protected_article_collections,
+        )
     picked_articles = 0
     for candidate in article_candidates:
         source_ref = str(candidate.get("sourceRef") or "")
-        if source_ref in used_article_sources:
+        if source_ref and source_ref in used_article_sources:
             article_rejects["source_ref_reused"] += 1
             continue
-        claim = _first_publishable_asset(candidate["sourceDir"], candidate.get("rows") or [])
-        ref = sha = collection_id = ""
-        if claim is None:
-            article_image_soft_warnings["no_publishable_source_asset"] += 1
-        else:
-            ref, sha, collection_id = claim
-            if _claims_conflict(ref, sha, collection_id):
-                article_image_soft_warnings["source_asset_reused"] += 1
-                ref = sha = collection_id = ""
-        used_article_sources.add(source_ref)
-        if ref:
-            used_refs.add(ref)
-            if sha:
-                used_shas.add(sha)
-            if collection_id:
-                used_collections.add(collection_id)
+        refs = list(candidate.get("assetClaimRefs") or [])
+        shas = list(candidate.get("assetClaimShas") or [])
+        collections = list(candidate.get("assetClaimCollections") or [])
+        if claims_conflict(
+            refs,
+            shas,
+            collections,
+            claimed_refs=used_refs,
+            claimed_shas=used_shas,
+            claimed_collections=used_collections,
+        ):
+            article_rejects["source_asset_reused"] += 1
+            continue
+        if source_ref:
+            used_article_sources.add(source_ref)
+        claim_assets(
+            refs,
+            shas,
+            collections,
+            claimed_refs=used_refs,
+            claimed_shas=used_shas,
+            claimed_collections=used_collections,
+        )
         picked_articles += 1
         if picked_articles >= required_articles:
             break
@@ -359,7 +417,12 @@ def _content_capacity_gate_for_entity(
             ref = str(candidate.get("assetRef") or "")
             sha = str(candidate.get("assetSha") or "")
             collection_id = str(candidate.get("collectionId") or "")
-            if _claims_conflict(ref, sha, collection_id):
+            if (
+                bool(ref and ref in protected_article_refs)
+                or bool(sha and sha in protected_article_shas)
+                or bool(collection_id and collection_id in protected_article_collections)
+                or _single_claim_conflicts(ref, sha, collection_id)
+            ):
                 image_rejects["source_asset_reused"] += 1
                 continue
             used_refs.add(ref)

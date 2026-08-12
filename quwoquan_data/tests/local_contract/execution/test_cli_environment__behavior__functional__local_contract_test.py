@@ -60,15 +60,18 @@ def test_cli_exposes_only_durable_task_facades():
         if line.strip().startswith("{") and line.strip().endswith("}")
     )
     assert choices.split(",") == [
-        "preflight",
-        "prepare-campaign",
-        "execute",
-        "discard",
+            "preflight",
+            "prepare-campaign",
+            "execute",
+            "drain-pool-delivery",
+            "discard",
         "supersede-execution",
         "plan-images",
-        "probe-images",
-        "acquire-images",
-        "acquire-videos",
+            "probe-images",
+            "acquire-images",
+            "prepare-image-supported-api-input",
+            "prepare-video-manual-input",
+            "acquire-videos",
         "review-asset",
         "reconcile-stale",
         "reconcile-failed-campaign",
@@ -236,6 +239,52 @@ def test_python_runtime_prefers_data_venv_when_current_lacks_agent_modules(monke
         python_environment.resolve_data_agent_python(include_current=True)
         == data_python
     )
+
+
+def test_python_module_probe_does_not_inherit_closed_worker_stdin(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class Completed:
+        returncode = 0
+        stdout = '{"missing": []}'
+        stderr = ""
+
+    def run(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return Completed()
+
+    monkeypatch.setattr(python_environment.subprocess, "run", run)
+
+    assert python_environment.python_has_modules(
+        Path(sys.executable), ("cursor_sdk",)
+    ) == (True, [])
+    assert captured["kwargs"]["stdin"] is subprocess.DEVNULL
+
+
+def test_python_module_probe_runs_from_a_worker_with_fd_zero_closed() -> None:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(SCRIPTS_ROOT)
+    code = (
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "os.close(0)\n"
+        "from core.python_environment import python_has_modules\n"
+        "ok, missing = python_has_modules(Path(sys.executable), ('json',))\n"
+        "print(json.dumps({'ok': ok, 'missing': missing}))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=DATA_ROOT.parent,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"ok": True, "missing": []}
 
 
 def test_python_tool_cache_rejects_disposable_output_root() -> None:
@@ -615,7 +664,7 @@ def test_env_ready_writes_compact_failure_evidence(monkeypatch, tmp_path):
     assert "stdoutTail" not in json.dumps(evidence)
 
 
-def test_compact_preflight_evidence_preserves_reliabletask_fleet_receipt() -> None:
+def test_compact_semantic_preflight_evidence_excludes_reliabletask_fleet() -> None:
     evidence = compact_ready_evidence(
         {
             "ready": True,
@@ -656,20 +705,12 @@ def test_compact_preflight_evidence_preserves_reliabletask_fleet_receipt() -> No
         }
     )
 
-    assert evidence["reliableTaskFleet"] == {
-        "checked": True,
-        "ready": True,
-        "target": "beta-local",
-        "mongo": True,
-        "redis": True,
-        "owned": True,
-        "issues": [],
-    }
+    assert "reliableTaskFleet" not in evidence
     assert evidence["provider"] == "codex_sdk"
     assert evidence["semanticAgentStartup"]["provider"] == "codex_sdk"
 
 
-def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
+def test_semantic_ready_does_not_reconcile_runtime_child_fleet(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -712,12 +753,6 @@ def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
             },
         },
     )
-    repeated: list[bool] = []
-    monkeypatch.setattr(
-        preflight_handler,
-        "_apply_reliabletask_fleet_gate",
-        lambda *_args, **_kwargs: repeated.append(True),
-    )
     args = argparse.Namespace(
         python=None,
         requirements=None,
@@ -734,7 +769,6 @@ def test_env_ready_does_not_repeat_runtime_child_fleet_reconciliation(
     )
 
     assert preflight_handler.handle_ready(args) is None
-    assert repeated == []
 
 
 def test_preflight_evidence_rejects_retired_data_local_branch(monkeypatch, tmp_path):

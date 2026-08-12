@@ -4,6 +4,7 @@ final class CloudClientContextSnapshot {
     required this.sessionId,
     required this.platform,
     required this.appVersion,
+    this.appBuild = '0',
     required this.locale,
     this.deviceActorId,
     this.regionCode,
@@ -13,16 +14,17 @@ final class CloudClientContextSnapshot {
   final String sessionId;
   final String platform;
   final String appVersion;
+  final String appBuild;
   final String locale;
   final String? deviceActorId;
 
   /// GB/T 2260 六位省级行政区划码（如 330000=浙江）。
-  /// 来源为端侧真实定位/网络探测缓存；无真实来源时保持 null，
-  /// 灰度路由的地域维度对该请求不匹配（禁止填充猜测值）。
+  /// 来源为端侧真实定位/网络探测缓存；仅允许用于本地体验或遥测。
+  /// 云侧灰度路由必须由 API Edge 基于可信源 IP 重建，不消费该值。
   final String? regionCode;
 
   /// 电信运营商枚举（chinamobile/chinaunicom/chinatelecom/chinabroadnet）。
-  /// 同 regionCode：无真实来源时保持 null。
+  /// 同 regionCode：只用于本地体验或遥测，不是可信灰度路由输入。
   final String? carrier;
 }
 

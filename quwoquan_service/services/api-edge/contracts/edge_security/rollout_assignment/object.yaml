@@ -1,0 +1,30 @@
+kind: runtime_session
+description: >-
+  API Edge 对生产发布 campaign 与可信安装主体的 stable/candidate
+  裁决。只有定向 audience 中已进入 candidate 的主体持久化 assignment，
+  百分比分区可由不可变 campaign material 确定性重算。
+identity:
+  fields: [campaignId, subjectDigest]
+  version_source: session
+access:
+  commands: session_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: "生产发布运行状态不是用户可检索的业务对象。"
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+  denied_reason: "设备分组与发布路由对小趣完全关闭。"
+business_rules:
+- 原始 deviceActorId 不得持久化或进入日志，subjectDigest 必须使用 allocation key 做 HMAC-SHA256。
+- 同一 campaign 的 candidate assignment 只能建立，不得删除或改回 stable；仅 campaign rollback 可使全量流量返回 stable。
+- assignment store 不可用或数据丢失时 campaign 必须回滚，不得使用请求随机或账号/IP fallback。
+lifecycle:
+  ttl_seconds: 2592000
+  ttl_seconds_after_campaign: 2592000
+  expiry_semantics: delete_after_campaign_retention
+  renewal: campaign_only

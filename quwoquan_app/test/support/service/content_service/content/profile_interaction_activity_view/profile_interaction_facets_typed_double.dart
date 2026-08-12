@@ -3,7 +3,7 @@ import 'dart:convert' show utf8;
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Alpha/test 的 ProfileInteraction typed Facet。
 ///
@@ -116,11 +116,11 @@ final class InMemoryProfileInteractionFacet
   }
 
   static List<_InMemoryProfileActivityRow> _loadRows() {
-    final root = objectScenarioSeedReader.document('content');
-    if (root['seedSets'] is! Map) {
-      throw const FormatException('content fixture seedSets are missing');
+    final root = objectContractExampleReader.document('content');
+    if (root['examples'] is! Map) {
+      throw const FormatException('content fixture examples are missing');
     }
-    final seed = (root['seedSets'] as Map)['profile_share_interaction_core'];
+    final seed = (root['examples'] as Map)['profile_share_interaction_core'];
     if (seed is! Map || seed['profileShareInteractions'] is! List) {
       return <_InMemoryProfileActivityRow>[];
     }

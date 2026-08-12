@@ -98,7 +98,8 @@ class ExtractedMediaCaptureMetadata {
   final double? gpsLongitude;
 
   /// 没有解析到任何字段的空元数据。
-  static const ExtractedMediaCaptureMetadata empty = ExtractedMediaCaptureMetadata();
+  static const ExtractedMediaCaptureMetadata empty =
+      ExtractedMediaCaptureMetadata();
 
   bool get hasGear =>
       cameraMake != null || cameraModel != null || lensModel != null;

@@ -803,8 +803,10 @@ def _live_matrix_evidence_errors(
             ):
                 errors.append(f"{target}: {step} has no release-bound device attempt")
         verify = block.get("verify")
-        if not _integration_verify_has_required_nonprod_case(verify):
-            errors.append(f"{target}: integration verify has no executed nonprod CaseResult")
+        if not _integration_verify_has_required_test_data_case(verify):
+            errors.append(
+                f"{target}: integration verify has no executed test-data CaseResult"
+            )
     return errors
 
 
@@ -820,7 +822,7 @@ def _contains_non_unknown_attempt(value: Any) -> bool:
     return False
 
 
-def _integration_verify_has_required_nonprod_case(value: Any) -> bool:
+def _integration_verify_has_required_test_data_case(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
     report_ref = str(value.get("reportDir") or "").strip()
@@ -836,7 +838,7 @@ def _integration_verify_has_required_nonprod_case(value: Any) -> bool:
     if report.get("profile") != "integration" or report.get("status") != "ok":
         return False
     for step in report.get("steps") or []:
-        if not isinstance(step, dict) or step.get("kind") != "nonprod-business-data":
+        if not isinstance(step, dict) or step.get("kind") != "test-data":
             continue
         case = step.get("caseResult")
         return (
@@ -988,7 +990,8 @@ def _run_local_env_gate_matrix(
     include_l0: bool = True,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
-    nonprod_data_evidence: dict[str, str] | None = None,
+    test_data_request: dict[str, str] | None = None,
+    test_data_evidence: dict[str, str] | None = None,
     ios_simulator_device: str = "",
     android_emulator_device: str = "",
     android_physical_device: str = "",
@@ -1025,7 +1028,8 @@ def _run_local_env_gate_matrix(
         )
         if candidate_release["releaseId"] == rollback_release["releaseId"]:
             raise ValueError("candidate and rollback release must be different")
-        evidence_by_target = dict(nonprod_data_evidence or {})
+        request_by_target = dict(test_data_request or {})
+        evidence_by_target = dict(test_data_evidence or {})
         if execution_class == "live":
             compiled_provider_governance, provider_governance_issues = (
                 external_provider_governance.load_and_compile()
@@ -1041,16 +1045,24 @@ def _run_local_env_gate_matrix(
                 raise ValueError(
                     "canonical Provider governance defines no required capabilities"
                 )
-            if set(evidence_by_target) != set(CANONICAL_TARGETS):
+            if set(request_by_target) != set(CANONICAL_TARGETS):
                 raise ValueError(
-                    "live matrix requires one --nonprod-data-evidence for every target"
+                    "live matrix requires one --test-data-request for every target"
                 )
+            for target, raw_path in sorted(request_by_target.items()):
+                request_path = Path(str(raw_path or "").strip()).expanduser()
+                if not request_path.is_absolute():
+                    request_path = ROOT / request_path
+                if not request_path.is_file():
+                    raise ValueError(f"{target} test-data request is unavailable")
             for target, raw_path in sorted(evidence_by_target.items()):
+                if target not in CANONICAL_TARGETS:
+                    raise ValueError(f"unknown test-data evidence target: {target}")
                 evidence_path = Path(str(raw_path or "").strip()).expanduser()
                 if not evidence_path.is_absolute():
                     evidence_path = ROOT / evidence_path
                 if not evidence_path.is_file():
-                    raise ValueError(f"{target} nonprod data evidence is unavailable")
+                    raise ValueError(f"{target} test-data evidence is unavailable")
             if telemetry_fn is None or provider_fn is None or app_uat_fn is None:
                 raise ValueError(
                     "live matrix requires telemetry, Provider, and App UAT runners"
@@ -1680,7 +1692,8 @@ def _run_local_env_gate_matrix(
                     data_release_id=candidate_release["releaseId"],
                     data_verify_run_id=data_ids["replayVerify"],
                     data_manifest_digest=candidate_release["releaseDigest"],
-                    nonprod_data_evidence=str(evidence_by_target.get(target) or ""),
+                    test_data_request=str(request_by_target.get(target) or ""),
+                    test_data_evidence=str(evidence_by_target.get(target) or ""),
                     data_lifecycle_exit_ref=_evidence_path(lifecycle_path),
                     distribution_root="",
                     verify_hosted=False,
@@ -1915,7 +1928,8 @@ def run_local_env_gate_matrix(
     include_l0: bool = True,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
-    nonprod_data_evidence: dict[str, str] | None = None,
+    test_data_request: dict[str, str] | None = None,
+    test_data_evidence: dict[str, str] | None = None,
     ios_simulator_device: str = "",
     android_emulator_device: str = "",
     android_physical_device: str = "",
@@ -1941,7 +1955,8 @@ def run_local_env_gate_matrix(
         "include_l0": include_l0,
         "release_attestation": release_attestation,
         "rollback_release_attestation": rollback_release_attestation,
-        "nonprod_data_evidence": nonprod_data_evidence,
+        "test_data_request": test_data_request,
+        "test_data_evidence": test_data_evidence,
         "ios_simulator_device": ios_simulator_device,
         "android_emulator_device": android_emulator_device,
         "android_physical_device": android_physical_device,

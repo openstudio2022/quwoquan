@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：**分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`main` 是唯一长期发布主干；短期 PR 分支受控、合入即删，退役分支只保留 archive tag/bundle。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -30,14 +30,15 @@
 <a id="dec-001"></a>
 ### DEC-001 main 后只允许一条权威受控主链
 - 决策：main 后只允许一条权威受控主链。
+- 分支真相：`main` 同时是唯一长期开发与发布真相源；短期 PR 分支不是第二主干，禁止从 archive tag/bundle 恢复为活动发布分支。
 - 理由：以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - main push 自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 main 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
 - `candidate-ready` 必须绑定四环境配置包、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
 - 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。
-- Prod 只保留一个 production environment approval 与一个事务 job；checkout、OIDC/registry login、ReleaseEvidenceManifest 验签、治理校验和配置包物化只执行一次，随后由 `stackctl` 依次推进 5%、25%、100%。
-- push 与默认 dispatch 均保持 dry-run；dry-run 不提交 hosted ledger，因此只执行 gray-initial 只读校验并明确标记边界，禁止伪造 carry-on/full 回执。
+- Prod 只保留一个 production environment approval 与一个事务 job；checkout、OIDC/registry login、ReleaseEvidenceManifest 验签、治理校验和配置包物化只执行一次，随后由 `stackctl` 依次推进 `canary、5、20、50、100`。
+- push 与默认 dispatch 均保持 dry-run；dry-run 不提交 hosted ledger，因此只执行 `canary` 只读校验并明确标记边界，禁止伪造 `5/20/50/100` 回执。
 - 发布身份只使用 `fromCandidateDigest -> toCandidateDigest`；镜像 transport tag 和逐服务配置包仅是装配坐标，不得重新成为晋级或恢复身份。
 - 600/1800 秒准出以 GitHub workflow `created_at -> candidate/prod completed_at` 的官方日历时长为唯一关键路径；Jobs API 的 DAG 只生成 `machineCriticalPath` 诊断，矩阵长尾与 runner 排队不得由 shell timer 或静态预算替代。
 - mainline timing 在渲染后以精确 GHCR OCI digest 发布，再由独立 append-only hosted timing authority 按 candidate digest + workflow run 建索引并执行 bind/query readback；该索引不复用 Prod rollout CAS，AI advisory 与普通 gate 均无写入口，三天 Actions Artifact 仅作诊断副本。

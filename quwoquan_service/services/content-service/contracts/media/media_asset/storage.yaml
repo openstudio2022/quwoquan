@@ -103,12 +103,4 @@ collections:
       keys:
         _id: 1
       unique: true
-    - name: idx_media_processing_dead_letters_consumer_time
-      keys:
-        consumer: 1
-        quarantinedAt: -1
-    - name: idx_media_processing_dead_letters_aggregate_time
-      keys:
-        aggregateId: 1
-        quarantinedAt: -1
 role: authoritative

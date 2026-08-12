@@ -9,7 +9,8 @@ import 'filter_catalog_query_typed_double.dart';
 /// 只实现 [ImageEditorFilterCatalog] 这一个 port：目录内容直接来自 canonical
 /// FilterCatalogRelease（经 [InMemoryFilterCatalogQuery]），不自造第二套滤镜数据；
 /// 最近使用与使用次数是纯本地偏好，测试期用内存 map 承载，避免依赖 SharedPreferences。
-final class InMemoryImageEditorFilterCatalog implements ImageEditorFilterCatalog {
+final class InMemoryImageEditorFilterCatalog
+    implements ImageEditorFilterCatalog {
   InMemoryImageEditorFilterCatalog({InMemoryFilterCatalogQuery? query})
     : _query = query ?? InMemoryFilterCatalogQuery();
 

@@ -36,6 +36,7 @@ import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show
         homepageStatusReportCommandWriterProvider,
+        homepageStatusReportQueryReaderProvider,
         homepageWriteTargetReaderProvider;
 import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_appearance.dart';
@@ -517,6 +518,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               commandWriter: ref.read(
                 homepageStatusReportCommandWriterProvider,
               ),
+              queryReader: ref.read(homepageStatusReportQueryReaderProvider),
               actionTracker: HomepageStatusReportActionTrackerAdapter(
                 journeyEventTracker: ref.read(journeyEventTrackerProvider),
               ),

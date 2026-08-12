@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/pool_inspection.schema.json",
+  "type": "object",
+  "required": [
+    "schema", "result", "milestone", "targetAttained", "checks", "authors",
+    "supply", "usageScope", "environmentCapacity", "reasons", "issueCount",
+    "nextWave", "pendingDelivery", "semanticScheduling", "nextAction"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_inspection"},
+    "result": {"enum": ["ready", "partial", "blocked"]},
+    "milestone": {"enum": ["M100", "M1000", "M10000"]},
+    "targetAttained": {"type": "boolean"},
+    "checks": {
+      "type": "object",
+      "required": ["quality", "eligibility", "delivery"],
+      "additionalProperties": false,
+      "properties": {
+        "quality": {"enum": ["passed", "failed"]},
+        "eligibility": {"enum": ["passed", "failed"]},
+        "delivery": {"enum": ["passed", "failed"]}
+      }
+    },
+    "authors": {
+      "type": "object",
+      "required": ["observed", "admitted"],
+      "additionalProperties": false,
+      "properties": {
+        "observed": {"type": "integer", "minimum": 0},
+        "admitted": {"type": "integer", "minimum": 0}
+      }
+    },
+    "supply": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"$ref": "#/$defs/supply"},
+        "article": {"$ref": "#/$defs/supply"},
+        "image": {"$ref": "#/$defs/supply"},
+        "video": {"$ref": "#/$defs/supply"}
+      }
+    },
+    "usageScope": {
+      "type": "object",
+      "required": ["research", "commercial"],
+      "additionalProperties": false,
+      "properties": {
+        "research": {"type": "integer", "minimum": 0},
+        "commercial": {"type": "integer", "minimum": 0}
+      }
+    },
+    "environmentCapacity": {
+      "type": "object",
+      "required": ["alpha", "beta", "gamma", "prod"],
+      "additionalProperties": false,
+      "properties": {
+        "alpha": {"type": "integer", "minimum": 0, "maximum": 2100},
+        "beta": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "gamma": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "prod": {"type": "integer", "minimum": 0}
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reason"}
+    },
+    "issueCount": {"type": "integer", "minimum": 0},
+    "nextWave": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["carrier", "requestedCandidateCount"],
+        "additionalProperties": false,
+        "properties": {
+          "carrier": {"enum": ["homepage", "article", "image", "video"]},
+          "requestedCandidateCount": {"type": "integer", "minimum": 1, "maximum": 12}
+        }
+      }
+    },
+    "nextAction": {"type": "string", "minLength": 1},
+    "pendingDelivery": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "carrier", "contentId", "version", "executionId",
+          "sourceIdentityDigest", "intentId", "intentRef", "objectRef",
+          "contentObjectDir", "drainCommand"
+        ],
+        "properties": {
+          "carrier": {"enum": ["homepage", "article", "image", "video"]},
+          "contentId": {"type": "string", "minLength": 1},
+          "version": {"type": "integer", "minimum": 1},
+          "executionId": {"type": "string", "minLength": 1},
+          "sourceIdentityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "intentId": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "intentRef": {"type": "string", "minLength": 1},
+          "objectRef": {"type": "string", "minLength": 1},
+          "contentObjectDir": {"type": "string", "minLength": 1},
+          "drainCommand": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "semanticScheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "totalSemanticSlots", "researchWaveSize", "initialSlots", "idleSlots",
+        "nextReallocationCarrier", "dispatchBlockedWithoutPhysicalBacklog",
+        "carriers", "sourceReadyInput", "throughputInput", "waveInput"
+      ],
+      "properties": {
+        "totalSemanticSlots": {"const": 4},
+        "researchWaveSize": {"const": 12},
+        "initialSlots": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["homepage", "article", "image", "video"],
+          "properties": {
+            "homepage": {"type": "integer", "minimum": 0, "maximum": 4},
+            "article": {"type": "integer", "minimum": 0, "maximum": 4},
+            "image": {"type": "integer", "minimum": 0, "maximum": 4},
+            "video": {"type": "integer", "minimum": 0, "maximum": 4}
+          }
+        },
+        "idleSlots": {"type": "integer", "minimum": 0, "maximum": 4},
+        "nextReallocationCarrier": {
+          "type": ["string", "null"],
+          "enum": ["homepage", "article", "image", "video", null]
+        },
+        "dispatchBlockedWithoutPhysicalBacklog": {"type": "boolean"},
+        "carriers": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/semanticCarrier"}
+        },
+        "sourceReadyInput": {"$ref": "#/$defs/sourceReadyInput"},
+        "throughputInput": {"$ref": "#/$defs/throughputInput"},
+        "waveInput": {"$ref": "#/$defs/semanticWaveInput"}
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/issue"}
+    },
+    "batches": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/batch"}
+    }
+  },
+  "$defs": {
+    "supply": {
+      "type": "object",
+      "required": [
+        "observed", "admitted", "publishable", "deliveryPending",
+        "legacyPending", "target", "gap"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "observed": {"type": "integer", "minimum": 0},
+        "admitted": {"type": "integer", "minimum": 0},
+        "publishable": {"type": "integer", "minimum": 0},
+        "deliveryPending": {"type": "integer", "minimum": 0},
+        "legacyPending": {"type": "integer", "minimum": 0},
+        "target": {"type": "integer", "minimum": 1},
+        "gap": {"type": "integer", "minimum": 0}
+      }
+    },
+    "reason": {
+      "type": "object",
+      "required": ["gate", "code", "count", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "gate": {"enum": ["quality", "eligibility", "delivery"]},
+        "code": {"type": "string", "minLength": 1},
+        "count": {"type": "integer", "minimum": 1},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": ["gate", "code", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "gate": {"enum": ["quality", "eligibility", "delivery"]},
+        "code": {"type": "string", "minLength": 1},
+        "ref": {"type": "string", "minLength": 1}
+      }
+    },
+    "batch": {
+      "type": "object",
+      "required": [
+        "sourceTaskId", "target", "generated", "quality", "usageScope",
+        "admitted", "publishable", "deliveryPending", "excluded",
+        "successRate", "durationMs", "stages"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sourceTaskId": {"type": "string", "minLength": 1},
+        "target": {"type": ["integer", "null"], "minimum": 0},
+        "generated": {"type": "integer", "minimum": 0},
+        "quality": {
+          "type": "object",
+          "required": ["passed", "failed"],
+          "additionalProperties": false,
+          "properties": {
+            "passed": {"type": "integer", "minimum": 0},
+            "failed": {"type": "integer", "minimum": 0}
+          }
+        },
+        "usageScope": {
+          "type": "object",
+          "required": ["research", "commercial", "unknown"],
+          "additionalProperties": false,
+          "properties": {
+            "research": {"type": "integer", "minimum": 0},
+            "commercial": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0}
+          }
+        },
+        "admitted": {"type": "integer", "minimum": 0},
+        "publishable": {"type": "integer", "minimum": 0},
+        "deliveryPending": {"type": "integer", "minimum": 0},
+        "excluded": {"type": "integer", "minimum": 0},
+        "successRate": {"type": "number", "minimum": 0, "maximum": 1},
+        "durationMs": {"type": ["integer", "null"], "minimum": 0},
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "durationMs"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "durationMs": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "semanticCarrier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrier", "gap", "sourceReadyBacklog", "p10PerSlotThroughput",
+        "remainingSemanticHours", "assignedSlots", "sourceReadyHighWater",
+        "dispatchCandidateCount"
+      ],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "gap": {"type": "integer", "minimum": 0},
+        "sourceReadyBacklog": {"type": "integer", "minimum": 0},
+        "p10PerSlotThroughput": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "remainingSemanticHours": {"type": ["number", "null"], "minimum": 0},
+        "assignedSlots": {"type": "integer", "minimum": 0, "maximum": 4},
+        "sourceReadyHighWater": {"type": "integer", "minimum": 0},
+        "dispatchCandidateCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "nullableDigest": {
+      "type": ["string", "null"],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nullableRef": {"type": ["string", "null"], "minLength": 1},
+    "sourceReadyInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status", "sourcePoolRef", "sourcePoolFileSha256", "sourcePoolDigest",
+        "sourcePoolEvidenceRootRef", "evidenceBindingCount"
+      ],
+      "properties": {
+        "status": {"enum": ["not_provided", "validated"]},
+        "sourcePoolRef": {"$ref": "#/$defs/nullableRef"},
+        "sourcePoolFileSha256": {"$ref": "#/$defs/nullableDigest"},
+        "sourcePoolDigest": {"$ref": "#/$defs/nullableDigest"},
+        "sourcePoolEvidenceRootRef": {"$ref": "#/$defs/nullableRef"},
+        "evidenceBindingCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "throughputInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "throughputPromotionRef", "throughputPromotionFileSha256"
+      ],
+      "properties": {
+        "throughputPromotionRef": {"$ref": "#/$defs/nullableRef"},
+        "throughputPromotionFileSha256": {"$ref": "#/$defs/nullableDigest"}
+      }
+    },
+    "semanticWaveInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "milestone", "sourcePoolRef", "sourcePoolDigest",
+        "sourcePoolEvidenceRootRef", "candidates", "waveInputDigest"
+      ],
+      "properties": {
+        "schema": {"const": "quwoquan_data.pool_semantic_wave_input"},
+        "milestone": {"enum": ["M100", "M1000", "M10000"]},
+        "sourcePoolRef": {"$ref": "#/$defs/nullableRef"},
+        "sourcePoolDigest": {"$ref": "#/$defs/nullableDigest"},
+        "sourcePoolEvidenceRootRef": {"$ref": "#/$defs/nullableRef"},
+        "candidates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/semanticWaveCandidate"}
+        },
+        "waveInputDigest": {"$ref": "#/$defs/nullableDigest"}
+      }
+    },
+    "semanticWaveCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrier", "candidateId", "objectRef", "sourceUnitRef",
+        "sourceReadyEvidenceRootRef", "entityRef"
+      ],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "candidateId": {"type": "string", "minLength": 1},
+        "objectRef": {"type": "string", "minLength": 1},
+        "entityRef": {
+          "type": "string",
+          "pattern": "^/entity/[^/]+/[^/]+/[^/]+$"
+        },
+        "sourceUnitRef": {"type": "string", "minLength": 1},
+        "sourceReadyEvidenceRootRef": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

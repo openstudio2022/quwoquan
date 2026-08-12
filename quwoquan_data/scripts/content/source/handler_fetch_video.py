@@ -14,7 +14,10 @@ from core.content_source_registry import load_content_source_registry
 from core.io import write_json
 from core.paths import execution_shared_dir
 from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
-from core.video_source_admission import assert_video_source_admitted
+from core.video_source_admission import (
+    assert_video_acquisition_path_allowed,
+    assert_video_distribution_use_allowed,
+)
 
 from content.source.professional_video_receipt import (
     resolve_professional_video_candidate,
@@ -159,9 +162,10 @@ def fetch_admitted_sourced_videos(
 ) -> list[Path]:
     """Materialize admitted source units for directly downloadable videos."""
     evidence_paths: list[Path] = []
+    registry = load_content_source_registry()
     for candidate in candidates:
-        assert_video_source_admitted(
-            load_content_source_registry(),
+        assert_video_distribution_use_allowed(
+            registry,
             source_id=str(candidate.get("sourceId") or ""),
             source_kind=str(candidate.get("sourceKind") or ""),
             publication_admission=str(
@@ -172,6 +176,13 @@ def fetch_admitted_sourced_videos(
         professional = bool(
             str(candidate.get("professionalAcquisitionReceiptRef") or "").strip()
         )
+        if not professional:
+            assert_video_acquisition_path_allowed(
+                registry,
+                source_id=str(candidate.get("sourceId") or ""),
+                source_kind=str(candidate.get("sourceKind") or ""),
+                acquisition_path="public_direct",
+            )
         delete_after_admission = not professional
         if professional:
             if professional_acquisition_root is None:

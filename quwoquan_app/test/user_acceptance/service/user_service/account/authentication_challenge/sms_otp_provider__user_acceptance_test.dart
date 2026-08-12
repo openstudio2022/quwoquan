@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
 library;
 
 import 'dart:convert';
@@ -17,6 +18,9 @@ const _otp = String.fromEnvironment('QWQ_PROVIDER_UAT_SMS_OTP');
 const _otpBrokerUrl = String.fromEnvironment('QWQ_PROVIDER_UAT_OTP_BROKER_URL');
 const _otpBrokerToken = String.fromEnvironment(
   'QWQ_PROVIDER_UAT_OTP_BROKER_TOKEN',
+);
+const _otpBrokerCaBase64 = String.fromEnvironment(
+  'QWQ_PROVIDER_UAT_OTP_BROKER_CA_B64',
 );
 
 Uri _validatedOtpBrokerUri(String rawUrl) {
@@ -41,11 +45,15 @@ Uri _validatedOtpBrokerUri(String rawUrl) {
 Future<String> _resolveOneTimeOtp() async {
   final brokerUrl = _otpBrokerUrl.trim();
   final brokerToken = _otpBrokerToken.trim();
-  final hasBroker = brokerUrl.isNotEmpty || brokerToken.isNotEmpty;
+  final brokerCaBase64 = _otpBrokerCaBase64.trim();
+  final hasBroker =
+      brokerUrl.isNotEmpty ||
+      brokerToken.isNotEmpty ||
+      brokerCaBase64.isNotEmpty;
   if (hasBroker) {
-    if (brokerUrl.isEmpty || brokerToken.isEmpty) {
+    if (brokerUrl.isEmpty || brokerToken.isEmpty || brokerCaBase64.isEmpty) {
       throw StateError(
-        'local-capture OTP UAT requires both broker URL and token',
+        'local-capture OTP UAT requires broker URL, token, and pinned CA',
       );
     }
     if (_otp.trim().isNotEmpty) {
@@ -54,7 +62,9 @@ Future<String> _resolveOneTimeOtp() async {
       );
     }
     final brokerUri = _validatedOtpBrokerUri(brokerUrl);
-    final client = HttpClient();
+    final securityContext = SecurityContext(withTrustedRoots: false)
+      ..setTrustedCertificatesBytes(base64Decode(brokerCaBase64));
+    final client = HttpClient(context: securityContext);
     try {
       final request = await client.postUrl(brokerUri);
       request.headers.set(
@@ -96,18 +106,28 @@ void main() {
       expect(
         _otp.trim().isNotEmpty ||
             (_otpBrokerUrl.trim().isNotEmpty &&
-                _otpBrokerToken.trim().isNotEmpty),
+                _otpBrokerToken.trim().isNotEmpty &&
+                _otpBrokerCaBase64.trim().isNotEmpty),
         isTrue,
       );
       await launchProviderLogin($);
+      await $.pumpAndSettle();
 
       if (find.byType(LoginPhoneField).evaluate().isEmpty) {
-        await $(find.text(FoundationText.loginOtherMethodFallback)).tap();
-        await $(
-          find.text(FoundationText.loginMethodPhone),
-        ).waitUntilVisible(timeout: const Duration(seconds: 15));
-        await $(find.text(FoundationText.loginMethodPhone)).tap();
+        final otherMethod = find.text(
+          FoundationText.loginOtherMethodFallback,
+        );
+        if (otherMethod.evaluate().isNotEmpty) {
+          await $(otherMethod).tap();
+          await $(
+            find.text(FoundationText.loginMethodPhone),
+          ).waitUntilVisible(timeout: const Duration(seconds: 15));
+          await $(find.text(FoundationText.loginMethodPhone)).tap();
+        }
       }
+      await $(
+        find.byType(LoginPhoneField),
+      ).waitUntilVisible(timeout: const Duration(seconds: 15));
 
       final phoneField = find.descendant(
         of: find.byType(LoginPhoneField),
@@ -126,7 +146,6 @@ void main() {
       );
       final otp = await _resolveOneTimeOtp();
       await $(otpField).enterText(otp);
-      await $(find.text(FoundationText.loginPhoneSubmit)).tap();
       await waitForProviderLoginSuccess($);
     },
   );

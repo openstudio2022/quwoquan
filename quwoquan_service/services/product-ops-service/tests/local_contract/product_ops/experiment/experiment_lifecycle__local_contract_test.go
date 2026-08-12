@@ -34,10 +34,29 @@ func TestExperimentLifecycleUsesDomainAggregateContract(t *testing.T) {
 	if next.Version != 2 || next.UpdatedAt != now.Format(time.RFC3339) {
 		t.Fatalf("updated aggregate = %#v", next)
 	}
+	liveReallocated, err := next.UpdateRollout("running", []model.Variant{
+		{Key: "control", AllocationBasisPoints: 0},
+		{Key: "treatment", AllocationBasisPoints: 10000},
+	}, now.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("UpdateRollout() live reallocation error = %v", err)
+	}
+	if liveReallocated.Version != 3 ||
+		liveReallocated.Status != "running" ||
+		liveReallocated.Variants[0].AllocationBasisPoints != 0 ||
+		liveReallocated.Variants[1].AllocationBasisPoints != 10000 {
+		t.Fatalf("live reallocated aggregate = %#v", liveReallocated)
+	}
 	if _, err := experiment.UpdateRollout("running", []model.Variant{
 		{Key: "control", AllocationBasisPoints: 6000},
 		{Key: "treatment", AllocationBasisPoints: 3000},
 	}, now); err == nil {
 		t.Fatal("allocation that is not 10000 basis points must be rejected")
+	}
+	if _, err := experiment.UpdateRollout("running", []model.Variant{
+		{Key: "control", AllocationBasisPoints: -1},
+		{Key: "treatment", AllocationBasisPoints: 10001},
+	}, now); err == nil {
+		t.Fatal("negative allocation must be rejected")
 	}
 }

@@ -44,6 +44,7 @@ func dataJob(i int) reliabletask.DataContentJob {
 		Ref:            entity,
 		Stage:          "author",
 		PartitionKey:   entity,
+		MaxAttempts:    3,
 	}
 	key, err := job.ExpectedIdempotencyKey()
 	if err != nil {

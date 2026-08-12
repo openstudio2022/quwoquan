@@ -13,11 +13,13 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.release.environment import _ship_operations, handler
+from content.release.environment.readiness import ShipReadinessPhase
 from content.release.environment.release_contract import (
     build_release_contract,
     write_release_contract,
 )
 from content.release.environment.topology import (
+    EnvironmentReleaseMode,
     EnvironmentReleaseTarget,
     resolve_environment_release_target,
 )
@@ -127,6 +129,24 @@ def _target(
         user_postgres_dsn="postgres://topology.test/quwoquan",
         media_sync_root=root / "environment-media",
         missing_requirements=(),
+    )
+
+
+def _isolated_target(
+    root: Path,
+    environment: DeploymentEnvironment = DeploymentEnvironment.GAMMA,
+) -> EnvironmentReleaseTarget:
+    return EnvironmentReleaseTarget(
+        environment=environment,
+        target_name=f"{environment.value}-local",
+        mode=EnvironmentReleaseMode.LOCAL_IMPORT,
+        mongo_uri="mongodb://topology.test",
+        user_postgres_dsn="postgres://topology.test/quwoquan",
+        media_sync_root=root / "environment-media",
+        media_delivery_base_url=f"https://media.{environment.value}.test",
+        api_base_url=f"https://api.{environment.value}.test",
+        missing_requirements=(),
+        redis_addr="127.0.0.1:6379",
     )
 
 
@@ -252,11 +272,112 @@ def test_apply_import_enforces_release_desired_state(
     assert calls[0]["mongo_uri"] == "mongodb://topology.test"
     target = _target(tmp_path)
     assert calls[1]["media_avatar_base_url"] == target.media_delivery_base_url
+    assert calls[2]["media_avatar_base_url"] == target.media_delivery_base_url
     assert calls[2]["media_video_base_url"] == target.media_delivery_base_url
     assert calls[3]["media_image_base_url"] == target.media_delivery_base_url
     applied = read_json(tmp_path / "env/gamma/runs/data-release/release-a/apply-sync/applied_ref.json")
     assert applied["releaseId"] == "release-a"
     assert applied["releaseRef"] == "data/releases/release-a"
+
+
+def test_research_apply_uses_import_readiness_before_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = _release(tmp_path)
+    header_path = release / "payload/release.json"
+    header = read_json(header_path)
+    header["releaseClass"] = "research"
+    header["productLifecycleState"] = "research"
+    write_json(header_path, header)
+    _patch_roots(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        handler,
+        "resolve_environment_release_target",
+        lambda _env: _isolated_target(tmp_path),
+    )
+    observed: dict[str, object] = {}
+
+    class StopAfterReadiness(RuntimeError):
+        pass
+
+    def _require_import_readiness(**kwargs: object) -> None:
+        observed.update(kwargs)
+        raise StopAfterReadiness
+
+    monkeypatch.setattr(
+        handler,
+        "require_environment_readiness",
+        _require_import_readiness,
+    )
+
+    with pytest.raises(StopAfterReadiness):
+        handler._apply_release(
+            argparse.Namespace(
+                release_id="release-a",
+                env="gamma",
+                run_id="research-apply-import-readiness",
+                import_to_db=True,
+                full_sync=True,
+                dry_run=False,
+                confirm_prod_apply=False,
+            )
+        )
+
+    assert observed["phase"] is ShipReadinessPhase.IMPORT
+    assert observed["environment"] is DeploymentEnvironment.GAMMA
+    assert observed["release_id"] == "release-a"
+    assert observed["manifest_digest"] == payload_digest(release)
+
+
+def test_research_rollback_uses_import_readiness_before_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = _release(tmp_path)
+    header_path = release / "payload/release.json"
+    header = read_json(header_path)
+    header["releaseClass"] = "research"
+    header["productLifecycleState"] = "research"
+    write_json(header_path, header)
+    _patch_roots(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        handler,
+        "resolve_environment_release_target",
+        lambda _env: _isolated_target(tmp_path),
+    )
+    observed: dict[str, object] = {}
+
+    class StopAfterReadiness(RuntimeError):
+        pass
+
+    def _require_import_readiness(**kwargs: object) -> None:
+        observed.update(kwargs)
+        raise StopAfterReadiness
+
+    monkeypatch.setattr(
+        handler,
+        "require_environment_readiness",
+        _require_import_readiness,
+    )
+
+    with pytest.raises(StopAfterReadiness):
+        handler._rollback_release(
+            argparse.Namespace(
+                to_release="release-a",
+                from_release_id="release-current",
+                env="gamma",
+                run_id="research-rollback-import-readiness",
+                import_to_db=True,
+                dry_run=False,
+                confirm_prod_apply=False,
+            )
+        )
+
+    assert observed["phase"] is ShipReadinessPhase.IMPORT
+    assert observed["environment"] is DeploymentEnvironment.GAMMA
+    assert observed["release_id"] == "release-a"
+    assert observed["manifest_digest"] == payload_digest(release)
 
 
 def test_apply_rejects_missing_full_sync_flag(
